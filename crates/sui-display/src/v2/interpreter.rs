@@ -5,6 +5,8 @@ use std::borrow::Cow;
 use std::mem;
 use std::sync::Arc;
 
+use mysten_common::ZipDebugEqIteratorExt;
+
 use dashmap::DashMap;
 use futures::future::OptionFuture;
 use futures::future::join_all;
@@ -377,7 +379,7 @@ impl<S: V::Store> Interpreter<S> {
             P::Fields::Named(fs) => self
                 .eval_chains(fs.iter().map(|(_, f)| f))
                 .await?
-                .map(|vs| V::Fields::Named(fs.iter().map(|(n, _)| *n).zip(vs).collect())),
+                .map(|vs| V::Fields::Named(fs.iter().map(|(n, _)| *n).zip_debug_eq(vs).collect())),
         })
     }
 

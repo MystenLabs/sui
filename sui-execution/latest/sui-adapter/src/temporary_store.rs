@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::gas_charger::{GasCharger, PaymentLocation};
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -868,7 +869,7 @@ impl TemporaryStore<'_> {
             .execution_results
             .written_objects
             .values_mut()
-            .zip(old_storage_rebates)
+            .zip_debug_eq(old_storage_rebates)
         {
             // new object size
             let new_object_size = object.object_size_for_gas_metering();

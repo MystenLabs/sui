@@ -69,38 +69,38 @@ module test::m {
 //> 0: test::m::new();
 //> TransferObjects([Result(0)], Input(0))
 
-//# view-object 2,4
+//# view-object 2,0
 
-//# programmable --sender A --inputs object(2,4) 1 2 3
+//# programmable --sender A --inputs object(2,0) 1 2 3
 //> test::m::set(Input(0), Input(1), Input(2), Input(3))
 
-//# view-object 2,4
+//# view-object 2,0
 
-//# programmable --sender A --inputs object(2,4)
+//# programmable --sender A --inputs object(2,0)
 //> test::m::remove(Input(0))
 
-//# view-object 2,4
+//# view-object 2,0
 
 
 // dev-inspect with 'check' and correct values
 
-//# programmable --sender A --inputs object(2,4)@2 0 0 vector[0] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@2 0 0 vector[0] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,4)@3 1 2 vector[3] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@3 1 2 vector[3] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,4)@4 1 2 vector[] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@4 1 2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
 
 // dev-inspect with 'check' and _incorrect_ values
 
-//# programmable --sender A --inputs object(2,4)@3 0 0 vector[0] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@3 0 0 vector[0] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,4)@4 1 2 vector[3] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@4 1 2 vector[3] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,4)@2 1 2 vector[] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@2 1 2 vector[] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))

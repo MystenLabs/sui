@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 13 tasks
 
@@ -289,12 +290,12 @@ Response: {
 }
 
 task 8, lines 34-35:
-//# programmable --sender A --inputs object(0x5) object(2,1)
+//# programmable --sender A --inputs object(0x5) object(2,0)
 //> 0: sui_system::sui_system::request_withdraw_stake(Input(0), Input(1))
 events: Event { package_id: sui_system, transaction_module: Identifier("sui_system"), sender: A, type_: StructTag { address: sui_system, module: Identifier("validator"), name: Identifier("UnstakingRequestEvent"), type_params: [] }, contents: [172, 218, 146, 149, 250, 96, 119, 7, 59, 42, 219, 116, 112, 186, 5, 143, 250, 124, 228, 72, 123, 228, 17, 226, 97, 13, 44, 135, 249, 206, 62, 150, 218, 131, 22, 109, 1, 175, 215, 221, 207, 138, 245, 248, 68, 244, 90, 170, 83, 244, 133, 72, 229, 17, 124, 35, 245, 162, 151, 140, 253, 66, 34, 68, 252, 204, 154, 66, 27, 187, 19, 193, 166, 106, 26, 169, 143, 10, 215, 80, 41, 237, 233, 72, 87, 119, 156, 105, 21, 180, 79, 148, 6, 139, 146, 30, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 202, 154, 59, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
 created: object(8,0)
-mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0), object(2,0)
-deleted: object(2,1)
+mutated: 0x0000000000000000000000000000000000000000000000000000000000000005, object(0,0), object(2,1)
+deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 14804800,  storage_rebate: 14957712, non_refundable_storage_fee: 151088
 
 task 9, line 37:

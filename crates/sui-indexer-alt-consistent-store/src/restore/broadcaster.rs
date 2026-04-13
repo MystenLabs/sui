@@ -12,6 +12,7 @@ use backoff::Error as BE;
 use backoff::ExponentialBackoff;
 use futures::future::try_join_all;
 use futures::stream;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_futures::future::with_slow_future_monitor;
 use sui_futures::service::Service;
 use sui_futures::stream::Break;
@@ -112,7 +113,7 @@ pub(super) fn broadcaster(
                     // Send it to all subscribers who are not restored yet.
                     let futures = subscribers
                         .iter()
-                        .zip(restored)
+                        .zip_debug_eq(restored)
                         .filter(|(_, restored)| !*restored)
                         .map(|((_, s), _)| s.send(objects.clone()));
 

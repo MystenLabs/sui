@@ -54,6 +54,7 @@ use tokio::sync::Barrier;
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
+    let min_tps = opts.min_tps;
 
     // TODO: query the network for the current protocol version.
     let protocol_config = match opts.protocol_version {
@@ -201,6 +202,16 @@ async fn main() -> Result<()> {
                     if !curr_benchmark_stats_path.is_empty() {
                         let serialized = serde_json::to_string(&benchmark_stats)?;
                         std::fs::write(curr_benchmark_stats_path, serialized)?;
+                    }
+
+                    if let Some(min_tps) = min_tps {
+                        let actual_tps = benchmark_stats.num_success_txes as f64
+                            / benchmark_stats.duration.as_secs_f64().max(1.0);
+                        if actual_tps < min_tps {
+                            return Err(anyhow!(
+                                "TPS {actual_tps:.2} is below minimum threshold {min_tps}"
+                            ));
+                        }
                     }
                 }
                 Err(e) => eprintln!("{e}"),

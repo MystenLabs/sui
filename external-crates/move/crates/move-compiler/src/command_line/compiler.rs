@@ -458,8 +458,8 @@ impl Compiler {
     }
 
     pub fn check_and_report(self) -> anyhow::Result<MappedFiles> {
-        let (files, res) = self.check()?;
-        unwrap_or_report_diagnostics(&files, res);
+        let (files, units_res) = self.build()?;
+        let _units = unwrap_or_report_diagnostics(&files, units_res);
         Ok(files)
     }
 
@@ -479,8 +479,7 @@ impl Compiler {
 
     pub fn build_and_report(self) -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)> {
         let (files, units_res) = self.build()?;
-        let (units, warnings) = unwrap_or_report_diagnostics(&files, units_res);
-        report_warnings(&files, warnings);
+        let units = unwrap_or_report_diagnostics(&files, units_res);
         Ok((files, units))
     }
 }
@@ -593,8 +592,8 @@ macro_rules! ast_stepped_compilers {
                 }
 
                 pub fn check_and_report(self, files: &MappedFiles)  {
-                    let errors_result = self.check().map_err(|(_, diags)| diags);
-                    unwrap_or_report_diagnostics(&files, errors_result);
+                    let units_result = self.build().map_err(|(_, diags)| diags);
+                    let _units = unwrap_or_report_diagnostics(&files, units_result);
                 }
 
                 pub fn build_and_report(
@@ -602,9 +601,7 @@ macro_rules! ast_stepped_compilers {
                     files: &MappedFiles,
                 ) -> Vec<AnnotatedCompiledUnit> {
                     let units_result = self.build().map_err(|(_, diags)| diags);
-                    let (units, warnings) = unwrap_or_report_diagnostics(&files, units_result);
-                    report_warnings(&files, warnings);
-                    units
+                    unwrap_or_report_diagnostics(&files, units_result)
                 }
             }
         )*

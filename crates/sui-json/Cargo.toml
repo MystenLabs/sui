@@ -15,6 +15,7 @@ schemars.workspace = true
 
 sui-types.workspace = true
 
+mysten-common.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true

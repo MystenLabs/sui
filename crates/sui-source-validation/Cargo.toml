@@ -26,6 +26,7 @@ tracing.workspace = true
 ureq.workspace = true
 tonic.workspace = true
 
+mysten-common.workspace = true
 sui-move-build.workspace = true
 sui-package-management.workspace = true
 sui-package-alt.workspace = true

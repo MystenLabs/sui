@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_common::ZipDebugEqIteratorExt;
+
 use crate::authority::AuthorityPerEpochStore;
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
 use crate::execution_cache::ObjectCacheRead;
@@ -475,7 +477,7 @@ impl SharedObjVerManager {
             // Update the next version for the shared objects.
             assigned_versions
                 .iter()
-                .zip(is_exclusively_accessed_input)
+                .zip_debug_eq(is_exclusively_accessed_input)
                 .filter_map(|((id, _), mutable)| {
                     if mutable {
                         Some((*id, next_version))
@@ -961,7 +963,7 @@ mod tests {
         let assigned_versions = SharedObjVerManager::assign_versions_from_effects(
             certs
                 .iter()
-                .zip(effects.iter())
+                .zip_debug_eq(effects.iter())
                 .map(|(cert, effect)| (cert, effect, None))
                 .collect::<Vec<_>>()
                 .as_slice(),

@@ -6,6 +6,7 @@ use crate::{
     static_programmable_transactions::{env::Env, typing::ast as T},
 };
 use indexmap::IndexSet;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::rc::Rc;
 use sui_types::error::ExecutionError;
 
@@ -299,6 +300,7 @@ impl Context {
             pure,
             receiving,
             withdrawal_compatibility_conversions: _,
+            original_command_len: _,
             commands: _,
         } = txn;
         let tx_context = Location::non_ref(T::Location::TxContext);
@@ -558,6 +560,7 @@ fn verify_(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
         pure: _,
         receiving: _,
         withdrawal_compatibility_conversions: _,
+        original_command_len: _,
         commands,
     } = txn;
     for c in commands {
@@ -580,7 +583,7 @@ fn command(context: &mut Context, c: &T::Command) -> anyhow::Result<()> {
     context.add_result_values(
         results
             .into_iter()
-            .zip(c.value.drop_values.iter().copied())
+            .zip_debug_eq(c.value.drop_values.iter().copied())
             .map(|(v, drop)| if drop { None } else { Some(v) }),
     )?;
     context.arg_roots.clear();

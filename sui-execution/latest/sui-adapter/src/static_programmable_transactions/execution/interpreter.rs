@@ -16,13 +16,20 @@ use crate::{
 };
 use move_core_types::account_address::AccountAddress;
 use move_trace_format::format::MoveTraceBuilder;
-use std::{cell::RefCell, rc::Rc, sync::Arc, time::Instant};
+use mysten_common::ZipDebugEqIteratorExt;
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    rc::Rc,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use sui_types::{
     base_types::TxContext,
     error::ExecutionError,
     execution::{ExecutionTiming, ResultWithTimings},
     execution_status::{ExecutionErrorKind, PackageUpgradeError},
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     move_package::MovePackage,
     object::Owner,
 };
@@ -30,7 +37,7 @@ use tracing::instrument;
 
 pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension>,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
     ast: T::Transaction,
@@ -40,15 +47,23 @@ where
     'pc: 'state,
     'env: 'state,
 {
-    let mut timings = vec![];
+    let original_command_len = ast.original_command_len;
+    let mut indexed_timings = IndexedExecutionTimings::new(original_command_len);
     let result = execute_inner::<Mode>(
-        &mut timings,
+        &mut indexed_timings,
         env,
         metrics,
         tx_context,
         gas_charger,
         ast,
         trace_builder_opt,
+    );
+    let timings = indexed_timings.into_coalesced();
+    debug_assert!(
+        timings.len() <= original_command_len,
+        "coalesced timings length {} exceeds original command length {}",
+        timings.len(),
+        original_command_len
     );
 
     match result {
@@ -60,10 +75,10 @@ where
     }
 }
 
-pub fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
-    timings: &mut Vec<ExecutionTiming>,
+fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
+    timings: &mut IndexedExecutionTimings,
     env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension>,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
     ast: T::Transaction,
@@ -81,6 +96,7 @@ where
         pure,
         receiving,
         withdrawal_compatibility_conversions: _,
+        original_command_len: _,
         commands,
     } = ast;
     let mut context = Context::new(
@@ -99,7 +115,8 @@ where
     trace_utils::trace_ptb_summary(&mut context, trace_builder_opt, &commands)?;
 
     let mut mode_results = Mode::empty_results();
-    for sp!(idx, c) in commands {
+    for sp!(annotated_index, c) in commands {
+        let annotated_index = annotated_index as usize;
         let start = Instant::now();
         if let Err(err) =
             execute_command::<Mode>(&mut context, &mut mode_results, c, trace_builder_opt)
@@ -112,10 +129,10 @@ where
             // runtime, but its since been dropped. what gives with this error?
             env.state_view
                 .save_loaded_runtime_objects(loaded_runtime_objects);
-            timings.push(ExecutionTiming::Abort(start.elapsed()));
-            return Err(err.with_command_index(idx as usize));
+            timings.error(annotated_index, start.elapsed());
+            return Err(err.with_command_index(annotated_index));
         };
-        timings.push(ExecutionTiming::Success(start.elapsed()));
+        timings.executed(annotated_index, start.elapsed());
     }
     // Save loaded objects table in case we fail in post execution
     //
@@ -218,7 +235,7 @@ fn execute_command<Mode: ExecutionMode>(
                 "object values and types mismatch"
             );
             trace_utils::trace_transfer(context, trace_builder_opt, &object_values, &object_tys)?;
-            for (object_value, ty) in object_values.into_iter().zip(object_tys) {
+            for (object_value, ty) in object_values.into_iter().zip_debug_eq(object_tys) {
                 // TODO should we just call a Move function?
                 let recipient = Owner::AddressOwner(recipient.into());
                 context.transfer_object(recipient, ty, object_value)?;
@@ -413,7 +430,7 @@ fn execute_command<Mode: ExecutionMode>(
     context.charge_command(is_move_call, num_args, result.len())?;
     let result = result
         .into_iter()
-        .zip(drop_values)
+        .zip_debug_eq(drop_values)
         .map(|(value, drop)| if !drop { Some(value) } else { None })
         .collect::<Vec<_>>();
     context.result(result)?;
@@ -422,4 +439,128 @@ fn execute_command<Mode: ExecutionMode>(
         "stack height did not end at 0"
     );
     Ok(())
+}
+
+/// Struct to track execution timings, coalesced into the annotated command indices.
+struct IndexedExecutionTimings {
+    /// The maximum index in the original command vector. All annotated indices will be capped at
+    /// this value.
+    max_allowed_index: usize,
+    /// Mapping from the command's annotated index to its duration. Multiple commands may share
+    /// the same annotated index, in which case their durations will be added together.
+    executed_commands: BTreeMap<usize, Duration>,
+    /// `Some` if an error occurred, stopping execution.
+    /// `usize` is the annotated index of the command.
+    error_command: Option<(usize, Duration)>,
+}
+
+impl IndexedExecutionTimings {
+    fn new(original_command_len: usize) -> Self {
+        let max_allowed_index = original_command_len.saturating_sub(1);
+        Self {
+            max_allowed_index,
+            executed_commands: BTreeMap::new(),
+            error_command: None,
+        }
+    }
+
+    /// Records the execution of a successful command.
+    fn executed(&mut self, annotated_index: usize, duration: Duration) {
+        debug_assert!(
+            self.error_command.is_none(),
+            "command executed after an error occurred"
+        );
+        let index = annotated_index.min(self.max_allowed_index);
+        let existing = self
+            .executed_commands
+            .entry(index)
+            .or_insert(Duration::ZERO);
+        *existing = existing.saturating_add(duration);
+    }
+
+    /// Record the execution of a failed command that errored and stopped the execution of the PTB.
+    fn error(&mut self, annotated_index: usize, duration: Duration) {
+        debug_assert!(self.error_command.is_none(), "multiple errors recorded");
+        let index = annotated_index.min(self.max_allowed_index);
+        debug_assert!(
+            self.executed_commands
+                .last_key_value()
+                .is_none_or(|(last, _)| *last <= index),
+            "execution timings recorded for command index {:?} after error at index {}",
+            self.executed_commands
+                .last_key_value()
+                .map(|(last, _)| *last),
+            index,
+        );
+
+        let existing_opt = self.executed_commands.remove(&index);
+        let total_duration = existing_opt
+            .unwrap_or(Duration::ZERO)
+            .saturating_add(duration);
+        self.error_command = Some((index, total_duration));
+    }
+
+    /// Coalesces timings by each commands annotated index to align with the original command count.
+    /// Extra commands may have been injected during typing (e.g., withdrawal compatibility).
+    /// Timings sharing an `annotated_index` have their durations summed. An error, if present,
+    /// is always last.
+    fn into_coalesced(self) -> Vec<ExecutionTiming> {
+        let Self {
+            max_allowed_index,
+            executed_commands,
+            error_command,
+        } = self;
+
+        let max_executed_index = executed_commands.keys().last().copied();
+        let error_index = error_command.as_ref().map(|(idx, _)| *idx);
+        let max_used_index = match (max_executed_index, error_index) {
+            (Some(exec), Some(err)) => exec.max(err),
+            (Some(idx), None) | (None, Some(idx)) => idx,
+            (None, None) => return vec![],
+        };
+        debug_assert!(
+            max_used_index <= max_allowed_index,
+            "max used index {} exceeds max allowed index {}",
+            max_used_index,
+            max_allowed_index
+        );
+        let size = max_used_index.saturating_add(1);
+
+        // We initialize a vector of `Success` timings with zero duration, since we have no
+        // guarantee at this point that there are no gaps in the annotated indices. Presently,
+        // there should be no gaps, but there is nothing inherent to the annotation scheme that
+        // guarantees they are not sparse.
+        let mut coalesced = vec![ExecutionTiming::Success(Duration::ZERO); size];
+        for (index, duration) in executed_commands {
+            let Some(entry) = coalesced.get_mut(index) else {
+                debug_assert!(
+                    false,
+                    "failed to initialize coalesced timings at index {}",
+                    index
+                );
+                continue;
+            };
+            debug_assert!(matches!(entry, ExecutionTiming::Success(d) if d.is_zero()));
+            *entry = ExecutionTiming::Success(duration);
+        }
+
+        if let Some((index, error_duration)) = error_command {
+            debug_assert!(
+                index == coalesced.len().saturating_sub(1),
+                "error index should be last"
+            );
+            if let Some(entry) = coalesced.get_mut(index) {
+                debug_assert!(matches!(entry, ExecutionTiming::Success(d) if d.is_zero()));
+                *entry = ExecutionTiming::Abort(error_duration);
+            } else {
+                debug_assert!(
+                    false,
+                    "failed to initialize coalesced timings at index {}",
+                    index
+                );
+            };
+        }
+
+        coalesced
+    }
 }

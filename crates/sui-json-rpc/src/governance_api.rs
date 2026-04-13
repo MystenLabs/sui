@@ -11,6 +11,7 @@ use cached::proc_macro::cached;
 use itertools::Itertools;
 use jsonrpsee::RpcModule;
 use jsonrpsee::core::RpcResult;
+use mysten_common::ZipDebugEqIteratorExt;
 use tracing::{info, instrument};
 
 use sui_core::authority::AuthorityState;
@@ -291,7 +292,7 @@ pub fn calculate_apys(
             // rate e+1
             let er_e_1 = exchange_rates.dropping_back(1);
             let apys = er_e
-                .zip(er_e_1)
+                .zip_debug_eq(er_e_1)
                 .map(calculate_apy)
                 .filter(|apy| *apy > 0.0 && *apy < 0.1)
                 .take(30)

@@ -35,6 +35,7 @@ use consensus_config::AuthorityIndex;
 use consensus_types::block::BlockRef;
 use futures::{StreamExt as _, stream::FuturesOrdered};
 use itertools::Itertools as _;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use rand::{prelude::SliceRandom as _, rngs::ThreadRng};
@@ -635,8 +636,8 @@ where
                     let mut blocks = Vec::new();
                     for ((requested_block_ref, signed_block), serialized) in request_block_refs
                         .iter()
-                        .zip(signed_blocks.into_iter())
-                        .zip(serialized_blocks.into_iter())
+                        .zip_debug_eq(signed_blocks.into_iter())
+                        .zip_debug_eq(serialized_blocks.into_iter())
                     {
                         let signed_block_digest = VerifiedBlock::compute_digest(&serialized);
                         let received_block_ref = BlockRef::new(
@@ -872,7 +873,7 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
 
         let trusted_commits = commits
             .into_iter()
-            .zip(serialized_commits)
+            .zip_debug_eq(serialized_commits)
             .map(|((_d, c), s)| TrustedCommit::new_trusted(c, s))
             .collect();
         Ok((trusted_commits, vote_blocks))
@@ -886,7 +887,7 @@ mod tests {
     use bytes::Bytes;
     use consensus_config::{AuthorityIndex, Parameters};
     use consensus_types::block::{BlockRef, Round};
-    use mysten_metrics::monitored_mpsc;
+    use mysten_common::ZipDebugEqIteratorExt;
     use parking_lot::RwLock;
 
     use crate::{
@@ -924,8 +925,8 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
-            _highest_accepted_rounds: Vec<Round>,
-            _breadth_first: bool,
+            _fetch_after_rounds: Vec<Round>,
+            _fetch_missing_ancestors: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
@@ -1025,14 +1026,8 @@ mod tests {
         ));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let (blocks_sender, _blocks_receiver) =
-            monitored_mpsc::unbounded_channel("consensus_block_output");
-        let transaction_certifier = TransactionCertifier::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-            blocks_sender,
-        );
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let commit_consumer_monitor = Arc::new(CommitConsumerMonitor::new(0, 0));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
@@ -1102,7 +1097,7 @@ mod tests {
         assert_eq!(pending_fetches.len(), 7);
 
         // Verify contiguous ranges are scheduled.
-        for (range, start) in pending_fetches.iter().zip((1..35).step_by(5)) {
+        for (range, start) in pending_fetches.iter().zip_debug_eq((1..35).step_by(5)) {
             assert_eq!(range.start(), start);
             assert_eq!(range.end(), start + 4);
         }

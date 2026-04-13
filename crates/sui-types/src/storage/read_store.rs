@@ -22,6 +22,7 @@ use crate::transaction::{TransactionData, VerifiedTransaction};
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use mysten_common::ZipDebugEqIteratorExt;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::{BTreeSet, HashMap};
@@ -200,7 +201,7 @@ pub trait ReadStore: ObjectStore {
         let mut events = self
             .multi_get_events(&event_tx_digests)
             .into_iter()
-            .zip(event_tx_digests)
+            .zip_debug_eq(event_tx_digests)
             .map(|(maybe_event, tx_digest)| {
                 maybe_event
                     .ok_or_else(|| Error::missing(format!("missing event for tx {tx_digest}")))
@@ -209,7 +210,7 @@ pub trait ReadStore: ObjectStore {
             .collect::<Result<HashMap<_, _>>>()?;
 
         let mut transactions = Vec::with_capacity(txns.len());
-        for (tx, fx) in txns.into_iter().zip(effects) {
+        for (tx, fx) in txns.into_iter().zip_debug_eq(effects) {
             let events = fx.events_digest().map(|_event_digest| {
                 events
                     .remove(fx.transaction_digest())

@@ -5,6 +5,7 @@ pub use crate::external::External;
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::key_identity::KeyIdentity;
 use crate::random_names::{random_name, random_names};
+use mysten_common::ZipDebugEqIteratorExt;
 
 use anyhow::{Context, anyhow, bail, ensure};
 use async_trait::async_trait;
@@ -460,7 +461,7 @@ impl FileBasedKeystore {
             let names: Vec<String> = random_names(HashSet::new(), keys.len());
             let aliases = keys
                 .iter()
-                .zip(names)
+                .zip_debug_eq(names)
                 .map(|((sui_address, skp), alias)| {
                     let public_key_base64 = skp.public().encode_base64();
                     (
@@ -719,7 +720,7 @@ impl InMemKeystore {
 
         let aliases = keys
             .iter()
-            .zip(random_names(HashSet::new(), keys.len()))
+            .zip_debug_eq(random_names(HashSet::new(), keys.len()))
             .map(|((sui_address, skp), alias)| {
                 let public_key_base64 = skp.public().encode_base64();
                 (

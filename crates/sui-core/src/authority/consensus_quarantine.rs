@@ -12,6 +12,7 @@ use fastcrypto_tbls::{dkg_v1, nodes::PartyId};
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId};
 use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
@@ -1093,7 +1094,7 @@ impl ConsensusOutputQuarantine {
 
         Ok(results
             .into_iter()
-            .zip(shared_input_object_ids)
+            .zip_debug_eq(shared_input_object_ids)
             .filter_map(|(debt, object_id)| debt.map(|debt| (debt, object_id)))
             .map(move |((round, debt), object_id)| {
                 // Stored debts already account for the budget of the round in which

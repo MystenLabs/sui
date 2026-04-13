@@ -162,6 +162,7 @@ feature_flags:
   use_coin_party_owner: true
   enable_gasless: true
   disallow_jump_orphans: true
+  early_return_receive_object_mismatched_type: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -489,3 +490,4 @@ gasless_allowed_token_types:
     - 0
 gasless_max_unused_inputs: 1
 gasless_max_pure_input_bytes: 32
+gasless_max_tps: 50

@@ -10,6 +10,7 @@ use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
 use itertools::Itertools;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
@@ -380,7 +381,7 @@ impl SuiTxValidator {
         let claimed_immutable_ids = claimed_ids.iter().cloned().collect::<BTreeSet<_>>();
         let mut found_immutable_ids = BTreeSet::new();
 
-        for (obj_opt, object_id) in objects.into_iter().zip(input_ids.iter()) {
+        for (obj_opt, object_id) in objects.into_iter().zip_debug_eq(input_ids.iter()) {
             let input_ref = input_refs_by_id.get(object_id).unwrap();
             match obj_opt {
                 Some(o) => {

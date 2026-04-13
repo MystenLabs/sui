@@ -3,6 +3,7 @@
 
 use futures::{StreamExt, future::join_all};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::fatal;
 use rand::{Rng, distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::net::SocketAddr;
@@ -727,7 +728,10 @@ impl TestCluster {
             })
             .await;
 
-        Ok(digests.into_iter().zip(effects.into_iter()).collect())
+        Ok(digests
+            .into_iter()
+            .zip_debug_eq(effects.into_iter())
+            .collect())
     }
 
     /// Execute signed transactions in a soft bundle and return results for each transaction.
@@ -789,7 +793,7 @@ impl TestCluster {
         // Wait for effects using consensus positions
         let wait_futures: Vec<_> = digests
             .iter()
-            .zip(consensus_positions.iter())
+            .zip_debug_eq(consensus_positions.iter())
             .map(|(digest, position)| {
                 let request = WaitForEffectsRequest {
                     transaction_digest: Some(*digest),
@@ -805,7 +809,7 @@ impl TestCluster {
 
         let results: SuiResult<Vec<_>> = digests
             .into_iter()
-            .zip(responses.into_iter())
+            .zip_debug_eq(responses.into_iter())
             .map(|(digest, response)| Ok((digest, response?)))
             .collect();
 

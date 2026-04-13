@@ -54,6 +54,7 @@ use dashmap::DashMap;
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use futures::{FutureExt, future::BoxFuture};
 use moka::sync::SegmentedCache as MokaCache;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
@@ -2015,7 +2016,7 @@ impl TransactionCacheRead for WritebackCache {
                     .into_iter()
                     .map(|o| o.map(Arc::new))
                     .collect();
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached.transactions.insert(digest, None, *ticket).ok();
                     }
@@ -2078,7 +2079,7 @@ impl TransactionCacheRead for WritebackCache {
                     .record_db_multi_get("executed_effects_digests", remaining.len())
                     .multi_get_executed_effects_digests(&remaining_digests)
                     .expect("db error");
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached
                             .executed_effects_digests
@@ -2139,7 +2140,7 @@ impl TransactionCacheRead for WritebackCache {
                     .record_db_multi_get("transaction_effects", remaining.len())
                     .multi_get_effects(remaining_digests.iter())
                     .expect("db error");
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached
                             .transaction_effects
@@ -2260,7 +2261,7 @@ impl TransactionCacheRead for WritebackCache {
                     .store
                     .multi_get_events(&remaining_digests)
                     .expect("db error");
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached
                             .transaction_events

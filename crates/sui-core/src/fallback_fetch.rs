@@ -2,6 +2,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_common::ZipDebugEqIteratorExt;
+
 use crate::execution_cache::cache_types::CacheResult;
 use sui_types::error::SuiResult;
 
@@ -53,7 +55,7 @@ pub fn do_fallback_lookup_fallible<K: Clone, V: Default + Clone>(
 
     for (i, result) in fallback_indices
         .into_iter()
-        .zip(fallback_results.into_iter())
+        .zip_debug_eq(fallback_results.into_iter())
     {
         results[i] = result;
     }

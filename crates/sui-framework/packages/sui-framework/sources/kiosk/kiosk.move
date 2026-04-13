@@ -233,8 +233,8 @@ public struct ItemDelisted<phantom T: key + store> has copy, drop {
 /// `KioskOwnerCap` and becomes the Owner, the `Kiosk` is shared.
 entry fun default(ctx: &mut TxContext) {
     let (kiosk, cap) = new(ctx);
-    sui::transfer::transfer(cap, ctx.sender());
-    sui::transfer::share_object(kiosk);
+    transfer::transfer(cap, ctx.sender());
+    transfer::share_object(kiosk);
 }
 
 /// Creates a new `Kiosk` with a matching `KioskOwnerCap`.
@@ -527,14 +527,6 @@ public fun uid_mut_as_owner(self: &mut Kiosk, cap: &KioskOwnerCap): &mut UID {
     &mut self.id
 }
 
-/// [DEPRECATED]
-/// Allow or disallow `uid` and `uid_mut` access via the `allow_extensions`
-/// setting.
-public fun set_allow_extensions(self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool) {
-    assert!(self.has_access(cap), ENotOwner);
-    self.allow_extensions = allow_extensions;
-}
-
 /// Get the immutable `UID` for dynamic field access.
 /// Always enabled.
 ///
@@ -638,4 +630,13 @@ public fun purchase_cap_item<T: key + store>(self: &PurchaseCap<T>): ID {
 /// Get the `min_price` from the `PurchaseCap`.
 public fun purchase_cap_min_price<T: key + store>(self: &PurchaseCap<T>): u64 {
     self.min_price
+}
+
+// === Deprecated ===
+
+#[deprecated(note = b"Function is deprecated, prefer using `uid_mut_as_owner` instead")]
+/// Allow or disallow `uid` and `uid_mut` access via the `allow_extensions` setting.
+public fun set_allow_extensions(self: &mut Kiosk, cap: &KioskOwnerCap, allow_extensions: bool) {
+    assert!(self.has_access(cap), ENotOwner);
+    self.allow_extensions = allow_extensions;
 }

@@ -6,6 +6,7 @@ use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 
 use anyhow::Context;
+use itertools::Itertools;
 use prometheus::Registry;
 use reqwest::Client;
 use serde::Deserialize;
@@ -235,8 +236,7 @@ async fn test_execute_transaction_mutation_schema() {
         validator_cluster.get_address_0().to_string()
     );
     assert_eq!(transaction.gas_input.gas_budget, "5000000000");
-    assert_eq!(transaction.signatures.len(), signatures.len());
-    for (returned, original) in transaction.signatures.iter().zip(signatures.iter()) {
+    for (returned, original) in transaction.signatures.iter().zip_eq(signatures.iter()) {
         assert_eq!(returned.signature_bytes, original.encoded());
     }
 }

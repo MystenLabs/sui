@@ -10,6 +10,7 @@ use crate::{
 };
 use anemo::{PeerId, Request};
 use anyhow::anyhow;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost::Message;
 use std::num::NonZeroUsize;
 use std::{
@@ -701,7 +702,7 @@ async fn sync_with_checkpoints_watermark() {
     ));
 
     // Inject all the checkpoints to Peer 1
-    for (checkpoint, contents) in checkpoint_iter.zip(contents_iter) {
+    for (checkpoint, contents) in checkpoint_iter.zip_debug_eq(contents_iter) {
         store_1
             .insert_checkpoint_contents(&checkpoint, contents)
             .unwrap();
@@ -713,7 +714,7 @@ async fn sync_with_checkpoints_watermark() {
     timeout(Duration::from_secs(1), async {
         for (checkpoint, contents) in ordered_checkpoints[2..]
             .iter()
-            .zip(contents.clone().into_iter().skip(2))
+            .zip_debug_eq(contents.clone().into_iter().skip(2))
         {
             assert_eq!(subscriber_1.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();
@@ -816,7 +817,7 @@ async fn sync_with_checkpoints_watermark() {
     timeout(Duration::from_secs(10), async {
         for (checkpoint, contents) in ordered_checkpoints[2..]
             .iter()
-            .zip(contents.clone().into_iter().skip(2))
+            .zip_debug_eq(contents.clone().into_iter().skip(2))
         {
             assert_eq!(subscriber_2.recv().await.unwrap().data(), checkpoint.data());
             assert_eq!(subscriber_3.recv().await.unwrap().data(), checkpoint.data());
@@ -899,7 +900,7 @@ async fn sync_with_checkpoints_watermark() {
     timeout(Duration::from_secs(3), async {
         for (checkpoint, contents) in ordered_checkpoints[1..]
             .iter()
-            .zip(contents.clone().into_iter().skip(1))
+            .zip_debug_eq(contents.clone().into_iter().skip(1))
         {
             assert_eq!(subscriber_4.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();

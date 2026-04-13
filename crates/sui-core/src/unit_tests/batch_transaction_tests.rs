@@ -4,6 +4,7 @@
 use super::*;
 use crate::authority::authority_tests::init_state_with_ids_and_object_basics;
 use bcs;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     base_types::FullObjectRef, execution_status::ExecutionStatus,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -27,7 +28,9 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
     const TOTAL: usize = N + 1;
     let all_ids = (0..TOTAL).map(|_| ObjectID::random()).collect::<Vec<_>>();
     let (authority_state, package) = init_state_with_ids_and_object_basics(
-        [sender; TOTAL].into_iter().zip(all_ids.clone().into_iter()),
+        [sender; TOTAL]
+            .into_iter()
+            .zip_debug_eq(all_ids.clone().into_iter()),
     )
     .await;
     let rgp = authority_state.reference_gas_price_for_testing()?;
@@ -111,7 +114,9 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
     const TOTAL: usize = N + 1;
     let all_ids = (0..TOTAL).map(|_| ObjectID::random()).collect::<Vec<_>>();
     let (authority_state, package) = init_state_with_ids_and_object_basics(
-        [sender; TOTAL].into_iter().zip(all_ids.clone().into_iter()),
+        [sender; TOTAL]
+            .into_iter()
+            .zip_debug_eq(all_ids.clone().into_iter()),
     )
     .await;
     let rgp = authority_state.reference_gas_price_for_testing()?;

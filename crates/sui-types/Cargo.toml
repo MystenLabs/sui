@@ -118,5 +118,6 @@ harness = false
 
 [features]
 default = []
+testing = []
 tracing = ["move-vm-profiler/tracing"]
 fuzzing = ["move-core-types/fuzzing"]

@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::in_test_configuration;
 use rand::rngs::OsRng;
 use sui_config::ExecutionCacheConfig;
@@ -441,7 +442,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 // See above re fixed protocol keys
                 let (_, protocol_keys) = Committee::new_simple_test_committee_of_size(keys.len());
                 keys.into_iter()
-                    .zip(protocol_keys)
+                    .zip_debug_eq(protocol_keys)
                     .map(|(account_key, protocol_key)| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
                             .with_protocol_key_pair(protocol_key)
@@ -691,7 +692,7 @@ mod test {
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas::SuiGasStatus;
     use sui_types::in_memory_storage::InMemoryStorage;
-    use sui_types::metrics::LimitsMetrics;
+    use sui_types::metrics::ExecutionMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;
     use sui_types::transaction::CheckedInputObjects;
 
@@ -726,7 +727,7 @@ mod test {
 
         // Use a throwaway metrics registry for genesis transaction execution.
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let metrics = Arc::new(ExecutionMetrics::new(&registry));
         let expensive_checks = false;
         let epoch = EpochData::new_test();
         let transaction_data = &genesis_transaction.data().intent_message().value;

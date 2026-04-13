@@ -14,6 +14,7 @@ use std::{
 use consensus_config::AuthorityIndex;
 use consensus_types::block::{BlockDigest, BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use itertools::Itertools as _;
+use mysten_common::ZipDebugEqIteratorExt;
 use tokio::time::Instant;
 use tracing::{debug, error, info, trace};
 
@@ -406,6 +407,10 @@ impl DagState {
     /// Gets blocks by checking genesis, cached recent blocks in memory, then storage.
     /// An element is None when the corresponding block is not found.
     pub(crate) fn get_blocks(&self, block_refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
+        if block_refs.is_empty() {
+            return vec![];
+        }
+
         let mut blocks = vec![None; block_refs.len()];
         let mut missing = Vec::new();
 
@@ -443,7 +448,7 @@ impl DagState {
             .with_label_values(&["get_blocks"])
             .inc();
 
-        for ((index, _), result) in missing.into_iter().zip(store_results.into_iter()) {
+        for ((index, _), result) in missing.into_iter().zip_debug_eq(store_results.into_iter()) {
             blocks[index] = result;
         }
 
@@ -692,7 +697,10 @@ impl DagState {
             }
         }
 
-        blocks.into_iter().zip(equivocating_blocks).collect()
+        blocks
+            .into_iter()
+            .zip_debug_eq(equivocating_blocks)
+            .collect()
     }
 
     /// Checks whether a block exists in the slot. The method checks only against the cached data.
@@ -760,7 +768,7 @@ impl DagState {
             .with_label_values(&["contains_blocks"])
             .inc();
 
-        for ((index, _), result) in missing.into_iter().zip(store_results.into_iter()) {
+        for ((index, _), result) in missing.into_iter().zip_debug_eq(store_results.into_iter()) {
             exist[index] = result;
         }
 

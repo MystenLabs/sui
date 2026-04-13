@@ -6,6 +6,7 @@
 
 use crate::key_value_store_metrics::KeyValueStoreMetrics;
 use async_trait::async_trait;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::sync::Arc;
 use std::time::Instant;
 use sui_types::base_types::{ObjectID, SequenceNumber, VersionNumber};
@@ -607,7 +608,7 @@ fn find_fallback<T, K: Clone>(values: &[Option<T>], keys: &[K]) -> (Vec<K>, Vec<
 }
 
 fn merge_res<T>(values: &mut [Option<T>], fallback_values: Vec<Option<T>>, indices: &[usize]) {
-    for (&index, fallback_value) in indices.iter().zip(fallback_values) {
+    for (&index, fallback_value) in indices.iter().zip_debug_eq(fallback_values) {
         values[index] = fallback_value;
     }
 }

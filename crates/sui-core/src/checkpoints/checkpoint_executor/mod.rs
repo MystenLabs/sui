@@ -19,7 +19,7 @@
 //! end of epoch. This allows us to use it as a signal for reconfig.
 
 use futures::StreamExt;
-use mysten_common::{debug_fatal, fatal};
+use mysten_common::{ZipDebugEqIteratorExt, debug_fatal, fatal, izip_debug_eq};
 use parking_lot::Mutex;
 use std::{sync::Arc, time::Instant};
 use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
@@ -770,7 +770,7 @@ impl CheckpointExecutor {
 
             full_contents
                 .into_iter()
-                .zip(checkpoint_contents.iter())
+                .zip_debug_eq(checkpoint_contents.iter())
                 .for_each(|(execution_data, digests)| {
                     let tx_digest = digests.transaction;
                     let fx_digest = digests.effects;
@@ -862,7 +862,7 @@ impl CheckpointExecutor {
 
         // Find unexecuted transactions and their expected effects digests
         let (unexecuted_tx_digests, unexecuted_txns): (Vec<_>, Vec<_>) = itertools::multiunzip(
-            itertools::izip!(
+            izip_debug_eq!(
                 tx_data.transactions.iter(),
                 ckpt_state.data.tx_digests.iter(),
                 ckpt_state.data.fx_digests.iter(),

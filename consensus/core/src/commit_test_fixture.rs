@@ -69,12 +69,10 @@ impl CommitTestFixture {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
 
         let linearizer = Linearizer::new(context.clone(), dag_state.clone());
-        let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
-            blocks_sender,
         );
         let (commit_sender, _commit_receiver) = unbounded_channel("consensus_commit_output");
         let commit_finalizer = CommitFinalizer::new(
@@ -235,6 +233,8 @@ pub fn assert_commit_sequences_match(
             shortest_sequence.len()
         );
 
+        #[allow(clippy::disallowed_methods)]
+        // Intentional zip: comparing prefix between sequences of varying lengths
         for (commit_index, (c1, c2)) in commit_sequence
             .iter()
             .zip(shortest_sequence.iter())

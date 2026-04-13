@@ -14,6 +14,7 @@ use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
 use crate::workloads::{ExpectedFailureType, GroupID, WorkloadBuilderInfo, WorkloadInfo};
 use anyhow::Result;
 use futures::future::join_all;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -197,7 +198,7 @@ impl WorkloadConfiguration {
             }
         });
         let workloads: Vec<_> = join_all(init_futures).await;
-        let all_workloads = workloads.into_iter().zip(workload_params).fold(
+        let all_workloads = workloads.into_iter().zip_debug_eq(workload_params).fold(
             BTreeMap::<GroupID, Vec<WorkloadInfo>>::new(),
             |mut acc, (workload, workload_params)| {
                 let w = WorkloadInfo {

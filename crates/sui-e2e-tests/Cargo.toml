@@ -53,7 +53,7 @@ sui-storage.workspace = true
 mysten-metrics.workspace = true
 sui-tool.workspace = true
 sui-protocol-config.workspace = true
-sui-types.workspace = true
+sui-types = { workspace = true, features = ["testing"] }
 sui-move-build.workspace = true
 sui-swarm-config.workspace = true
 sui-swarm.workspace = true

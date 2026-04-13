@@ -79,6 +79,9 @@ pub enum ConsensusError {
     )]
     InvalidSizeOfHighestAcceptedRounds(usize, usize),
 
+    #[error("Invalid fetch blocks request: {0}")]
+    InvalidFetchBlocksRequest(String),
+
     #[error("Invalid authority index: {index} > {max}")]
     InvalidAuthorityIndex { index: AuthorityIndex, max: usize },
 

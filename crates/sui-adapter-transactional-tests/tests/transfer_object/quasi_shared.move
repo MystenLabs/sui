@@ -26,8 +26,8 @@ module test::m {
 
 //# run test::m::mint_child --args object(2,0)
 
-//# view-object 3,0
+//# view-object 3,1
 
-//# transfer-object 3,0 --sender A --recipient B
+//# transfer-object 3,1 --sender A --recipient B
 
-//# view-object 3,0
+//# view-object 3,1

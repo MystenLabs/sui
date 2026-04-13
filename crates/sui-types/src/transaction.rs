@@ -55,7 +55,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
-use mysten_common::{assert_reachable, debug_fatal};
+use mysten_common::{ZipDebugEqIteratorExt, assert_reachable, debug_fatal};
 use nonempty::{NonEmpty, nonempty};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
@@ -970,10 +970,10 @@ pub struct ProgrammableTransaction {
     pub commands: Vec<Command>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "testing")]
 static GASLESS_TOKENS_FOR_TESTING: RwLock<Vec<(String, u64)>> = RwLock::new(Vec::new());
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "testing")]
 pub fn add_gasless_token_for_testing(type_string: String, min_transfer: u64) {
     GASLESS_TOKENS_FOR_TESTING
         .write()
@@ -981,7 +981,7 @@ pub fn add_gasless_token_for_testing(type_string: String, min_transfer: u64) {
         .push((type_string, min_transfer));
 }
 
-#[cfg(debug_assertions)]
+#[cfg(feature = "testing")]
 pub fn clear_gasless_tokens_for_testing() {
     GASLESS_TOKENS_FOR_TESTING.write().unwrap().clear();
 }
@@ -1120,10 +1120,8 @@ pub fn get_gasless_allowed_token_types(config: &ProtocolConfig) -> Arc<BTreeMap<
     apply_test_token_overrides(arc)
 }
 
-/// Merges debug-only token overrides into the cached map.
-/// In release builds this is a no-op that returns the input unchanged.
 fn apply_test_token_overrides(base: Arc<BTreeMap<TypeTag, u64>>) -> Arc<BTreeMap<TypeTag, u64>> {
-    #[cfg(debug_assertions)]
+    #[cfg(feature = "testing")]
     {
         let overrides = GASLESS_TOKENS_FOR_TESTING.read().unwrap();
         if !overrides.is_empty() {
@@ -1357,8 +1355,9 @@ impl ProgrammableMoveCall {
             ))
         );
 
-        for (type_arg_constraint, type_input) in
-            type_arg_constraints.iter().zip(&self.type_arguments)
+        for (type_arg_constraint, type_input) in type_arg_constraints
+            .iter()
+            .zip_debug_eq(&self.type_arguments)
         {
             let Some(type_arg_constraint) = type_arg_constraint else {
                 continue;
@@ -2885,6 +2884,15 @@ pub trait TransactionDataAPI {
         coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>>;
 
+    /// Like `process_funds_withdrawals_for_signing`, but excludes the implicit gas payment
+    /// withdrawal. This is used during gas selection estimation to avoid double-counting the
+    /// gas budget when determining available address balance.
+    fn process_funds_withdrawals_for_estimation(
+        &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>>;
+
     /// Like `process_funds_withdrawals_for_signing`, but must only be called on a certified
     /// transaction, i.e. one that is known to be valid.
     fn process_funds_withdrawals_for_execution(
@@ -3037,47 +3045,15 @@ impl TransactionDataAPI for TransactionDataV1 {
         chain_identifier: ChainIdentifier,
         coin_resolver: &dyn CoinReservationResolverTrait,
     ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
-        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
+        self.accumulate_funds_withdrawals(chain_identifier, coin_resolver, true)
+    }
 
-        for withdraw in self.parsed_coin_reservations(chain_identifier) {
-            // During signing, use latest accumulator version (None).
-            let withdrawal_arg =
-                coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw, None)?;
-            withdraws.push(withdrawal_arg);
-        }
-
-        withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
-
-        // Accumulate all withdraws per account.
-        let mut withdraw_map: BTreeMap<AccumulatorObjId, (u64, TypeTag)> = BTreeMap::new();
-        for withdraw in withdraws {
-            let reserved_amount = match &withdraw.reservation {
-                Reservation::MaxAmountU64(amount) => {
-                    assert!(*amount > 0, "verified in validity check");
-                    *amount
-                }
-            };
-
-            let account_address = withdraw.owner_for_withdrawal(self);
-            let type_tag = withdraw.type_arg.to_type_tag();
-            let account_id =
-                AccumulatorValue::get_field_id(account_address, &type_tag).map_err(|e| {
-                    UserInputError::InvalidWithdrawReservation {
-                        error: e.to_string(),
-                    }
-                })?;
-
-            let (current_amount, _) = withdraw_map
-                .entry(account_id)
-                .or_insert_with(|| (0, type_tag));
-            *current_amount = current_amount.checked_add(reserved_amount).ok_or(
-                UserInputError::InvalidWithdrawReservation {
-                    error: "Balance withdraw reservation overflow".to_string(),
-                },
-            )?;
-        }
-
-        Ok(withdraw_map)
+    fn process_funds_withdrawals_for_estimation(
+        &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+        self.accumulate_funds_withdrawals(chain_identifier, coin_resolver, false)
     }
 
     fn process_funds_withdrawals_for_execution(
@@ -3560,6 +3536,55 @@ impl TransactionDataAPI for TransactionDataV1 {
 }
 
 impl TransactionDataV1 {
+    fn accumulate_funds_withdrawals(
+        &self,
+        chain_identifier: ChainIdentifier,
+        coin_resolver: &dyn CoinReservationResolverTrait,
+        include_gas_payment: bool,
+    ) -> UserInputResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
+        let mut withdraws: Vec<_> = self.get_funds_withdrawals().collect();
+
+        for withdraw in self.parsed_coin_reservations(chain_identifier) {
+            let withdrawal_arg =
+                coin_resolver.resolve_funds_withdrawal(self.sender(), withdraw, None)?;
+            withdraws.push(withdrawal_arg);
+        }
+
+        if include_gas_payment {
+            withdraws.extend(self.get_funds_withdrawal_for_gas_payment());
+        }
+
+        let mut withdraw_map: BTreeMap<AccumulatorObjId, (u64, TypeTag)> = BTreeMap::new();
+        for withdraw in withdraws {
+            let reserved_amount = match &withdraw.reservation {
+                Reservation::MaxAmountU64(amount) => {
+                    assert!(*amount > 0, "verified in validity check");
+                    *amount
+                }
+            };
+
+            let account_address = withdraw.owner_for_withdrawal(self);
+            let type_tag = withdraw.type_arg.to_type_tag();
+            let account_id =
+                AccumulatorValue::get_field_id(account_address, &type_tag).map_err(|e| {
+                    UserInputError::InvalidWithdrawReservation {
+                        error: e.to_string(),
+                    }
+                })?;
+
+            let (current_amount, _) = withdraw_map
+                .entry(account_id)
+                .or_insert_with(|| (0, type_tag));
+            *current_amount = current_amount.checked_add(reserved_amount).ok_or(
+                UserInputError::InvalidWithdrawReservation {
+                    error: "Balance withdraw reservation overflow".to_string(),
+                },
+            )?;
+        }
+
+        Ok(withdraw_map)
+    }
+
     fn get_funds_withdrawal_for_gas_payment(&self) -> Option<FundsWithdrawalArg> {
         if self.is_gas_paid_from_address_balance() && self.gas_data().budget > 0 {
             Some(if self.sender() != self.gas_owner() {

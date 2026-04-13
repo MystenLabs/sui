@@ -838,6 +838,7 @@ pub(crate) mod tests {
     use std::str::FromStr;
     use std::sync::atomic::AtomicUsize;
 
+    use itertools::Itertools;
     use move_core_types::annotated_value::MoveEnumLayout;
     use move_core_types::annotated_value::MoveFieldLayout;
     use move_core_types::annotated_value::MoveStructLayout;
@@ -1349,8 +1350,7 @@ pub(crate) mod tests {
             Atom::Bytes(Cow::Borrowed(&[4, 5, 6])),
         ];
 
-        assert_eq!(values.len(), atoms.len());
-        for (value, expect) in values.into_iter().zip(atoms.into_iter()) {
+        for (value, expect) in values.into_iter().zip_eq(atoms.into_iter()) {
             let actual = Atom::try_from(value).unwrap();
             assert_eq!(actual, expect);
         }
@@ -1435,7 +1435,7 @@ pub(crate) mod tests {
             Atom::Bytes(Cow::Borrowed(&[1, 2, 3])),
         ];
 
-        for (value, expect) in values.into_iter().zip(atoms.into_iter()) {
+        for (value, expect) in values.into_iter().zip_eq(atoms.into_iter()) {
             let actual = Atom::try_from(value).unwrap();
             assert_eq!(actual, expect);
         }
@@ -1469,8 +1469,7 @@ pub(crate) mod tests {
             json!("AQID"),
         ];
 
-        assert_eq!(values.len(), json.len());
-        for (value, expect) in values.into_iter().zip(json.into_iter()) {
+        for (value, expect) in values.into_iter().zip_eq(json.into_iter()) {
             let used = AtomicUsize::new(0);
             let meter = writer::Meter::new(&used, usize::MAX, usize::MAX);
             let actual = value.format_json::<Json>(meter).unwrap();

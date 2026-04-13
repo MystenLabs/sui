@@ -7,7 +7,7 @@ use crate::{
     },
     execution_cache::ObjectCacheRead,
 };
-use itertools::izip;
+use mysten_common::{ZipDebugEqIteratorExt, izip_debug_eq};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_types::{
@@ -104,7 +104,7 @@ impl TransactionInputLoader {
             .cache
             .multi_get_objects_with_more_accurate_error_return(&object_refs)?;
         assert_eq!(objects.len(), object_refs.len());
-        for (index, object) in fetch_indices.into_iter().zip(objects.into_iter()) {
+        for (index, object) in fetch_indices.into_iter().zip_debug_eq(objects.into_iter()) {
             input_results[index] = Some(ObjectReadResult {
                 input_object_kind: input_object_kinds[index],
                 object: ObjectReadResultKind::Object(object),
@@ -205,7 +205,7 @@ impl TransactionInputLoader {
 
         assert!(objects.len() == object_keys.len() && objects.len() == fetches.len());
 
-        for (object, key, (index, input)) in izip!(
+        for (object, key, (index, input)) in izip_debug_eq!(
             objects.into_iter(),
             object_keys.into_iter(),
             fetches.into_iter()

@@ -140,7 +140,6 @@ See <code><a href="../sui/transfer_policy.md#sui_transfer_policy">transfer_polic
 -  [Function `is_listed_exclusively`](#sui_kiosk_is_listed_exclusively)
 -  [Function `has_access`](#sui_kiosk_has_access)
 -  [Function `uid_mut_as_owner`](#sui_kiosk_uid_mut_as_owner)
--  [Function `set_allow_extensions`](#sui_kiosk_set_allow_extensions)
 -  [Function `uid`](#sui_kiosk_uid)
 -  [Function `uid_mut`](#sui_kiosk_uid_mut)
 -  [Function `owner`](#sui_kiosk_owner)
@@ -155,6 +154,7 @@ See <code><a href="../sui/transfer_policy.md#sui_transfer_policy">transfer_polic
 -  [Function `purchase_cap_kiosk`](#sui_kiosk_purchase_cap_kiosk)
 -  [Function `purchase_cap_item`](#sui_kiosk_purchase_cap_item)
 -  [Function `purchase_cap_min_price`](#sui_kiosk_purchase_cap_min_price)
+-  [Function `set_allow_extensions`](#sui_kiosk_set_allow_extensions)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -736,8 +736,8 @@ Creates a new Kiosk in a default configuration: sender receives the
 
 <pre><code><b>entry</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_default">default</a>(ctx: &<b>mut</b> TxContext) {
     <b>let</b> (<a href="../sui/kiosk.md#sui_kiosk">kiosk</a>, cap) = <a href="../sui/kiosk.md#sui_kiosk_new">new</a>(ctx);
-    <a href="../sui/transfer.md#sui_transfer_transfer">sui::transfer::transfer</a>(cap, ctx.sender());
-    <a href="../sui/transfer.md#sui_transfer_share_object">sui::transfer::share_object</a>(<a href="../sui/kiosk.md#sui_kiosk">kiosk</a>);
+    <a href="../sui/transfer.md#sui_transfer_transfer">transfer::transfer</a>(cap, ctx.sender());
+    <a href="../sui/transfer.md#sui_transfer_share_object">transfer::share_object</a>(<a href="../sui/kiosk.md#sui_kiosk">kiosk</a>);
 }
 </code></pre>
 
@@ -1505,34 +1505,6 @@ Access the <code>UID</code> using the <code><a href="../sui/kiosk.md#sui_kiosk_K
 
 </details>
 
-<a name="sui_kiosk_set_allow_extensions"></a>
-
-## Function `set_allow_extensions`
-
-[DEPRECATED]
-Allow or disallow <code><a href="../sui/kiosk.md#sui_kiosk_uid">uid</a></code> and <code><a href="../sui/kiosk.md#sui_kiosk_uid_mut">uid_mut</a></code> access via the <code>allow_extensions</code>
-setting.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_set_allow_extensions">set_allow_extensions</a>(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>, allow_extensions: bool)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_set_allow_extensions">set_allow_extensions</a>(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">KioskOwnerCap</a>, allow_extensions: bool) {
-    <b>assert</b>!(self.<a href="../sui/kiosk.md#sui_kiosk_has_access">has_access</a>(cap), <a href="../sui/kiosk.md#sui_kiosk_ENotOwner">ENotOwner</a>);
-    self.allow_extensions = allow_extensions;
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="sui_kiosk_uid"></a>
 
 ## Function `uid`
@@ -1898,6 +1870,32 @@ Get the <code>min_price</code> from the <code><a href="../sui/kiosk.md#sui_kiosk
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_purchase_cap_min_price">purchase_cap_min_price</a>&lt;T: key + store&gt;(self: &<a href="../sui/kiosk.md#sui_kiosk_PurchaseCap">PurchaseCap</a>&lt;T&gt;): u64 {
     self.min_price
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_kiosk_set_allow_extensions"></a>
+
+## Function `set_allow_extensions`
+
+Allow or disallow <code><a href="../sui/kiosk.md#sui_kiosk_uid">uid</a></code> and <code><a href="../sui/kiosk.md#sui_kiosk_uid_mut">uid_mut</a></code> access via the <code>allow_extensions</code> setting.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_set_allow_extensions">set_allow_extensions</a>(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">sui::kiosk::Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">sui::kiosk::KioskOwnerCap</a>, allow_extensions: bool)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_set_allow_extensions">set_allow_extensions</a>(self: &<b>mut</b> <a href="../sui/kiosk.md#sui_kiosk_Kiosk">Kiosk</a>, cap: &<a href="../sui/kiosk.md#sui_kiosk_KioskOwnerCap">KioskOwnerCap</a>, allow_extensions: bool) {
+    <b>assert</b>!(self.<a href="../sui/kiosk.md#sui_kiosk_has_access">has_access</a>(cap), <a href="../sui/kiosk.md#sui_kiosk_ENotOwner">ENotOwner</a>);
+    self.allow_extensions = allow_extensions;
 }
 </code></pre>
 

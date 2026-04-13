@@ -1,29 +1,57 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::Write;
-
 use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
+use reqwest::header::USER_AGENT;
 
-use sui_types::{
-    digests::{CheckpointContentsDigest, CheckpointDigest},
-    messages_checkpoint::CheckpointSequenceNumber,
-    object::Object,
-    supported_protocol_versions::{Chain, ProtocolConfig},
-};
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::VerifiedCheckpoint;
+use sui_types::object::Object;
+use sui_types::supported_protocol_versions::ProtocolConfig;
 
-use crate::{
-    CheckpointData, CheckpointStore, EpochData, EpochStore, ObjectKey, ObjectStore, SetupStore,
-    StoreSummary, TransactionInfo, TransactionStore, node::Node,
-};
+use crate::CheckpointStore;
+use crate::EpochData;
+use crate::EpochStore;
+use crate::ObjectKey;
+use crate::ObjectStore;
+use crate::TransactionInfo;
+use crate::TransactionStore;
+use crate::node::Node;
+
+macro_rules! block_on {
+    ($expr:expr) => {{
+        #[allow(clippy::disallowed_methods, clippy::result_large_err)]
+        {
+            if tokio::runtime::Handle::try_current().is_ok() {
+                std::thread::scope(|scope| {
+                    scope
+                        .spawn(|| {
+                            let rt = tokio::runtime::Builder::new_current_thread()
+                                .enable_all()
+                                .build()
+                                .expect("failed to build Tokio runtime");
+                            rt.block_on($expr)
+                        })
+                        .join()
+                        .expect("failed to join scoped thread running nested runtime")
+                })
+            } else {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("failed to build Tokio runtime");
+                rt.block_on($expr)
+            }
+        }
+    }};
+}
 
 /// Remote GraphQL-backed store.
 #[derive(Debug, Clone)]
 pub struct GraphQLStore {
     client: reqwest::Client,
     rpc: reqwest::Url,
-    node: Node,
     version: String,
 }
 
@@ -35,45 +63,48 @@ impl GraphQLStore {
         Ok(Self {
             client: reqwest::Client::new(),
             rpc,
-            node,
             version: version.to_string(),
         })
     }
 
-    /// Return the configured node.
-    pub fn node(&self) -> &Node {
-        &self.node
-    }
-
-    /// Return the configured GraphQL endpoint.
-    pub fn rpc(&self) -> &reqwest::Url {
-        &self.rpc
-    }
-
-    /// Return the binary version used for identification.
-    pub fn version(&self) -> &str {
-        &self.version
-    }
-
-    /// Return the chain associated with the configured node.
-    pub fn chain(&self) -> Chain {
-        self.node.chain()
-    }
-
-    /// Return the HTTP client used by the store.
-    pub fn client(&self) -> &reqwest::Client {
-        &self.client
-    }
-
     pub(crate) async fn run_query<T, V>(
         &self,
-        _operation: &Operation<T, V>,
+        operation: &Operation<T, V>,
     ) -> Result<GraphQlResponse<T>, Error>
     where
         T: serde::de::DeserializeOwned,
         V: serde::Serialize,
     {
-        todo!("GraphQL query execution is not implemented in the skeleton")
+        Self::run_query_internal(&self.client, &self.rpc, &self.version, operation).await
+    }
+
+    async fn run_query_internal<T, V>(
+        client: &reqwest::Client,
+        rpc: &reqwest::Url,
+        version: &str,
+        operation: &Operation<T, V>,
+    ) -> Result<GraphQlResponse<T>, Error>
+    where
+        T: serde::de::DeserializeOwned,
+        V: serde::Serialize,
+    {
+        client
+            .post(rpc.clone())
+            .header(USER_AGENT, format!("forking-data-store-v{}", version))
+            .json(operation)
+            .send()
+            .await
+            .context("Failed to send GQL query")?
+            .json::<GraphQlResponse<T>>()
+            .await
+            .context("Failed to read response in GQL query")
+    }
+
+    async fn get_verified_checkpoint_impl(
+        &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
+    ) -> Result<Option<VerifiedCheckpoint>, Error> {
+        crate::gql_queries::checkpoint_query::query(sequence_number, self).await
     }
 }
 
@@ -103,47 +134,141 @@ impl ObjectStore for GraphQLStore {
 }
 
 impl CheckpointStore for GraphQLStore {
-    fn get_checkpoint_by_sequence_number(
+    fn get_verified_checkpoint(
         &self,
-        _sequence: CheckpointSequenceNumber,
-    ) -> Result<Option<CheckpointData>, Error> {
-        todo!("GraphQL checkpoint reads are not implemented in the skeleton")
-    }
-
-    fn get_latest_checkpoint(&self) -> Result<Option<CheckpointData>, Error> {
-        todo!("GraphQL latest-checkpoint lookup is not implemented in the skeleton")
-    }
-
-    fn get_sequence_by_checkpoint_digest(
-        &self,
-        _digest: &CheckpointDigest,
-    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("GraphQL checkpoint-digest lookups are not implemented in the skeleton")
-    }
-
-    fn get_sequence_by_contents_digest(
-        &self,
-        _digest: &CheckpointContentsDigest,
-    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        todo!("GraphQL contents-digest lookups are not implemented in the skeleton")
+        sequence: Option<CheckpointSequenceNumber>,
+    ) -> Result<Option<VerifiedCheckpoint>, Error> {
+        Ok(block_on!(self.get_verified_checkpoint_impl(sequence))?)
     }
 }
 
-impl SetupStore for GraphQLStore {
-    fn setup(&self, _chain_id: Option<String>) -> Result<Option<String>, Error> {
-        todo!("GraphQL setup is not implemented in the skeleton")
-    }
-}
+#[cfg(test)]
+mod tests {
+    use cynic::QueryBuilder;
+    use fastcrypto::encoding::Base64 as FastCryptoBase64;
+    use serde_json::json;
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+    use wiremock::matchers::{body_partial_json, header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
-impl StoreSummary for GraphQLStore {
-    fn summary<W: Write>(&self, writer: &mut W) -> Result<()> {
-        writeln!(
-            writer,
-            "DataStore(node={}, rpc={}, version={})",
-            self.node.network_name(),
-            self.rpc,
-            self.version
-        )?;
-        Ok(())
+    use super::*;
+    use crate::gql_queries::checkpoint_query::{CheckpointArgs, Query as CheckpointQuery};
+
+    fn mock_store(server: &MockServer) -> GraphQLStore {
+        GraphQLStore::new(Node::Custom(server.uri()), "test-version").expect("store should build")
+    }
+
+    fn checkpoint_response_body(
+        certified: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
+    ) -> serde_json::Value {
+        json!({
+            "data": {
+                "checkpoint": {
+                    "summaryBcs": FastCryptoBase64::from_bytes(
+                        &bcs::to_bytes(certified.data()).expect("summary should serialize"),
+                    )
+                    .encoded(),
+                    "validatorSignatures": {
+                        "signature": FastCryptoBase64::from_bytes(
+                            certified.auth_sig().signature.as_ref(),
+                        )
+                        .encoded(),
+                        "signersMap": certified
+                            .auth_sig()
+                            .signers_map
+                            .iter()
+                            .map(|index| i32::try_from(index).expect("signer index fits in i32"))
+                            .collect::<Vec<_>>(),
+                    },
+                }
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn test_run_query() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(header("user-agent", "forking-data-store-vtest-version"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "sequenceNumber": 7,
+                }
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": {
+                    "checkpoint": null,
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let operation = CheckpointQuery::build(CheckpointArgs {
+            sequence_number: Some(7),
+        });
+
+        let response = store
+            .run_query(&operation)
+            .await
+            .expect("query should succeed");
+        assert!(response.data.is_some());
+
+        let requests = server
+            .received_requests()
+            .await
+            .expect("wiremock should record requests");
+        let request_body: serde_json::Value = requests[0]
+            .body_json()
+            .expect("request body should be json");
+        let query = request_body
+            .get("query")
+            .and_then(serde_json::Value::as_str)
+            .expect("query string should be present");
+        assert!(query.contains("checkpoint"));
+        assert!(query.contains("summaryBcs"));
+        assert!(query.contains("validatorSignatures"));
+    }
+
+    #[tokio::test]
+    async fn test_get_checkpoint_by_sequence_number() {
+        let server = MockServer::start().await;
+        let checkpoint = TestCheckpointBuilder::new(11).build_checkpoint();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "sequenceNumber": 11,
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(checkpoint_response_body(&checkpoint.summary)),
+            )
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let verified = store
+            .get_verified_checkpoint_impl(Some(11))
+            .await
+            .expect("checkpoint query should succeed")
+            .expect("checkpoint should be present");
+
+        assert_eq!(verified.data(), checkpoint.summary.data());
+        assert_eq!(
+            verified.auth_sig().epoch,
+            checkpoint.summary.auth_sig().epoch
+        );
+        assert_eq!(
+            verified.auth_sig().signature.as_ref(),
+            checkpoint.summary.auth_sig().signature.as_ref()
+        );
+        assert_eq!(
+            verified.auth_sig().signers_map,
+            checkpoint.summary.auth_sig().signers_map
+        );
     }
 }

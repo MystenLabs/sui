@@ -5,6 +5,7 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::TransactionNotFoundError;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -216,7 +217,7 @@ fn render_executed_transaction(
             .inner()
             .multi_get_objects_by_key(&object_keys)
             .into_iter()
-            .zip(object_keys.into_iter())
+            .zip_debug_eq(object_keys.into_iter())
         {
             if let Some(o) = o {
                 objects.insert(o);

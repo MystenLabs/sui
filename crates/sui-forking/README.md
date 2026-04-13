@@ -1,0 +1,46 @@
+# Disclaimer
+
+This is highly experimental tooling intended for development and testing purposes only. It is not recommended for production use and is provided as-is without guarantees.
+
+Expect breaking changes until this is officially released and stable.
+
+# Sui Forking Tool
+
+A development tool that enables testing and developing against a local Sui network initialized with state from mainnet, testnet, or devnet at a specific checkpoint.
+
+## Overview
+
+`sui-forking` allows developers to start a local network in lock-step mode and execute transactions against some initial state derived from the live Sui network. This enables you to:
+
+- Depend on existing on-chain packages and data
+- Test contracts that interact with real deployed packages
+- Develop locally while maintaining consistency with production state
+- Run integration tests against forked network state and using packages deployed on the real live network
+
+**Important Note**
+Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
+That means that you have full control over the advancement of checkpoints, time, and epochs to simulate different scenarios.
+
+## Forked Network vs Sui CLI Local Network
+
+The table below summarizes when to use each option:
+
+| Topic | Local forked network (`sui-forking`) | Sui CLI local network |
+| --- | --- | --- |
+| Initial state | Starts from real chain state (mainnet/testnet/devnet) at a chosen checkpoint | Starts from a fresh genesis state (or from an existing one on disk) |
+| Existing on-chain packages and objects | Available from the fork point (fetched/cached on demand) | Not available unless you deploy/create them locally |
+| External dependency at runtime | Needs network access to source chain for first-time object fetches | Fully local once started |
+| Execution model | Single validator, lock-step, sequential execution | Multi-validator local network flow |
+| Checkpoint/time/epoch control | Explicit control through `advance-checkpoint`, `advance-clock` | Driven by normal local network progression |
+| Best for | Testing against real deployed packages and realistic chain state | Fast local development from clean state |
+| Startup cost | Higher (state bootstrap + potential object downloads) | Lower (local genesis and startup) |
+| Determinism/reproducibility | Deterministic from selected checkpoint + seeded objects | Deterministic from local genesis/configuration |
+
+## Limitations
+- Staking and related operations are not supported.
+- Single validator, single authority network.
+- Object fetching overhead: First access to objects requires network download.
+- Forking from a checkpoint older than 1 hour requires explicit object seeding (you need to know which owned objects you want to have pulled at startup)
+- If it forks at checkpoint X, you cannot depend on objects created after checkpoint X from the actual real network. You'll need to restart the network at that checkpoint or a later one.
+- Sequential execution: Transactions are executed one at a time, no parallelism.
+

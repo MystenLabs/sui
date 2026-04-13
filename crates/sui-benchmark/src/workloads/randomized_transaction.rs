@@ -12,6 +12,7 @@ use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
+use mysten_common::ZipDebugEqIteratorExt;
 use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
@@ -698,7 +699,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
             self.owned_objects = results.iter().map(|x| x.0).collect();
 
             // Update gas object in payload gas
-            for (payload_gas, result) in self.payload_gas.iter_mut().zip(results.iter()) {
+            for (payload_gas, result) in self.payload_gas.iter_mut().zip_debug_eq(results.iter()) {
                 payload_gas.0 = result.1;
             }
         }

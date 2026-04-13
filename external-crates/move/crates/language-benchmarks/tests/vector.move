@@ -1,9 +1,9 @@
-module 0x1::bench {
+module 0x2::bench {
     const COUNT: u64 = 100_000u64;
 
     public fun bench_vector_push_pop() {
         let mut v = vector::empty<u64>();
-        let mut i = 0;
+        let mut i: u64 = 0;
         while (i < COUNT) {
             v.push_back(i);
             i = i + 1;
@@ -18,7 +18,7 @@ module 0x1::bench {
     public fun bench_vector_append() {
         let mut v1 = vector::empty<u64>();
         let mut v2 = vector::empty<u64>();
-        let mut i = 0;
+        let mut i: u64 = 0;
         while (i < COUNT) {
             v1.push_back(i);
             v2.push_back(i);

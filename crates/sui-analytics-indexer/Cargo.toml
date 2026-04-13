@@ -16,6 +16,7 @@ chrono.workspace = true
 csv.workspace = true
 indexmap.workspace = true
 move-core-types.workspace = true
+mysten-common.workspace = true
 object_store.workspace = true
 num_enum.workspace = true
 prometheus.workspace = true

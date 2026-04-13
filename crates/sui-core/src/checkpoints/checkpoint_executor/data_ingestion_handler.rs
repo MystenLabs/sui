@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_common::ZipDebugEqIteratorExt;
+
 use crate::checkpoints::checkpoint_executor::{CheckpointExecutionData, CheckpointTransactionData};
 use crate::execution_cache::TransactionCacheRead;
 use prost::Message;
@@ -96,7 +98,7 @@ pub(crate) fn load_checkpoint(
     let mut events = transaction_cache_reader
         .multi_get_events(&event_tx_digests)
         .into_iter()
-        .zip(event_tx_digests)
+        .zip_debug_eq(event_tx_digests)
         .map(|(maybe_event, tx_digest)| {
             maybe_event
                 .ok_or(SuiErrorKind::TransactionEventsNotFound { digest: tx_digest }.into())
@@ -108,7 +110,7 @@ pub(crate) fn load_checkpoint(
     for (tx, fx) in ckpt_tx_data
         .transactions
         .iter()
-        .zip(ckpt_tx_data.effects.iter())
+        .zip_debug_eq(ckpt_tx_data.effects.iter())
     {
         let events = fx.events_digest().map(|_event_digest| {
             events

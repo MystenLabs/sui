@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
@@ -63,6 +64,7 @@ use tracing::{debug, error, info, instrument};
 
 use crate::admission_queue::{AdmissionQueueHandle, AdmissionQueueManager};
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
+use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -214,6 +216,7 @@ pub struct ValidatorServiceMetrics {
     forwarded_header_not_included: IntCounter,
     client_id_source_config_mismatch: IntCounter,
     x_forwarded_for_num_hops: Gauge,
+    pub gasless_rate_limited_count: IntCounter,
     admission_queue_direct_bypasses: IntCounter,
 }
 
@@ -386,6 +389,12 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
+            gasless_rate_limited_count: register_int_counter_with_registry!(
+                "validator_service_gasless_rate_limited_count",
+                "Number of gasless transactions rejected by rate limiter",
+                registry,
+            )
+            .unwrap(),
             admission_queue_direct_bypasses: register_int_counter_with_registry!(
                 "validator_service_admission_queue_direct_bypasses",
                 "Number of transactions that bypassed the queue (system not overloaded)",
@@ -408,6 +417,7 @@ pub struct ValidatorService {
     metrics: Arc<ValidatorServiceMetrics>,
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
+    gasless_limiter: GaslessRateLimiter,
     admission_queue: Arc<ArcSwap<AdmissionQueueHandle>>,
     admission_queue_bypass_threshold: usize,
 }
@@ -421,6 +431,7 @@ impl ValidatorService {
         admission_queue: Arc<ArcSwap<AdmissionQueueHandle>>,
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
+        let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
         let admission_queue_bypass_threshold = admission_queue.load().bypass_threshold;
         Self {
             state,
@@ -428,6 +439,7 @@ impl ValidatorService {
             metrics: validator_metrics,
             traffic_controller,
             client_id_source,
+            gasless_limiter,
             admission_queue,
             admission_queue_bypass_threshold,
         }
@@ -438,6 +450,7 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Self {
+        let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
         let epoch_store = state.epoch_store_for_testing().clone();
         let slot_freed_notify = Arc::new(tokio::sync::Notify::new());
         let service =
@@ -451,6 +464,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: None,
             client_id_source: None,
+            gasless_limiter,
             admission_queue,
             admission_queue_bypass_threshold,
         }
@@ -535,7 +549,7 @@ impl ValidatorService {
         // All objects should be found, since owned input objects have been validated to exist.
         objects
             .into_iter()
-            .zip(object_ids.iter())
+            .zip_debug_eq(object_ids.iter())
             .filter_map(|(obj, id)| {
                 let Some(o) = obj else {
                     return Some(Err::<ObjectID, SuiError>(
@@ -573,6 +587,7 @@ impl ValidatorService {
             metrics,
             traffic_controller: _,
             client_id_source,
+            gasless_limiter: _,
             admission_queue: _,
             admission_queue_bypass_threshold: _,
         } = self.clone();
@@ -760,6 +775,24 @@ impl ValidatorService {
                 continue;
             }
 
+            if transaction
+                .data()
+                .transaction_data()
+                .is_gasless_transaction()
+                && !self
+                    .gasless_limiter
+                    .try_acquire(epoch_store.protocol_config())
+            {
+                metrics.gasless_rate_limited_count.inc();
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: SuiErrorKind::ValidatorOverloadedRetryAfter {
+                        retry_after_secs: 1,
+                    }
+                    .into(),
+                });
+                continue;
+            }
+
             // Ok to fail the request when any signature is invalid.
             let verified_transaction = {
                 let _metrics_guard = metrics.tx_verification_latency.start_timer();
@@ -782,9 +815,7 @@ impl ValidatorService {
                 }
             };
 
-            let tx_digest = verified_transaction.tx().digest();
-            tx_digests.push(*tx_digest);
-
+            let tx_digest = *verified_transaction.tx().digest();
             debug!(
                 ?tx_digest,
                 "handle_submit_transaction: verified transaction"
@@ -794,7 +825,7 @@ impl ValidatorService {
             // which could have been consumed.
             if let Some(effects) = state
                 .get_transaction_cache_reader()
-                .get_executed_effects(tx_digest)
+                .get_executed_effects(&tx_digest)
             {
                 let effects_digest = effects.digest();
                 if let Ok(executed_data) = self.complete_executed_data(effects).await {
@@ -811,10 +842,10 @@ impl ValidatorService {
             if self
                 .state
                 .get_transaction_cache_reader()
-                .transaction_executed_in_last_epoch(tx_digest, epoch_store.epoch())
+                .transaction_executed_in_last_epoch(&tx_digest, epoch_store.epoch())
             {
                 results[idx] = Some(SubmitTxResult::Rejected {
-                    error: UserInputError::TransactionAlreadyExecuted { digest: *tx_digest }.into(),
+                    error: UserInputError::TransactionAlreadyExecuted { digest: tx_digest }.into(),
                 });
                 debug!(
                     ?tx_digest,
@@ -847,7 +878,7 @@ impl ValidatorService {
                     // This is an edge case so checking executed effects twice is acceptable.
                     if let Some(effects) = state
                         .get_transaction_cache_reader()
-                        .get_executed_effects(tx_digest)
+                        .get_executed_effects(&tx_digest)
                     {
                         let effects_digest = effects.digest();
                         if let Ok(executed_data) = self.complete_executed_data(effects).await {
@@ -915,6 +946,7 @@ impl ValidatorService {
             ));
 
             transaction_indexes.push(idx);
+            tx_digests.push(tx_digest);
             total_size_bytes += tx_size;
         }
 
@@ -1032,8 +1064,8 @@ impl ValidatorService {
             // Otherwise, return the consensus position for each transaction.
             for ((idx, tx_digest), consensus_position) in transaction_indexes
                 .into_iter()
-                .zip(tx_digests)
-                .zip(consensus_positions)
+                .zip_debug_eq(tx_digests)
+                .zip_debug_eq(consensus_positions)
             {
                 debug!(
                     ?tx_digest,

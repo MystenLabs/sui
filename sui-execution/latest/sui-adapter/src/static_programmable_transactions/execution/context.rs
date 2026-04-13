@@ -47,6 +47,7 @@ use move_vm_runtime::{
     },
     validation::verification::ast::Package as VerifiedPackage,
 };
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::debug_fatal;
 use nonempty::nonempty;
 use quick_cache::unsync::Cache as QCache;
@@ -77,7 +78,7 @@ use sui_types::{
     event::Event,
     execution::{ExecutionResults, ExecutionResultsV2},
     execution_status::{CommandArgumentError, ExecutionErrorKind, PackageUpgradeError},
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     move_package::{
         MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
         normalize_deserialized_modules,
@@ -250,7 +251,7 @@ enum ResolvedLocation<'a> {
 pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension> {
     pub env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
     /// Metrics for reporting exceeded limits
-    pub metrics: Arc<LimitsMetrics>,
+    pub metrics: Arc<ExecutionMetrics>,
     pub native_extensions: NativeExtensions<'env>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
@@ -318,7 +319,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     #[instrument(name = "Context::new", level = "trace", skip_all)]
     pub fn new(
         env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
         payment_location: Option<GasPayment>,
@@ -1495,7 +1496,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
         );
         results
             .iter()
-            .zip(result_tys)
+            .zip_debug_eq(result_tys)
             .map(|(v, ty)| self.tracked_result(&v.0, ty.clone()))
             .collect()
     }
@@ -2541,7 +2542,10 @@ fn assert_expected_move_object_type(
         "Actual type arg length does not match expected. \
        actual: {actual:?} vs expected: {expected:?}",
     );
-    for (actual_ty, expected_ty) in actual_type_arguments.iter().zip(&expected_type_arguments) {
+    for (actual_ty, expected_ty) in actual_type_arguments
+        .iter()
+        .zip_debug_eq(&expected_type_arguments)
+    {
         assert_expected_type(actual_ty, expected_ty)?;
     }
     Ok(())
@@ -2597,7 +2601,10 @@ fn assert_expected_data_type(
         "Actual type arg length does not match expected. \
        actual: {actual:?} vs expected: {expected:?}",
     );
-    for (actual_ty, expected_ty) in actual_type_arguments.iter().zip(expected_type_arguments) {
+    for (actual_ty, expected_ty) in actual_type_arguments
+        .iter()
+        .zip_debug_eq(expected_type_arguments)
+    {
         assert_expected_type(actual_ty, expected_ty)?;
     }
     Ok(())

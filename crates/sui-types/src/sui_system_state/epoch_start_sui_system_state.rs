@@ -10,6 +10,7 @@ use crate::crypto::{AuthorityPublicKey, NetworkPublicKey};
 use crate::multiaddr::Multiaddr;
 use anemo::PeerId;
 use consensus_config::{Authority, Committee as ConsensusCommittee};
+use mysten_common::ZipDebugEqIteratorExt;
 use serde::{Deserialize, Serialize};
 use sui_protocol_config::ProtocolVersion;
 use tracing::error;
@@ -205,7 +206,7 @@ impl EpochStartSystemStateTrait for EpochStartSystemStateV1 {
         for ((i, mysticeti_authority), sui_authority_name) in authorities
             .iter()
             .enumerate()
-            .zip(self.get_sui_committee().names())
+            .zip_debug_eq(self.get_sui_committee().names())
         {
             if sui_authority_name.0 != mysticeti_authority.authority_name.to_bytes() {
                 error!(

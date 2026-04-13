@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! GQL Queries
-//! Interface to the rpc for the gql schema defined in `crates\sui-indexer-alt-graphql/schema.graphql`.
-//! Built in 3 modules: epoch_query, txn_query, object_query.
+//! Interface to the rpc for the gql schema defined in `crates/sui-indexer-alt-graphql/schema.graphql`.
+//! Built in modules for epochs, transactions, objects, and checkpoints.
 //! No GQL type escapes this module. From here we return structures defined in this crate
 //! or bcs encoded data of runtime structures.
 //!
@@ -324,6 +324,212 @@ pub(crate) mod object_query {
                     _ => None,
                 },
             }
+        }
+    }
+}
+
+pub(crate) mod checkpoint_query {
+    use fastcrypto::traits::ToFromBytes;
+    use roaring::RoaringBitmap;
+    use sui_types::{
+        crypto::{AggregateAuthoritySignature, AuthorityStrongQuorumSignInfo},
+        messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, VerifiedCheckpoint},
+    };
+
+    use super::*;
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "Base64")]
+    pub(crate) struct Base64(pub String);
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct CheckpointArgs {
+        pub sequence_number: Option<u64>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "CheckpointArgs", graphql_type = "Query")]
+    pub(crate) struct Query {
+        #[arguments(sequenceNumber: $sequence_number)]
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Checkpoint {
+        summary_bcs: Option<Base64>,
+        validator_signatures: Option<ValidatorAggregatedSignature>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct ValidatorAggregatedSignature {
+        signature: Option<Base64>,
+        signers_map: Vec<i32>,
+    }
+
+    pub(crate) async fn query(
+        sequence_number: Option<u64>,
+        data_store: &GraphQLStore,
+    ) -> Result<Option<VerifiedCheckpoint>, Error> {
+        let query = Query::build(CheckpointArgs { sequence_number });
+        let response = data_store.run_query(&query).await?;
+        let Some(checkpoint) = response.data.and_then(|data| data.checkpoint) else {
+            return Ok(None);
+        };
+        Ok(Some(decode_checkpoint(checkpoint)?))
+    }
+
+    fn decode_checkpoint(checkpoint: Checkpoint) -> Result<VerifiedCheckpoint, Error> {
+        let summary: CheckpointSummary = decode_bcs(checkpoint.summary_bcs, "checkpoint summary")?;
+        let Some(validator_signatures) = checkpoint.validator_signatures else {
+            return Err(anyhow!(
+                "Missing validator signatures in checkpoint response"
+            ));
+        };
+
+        let signature_bytes = CryptoBase64::decode(
+            &validator_signatures
+                .signature
+                .ok_or_else(|| anyhow!("Missing aggregated checkpoint signature"))?
+                .0,
+        )
+        .context("checkpoint signature does not decode")?;
+        let signature = AggregateAuthoritySignature::from_bytes(&signature_bytes)
+            .context("cannot deserialize aggregated checkpoint signature")?;
+        let signers_map = validator_signatures
+            .signers_map
+            .into_iter()
+            .map(|signer| {
+                u32::try_from(signer)
+                    .map_err(|_| anyhow!("negative signer index in checkpoint signature"))
+            })
+            .collect::<Result<RoaringBitmap, Error>>()?;
+
+        let certified = CertifiedCheckpointSummary::new_from_data_and_sig(
+            summary.clone(),
+            AuthorityStrongQuorumSignInfo {
+                epoch: summary.epoch,
+                signature,
+                signers_map,
+            },
+        );
+        // TODO: should we fetch the committee and pass that into try_into_verified instead of
+        // constructing this with new_unchecked?
+        Ok(VerifiedCheckpoint::new_unchecked(certified))
+    }
+
+    fn decode_bcs<T>(field: Option<Base64>, label: &str) -> Result<T, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        let bytes = CryptoBase64::decode(
+            &field
+                .ok_or_else(|| anyhow!("Missing {} in checkpoint response", label))?
+                .0,
+        )
+        .with_context(|| format!("{} does not decode", label))?;
+        bcs::from_bytes(&bytes).with_context(|| format!("cannot deserialize {}", label))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::convert::TryFrom;
+
+        use fastcrypto::encoding::Base64 as FastCryptoBase64;
+        use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+        use super::{Base64, Checkpoint, ValidatorAggregatedSignature, decode_checkpoint};
+
+        #[test]
+        fn decode_checkpoint_reconstructs_verified_checkpoint() {
+            let checkpoint = TestCheckpointBuilder::new(7).build_checkpoint();
+            let certified = checkpoint.summary;
+
+            let decoded = decode_checkpoint(Checkpoint {
+                summary_bcs: Some(Base64(
+                    FastCryptoBase64::from_bytes(
+                        &bcs::to_bytes(certified.data()).expect("summary should serialize"),
+                    )
+                    .encoded(),
+                )),
+                validator_signatures: Some(ValidatorAggregatedSignature {
+                    signature: Some(Base64(
+                        FastCryptoBase64::from_bytes(certified.auth_sig().signature.as_ref())
+                            .encoded(),
+                    )),
+                    signers_map: certified
+                        .auth_sig()
+                        .signers_map
+                        .iter()
+                        .map(|index| i32::try_from(index).expect("test signers fit in i32"))
+                        .collect(),
+                }),
+            })
+            .expect("checkpoint should decode");
+
+            assert_eq!(decoded.data(), certified.data());
+            assert_eq!(decoded.auth_sig().epoch, certified.auth_sig().epoch);
+            assert_eq!(
+                decoded.auth_sig().signature.as_ref(),
+                certified.auth_sig().signature.as_ref()
+            );
+            assert_eq!(
+                decoded.auth_sig().signers_map,
+                certified.auth_sig().signers_map
+            );
+        }
+
+        #[test]
+        fn decode_checkpoint_rejects_missing_validator_signatures() {
+            let checkpoint = TestCheckpointBuilder::new(7).build_checkpoint();
+
+            let error = decode_checkpoint(Checkpoint {
+                summary_bcs: Some(Base64(
+                    FastCryptoBase64::from_bytes(
+                        &bcs::to_bytes(checkpoint.summary.data())
+                            .expect("summary should serialize"),
+                    )
+                    .encoded(),
+                )),
+                validator_signatures: None,
+            })
+            .expect_err("missing validator signatures should fail");
+
+            assert!(
+                error
+                    .to_string()
+                    .contains("Missing validator signatures in checkpoint response")
+            );
+        }
+
+        #[test]
+        fn decode_checkpoint_rejects_negative_signer_indices() {
+            let checkpoint = TestCheckpointBuilder::new(7).build_checkpoint();
+
+            let error = decode_checkpoint(Checkpoint {
+                summary_bcs: Some(Base64(
+                    FastCryptoBase64::from_bytes(
+                        &bcs::to_bytes(checkpoint.summary.data())
+                            .expect("summary should serialize"),
+                    )
+                    .encoded(),
+                )),
+                validator_signatures: Some(ValidatorAggregatedSignature {
+                    signature: Some(Base64(
+                        FastCryptoBase64::from_bytes(
+                            checkpoint.summary.auth_sig().signature.as_ref(),
+                        )
+                        .encoded(),
+                    )),
+                    signers_map: vec![-1],
+                }),
+            })
+            .expect_err("negative signer index should fail");
+
+            assert!(
+                error
+                    .to_string()
+                    .contains("negative signer index in checkpoint signature")
+            );
         }
     }
 }

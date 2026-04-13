@@ -10,7 +10,6 @@ use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use crate::error::ObjectNotFoundError;
-use crate::reader::StateReader;
 use bytes::Bytes;
 use move_binary_format::normalized;
 use sui_protocol_config::ProtocolConfig;
@@ -20,6 +19,7 @@ use sui_sdk_types::Address;
 use sui_sdk_types::Argument;
 use sui_sdk_types::Command;
 use sui_types::base_types::ObjectRef;
+use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
 use sui_types::move_package::MovePackage;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::FundsWithdrawalArg;
@@ -65,9 +65,9 @@ pub fn resolve_transaction(
                 .with_reason(ErrorReason::FieldInvalid)
         })?;
 
-    let mut called_packages = called_packages(&service.reader, protocol_config, &commands)?;
+    let mut called_packages = called_packages(service, protocol_config, &commands)?;
     resolve_unresolved_transaction(
-        &service.reader,
+        service,
         &mut called_packages,
         reference_gas_price,
         protocol_config.max_tx_gas(),
@@ -91,7 +91,7 @@ struct NormalizedPackage {
 }
 
 pub(super) fn called_packages(
-    reader: &StateReader,
+    service: &RpcService,
     protocol_config: &ProtocolConfig,
     commands: &[Command],
 ) -> Result<NormalizedPackages> {
@@ -106,7 +106,8 @@ pub(super) fn called_packages(
             None
         }
     }) {
-        let package = reader
+        let package = service
+            .reader
             .inner()
             .get_object(&(move_call.package.into()))
             .ok_or_else(|| ObjectNotFoundError::new(move_call.package))?
@@ -146,7 +147,7 @@ pub(super) fn called_packages(
 }
 
 fn resolve_unresolved_transaction(
-    reader: &StateReader,
+    service: &RpcService,
     called_packages: &mut NormalizedPackages,
     reference_gas_price: u64,
     max_gas_budget: u64,
@@ -160,7 +161,7 @@ fn resolve_unresolved_transaction(
         let gas_coins = unresolved_gas_payment
             .objects
             .iter()
-            .map(|unresolved| resolve_gas_object_reference(reader, unresolved.try_into()?))
+            .map(|unresolved| resolve_gas_object_reference(service, unresolved.try_into()?))
             .collect::<Result<Vec<_>>>()?;
         let payment = gas_coins.iter().map(|(r, _)| *r).collect::<Vec<_>>();
         let max_gas_budget = if payment.is_empty() {
@@ -200,7 +201,7 @@ fn resolve_unresolved_transaction(
                 .with_reason(ErrorReason::FieldInvalid)
         })?
         .unwrap_or(sui_types::transaction::TransactionExpiration::None);
-    let ptb = resolve_ptb(reader, called_packages, unresolved_inputs, commands)?;
+    let ptb = resolve_ptb(service, called_packages, unresolved_inputs, commands)?;
     Ok(TransactionData::V1(
         sui_types::transaction::TransactionDataV1 {
             kind: sui_types::transaction::TransactionKind::ProgrammableTransaction(ptb),
@@ -211,11 +212,53 @@ fn resolve_unresolved_transaction(
     ))
 }
 
+/// If the unresolved reference has a digest that matches the coin reservation
+/// magic, parse it into a `ParsedObjectRefWithdrawal`. Coin reservation
+/// ObjectRefs encode an address balance reservation and don't correspond to
+/// real objects in storage, so callers must pass them through without a
+/// storage lookup.
+///
+/// Returns the parsed withdrawal together with the version from the
+/// unresolved reference (which `ParsedObjectRefWithdrawal` does not store).
+fn try_parse_coin_reservation(
+    unresolved: &UnresolvedObjectReference,
+    service: &RpcService,
+) -> Option<(
+    ParsedObjectRefWithdrawal,
+    sui_types::base_types::SequenceNumber,
+)> {
+    use sui_types::coin_reservation::ParsedDigest;
+
+    let digest = unresolved.digest?;
+    let object_digest = sui_types::digests::ObjectDigest::new(*digest.inner());
+    if !ParsedDigest::is_coin_reservation_digest(&object_digest) {
+        return None;
+    }
+
+    let object_id: sui_types::base_types::ObjectID = unresolved.object_id.into();
+    let version = sui_types::base_types::SequenceNumber::from_u64(unresolved.version.unwrap_or(0));
+    let obj_ref = (object_id, version, object_digest);
+    let parsed = ParsedObjectRefWithdrawal::parse(&obj_ref, service.chain_id)?;
+    Some((parsed, version))
+}
+
 fn resolve_gas_object_reference(
-    reader: &StateReader,
+    service: &RpcService,
     unresolved_object_reference: UnresolvedObjectReference,
 ) -> Result<(ObjectRef, u64)> {
-    let object = reader
+    // Coin reservation ObjectRefs don't exist in storage; pass them through
+    // as-is when the digest identifies one.
+    if let Some((parsed, version)) =
+        try_parse_coin_reservation(&unresolved_object_reference, service)
+    {
+        return Ok((
+            parsed.encode(version, service.chain_id),
+            parsed.reservation_amount(),
+        ));
+    }
+
+    let object = service
+        .reader
         .inner()
         .get_object(&(unresolved_object_reference.object_id.into()))
         .ok_or_else(|| ObjectNotFoundError::new(unresolved_object_reference.object_id))?;
@@ -232,10 +275,19 @@ fn resolve_gas_object_reference(
 }
 
 fn resolve_object_reference(
-    reader: &StateReader,
+    service: &RpcService,
     unresolved_object_reference: UnresolvedObjectReference,
 ) -> Result<ObjectRef> {
-    let object = reader
+    // Coin reservation ObjectRefs don't exist in storage; pass them through
+    // as-is when the digest identifies one.
+    if let Some((parsed, version)) =
+        try_parse_coin_reservation(&unresolved_object_reference, service)
+    {
+        return Ok(parsed.encode(version, service.chain_id));
+    }
+
+    let object = service
+        .reader
         .inner()
         .get_object(&(unresolved_object_reference.object_id.into()))
         .ok_or_else(|| ObjectNotFoundError::new(unresolved_object_reference.object_id))?;
@@ -296,7 +348,7 @@ fn resolve_object_reference_with_object(
 }
 
 pub(super) fn resolve_ptb(
-    reader: &StateReader,
+    service: &RpcService,
     called_packages: &mut NormalizedPackages,
     unresolved_inputs: &[sui_rpc::proto::sui::rpc::v2::Input],
     commands: Vec<Command>,
@@ -304,7 +356,7 @@ pub(super) fn resolve_ptb(
     let inputs = unresolved_inputs
         .iter()
         .enumerate()
-        .map(|(arg_idx, arg)| resolve_arg(reader, called_packages, &commands, arg, arg_idx))
+        .map(|(arg_idx, arg)| resolve_arg(service, called_packages, &commands, arg, arg_idx))
         .collect::<Result<_>>()?;
 
     ProgrammableTransaction {
@@ -315,7 +367,7 @@ pub(super) fn resolve_ptb(
 }
 
 fn resolve_arg(
-    reader: &StateReader,
+    service: &RpcService,
     called_packages: &mut NormalizedPackages,
     commands: &[Command],
     arg: &sui_rpc::proto::sui::rpc::v2::Input,
@@ -357,7 +409,7 @@ fn resolve_arg(
             funds_withdrawal: None,
             literal: None,
         } => CallArg::Object(ObjectArg::ImmOrOwnedObject(resolve_object_reference(
-            reader,
+            service,
             UnresolvedObjectReference {
                 object_id,
                 version,
@@ -376,7 +428,7 @@ fn resolve_arg(
             funds_withdrawal: None,
             literal: None,
         } => CallArg::Object(resolve_shared_input(
-            reader,
+            service,
             called_packages,
             commands,
             arg_idx,
@@ -394,7 +446,7 @@ fn resolve_arg(
             funds_withdrawal: None,
             literal: None,
         } => CallArg::Object(ObjectArg::Receiving(resolve_object_reference(
-            reader,
+            service,
             UnresolvedObjectReference {
                 object_id,
                 version,
@@ -413,7 +465,7 @@ fn resolve_arg(
             funds_withdrawal: None,
             literal: None,
         } => CallArg::Object(resolve_object(
-            reader,
+            service,
             called_packages,
             commands,
             arg_idx,
@@ -473,7 +525,7 @@ fn resolve_arg(
 }
 
 fn resolve_object(
-    reader: &StateReader,
+    service: &RpcService,
     called_packages: &NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
@@ -482,8 +534,22 @@ fn resolve_object(
     digest: Option<sui_sdk_types::Digest>,
     _mutable: Option<bool>,
 ) -> Result<ObjectArg> {
+    // Coin reservation ObjectRefs don't exist in storage; pass them through
+    // as-is when the digest identifies one.
+    let unresolved = UnresolvedObjectReference {
+        object_id,
+        version,
+        digest,
+    };
+    if let Some((parsed, ver)) = try_parse_coin_reservation(&unresolved, service) {
+        return Ok(ObjectArg::ImmOrOwnedObject(
+            parsed.encode(ver, service.chain_id),
+        ));
+    }
+
     let id = object_id.into();
-    let object = reader
+    let object = service
+        .reader
         .inner()
         .get_object(&id)
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
@@ -528,14 +594,15 @@ fn resolve_object(
 }
 
 fn resolve_shared_input(
-    reader: &StateReader,
+    service: &RpcService,
     called_packages: &NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
     object_id: Address,
 ) -> Result<ObjectArg> {
     let id = object_id.into();
-    let object = reader
+    let object = service
+        .reader
         .inner()
         .get_object(&id)
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;

@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag, u256::U256};
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     base_types::TxContext,
     error::ExecutionError,
@@ -46,11 +47,12 @@ pub fn transaction<Mode: ExecutionMode>(
     );
     let inputs = withdrawal_compatibility_inputs
         .into_iter()
-        .zip(inputs)
+        .zip_debug_eq(inputs)
         .map(|(is_withdrawal_compatibility_input, arg)| {
             input::<Mode>(env, tx_context, is_withdrawal_compatibility_input, arg)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let original_command_len = commands.len();
     let commands = commands
         .into_iter()
         .enumerate()
@@ -59,6 +61,7 @@ pub fn transaction<Mode: ExecutionMode>(
     let loaded_tx = L::Transaction {
         gas_payment,
         inputs,
+        original_command_len,
         commands,
     };
     metering::loading::meter(meter, &loaded_tx)?;

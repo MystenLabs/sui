@@ -12,6 +12,7 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use futures::TryStreamExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::FieldMask;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -400,8 +401,8 @@ async fn test_indexer_e2e() -> Result<()> {
     assert_eq!(batch_response.transactions.len(), tx_digests.len());
     for ((digest, indexed), grpc_result) in tx_digests
         .iter()
-        .zip(transactions.iter())
-        .zip(batch_response.transactions.into_iter())
+        .zip_debug_eq(transactions.iter())
+        .zip_debug_eq(batch_response.transactions.into_iter())
     {
         let grpc_transaction = grpc_result.to_result().unwrap_or_else(|status| {
             panic!("batch_get_transactions failed for {digest}: {status:?}")
@@ -442,8 +443,8 @@ async fn test_indexer_e2e() -> Result<()> {
     assert_eq!(ulro_response.transactions.len(), tx_digests.len());
     for ((digest, indexed), grpc_result) in tx_digests
         .iter()
-        .zip(transactions.iter())
-        .zip(ulro_response.transactions.into_iter())
+        .zip_debug_eq(transactions.iter())
+        .zip_debug_eq(ulro_response.transactions.into_iter())
     {
         let grpc_transaction = grpc_result.to_result().unwrap_or_else(|status| {
             panic!("batch_get_transactions failed for {digest}: {status:?}")
@@ -486,7 +487,7 @@ async fn test_indexer_e2e() -> Result<()> {
         let content_digests: Vec<_> = contents.iter().map(|ed| ed.transaction).collect();
         let expected: Vec<_> = tx_digests
             .iter()
-            .zip(&tx_checkpoints)
+            .zip_debug_eq(&tx_checkpoints)
             .filter(|(_, cp_num)| **cp_num == summary.sequence_number)
             .map(|(d, _)| *d)
             .collect();

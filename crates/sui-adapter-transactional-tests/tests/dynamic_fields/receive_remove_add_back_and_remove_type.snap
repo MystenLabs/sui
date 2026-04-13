@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 10 tasks
 
@@ -19,9 +20,9 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 91:
-//# run test::m1::test_dof --args object(2,2) receiving(2,0) receiving(2,1) --sender A
-mutated: object(0,0), object(2,0), object(2,2)
-deleted: object(2,1)
+//# run test::m1::test_dof --args object(2,0) receiving(2,1) receiving(2,2) --sender A
+mutated: object(0,0), object(2,0), object(2,1)
+deleted: object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 4642308, non_refundable_storage_fee: 46892
 
 task 4, line 93:
@@ -31,9 +32,9 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 5, line 95:
-//# run test::m1::test_df --args object(4,2) receiving(4,0) receiving(4,1) --sender A
-mutated: object(0,0), object(4,0), object(4,2)
-deleted: object(4,1)
+//# run test::m1::test_df --args object(4,0) receiving(4,1) receiving(4,2) --sender A
+mutated: object(0,0), object(4,0), object(4,1)
+deleted: object(4,2)
 gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 4642308, non_refundable_storage_fee: 46892
 
 task 6, line 97:
@@ -43,10 +44,10 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, line 99:
-//# run test::m1::test_dof_wrapper --args object(6,2) receiving(6,0) receiving(6,1) --sender A
+//# run test::m1::test_dof_wrapper --args object(6,0) receiving(6,1) receiving(6,2) --sender A
 created: object(7,0)
-mutated: object(0,0), object(6,2)
-wrapped: object(6,0)
+mutated: object(0,0), object(6,0)
+wrapped: object(6,1)
 gas summary: computation_cost: 1000000, storage_cost: 4050800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
 
 task 8, line 101:
@@ -56,8 +57,8 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4689200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 9, line 103:
-//# run test::m1::test_df_wrapper --args object(8,2) receiving(8,0) receiving(8,1) --sender A
+//# run test::m1::test_df_wrapper --args object(8,0) receiving(8,1) receiving(8,2) --sender A
 created: object(9,0)
-mutated: object(0,0), object(8,2)
-wrapped: object(8,0)
+mutated: object(0,0), object(8,0)
+wrapped: object(8,1)
 gas summary: computation_cost: 1000000, storage_cost: 4050800,  storage_rebate: 3430944, non_refundable_storage_fee: 34656

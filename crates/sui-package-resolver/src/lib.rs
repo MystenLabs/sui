@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use async_trait::async_trait;
+use itertools::Itertools;
 use lru::LruCache;
 use move_binary_format::CompiledModule;
 use move_binary_format::errors::Location;
@@ -540,6 +541,8 @@ impl<S: PackageStore> Resolver<S> {
                         .await?
                         .parameters;
 
+                    #[allow(clippy::disallowed_methods)]
+                    // Intentional zip: params includes implicit TxContext param not in arguments
                     for (open_sig, arg) in params.iter().zip(call.arguments.iter()) {
                         let sig = open_sig.instantiate(&call.type_arguments)?;
                         register_type(arg, &sig.body);
@@ -1289,7 +1292,7 @@ impl<'l> ResolutionContext<'l> {
                         max_type_argument_width >= s.type_params.len()
                     );
 
-                    for (param, def) in s.type_params.iter_mut().zip(def.type_params.iter()) {
+                    for (param, def) in s.type_params.iter_mut().zip_eq(def.type_params.iter()) {
                         if !def.is_phantom || visit_phantoms {
                             push_ty_param!(param);
                         }
@@ -1703,7 +1706,7 @@ impl<'l> ResolutionContext<'l> {
                 let param_abilities: Result<Vec<AbilitySet>> = s
                     .type_params
                     .iter()
-                    .zip(def.type_params.iter())
+                    .zip_eq(def.type_params.iter())
                     .map(|(p, d)| {
                         if d.is_phantom {
                             Ok(AbilitySet::EMPTY)

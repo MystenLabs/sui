@@ -7,6 +7,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use mock_store::MockStore;
+use mysten_common::ZipDebugEqIteratorExt;
 use object_store::ObjectStore;
 use object_store::ObjectStoreExt as _;
 use object_store::memory::InMemory;
@@ -1766,7 +1767,7 @@ impl TestHarness {
         for row_result in iter {
             let row = row_result.expect("Failed to read row");
             let mut record = std::collections::HashMap::new();
-            for (name, field) in field_names.iter().zip(row.get_column_iter()) {
+            for (name, field) in field_names.iter().zip_debug_eq(row.get_column_iter()) {
                 record.insert(name.clone(), format!("{}", field.1));
             }
             records.push(record);

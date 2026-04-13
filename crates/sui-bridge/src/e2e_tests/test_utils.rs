@@ -32,6 +32,7 @@ use futures::Future;
 use futures::future::join_all;
 use move_core_types::ident_str;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use mysten_common::ZipDebugEqIteratorExt;
 use prometheus::Registry;
 use rand::Rng;
 use rand::SeedableRng;
@@ -709,7 +710,7 @@ pub(crate) async fn deploy_sol_contract(
         EthBridgeCommittee::new(contracts.bridge_committee, eth_signer_provider);
     for (i, (m, s)) in committee_members
         .iter()
-        .zip(committee_member_stake.iter())
+        .zip_debug_eq(committee_member_stake.iter())
         .enumerate()
     {
         let eth_address = EthAddress::from_str(m).unwrap();
@@ -821,8 +822,8 @@ pub(crate) async fn start_bridge_cluster(
     let mut handles = vec![];
     for (i, ((kp, server_listen_port), approved_governance_actions)) in bridge_authority_keys
         .iter()
-        .zip(bridge_server_ports.iter())
-        .zip(approved_governance_actions.into_iter())
+        .zip_debug_eq(bridge_server_ports.iter())
+        .zip_debug_eq(approved_governance_actions.into_iter())
         .enumerate()
     {
         // prepare node config (server + client)
@@ -1015,7 +1016,7 @@ impl TestClusterWrapperBuilder {
         let reordered_nodes = other_nodes
             .iter()
             .chain(std::iter::once(&node_with_max_stake));
-        for (node, kp) in reordered_nodes.zip(self.bridge_authority_keys.iter()) {
+        for (node, kp) in reordered_nodes.zip_debug_eq(self.bridge_authority_keys.iter()) {
             let validator_address = node.config().sui_address();
             // create committee registration tx
             let gas = test_cluster

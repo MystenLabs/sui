@@ -9,6 +9,7 @@ use crate::execution_mode::ExecutionMode;
 use crate::sp;
 use crate::static_programmable_transactions::{env::Env, typing::ast as T};
 use move_binary_format::file_format::Visibility;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::error::SafeIndex;
 use sui_types::{
     error::{ExecutionError, command_argument_error},
@@ -427,7 +428,7 @@ fn command<Mode: ExecutionMode>(
     );
     result_type
         .iter()
-        .zip(drop_values)
+        .zip_debug_eq(drop_values)
         .map(|(ty, dropped)| {
             Ok(if *dropped {
                 None

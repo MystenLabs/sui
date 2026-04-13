@@ -6,6 +6,7 @@ use crate::{
     StoreSummary, TransactionInfo, TransactionStore,
 };
 use anyhow::{Error, Result};
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{object::Object, supported_protocol_versions::ProtocolConfig};
 
 /// A read-through store that composes a primary (cache) and a secondary (source) store.
@@ -107,8 +108,8 @@ where
 
             for ((idx, key), fetched) in none_object_idx
                 .iter()
-                .zip(keys_to_fetch.iter())
-                .zip(fetched_objects.iter())
+                .zip_debug_eq(keys_to_fetch.iter())
+                .zip_debug_eq(fetched_objects.iter())
             {
                 // REVIEW: should we cache `None` to avoid repeated misses? Doing so would
                 // require API changes to represent cached-miss entries.

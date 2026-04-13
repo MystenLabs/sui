@@ -366,6 +366,8 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
     // publish coin packages
     let mut publish_tokens_tasks = vec![];
 
+    #[allow(clippy::disallowed_methods)]
+    // Intentional zip: senders may be longer than token_packages_dir
     for (token_package_dir, sender) in token_packages_dir.iter().zip(senders.clone()) {
         let gas = wallet_context
             .get_one_gas_object_owned_by_address(sender)
@@ -387,6 +389,8 @@ pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
 
     let mut token_type_names = vec![];
     let mut register_tasks = vec![];
+    #[allow(clippy::disallowed_methods)]
+    // Intentional zip: senders may be longer than token_packages_dir
     for (response, sender) in publish_coin_responses.into_iter().zip(senders.clone()) {
         let response = response.unwrap().unwrap();
         assert!(response.effects.status().is_ok());

@@ -5,12 +5,12 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use consensus_config::Stake;
 use consensus_types::block::{BlockRef, Round, TransactionIndex};
-use mysten_metrics::monitored_mpsc::UnboundedSender;
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::RwLock;
 use tracing::{debug, info};
 
 use crate::{
-    BlockAPI as _, CertifiedBlock, CertifiedBlocksOutput, VerifiedBlock,
+    BlockAPI as _, CertifiedBlock, VerifiedBlock,
     block::{BlockTransactionVotes, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     context::Context,
@@ -52,8 +52,6 @@ pub struct TransactionCertifier {
     block_verifier: Arc<dyn BlockVerifier>,
     // The state of the DAG.
     dag_state: Arc<RwLock<DagState>>,
-    // An unbounded channel to output certified blocks to Sui consensus block handler.
-    certified_blocks_sender: UnboundedSender<CertifiedBlocksOutput>,
 }
 
 impl TransactionCertifier {
@@ -61,13 +59,11 @@ impl TransactionCertifier {
         context: Arc<Context>,
         block_verifier: Arc<dyn BlockVerifier>,
         dag_state: Arc<RwLock<DagState>>,
-        certified_blocks_sender: UnboundedSender<CertifiedBlocksOutput>,
     ) -> Self {
         Self {
             certifier_state: Arc::new(RwLock::new(CertifierState::new(context))),
             block_verifier,
             dag_state,
-            certified_blocks_sender,
         }
     }
 
@@ -129,7 +125,7 @@ impl TransactionCertifier {
         };
         let voted_blocks = blocks
             .into_iter()
-            .zip(should_vote_blocks)
+            .zip_debug_eq(should_vote_blocks)
             .map(|(b, should_vote)| {
                 if !should_vote {
                     // Voting is unnecessary for blocks already included in own proposed blocks,
@@ -158,32 +154,15 @@ impl TransactionCertifier {
     }
 
     /// Stores own reject votes on input blocks, and aggregates reject votes from the input blocks.
-    /// Newly certified blocks are sent to the fastpath output channel.
     pub fn add_voted_blocks(&self, voted_blocks: Vec<(VerifiedBlock, Vec<TransactionIndex>)>) {
-        let certified_blocks = self.certifier_state.write().add_voted_blocks(voted_blocks);
-        self.send_certified_blocks(certified_blocks);
+        self.certifier_state.write().add_voted_blocks(voted_blocks);
     }
 
     /// Aggregates accept votes from the own proposed block.
-    /// Newly certified blocks are sent to the fastpath output channel.
     pub(crate) fn add_proposed_block(&self, proposed_block: VerifiedBlock) {
-        let certified_blocks = self
-            .certifier_state
+        self.certifier_state
             .write()
             .add_proposed_block(proposed_block);
-        self.send_certified_blocks(certified_blocks);
-    }
-
-    // Sends certified blocks to the fastpath output channel.
-    fn send_certified_blocks(&self, certified_blocks: Vec<CertifiedBlock>) {
-        if certified_blocks.is_empty() {
-            return;
-        }
-        if let Err(e) = self.certified_blocks_sender.send(CertifiedBlocksOutput {
-            blocks: certified_blocks,
-        }) {
-            tracing::warn!("Failed to send certified blocks: {:?}", e);
-        }
     }
 
     /// Retrieves own votes on peer block transactions.
@@ -952,7 +931,7 @@ mod test {
             );
             for (actual, expected) in actual_certified_blocks
                 .iter()
-                .zip(expected_certified_blocks.iter())
+                .zip_debug_eq(expected_certified_blocks.iter())
             {
                 assert_eq!(actual.block.reference(), expected.block.reference());
                 assert_eq!(actual.rejected, expected.rejected);

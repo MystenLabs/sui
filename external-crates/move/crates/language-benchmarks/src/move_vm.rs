@@ -27,11 +27,11 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use anyhow::Result;
-use move_package::BuildConfig;
-use move_package::compilation::compiled_package::CompiledPackage;
-
 const BENCH_FUNCTION_PREFIX: &str = "bench_";
+const BENCH_ADDR: AccountAddress = AccountAddress::new([
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2,
+]);
+const BENCH_ADDR_STR: &str = "0x2";
 
 static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new(|| {
     let program_res = move_compiler::construct_pre_compiled_lib(
@@ -59,8 +59,9 @@ static PRECOMPILED_MOVE_STDLIB: LazyLock<PreCompiledProgramInfo> = LazyLock::new
 /// Entry point for the bench, provide a function name to invoke in Module Bench in bench.move.
 pub fn bench<M: Measurement + 'static>(c: &mut Criterion<M>, filename: &str) {
     let modules = compile_modules(filename);
-    let mut move_vm = create_vm();
-    execute(c, &mut move_vm, modules, filename);
+    let mut adapter = create_vm();
+    publish_stdlib(&mut adapter);
+    execute(c, &mut adapter, BENCH_ADDR, modules, filename);
 }
 
 fn make_path(file: &str) -> PathBuf {
@@ -76,12 +77,16 @@ pub fn compile_modules(filename: &str) -> Vec<CompiledModule> {
         edition: Edition::E2024_BETA,
         ..Default::default()
     };
-    let (_files, compiled_units) =
-        Compiler::from_files(None, src_files, vec![], move_stdlib::named_addresses())
-            .set_pre_compiled_program_opt(Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
-            .set_default_config(pkg_config)
-            .build_and_report()
-            .expect("Error compiling...");
+    let mut named_addresses = move_stdlib::named_addresses();
+    named_addresses.insert(
+        "bench".to_string(),
+        move_core_types::parsing::address::NumericalAddress::parse_str(BENCH_ADDR_STR).unwrap(),
+    );
+    let (_files, compiled_units) = Compiler::from_files(None, src_files, vec![], named_addresses)
+        .set_pre_compiled_program_opt(Some(Arc::new(PRECOMPILED_MOVE_STDLIB.clone())))
+        .set_default_config(pkg_config)
+        .build_and_report()
+        .expect("Error compiling...");
     compiled_units
         .into_iter()
         .map(|annot_unit| annot_unit.named_module.module)
@@ -98,6 +103,46 @@ fn create_vm() -> InMemoryTestAdapter {
         .unwrap(),
     ))
 }
+
+fn publish_stdlib(adapter: &mut InMemoryTestAdapter) {
+    let stdlib_modules: Vec<CompiledModule> = PRECOMPILED_MOVE_STDLIB
+        .iter()
+        .filter_map(|(_, info)| {
+            info.compiled_unit
+                .as_ref()
+                .map(|unit| unit.named_module.module.clone())
+        })
+        .collect();
+    if stdlib_modules.is_empty() {
+        return;
+    }
+    let pkg = StoredPackage::from_modules_for_testing(CORE_CODE_ADDRESS, stdlib_modules).unwrap();
+    adapter.insert_package_into_storage(pkg);
+}
+
+// TODO: cross_module benchmark is broken — uses multi-address packages not supported by current setup
+// fn build_package(path: PathBuf) -> anyhow::Result<move_package::compilation::compiled_package::CompiledPackage> {
+//     let config = move_package::BuildConfig {
+//         dev_mode: true,
+//         test_mode: false,
+//         generate_docs: false,
+//         install_dir: Some(path.clone()),
+//         force_recompilation: false,
+//         ..Default::default()
+//     };
+//     config.compile_package(&path, &mut Vec::new())
+// }
+//
+// pub fn run_cross_module_tests<M: Measurement + 'static>(c: &mut Criterion<M>, path: PathBuf) {
+//     let modules_a1 = build_package(path).unwrap();
+//     let modules = modules_a1
+//         .all_modules()
+//         .map(|m| m.unit.module.clone())
+//         .collect::<Vec<_>>();
+//     let mut adapter = create_vm();
+//     publish_stdlib(&mut adapter);
+//     execute(c, &mut adapter, CORE_CODE_ADDRESS, modules, "cross_module/a1/sources/m.move");
+// }
 
 fn find_bench_functions(modules: &[CompiledModule]) -> Vec<(Identifier, ModuleId)> {
     modules
@@ -119,38 +164,14 @@ fn find_bench_functions(modules: &[CompiledModule]) -> Vec<(Identifier, ModuleId
         .collect()
 }
 
-fn build_package(path: PathBuf) -> Result<CompiledPackage> {
-    let config = BuildConfig {
-        dev_mode: true,
-        test_mode: false,
-        generate_docs: false,
-        install_dir: Some(path.clone()),
-        force_recompilation: false,
-        ..Default::default()
-    };
-
-    config.compile_package(&path, &mut Vec::new())
-}
-
-pub fn run_cross_module_tests<M: Measurement + 'static>(c: &mut Criterion<M>, path: PathBuf) {
-    let modules_a1 = build_package(path).unwrap();
-    let modules = modules_a1
-        .all_modules()
-        .map(|m| m.unit.module.clone())
-        .collect::<Vec<_>>();
-    let mut move_vm = create_vm();
-    execute(c, &mut move_vm, modules, "cross_module/a1/sources/m.move");
-}
-
 // execute a given function in the Bench module
 fn execute<M: Measurement + 'static>(
     c: &mut Criterion<M>,
     adapter: &mut InMemoryTestAdapter,
+    sender: AccountAddress,
     modules: Vec<CompiledModule>,
     file: &str,
 ) {
-    // establish running context
-    let sender = CORE_CODE_ADDRESS;
     let fun_names_with_moduleid = find_bench_functions(&modules);
 
     let linkage = adapter

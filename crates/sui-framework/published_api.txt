@@ -3250,9 +3250,6 @@ has_access
 uid_mut_as_owner
 	public fun
 	0x2::kiosk
-set_allow_extensions
-	public fun
-	0x2::kiosk
 uid
 	public fun
 	0x2::kiosk
@@ -3293,6 +3290,9 @@ purchase_cap_item
 	public fun
 	0x2::kiosk
 purchase_cap_min_price
+	public fun
+	0x2::kiosk
+set_allow_extensions
 	public fun
 	0x2::kiosk
 Extension

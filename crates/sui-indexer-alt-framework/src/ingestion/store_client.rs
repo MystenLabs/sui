@@ -3,40 +3,45 @@
 
 use std::sync::Arc;
 
+use anyhow::Context;
 use bytes::Bytes;
-use object_store::Error as ObjectStoreError;
+use object_store::Error;
 use object_store::ObjectStore;
 use object_store::ObjectStoreExt;
 use object_store::RetryConfig;
 use object_store::path::Path as ObjectPath;
+use prometheus::IntCounter;
 use serde::de::DeserializeOwned;
 use sui_types::digests::ChainIdentifier;
-use tracing::debug;
-use tracing::error;
 
 use crate::ingestion::decode;
-use crate::ingestion::ingestion_client::CheckpointData;
 use crate::ingestion::ingestion_client::CheckpointError;
 use crate::ingestion::ingestion_client::CheckpointResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
 use crate::types::full_checkpoint_content::Checkpoint;
 
-/// Disable object_store's internal retries so that transient errors (429s, 5xx) propagate
-/// immediately to the framework's own retry logic.
-pub(super) fn retry_config() -> RetryConfig {
-    RetryConfig {
-        max_retries: 0,
-        ..Default::default()
-    }
-}
+// from sui-indexer-alt-object-store
+pub(crate) const WATERMARK_PATH: &str = "_metadata/watermark/checkpoint_blob.json";
 
 pub struct StoreIngestionClient {
     store: Arc<dyn ObjectStore>,
+    /// Counter incremented (in the [`IngestionClientTrait`] impl) by the size in bytes of each
+    /// fetched checkpoint payload. `None` for callers that only use this client for one-shot
+    /// metadata fetches (e.g. `end_of_epoch_checkpoints`) and don't need a metric.
+    total_ingested_bytes: Option<IntCounter>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub(crate) struct ObjectStoreWatermark {
+    pub checkpoint_hi_inclusive: u64,
 }
 
 impl StoreIngestionClient {
-    pub fn new(store: Arc<dyn ObjectStore>) -> Self {
-        Self { store }
+    pub fn new(store: Arc<dyn ObjectStore>, total_ingested_bytes: Option<IntCounter>) -> Self {
+        Self {
+            store,
+            total_ingested_bytes,
+        }
     }
 
     /// Fetch metadata mapping epoch IDs to the sequence numbers of their last checkpoints.
@@ -61,6 +66,19 @@ impl StoreIngestionClient {
         let result = self.store.get(&path).await?;
         result.bytes().await
     }
+
+    async fn watermark_checkpoint_hi_inclusive(&self) -> anyhow::Result<Option<u64>> {
+        let bytes = match self.bytes(ObjectPath::from(WATERMARK_PATH)).await {
+            Ok(bytes) => bytes,
+            Err(Error::NotFound { .. }) => return Ok(None),
+            Err(e) => return Err(e).context(format!("error reading {WATERMARK_PATH}")),
+        };
+
+        let watermark: ObjectStoreWatermark =
+            serde_json::from_slice(&bytes).context(format!("error parsing {WATERMARK_PATH}"))?;
+
+        Ok(Some(watermark.checkpoint_hi_inclusive))
+    }
 }
 
 #[async_trait::async_trait]
@@ -80,20 +98,33 @@ impl IngestionClientTrait for StoreIngestionClient {
     /// - server errors (5xx),
     /// - issues getting a full response.
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
-        match self.checkpoint_bytes(checkpoint).await {
-            Ok(bytes) => Ok(CheckpointData::Raw(bytes)),
-            Err(ObjectStoreError::NotFound { .. }) => {
-                debug!(checkpoint, "Checkpoint not found");
-                Err(CheckpointError::NotFound)
-            }
-            Err(error) => {
-                error!(checkpoint, "Failed to fetch checkpoint: {error}");
-                Err(CheckpointError::Transient {
-                    reason: "object_store",
-                    error: error.into(),
-                })
-            }
+        let bytes = self
+            .checkpoint_bytes(checkpoint)
+            .await
+            .map_err(|e| match e {
+                Error::NotFound { .. } => CheckpointError::NotFound,
+                e => CheckpointError::Fetch(e.into()),
+            })?;
+
+        if let Some(counter) = &self.total_ingested_bytes {
+            counter.inc_by(bytes.len() as u64);
         }
+        decode::checkpoint(&bytes).map_err(CheckpointError::Decode)
+    }
+
+    async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        self.watermark_checkpoint_hi_inclusive()
+            .await
+            .map(|cp| cp.unwrap_or(0))
+    }
+}
+
+/// Disable object_store's internal retries so that transient errors (429s, 5xx) propagate
+/// immediately to the framework's own retry logic.
+pub(super) fn retry_config() -> RetryConfig {
+    RetryConfig {
+        max_retries: 0,
+        ..Default::default()
     }
 }
 
@@ -144,7 +175,7 @@ pub(crate) mod tests {
     /// `respond_with_chain_id` is mounted.
     pub(crate) fn expected_chain_id() -> ChainIdentifier {
         let bytes = test_checkpoint_data(0);
-        let checkpoint = crate::ingestion::decode::checkpoint(&bytes).unwrap();
+        let checkpoint = decode::checkpoint(&bytes).unwrap();
         (*checkpoint.summary.digest()).into()
     }
 
@@ -160,6 +191,56 @@ pub(crate) mod tests {
             .map(Arc::new)
             .unwrap();
         IngestionClient::with_store(store, test_ingestion_metrics()).unwrap()
+    }
+
+    async fn test_latest_checkpoint_number(watermark: ResponseTemplate) -> anyhow::Result<u64> {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path(WATERMARK_PATH))
+            .respond_with(watermark)
+            .mount(&server)
+            .await;
+
+        let store = HttpBuilder::new()
+            .with_url(server.uri())
+            .with_client_options(ClientOptions::default().with_allow_http(true))
+            .build()
+            .map(Arc::new)
+            .unwrap();
+        let client = StoreIngestionClient::new(store, None);
+
+        IngestionClientTrait::latest_checkpoint_number(&client).await
+    }
+
+    #[tokio::test]
+    async fn test_latest_checkpoint_no_watermark() {
+        assert_eq!(
+            test_latest_checkpoint_number(status(StatusCode::NOT_FOUND))
+                .await
+                .unwrap(),
+            0
+        )
+    }
+
+    #[tokio::test]
+    async fn test_latest_checkpoint_corrupt_watermark() {
+        assert!(
+            test_latest_checkpoint_number(status(StatusCode::OK).set_body_string("<"))
+                .await
+                .is_err()
+        )
+    }
+
+    #[tokio::test]
+    async fn test_latest_checkpoint_from_watermark() {
+        let body = serde_json::json!({"checkpoint_hi_inclusive": 1}).to_string();
+        assert_eq!(
+            test_latest_checkpoint_number(status(StatusCode::OK).set_body_string(body))
+                .await
+                .unwrap(),
+            1
+        )
     }
 
     #[tokio::test]
@@ -273,7 +354,7 @@ pub(crate) mod tests {
             match times_clone.fetch_add(1, Ordering::Relaxed) {
                 0 => {
                     // Delay longer than our test timeout (2 seconds)
-                    std::thread::sleep(std::time::Duration::from_secs(4));
+                    std::thread::sleep(Duration::from_secs(4));
                     status(StatusCode::OK).set_body_bytes(test_checkpoint_data(42))
                 }
                 _ => {

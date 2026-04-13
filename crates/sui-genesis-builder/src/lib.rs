@@ -7,6 +7,7 @@ use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
 use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
+use mysten_common::ZipDebugEqIteratorExt;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::fs;
@@ -43,7 +44,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
     CheckpointVersionSpecificData, CheckpointVersionSpecificDataV1,
 };
-use sui_types::metrics::LimitsMetrics;
+use sui_types::metrics::ExecutionMetrics;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait, get_sui_system_state};
@@ -345,7 +346,7 @@ impl Builder {
         for (validator, onchain_validator) in self
             .validators
             .values()
-            .zip(system_state.validators.active_validators.iter())
+            .zip_debug_eq(system_state.validators.active_validators.iter())
         {
             let metadata = onchain_validator.verified_metadata();
 
@@ -760,7 +761,7 @@ fn build_unsigned_genesis_data(
 
     // Use a throwaway metrics registry for genesis transaction execution.
     let registry = prometheus::Registry::new();
-    let metrics = Arc::new(LimitsMetrics::new(&registry));
+    let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
     let objects = create_genesis_objects(
         &epoch_data,
@@ -873,7 +874,7 @@ fn create_genesis_checkpoint(
 fn create_genesis_transaction(
     objects: Vec<Object>,
     protocol_config: &ProtocolConfig,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
     epoch_data: &EpochData,
 ) -> (
     Transaction,
@@ -962,7 +963,7 @@ fn create_genesis_objects(
     parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
     system_packages: Vec<SystemPackage>,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
     // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
@@ -1020,7 +1021,7 @@ fn process_package(
     modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
     protocol_config: &ProtocolConfig,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
 ) -> anyhow::Result<()> {
     let dependency_objects = store.get_objects(&dependencies);
     // When publishing genesis packages, since the std framework packages all have
@@ -1038,14 +1039,14 @@ fn process_package(
             // An object either exists on-chain, or is one of the packages to be published.
             dependencies
                 .iter()
-                .zip(dependency_objects.iter())
+                .zip_debug_eq(dependency_objects.iter())
                 .all(|(dependency, obj_opt)| obj_opt.is_some()
                     || to_be_published_addresses.contains(&AccountAddress::from(*dependency)))
         );
     }
     let loaded_dependencies: Vec<_> = dependencies
         .iter()
-        .zip(dependency_objects)
+        .zip_debug_eq(dependency_objects)
         .filter_map(|(dependency, object)| {
             Some(ObjectReadResult::new(
                 InputObjectKind::MovePackage(*dependency),
@@ -1092,7 +1093,7 @@ pub fn generate_genesis_system_object(
     genesis_digest: &TransactionDigest,
     genesis_chain_parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
 ) -> anyhow::Result<()> {
     let protocol_config = ProtocolConfig::get_for_version(
         ProtocolVersion::new(genesis_chain_parameters.protocol_version),

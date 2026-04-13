@@ -9,6 +9,7 @@ mod upgrade_compatibility_tests;
 use formatting::{FormattedField, format_list, format_param, singular_or_plural};
 
 use anyhow::{Context, Error, anyhow};
+use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
@@ -1260,7 +1261,7 @@ fn function_signature_mismatch_diag(
             .parameters
             .iter()
             .enumerate()
-            .zip(new_function.parameters.iter())
+            .zip_debug_eq(new_function.parameters.iter())
         {
             if old_param != new_param {
                 let param_loc = func_sourcemap
@@ -1346,7 +1347,7 @@ fn function_signature_mismatch_diag(
             .type_parameters
             .iter()
             .enumerate()
-            .zip(new_function.type_parameters.iter())
+            .zip_debug_eq(new_function.type_parameters.iter())
         {
             if old_type_param != new_type_param {
                 let type_param_loc = func_sourcemap
@@ -1421,7 +1422,7 @@ fn function_signature_mismatch_diag(
             .return_
             .iter()
             .enumerate()
-            .zip(new_function.return_.iter())
+            .zip_debug_eq(new_function.return_.iter())
         {
             let return_ = func_sourcemap
                 .returns
@@ -1730,37 +1731,41 @@ fn struct_field_mismatch_diag(
                 ),
             ],
         ));
-    } else if !old_fields
-        .iter()
-        .zip(&new_fields)
-        .all(|(old_field, new_field)| old_field.equivalent(new_field))
-    {
-        for (i, (old_field, new_field)) in old_fields.iter().zip(&new_fields).enumerate() {
-            if !old_field.equivalent(new_field) {
-                let field_loc = struct_sourcemap
-                    .fields
-                    .get(i)
-                    .context("Unable to get field location")?;
+    } else {
+        let fields_mismatch = !old_fields
+            .iter()
+            .zip_debug_eq(&new_fields)
+            .all(|(old_field, new_field)| old_field.equivalent(new_field));
+        if fields_mismatch {
+            for (i, (old_field, new_field)) in
+                old_fields.iter().zip_debug_eq(&new_fields).enumerate()
+            {
+                if !old_field.equivalent(new_field) {
+                    let field_loc = struct_sourcemap
+                        .fields
+                        .get(i)
+                        .context("Unable to get field location")?;
 
-                let (code, label) = field_mismatch_message(
-                    old_field,
-                    new_field,
-                    struct_sourcemap.type_parameters.clone(),
-                )?;
+                    let (code, label) = field_mismatch_message(
+                        old_field,
+                        new_field,
+                        struct_sourcemap.type_parameters.clone(),
+                    )?;
 
-                diags.add(Diagnostic::new(
-                    code,
-                    (*field_loc, label),
-                    vec![(def_loc, "Struct definition".to_string())],
-                    vec![
-                        reason.to_string(),
-                        format!(
-                            "Restore the original struct's {} for \
+                    diags.add(Diagnostic::new(
+                        code,
+                        (*field_loc, label),
+                        vec![(def_loc, "Struct definition".to_string())],
+                        vec![
+                            reason.to_string(),
+                            format!(
+                                "Restore the original struct's {} for \
                             struct '{struct_name}' including the ordering.",
-                            singular_or_plural(old_fields.len(), "field", "fields")
-                        ),
-                    ],
-                ));
+                                singular_or_plural(old_fields.len(), "field", "fields")
+                            ),
+                        ],
+                    ));
+                }
             }
         }
     }
@@ -1917,7 +1922,7 @@ fn enum_variant_field_message(
                     .fields
                     .0
                     .values()
-                    .zip(new_variant.fields.0.values())
+                    .zip_debug_eq(new_variant.fields.0.values())
                 {
                     if !old_field.equivalent(new_field) {
                         let (code, label) =
@@ -1959,6 +1964,8 @@ fn enum_variant_mismatch_diag(
 
     let def_loc = enum_sourcemap.definition_location;
 
+    #[allow(clippy::disallowed_methods)]
+    // Intentional zip: old and new enums may have different variant counts
     for (i, (old_variant, new_variant)) in old_enum
         .variants
         .values()
@@ -2253,13 +2260,13 @@ fn enum_changed_diag(
         )?);
     }
 
-    if old_enum.variants.len() != new_enum.variants.len()
+    let variants_mismatch = old_enum.variants.len() != new_enum.variants.len()
         || !old_enum
             .variants
             .values()
-            .zip(new_enum.variants.values())
-            .all(|(old_variant, new_variant)| old_variant.equivalent(new_variant))
-    {
+            .zip_debug_eq(new_enum.variants.values())
+            .all(|(old_variant, new_variant)| old_variant.equivalent(new_variant));
+    if variants_mismatch {
         diags.extend(enum_variant_mismatch_diag(
             enum_name,
             old_enum,
@@ -2417,7 +2424,7 @@ fn type_parameter_diag(
     } else if old_type_parameters != new_type_parameters {
         for (i, (old_type_param, new_type_param)) in old_type_parameters
             .iter()
-            .zip(new_type_parameters.iter())
+            .zip_debug_eq(new_type_parameters.iter())
             .enumerate()
         {
             let type_param_loc = type_parameter_locs

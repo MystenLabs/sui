@@ -31,6 +31,9 @@ use sui_types::{
 pub struct Transaction {
     pub gas_payment: Option<GasPayment>,
     pub inputs: Inputs,
+    /// Original number of commands in the transaction. After typing, Spanned indices in the AST
+    /// should be < `original_command_len`
+    pub original_command_len: usize,
     pub commands: Commands,
 }
 

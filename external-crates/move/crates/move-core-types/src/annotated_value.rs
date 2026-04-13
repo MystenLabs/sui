@@ -11,7 +11,6 @@ use crate::{
     runtime_value::{self as R, MOVE_STRUCT_FIELDS, MOVE_STRUCT_TYPE},
     u256,
 };
-use anyhow::Result as AResult;
 use serde::{
     Deserialize, Serialize,
     de::Error as DeError,
@@ -181,11 +180,6 @@ impl MoveTypeLayout {
 }
 
 impl MoveValue {
-    /// TODO (annotated-visitor): Port legacy uses of this method to `BoundedVisitor`.
-    pub fn simple_deserialize(blob: &[u8], ty: &MoveTypeLayout) -> AResult<Self> {
-        Ok(bcs::from_bytes_seed(ty, blob)?)
-    }
-
     /// Deserialize `blob` as a Move value with the given `ty`-pe layout, and visit its
     /// sub-structure with the given `visitor`. The visitor dictates the return value that is built
     /// up during deserialization.
@@ -265,11 +259,6 @@ impl MoveStruct {
         Self { type_, fields }
     }
 
-    /// TODO (annotated-visitor): Port legacy uses of this method to `BoundedVisitor`.
-    pub fn simple_deserialize(blob: &[u8], ty: &MoveStructLayout) -> AResult<Self> {
-        Ok(bcs::from_bytes_seed(ty, blob)?)
-    }
-
     /// Like `MoveValue::visit_deserialize` (see for details), but specialized to visiting a struct
     /// (the `blob` is known to be a serialized Move struct, and the layout is a
     /// `MoveStructLayout`).
@@ -319,10 +308,6 @@ impl MoveVariant {
             tag,
             fields,
         }
-    }
-
-    pub fn simple_deserialize(blob: &[u8], ty: &MoveEnumLayout) -> AResult<Self> {
-        Ok(bcs::from_bytes_seed(ty, blob)?)
     }
 
     pub fn into_fields(self) -> Vec<MoveValue> {

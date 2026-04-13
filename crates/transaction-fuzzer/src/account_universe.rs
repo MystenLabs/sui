@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::executor::{ExecutionResult, Executor};
+use mysten_common::ZipDebugEqIteratorExt;
 use once_cell::sync::Lazy;
 use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
@@ -110,7 +111,7 @@ pub fn run_and_assert_universe(
     let outputs = executor.execute_transactions(transactions);
     prop_assert_eq!(outputs.len(), expected_values.len());
 
-    for (idx, (output, expected)) in outputs.iter().zip(&expected_values).enumerate() {
+    for (idx, (output, expected)) in outputs.iter().zip_debug_eq(&expected_values).enumerate() {
         prop_assert!(
             output == expected,
             "unexpected status for transaction {} expected {:#?} but got {:#?}",

@@ -11,6 +11,7 @@ use fastcrypto_tbls::{
     tbls::ThresholdBls,
     types::{ShareIndex, ThresholdBls12381MinSig},
 };
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::anemo_ext::NetworkExt;
 use serde::{Deserialize, Serialize};
@@ -551,7 +552,7 @@ impl RandomnessEventLoop {
         // valid signatures of other peers which will be successfully verified below).
         let received_share_ids = partial_sigs.iter().map(|s| s.index);
         if received_share_ids
-            .zip(expected_share_ids.iter())
+            .zip_debug_eq(expected_share_ids.iter())
             .any(|(a, b)| a != *b)
         {
             let received_share_ids = partial_sigs.iter().map(|s| s.index).collect::<Vec<_>>();

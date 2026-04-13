@@ -15,6 +15,8 @@ use super::*;
 #[cfg(test)]
 use super::shared_object_version_manager::Schedulable;
 #[cfg(test)]
+use mysten_common::ZipDebugEqIteratorExt;
+#[cfg(test)]
 use std::collections::HashMap;
 #[cfg(test)]
 use sui_types::transaction::TransactionKey;
@@ -431,7 +433,11 @@ where
         );
         let (paired, _) = captured.remove(0);
         let (schedulables, versions): (Vec<_>, Vec<_>) = paired.into_iter().unzip();
-        let assigned_versions = schedulables.iter().map(|s| s.key()).zip(versions).collect();
+        let assigned_versions = schedulables
+            .iter()
+            .map(|s| s.key())
+            .zip_debug_eq(versions)
+            .collect();
         (schedulables, assigned_versions)
     };
 

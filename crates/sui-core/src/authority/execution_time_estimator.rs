@@ -316,11 +316,19 @@ impl ExecutionTimeObserver {
         total_duration: Duration,
         gas_price: u64,
     ) {
-        assert!(tx.commands.len() >= timings.len());
-
         let Some(epoch_store) = self.epoch_store.upgrade() else {
             debug!("epoch is ending, dropping execution time observation");
             return;
+        };
+        let timings = if timings.len() > tx.commands.len() {
+            warn!(
+                executed_commands = timings.len(),
+                original_commands = tx.commands.len(),
+                "execution produced more timings than the original PTB commands; using the trailing timings for local execution-time observations"
+            );
+            &timings[timings.len() - tx.commands.len()..]
+        } else {
+            timings
         };
 
         let mut uses_indebted_object = false;
@@ -501,9 +509,11 @@ impl ExecutionTimeObserver {
         tx: &ProgrammableTransaction,
         timings: &[ExecutionTiming],
     ) -> (Vec<ExecutionTiming>, Duration) {
+        #[allow(clippy::disallowed_methods)]
         let generated_timings: Vec<_> = tx
             .commands
             .iter()
+            // TODO: migrate to zip_debug_eq once PR #26125 fixes the timings/commands length mismatch
             .zip(timings.iter())
             .map(|(command, timing)| {
                 let key = ExecutionTimeObservationKey::from_command(command);

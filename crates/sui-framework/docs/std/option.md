@@ -33,8 +33,13 @@ This module defines the Option type and its methods to represent and handle an o
 -  [Macro function `and_ref`](#std_option_and_ref)
 -  [Macro function `map`](#std_option_map)
 -  [Macro function `map_ref`](#std_option_map_ref)
+-  [Macro function `map_mut`](#std_option_map_mut)
 -  [Macro function `filter`](#std_option_filter)
 -  [Macro function `is_some_and`](#std_option_is_some_and)
+-  [Macro function `is_none_or`](#std_option_is_none_or)
+-  [Macro function `fold`](#std_option_fold)
+-  [Macro function `fold_ref`](#std_option_fold_ref)
+-  [Macro function `fold_mut`](#std_option_fold_mut)
 -  [Macro function `extract_or`](#std_option_extract_or)
 -  [Macro function `destroy_or`](#std_option_destroy_or)
 
@@ -813,6 +818,33 @@ Equivalent to Rust's <code>t.<a href="../std/option.md#std_option_map">map</a>(f
 
 </details>
 
+<a name="std_option_map_mut"></a>
+
+## Macro function `map_mut`
+
+Map an <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> value to <code><a href="../std/option.md#std_option_Option">Option</a>&lt;U&gt;</code> by applying a function to a contained value by mutable
+reference. Original <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> is preserved, although potentially modified.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_map_mut">map_mut</a>&lt;$T, $U&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&<b>mut</b> $T| -&gt; $U): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$U&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_map_mut">map_mut</a>&lt;$T, $U&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&<b>mut</b> $T| -&gt; $U): <a href="../std/option.md#std_option_Option">Option</a>&lt;$U&gt; {
+    <b>let</b> o = $o;
+    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) <a href="../std/option.md#std_option_some">some</a>($f(o.<a href="../std/option.md#std_option_borrow_mut">borrow_mut</a>())) <b>else</b> <a href="../std/option.md#std_option_none">none</a>()
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="std_option_filter"></a>
 
 ## Macro function `filter`
@@ -858,6 +890,121 @@ Return <code><b>false</b></code> if the value is <code>None</code>, otherwise re
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_is_some_and">is_some_and</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a> {
     <b>let</b> o = $o;
     o.<a href="../std/option.md#std_option_is_some">is_some</a>() && $f(o.<a href="../std/option.md#std_option_borrow">borrow</a>())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_option_is_none_or"></a>
+
+## Macro function `is_none_or`
+
+Return <code><b>true</b></code> if the value is <code>None</code>, or if the predicate <code>f</code> returns <code><b>true</b></code> for the contained
+value.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_is_none_or">is_none_or</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_is_none_or">is_none_or</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a> {
+    <b>let</b> o = $o;
+    o.<a href="../std/option.md#std_option_is_none">is_none</a>() || $f(o.<a href="../std/option.md#std_option_borrow">borrow</a>())
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_option_fold"></a>
+
+## Macro function `fold`
+
+Consume the option and return <code>$<a href="../std/option.md#std_option_none">none</a></code> if it is <code>None</code>, otherwise apply <code>$<a href="../std/option.md#std_option_some">some</a></code> to the contained
+value.
+Note <code>$<a href="../std/option.md#std_option_none">none</a></code> is evaluated only if the option is <code>None</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_fold">fold</a>&lt;$T, $R&gt;($o: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $<a href="../std/option.md#std_option_none">none</a>: $R, $<a href="../std/option.md#std_option_some">some</a>: |$T| -&gt; $R): $R
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_fold">fold</a>&lt;$T, $R&gt;($o: <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $<a href="../std/option.md#std_option_none">none</a>: $R, $<a href="../std/option.md#std_option_some">some</a>: |$T| -&gt; $R): $R {
+    <b>let</b> o = $o;
+    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) {
+        $<a href="../std/option.md#std_option_some">some</a>(o.<a href="../std/option.md#std_option_destroy_some">destroy_some</a>())
+    } <b>else</b> {
+        o.<a href="../std/option.md#std_option_destroy_none">destroy_none</a>();
+        $<a href="../std/option.md#std_option_none">none</a>
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_option_fold_ref"></a>
+
+## Macro function `fold_ref`
+
+Apply <code>$<a href="../std/option.md#std_option_some">some</a></code> to the borrowed value if <code>Some</code>, otherwise return <code>$<a href="../std/option.md#std_option_none">none</a></code>.
+Original option is preserved.
+Note <code>$<a href="../std/option.md#std_option_none">none</a></code> is evaluated only if the option is <code>None</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_fold_ref">fold_ref</a>&lt;$T, $R&gt;($o: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $<a href="../std/option.md#std_option_none">none</a>: $R, $<a href="../std/option.md#std_option_some">some</a>: |&$T| -&gt; $R): $R
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_fold_ref">fold_ref</a>&lt;$T, $R&gt;($o: &<a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $<a href="../std/option.md#std_option_none">none</a>: $R, $<a href="../std/option.md#std_option_some">some</a>: |&$T| -&gt; $R): $R {
+    <b>let</b> o = $o;
+    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) $<a href="../std/option.md#std_option_some">some</a>(o.<a href="../std/option.md#std_option_borrow">borrow</a>()) <b>else</b> $<a href="../std/option.md#std_option_none">none</a>
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_option_fold_mut"></a>
+
+## Macro function `fold_mut`
+
+Apply <code>$<a href="../std/option.md#std_option_some">some</a></code> to the mutably borrowed value if <code>Some</code>, otherwise return <code>$<a href="../std/option.md#std_option_none">none</a></code>.
+Note <code>$<a href="../std/option.md#std_option_none">none</a></code> is evaluated only if the option is <code>None</code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_fold_mut">fold_mut</a>&lt;$T, $R&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $<a href="../std/option.md#std_option_none">none</a>: $R, $<a href="../std/option.md#std_option_some">some</a>: |&<b>mut</b> $T| -&gt; $R): $R
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_fold_mut">fold_mut</a>&lt;$T, $R&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $<a href="../std/option.md#std_option_none">none</a>: $R, $<a href="../std/option.md#std_option_some">some</a>: |&<b>mut</b> $T| -&gt; $R): $R {
+    <b>let</b> o = $o;
+    <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>()) $<a href="../std/option.md#std_option_some">some</a>(o.<a href="../std/option.md#std_option_borrow_mut">borrow_mut</a>()) <b>else</b> $<a href="../std/option.md#std_option_none">none</a>
 }
 </code></pre>
 

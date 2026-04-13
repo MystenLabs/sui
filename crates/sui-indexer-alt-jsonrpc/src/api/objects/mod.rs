@@ -5,6 +5,7 @@ use filter::SuiObjectResponseQuery;
 use futures::future;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_json_rpc_types::Page;
 use sui_json_rpc_types::SuiGetPastObjectRequest;
 use sui_json_rpc_types::SuiObjectDataOptions;
@@ -154,7 +155,7 @@ impl ObjectsApiServer for Objects {
         Ok(future::join_all(obj_futures)
             .await
             .into_iter()
-            .zip(object_ids)
+            .zip_debug_eq(object_ids)
             .map(|(r, o)| {
                 r.with_internal_context(|| format!("Failed to get object {o} at latest version"))
             })
@@ -203,7 +204,7 @@ impl ObjectsApiServer for Objects {
         Ok(future::join_all(obj_futures)
             .await
             .into_iter()
-            .zip(past_objects)
+            .zip_debug_eq(past_objects)
             .map(|(r, o)| {
                 let id = o.object_id;
                 let v = o.version;
@@ -241,7 +242,7 @@ impl QueryObjectsApiServer for QueryObjects {
         let data = future::join_all(obj_futures)
             .await
             .into_iter()
-            .zip(object_ids)
+            .zip_debug_eq(object_ids)
             .map(|(r, id)| {
                 r.with_internal_context(|| format!("Failed to get object {id} at latest version"))
             })

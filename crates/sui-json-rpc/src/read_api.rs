@@ -21,6 +21,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
+use mysten_common::ZipDebugEqIteratorExt;
 use once_cell::sync::Lazy;
 use serde_json::Value as Json;
 use shared_crypto::intent::{IntentMessage, PersonalMessage};
@@ -301,7 +302,7 @@ impl ReadApi {
 
         for (summary_and_sig, content) in checkpoint_summaries_and_signatures
             .into_iter()
-            .zip(contents.into_iter())
+            .zip_debug_eq(contents.into_iter())
         {
             checkpoints.push(Checkpoint::from((
                 summary_and_sig.0,
@@ -352,8 +353,9 @@ impl ReadApi {
                     |err| debug!(digests=?digests_clone, "Failed to multi get transactions: {:?}", err),
                 )?;
 
-            for ((_digest, cache_entry), txn) in
-                temp_response.iter_mut().zip(transactions.into_iter())
+            for ((_digest, cache_entry), txn) in temp_response
+                .iter_mut()
+                .zip_debug_eq(transactions.into_iter())
             {
                 cache_entry.transaction = txn;
             }
@@ -369,8 +371,9 @@ impl ReadApi {
                 .tap_err(
                     |err| debug!(digests=?digests_clone, "Failed to multi get effects for transactions: {:?}", err),
                 )?;
-            for ((_digest, cache_entry), e) in
-                temp_response.iter_mut().zip(effects_list.into_iter())
+            for ((_digest, cache_entry), e) in temp_response
+                .iter_mut()
+                .zip_debug_eq(effects_list.into_iter())
             {
                 cache_entry.effects = e;
             }
@@ -385,7 +388,7 @@ impl ReadApi {
                 |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
             .iter_mut()
-            .zip(checkpoint_seq_list.into_iter())
+            .zip_debug_eq(checkpoint_seq_list.into_iter())
         {
             cache_entry.checkpoint_seq = seq;
         }
@@ -413,7 +416,7 @@ impl ReadApi {
         // construct a hashmap of checkpoint -> timestamp for fast lookup
         let checkpoint_to_timestamp = unique_checkpoint_numbers
             .into_iter()
-            .zip(timestamps)
+            .zip_debug_eq(timestamps)
             .collect::<HashMap<_, _>>();
 
         // fill cache with the timestamp
@@ -559,7 +562,7 @@ impl ReadApi {
                 ));
             }
             let results = join_all(results).await;
-            for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
+            for (result, entry) in results.into_iter().zip_debug_eq(temp_response.iter_mut()) {
                 match result {
                     Ok(balance_changes) => entry.1.balance_changes = Some(balance_changes),
                     Err(e) => entry
@@ -602,7 +605,7 @@ impl ReadApi {
                 ));
             }
             let results = join_all(results).await;
-            for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
+            for (result, entry) in results.into_iter().zip_debug_eq(temp_response.iter_mut()) {
                 match result {
                     Ok(object_changes) => entry.1.object_changes = Some(object_changes),
                     Err(e) => entry

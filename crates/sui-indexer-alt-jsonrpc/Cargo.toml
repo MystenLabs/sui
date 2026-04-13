@@ -47,8 +47,12 @@ tower-http.workspace = true
 tracing.workspace = true
 url.workspace = true
 
+prost-types.workspace = true
+tonic.workspace = true
+
 move-binary-format.workspace = true
 move-core-types.workspace = true
+mysten-common.workspace = true
 
 sui-default-config.workspace = true
 sui-display.workspace = true
@@ -65,6 +69,7 @@ sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-package-resolver.workspace = true
 sui-protocol-config.workspace = true
+sui-rpc.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true
 

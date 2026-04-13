@@ -15,6 +15,7 @@ use crate::{
     },
 };
 use move_regex_borrow_graph::{MeterError, meter::DummyMeter, references::Ref};
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     error::{ExecutionError, SafeIndex, command_argument_error},
     execution_status::CommandArgumentError,
@@ -269,7 +270,7 @@ pub fn verify(env: &Env, ast: &T::Transaction) -> Result<(), ExecutionError> {
         );
         let result_values = result
             .into_iter()
-            .zip(c.value.drop_values.iter().copied())
+            .zip_debug_eq(c.value.drop_values.iter().copied())
             .map(|(v, drop)| {
                 Ok(if !drop {
                     Some(v)
@@ -538,7 +539,7 @@ fn call(
     if let Some(v) = context.find_non_transferrable(&sources)? {
         let mut_idx = arg_values
             .iter()
-            .zip(&signature.parameters)
+            .zip_debug_eq(&signature.parameters)
             .enumerate()
             .find(|(_, (x, ty))| x.to_ref() == Some(v) && matches!(ty, Type::Reference(true, _)));
 

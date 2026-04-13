@@ -8,6 +8,7 @@ use crate::par_index_live_object_set::LiveObjectIndexer;
 use crate::par_index_live_object_set::ParMakeLiveObjectIndexer;
 use itertools::Itertools;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use mysten_common::ZipDebugEqIteratorExt;
 use rayon::iter::IntoParallelIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
@@ -1772,7 +1773,11 @@ fn sparse_checkpoint_data_for_epoch_backfill(
     };
 
     let mut full_transactions = Vec::with_capacity(transactions.len());
-    for ((tx, fx), ev) in transactions.into_iter().zip(effects).zip(events) {
+    for ((tx, fx), ev) in transactions
+        .into_iter()
+        .zip_debug_eq(effects)
+        .zip_debug_eq(events)
+    {
         let input_objects =
             sui_types::storage::get_transaction_input_objects(authority_store, &fx)?;
         let output_objects =

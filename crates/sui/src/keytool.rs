@@ -24,6 +24,7 @@ use fastcrypto_zkp::bn254::zk_login::{OIDCProvider, ZkLoginInputs, fetch_jwks};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
 use json_to_table::{Orientation, json_to_table};
+use mysten_common::ZipDebugEqIteratorExt;
 use num_bigint::BigUint;
 use rand::Rng;
 use rand::SeedableRng;
@@ -534,7 +535,7 @@ impl KeyToolCommand {
                     sig_verify_result: "".to_string(),
                 };
 
-                for (sig, i) in sigs.iter().zip(bitmap) {
+                for (sig, i) in sigs.iter().zip_debug_eq(bitmap) {
                     let (pk, w) = pks
                         .get(i as usize)
                         .ok_or(anyhow!("Invalid public keys index".to_string()))?;
@@ -769,7 +770,7 @@ impl KeyToolCommand {
                     multisig: vec![],
                 };
 
-                for (pk, w) in pks.into_iter().zip(weights.into_iter()) {
+                for (pk, w) in pks.into_iter().zip_debug_eq(weights.into_iter()) {
                     output.multisig.push(MultiSigOutput {
                         address: Into::<SuiAddress>::into(&pk),
                         public_base64_key: pk.encode_base64(),

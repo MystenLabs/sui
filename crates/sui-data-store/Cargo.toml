@@ -14,6 +14,7 @@ csv.workspace = true
 cynic.workspace = true
 fastcrypto.workspace = true
 lru.workspace = true
+mysten-common.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
 sui-config.workspace = true

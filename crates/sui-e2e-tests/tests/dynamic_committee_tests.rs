@@ -4,6 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use move_core_types::ident_str;
+use mysten_common::ZipDebugEqIteratorExt;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -517,7 +518,7 @@ async fn fuzz_dynamic_committee() {
     post_epoch_committee.sort_by(|a, b| a.0.cmp(&b.0));
     post_epoch_committee
         .iter()
-        .zip(initial_committee.iter())
+        .zip_debug_eq(initial_committee.iter())
         .for_each(|(a, b)| {
             assert_eq!(a.0, b.0); // same address
             assert!(a.1.abs_diff(b.1) < 2); // rounding error correction

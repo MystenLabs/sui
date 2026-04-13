@@ -5,6 +5,7 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::error::CheckpointNotFoundError;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -150,7 +151,9 @@ pub fn get_checkpoint(
                             && let Some(events) = transaction.events.as_mut()
                             && let Some(sdk_events) = &t.events
                         {
-                            for (message, event) in events.events.iter_mut().zip(&sdk_events.data) {
+                            for (message, event) in
+                                events.events.iter_mut().zip_debug_eq(&sdk_events.data)
+                            {
                                 message.json = service
                                     .render_json(
                                         &event.type_,

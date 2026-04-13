@@ -1,20 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
+use anyhow::Context as _;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use prost_types::FieldMask;
-use std::str::FromStr;
 use sui_rpc::Client as RpcClient;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::GetCheckpointRequest;
 use sui_rpc::proto::sui::rpc::v2::GetServiceInfoRequest;
+use sui_rpc::proto::sui::rpc::v2::GetServiceInfoResponse;
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::Checkpoint;
 use tonic::Code;
 
-use crate::ingestion::ingestion_client::CheckpointData;
+use crate::ingestion::decode::Error::ProtoConversion;
 use crate::ingestion::ingestion_client::CheckpointError;
 use crate::ingestion::ingestion_client::CheckpointResult;
 use crate::ingestion::ingestion_client::IngestionClientTrait;
@@ -22,13 +25,7 @@ use crate::ingestion::ingestion_client::IngestionClientTrait;
 #[async_trait]
 impl IngestionClientTrait for RpcClient {
     async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
-        let request = GetServiceInfoRequest::const_default();
-        let response = self
-            .clone()
-            .ledger_client()
-            .get_service_info(request)
-            .await?
-            .into_inner();
+        let response = get_service_info_request(self).await?;
         Ok(CheckpointDigest::from_str(response.chain_id())?.into())
     }
 
@@ -52,20 +49,33 @@ impl IngestionClientTrait for RpcClient {
             .await
             .map_err(|status| match status.code() {
                 Code::NotFound => CheckpointError::NotFound,
-                _ => CheckpointError::Transient {
-                    reason: "get_checkpoint",
-                    error: anyhow!(status),
-                },
-            })?
-            .into_inner();
+                _ => CheckpointError::Fetch(anyhow!(status)),
+            })?;
 
-        let checkpoint = Checkpoint::try_from(response.checkpoint()).map_err(|e| {
-            CheckpointError::Permanent {
-                reason: "proto_conversion",
-                error: e.into(),
-            }
-        })?;
-
-        Ok(CheckpointData::Checkpoint(checkpoint))
+        // `total_ingested_bytes` is incremented directly by the
+        // `ByteCountMakeCallbackHandler` request layer attached in
+        // `IngestionClient::with_grpc`, so it does not need to be tracked here.
+        let response = response.into_inner();
+        Checkpoint::try_from(response.checkpoint())
+            .map_err(|e| CheckpointError::Decode(ProtoConversion(e)))
     }
+
+    async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        get_service_info_request(self)
+            .await?
+            .checkpoint_height
+            .context("Checkpoint height not found")
+    }
+}
+
+async fn get_service_info_request(
+    rpc_client: &RpcClient,
+) -> anyhow::Result<GetServiceInfoResponse> {
+    let request = GetServiceInfoRequest::const_default();
+    Ok(rpc_client
+        .clone()
+        .ledger_client()
+        .get_service_info(request)
+        .await?
+        .into_inner())
 }

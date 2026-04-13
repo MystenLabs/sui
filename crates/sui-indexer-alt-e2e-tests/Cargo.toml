@@ -19,6 +19,7 @@ bcs.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 fastcrypto.workspace = true
+itertools.workspace = true
 prost.workspace = true
 prometheus.workspace = true
 rand.workspace = true
@@ -31,6 +32,7 @@ tokio.workspace = true
 url.workspace = true
 zstd.workspace = true
 
+mysten-common.workspace = true
 simulacrum.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt.workspace = true
@@ -72,6 +74,6 @@ sui-macros.workspace = true
 sui-sdk.workspace = true
 sui-swarm-config.workspace = true
 sui-test-transaction-builder.workspace = true
-sui-transactional-test-runner.workspace = true
+sui-transactional-test-runner = { workspace = true, features = ["testing"] }
 test-cluster.workspace = true
 tracing.workspace = true

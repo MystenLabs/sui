@@ -12,6 +12,7 @@ use futures::StreamExt;
 use futures::TryStreamExt;
 use indicatif::ProgressBar;
 use itertools::Itertools;
+use mysten_common::ZipDebugEqIteratorExt;
 use object_store::aws::{AmazonS3Builder, AmazonS3ConfigKey};
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
@@ -145,7 +146,7 @@ pub async fn copy_files<S: ObjectStoreGetExt, D: ObjectStorePutExt>(
 ) -> Result<Vec<()>> {
     let mut instant = Instant::now();
     let progress_bar_clone = progress_bar.clone();
-    let results = futures::stream::iter(src.iter().zip(dest.iter()))
+    let results = futures::stream::iter(src.iter().zip_debug_eq(dest.iter()))
         .map(|(path_in, path_out)| async move {
             let ret = copy_file(path_in, path_out, src_store, dest_store).await;
             Ok((path_out.clone(), ret))

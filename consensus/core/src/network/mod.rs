@@ -104,15 +104,15 @@ pub(crate) trait ValidatorNetworkClient: Send + Sync + Sized + 'static {
 
     // TODO: add a parameter for maximum total size of blocks returned.
     /// Fetches serialized `SignedBlock`s from a peer. It also might return additional ancestor blocks
-    /// of the requested blocks according to the provided `highest_accepted_rounds`. The `highest_accepted_rounds`
-    /// length should be equal to the committee size. If `highest_accepted_rounds` is empty then it will
+    /// of the requested blocks according to the provided `fetch_after_rounds`. The `fetch_after_rounds`
+    /// length should be equal to the committee size. If `fetch_after_rounds` is empty then it will
     /// be simply ignored.
     async fn fetch_blocks(
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 
@@ -182,8 +182,8 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
     ) -> ConsensusResult<Vec<Bytes>>;
 
     /// Handles the request to fetch commits by index range from the peer.

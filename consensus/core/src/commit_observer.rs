@@ -339,7 +339,7 @@ impl CommitObserver {
 mod tests {
     use consensus_config::AuthorityIndex;
     use consensus_types::block::BlockRef;
-    use mysten_metrics::monitored_mpsc::{UnboundedReceiver, unbounded_channel};
+    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use parking_lot::RwLock;
     use rstest::rstest;
     use tokio::time::timeout;
@@ -369,12 +369,10 @@ mod tests {
         let last_processed_commit_index = 0;
         let (commit_consumer, mut commit_receiver) =
             CommitConsumerArgs::new(0, last_processed_commit_index);
-        let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
-            blocks_sender,
         );
         const NUM_OF_COMMITS_PER_SCHEDULE: u64 = 5;
         let leader_schedule = Arc::new(
@@ -518,12 +516,10 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
-            blocks_sender,
         );
         let last_processed_commit_index = 0;
         let (commit_consumer, mut commit_receiver) =

@@ -1,0 +1,17 @@
+[package]
+name = "sui-forking"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+
+[dependencies]
+anyhow.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing-subscriber.workspace = true
+
+bin-version.workspace = true
+
+[lints]
+workspace = true

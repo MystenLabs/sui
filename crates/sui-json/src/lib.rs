@@ -793,6 +793,8 @@ fn resolve_call_args(
     json_args: &[SuiJsonValue],
     parameter_types: &[SignatureToken],
 ) -> Result<Vec<ResolvedCallArg>, anyhow::Error> {
+    #[allow(clippy::disallowed_methods)]
+    // Intentional zip: parameter_types includes implicit TxContext params not in json_args
     json_args
         .iter()
         .zip(parameter_types)
@@ -845,6 +847,8 @@ pub fn resolve_move_function_args(
     }
     // Check that the args are valid and convert to the correct format
     let call_args = resolve_call_args(&module, type_args, &combined_args_json, parameters)?;
+    #[allow(clippy::disallowed_methods)]
+    // Intentional zip: parameters includes implicit TxContext param not in call_args
     let tupled_call_args = call_args
         .into_iter()
         .zip(parameters.iter())

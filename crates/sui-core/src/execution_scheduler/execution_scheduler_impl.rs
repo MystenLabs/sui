@@ -17,6 +17,7 @@ use crate::{
     },
 };
 use futures::stream::{FuturesUnordered, StreamExt};
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
@@ -246,7 +247,7 @@ impl ExecutionScheduler {
         // missing input objects if necessary.
         let missing_input_keys: Vec<_> = input_and_receiving_keys
             .into_iter()
-            .zip(availability)
+            .zip_debug_eq(availability)
             .filter_map(|(key, available)| if !available { Some(key) } else { None })
             .collect();
 
@@ -442,7 +443,7 @@ impl ExecutionScheduler {
                     let tx = tx.expect("tx must exist").as_ref().clone();
                     VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
                 })
-                .zip(tx_with_keys.into_iter().map(|(_, env)| env))
+                .zip_debug_eq(tx_with_keys.into_iter().map(|(_, env)| env))
                 .collect::<Vec<_>>();
             scheduler.enqueue_transactions(transactions, &epoch_store);
         }));
@@ -546,18 +547,16 @@ impl ExecutionScheduler {
             .transaction_cache_read
             .multi_get_executed_effects_digests(&digests);
         let mut already_executed_certs_num = 0;
-        let pending_certs =
-            certs
-                .into_iter()
-                .zip(executed)
-                .filter_map(|((cert, execution_env), executed)| {
-                    if executed.is_none() {
-                        Some((cert, execution_env))
-                    } else {
-                        already_executed_certs_num += 1;
-                        None
-                    }
-                });
+        let pending_certs = certs.into_iter().zip_debug_eq(executed).filter_map(
+            |((cert, execution_env), executed)| {
+                if executed.is_none() {
+                    Some((cert, execution_env))
+                } else {
+                    already_executed_certs_num += 1;
+                    None
+                }
+            },
+        );
 
         for (cert, execution_env) in pending_certs {
             let scheduler = self.clone();

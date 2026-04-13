@@ -89,6 +89,7 @@ use crate::{
     },
     execution_cache::ObjectCacheRead,
     execution_scheduler::{SettlementBatchInfo, SettlementScheduler},
+    gasless_rate_limiter::ConsensusGaslessCounter,
     post_consensus_tx_reorder::PostConsensusTxReorder,
     scoring_decision::update_low_scoring_authorities,
     traffic_controller::{TrafficController, policies::TrafficTally},
@@ -110,6 +111,7 @@ pub struct ConsensusHandlerInitializer {
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
     backpressure_manager: Arc<BackpressureManager>,
     congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
+    consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 }
 
 impl ConsensusHandlerInitializer {
@@ -131,6 +133,7 @@ impl ConsensusHandlerInitializer {
                     None
                 }
             });
+        let consensus_gasless_counter = state.consensus_gasless_counter.clone();
         Self {
             state,
             checkpoint_service,
@@ -140,6 +143,7 @@ impl ConsensusHandlerInitializer {
             throughput_calculator,
             backpressure_manager,
             congestion_logger,
+            consensus_gasless_counter,
         }
     }
 
@@ -154,6 +158,7 @@ impl ConsensusHandlerInitializer {
         let backpressure_manager = BackpressureManager::new_for_tests();
         let consensus_adapter =
             make_consensus_adapter_for_test(state.clone(), HashSet::new(), false, vec![]);
+        let consensus_gasless_counter = state.consensus_gasless_counter.clone();
         Self {
             state: state.clone(),
             checkpoint_service,
@@ -166,6 +171,7 @@ impl ConsensusHandlerInitializer {
             )),
             backpressure_manager,
             congestion_logger: None,
+            consensus_gasless_counter,
         }
     }
 
@@ -190,6 +196,7 @@ impl ConsensusHandlerInitializer {
             self.backpressure_manager.subscribe(),
             self.state.traffic_controller.clone(),
             self.congestion_logger.clone(),
+            self.consensus_gasless_counter.clone(),
         )
     }
 }
@@ -819,6 +826,8 @@ pub struct ConsensusHandler<C> {
 
     congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
 
+    consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
+
     checkpoint_queue: Mutex<CheckpointQueue>,
 }
 
@@ -838,6 +847,7 @@ impl<C> ConsensusHandler<C> {
         backpressure_subscriber: BackpressureSubscriber,
         traffic_controller: Option<Arc<TrafficController>>,
         congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
+        consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
     ) -> Self {
         assert!(
             matches!(
@@ -905,6 +915,7 @@ impl<C> ConsensusHandler<C> {
             backpressure_subscriber,
             traffic_controller,
             congestion_logger,
+            consensus_gasless_counter,
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -967,6 +978,7 @@ impl<C> ConsensusHandler<C> {
             backpressure_subscriber,
             traffic_controller,
             congestion_logger: None,
+            consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
             checkpoint_queue: Mutex::new(CheckpointQueue::new(
                 last_built_timestamp,
                 checkpoint_height,
@@ -1208,6 +1220,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             new_jwks,
         } = self.build_commit_handler_input(transactions);
 
+        self.process_gasless_transactions(&commit_info, &user_transactions);
         self.process_jwks(&mut state, &commit_info, new_jwks);
         self.process_capability_notifications(capability_notifications);
         self.process_execution_time_observations(&mut state, execution_time_observations);
@@ -2327,6 +2340,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
 
         ret
+    }
+
+    fn process_gasless_transactions(
+        &self,
+        commit_info: &ConsensusCommitInfo,
+        user_transactions: &[VerifiedExecutableTransactionWithAliases],
+    ) {
+        let gasless_count = user_transactions
+            .iter()
+            .filter(|txn| txn.tx().transaction_data().is_gasless_transaction())
+            .count() as u64;
+        self.consensus_gasless_counter
+            .record_commit(commit_info.timestamp, gasless_count);
     }
 
     fn process_jwks(
@@ -3744,6 +3770,7 @@ mod tests {
             backpressure_manager.subscribe(),
             state.traffic_controller.clone(),
             None,
+            state.consensus_gasless_counter.clone(),
         );
 
         // AND create test user transactions alternating between owned and shared input.
@@ -4008,6 +4035,7 @@ mod tests {
             backpressure.subscribe(),
             state.traffic_controller.clone(),
             None,
+            state.consensus_gasless_counter.clone(),
         );
 
         handler.handle_consensus_commit(commit).await;
@@ -4133,6 +4161,7 @@ mod tests {
             backpressure.subscribe(),
             state.traffic_controller.clone(),
             None,
+            state.consensus_gasless_counter.clone(),
         );
 
         handler.handle_consensus_commit(commit).await;

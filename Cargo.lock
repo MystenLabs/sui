@@ -440,7 +440,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
 ]
@@ -571,7 +571,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "wasmtimer",
 ]
@@ -617,7 +617,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
  "wasmtimer",
@@ -799,7 +799,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
  "wasmtimer",
@@ -815,7 +815,7 @@ dependencies = [
  "alloy-transport",
  "reqwest",
  "serde_json",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
 ]
@@ -2214,7 +2214,7 @@ dependencies = [
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -2406,7 +2406,7 @@ dependencies = [
  "sync_wrapper 1.0.2",
  "tokio",
  "tokio-tungstenite 0.26.2",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -2494,7 +2494,7 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
 ]
@@ -2751,7 +2751,7 @@ checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
 
 [[package]]
 name = "bin-version"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "const-str",
  "git-version",
@@ -3747,7 +3747,7 @@ dependencies = [
  "tonic-build",
  "tonic-prost",
  "tonic-rustls",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "typed-store",
@@ -5539,7 +5539,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.9"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4d2550a9833b3e686a94b823271e38063d309243#4d2550a9833b3e686a94b823271e38063d309243"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5599,7 +5599,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4d2550a9833b3e686a94b823271e38063d309243#4d2550a9833b3e686a94b823271e38063d309243"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -5608,7 +5608,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4d2550a9833b3e686a94b823271e38063d309243#4d2550a9833b3e686a94b823271e38063d309243"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -5628,7 +5628,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4d2550a9833b3e686a94b823271e38063d309243#4d2550a9833b3e686a94b823271e38063d309243"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -5645,7 +5645,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=7ba456d008a3a657e01589de64cb0eeb8aca532b#7ba456d008a3a657e01589de64cb0eeb8aca532b"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4d2550a9833b3e686a94b823271e38063d309243#4d2550a9833b3e686a94b823271e38063d309243"
 dependencies = [
  "ark-bn254",
  "ark-ec",
@@ -5936,7 +5936,9 @@ dependencies = [
  "lru 0.10.1",
  "prost 0.14.1",
  "reqwest",
+ "roaring 0.10.9",
  "serde",
+ "serde_json",
  "sui-rpc",
  "sui-rpc-api",
  "sui-types",
@@ -5944,6 +5946,7 @@ dependencies = [
  "tokio",
  "tonic 0.14.3",
  "tracing",
+ "wiremock",
  "zstd 0.12.3+zstd.1.5.2",
 ]
 
@@ -7911,7 +7914,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.0",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -8481,7 +8484,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=bf7e85261d348d6552fe088635e551e6f523d7df#bf7e85261d348d6552fe088635e551e6f523d7df"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=641675ae80ab625e1b3d72f66eae494cee0f0d2b#641675ae80ab625e1b3d72f66eae494cee0f0d2b"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -9751,7 +9754,7 @@ dependencies = [
  "tokio-stream",
  "tonic 0.14.3",
  "tonic-health",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
 ]
@@ -9769,7 +9772,7 @@ dependencies = [
  "simple-server-timing-header",
  "telemetry-subscribers",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -11736,7 +11739,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.6.0",
+ "socket2 0.5.6",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -12262,7 +12265,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util 0.7.18",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.6.8",
  "tower-service",
  "url",
@@ -14036,7 +14039,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -14144,7 +14147,7 @@ dependencies = [
  "tokio",
  "toml 0.7.4",
  "toml_edit 0.19.10",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "unescape",
@@ -14309,7 +14312,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -14328,6 +14331,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "mysten-common",
  "num_enum 0.6.1",
  "object_store 0.13.0",
  "parquet",
@@ -14367,7 +14371,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -14442,7 +14446,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "alloy",
  "alloy-multiprovider-strategy",
@@ -14493,7 +14497,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.14.3",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "typed-store",
  "url",
@@ -14501,7 +14505,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge-cli"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "alloy",
  "anyhow",
@@ -14509,6 +14513,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "move-core-types",
+ "mysten-common",
  "reqwest",
  "serde",
  "serde_json",
@@ -14605,7 +14610,7 @@ dependencies = [
 
 [[package]]
 name = "sui-checkpoint-blob-indexer"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14637,7 +14642,7 @@ dependencies = [
 
 [[package]]
 name = "sui-cluster-test"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14838,8 +14843,8 @@ dependencies = [
 
 [[package]]
 name = "sui-crypto"
-version = "0.2.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e5c53de2e9570229b63bd0508b43f27c11cb5f76#e5c53de2e9570229b63bd0508b43f27c11cb5f76"
+version = "0.3.0"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e494a36a76a0aab8c5d66d5557995faee5c1fb09#e494a36a76a0aab8c5d66d5557995faee5c1fb09"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -14905,6 +14910,7 @@ dependencies = [
  "cynic-codegen",
  "fastcrypto",
  "lru 0.10.1",
+ "mysten-common",
  "reqwest",
  "serde",
  "sui-config",
@@ -14915,7 +14921,7 @@ dependencies = [
 
 [[package]]
 name = "sui-default-config"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -14923,7 +14929,7 @@ dependencies = [
 
 [[package]]
 name = "sui-display"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14934,7 +14940,9 @@ dependencies = [
  "futures",
  "indexmap 2.8.0",
  "insta",
+ "itertools 0.13.0",
  "move-core-types",
+ "mysten-common",
  "prost-types 0.14.1",
  "serde",
  "serde_json",
@@ -14946,7 +14954,7 @@ dependencies = [
 
 [[package]]
 name = "sui-e2e-tests"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15079,7 +15087,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15100,7 +15108,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.14.3",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "uuid",
@@ -15109,17 +15117,27 @@ dependencies = [
 
 [[package]]
 name = "sui-field-count"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "sui-field-count-derive",
 ]
 
 [[package]]
 name = "sui-field-count-derive"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "sui-forking"
+version = "1.71.0"
+dependencies = [
+ "anyhow",
+ "bin-version",
+ "tokio",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -15147,7 +15165,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework-snapshot"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -15190,7 +15208,7 @@ dependencies = [
 
 [[package]]
 name = "sui-futures"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "futures",
@@ -15210,6 +15228,7 @@ dependencies = [
  "fastcrypto",
  "move-binary-format",
  "move-core-types",
+ "mysten-common",
  "prometheus",
  "rand 0.8.5",
  "serde",
@@ -15244,13 +15263,13 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util 0.7.18",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
 ]
 
 [[package]]
 name = "sui-indexer-alt"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15288,7 +15307,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-consistent-api"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -15301,7 +15320,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-consistent-store"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15319,6 +15338,7 @@ dependencies = [
  "http 1.3.1",
  "integer-encoding",
  "move-core-types",
+ "mysten-common",
  "mysten-network",
  "object_store 0.13.0",
  "ouroboros 0.17.2",
@@ -15344,7 +15364,7 @@ dependencies = [
  "tonic 0.14.3",
  "tonic-health",
  "tonic-reflection",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
  "zstd 0.12.3+zstd.1.5.2",
@@ -15362,9 +15382,11 @@ dependencies = [
  "diesel-async",
  "fastcrypto",
  "insta",
+ "itertools 0.13.0",
  "jsonrpsee",
  "move-core-types",
  "msim",
+ "mysten-common",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -15412,7 +15434,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-framework"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15427,9 +15449,10 @@ dependencies = [
  "diesel-async",
  "diesel_migrations",
  "futures",
+ "http 1.3.1",
+ "mysten-network",
  "num_cpus",
  "object_store 0.13.0",
- "pin-project-lite",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -15463,7 +15486,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-framework-store-traits"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15473,7 +15496,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-graphql"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -15540,7 +15563,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-jsonrpc"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -15558,9 +15581,11 @@ dependencies = [
  "jsonrpsee",
  "move-binary-format",
  "move-core-types",
+ "mysten-common",
  "pin-project",
  "pin-project-lite",
  "prometheus",
+ "prost-types 0.14.1",
  "reqwest",
  "rustls",
  "schemars 0.8.21",
@@ -15583,12 +15608,14 @@ dependencies = [
  "sui-package-resolver",
  "sui-pg-db",
  "sui-protocol-config",
+ "sui-rpc",
  "sui-sql-macro",
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.69",
  "tokio",
  "toml 0.7.4",
+ "tonic 0.14.3",
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tower-layer",
@@ -15598,7 +15625,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-metrics"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "axum 0.8.3",
@@ -15613,7 +15640,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-object-store"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15628,7 +15655,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-reader"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -15639,6 +15666,7 @@ dependencies = [
  "diesel-async",
  "futures",
  "move-core-types",
+ "mysten-common",
  "prometheus",
  "prost-types 0.14.1",
  "serde_json",
@@ -15663,7 +15691,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-schema"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -15687,6 +15715,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "mysten-common",
  "schemars 0.8.21",
  "serde",
  "serde_json",
@@ -15725,6 +15754,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "mysten-common",
  "mysten-metrics",
  "once_cell",
  "prometheus",
@@ -15751,7 +15781,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-util 0.7.18",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "typed-store-error",
@@ -15832,6 +15862,7 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
+ "mysten-common",
  "mysten-metrics",
  "nonempty",
  "schemars 0.8.21",
@@ -15861,6 +15892,7 @@ dependencies = [
  "fastcrypto",
  "jsonrpc",
  "mockall",
+ "mysten-common",
  "rand 0.8.5",
  "regex",
  "serde",
@@ -15876,7 +15908,7 @@ dependencies = [
 
 [[package]]
 name = "sui-kv-rpc"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15884,6 +15916,7 @@ dependencies = [
  "bin-version",
  "clap",
  "move-core-types",
+ "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "prometheus",
@@ -15907,7 +15940,7 @@ dependencies = [
 
 [[package]]
 name = "sui-kvstore"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -15920,6 +15953,7 @@ dependencies = [
  "gcp_auth",
  "governor",
  "http 1.3.1",
+ "mysten-common",
  "num_cpus",
  "prometheus",
  "prost 0.14.1",
@@ -15949,7 +15983,7 @@ dependencies = [
 
 [[package]]
 name = "sui-light-client"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15999,7 +16033,7 @@ dependencies = [
 
 [[package]]
 name = "sui-metric-checker"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -16037,7 +16071,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "better_any",
@@ -16087,7 +16121,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "fastcrypto",
@@ -16116,7 +16150,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-lsp"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "bin-version",
  "clap",
@@ -16233,7 +16267,7 @@ dependencies = [
 
 [[package]]
 name = "sui-name-service"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "bcs",
  "move-core-types",
@@ -16292,7 +16326,7 @@ dependencies = [
  "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "url",
@@ -16301,7 +16335,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -16349,7 +16383,7 @@ dependencies = [
  "telemetry-subscribers",
  "tikv-jemallocator",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "typed-store",
@@ -16358,7 +16392,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -16392,7 +16426,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -16422,7 +16456,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-alt"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "bin-version",
@@ -16447,7 +16481,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-dump"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -16464,7 +16498,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-management"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "move-core-types",
@@ -16487,23 +16521,25 @@ dependencies = [
  "eyre",
  "hyper 1.8.1",
  "insta",
+ "itertools 0.13.0",
  "lru 0.10.1",
  "move-binary-format",
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
+ "mysten-common",
  "serde",
  "serde_json",
  "sui-move-build",
  "sui-types",
  "thiserror 1.0.69",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
 ]
 
 [[package]]
 name = "sui-pg-db"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -16589,6 +16625,7 @@ dependencies = [
  "itertools 0.13.0",
  "mime",
  "multiaddr",
+ "mysten-common",
  "mysten-metrics",
  "once_cell",
  "prometheus",
@@ -16607,7 +16644,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "url",
@@ -16709,7 +16746,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rosetta"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -16758,14 +16795,15 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc"
-version = "0.2.2"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e5c53de2e9570229b63bd0508b43f27c11cb5f76#e5c53de2e9570229b63bd0508b43f27c11cb5f76"
+version = "0.3.0"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e494a36a76a0aab8c5d66d5557995faee5c1fb09#e494a36a76a0aab8c5d66d5557995faee5c1fb09"
 dependencies = [
  "base64 0.22.1",
  "bcs",
  "bytes",
  "futures",
  "http 1.3.1",
+ "http-body 1.0.1",
  "prost 0.14.1",
  "prost-types 0.14.1",
  "serde",
@@ -16775,6 +16813,7 @@ dependencies = [
  "tokio",
  "tonic 0.14.3",
  "tonic-prost",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -16795,6 +16834,7 @@ dependencies = [
  "mime",
  "move-binary-format",
  "move-core-types",
+ "mysten-common",
  "mysten-network",
  "prometheus",
  "prost 0.14.1",
@@ -16826,7 +16866,7 @@ dependencies = [
  "tonic-prost-build",
  "tonic-reflection",
  "tonic-web",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
  "walkdir",
@@ -16834,7 +16874,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-benchmark"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "bb8",
@@ -16859,7 +16899,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -16886,7 +16926,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-resolver"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -16906,7 +16946,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -16951,8 +16991,8 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.2.2"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e5c53de2e9570229b63bd0508b43f27c11cb5f76#e5c53de2e9570229b63bd0508b43f27c11cb5f76"
+version = "0.3.0"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e494a36a76a0aab8c5d66d5557995faee5c1fb09#e494a36a76a0aab8c5d66d5557995faee5c1fb09"
 dependencies = [
  "base64ct",
  "bcs",
@@ -16972,7 +17012,7 @@ dependencies = [
 
 [[package]]
 name = "sui-security-watchdog"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -17014,13 +17054,13 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
 ]
 
 [[package]]
 name = "sui-single-node-benchmark"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -17082,7 +17122,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -17102,6 +17142,7 @@ dependencies = [
  "move-package-alt-compilation",
  "move-symbol-pool",
  "msim",
+ "mysten-common",
  "rand 0.8.5",
  "serde",
  "sui-config",
@@ -17125,7 +17166,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sql-macro"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -17159,6 +17200,7 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
+ "mysten-common",
  "mysten-metrics",
  "num_enum 0.6.1",
  "object_store 0.13.0",
@@ -17190,7 +17232,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -17316,7 +17358,7 @@ dependencies = [
 
 [[package]]
 name = "sui-test-validator"
-version = "1.70.0"
+version = "1.71.0"
 
 [[package]]
 name = "sui-tls"
@@ -17342,7 +17384,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -17566,6 +17608,7 @@ dependencies = [
  "move-command-line-common",
  "move-compiler",
  "msim",
+ "mysten-common",
  "sui-move-build",
  "tokio",
 ]
@@ -17581,6 +17624,7 @@ dependencies = [
  "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
+ "mysten-common",
  "sui-protocol-config",
  "sui-types",
 ]
@@ -18186,7 +18230,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=bf7e85261d348d6552fe088635e551e6f523d7df#bf7e85261d348d6552fe088635e551e6f523d7df"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=641675ae80ab625e1b3d72f66eae494cee0f0d2b#641675ae80ab625e1b3d72f66eae494cee0f0d2b"
 dependencies = [
  "arc-swap",
  "bincode 1.3.3",
@@ -18667,7 +18711,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -18762,7 +18806,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tonic 0.14.3",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -18822,9 +18866,9 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
+checksum = "ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -18889,7 +18933,7 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util 0.7.18",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
 ]
@@ -19049,6 +19093,7 @@ name = "transaction-fuzzer"
 version = "0.1.0"
 dependencies = [
  "move-core-types",
+ "mysten-common",
  "once_cell",
  "proptest",
  "proptest-derive",
@@ -20507,7 +20552,7 @@ dependencies = [
 
 [[package]]
 name = "x"
-version = "1.70.0"
+version = "1.71.0"
 dependencies = [
  "anyhow",
  "camino",

@@ -20,6 +20,7 @@ use fastcrypto::{
     secp256r1::Secp256r1PublicKey,
     traits::{EncodeDecodeBase64, ToFromBytes, VerifyingKey},
 };
+use mysten_common::ZipDebugEqIteratorExt;
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -150,7 +151,7 @@ impl AuthenticatorTrait for MultiSig {
         let digest = hasher.finalize().digest;
         // Verify each signature against its corresponding signature scheme and public key.
         // TODO: further optimization can be done because multiple Ed25519 signatures can be batch verified.
-        for (sig, i) in self.sigs.iter().zip(as_indices(self.bitmap)?) {
+        for (sig, i) in self.sigs.iter().zip_debug_eq(as_indices(self.bitmap)?) {
             let (subsig_pubkey, weight) =
                 self.multisig_pk
                     .pk_map
@@ -532,7 +533,7 @@ impl MultiSigPublicKey {
         }
 
         Ok(MultiSigPublicKey {
-            pk_map: pks.into_iter().zip(weights).collect(),
+            pk_map: pks.into_iter().zip_debug_eq(weights).collect(),
             threshold,
         })
     }

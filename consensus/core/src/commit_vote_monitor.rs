@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::Mutex;
 
 use crate::{
@@ -46,7 +47,7 @@ impl CommitVoteMonitor {
         let highest_voted_commits = self.highest_voted_commits.lock();
         let mut highest_voted_commits = highest_voted_commits
             .iter()
-            .zip(self.context.committee.authorities())
+            .zip_debug_eq(self.context.committee.authorities())
             .map(|(commit_index, (_, a))| (*commit_index, a.stake))
             .collect::<Vec<_>>();
         // Sort by commit index then stake, in descending order.
