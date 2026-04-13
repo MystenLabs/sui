@@ -164,7 +164,7 @@ fun borrow_or_add_existing() {
     let mut id = scenario.new_object();
     add(&mut id, 0u64, 42u64);
     assert!(exists_with_type<u64, u64>(&id, 0));
-    assert_eq!(*dynamic_field::borrow_or_add!(&mut id, 0u64, 99u64), 42);
+    assert_eq!(*dynamic_field::borrow_or_add!(&mut id, 0u64, { assert!(false); 99u64 }), 42);
     assert!(exists_with_type<u64, u64>(&id, 0));
     scenario.end();
     id.delete();
@@ -189,7 +189,7 @@ fun borrow_mut_or_add_existing() {
     let mut id = scenario.new_object();
     add(&mut id, 0u64, 42u64);
     assert!(exists_with_type<u64, u64>(&id, 0));
-    *dynamic_field::borrow_mut_or_add!(&mut id, 0u64, 99u64) = 100;
+    *dynamic_field::borrow_mut_or_add!(&mut id, 0u64, { assert!(false); 99u64 }) = 100;
     assert_eq!(*borrow(&id, 0u64), 100u64);
     scenario.end();
     id.delete();

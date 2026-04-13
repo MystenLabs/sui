@@ -231,7 +231,16 @@ fun borrow_or_add_existing() {
     add(&mut id, 0u64, new(&mut scenario));
     bump(borrow_mut(&mut id, 0u64));
     // count should be 1 since it was bumped above
-    assert_eq!(count(dynamic_object_field::borrow_or_add!(&mut id, 0u64, new(&mut scenario))), 1);
+    assert_eq!(
+        count(
+            dynamic_object_field::borrow_or_add!(
+                &mut id,
+                0u64,
+                { assert!(false); new(&mut scenario) },
+            ),
+        ),
+        1,
+    );
     scenario.end();
     id.delete();
 }
@@ -255,7 +264,13 @@ fun borrow_mut_or_add_existing() {
     let mut id = scenario.new_object();
     add(&mut id, 0u64, new(&mut scenario));
     bump(borrow_mut(&mut id, 0u64));
-    bump(dynamic_object_field::borrow_mut_or_add!(&mut id, 0u64, new(&mut scenario)));
+    bump(
+        dynamic_object_field::borrow_mut_or_add!(
+            &mut id,
+            0u64,
+            { assert!(false); new(&mut scenario) },
+        ),
+    );
     // count should be 2 since it was bumped twice above
     assert_eq!(count(borrow(&id, 0u64)), 2);
     scenario.end();
