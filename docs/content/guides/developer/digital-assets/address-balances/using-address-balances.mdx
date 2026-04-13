@@ -486,7 +486,7 @@ sui client ptb \
     --merge-coins @<COIN_1> '[@<COIN_2>, @<COIN_3>]' \
     --move-call 0x2::coin::send_funds '<0x2::sui::SUI>' @<COIN_1> @<YOUR_ADDRESS>
 ```
-`
+
 For SUI coins, you can smash them as gas and use `--move-call 0x2::coin::send_funds --gas-coin <COIN>`.
 
 The TypeScript SDK automatically selects coins or address balances as needed. Contracts that accept `Coin<T>` or `Balance<T>` remain callable. The `redeem_funds` function converts withdrawals to the expected types within the PTB.
