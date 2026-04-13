@@ -1,0 +1,484 @@
+---
+title: Data Storage with Walrus
+description: A complete guide to the Sui and Walrus storage stack, covering publishers and aggregators, the TypeScript SDK, and the Move API for onchain blob lifecycle management.
+keywords: [ walrus, sui, blob storage, typescript sdk, walrus file, move api, publishers, aggregators, upload relay ]
+---
+
+Sui and [Walrus](https://docs.wal.app/) are designed as a pair. Sui handles coordination, ownership, and payments onchain. Walrus handles large binary data offchain. Together, they form a programmable storage stack: every blob stored on Walrus is represented as a [Sui object](/guides/developer/objects/object-model.mdx), which means Move smart contracts can own, transfer, extend, or delete it using the same primitives you use for any other onchain resource.
+
+## Sui and Walrus
+
+**Sui** acts as the control plane. It holds the Walrus system object, tracks storage resource metadata, emits availability [events](/guides/developer/accessing-data/using-events.mdx), and processes payments in WAL. Every write to Walrus involves at least 2 Sui transactions: one to register the blob and one to certify it after upload.
+
+**Walrus** acts as the data plane. It encodes blobs using [RedStuff](https://docs.wal.app/docs/design/overview) (a 2D erasure-coding scheme), distributes encoded slivers across a committee of storage nodes, and reconstructs blobs on read. Metadata lives onchain on Sui; content lives offchain on Walrus nodes.
+
+The integration point is the Blob object on Sui. When you upload data, a `Blob` Sui object is created in your wallet. It holds the `blob_id`, the storage period, and a reference to its associated `Storage` resource. That object is yours to [own, transfer, wrap](/guides/developer/objects/object-ownership/index.mdx), or manage with Move.
+
+
+## Pathways overview
+
+There are 3 pathways for building on Walrus, in order of how often you should reach for them:
+
+1. [Publishers and aggregators](https://docs.wal.app/docs/operator-guide/aggregator): HTTP endpoints you can POST to and GET from. Fastest to integrate. Best for server-side or backend flows where you do not need wallet-level control of blobs.
+2. [TypeScript SDK](https://docs.wal.app/docs/typescript-sdk/sdks) (`@mysten/walrus`): Direct interaction with Walrus storage nodes or an upload relay. Required when users need to pay for their own storage, or when your app needs to own and manage blob objects.
+3. **Move API:** Onchain blob lifecycle management through [PTBs](/guides/developer/transactions/ptbs/index.mdx) or custom Move contracts. Use this when you need programmable blob ownership, sharing, extension, or deletion from within a smart contract.
+
+:::tip
+For many applications, publishers and aggregators are sufficient and save you significant development time. The TS SDK is the right choice when users sign their own transactions or when you need blob object ownership. The Move API unlocks composability but is only needed for onchain automation.
+:::
+
+
+## Pathway 1: Publishers and aggregators
+
+Publishers and aggregators are the simplest integration path. A publisher accepts HTTP POST requests and stores blobs on Walrus on your behalf. An aggregator accepts HTTP GET requests and reconstructs blobs from storage nodes.
+
+This pathway is documented in the [Walrus documentation](https://docs.wal.app/docs/dev-guide/components). When using public or shared publishers in production, use the `send-object-to` feature to direct the resulting blob Sui object to a specific address rather than leaving it in the publisher's custody.
+
+
+## Pathway 2: TypeScript SDK
+
+The TS SDK (`@mysten/walrus`) is the primary pathway for apps where:
+
+- Users sign transactions with their own wallets (browser apps, Sui dApp Kit).
+- Your backend needs to own blob objects programmatically.
+- You need direct access to blob metadata, attributes, and lifecycle methods.
+
+Reading and writing directly through the SDK (without an upload relay) requires many requests: approximately 2200 to write a blob and approximately 335 to read. The upload relay reduces write requests significantly.
+
+### Installation
+
+```bash
+npm install --save @mysten/walrus @mysten/sui
+```
+
+### Setup
+
+The Walrus SDK extends a [Sui client](https://sdk.mystenlabs.com/sui/clients) using the `$extend` pattern.
+
+```typescript
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { walrus } from '@mysten/walrus';
+
+const client = new SuiGrpcClient({
+  network: 'testnet',
+  baseUrl: 'https://fullnode.testnet.sui.io:443',
+}).$extend(walrus());
+```
+
+To reduce write request overhead, configure an upload relay:
+
+```typescript
+const client = new SuiGrpcClient({
+  network: 'testnet',
+  baseUrl: 'https://fullnode.testnet.sui.io:443',
+}).$extend(
+  walrus({
+    uploadRelay: {
+      host: 'https://upload-relay.testnet.walrus.space',
+      sendTip: {
+        max: 1_000, // max tip in MIST; SDK auto-negotiates the required amount
+      },
+    },
+  }),
+);
+```
+
+
+### Uploading
+
+There are two levels of upload abstraction: the `WalrusFile` API and the lower-level `writeBlob` API.
+
+#### WalrusFile API (recommended)
+
+`WalrusFile` is the higher-level abstraction. It handles the distinction between blobs and quilts (multi-file blobs) automatically. When you write multiple files, they are batched into a single quilt, which is more storage-efficient than writing each file separately.
+
+##### Uploading with a Signer (backend/script context)
+
+Use this when your backend or a deployment script signs the transactions using a [keypair](https://sdk.mystenlabs.com/sui/cryptography/keypairs), not a user wallet.
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { WalrusFile } from '@mysten/walrus';
+
+const keypair = Ed25519Keypair.fromSecretKey(process.env.PRIVATE_KEY!);
+
+const file1 = WalrusFile.from({
+  contents: new TextEncoder().encode('Hello from the TS SDK!\n'),
+  identifier: 'README.md',
+  tags: { 'content-type': 'text/plain' },
+});
+
+const file2 = WalrusFile.from({
+  contents: new Uint8Array([1, 2, 3, 4]),
+  identifier: 'data.bin',
+});
+
+const results = await client.walrus.writeFiles({
+  files: [file1, file2],
+  epochs: 3,       // number of storage epochs
+  deletable: true, // set to true to allow deletion later
+  signer: keypair,
+});
+
+// Each result contains the Sui object ID and blob ID
+for (const result of results) {
+  console.log('blobId:', result.blobId);
+  console.log('Sui objectId:', result.blobObject.id.id);
+}
+```
+
+
+##### Uploading with a user wallet (browser/dApp Kit context)
+
+When users sign transactions in a browser, wallet popups must be triggered by direct user interaction. Use `writeFilesFlow` to split the registration and certification steps into separate user actions. The [`signAndExecuteTransaction`](https://sdk.mystenlabs.com/dapp-kit/wallet-hooks/useSignAndExecuteTransaction) hook from [dApp Kit](https://sdk.mystenlabs.com/dapp-kit) handles the wallet interaction.
+
+```typescript
+import { WalrusFile } from '@mysten/walrus';
+
+// Step 1: Encode (can run as soon as the user selects a file)
+const flow = client.walrus.writeFilesFlow({
+  files: [
+    WalrusFile.from({
+      contents: new Uint8Array(fileData),
+      identifier: 'my-file.txt',
+    }),
+  ],
+});
+
+await flow.encode();
+
+// Step 2: Register — triggered by a "Register" button click
+async function handleRegister() {
+  const registerTx = flow.register({
+    epochs: 3,
+    owner: currentAccount.address,
+    deletable: true,
+  });
+
+  const result = await signAndExecuteTransaction({ transaction: registerTx });
+
+  if (result.$kind === 'FailedTransaction') {
+    throw new Error(result.FailedTransaction.status.error?.message);
+  }
+
+  // Step 3: Upload slivers to storage nodes (can run immediately after register)
+  await flow.upload({ digest: result.Transaction.digest });
+}
+
+// Step 4: Certify — triggered by a "Certify" button click
+async function handleCertify() {
+  const certifyTx = flow.certify();
+  const result = await signAndExecuteTransaction({ transaction: certifyTx });
+
+  if (result.$kind === 'FailedTransaction') {
+    throw new Error(result.FailedTransaction.status.error?.message);
+  }
+
+  const files = await flow.listFiles();
+  console.log('Uploaded files:', files);
+}
+```
+
+
+##### Crash recovery
+
+`writeBlob` and `writeFiles` support inline crash recovery through `onStep` and `resume`. Persist each step and pass the last saved step as `resume` to skip completed stages:
+
+```typescript
+const { blobId } = await client.walrus.writeBlob({
+  blob: file,
+  deletable: true,
+  epochs: 3,
+  signer: keypair,
+  onStep: (step) => db.save(fileId, step),
+  resume: await db.load(fileId), // skip already-completed stages on retry
+});
+```
+
+#### writeBlob API (lower-level)
+
+Use `writeBlob` when you want direct control over a single raw blob without the `WalrusFile` abstraction:
+
+```typescript
+const file = new TextEncoder().encode('Hello from the TS SDK!\n');
+
+const { blobId } = await client.walrus.writeBlob({
+  blob: file,
+  deletable: false,
+  epochs: 3,
+  signer: keypair,
+});
+```
+
+
+### Reading
+
+Reading assumes you know the blob ID or quilt ID. See the [Querying blobs](#querying-blobs) section for how to retrieve them.
+
+#### WalrusFile API
+
+Read files in batches when possible. The SDK is more efficient when loading multiple files from the same quilt.
+
+```typescript
+const [file1, file2] = await client.walrus.getFiles({
+  ids: [blobId, orQuiltId],
+});
+
+// WalrusFile works like a fetch Response
+const text  = await file1.text();
+const bytes = await file1.bytes();
+const json  = await file2.json();
+
+// Access quilt metadata
+const identifier = await file1.getIdentifier(); // 'README.md'
+const tags       = await file1.getTags();        // { 'content-type': 'text/plain' }
+```
+
+To read files within a quilt by identifier, tag, or quilt ID:
+
+```typescript
+const blob = await client.walrus.getBlob({ blobId });
+
+// Get all files in the quilt
+const allFiles = await blob.files();
+
+// Filter by identifier
+const [readme] = await blob.files({ identifiers: ['README.md'] });
+
+// Filter by tag
+const textFiles = await blob.files({ tags: [{ 'content-type': 'text/plain' }] });
+```
+
+#### readBlob API (lower-level)
+
+```typescript
+const bytes = await client.walrus.readBlob({ blobId });
+```
+
+
+### Blob management
+
+Blob management covers querying, deleting, and extending blobs. Each blob is a Sui object, so standard Sui object ownership patterns apply.
+
+#### Querying personally-owned blobs
+
+Blob objects on Walrus are [Sui objects owned by an address](/guides/developer/objects/object-ownership/address-owned.mdx). You can query them the same way you query any owned Sui object, by filtering on the Walrus `Blob` type.
+
+```typescript
+import { SuiClient } from '@mysten/sui/client';
+
+const suiClient = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443' });
+
+// WALRUS_BLOB_TYPE is the Move type for a blob on your target network,
+// for example: '0x<package_id>::blob::Blob'
+const ownedBlobs = await suiClient.getOwnedObjects({
+  owner: walletAddress,
+  filter: {
+    StructType: WALRUS_BLOB_TYPE,
+  },
+  options: {
+    showContent: true,
+    showType: true,
+  },
+});
+```
+
+The Walrus package object ID can be found in the Walrus [`client_config.yaml`](https://docs.wal.app/docs/usage/started) file for your target network. With dApp Kit, you can use `useGetOwnedObjects` with the same `StructType` filter to display all blobs in a connected wallet.
+
+#### Deleting blobs
+
+Only blobs registered as `deletable: true` can be deleted. Use `executeDeleteBlobTransaction` with the Sui object ID of the blob.
+
+```typescript
+import { RetryableWalrusClientError } from '@mysten/walrus';
+
+async function deleteBlob(blobObjectId: string) {
+  try {
+    const { digest } = await client.walrus.executeDeleteBlobTransaction({
+      blobObjectId,
+      signer: keypair,
+    });
+    console.log('Deleted. Transaction digest:', digest);
+  } catch (err) {
+    if (err instanceof RetryableWalrusClientError) {
+      client.walrus.reset();
+      const { digest } = await client.walrus.executeDeleteBlobTransaction({
+        blobObjectId,
+        signer: keypair,
+      });
+      console.log('Deleted after retry. Digest:', digest);
+    } else {
+      throw err;
+    }
+  }
+}
+```
+
+
+#### Extending blobs
+
+Extend a blob's storage period by adding [epochs](/concepts/sui-architecture/epochs.mdx) to its associated `Storage` resource:
+
+```typescript
+const { digest } = await client.walrus.executeExtendBlobTransaction({
+  blobObjectId,
+  epochs: 5, // number of additional epochs
+  signer: keypair,
+});
+```
+
+#### Writing and reading blob attributes
+
+Blob objects support custom key-value attributes stored as [dynamic fields](/guides/developer/objects/dynamic-fields.mdx) onchain. Use these to attach application-level metadata (file names, content types, version tags, and so on) to a blob object.
+
+```typescript
+// Write attributes (set to null to remove)
+await client.walrus.executeWriteBlobAttributesTransaction({
+  blobObjectId,
+  attributes: {
+    'content-type': 'application/json',
+    version: '2',
+    deprecated: null, // removes this key if it exists
+  },
+  signer: keypair,
+});
+```
+
+
+## Pathway 3: Move API
+
+Blobs are first-class Sui objects. This means you can [wrap them in other objects](/guides/developer/objects/object-ownership/wrapped.mdx), [share them](/guides/developer/objects/object-ownership/shared.mdx), write Move functions that check blob availability, and automate renewals using smart contracts. The Move API is the pathway for any application that needs programmable onchain control over blob lifecycle.
+
+### Key Move types
+
+The `Blob` and `Storage` structs are defined in the [Walrus contracts](https://docs.wal.app/docs/dev-guide/sui-struct). Source them directly to ensure field names stay in sync with the deployed package:
+
+<ImportContent source="contracts/walrus/sources/system/blob.move" mode="code" org="MystenLabs" repo="walrus" struct="Blob" />
+
+<ImportContent source="contracts/walrus/sources/system/storage_resource.move" mode="code" org="MystenLabs" repo="walrus" struct="Storage" />
+
+Because `Blob` has `key` and `store`, you can own it, [transfer it](/guides/developer/objects/transfers/index.mdx), wrap it in another object, or share it. `Storage` resources can be split, merged, and transferred independently.
+
+### Onchain events
+
+Walrus emits Sui events for every stage of the blob lifecycle. Your contracts and offchain indexers can listen for:
+
+- [`BlobRegistered`](https://docs.wal.app/docs/dev-guide/dev-operations): Storage nodes should expect slivers for this blob ID.
+- `BlobCertified`: The blob is available; `end_epoch` indicates when it expires.
+- `InvalidBlobID`: Storage nodes detected incorrect encoding.
+- `EpochChangeStart` and `EpochChangeDone`: Epoch transition signals.
+
+### Shared blobs (PTB template)
+
+Walrus provides a standard for wrapping a blob in a shared object that anyone can fund to extend its lifetime. The following programmable transaction block (PTB) template shares an existing blob:
+
+The `shared_blob::new` function takes only the `Blob` object and a transaction context. No `System` object is required:
+
+<ImportContent source="contracts/walrus/sources/system/shared_blob.move" mode="code" org="MystenLabs" repo="walrus" fun="new" />
+
+To construct this as a PTB from TypeScript using the [`Transaction`](https://sdk.mystenlabs.com/sui/transaction-building/basics) builder:
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+function shareBlobTx(
+  tx: Transaction,
+  walrusPackageId: string,
+  blobObjectId: string,
+): void {
+  tx.moveCall({
+    target: `${walrusPackageId}::shared_blob::new`,
+    arguments: [tx.object(blobObjectId)],
+  });
+}
+```
+
+Once shared, anyone can call `extend` on the shared blob object by supplying a `Storage` resource, which makes community-funded perpetual storage possible.
+
+### Extending a blob with a PTB
+
+<ImportContent source="contracts/walrus/sources/system/blob.move" mode="code" org="MystenLabs" repo="walrus" fun="extend_blob" />
+
+The TS equivalent uses `executeExtendBlobTransaction`, which handles the contract call internally. To construct a raw PTB, supply the `System` object and a `Storage` resource with a later `end_epoch`:
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+function extendBlobTx(
+  tx: Transaction,
+  walrusPackageId: string,
+  systemObjectId: string,
+  blobObjectId: string,
+  storageObjectId: string,
+): void {
+  tx.moveCall({
+    target: `${walrusPackageId}::system::extend_blob`,
+    arguments: [
+      tx.object(systemObjectId),
+      tx.object(blobObjectId),
+      tx.object(storageObjectId),
+    ],
+  });
+}
+```
+
+### Deleting a blob with a PTB
+
+<ImportContent source="contracts/walrus/sources/system/blob.move" mode="code" org="MystenLabs" repo="walrus" fun="delete_blob" />
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+
+function deleteBlobTx(
+  tx: Transaction,
+  walrusPackageId: string,
+  systemObjectId: string,
+  blobObjectId: string,
+): void {
+  tx.moveCall({
+    target: `${walrusPackageId}::system::delete_blob`,
+    arguments: [
+      tx.object(systemObjectId),
+      tx.object(blobObjectId),
+    ],
+  });
+}
+```
+
+:::caution
+The `moveCall` target strings above use illustrative module and function names. Always verify the exact entry function names against the deployed contract version for your target network. The TS SDK's `executeDeleteBlobTransaction` and `executeExtendBlobTransaction` methods handle this automatically and are the recommended approach.
+:::
+
+### Wrapping blobs in your own objects
+
+Because `Blob` has the `store` ability, you can embed it inside your own Move objects. This is one of the most powerful aspects of the Sui and Walrus integration: your contract can hold and govern blobs directly. See [Move object abilities](/concepts/sui-move-concepts.mdx) for more on `key` and `store`.
+
+```move
+module my_app::content_store {
+    use walrus::blob::Blob;
+
+    public struct Document has key, store {
+        id: UID,
+        title: vector<u8>,
+        blob: Blob,
+        owner: address,
+    }
+
+    public fun create_document(
+        title: vector<u8>,
+        blob: Blob,
+        ctx: &mut TxContext,
+    ): Document {
+        Document {
+            id: object::new(ctx),
+            title,
+            blob,
+            owner: ctx.sender(),
+        }
+    }
+
+    public fun get_blob_id(doc: &Document): u256 {
+        doc.blob.blob_id
+    }
+}
+```
