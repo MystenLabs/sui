@@ -8,7 +8,6 @@ use reqwest::header::USER_AGENT;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
-use sui_types::supported_protocol_versions::Chain;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 
 use crate::CheckpointStore;
@@ -53,7 +52,6 @@ macro_rules! block_on {
 pub struct GraphQLStore {
     client: reqwest::Client,
     rpc: reqwest::Url,
-    node: Node,
     version: String,
 }
 
@@ -65,34 +63,8 @@ impl GraphQLStore {
         Ok(Self {
             client: reqwest::Client::new(),
             rpc,
-            node,
             version: version.to_string(),
         })
-    }
-
-    /// Return the configured node.
-    pub fn node(&self) -> &Node {
-        &self.node
-    }
-
-    /// Return the configured GraphQL endpoint.
-    pub fn rpc(&self) -> &reqwest::Url {
-        &self.rpc
-    }
-
-    /// Return the binary version used for identification.
-    pub fn version(&self) -> &str {
-        &self.version
-    }
-
-    /// Return the chain associated with the configured node.
-    pub fn chain(&self) -> Chain {
-        self.node.chain()
-    }
-
-    /// Return the HTTP client used by the store.
-    pub fn client(&self) -> &reqwest::Client {
-        &self.client
     }
 
     pub(crate) async fn run_query<T, V>(
@@ -128,7 +100,7 @@ impl GraphQLStore {
             .context("Failed to read response in GQL query")
     }
 
-    async fn get_verified_checkpoint(
+    async fn get_verified_checkpoint_impl(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
     ) -> Result<Option<VerifiedCheckpoint>, Error> {
@@ -166,7 +138,7 @@ impl CheckpointStore for GraphQLStore {
         &self,
         sequence: Option<CheckpointSequenceNumber>,
     ) -> Result<Option<VerifiedCheckpoint>, Error> {
-        Ok(block_on!(self.get_verified_checkpoint(sequence))?)
+        Ok(block_on!(self.get_verified_checkpoint_impl(sequence))?)
     }
 }
 
@@ -280,7 +252,7 @@ mod tests {
 
         let store = mock_store(&server);
         let verified = store
-            .get_verified_checkpoint(Some(11))
+            .get_verified_checkpoint_impl(Some(11))
             .await
             .expect("checkpoint query should succeed")
             .expect("checkpoint should be present");

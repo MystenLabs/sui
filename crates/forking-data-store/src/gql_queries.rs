@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! GQL Queries
-//! Interface to the rpc for the gql schema defined in `crates\sui-indexer-alt-graphql/schema.graphql`.
+//! Interface to the rpc for the gql schema defined in `crates/sui-indexer-alt-graphql/schema.graphql`.
 //! Built in modules for epochs, transactions, objects, and checkpoints.
 //! No GQL type escapes this module. From here we return structures defined in this crate
 //! or bcs encoded data of runtime structures.
@@ -435,9 +435,7 @@ pub(crate) mod checkpoint_query {
         use std::convert::TryFrom;
 
         use fastcrypto::encoding::Base64 as FastCryptoBase64;
-        use sui_types::{
-            message_envelope::Message, test_checkpoint_data_builder::TestCheckpointBuilder,
-        };
+        use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
         use super::{Base64, Checkpoint, ValidatorAggregatedSignature, decode_checkpoint};
 
