@@ -56,7 +56,7 @@ pub enum BridgeError {
     // Client requested a non-approved governance action
     GovernanceActionIsNotApproved,
     // Authority has invalid url
-    AuthoirtyUrlInvalid,
+    AuthorityUrlInvalid,
     // Action is not token transfer
     ActionIsNotTokenTransferAction,
     // Sui transaction failure due to generic error
