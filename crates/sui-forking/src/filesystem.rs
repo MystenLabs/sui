@@ -20,10 +20,11 @@ use anyhow::Error;
 use anyhow::anyhow;
 use anyhow::bail;
 
-use forking_data_store::Node;
 use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
+
+use crate::Node;
 
 /// Directory name appended to the configured filesystem store root.
 pub const DATA_STORE_DIR: &str = ".forking_data_store";

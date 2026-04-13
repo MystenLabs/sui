@@ -14,10 +14,10 @@
 use anyhow::{Context, Error, anyhow};
 use cynic::QueryBuilder;
 use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
-use forking_data_store::EpochData;
 use itertools::Itertools;
 
 use super::graphql::GraphQLStore;
+use crate::EpochData;
 
 // Register the schema which was loaded in the build.rs call.
 #[cynic::schema("rpc")]
@@ -209,7 +209,7 @@ pub(crate) mod object_query {
     use sui_types::object::Object;
 
     use super::*;
-    use forking_data_store::{ObjectKey as GqlObjectKey, VersionQuery};
+    use crate::{ObjectKey as GqlObjectKey, VersionQuery};
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "SuiAddress")]

@@ -10,14 +10,14 @@ use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 
-use forking_data_store::CheckpointStore;
-use forking_data_store::EpochData;
-use forking_data_store::EpochStore;
-use forking_data_store::Node;
-use forking_data_store::ObjectKey;
-use forking_data_store::ObjectStore;
-use forking_data_store::TransactionInfo;
-use forking_data_store::TransactionStore;
+use crate::CheckpointStore;
+use crate::EpochData;
+use crate::EpochStore;
+use crate::Node;
+use crate::ObjectKey;
+use crate::ObjectStore;
+use crate::TransactionInfo;
+use crate::TransactionStore;
 
 macro_rules! block_on {
     ($expr:expr) => {{
@@ -153,7 +153,7 @@ mod tests {
 
     use super::super::gql_queries::checkpoint_query::{CheckpointArgs, Query as CheckpointQuery};
     use super::*;
-    use forking_data_store::VersionQuery;
+    use crate::VersionQuery;
 
     fn mock_store(server: &MockServer) -> GraphQLStore {
         GraphQLStore::new(Node::Custom(server.uri()), "test-version").expect("store should build")
