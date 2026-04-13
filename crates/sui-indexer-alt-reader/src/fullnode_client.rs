@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use anyhow::Context;
 use prometheus::Registry;
 use prost_types::FieldMask;
@@ -13,10 +11,12 @@ use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
+use tower::Layer;
 use tracing::instrument;
 use url::Url;
 
-use crate::metrics::FullnodeClientMetrics;
+use crate::metrics::GrpcMetricsLayer;
+use crate::metrics::GrpcMetricsService;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct FullnodeArgs {
@@ -28,8 +28,7 @@ pub struct FullnodeArgs {
 /// A client for executing and simulating transactions via the full node gRPC service.
 #[derive(Clone)]
 pub struct FullnodeClient {
-    execution_client: TransactionExecutionServiceClient<Channel>,
-    metrics: Arc<FullnodeClientMetrics>,
+    execution_client: TransactionExecutionServiceClient<GrpcMetricsService<Channel>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -57,13 +56,12 @@ impl FullnodeClient {
         }
 
         let channel = endpoint.connect_lazy();
-        let execution_client = TransactionExecutionServiceClient::new(channel);
-        let metrics = FullnodeClientMetrics::new(prefix, registry);
 
-        Ok(Self {
-            execution_client,
-            metrics,
-        })
+        let layered = GrpcMetricsLayer::new(prefix.unwrap_or("fullnode"), registry).layer(channel);
+
+        let execution_client = TransactionExecutionServiceClient::new(layered);
+
+        Ok(Self { execution_client })
     }
 
     /// Execute a transaction on the Sui network via gRPC.
@@ -98,10 +96,12 @@ impl FullnodeClient {
         .with_signatures(signatures)
         .with_read_mask(read_mask);
 
-        self.request("execute_transaction", |mut client| async move {
-            client.execute_transaction(request).await
-        })
-        .await
+        self.execution_client
+            .clone()
+            .execute_transaction(request)
+            .await
+            .map(|r| r.into_inner())
+            .map_err(Into::into)
     }
 
     /// Simulate a transaction on the Sui network via gRPC.
@@ -130,46 +130,12 @@ impl FullnodeClient {
             .with_checks(checks)
             .with_do_gas_selection(do_gas_selection);
 
-        self.request("simulate_transaction", |mut client| async move {
-            client.simulate_transaction(request).await
-        })
-        .await
-    }
-
-    async fn request<F, Fut, R>(&self, method: &str, response: F) -> Result<R, Error>
-    where
-        F: FnOnce(TransactionExecutionServiceClient<Channel>) -> Fut,
-        Fut: std::future::Future<Output = Result<tonic::Response<R>, tonic::Status>>,
-    {
-        self.metrics
-            .requests_received
-            .with_label_values(&[method])
-            .inc();
-
-        let _timer = self
-            .metrics
-            .latency
-            .with_label_values(&[method])
-            .start_timer();
-
-        let response = response(self.execution_client.clone())
+        self.execution_client
+            .clone()
+            .simulate_transaction(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(Into::into);
-
-        if response.is_ok() {
-            self.metrics
-                .requests_succeeded
-                .with_label_values(&[method])
-                .inc();
-        } else {
-            self.metrics
-                .requests_failed
-                .with_label_values(&[method])
-                .inc();
-        }
-
-        response
+            .map_err(Into::into)
     }
 }
 
