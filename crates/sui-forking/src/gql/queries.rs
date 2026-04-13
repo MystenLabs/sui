@@ -408,11 +408,6 @@ pub(crate) mod object_query {
         fn decode_object_fragment_returns_none_for_missing_object() {
             assert_eq!(decode_object_fragment(None).unwrap(), None);
         }
-
-        #[test]
-        fn decode_object_fragment_returns_none_for_missing_object() {
-            assert_eq!(decode_object_fragment(None).unwrap(), None);
-        }
     }
 }
 
