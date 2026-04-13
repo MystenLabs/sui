@@ -2,6 +2,7 @@
   "name": "regulated-coin-utility",
   "version": "0.0.1",
   "description": "CLI tool to manage your Regulated Coin.",
+  "type": "module",
   "main": "main.ts",
   "scripts": {
     "coin-manager": "env-cmd -f ./.env ts-node src/main"

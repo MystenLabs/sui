@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {SuiJsonRpcClient} from "@mysten/sui/jsonRpc";
+import {SuiClient} from "@mysten/sui/client";
 import {
     ADMIN_SECRET_KEY, COIN_TYPE,
     DENY_CAP_ID,
@@ -144,7 +144,7 @@ run();
 async function executeTx(tx: Transaction) {
 
     console.log("Connecting to Sui network: ", SUI_NETWORK);
-    const suiClient = new SuiJsonRpcClient({url: SUI_NETWORK, network: 'testnet'});
+    const suiClient = new SuiClient({url: SUI_NETWORK});
 
     if(!ADMIN_SECRET_KEY) throw new Error("ADMIN_SECRET_KEY environment variable is not set.");
 
