@@ -5923,35 +5923,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
-name = "forking-data-store"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "chrono",
- "csv",
- "cynic",
- "cynic-codegen",
- "fastcrypto",
- "itertools 0.13.0",
- "lru 0.10.1",
- "prost 0.14.1",
- "reqwest",
- "roaring 0.10.9",
- "serde",
- "serde_json",
- "sui-rpc",
- "sui-rpc-api",
- "sui-types",
- "tempfile",
- "tokio",
- "tonic 0.14.3",
- "tracing",
- "wiremock",
- "zstd 0.12.3+zstd.1.5.2",
-]
-
-[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15142,7 +15113,6 @@ dependencies = [
  "cynic",
  "cynic-codegen",
  "fastcrypto",
- "forking-data-store",
  "itertools 0.13.0",
  "reqwest",
  "roaring 0.10.9",

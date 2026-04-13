@@ -21,7 +21,6 @@ url.workspace = true
 
 bcs.workspace = true
 bin-version.workspace = true
-forking-data-store = { path = "../forking-data-store" }
 sui-types.workspace = true
 
 [build-dependencies]
