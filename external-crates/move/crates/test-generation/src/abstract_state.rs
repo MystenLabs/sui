@@ -65,7 +65,13 @@ impl AbstractValue {
                 | SignatureToken::U32
                 | SignatureToken::U64
                 | SignatureToken::U128
-                | SignatureToken::U256 => true,
+                | SignatureToken::U256
+                | SignatureToken::I8
+                | SignatureToken::I16
+                | SignatureToken::I32
+                | SignatureToken::I64
+                | SignatureToken::I128
+                | SignatureToken::I256 => true,
             },
             "AbstractValue::new_primitive must be applied with primitive type"
         );
