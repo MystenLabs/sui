@@ -441,6 +441,42 @@ fn deserialize_empty_enum_fails() {
 }
 
 #[test]
+fn signed_integer_signature_token_rejected_at_version_7() {
+    use crate::file_format::{Signature, SignatureToken};
+    let mut module = basic_test_module();
+    // Inject a signed integer type into the signature pool.
+    module.signatures.push(Signature(vec![SignatureToken::I8]));
+    let mut v = vec![];
+    // VERSION_MAX is VERSION_7 in this branch, so serialize_with_version(VERSION_MAX, ...)
+    // must reject the signed integer signature token.
+    let res = module.serialize_with_version(VERSION_MAX, &mut v);
+    assert!(
+        res.is_err(),
+        "Expected rejection of signed integer types at version {VERSION_MAX}"
+    );
+    let err_msg = res.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("Signed integer types"),
+        "Error should mention signed integer types, got: {err_msg}"
+    );
+}
+
+#[test]
+fn is_signed_integer_predicate() {
+    use crate::file_format::SignatureToken as ST;
+    assert!(ST::I8.is_signed_integer());
+    assert!(ST::I16.is_signed_integer());
+    assert!(ST::I32.is_signed_integer());
+    assert!(ST::I64.is_signed_integer());
+    assert!(ST::I128.is_signed_integer());
+    assert!(ST::I256.is_signed_integer());
+    assert!(!ST::U8.is_signed_integer());
+    assert!(!ST::U64.is_signed_integer());
+    assert!(!ST::Bool.is_signed_integer());
+    assert!(!ST::Address.is_signed_integer());
+}
+
+#[test]
 fn serialize_deserialize_v6_no_flavor() {
     let module = basic_test_module();
     let mut bin = vec![];

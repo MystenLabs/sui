@@ -105,7 +105,13 @@ fn run_vm(module: CompiledModule) -> Result<(), VMError> {
             | SignatureToken::TypeParameter(_)
             | SignatureToken::U16
             | SignatureToken::U32
-            | SignatureToken::U256 => unimplemented!("Unsupported argument type: {:#?}", sig_tok),
+            | SignatureToken::U256
+            | SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => unimplemented!("Unsupported argument type: {:#?}", sig_tok),
         })
         .collect();
 
@@ -393,6 +399,12 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
         U64 => U64,
         U128 => U128,
         U256 => U256,
+        I8 => I8,
+        I16 => I16,
+        I32 => I32,
+        I64 => I64,
+        I128 => I128,
+        I256 => I256,
         Address => Address,
         Signer => Signer,
         Vector(ty) => Vector(Box::new(substitute(ty, tys))),
@@ -423,7 +435,8 @@ pub fn abilities(
     use SignatureToken::*;
 
     match ty {
-        Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => AbilitySet::PRIMITIVES,
+        Bool | U8 | U16 | U32 | U64 | U128 | U256 | I8 | I16 | I32 | I64 | I128 | I256
+        | Address => AbilitySet::PRIMITIVES,
 
         Reference(_) | MutableReference(_) => AbilitySet::REFERENCES,
         Signer => AbilitySet::SIGNER,
@@ -507,6 +520,12 @@ pub(crate) fn get_type_actuals_from_reference(
         | TypeParameter(_)
         | U16
         | U32
-        | U256 => None,
+        | U256
+        | I8
+        | I16
+        | I32
+        | I64
+        | I128
+        | I256 => None,
     }
 }
