@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {SuiJsonRpcClient} from "@mysten/sui/jsonRpc";
+import {SuiClient} from "@mysten/sui/client";
 import {
     ADMIN_SECRET_KEY, COIN_TYPE,
     DENY_CAP_ID,
     SUI_DENY_LIST_OBJECT_ID,
-    SUI_FULLNODE_URL,
     SUI_NETWORK,
     TREASURY_CAP_ID,
-} from "./config.js";
+} from "./config";
 import {Transaction} from '@mysten/sui/transactions';
 import {program} from "commander";
 import {Ed25519Keypair} from "@mysten/sui/keypairs/ed25519";
@@ -30,19 +29,19 @@ const run = async () => {
         .action((options) => {
             console.log("Executing addition to deny list...");
             console.log("Address to add to deny list: ", options.address);
-            const tx = new Transaction();
+            const txb = new Transaction();
 
-            tx.moveCall({
+            txb.moveCall({
                 target: `0x2::coin::deny_list_v2_add`,
                 arguments: [
-                    tx.object(SUI_DENY_LIST_OBJECT_ID),
-                    tx.object(DENY_CAP_ID),
-                    tx.pure.address(options.address),
+                    txb.object(SUI_DENY_LIST_OBJECT_ID),
+                    txb.object(DENY_CAP_ID),
+                    txb.pure.address(options.address),
                 ],
                 typeArguments: [COIN_TYPE],
             });
 
-            executeTx(tx);
+            executeTx(txb);
         });
 
 
@@ -57,19 +56,19 @@ const run = async () => {
 
             if(!DENY_CAP_ID) throw new Error("DENY_CAP_ID environment variable is not set. Are you sure the active address owns the deny list object?");
 
-            const tx = new Transaction();
+            const txb = new Transaction();
 
-            tx.moveCall({
+            txb.moveCall({
                 target: `0x2::coin::deny_list_v2_remove`,
                 arguments: [
-                    tx.object(SUI_DENY_LIST_OBJECT_ID),
-                    tx.object(DENY_CAP_ID),
-                    tx.pure.address(options.address),
+                    txb.object(SUI_DENY_LIST_OBJECT_ID),
+                    txb.object(DENY_CAP_ID),
+                    txb.pure.address(options.address),
                 ],
                 typeArguments: [COIN_TYPE],
             });
 
-            executeTx(tx);
+            executeTx(txb);
         });
     // docs::/#deny
     // docs::#mint
@@ -88,20 +87,20 @@ const run = async () => {
 
             if(!TREASURY_CAP_ID) throw new Error("TREASURY_CAP_ID environment variable is not set.");
 
-            const tx = new Transaction();
+            const txb = new Transaction();
 
-            const coin = tx.moveCall({
+            const coin = txb.moveCall({
                 target: `0x2::coin::mint`,
                 arguments: [
-                    tx.object(TREASURY_CAP_ID),
-                    tx.pure.u64(options.amount),
+                    txb.object(TREASURY_CAP_ID),
+                    txb.pure.u64(options.amount),
                 ],
                 typeArguments: [COIN_TYPE],
             });
 
-            tx.transferObjects([coin], tx.pure.address(options.address));
+            txb.transferObjects([coin], txb.pure.address(options.address));
 
-            executeTx(tx);
+            executeTx(txb);
         });
     // docs::/#mint
 
@@ -115,23 +114,23 @@ const run = async () => {
 
             if(!TREASURY_CAP_ID) throw new Error("TREASURY_CAP_ID environment variable is not set.");
 
-            const tx = new Transaction();
+            const txb = new Transaction();
 
-            tx.moveCall({
+            txb.moveCall({
                 target: `0x2::coin::burn`,
                 arguments: [
-                    tx.object(TREASURY_CAP_ID),
-                    tx.object(options.coin),
+                    txb.object(TREASURY_CAP_ID),
+                    txb.object(options.coin),
                 ],
                 typeArguments: [COIN_TYPE],
             });
 
-            executeTx(tx);
+            executeTx(txb);
         });
 
     program.command('help')
         .description('prints help')
-        .action(() => {
+        .action((options) => {
             console.log("Regulated coin utility.");
             program.outputHelp();
         });
@@ -142,10 +141,10 @@ const run = async () => {
 
 run();
 
-async function executeTx(tx: Transaction) {
+async function executeTx(txb: Transaction) {
 
-    console.log("Connecting to Sui network: ", SUI_FULLNODE_URL);
-    const suiClient = new SuiJsonRpcClient({url: SUI_FULLNODE_URL, network: SUI_NETWORK});
+    console.log("Connecting to Sui network: ", SUI_NETWORK);
+    const suiClient = new SuiClient({url: SUI_NETWORK});
 
     if(!ADMIN_SECRET_KEY) throw new Error("ADMIN_SECRET_KEY environment variable is not set.");
 
@@ -153,11 +152,12 @@ async function executeTx(tx: Transaction) {
       ADMIN_SECRET_KEY
     );
 
-    tx.setGasBudget(1000000000);
+    txb.setGasBudget(1000000000);
 
-    const res = await suiClient.signAndExecuteTransaction({
+    suiClient.signAndExecuteTransaction({
         signer: adminKeypair,
-        transaction: tx,
+        transaction: txb,
+        requestType: 'WaitForLocalExecution',
         options: {
             showEvents: true,
             showEffects: true,
@@ -165,17 +165,19 @@ async function executeTx(tx: Transaction) {
             showBalanceChanges: true,
             showInput: true,
         }
+    }).then((res) => {
+
+        const status = res?.effects?.status.status;
+
+        console.log("TxDigest = ", res?.digest);
+        console.log("Status = ", status);
+
+        if (status === "success") {
+            console.log("Transaction executed successfully.");
+        }
+        if (status == "failure") {
+            console.log("Transaction error = ", res?.effects?.status);
+        }
     });
 
-    const status = res?.effects?.status.status;
-
-    console.log("TxDigest = ", res?.digest);
-    console.log("Status = ", status);
-
-    if (status === "success") {
-        console.log("Transaction executed successfully.");
-    }
-    if (status == "failure") {
-        console.log("Transaction error = ", res?.effects?.status);
-    }
 }
