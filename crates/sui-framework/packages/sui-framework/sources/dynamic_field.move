@@ -173,7 +173,7 @@ public macro fun get_mut_do<$Name: copy + drop + store, $Value: store, $R: drop>
     if (exists_with_type<$Name, $Value>(o, name)) { $f(borrow_mut(o, name)); }
 }
 
-/// If the field exists, applys `$some` to an immutable reference to the value; otherwise, returns
+/// If the field exists, applies `$some` to an immutable reference to the value; otherwise, returns
 /// `$none`.
 /// This is like getting an `Option<&Value>` then calling `std::option::fold`.
 public macro fun get_fold<$Name: copy + drop + store, $Value: store, $R>(
@@ -187,7 +187,7 @@ public macro fun get_fold<$Name: copy + drop + store, $Value: store, $R>(
     if (exists_with_type<$Name, $Value>(o, name)) $some(borrow(o, name)) else $none
 }
 
-/// If the field exists, apply `$some` to a mutable reference to the value; otherwise, returns
+/// If the field exists, applies `$some` to a mutable reference to the value; otherwise, returns
 /// `$none`.
 /// This is like getting an `Option<&mut Value>` then calling `std::option::fold`.
 public macro fun get_mut_fold<$Name: copy + drop + store, $Value: store, $R>(

@@ -415,7 +415,7 @@ This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then callin
 
 ## Macro function `get_fold`
 
-If the field exists, applys <code>$some</code> to an immutable reference to the value; otherwise, returns
+If the field exists, applies <code>$some</code> to an immutable reference to the value; otherwise, returns
 <code>$none</code>.
 This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
 
@@ -449,7 +449,7 @@ This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a 
 
 ## Macro function `get_mut_fold`
 
-If the field exists, apply <code>$some</code> to a mutable reference to the value; otherwise, returns
+If the field exists, applies <code>$some</code> to a mutable reference to the value; otherwise, returns
 <code>$none</code>.
 This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
 
