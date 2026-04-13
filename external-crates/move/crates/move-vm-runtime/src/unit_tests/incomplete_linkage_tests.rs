@@ -23,8 +23,8 @@ use crate::{
 };
 use indexmap::IndexMap;
 use move_binary_format::{
-    file_format::{AddressIdentifierIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex},
     CompiledModule,
+    file_format::{AddressIdentifierIndex, IdentifierIndex, ModuleHandle, ModuleHandleIndex},
 };
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use std::collections::BTreeMap;

@@ -1,8 +1,6 @@
 [workspace]
 resolver = "2"
 
-exclude = ["crates/.claude"]
-
 members = [
     "crates/*",
     "move-execution/v0/crates/bytecode-verifier-tests",
