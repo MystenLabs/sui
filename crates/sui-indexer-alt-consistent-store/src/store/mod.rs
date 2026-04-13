@@ -177,13 +177,17 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
             .await
     }
 
+    /// Stores the `chain_id` for `pipeline_task` on first call, and on subsequent calls verifies
+    /// that the provided `chain_id` matches the stored value.
+    ///
+    /// This guards against pointing the indexer at a database that was previously populated with
+    /// data from a different chain.
     async fn accepts_chain_id(
         &mut self,
-        _pipeline_task: &str,
-        _chain_id: [u8; 32],
+        pipeline_task: &str,
+        chain_id: [u8; 32],
     ) -> anyhow::Result<bool> {
-        // TODO: Implement storing chain_id
-        Ok(true)
+        Ok(self.store.0.db.accepts_chain_id(pipeline_task, chain_id)?)
     }
 
     async fn committer_watermark(
@@ -247,6 +251,18 @@ mod tests {
                 a: DbMap::new(db.clone(), "a"),
                 b: DbMap::new(db.clone(), "b"),
             })
+        }
+    }
+
+    struct TestDb(tempfile::TempDir);
+
+    impl TestDb {
+        fn new() -> Self {
+            Self(tempfile::tempdir().unwrap())
+        }
+
+        fn store(&self) -> Store<TestSchema> {
+            Store::open(self.0.path().join("db"), DbConfig::default(), 4, None).unwrap()
         }
     }
 
@@ -711,6 +727,75 @@ mod tests {
 
         // Going back beyond the first checkpoint results in an empty range.
         assert_eq!(None, d.snapshot_range(1));
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_first_call_writes_and_accepts() {
+        let db = TestDb::new();
+        let store = db.store();
+
+        let mut conn = store.connect().await.unwrap();
+        assert!(conn.accepts_chain_id("test", [1u8; 32]).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_matching_accepts() {
+        let db = TestDb::new();
+        let store = db.store();
+
+        let mut conn = store.connect().await.unwrap();
+        let chain_id = [1u8; 32];
+        assert!(conn.accepts_chain_id("test", chain_id).await.unwrap());
+        // Second call with the same chain_id should also accept.
+        assert!(conn.accepts_chain_id("test", chain_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_mismatching_rejects() {
+        let db = TestDb::new();
+        let store = db.store();
+
+        let mut conn = store.connect().await.unwrap();
+        let chain_id_a = [1u8; 32];
+        let chain_id_b = [2u8; 32];
+        assert!(conn.accepts_chain_id("test", chain_id_a).await.unwrap());
+        assert!(!conn.accepts_chain_id("test", chain_id_b).await.unwrap());
+
+        // The originally stored chain_id is still accepted.
+        assert!(conn.accepts_chain_id("test", chain_id_a).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_distinct_pipelines() {
+        let db = TestDb::new();
+        let store = db.store();
+
+        let mut conn = store.connect().await.unwrap();
+        let chain_id_a = [1u8; 32];
+        let chain_id_b = [2u8; 32];
+        // Different pipelines are tracked independently.
+        assert!(conn.accepts_chain_id("a", chain_id_a).await.unwrap());
+        assert!(conn.accepts_chain_id("b", chain_id_b).await.unwrap());
+        assert!(conn.accepts_chain_id("a", chain_id_a).await.unwrap());
+        assert!(conn.accepts_chain_id("b", chain_id_b).await.unwrap());
+        assert!(!conn.accepts_chain_id("a", chain_id_b).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_persists_across_reopen() {
+        let db = TestDb::new();
+        let chain_id = [7u8; 32];
+
+        {
+            let store = db.store();
+            let mut conn = store.connect().await.unwrap();
+            assert!(conn.accepts_chain_id("test", chain_id).await.unwrap());
+        }
+
+        let store = db.store();
+        let mut conn = store.connect().await.unwrap();
+        assert!(conn.accepts_chain_id("test", chain_id).await.unwrap());
+        assert!(!conn.accepts_chain_id("test", [0u8; 32]).await.unwrap());
     }
 
     #[tokio::test]
