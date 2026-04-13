@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {SuiClient} from "@mysten/sui/client";
+import {SuiJsonRpcClient} from "@mysten/sui/jsonRpc";
 import {
     ADMIN_SECRET_KEY, COIN_TYPE,
     DENY_CAP_ID,
     SUI_DENY_LIST_OBJECT_ID,
     SUI_NETWORK,
     TREASURY_CAP_ID,
-} from "./config";
+} from "./config.js";
 import {Transaction} from '@mysten/sui/transactions';
 import {program} from "commander";
 import {Ed25519Keypair} from "@mysten/sui/keypairs/ed25519";
@@ -29,19 +29,19 @@ const run = async () => {
         .action((options) => {
             console.log("Executing addition to deny list...");
             console.log("Address to add to deny list: ", options.address);
-            const txb = new Transaction();
+            const tx = new Transaction();
 
-            txb.moveCall({
+            tx.moveCall({
                 target: `0x2::coin::deny_list_v2_add`,
                 arguments: [
-                    txb.object(SUI_DENY_LIST_OBJECT_ID),
-                    txb.object(DENY_CAP_ID),
-                    txb.pure.address(options.address),
+                    tx.object(SUI_DENY_LIST_OBJECT_ID),
+                    tx.object(DENY_CAP_ID),
+                    tx.pure.address(options.address),
                 ],
                 typeArguments: [COIN_TYPE],
             });
 
-            executeTx(txb);
+            executeTx(tx);
         });
 
 
@@ -56,19 +56,19 @@ const run = async () => {
 
             if(!DENY_CAP_ID) throw new Error("DENY_CAP_ID environment variable is not set. Are you sure the active address owns the deny list object?");
 
-            const txb = new Transaction();
+            const tx = new Transaction();
 
-            txb.moveCall({
+            tx.moveCall({
                 target: `0x2::coin::deny_list_v2_remove`,
                 arguments: [
-                    txb.object(SUI_DENY_LIST_OBJECT_ID),
-                    txb.object(DENY_CAP_ID),
-                    txb.pure.address(options.address),
+                    tx.object(SUI_DENY_LIST_OBJECT_ID),
+                    tx.object(DENY_CAP_ID),
+                    tx.pure.address(options.address),
                 ],
                 typeArguments: [COIN_TYPE],
             });
 
-            executeTx(txb);
+            executeTx(tx);
         });
     // docs::/#deny
     // docs::#mint
@@ -87,20 +87,20 @@ const run = async () => {
 
             if(!TREASURY_CAP_ID) throw new Error("TREASURY_CAP_ID environment variable is not set.");
 
-            const txb = new Transaction();
+            const tx = new Transaction();
 
-            const coin = txb.moveCall({
+            const coin = tx.moveCall({
                 target: `0x2::coin::mint`,
                 arguments: [
-                    txb.object(TREASURY_CAP_ID),
-                    txb.pure.u64(options.amount),
+                    tx.object(TREASURY_CAP_ID),
+                    tx.pure.u64(options.amount),
                 ],
                 typeArguments: [COIN_TYPE],
             });
 
-            txb.transferObjects([coin], txb.pure.address(options.address));
+            tx.transferObjects([coin], tx.pure.address(options.address));
 
-            executeTx(txb);
+            executeTx(tx);
         });
     // docs::/#mint
 
@@ -114,23 +114,23 @@ const run = async () => {
 
             if(!TREASURY_CAP_ID) throw new Error("TREASURY_CAP_ID environment variable is not set.");
 
-            const txb = new Transaction();
+            const tx = new Transaction();
 
-            txb.moveCall({
+            tx.moveCall({
                 target: `0x2::coin::burn`,
                 arguments: [
-                    txb.object(TREASURY_CAP_ID),
-                    txb.object(options.coin),
+                    tx.object(TREASURY_CAP_ID),
+                    tx.object(options.coin),
                 ],
                 typeArguments: [COIN_TYPE],
             });
 
-            executeTx(txb);
+            executeTx(tx);
         });
 
     program.command('help')
         .description('prints help')
-        .action((options) => {
+        .action(() => {
             console.log("Regulated coin utility.");
             program.outputHelp();
         });
@@ -141,10 +141,10 @@ const run = async () => {
 
 run();
 
-async function executeTx(txb: Transaction) {
+async function executeTx(tx: Transaction) {
 
     console.log("Connecting to Sui network: ", SUI_NETWORK);
-    const suiClient = new SuiClient({url: SUI_NETWORK});
+    const suiClient = new SuiJsonRpcClient({url: SUI_NETWORK, network: 'testnet'});
 
     if(!ADMIN_SECRET_KEY) throw new Error("ADMIN_SECRET_KEY environment variable is not set.");
 
@@ -152,12 +152,11 @@ async function executeTx(txb: Transaction) {
       ADMIN_SECRET_KEY
     );
 
-    txb.setGasBudget(1000000000);
+    tx.setGasBudget(1000000000);
 
-    suiClient.signAndExecuteTransaction({
+    const res = await suiClient.signAndExecuteTransaction({
         signer: adminKeypair,
-        transaction: txb,
-        requestType: 'WaitForLocalExecution',
+        transaction: tx,
         options: {
             showEvents: true,
             showEffects: true,
@@ -165,19 +164,17 @@ async function executeTx(txb: Transaction) {
             showBalanceChanges: true,
             showInput: true,
         }
-    }).then((res) => {
-
-        const status = res?.effects?.status.status;
-
-        console.log("TxDigest = ", res?.digest);
-        console.log("Status = ", status);
-
-        if (status === "success") {
-            console.log("Transaction executed successfully.");
-        }
-        if (status == "failure") {
-            console.log("Transaction error = ", res?.effects?.status);
-        }
     });
 
+    const status = res?.effects?.status.status;
+
+    console.log("TxDigest = ", res?.digest);
+    console.log("Status = ", status);
+
+    if (status === "success") {
+        console.log("Transaction executed successfully.");
+    }
+    if (status == "failure") {
+        console.log("Transaction error = ", res?.effects?.status);
+    }
 }

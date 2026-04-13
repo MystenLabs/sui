@@ -1,8 +1,11 @@
 {
   "compilerOptions": {
-    "target": "es2016",
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "strict": true
   }
 }

@@ -9,7 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@mysten/sui": "^1.18.0",
+    "@mysten/sui": "^2.15.0",
     "commander": "^11.1.0",
     "dotenv": "^16.0.3",
     "typescript": "^5.5.3"
