@@ -18,18 +18,18 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(simulacrum: Simulacrum<OsRng, DataStore>, chain_identifier: Chain) -> Self {
+    pub(crate) fn new(simulacrum: Simulacrum<OsRng, DataStore>, chain_identifier: Chain) -> Self {
         Self {
             simulacrum: Arc::new(RwLock::new(simulacrum)),
             chain_identifier,
         }
     }
 
-    pub fn simulacrum(&self) -> &Arc<RwLock<Simulacrum<OsRng, DataStore>>> {
+    pub(crate) fn simulacrum(&self) -> &Arc<RwLock<Simulacrum<OsRng, DataStore>>> {
         &self.simulacrum
     }
 
-    pub fn chain_identifier(&self) -> &Chain {
+    pub(crate) fn chain_identifier(&self) -> &Chain {
         &self.chain_identifier
     }
 }

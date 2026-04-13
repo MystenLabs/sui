@@ -7,7 +7,6 @@ use anyhow::{Result, anyhow};
 use rand::rngs::OsRng;
 use tracing::info;
 
-use forking_data_store::Node;
 use simulacrum::Simulacrum;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_protocol_config::ProtocolVersion;
@@ -16,6 +15,7 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 
+use crate::Node;
 use crate::context::Context;
 use crate::store::DataStore;
 

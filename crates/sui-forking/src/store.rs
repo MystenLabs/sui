@@ -5,11 +5,6 @@ use std::collections::BTreeMap;
 
 use anyhow::anyhow;
 
-use forking_data_store::CheckpointStore;
-use forking_data_store::Node;
-use forking_data_store::ObjectKey;
-use forking_data_store::ObjectStore as GqlObjectStore;
-use forking_data_store::stores::GraphQLStore;
 use simulacrum::store::SimulatorStore;
 use sui_protocol_config::Chain;
 use sui_types::base_types::ObjectID;
@@ -40,6 +35,12 @@ use sui_types::storage::load_package_object_from_object_store;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
 
+use crate::CheckpointRead;
+use crate::GraphQLClient;
+use crate::Node;
+use crate::ObjectKey;
+use crate::ObjectRead;
+use crate::VersionQuery;
 use crate::filesystem::FilesystemStore;
 
 /// A data store for Sui data, combining a local filesystem cache with a remote GraphQL endpoint
@@ -99,7 +100,7 @@ impl DataStore {
     /// Get the object at the latest version available on disk. If not found, it will fetch the
     /// object at the forked checkpoint from remote rpc and save it to disk for future use. Returns
     /// `None` in the latter case.
-    pub(crate) fn get_object(&self, object_id: ObjectID) -> anyhow::Result<Option<Object>> {
+    pub(crate) fn get_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
         self.get_latest_object(object_id)
     }
 
@@ -149,7 +150,7 @@ impl DataStore {
     /// will be returned if it existed at that checkpoint.
     fn get_object_from_remote(
         &self,
-        object_id: ObjectID,
+        object_id: &ObjectID,
         version: Option<u64>,
         checkpoint: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<Object>> {
@@ -163,7 +164,7 @@ impl DataStore {
         };
 
         let objects = self.gql.get_objects(&[ObjectKey {
-            object_id,
+            object_id: *object_id,
             version_query,
         }])?;
 
@@ -176,7 +177,7 @@ impl DataStore {
 
     /// Get the highest checkpoint sequence number available on disk.
     pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
-        self.local.get_highest_checkpoint()
+        self.local.get_highest_checkpoint_sequence_number()
     }
 }
 
