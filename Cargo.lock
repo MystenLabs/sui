@@ -5933,7 +5933,7 @@ dependencies = [
  "cynic",
  "cynic-codegen",
  "fastcrypto",
- "lru 0.10.1",
+ "lru 0.16.3",
  "prost 0.14.1",
  "reqwest",
  "serde",
@@ -8176,15 +8176,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
 dependencies = [
  "hashbrown 0.12.3",
-]
-
-[[package]]
-name = "lru"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "718e8fae447df0c7e1ba7f5189829e63fd536945c8988d61444c19039f16b670"
-dependencies = [
- "hashbrown 0.13.2",
 ]
 
 [[package]]
@@ -14743,7 +14734,7 @@ dependencies = [
  "im",
  "insta",
  "itertools 0.13.0",
- "lru 0.10.1",
+ "lru 0.16.3",
  "mockall",
  "moka",
  "more-asserts",
@@ -14906,7 +14897,7 @@ dependencies = [
  "cynic",
  "cynic-codegen",
  "fastcrypto",
- "lru 0.10.1",
+ "lru 0.16.3",
  "mysten-common",
  "reqwest",
  "serde",
@@ -16519,7 +16510,7 @@ dependencies = [
  "hyper 1.8.1",
  "insta",
  "itertools 0.13.0",
- "lru 0.10.1",
+ "lru 0.16.3",
  "move-binary-format",
  "move-command-line-common",
  "move-compiler",
@@ -16659,7 +16650,7 @@ dependencies = [
  "futures",
  "http 1.3.1",
  "jsonrpsee",
- "lru 0.10.1",
+ "lru 0.16.3",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -16757,7 +16748,7 @@ dependencies = [
  "fastcrypto",
  "futures",
  "hyper 1.8.1",
- "lru 0.10.1",
+ "lru 0.16.3",
  "move-cli",
  "move-core-types",
  "mysten-metrics",
@@ -16930,7 +16921,7 @@ dependencies = [
  "base64 0.21.7",
  "bcs",
  "futures",
- "lru 0.10.1",
+ "lru 0.16.3",
  "move-core-types",
  "serde",
  "serde_json",
@@ -17039,7 +17030,7 @@ dependencies = [
  "anemo-tower",
  "bcs",
  "fastcrypto",
- "lru 0.10.1",
+ "lru 0.16.3",
  "move-package-alt",
  "move-package-alt-compilation",
  "msim",
@@ -17192,7 +17183,7 @@ dependencies = [
  "indicatif",
  "integer-encoding",
  "itertools 0.13.0",
- "lru 0.10.1",
+ "lru 0.16.3",
  "moka",
  "move-binary-format",
  "move-bytecode-utils",
@@ -17539,7 +17530,7 @@ dependencies = [
  "indexmap 2.8.0",
  "insta",
  "itertools 0.13.0",
- "lru 0.10.1",
+ "lru 0.16.3",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -19166,7 +19157,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
