@@ -17,7 +17,7 @@ use move_binary_format::file_format::{
     FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
     StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
 };
-use move_core_types::u256::U256;
+use move_core_types::{i256::I256, u256::U256};
 use rand::{Rng, rngs::StdRng};
 use tracing::{debug, error, warn};
 
@@ -44,6 +44,24 @@ type U128ToBytecode = fn(Box<u128>) -> Bytecode;
 
 /// This type represents bytecode instructions that take a `u256`
 type U256ToBytecode = fn(Box<U256>) -> Bytecode;
+
+/// This type represents bytecode instructions that take an `i8`
+type I8ToBytecode = fn(i8) -> Bytecode;
+
+/// This type represents bytecode instructions that take an `i16`
+type I16ToBytecode = fn(i16) -> Bytecode;
+
+/// This type represents bytecode instructions that take an `i32`
+type I32ToBytecode = fn(i32) -> Bytecode;
+
+/// This type represents bytecode instructions that take an `i64`
+type I64ToBytecode = fn(i64) -> Bytecode;
+
+/// This type represents bytecode instructions that take an `i128`
+type I128ToBytecode = fn(Box<i128>) -> Bytecode;
+
+/// This type represents bytecode instructions that take an `i256`
+type I256ToBytecode = fn(Box<I256>) -> Bytecode;
 
 /// This type represents bytecode instructions that take a `AddressPoolIndex`
 type ConstantPoolIndexToBytecode = fn(ConstantPoolIndex) -> Bytecode;
@@ -95,6 +113,24 @@ enum BytecodeType {
 
     /// Instructions that take a `u256`
     U256(U256ToBytecode),
+
+    /// Instructions that take an `i8`
+    I8(I8ToBytecode),
+
+    /// Instructions that take an `i16`
+    I16(I16ToBytecode),
+
+    /// Instructions that take an `i32`
+    I32(I32ToBytecode),
+
+    /// Instructions that take an `i64`
+    I64(I64ToBytecode),
+
+    /// Instructions that take an `i128`
+    I128(I128ToBytecode),
+
+    /// Instructions that take an `i256`
+    I256(I256ToBytecode),
 
     /// Instructions that take an `ConstantPoolIndex`
     ConstantPoolIndex(ConstantPoolIndexToBytecode),
@@ -192,6 +228,19 @@ impl<'a> BytecodeGenerator<'a> {
             (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastU64)),
             (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastU128)),
             (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastU256)),
+            (StackEffect::Add, BytecodeType::I8(Bytecode::LdI8)),
+            (StackEffect::Add, BytecodeType::I16(Bytecode::LdI16)),
+            (StackEffect::Add, BytecodeType::I32(Bytecode::LdI32)),
+            (StackEffect::Add, BytecodeType::I64(Bytecode::LdI64)),
+            (StackEffect::Add, BytecodeType::I128(Bytecode::LdI128)),
+            (StackEffect::Add, BytecodeType::I256(Bytecode::LdI256)),
+            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI8)),
+            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI16)),
+            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI32)),
+            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI64)),
+            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI128)),
+            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::CastI256)),
+            (StackEffect::Nop, BytecodeType::NoArg(Bytecode::Neg)),
             (
                 StackEffect::Add,
                 BytecodeType::ConstantPoolIndex(Bytecode::LdConst),
@@ -380,6 +429,24 @@ impl<'a> BytecodeGenerator<'a> {
                         self.rng.gen_range(U256::zero()..U256::max_value()),
                     )))
                 }
+                BytecodeType::I8(instruction) => {
+                    Some(instruction(self.rng.gen_range(i8::MIN..i8::MAX)))
+                }
+                BytecodeType::I16(instruction) => {
+                    Some(instruction(self.rng.gen_range(i16::MIN..i16::MAX)))
+                }
+                BytecodeType::I32(instruction) => {
+                    Some(instruction(self.rng.gen_range(i32::MIN..i32::MAX)))
+                }
+                BytecodeType::I64(instruction) => {
+                    Some(instruction(self.rng.gen_range(i64::MIN..i64::MAX)))
+                }
+                BytecodeType::I128(instruction) => Some(instruction(Box::new(
+                    self.rng.gen_range(i128::MIN..i128::MAX),
+                ))),
+                BytecodeType::I256(instruction) => Some(instruction(Box::new(I256::from(
+                    self.rng.gen_range(i128::MIN..i128::MAX),
+                )))),
                 BytecodeType::ConstantPoolIndex(instruction) => {
                     // Select a random address from the module's address pool
                     Self::index_or_none(&module.constant_pool, self.rng)
@@ -865,6 +932,12 @@ impl<'a> BytecodeGenerator<'a> {
             SignatureToken::U16 => vec![Bytecode::LdU16(0)],
             SignatureToken::U32 => vec![Bytecode::LdU32(0)],
             SignatureToken::U256 => vec![Bytecode::LdU256(Box::new(U256::zero()))],
+            SignatureToken::I8 => vec![Bytecode::LdI8(0)],
+            SignatureToken::I16 => vec![Bytecode::LdI16(0)],
+            SignatureToken::I32 => vec![Bytecode::LdI32(0)],
+            SignatureToken::I64 => vec![Bytecode::LdI64(0)],
+            SignatureToken::I128 => vec![Bytecode::LdI128(Box::new(0))],
+            SignatureToken::I256 => vec![Bytecode::LdI256(Box::new(I256::zero()))],
             SignatureToken::Bool => vec![Bytecode::LdFalse],
             SignatureToken::Datatype(handle_idx) => {
                 let struct_def_idx = module

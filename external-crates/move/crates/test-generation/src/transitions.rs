@@ -225,7 +225,13 @@ pub fn stack_top_is_castable_to(state: &AbstractState, typ: SignatureToken) -> b
                     Some(AbstractValue::new_primitive(SignatureToken::U256)),
                 )
             }
-            SignatureToken::Bool
+            SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256
+            | SignatureToken::Bool
             | SignatureToken::Address
             | SignatureToken::Signer
             | SignatureToken::Vector(_)
@@ -344,7 +350,13 @@ pub fn stack_ref_polymorphic_eq(state: &AbstractState, index1: usize, index2: us
             | SignatureToken::TypeParameter(_)
             | SignatureToken::U16
             | SignatureToken::U32
-            | SignatureToken::U256 => return false,
+            | SignatureToken::U256
+            | SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => return false,
         }
     }
     false
@@ -582,7 +594,13 @@ pub fn stack_has_struct(state: &AbstractState, struct_index: StructDefinitionInd
             | SignatureToken::TypeParameter(_)
             | SignatureToken::U16
             | SignatureToken::U32
-            | SignatureToken::U256 => return false,
+            | SignatureToken::U256
+            | SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => return false,
         }
     }
     false
@@ -681,7 +699,13 @@ pub fn stack_has_reference(state: &AbstractState, index: usize, mutability: Muta
             | SignatureToken::TypeParameter(_)
             | SignatureToken::U16
             | SignatureToken::U32
-            | SignatureToken::U256 => return false,
+            | SignatureToken::U256
+            | SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => return false,
         }
     }
     false
@@ -780,7 +804,13 @@ pub fn stack_unpack_struct_instantiation(
             | SignatureToken::TypeParameter(_)
             | SignatureToken::U16
             | SignatureToken::U32
-            | SignatureToken::U256 => {
+            | SignatureToken::U256
+            | SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => {
                 panic!("Invalid unpack -- non-struct value found at top of stack")
             }
         }
@@ -907,7 +937,13 @@ pub fn register_dereference(state: &AbstractState) -> Result<AbstractState, VMEr
             | SignatureToken::TypeParameter(_)
             | SignatureToken::U16
             | SignatureToken::U32
-            | SignatureToken::U256 => Err(VMError::new(
+            | SignatureToken::U256
+            | SignatureToken::I8
+            | SignatureToken::I16
+            | SignatureToken::I32
+            | SignatureToken::I64
+            | SignatureToken::I128
+            | SignatureToken::I256 => Err(VMError::new(
                 "Register does not contain a reference".to_string(),
             )),
         }
