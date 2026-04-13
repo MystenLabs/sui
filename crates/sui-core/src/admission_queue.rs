@@ -281,8 +281,13 @@ impl AdmissionQueueManager {
         slot_freed_notify: Arc<tokio::sync::Notify>,
     ) -> Self {
         let max_pending = consensus_adapter.max_pending_transactions();
+        let capacity = (max_pending as f64 * capacity_fraction) as usize;
+        assert!(
+            capacity > 0,
+            "admission_queue_capacity_fraction ({capacity_fraction}) * max_pending_transactions ({max_pending}) must be > 0"
+        );
         Self {
-            capacity: (max_pending as f64 * capacity_fraction) as usize,
+            capacity,
             bypass_threshold: (max_pending as f64 * bypass_fraction) as usize,
             metrics,
             consensus_adapter,

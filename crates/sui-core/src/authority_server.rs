@@ -28,7 +28,7 @@ use sui_network::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
-use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxResponse, SystemStateRequest,
     TransactionInfoRequest, TransactionInfoResponse,
@@ -969,34 +969,30 @@ impl ValidatorService {
             );
         }
 
-        let consensus_positions = if is_ping_request || self.should_bypass_admission_queue() {
-            // Submit directly to consensus, bypassing the admission queue.
-            self.metrics.admission_queue_direct_bypasses.inc();
-            if is_soft_bundle_request || is_ping_request {
-                debug!(
-                    "handle_submit_transaction: submitting consensus transactions ({}): {}",
-                    req_type,
-                    consensus_transactions
-                        .iter()
-                        .map(|t| t.local_display())
-                        .join(", ")
-                );
-                self.consensus_adapter
-                    .submit_and_get_positions(
-                        consensus_transactions,
-                        &epoch_store,
-                        submitter_client_addr,
-                    )
-                    .await?
-            } else {
-                let futures = consensus_transactions.into_iter().map(|t| {
+        // Soft bundles are inserted as a single queue entry.
+        // Individual transactions are each inserted separately.
+        let tx_groups: Vec<Vec<ConsensusTransaction>> = if is_soft_bundle_request || is_ping_request
+        {
+            vec![consensus_transactions]
+        } else {
+            consensus_transactions
+                .into_iter()
+                .map(|t| vec![t])
+                .collect()
+        };
+
+        let consensus_positions: Vec<ConsensusPosition> =
+            if is_ping_request || self.should_bypass_admission_queue() {
+                // Submit directly to consensus, bypassing the admission queue.
+                self.metrics.admission_queue_direct_bypasses.inc();
+                let futures = tx_groups.into_iter().map(|txns| {
                     debug!(
-                        "handle_submit_transaction: submitting consensus transaction ({}): {}",
+                        "handle_submit_transaction: submitting consensus transactions ({}): {}",
                         req_type,
-                        t.local_display(),
+                        txns.iter().map(|t| t.local_display()).join(", ")
                     );
                     self.consensus_adapter.submit_and_get_positions(
-                        vec![t],
+                        txns,
                         &epoch_store,
                         submitter_client_addr,
                     )
@@ -1006,37 +1002,25 @@ impl ValidatorService {
                     .into_iter()
                     .flatten()
                     .collect()
-            }
-        } else {
-            // Consensus is overloaded — route through the priority admission queue.
-            // Soft bundles are inserted as a single queue entry.
-            // Individual transactions are each inserted separately.
-            let tx_groups: Vec<Vec<ConsensusTransaction>> = if is_soft_bundle_request {
-                vec![consensus_transactions]
             } else {
-                consensus_transactions
-                    .into_iter()
-                    .map(|t| vec![t])
-                    .collect()
+                // Consensus is overloaded — route through the priority admission queue.
+                let aq = self.admission_queue.load();
+                let mut receivers = Vec::with_capacity(tx_groups.len());
+                for txns in tx_groups {
+                    let gas_price = Self::extract_gas_price(&txns);
+                    let rx = aq
+                        .try_insert(gas_price, txns, submitter_client_addr)
+                        .await?;
+                    receivers.push(rx);
+                }
+                let results = future::try_join_all(receivers.into_iter().map(|rx| async move {
+                    rx.await.map_err(|_| {
+                        SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus)
+                    })?
+                }))
+                .await?;
+                results.into_iter().flatten().collect()
             };
-
-            let aq = self.admission_queue.load();
-            let mut receivers = Vec::with_capacity(tx_groups.len());
-            for txns in tx_groups {
-                let gas_price = Self::extract_gas_price(&txns);
-                let rx = aq
-                    .try_insert(gas_price, txns, submitter_client_addr)
-                    .await?;
-                receivers.push(rx);
-            }
-            let results = future::try_join_all(receivers.into_iter().map(|rx| async move {
-                rx.await.map_err(|_| {
-                    SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus)
-                })?
-            }))
-            .await?;
-            results.into_iter().flatten().collect()
-        };
 
         if is_ping_request {
             // For ping requests, return the special consensus position.
