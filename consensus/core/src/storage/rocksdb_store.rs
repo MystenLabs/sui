@@ -64,9 +64,13 @@ impl RocksDBStore {
         let mut metrics_conf = MetricConf::new("consensus");
         metrics_conf.read_sample_interval = SamplingInterval::new(Duration::from_secs(60), 0);
         let cf_options = if use_fifo_compaction {
-            default_db_options().optimize_for_no_deletion()
+            default_db_options()
+                .optimize_for_no_deletion()
+                .disable_write_throttling()
         } else {
-            default_db_options().optimize_for_write_throughput()
+            default_db_options()
+                .optimize_for_write_throughput()
+                .disable_write_throttling()
         };
         // BLOCKS_CF only receives inserts (no deletions) and is dropped with the DB at epoch
         // boundary. Use Universal compaction (or FIFO when enabled) which handles this
