@@ -1,26 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-
 use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 
-use crate::CheckpointStore;
-use crate::GraphQLStore;
+use crate::CheckpointRead;
+use crate::GraphQLClient;
 use crate::Node;
 use crate::ObjectKey;
-use crate::ObjectStore;
+use crate::ObjectRead;
 use crate::VersionQuery;
 use crate::filesystem::FilesystemStore;
 
 /// A data store for Sui data, with a local filesystem and a remote GraphQL endpoint to query for
 /// historical data.
-pub struct DataStore {
+pub(crate) struct DataStore {
     forked_at_checkpoint: CheckpointSequenceNumber,
-    gql: GraphQLStore,
+    gql: GraphQLClient,
     local: FilesystemStore,
 }
 
@@ -65,6 +63,8 @@ impl DataStore {
 
     /// Get the object at the specified version. It will first try to load from disk, and if not
     /// found, it will fetch from remote rpc by making a query to fetch this version at the forked
+    /// checkpoint. If none is found, it will return None. If the object is successfully fetched
+    /// from remote rpc, it will be saved to disk for future use before returning the object.
     pub(crate) fn get_object_at_version(
         &self,
         object_id: ObjectID,
