@@ -119,7 +119,7 @@ pub fn validate_package(
 /// bijection: every linkage table entry corresponds to exactly one resolved package and vice versa.
 /// This ensures no packages are missing from the resolved set and no extraneous entries exist in the
 /// linkage table.
-fn validate_against_link_context(
+pub(crate) fn validate_against_link_context(
     publish: bool,
     packages: &BTreeMap<VersionId, &verification::ast::Package>,
     link_context: &LinkageContext,

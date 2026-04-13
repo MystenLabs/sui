@@ -16,9 +16,8 @@ use crate::{
     validation::verification::ast::{Module, Package},
 };
 use move_binary_format::{
-    CompiledModule,
     errors::{Location, VMResult},
-    partial_vm_error,
+    partial_vm_error, CompiledModule,
 };
 use move_bytecode_verifier::{cyclic_dependencies, dependencies};
 use std::collections::{BTreeMap, HashMap};

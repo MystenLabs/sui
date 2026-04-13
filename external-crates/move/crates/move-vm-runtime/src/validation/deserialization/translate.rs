@@ -2,8 +2,8 @@ use crate::validation::deserialization::ast::Package;
 use move_binary_format::partial_vm_error;
 
 use move_binary_format::{
+    errors::{verification_error, Location, VMResult},
     CompiledModule, IndexKind,
-    errors::{Location, VMResult, verification_error},
 };
 use move_core_types::{resolver::SerializedPackage, vm_status::StatusCode};
 use move_vm_config::runtime::VMConfig;
