@@ -30,7 +30,6 @@ use anyhow::{Error, Result};
 
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
-use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint};
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::ProtocolConfig;
