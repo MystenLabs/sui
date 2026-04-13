@@ -3,17 +3,17 @@
 
 use anyhow::anyhow;
 
-use forking_data_store::Node;
-use forking_data_store::stores::GraphQLStore;
 use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 
-use forking_data_store::CheckpointStore;
-use forking_data_store::ObjectKey;
-use forking_data_store::ObjectStore;
-use sui_types::messages_checkpoint::VerifiedCheckpoint;
-
+use crate::CheckpointStore;
+use crate::GraphQLStore;
+use crate::Node;
+use crate::ObjectKey;
+use crate::ObjectStore;
+use crate::VersionQuery;
 use crate::filesystem::FilesystemStore;
 
 /// A data store for Sui data, with a local filesystem and a remote GraphQL endpoint to query for
