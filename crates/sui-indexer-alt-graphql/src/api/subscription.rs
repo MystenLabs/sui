@@ -29,10 +29,10 @@ impl Subscription {
         let package_store: Arc<PackageCache> = ctx.data::<Arc<PackageCache>>()?.clone();
         let limits: &Limits = ctx.data()?;
         let resolver_limits = limits.package_resolver();
-        let broadcaster: CheckpointBroadcaster = ctx.data::<CheckpointBroadcaster>()?.clone();
+        let broadcaster: &CheckpointBroadcaster = ctx.data::<CheckpointBroadcaster>()?;
 
         Ok(async_stream::stream! {
-            let mut receiver = broadcaster.subscribe();
+            let mut receiver = broadcaster.resubscribe();
             loop {
                 match receiver.recv().await {
                     Ok(processed) => {

@@ -7,7 +7,6 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use futures::SinkExt;
-use futures::StreamExt;
 use prometheus::Registry;
 use serde_json::Value;
 use serde_json::json;
@@ -22,10 +21,12 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::get_available_port;
-use tokio::time::timeout;
+use tokio_stream::StreamExt;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::http::Request;
+
+const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct SubscriptionTestCluster {
     pub subscription_url: String,
@@ -69,7 +70,12 @@ impl SubscriptionTestCluster {
         }
     }
 
-    pub async fn subscribe(&self, query: &str) -> SubscriptionStream {
+    /// Subscribe and return a stream of GraphQL payloads.
+    /// Use `tokio_stream::StreamExt` methods (`next`, `take`, `collect`, etc.) to consume.
+    pub async fn subscribe(
+        &self,
+        query: &str,
+    ) -> std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Value> + Send>> {
         let request = Request::builder()
             .uri(&self.subscription_url)
             .header("Sec-WebSocket-Protocol", "graphql-transport-ws")
@@ -88,7 +94,8 @@ impl SubscriptionTestCluster {
             .await
             .expect("Failed to connect WebSocket");
 
-        let (mut sink, mut stream) = ws.split();
+        // Use futures::StreamExt::split (tokio_stream doesn't have split).
+        let (mut sink, stream) = futures::StreamExt::split(ws);
 
         sink.send(Message::Text(
             json!({"type": "connection_init"}).to_string().into(),
@@ -96,7 +103,15 @@ impl SubscriptionTestCluster {
         .await
         .expect("Failed to send connection_init");
 
-        let ack = stream.next().await.expect("No ack").expect("WS error");
+        // Wrap with tokio_stream timeout, then wait for ack.
+        let mut stream = Box::pin(stream.timeout(SUBSCRIPTION_TIMEOUT));
+
+        let ack = stream
+            .next()
+            .await
+            .expect("Stream ended")
+            .expect("Timeout waiting for ack")
+            .expect("WS error");
         let ack: Value = serde_json::from_str(ack.to_text().unwrap()).unwrap();
         assert_eq!(ack["type"], "connection_ack");
 
@@ -112,41 +127,16 @@ impl SubscriptionTestCluster {
         .await
         .expect("Failed to send subscribe");
 
-        SubscriptionStream { stream }
-    }
-}
-
-pub struct SubscriptionStream {
-    stream: futures::stream::SplitStream<
-        tokio_tungstenite::WebSocketStream<
-            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-        >,
-    >,
-}
-
-impl SubscriptionStream {
-    pub async fn next_item(&mut self) -> Value {
-        let msg = timeout(Duration::from_secs(30), self.stream.next())
-            .await
-            .expect("Timeout waiting for subscription item")
-            .expect("Stream ended")
-            .expect("WS error");
-
-        let text = match msg {
-            Message::Text(t) => t,
-            other => panic!("Expected text message, got: {other:?}"),
-        };
-
-        let msg: Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(msg["type"], "next", "Expected 'next' message, got: {msg}");
-        msg["payload"].clone()
-    }
-
-    pub async fn collect_items(&mut self, n: usize) -> Vec<Value> {
-        let mut items = Vec::with_capacity(n);
-        for _ in 0..n {
-            items.push(self.next_item().await);
-        }
-        items
+        // Return a stream that extracts payloads from "next" messages.
+        Box::pin(stream.map(|result| {
+            let msg = result.expect("Timeout").expect("WS error");
+            let text = match msg {
+                Message::Text(t) => t,
+                other => panic!("Expected text message, got: {other:?}"),
+            };
+            let msg: Value = serde_json::from_str(&text).unwrap();
+            assert_eq!(msg["type"], "next", "Expected 'next' message, got: {msg}");
+            msg["payload"].clone()
+        }))
     }
 }

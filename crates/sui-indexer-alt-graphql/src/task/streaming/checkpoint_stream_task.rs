@@ -30,7 +30,11 @@ use super::processed_checkpoint::ProcessedCheckpoint;
 const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub(crate) type CheckpointBroadcaster = broadcast::Sender<Arc<ProcessedCheckpoint>>;
+/// A broadcast receiver used by subscription resolvers to receive processed checkpoints.
+/// Stored in the GraphQL context; each subscriber calls `resubscribe()` to get its own
+/// receiver. Using a Receiver (not Sender) ensures that when the stream task drops its
+/// Sender, all subscribers receive `RecvError::Closed`.
+pub(crate) type CheckpointBroadcaster = broadcast::Receiver<Arc<ProcessedCheckpoint>>;
 
 /// Field mask requesting only checkpoint-level fields needed by GraphQL resolvers.
 fn checkpoint_field_mask() -> FieldMask {
@@ -46,17 +50,22 @@ fn checkpoint_field_mask() -> FieldMask {
 /// processes incoming checkpoints, and broadcasts them to subscription resolvers.
 pub(crate) struct CheckpointStreamTask {
     uri: Uri,
+    sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
     broadcaster: CheckpointBroadcaster,
 }
 
 impl CheckpointStreamTask {
     pub(crate) fn new(uri: Uri, config: &SubscriptionConfig) -> Self {
-        let (broadcaster, _) = broadcast::channel(config.broadcast_buffer);
-        Self { uri, broadcaster }
+        let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
+        Self {
+            uri,
+            sender,
+            broadcaster,
+        }
     }
 
     pub(crate) fn broadcaster(&self) -> CheckpointBroadcaster {
-        self.broadcaster.clone()
+        self.broadcaster.resubscribe()
     }
 
     /// Connect to the fullnode's gRPC SubscribeCheckpoints endpoint.
@@ -94,7 +103,7 @@ impl CheckpointStreamTask {
                     let processed = process_checkpoint(checkpoint)?;
                     // Ignore send errors — no active subscribers is a normal state
                     // (e.g., no clients have connected yet). The checkpoint is simply dropped.
-                    let _ = self.broadcaster.send(Arc::new(processed));
+                    let _ = self.sender.send(Arc::new(processed));
                 }
             }
 

@@ -6,10 +6,10 @@ expression: item
   "data": {
     "checkpoints": {
       "sequenceNumber": 1,
-      "digest": "DqnhktG3eDNPKRQXDHejaYBCNFAyCtSqJJDCJW7gPxPm",
-      "contentDigest": "4DAFLFUa9nURxBwemptqHzWzKDPsfRaF4TqfgNr58aAM",
-      "timestamp": "2022-01-03T02:04:56Z",
-      "networkTotalTransactions": 3,
+      "digest": "[digest]",
+      "contentDigest": "[contentDigest]",
+      "timestamp": "[timestamp]",
+      "networkTotalTransactions": "[networkTotalTransactions]",
       "rollingGasSummary": {
         "computationCost": 0,
         "storageCost": 0,
@@ -20,7 +20,7 @@ expression: item
         "epochId": 0
       },
       "validatorSignatures": {
-        "signature": "tX4fCxBdzwFMO8rRcv/xwgc1KBtMPF5XpkXIpPvEwfCZl/lf9UhOu/MTYqbO8cGL",
+        "signature": "[signature]",
         "signersMap": [
           0
         ]

@@ -65,6 +65,7 @@ datatest-stable.workspace = true
 insta.workspace = true
 jsonrpsee.workspace = true
 telemetry-subscribers.workspace = true
+tokio-stream.workspace = true
 tokio-tungstenite = { workspace = true, features = ["native-tls"] }
 tonic.workspace = true
 futures.workspace = true

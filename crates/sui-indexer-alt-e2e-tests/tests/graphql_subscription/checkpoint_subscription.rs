@@ -3,8 +3,9 @@
 
 use sui_macros::sim_test;
 use test_cluster::TestClusterBuilder;
+use tokio_stream::StreamExt;
 
-use super::testing::*;
+use crate::testing::SubscriptionTestCluster;
 
 #[sim_test]
 async fn test_subscription_sequential() {
@@ -14,10 +15,12 @@ async fn test_subscription_sequential() {
         .await;
     let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
 
-    let mut stream = cluster
+    let items: Vec<_> = cluster
         .subscribe("subscription { checkpoints { sequenceNumber } }")
+        .await
+        .take(3)
+        .collect()
         .await;
-    let items = stream.collect_items(3).await;
 
     insta::assert_json_snapshot!("subscription_sequential", items);
 }
@@ -30,7 +33,7 @@ async fn test_subscription_fields() {
         .await;
     let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
 
-    let mut stream = cluster
+    let item = cluster
         .subscribe(
             r#"subscription {
                 checkpoints {
@@ -55,8 +58,16 @@ async fn test_subscription_fields() {
                 }
             }"#,
         )
-        .await;
-    let item = stream.next_item().await;
+        .await
+        .next()
+        .await
+        .unwrap();
 
-    insta::assert_json_snapshot!("subscription_fields", item);
+    insta::assert_json_snapshot!("subscription_fields", item, {
+        ".data.checkpoints.digest" => "[digest]",
+        ".data.checkpoints.contentDigest" => "[contentDigest]",
+        ".data.checkpoints.timestamp" => "[timestamp]",
+        ".data.checkpoints.networkTotalTransactions" => "[networkTotalTransactions]",
+        ".data.checkpoints.validatorSignatures.signature" => "[signature]",
+    });
 }
