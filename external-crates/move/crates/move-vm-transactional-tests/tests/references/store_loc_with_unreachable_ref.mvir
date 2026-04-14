@@ -1,0 +1,20 @@
+// StLoc with an unreachable reference to the local due to control flow.
+
+//# run
+module 0x42.m {
+
+entry foo() {
+    let x: u64;
+    let r: &u64;
+label b0:
+    x = 42;
+    jump_if_false (true) b_join;
+label b_ref:
+    r = &x;
+label b_join:
+    x = 100;
+    assert(move(x) == 100, 1);
+    return;
+}
+
+}
