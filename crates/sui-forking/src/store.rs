@@ -54,10 +54,6 @@ pub(crate) struct DataStore {
     forked_at_checkpoint: CheckpointSequenceNumber,
     gql: GraphQLClient,
     local: FilesystemStore,
-    /// Holds a checkpoint summary between `insert_checkpoint` and the
-    /// subsequent `insert_checkpoint_contents` call, so the two halves can
-    /// be persisted together once the matching contents arrive.
-    pending_checkpoint: Option<VerifiedCheckpoint>,
 }
 
 impl DataStore {
@@ -78,7 +74,6 @@ impl DataStore {
             forked_at_checkpoint,
             gql,
             local,
-            pending_checkpoint: None,
         })
     }
 
@@ -127,7 +122,7 @@ impl DataStore {
             .ok_or_else(|| anyhow!("checkpoint {} not found on remote", sequence))?;
 
         self.local.write_checkpoint_summary(&checkpoint)?;
-        self.local.write_checkpoint_contents(sequence, &contents)?;
+        self.local.write_checkpoint_contents(&contents)?;
         Ok(())
     }
 
@@ -226,7 +221,6 @@ impl DataStore {
             forked_at_checkpoint: 0,
             gql,
             local,
-            pending_checkpoint: None,
         }
     }
 }
@@ -394,37 +388,8 @@ impl SimulatorStore for DataStore {
     }
 
     fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
-        // Simulacrum always calls `insert_checkpoint` followed by
-        // `insert_checkpoint_contents`. Stash the summary here so the pair can
-        // be persisted together once the matching contents arrive.
-        if let Some(previous) = self.pending_checkpoint.take() {
-            tracing::warn!(
-                previous_sequence = previous.data().sequence_number,
-                next_sequence = checkpoint.data().sequence_number,
-                "overwriting pending checkpoint before matching contents were inserted",
-            );
-        }
-        self.pending_checkpoint = Some(checkpoint);
-    }
-
-    fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
-        let Some(checkpoint) = self.pending_checkpoint.take() else {
-            tracing::warn!("checkpoint contents inserted without a pending checkpoint summary");
-            return;
-        };
-
-        if checkpoint.data().content_digest != *contents.digest() {
-            tracing::warn!(
-                sequence_number = checkpoint.data().sequence_number,
-                "checkpoint content digest mismatch between summary and contents; dropping",
-            );
-            return;
-        }
-
         let sequence = checkpoint.data().sequence_number;
-
-        // Pre-fork checkpoint was persisted at seed time; don't rewrite it.
-        // Resuming an already-persisted post-fork checkpoint is also a no-op.
+        // Pre-fork summary was persisted at seed time; skip rewrites.
         if self
             .local
             .get_checkpoint_by_sequence_number(sequence)
@@ -434,13 +399,33 @@ impl SimulatorStore for DataStore {
         {
             return;
         }
-
         if let Err(err) = self.local.write_checkpoint_summary(&checkpoint) {
-            tracing::error!(sequence_number = sequence, "failed to persist checkpoint summary: {err:?}");
+            tracing::error!(
+                sequence_number = sequence,
+                "failed to persist checkpoint summary: {err:?}",
+            );
+        }
+    }
+
+    fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
+        // Contents are content-addressed, so writes are independent of the
+        // summary that references them. Idempotent: re-writing the same
+        // digest is a no-op.
+        let digest = *contents.digest();
+        if self
+            .local
+            .get_checkpoint_contents_by_digest(&digest)
+            .ok()
+            .flatten()
+            .is_some()
+        {
             return;
         }
-        if let Err(err) = self.local.write_checkpoint_contents(sequence, &contents) {
-            tracing::error!(sequence_number = sequence, "failed to persist checkpoint contents: {err:?}");
+        if let Err(err) = self.local.write_checkpoint_contents(&contents) {
+            tracing::error!(
+                contents_digest = %digest,
+                "failed to persist checkpoint contents: {err:?}",
+            );
         }
     }
 
@@ -533,22 +518,31 @@ mod checkpoint_persistence_tests {
     }
 
     #[test]
-    fn insert_checkpoint_contents_without_pending_summary_is_noop() {
+    fn insert_checkpoint_and_contents_are_independent() {
         let temp = tempfile::tempdir().expect("tempdir");
         let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
-        let (_, contents) = build_checkpoint(1);
+        let (checkpoint, contents) = build_checkpoint(5);
 
-        // No prior `insert_checkpoint`: the contents should be dropped rather
-        // than panicking or leaving orphaned state on disk.
+        // Insert contents first, then the summary: contents are content-addressed
+        // so there is no ordering dependency between the two halves.
         store.insert_checkpoint_contents(contents.clone());
-
-        assert!(
-            SimulatorStore::get_checkpoint_contents(&store, contents.digest()).is_none(),
-            "orphan contents should not be persisted",
+        assert_eq!(
+            SimulatorStore::get_checkpoint_contents(&store, contents.digest())
+                .expect("contents should be retrievable by digest")
+                .digest(),
+            contents.digest(),
         );
         assert!(
             SimulatorStore::get_highest_checkpint(&store).is_none(),
-            "latest marker should remain empty",
+            "latest marker should not advance until a summary is inserted",
+        );
+
+        store.insert_checkpoint(checkpoint.clone());
+        let highest = SimulatorStore::get_highest_checkpint(&store)
+            .expect("latest marker should advance after summary insert");
+        assert_eq!(
+            highest.data().sequence_number,
+            checkpoint.data().sequence_number,
         );
     }
 }

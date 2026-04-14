@@ -11,9 +11,9 @@
 //!         - latest                     (text: highest persisted sequence number)
 //!         - {seq}/
 //!             - summary                (BCS-encoded CertifiedCheckpointSummary)
-//!             - contents               (BCS-encoded CheckpointContents)
+//!         - contents/
+//!             - {contents_digest}      (BCS-encoded CheckpointContents)
 //!         - digest_index               ("{checkpoint_digest} {seq}\n", append-only)
-//!         - contents_digest_index      ("{contents_digest} {seq}\n", append-only)
 //!     - transactions/
 //!         - {tx_digest}/
 //!             - data                   (BCS-encoded Transaction envelope)
@@ -62,12 +62,10 @@ const TX_EFFECTS_FILE: &str = "effects";
 const TX_EVENTS_FILE: &str = "events";
 /// Filename for the BCS-encoded checkpoint summary within a checkpoint sequence directory.
 const CHECKPOINT_SUMMARY_FILE: &str = "summary";
-/// Filename for the BCS-encoded checkpoint contents within a checkpoint sequence directory.
-const CHECKPOINT_CONTENTS_FILE: &str = "contents";
+/// Subdirectory for content-addressed checkpoint contents files.
+const CHECKPOINT_CONTENTS_DIR: &str = "contents";
 /// Append-only index file mapping checkpoint digest to sequence number.
 const CHECKPOINT_DIGEST_INDEX_FILE: &str = "digest_index";
-/// Append-only index file mapping checkpoint contents digest to sequence number.
-const CHECKPOINT_CONTENTS_DIGEST_INDEX_FILE: &str = "contents_digest_index";
 /// Marker file for the latest checkpoint sequence known to the store.
 const LATEST_FILE: &str = "latest";
 
@@ -260,18 +258,23 @@ impl FilesystemStore {
         self.read_latest_file(&checkpoint_dir)
     }
 
-    /// Path to the per-sequence directory holding `summary` and `contents`.
+    /// Path to the per-sequence directory holding `summary`.
     fn checkpoint_seq_dir(&self, sequence: CheckpointSequenceNumber) -> PathBuf {
         self.checkpoints_dir().join(sequence.to_string())
     }
 
-    fn checkpoint_digest_index_path(&self) -> PathBuf {
-        self.checkpoints_dir().join(CHECKPOINT_DIGEST_INDEX_FILE)
+    /// Path to the content-addressed contents directory.
+    fn checkpoint_contents_dir(&self) -> PathBuf {
+        self.checkpoints_dir().join(CHECKPOINT_CONTENTS_DIR)
     }
 
-    fn checkpoint_contents_digest_index_path(&self) -> PathBuf {
-        self.checkpoints_dir()
-            .join(CHECKPOINT_CONTENTS_DIGEST_INDEX_FILE)
+    /// Path to the file storing a specific `CheckpointContents` blob.
+    fn checkpoint_contents_path(&self, digest: &CheckpointContentsDigest) -> PathBuf {
+        self.checkpoint_contents_dir().join(digest.to_string())
+    }
+
+    fn checkpoint_digest_index_path(&self) -> PathBuf {
+        self.checkpoints_dir().join(CHECKPOINT_DIGEST_INDEX_FILE)
     }
 
     /// Persist a checkpoint summary to `checkpoints/{seq}/summary`, append the
@@ -293,23 +296,15 @@ impl FilesystemStore {
         )
     }
 
-    /// Persist checkpoint contents to `checkpoints/{seq}/contents` and append
-    /// the contents digest to the contents digest index.
+    /// Persist checkpoint contents to `checkpoints/contents/{digest}`.
+    /// Contents are content-addressed, so this write is independent of the
+    /// summary that references it.
     pub(crate) fn write_checkpoint_contents(
         &self,
-        sequence: CheckpointSequenceNumber,
         contents: &CheckpointContents,
     ) -> anyhow::Result<()> {
-        let path = self
-            .checkpoint_seq_dir(sequence)
-            .join(CHECKPOINT_CONTENTS_FILE);
-        self.write_bcs_file(&path, contents)?;
-
-        append_index_line(
-            &self.checkpoint_contents_digest_index_path(),
-            &contents.digest().to_string(),
-            sequence,
-        )
+        let path = self.checkpoint_contents_path(contents.digest());
+        self.write_bcs_file(&path, contents)
     }
 
     /// Read a previously persisted checkpoint summary. Returns `None` if no
@@ -326,19 +321,17 @@ impl FilesystemStore {
         Ok(Some(VerifiedCheckpoint::new_unchecked(certified)))
     }
 
-    /// Read previously persisted checkpoint contents. Returns `None` if no
-    /// contents file exists for the given sequence.
+    /// Read checkpoint contents for a given sequence by joining through the
+    /// summary's `content_digest`. Returns `None` if either the summary or
+    /// the referenced contents file is missing.
     pub(crate) fn get_checkpoint_contents_by_sequence_number(
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<CheckpointContents>> {
-        let path = self
-            .checkpoint_seq_dir(sequence)
-            .join(CHECKPOINT_CONTENTS_FILE);
-        if !path.exists() {
+        let Some(summary) = self.get_checkpoint_by_sequence_number(sequence)? else {
             return Ok(None);
-        }
-        self.read_bcs_file(&path).map(Some)
+        };
+        self.get_checkpoint_contents_by_digest(&summary.data().content_digest)
     }
 
     /// Resolve a checkpoint by its summary digest via the digest index.
@@ -352,18 +345,17 @@ impl FilesystemStore {
         }
     }
 
-    /// Resolve checkpoint contents by their digest via the contents digest index.
+    /// Resolve checkpoint contents by their digest via a direct filesystem
+    /// lookup in the content-addressed contents directory.
     pub(crate) fn get_checkpoint_contents_by_digest(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> anyhow::Result<Option<CheckpointContents>> {
-        match lookup_index(
-            &self.checkpoint_contents_digest_index_path(),
-            &digest.to_string(),
-        )? {
-            Some(sequence) => self.get_checkpoint_contents_by_sequence_number(sequence),
-            None => Ok(None),
+        let path = self.checkpoint_contents_path(digest);
+        if !path.exists() {
+            return Ok(None);
         }
+        self.read_bcs_file(&path).map(Some)
     }
 
     /// Return the checkpoint at the highest persisted sequence number, or
@@ -638,7 +630,7 @@ mod tests {
         let sequence = checkpoint.data().sequence_number;
 
         store.write_checkpoint_summary(&checkpoint).unwrap();
-        store.write_checkpoint_contents(sequence, &contents).unwrap();
+        store.write_checkpoint_contents(&contents).unwrap();
 
         let by_seq = store
             .get_checkpoint_by_sequence_number(sequence)
