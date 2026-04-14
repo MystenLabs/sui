@@ -104,15 +104,14 @@ impl DataStore {
     pub(crate) async fn download_and_persist_startup_checkpoint(&self) -> anyhow::Result<()> {
         let sequence = self.forked_at_checkpoint;
 
-        let summary_cached = self
-            .local
-            .get_checkpoint_by_sequence_number(sequence)?
-            .is_some();
-        let contents_cached = self
+        // `get_checkpoint_contents_by_sequence_number` reads the summary to
+        // derive `content_digest` before loading the contents, so a `Some`
+        // result here implies both halves are already cached.
+        if self
             .local
             .get_checkpoint_contents_by_sequence_number(sequence)?
-            .is_some();
-        if summary_cached && contents_cached {
+            .is_some()
+        {
             return Ok(());
         }
 
