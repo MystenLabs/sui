@@ -439,7 +439,7 @@ fun deprecated_exists() {
     assert_eq!(exists<u64>(&id, 0), false);
     add(&mut id, 0u64, new(&mut scenario));
     assert_eq!(dynamic_object_field::exists_<u64>(&id, 0), exists<u64>(&id, 0));
-    assert_eq!(exists<u64>(&id, 0), false);
+    assert_eq!(exists<u64>(&id, 0), true);
     scenario.end();
     id.delete();
 }
