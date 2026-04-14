@@ -59,9 +59,6 @@ impl ExecutionErrorTrait for ExecutionFailure {
     fn command(&self) -> Option<CommandIndex> {
         self.command
     }
-    fn source_ref(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
