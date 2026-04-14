@@ -314,9 +314,17 @@ pub async fn start_rpc(
     let rpc = RpcService::new(args, version, schema(), registry);
     let metrics = rpc.metrics();
 
-    // Create gRPC full node client wrapper
-    let fullnode_client =
-        FullnodeClient::new(Some("graphql_fullnode"), fullnode_args, registry).await?;
+    // Create gRPC full node client wrapper. If no URL was configured, the client is stored as
+    // `None` in the schema data and resolvers that depend on it return `FeatureUnavailable`.
+    let fullnode_client = if let Some(url) = fullnode_args.fullnode_rpc_url {
+        Some(
+            FullnodeClient::new(Some("graphql_fullnode"), url, registry)
+                .await
+                .context("Failed to create fullnode gRPC client")?,
+        )
+    } else {
+        None
+    };
 
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;

@@ -255,9 +255,6 @@ fn grpc_error_to_rpc_error(
                 status.message().to_string(),
             ))
         }
-        Error::NotConfigured => anyhow::Error::new(Error::NotConfigured)
-            .context("Fullnode client not configured for write API")
-            .into(),
         Error::Internal(err) => err.context("Write API gRPC request failed").into(),
         Error::GrpcExecutionError(status) => anyhow::Error::new(status)
             .context("Write API gRPC request failed")
