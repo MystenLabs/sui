@@ -20,7 +20,9 @@ use anyhow::{Error, Result};
 
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
-use sui_types::messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint};
+use sui_types::messages_checkpoint::{
+    CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint,
+};
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 use sui_types::transaction::TransactionData;
@@ -82,9 +84,10 @@ pub(crate) trait ObjectRead {
 
 /// Checkpoint read data.
 pub(crate) trait CheckpointRead {
-    /// Return the verified checkpoint data. If `sequence` is `None`, return the latest checkpoint.
+    /// Return the verified checkpoint summary together with its decoded
+    /// contents. If `sequence` is `None`, return the latest checkpoint.
     fn get_verified_checkpoint(
         &self,
         sequence: Option<CheckpointSequenceNumber>,
-    ) -> Result<Option<VerifiedCheckpoint>, Error>;
+    ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error>;
 }

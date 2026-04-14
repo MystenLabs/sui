@@ -5,6 +5,7 @@ use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
 use reqwest::header::USER_AGENT;
 
+use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
@@ -105,7 +106,7 @@ impl GraphQLClient {
     async fn get_verified_checkpoint_impl(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
-    ) -> Result<Option<VerifiedCheckpoint>, Error> {
+    ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error> {
         queries::checkpoint_query::query(sequence_number, self).await
     }
 
@@ -145,7 +146,7 @@ impl CheckpointRead for GraphQLClient {
     fn get_verified_checkpoint(
         &self,
         sequence: Option<CheckpointSequenceNumber>,
-    ) -> Result<Option<VerifiedCheckpoint>, Error> {
+    ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error> {
         Ok(block_on!(self.get_verified_checkpoint_impl(sequence))?)
     }
 }
@@ -169,12 +170,17 @@ mod tests {
 
     fn checkpoint_response_body(
         certified: &sui_types::messages_checkpoint::CertifiedCheckpointSummary,
+        contents: &CheckpointContents,
     ) -> serde_json::Value {
         json!({
             "data": {
                 "checkpoint": {
                     "summaryBcs": FastCryptoBase64::from_bytes(
                         &bcs::to_bytes(certified.data()).expect("summary should serialize"),
+                    )
+                    .encoded(),
+                    "contentBcs": FastCryptoBase64::from_bytes(
+                        &bcs::to_bytes(contents).expect("contents should serialize"),
                     )
                     .encoded(),
                     "validatorSignatures": {
@@ -296,14 +302,16 @@ mod tests {
                 }
             })))
             .respond_with(
-                ResponseTemplate::new(200)
-                    .set_body_json(checkpoint_response_body(&checkpoint.summary)),
+                ResponseTemplate::new(200).set_body_json(checkpoint_response_body(
+                    &checkpoint.summary,
+                    &checkpoint.contents,
+                )),
             )
             .mount(&server)
             .await;
 
         let store = mock_store(&server);
-        let verified = store
+        let (verified, contents) = store
             .get_verified_checkpoint_impl(Some(11))
             .await
             .expect("checkpoint query should succeed")
@@ -322,6 +330,7 @@ mod tests {
             verified.auth_sig().signers_map,
             checkpoint.summary.auth_sig().signers_map
         );
+        assert_eq!(contents.digest(), checkpoint.contents.digest());
     }
 
     #[tokio::test]
