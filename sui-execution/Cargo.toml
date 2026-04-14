@@ -8,8 +8,11 @@ publish = false
 edition = "2024"
 
 [dependencies]
+mysten-common.workspace = true
+mysten-metrics.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
+tracing.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-verifier-meter.workspace = true

@@ -1166,8 +1166,6 @@ pub trait ExecutionErrorTrait:
     fn with_command_index(self, command: CommandIndex) -> Self;
     fn kind(&self) -> &ExecutionErrorKind;
     fn command(&self) -> Option<CommandIndex>;
-    // TODO remove, source ref should be used before instantiating this trait or after making it concrete
-    fn source_ref(&self) -> Option<&(dyn std::error::Error + 'static)>;
 
     fn to_execution_failure(&self) -> ExecutionFailure {
         ExecutionFailure {
@@ -1245,10 +1243,6 @@ impl ExecutionErrorTrait for ExecutionError {
 
     fn command(&self) -> Option<CommandIndex> {
         self.command()
-    }
-
-    fn source_ref(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.inner.source.as_deref().map(|e| e as _)
     }
 }
 
