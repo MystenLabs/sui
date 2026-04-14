@@ -345,14 +345,36 @@ impl Payload for AddrBalDepositPayload {
                 BatchedTransactionStatus::Success { effects } => {
                     if effects.is_ok() {
                         metrics.success += 1;
+                        if metrics.success % 100 == 1 {
+                            tracing::warn!(
+                                "addr_bal_deposit: {} successful deposits to {} so far",
+                                metrics.success,
+                                self.target_address,
+                            );
+                        }
                     } else {
+                        tracing::warn!(
+                            "addr_bal_deposit tx {} aborted: {:?}",
+                            result.digest,
+                            effects.status(),
+                        );
                         metrics.abort += 1;
                     }
                 }
-                BatchedTransactionStatus::PermanentFailure { .. } => {
+                BatchedTransactionStatus::PermanentFailure { error } => {
+                    tracing::warn!(
+                        "addr_bal_deposit tx {} permanent failure: {}",
+                        result.digest,
+                        error,
+                    );
                     metrics.permanent_failure += 1;
                 }
-                BatchedTransactionStatus::RetriableFailure { .. } => {
+                BatchedTransactionStatus::RetriableFailure { error } => {
+                    tracing::warn!(
+                        "addr_bal_deposit tx {} retriable failure: {}",
+                        result.digest,
+                        error,
+                    );
                     metrics.retriable_failure += 1;
                 }
                 BatchedTransactionStatus::UnknownRejection => {

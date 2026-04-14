@@ -1628,12 +1628,16 @@ impl CheckpointBuilder {
 
         let funds_changes = builder.collect_funds_changes();
         let num_updates = builder.num_updates();
-        self.metrics
-            .accumulator_deposits
-            .inc_by(builder.num_deposits());
-        self.metrics
-            .accumulator_withdrawals
-            .inc_by(builder.num_withdrawals());
+        let num_deposits = builder.num_deposits();
+        let num_withdrawals = builder.num_withdrawals();
+        if num_deposits > 0 || num_withdrawals > 0 {
+            info!(
+                "Checkpoint {checkpoint_seq}: {num_deposits} accumulator deposits, \
+                 {num_withdrawals} withdrawals, {num_updates} account updates"
+            );
+        }
+        self.metrics.accumulator_deposits.inc_by(num_deposits);
+        self.metrics.accumulator_withdrawals.inc_by(num_withdrawals);
         let settlement_txns = builder.build_tx(
             self.epoch_store.protocol_config(),
             epoch,
