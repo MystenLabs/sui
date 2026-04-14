@@ -42,6 +42,14 @@ const DATA_STORE_DIR: &str = ".forking_data_store";
 const OBJECTS_DIR: &str = "objects";
 /// Per-chain checkpoint storage directory.
 const CHECKPOINTS_DIR: &str = "checkpoints";
+/// Per-chain transaction storage directory.
+const TRANSACTIONS_DIR: &str = "transactions";
+/// Filename for the BCS-encoded transaction data within a transaction directory.
+const TX_DATA_FILE: &str = "data";
+/// Filename for the BCS-encoded transaction effects within a transaction directory.
+const TX_EFFECTS_FILE: &str = "effects";
+/// Filename for the BCS-encoded transaction events within a transaction directory.
+const TX_EVENTS_FILE: &str = "events";
 /// Marker file for the latest checkpoint sequence known to the store.
 const LATEST_FILE: &str = "latest";
 
