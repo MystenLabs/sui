@@ -20,7 +20,12 @@
 
 
 import * as fs from 'fs';
-import { FRAME_LIFETIME, ModuleInfo } from './utils';
+import {
+    FRAME_LIFETIME,
+    ModuleInfo,
+    streamDecompressedLines,
+    getDecoder,
+} from './utils';
 import {
     IRuntimeCompoundValue,
     RuntimeValueType,
@@ -40,7 +45,7 @@ import {
     ILoc,
     IDebugInfoFunction
 } from './debug_info_utils';
-import { decompress } from 'fzstd';
+import { logger } from "@vscode/debugadapter"
 
 
 // Data types corresponding to trace file JSON schema.
@@ -239,11 +244,6 @@ interface JSONTraceEvent {
     Effect?: JSONTraceEffect;
     CloseFrame?: JSONTraceCloseFrame;
     External?: JSONTraceExt;
-}
-
-interface JSONTraceRootObject {
-    events: JSONTraceEvent[];
-    version: number;
 }
 
 // Runtime data types.
@@ -454,36 +454,11 @@ export const EXT_EVENT_FRAME_ID = Number.MAX_SAFE_INTEGER - 4;
 
 
 /**
- * Splits decompressed trace file data into lines without creating a large intermediate string.
- * This avoids hitting JavaScript's maximum string length limit for large trace files.
- *
- * @param decompressed the decompressed buffer containing trace data
- * @returns array of strings representing lines from the trace file
- */
-function splitTraceFileLines(decompressed: Uint8Array): string[] {
-    const NEWLINE_BYTE = 0x0A;
-    const decoder = new TextDecoder();
-    const lines: string[] = [];
-
-    let lineStart = 0;
-
-    for (let i = 0; i <= decompressed.length; i++) {
-        if (i === decompressed.length || decompressed[i] === NEWLINE_BYTE) {
-            // end of the buffer or a new line
-            if (i > lineStart) {
-                const lineBytes = decompressed.slice(lineStart, i);
-                const line = decoder.decode(lineBytes).trimEnd();
-                lines.push(line);
-            }
-            lineStart = i + 1;
-        }
-    }
-
-    return lines;
-}
-
-/**
  * Reads a Move VM execution trace from a JSON file.
+ *
+ * The compressed file is read in full but decompressed and parsed one line at
+ * a time via `streamDecompressedLines`, so peak memory is proportional to the
+ * kept events (small) rather than the raw trace size (potentially multi-GB).
  *
  * @param traceFilePath path to the trace JSON file.
  * @param srcDebugInfosHashMap a map from file hash to debug info.
@@ -501,22 +476,31 @@ export async function readTrace(
     bcodeDebugInfosModMap: Map<string, IDebugInfo>,
     filesMap: Map<string, IFileInfo>,
 ): Promise<ITrace> {
-    const buf = Buffer.from(fs.readFileSync(traceFilePath));
-    const decompressed = await decompress(buf);
-    const lines = splitTraceFileLines(decompressed);
-    const [header, ...rest] = lines;
-    const jsonVersion: number = JSON.parse(header).version;
-    const jsonEvents: JSONTraceEvent[] = rest.map((line) => {
-        return JSON.parse(line);
-    });
-
-    const traceJSON: JSONTraceRootObject = {
-        events: jsonEvents,
-        version: jsonVersion,
-    };
-    if (traceJSON.events.length === 0) {
-        throw new Error('Trace contains no events');
+    const buf = fs.readFileSync(traceFilePath);
+    const u8 = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    const decoder = await getDecoder();
+    // Push/Pop effects that don't contain references are only used by
+    // extendLifetimeIfReference, which is a no-op for non-reference values.
+    // Skipping these at the byte level avoids expensive TextDecoder +
+    // JSON.parse on potentially very large lines in big traces.
+    function skipPushPopWithoutRef(lineBytes: Buffer): boolean {
+        if (lineBytes.indexOf('{"Effect":{"Push"') === 0 ||
+            lineBytes.indexOf('{"Effect":{"Pop"') === 0) {
+            return !lineBytes.includes('Ref');
+        }
+        return false;
     }
+
+    const lineIterator = streamDecompressedLines(u8, decoder, skipPushPopWithoutRef);
+
+    // First line is the version header — skip it.
+    const headerResult = lineIterator.next();
+    if (headerResult.done) {
+        throw new Error('Empty trace file');
+    }
+
+    let eventCount = 0;
+    let lastProgressTime = Date.now();
     const events: TraceEvent[] = [];
     // We compute the end of lifetime for a local variable as follows.
     // When a given local variable is read or written in an effect, we set the end of its lifetime
@@ -542,7 +526,14 @@ export async function readTrace(
     const tracedBcodeLines = new Map<string, Set<number>>();
     // stack of frame infos OpenFrame and popped on CloseFrame
     const frameInfoStack: ITraceGenFrameInfo[] = [];
-    for (const event of traceJSON.events) {
+    for (const line of lineIterator) {
+        eventCount++;
+        const event = JSON.parse(line) as JSONTraceEvent;
+        const now = Date.now();
+        if (now - lastProgressTime >= 5000) {
+            logger.log(`Processing trace: ${eventCount} events parsed so far...`);
+            lastProgressTime = now;
+        }
         if (event.OpenFrame) {
             const localsTypes = [];
             const frame = event.OpenFrame.frame;
@@ -895,6 +886,9 @@ export async function readTrace(
                 });
             }
         }
+    }
+    if (eventCount === 0) {
+        throw new Error('Trace contains no events');
     }
     return { events, localLifetimeEnds, tracedSrcLines, tracedBcodeLines };
 }

@@ -23,7 +23,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::TxContext, error::ExecutionError, execution::ResultWithTimings,
-    execution_status::ExecutionErrorKind, metrics::LimitsMetrics, storage::BackingPackageStore,
+    execution_status::ExecutionErrorKind, metrics::ExecutionMetrics, storage::BackingPackageStore,
     transaction::ProgrammableTransaction,
 };
 
@@ -37,7 +37,7 @@ pub mod typing;
 
 pub fn execute<Mode: ExecutionMode>(
     protocol_config: &ProtocolConfig,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
     vm: &MoveRuntime,
     state_view: &mut dyn ExecutionState,
     package_store: &dyn BackingPackageStore,

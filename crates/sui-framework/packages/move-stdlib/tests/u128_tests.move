@@ -83,9 +83,9 @@ fun test_div_ceil() {
     integer_tests::test_div_ceil!(MAX, CASES);
 }
 
-#[test, expected_failure(arithmetic_error, location = std::u8)]
+#[test, expected_failure(arithmetic_error, location = std::u128)]
 fun test_div_ceil_error() {
-    1u8.div_ceil(0);
+    1u128.div_ceil(0);
 }
 
 #[test]
@@ -95,9 +95,9 @@ fun test_pow() {
     assert_eq!(3u128.pow(27), integer_tests::slow_pow!(3u128, 27));
 }
 
-#[test, expected_failure(arithmetic_error, location = std::u16)]
+#[test, expected_failure(arithmetic_error, location = std::u128)]
 fun test_pow_overflow() {
-    255u16.pow(255);
+    255u128.pow(255);
 }
 
 #[test]

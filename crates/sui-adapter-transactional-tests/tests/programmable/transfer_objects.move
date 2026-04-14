@@ -64,8 +64,8 @@ module test::m1 {
 //> 5: test::m1::cup<test::m1::Pub>();
 //> TransferObjects([Result(4), Result(2), Result(5)], Result(3));
 
-//# view-object 8,0
-
 //# view-object 8,1
 
 //# view-object 8,2
+
+//# view-object 8,0

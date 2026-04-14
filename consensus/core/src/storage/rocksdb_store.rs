@@ -68,11 +68,18 @@ impl RocksDBStore {
         } else {
             default_db_options().optimize_for_write_throughput()
         };
+        // BLOCKS_CF only receives inserts (no deletions) and is dropped with the DB at epoch
+        // boundary. Use Universal compaction (or FIFO when enabled) which handles this
+        // pattern better than Level compaction.
+        let blocks_cf_options = if use_fifo_compaction {
+            default_db_options().optimize_for_no_deletion()
+        } else {
+            default_db_options().optimize_for_write_throughput_no_deletion()
+        };
         let column_family_options = DBMapTableConfigMap::new(BTreeMap::from([
             (
                 Self::BLOCKS_CF.to_string(),
-                cf_options
-                    .clone()
+                blocks_cf_options
                     // Using larger block is ok since there is not much point reads on the cf.
                     .set_block_options(512, 128 << 10),
             ),

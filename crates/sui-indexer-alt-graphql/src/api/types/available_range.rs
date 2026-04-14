@@ -632,7 +632,12 @@ mod field_piplines_tests {
                 );
             }
         }
-        insta::assert_snapshot!(output);
+        let snapshot_name = if cfg!(feature = "staging") {
+            "registry_collect_pipelines_snapshot_staging"
+        } else {
+            "registry_collect_pipelines_snapshot"
+        };
+        insta::assert_snapshot!(snapshot_name, output);
     }
 
     fn formatted_output_str(

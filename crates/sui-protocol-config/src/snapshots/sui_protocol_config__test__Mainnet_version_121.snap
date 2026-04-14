@@ -152,6 +152,7 @@ feature_flags:
   merge_randomness_into_checkpoint: true
   use_coin_party_owner: true
   disallow_jump_orphans: true
+  early_return_receive_object_mismatched_type: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

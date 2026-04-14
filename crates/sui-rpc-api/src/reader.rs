@@ -223,10 +223,10 @@ impl<'s> DisplayStore<'s> {
 
 #[async_trait::async_trait]
 impl sui_display::v2::Store for DisplayStore<'_> {
-    async fn object(
+    async fn latest(
         &self,
         id: move_core_types::account_address::AccountAddress,
-    ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+    ) -> anyhow::Result<Option<(move_core_types::annotated_value::MoveTypeLayout, Vec<u8>)>> {
         let Some(object) = self.state.inner().get_object(&id.into()) else {
             return Ok(None);
         };
@@ -241,9 +241,6 @@ impl sui_display::v2::Store for DisplayStore<'_> {
             return Ok(None);
         };
 
-        Ok(Some(sui_display::v2::OwnedSlice {
-            bytes: move_object.contents().to_vec(),
-            layout,
-        }))
+        Ok(Some((layout, move_object.contents().to_vec())))
     }
 }

@@ -5,7 +5,7 @@
     "publisher": "mysten",
     "icon": "images/move.png",
     "license": "Apache-2.0",
-    "version": "0.0.18",
+    "version": "0.0.19",
     "preview": true,
     "repository": {
         "url": "https://github.com/MystenLabs/sui.git",
@@ -166,7 +166,7 @@
         "@vscode/debugadapter": "^1.56.0",
         "@vscode/debugadapter-testsupport": "^1.56.0",
         "@vscode/debugprotocol": "1.66.0",
-        "fzstd": "^0.1.1",
+        "zstddec": "^0.2.0",
         "lodash.snakecase": "^4.1.1"
     },
     "devDependencies": {

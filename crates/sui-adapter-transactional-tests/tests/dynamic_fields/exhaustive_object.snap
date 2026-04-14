@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 11 tasks
 
@@ -47,7 +48,7 @@ gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 
 task 8, line 116:
 //# run a::m::t6 --sender A --args object(2,0)
 mutated: object(0,0), object(2,0)
-deleted: object(3,0), object(3,2), object(3,4), object(3,5)
+deleted: object(3,0), object(3,1), object(3,4), object(3,5)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 9608148, non_refundable_storage_fee: 97052
 
 task 9, line 118:

@@ -57,31 +57,31 @@ module test::second_coin {
 
 //# view-object 1,0
 
-//# view-object 1,1
-
-//# view-object 1,2
-
-//# view-object 1,3
-
-//# view-object 1,4
-
 //# view-object 1,5
-
-//# view-object 1,6
-
-//# view-object 1,7
-
-//# view-object 1,8
-
-//# view-object 1,9
 
 //# view-object 1,10
 
+//# view-object 1,2
+
+//# view-object 1,7
+
+//# view-object 1,3
+
+//# view-object 1,8
+
+//# view-object 1,4
+
+//# view-object 1,9
+
+//# view-object 1,1
+
+//# view-object 1,6
+
 // Deny account A for FIRST_COIN.
-//# run sui::coin::deny_list_add --args object(0x403) object(1,5) @A --type-args test::first_coin::FIRST_COIN --sender A
+//# run sui::coin::deny_list_add --args object(0x403) object(1,3) @A --type-args test::first_coin::FIRST_COIN --sender A
 
 // Sending away first coin from A should fail.
-//# transfer-object 1,1 --sender A --recipient A
+//# transfer-object 1,5 --sender A --recipient A
 
 // Sending away second coin from A should not be affected, and hence will succeed.
-//# transfer-object 1,2 --sender A --recipient A
+//# transfer-object 1,10 --sender A --recipient A

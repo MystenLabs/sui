@@ -35,15 +35,7 @@ module tto::M1 {
 
 //# run tto::M1::start
 
-//# view-object 2,0
-
-//# view-object 2,2
-
-//# view-object 2,1
-
 //# view-object 2,3
-
-//# run tto::M1::receive --args object(2,2) receiving(2,3)
 
 //# view-object 2,0
 
@@ -51,4 +43,12 @@ module tto::M1 {
 
 //# view-object 2,1
 
+//# run tto::M1::receive --args object(2,0) receiving(2,1)
+
 //# view-object 2,3
+
+//# view-object 2,0
+
+//# view-object 2,2
+
+//# view-object 2,1

@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 13 tasks
 
@@ -13,11 +14,11 @@ mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 6992000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 26-30:
-//# programmable --sender A --inputs object(1,0)
+//# programmable --sender A --inputs object(1,1)
 //> 0: test::simple::increment(Input(0));
 // Digest 3: Split gas coin into multiple pieces for later use as gas payments
 // This creates object(3,0) and object(3,1) which will be used in other digests
-mutated: object(0,0), object(1,0)
+mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 1339272, non_refundable_storage_fee: 13528
 
 task 3, lines 31-35:
@@ -30,9 +31,9 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 36-37:
-//# programmable --sender A --gas-payment object(3,0) --gas-payment object(3,1) --gas-budget 500000000 --inputs object(1,0)
+//# programmable --sender A --gas-payment object(3,0) --gas-payment object(3,1) --gas-budget 500000000 --inputs object(1,1)
 //> 0: test::simple::increment(Input(0));
-mutated: object(1,0), object(3,0)
+mutated: object(1,1), object(3,0)
 deleted: object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 3295512, non_refundable_storage_fee: 33288
 
@@ -90,11 +91,11 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0x215d3d383d0cf09d512e8ac1ea3df4fd783071ff7451c83f502ec5fd79cb68be",
+              "address": "0x40cc0a82e96c32c503043269e7037df96b2608faec8c77d6cae7ba4998649794",
               "version": 4
             },
             {
-              "address": "0x40cc0a82e96c32c503043269e7037df96b2608faec8c77d6cae7ba4998649794",
+              "address": "0x215d3d383d0cf09d512e8ac1ea3df4fd783071ff7451c83f502ec5fd79cb68be",
               "version": 4
             }
           ]
@@ -118,7 +119,7 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0x215d3d383d0cf09d512e8ac1ea3df4fd783071ff7451c83f502ec5fd79cb68be",
+              "address": "0x40cc0a82e96c32c503043269e7037df96b2608faec8c77d6cae7ba4998649794",
               "version": 4
             }
           ]
@@ -142,7 +143,7 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0x40cc0a82e96c32c503043269e7037df96b2608faec8c77d6cae7ba4998649794",
+              "address": "0x215d3d383d0cf09d512e8ac1ea3df4fd783071ff7451c83f502ec5fd79cb68be",
               "version": 4
             }
           ]

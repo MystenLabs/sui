@@ -215,6 +215,16 @@ fun map_map_ref() {
 }
 
 #[test]
+fun map_mut() {
+    let mut opt = option::some(5u64);
+    assert_eq!(opt.map_mut!(|x| { *x = 100; vector[*x] }), option::some(vector[100]));
+    assert_eq!(*opt.borrow(), 100);
+
+    let mut none = option::none<u64>();
+    assert_eq!(none.map_mut!(|x| { *x = 100; vector[*x] }), option::none());
+}
+
+#[test]
 fun map_no_drop() {
     let none = option::none<NoDrop>().map!(|el| {
         let NoDrop {} = el;
@@ -298,4 +308,48 @@ fun extract_or() {
     let mut some = option::some(5);
     assert_eq!(some.extract_or!(10), 5u64);
     assert!(some.is_none());
+}
+
+#[test]
+fun is_none_or() {
+    assert!(option::some(5u64).is_none_or!(|x| *x == 5));
+    assert!(!option::some(5u64).is_none_or!(|x| *x == 6));
+    assert!(option::none<u64>().is_none_or!(|x| *x == 5));
+}
+
+#[test]
+fun fold() {
+    assert_eq!(option::some(5u64).fold!(0, |x| x + 1), 6);
+    assert_eq!(option::none<u64>().fold!(0, |x| x + 1), 0);
+}
+
+#[test]
+fun fold_no_drop() {
+    let some = option::some(NoDrop {}).fold!(10u64, |el| {
+        let NoDrop {} = el;
+        100
+    });
+    let none = option::none<NoDrop>().fold!(10u64, |el| {
+        let NoDrop {} = el;
+        100
+    });
+    assert_eq!(some, 100);
+    assert_eq!(none, 10);
+}
+
+#[test]
+fun fold_ref() {
+    assert_eq!(option::some(5u64).fold_ref!(0, |x| *x + 1), 6);
+    assert_eq!(option::none<u64>().fold_ref!(0, |x| *x + 1), 0);
+}
+
+#[test]
+fun fold_mut() {
+    let mut opt = option::some(5u64);
+    let result = opt.fold_mut!(0u64, |x| { *x = 100; 42u64 });
+    assert_eq!(result, 42);
+    assert_eq!(*opt.borrow(), 100);
+
+    let mut none = option::none<u64>();
+    assert_eq!(none.fold_mut!(0u64, |x| { *x = 100; 42u64 }), 0);
 }

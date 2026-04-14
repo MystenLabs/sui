@@ -30,9 +30,9 @@ entry fun create_and_claim(ctx: &mut TxContext) {
 
 //# run a::m::create_and_claim --sender A
 
-//# view-object 2,0
-
 //# view-object 2,1
+
+//# view-object 2,0
 
 //# view-object 2,2
 

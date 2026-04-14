@@ -19,6 +19,12 @@ building block for core collection types
 -  [Function `exists_`](#sui_dynamic_field_exists_)
 -  [Function `remove_if_exists`](#sui_dynamic_field_remove_if_exists)
 -  [Function `exists_with_type`](#sui_dynamic_field_exists_with_type)
+-  [Macro function `borrow_or_add`](#sui_dynamic_field_borrow_or_add)
+-  [Macro function `borrow_mut_or_add`](#sui_dynamic_field_borrow_mut_or_add)
+-  [Macro function `get_do`](#sui_dynamic_field_get_do)
+-  [Macro function `get_mut_do`](#sui_dynamic_field_get_mut_do)
+-  [Macro function `get_fold`](#sui_dynamic_field_get_fold)
+-  [Macro function `get_mut_fold`](#sui_dynamic_field_get_mut_fold)
 -  [Function `field_info`](#sui_dynamic_field_field_info)
 -  [Function `field_info_mut`](#sui_dynamic_field_field_info_mut)
 -  [Function `hash_type_and_key`](#sui_dynamic_field_hash_type_and_key)
@@ -361,6 +367,204 @@ Returns true if and only if the <code><a href="../sui/object.md#sui_object">obje
     <b>let</b> object_addr = <a href="../sui/object.md#sui_object">object</a>.to_address();
     <b>let</b> <a href="../sui/hash.md#sui_hash">hash</a> = <a href="../sui/dynamic_field.md#sui_dynamic_field_hash_type_and_key">hash_type_and_key</a>(object_addr, name);
     <a href="../sui/dynamic_field.md#sui_dynamic_field_has_child_object_with_ty">has_child_object_with_ty</a>&lt;<a href="../sui/dynamic_field.md#sui_dynamic_field_Field">Field</a>&lt;Name, Value&gt;&gt;(object_addr, <a href="../sui/hash.md#sui_hash">hash</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_field_borrow_or_add"></a>
+
+## Macro function `borrow_or_add`
+
+Immutably borrows the field value, adding it with <code>$default</code> if it doesn't exist.
+Note that <code>$default</code> is evaluated only if the field does not already exist.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_or_add">borrow_or_add</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $default: $Value): &$Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_or_add">borrow_or_add</a>&lt;$Name: <b>copy</b> + drop + store, $Value: store&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    $name: $Name,
+    $default: $Value,
+): &$Value {
+    <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>if</b> (!<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_">exists_</a>&lt;$Name&gt;(o, name)) <a href="../sui/dynamic_field.md#sui_dynamic_field_add">add</a>(o, name, $default);
+    <a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_field_borrow_mut_or_add"></a>
+
+## Macro function `borrow_mut_or_add`
+
+Mutably borrows the field value, adding it with <code>$default</code> if it doesn't exist.
+Note that <code>$default</code> is evaluated only if the field does not already exist.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut_or_add">borrow_mut_or_add</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $default: $Value): &<b>mut</b> $Value
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut_or_add">borrow_mut_or_add</a>&lt;$Name: <b>copy</b> + drop + store, $Value: store&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    $name: $Name,
+    $default: $Value,
+): &<b>mut</b> $Value {
+    <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>if</b> (!<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_">exists_</a>&lt;$Name&gt;(o, name)) <a href="../sui/dynamic_field.md#sui_dynamic_field_add">add</a>(o, name, $default);
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_field_get_do"></a>
+
+## Macro function `get_do`
+
+If the field exists, calls <code>$f</code> on an immutable reference to the value; otherwise, does nothing.
+This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a href="../std/option.md#std_option_do">std::option::do</a></code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_do">get_do</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R: drop&gt;($<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $f: |&$Value| -&gt; $R)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_do">get_do</a>&lt;$Name: <b>copy</b> + drop + store, $Value: store, $R: drop&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &UID,
+    $name: $Name,
+    $f: |&$Value| -&gt; $R,
+) {
+    <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) { $f(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)); }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_field_get_mut_do"></a>
+
+## Macro function `get_mut_do`
+
+If the field exists, calls <code>$f</code> on a mutable reference to the value; otherwise, does nothing.
+This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then calling <code><a href="../std/option.md#std_option_do">std::option::do</a></code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_mut_do">get_mut_do</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R: drop&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $f: |&<b>mut</b> $Value| -&gt; $R)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_mut_do">get_mut_do</a>&lt;$Name: <b>copy</b> + drop + store, $Value: store, $R: drop&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    $name: $Name,
+    $f: |&<b>mut</b> $Value| -&gt; $R,
+) {
+    <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) { $f(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)); }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_field_get_fold"></a>
+
+## Macro function `get_fold`
+
+If the field exists, applies <code>$some</code> to an immutable reference to the value; otherwise, returns
+<code>$none</code>.
+This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_fold">get_fold</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R&gt;($<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $none: $R, $some: |&$Value| -&gt; $R): $R
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_fold">get_fold</a>&lt;$Name: <b>copy</b> + drop + store, $Value: store, $R&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &UID,
+    $name: $Name,
+    $none: $R,
+    $some: |&$Value| -&gt; $R,
+): $R {
+    <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) $some(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)) <b>else</b> $none
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_field_get_mut_fold"></a>
+
+## Macro function `get_mut_fold`
+
+If the field exists, applies <code>$some</code> to a mutable reference to the value; otherwise, returns
+<code>$none</code>.
+This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_mut_fold">get_mut_fold</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $none: $R, $some: |&<b>mut</b> $Value| -&gt; $R): $R
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_mut_fold">get_mut_fold</a>&lt;$Name: <b>copy</b> + drop + store, $Value: store, $R&gt;(
+    $<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    $name: $Name,
+    $none: $R,
+    $some: |&<b>mut</b> $Value| -&gt; $R,
+): $R {
+    <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
+    <b>let</b> name = $name;
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) $some(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)) <b>else</b> $none
 }
 </code></pre>
 

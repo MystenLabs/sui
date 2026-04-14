@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 9 tasks
 
@@ -28,20 +29,8 @@ Contents: tto::M1::A {
 }
 
 task 4, line 50:
-//# view-object 2,2
-Owner: Account Address ( fake(2,0) )
-Version: 3
-Contents: tto::M1::B {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,2),
-        },
-    },
-}
-
-task 5, lines 52-54:
 //# view-object 2,1
-Owner: Account Address ( fake(2,2) )
+Owner: Account Address ( fake(2,0) )
 Version: 3
 Contents: tto::M1::B {
     id: sui::object::UID {
@@ -51,22 +40,34 @@ Contents: tto::M1::B {
     },
 }
 
+task 5, lines 52-54:
+//# view-object 2,2
+Owner: Account Address ( fake(2,1) )
+Version: 3
+Contents: tto::M1::B {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+}
+
 task 6, lines 55-58:
-//# programmable --inputs object(2,0) receiving(2,2) receiving(2,1)
+//# programmable --inputs object(2,0) receiving(2,1) receiving(2,2)
 //> 0: tto::M1::make_duo(Input(1), Input(2))
 // receive the objects and return them. Error since we need to do something with the returned objects
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 2181960, non_refundable_storage_fee: 22040
 
 task 7, lines 59-63:
-//# programmable --inputs object(2,0) receiving(2,1) receiving(2,1)
+//# programmable --inputs object(2,0) receiving(2,2) receiving(2,2)
 //> 0: tto::M1::make_duo(Input(1), Input(2));
 //> 1: tto::M1::receive_duo(Input(0), Result(0));
 // receive the objects and return them. Then Transfer them with TransferObjects
 Error: Error checking transaction input objects: The transaction inputs contain duplicated ObjectRef's
 
 task 8, lines 64-67:
-//# programmable --inputs object(2,0) receiving(2,2) receiving(2,1) @tto
+//# programmable --inputs object(2,0) receiving(2,1) receiving(2,2) @tto
 //> 0: tto::M1::make_duo(Input(1), Input(2));
 //> 1: tto::M1::receive_duo(Input(0), Result(0));
 //> 2: TransferObjects([NestedResult(1, 0), NestedResult(1, 1)], Input(3));

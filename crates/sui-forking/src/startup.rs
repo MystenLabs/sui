@@ -1,0 +1,115 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::num::NonZeroUsize;
+
+use anyhow::{Result, anyhow};
+use rand::rngs::OsRng;
+use tracing::info;
+
+use simulacrum::Simulacrum;
+use simulacrum::store::in_mem_store::KeyStore;
+use sui_protocol_config::ProtocolVersion;
+use sui_swarm_config::network_config::NetworkConfig;
+use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
+
+use crate::Node;
+use crate::context::Context;
+use crate::store::DataStore;
+
+/// Initialize a forked network by fetching state from the remote endpoint at
+/// `forked_at_checkpoint` and starting a local Simulacrum instance.
+pub async fn initialize(
+    node: Node,
+    forked_at_checkpoint: CheckpointSequenceNumber,
+    version: &str,
+) -> Result<Context> {
+    // 1. Create DataStore — empty local cache, GraphQL wired up.
+    let data_store = DataStore::new(node.clone(), forked_at_checkpoint, version).await?;
+    let chain_identifier = data_store.get_chain_identifier();
+
+    // 2. Fetch verified checkpoint from remote.
+    let checkpoint = data_store
+        .get_verified_checkpoint_from_rpc(Some(forked_at_checkpoint))
+        .await?
+        .ok_or_else(|| anyhow!("checkpoint {} not found", forked_at_checkpoint))?;
+
+    // 3. Read system state — fetches object 0x5 + dynamic fields from remote via ObjectStore.
+    let system_state =
+        sui_types::sui_system_state::get_sui_system_state(&data_store).map_err(|e| {
+            anyhow!(
+                "failed to read system state at checkpoint {}: {}",
+                forked_at_checkpoint,
+                e
+            )
+        })?;
+
+    let protocol_version = system_state.protocol_version();
+
+    // 4. Build NetworkConfig with local test validators.
+    let mut rng = OsRng;
+    let config = ConfigBuilder::new_with_temp_dir()
+        .rng(&mut rng)
+        .with_chain_start_timestamp_ms(checkpoint.timestamp_ms)
+        .deterministic_committee_size(NonZeroUsize::MIN)
+        .with_protocol_version(ProtocolVersion::new(protocol_version))
+        .with_chain_override(node.chain())
+        .build();
+
+    // 5. Override validators in system state with local keys from config.
+    let system_state = override_validators(system_state, &config)?;
+
+    // 6. Build KeyStore.
+    let keystore = KeyStore::from_network_config(&config);
+
+    // 7. Create Simulacrum from custom state.
+    let simulacrum = Simulacrum::new_from_custom_state(
+        keystore,
+        checkpoint,
+        system_state,
+        &config,
+        data_store,
+        rng,
+    );
+
+    Ok(Context::new(simulacrum, chain_identifier))
+}
+
+/// Run the forked network until a shutdown signal (Ctrl+C) is received. The Context is held
+/// alive for the duration so that the Simulacrum and DataStore are not dropped. Once gRPC
+/// services exist, they will be hosted from inside this function.
+pub async fn run(_context: Context) -> Result<()> {
+    info!("forked network running, waiting for shutdown signal (Ctrl+C)");
+    tokio::signal::ctrl_c().await?;
+    info!("shutdown signal received, stopping forked network");
+    Ok(())
+}
+
+/// Replace the validator set in the system state with local validators from the NetworkConfig
+/// genesis, so the simulacrum can sign checkpoints with locally available keys.
+fn override_validators(
+    system_state: SuiSystemState,
+    config: &NetworkConfig,
+) -> Result<SuiSystemState> {
+    let genesis_validators = match config.genesis.sui_system_object() {
+        SuiSystemState::V1(inner) => inner.validators,
+        SuiSystemState::V2(inner) => inner.validators,
+        #[cfg(msim)]
+        _ => anyhow::bail!("unsupported genesis system state variant"),
+    };
+
+    match system_state {
+        SuiSystemState::V1(mut inner) => {
+            inner.validators = genesis_validators;
+            Ok(SuiSystemState::V1(inner))
+        }
+        SuiSystemState::V2(mut inner) => {
+            inner.validators = genesis_validators;
+            Ok(SuiSystemState::V2(inner))
+        }
+        #[cfg(msim)]
+        _ => anyhow::bail!("unsupported system state variant"),
+    }
+}

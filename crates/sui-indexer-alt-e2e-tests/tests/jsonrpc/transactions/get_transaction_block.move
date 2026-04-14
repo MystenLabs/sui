@@ -47,7 +47,7 @@ module test::counter {
   }
 }
 
-//# programmable --sender A --inputs object(1,0) 42 @A
+//# programmable --sender A --inputs object(1,1) 42 @A
 //> 0: test::counter::inc(Input(0));
 //> 1: test::counter::inc_by(Input(0), Input(1));
 //> 2: sui::coin::value<sui::sui::SUI>(Gas);

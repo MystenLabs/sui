@@ -33,7 +33,7 @@ use sui_types::{
     gas::{SuiGasStatus, SuiGasStatusAPI},
     gas_model::{tables::GasStatus, units_types::Gas},
     in_memory_storage::InMemoryStorage,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -210,7 +210,7 @@ impl VMTestSetup for SuiVMTestSetup {
         let mut ext = NativeContextExtensions::default();
         // Use a throwaway metrics registry for testing.
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
         ext.add(ObjectRuntime::new(
             store,

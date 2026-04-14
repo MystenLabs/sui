@@ -17,6 +17,9 @@ pub enum Error {
     #[error("Failed to fetch chain id for checkpoint {0}: {1}")]
     ChainIdError(u64, #[source] anyhow::Error),
 
+    #[error("Failed to fetch latest checkpoint: {0}")]
+    LatestCheckpointError(#[source] anyhow::Error),
+
     #[error(transparent)]
     ObjectStoreError(#[from] object_store::Error),
 

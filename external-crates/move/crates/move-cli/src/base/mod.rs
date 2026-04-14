@@ -6,6 +6,7 @@ pub mod coverage;
 pub mod decompile;
 pub mod disassemble;
 pub mod docgen;
+pub mod lint;
 pub mod migrate;
 pub mod new;
 pub mod profile;

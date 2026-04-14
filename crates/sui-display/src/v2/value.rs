@@ -45,8 +45,16 @@ use crate::v2::writer;
 /// requests for the same object, and it is the store's responsibility to handle this correctly
 /// (e.g. by deduplicating in-flight requests).
 #[async_trait]
-pub trait Store {
-    async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>>;
+pub trait Store: Sync {
+    async fn latest(&self, id: AccountAddress)
+    -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>>;
+
+    async fn scoped(
+        &self,
+        id: AccountAddress,
+    ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
+        self.latest(id).await
+    }
 }
 
 /// Result of evaluating a single strand of a Display v2 format string.
@@ -63,7 +71,7 @@ pub enum Strand<'s> {
 /// Value representation used during evaluation by the Display v2 interpreter.
 #[derive(Clone)]
 pub enum Value<'s> {
-    Address(AccountAddress),
+    Address(Address),
     Bool(bool),
     Bytes(Cow<'s, [u8]>),
     Enum(Enum<'s>),
@@ -77,6 +85,15 @@ pub enum Value<'s> {
     U128(u128),
     U256(U256),
     Vector(Vector<'s>),
+}
+
+#[derive(Clone, Copy)]
+pub struct Address {
+    pub(crate) bytes: AccountAddress,
+
+    /// Indicates whether this value came from the parent object being formatted (in which case
+    /// child object reads should be scoped by the parent object's version).
+    pub(crate) scoped: bool,
 }
 
 /// Non-aggregate values that can be formatted during string interpolation.
@@ -108,6 +125,10 @@ pub enum Accessor<'s> {
 pub struct Slice<'s> {
     pub(crate) layout: &'s MoveTypeLayout,
     pub(crate) bytes: &'s [u8],
+
+    /// Indicates whether this value came from the parent object being formatted (in which case
+    /// child object reads should be scoped by the parent object's version).
+    pub(crate) scoped: bool,
 }
 
 /// An owned version of `Slice`.
@@ -115,6 +136,10 @@ pub struct Slice<'s> {
 pub struct OwnedSlice {
     pub layout: MoveTypeLayout,
     pub bytes: Vec<u8>,
+
+    /// Indicates whether this value came from the parent object being formatted (in which case
+    /// child object reads should be scoped by the parent object's version).
+    pub scoped: bool,
 }
 
 /// An evaluated vector literal.
@@ -145,6 +170,22 @@ pub struct Enum<'s> {
 pub enum Fields<'s> {
     Positional(Vec<Value<'s>>),
     Named(Vec<(&'s str, Value<'s>)>),
+}
+
+impl Address {
+    pub(crate) fn scoped(bytes: AccountAddress) -> Self {
+        Self {
+            bytes,
+            scoped: true,
+        }
+    }
+
+    pub(crate) fn latest(bytes: AccountAddress) -> Self {
+        Self {
+            bytes,
+            scoped: false,
+        }
+    }
 }
 
 impl Value<'_> {
@@ -215,7 +256,7 @@ impl Value<'_> {
         mut meter: writer::Meter<'_>,
     ) -> Result<F, FormatError> {
         match self {
-            Value::Address(a) => Ok(F::string(&mut meter, a.to_canonical_string(true))?),
+            Value::Address(a) => Ok(F::string(&mut meter, a.bytes.to_canonical_string(true))?),
             Value::Bool(b) => Ok(F::bool(&mut meter, b)?),
             Value::U8(n) => Ok(F::number(&mut meter, n as u32)?),
             Value::U16(n) => Ok(F::number(&mut meter, n as u32)?),
@@ -293,6 +334,7 @@ impl Value<'_> {
             V::Slice(Slice {
                 layout,
                 bytes: data,
+                ..
             }) => match layout {
                 L::U8 => Some(bcs::from_bytes::<u8>(data).ok()?.into()),
                 L::U16 => Some(bcs::from_bytes::<u16>(data).ok()?.into()),
@@ -311,6 +353,18 @@ impl Value<'_> {
             | V::String(_)
             | V::Struct(_)
             | V::Vector(_) => None,
+        }
+    }
+
+    /// Annotate the value with a scope status.
+    pub(crate) fn set_scope(&mut self, scope: bool) {
+        match self {
+            Value::Address(a) => a.scoped = scope,
+            Value::Slice(s) => s.scoped = scope,
+
+            // Other value types can't be parents for child object reads, so scope status can be
+            // ignored.
+            _ => (),
         }
     }
 }
@@ -470,10 +524,19 @@ impl<'s> Accessor<'s> {
 }
 
 impl OwnedSlice {
+    pub fn new(layout: MoveTypeLayout, bytes: Vec<u8>) -> Self {
+        Self {
+            layout,
+            bytes,
+            scoped: true,
+        }
+    }
+
     pub(crate) fn as_slice(&self) -> Slice<'_> {
         Slice {
             layout: &self.layout,
             bytes: &self.bytes,
+            scoped: self.scoped,
         }
     }
 }
@@ -494,9 +557,19 @@ impl Value<'_> {
     /// This operation returns `None` if the value contains compound literals (struct, enum, vector
     /// literals), since their layouts are not guaranteed to be valid.
     pub fn into_owned_slice(self) -> Option<OwnedSlice> {
+        let scoped = match &self {
+            Value::Slice(s) => s.scoped,
+            Value::Address(a) => a.scoped,
+            _ => false,
+        };
+
         let layout = self.layout()?;
         let bytes = bcs::to_bytes(&self).ok()?;
-        Some(OwnedSlice { layout, bytes })
+        Some(OwnedSlice {
+            layout,
+            bytes,
+            scoped,
+        })
     }
 
     /// Compute the type layout for this value, if possible.
@@ -633,7 +706,7 @@ impl Serialize for Value<'_> {
         S: serde::Serializer,
     {
         match self {
-            Value::Address(a) => a.serialize(serializer),
+            Value::Address(a) => a.bytes.serialize(serializer),
             Value::Bool(b) => b.serialize(serializer),
             Value::Bytes(b) => b.serialize(serializer),
             Value::Enum(e) => e.serialize(serializer),
@@ -758,7 +831,7 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
         use Value as V;
 
         Ok(match value {
-            V::Address(a) => A::Address(a),
+            V::Address(a) => A::Address(a.bytes),
             V::Bool(b) => A::Bool(b),
             V::U8(n) => A::U8(n),
             V::U16(n) => A::U16(n),
@@ -783,7 +856,7 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                     .into_iter()
                     .map(|e| match e {
                         V::U8(b) => Ok(b),
-                        V::Slice(Slice { layout, bytes }) if layout == &L::U8 => {
+                        V::Slice(Slice { layout, bytes, .. }) if layout == &L::U8 => {
                             Ok(bcs::from_bytes(bytes)?)
                         }
                         _ => Err(FormatError::TransformInvalid("unexpected vector")),
@@ -793,7 +866,7 @@ impl<'s> TryFrom<Value<'s>> for Atom<'s> {
                 A::Bytes(Cow::Owned(bytes?))
             }
 
-            V::Slice(Slice { layout, bytes }) => match layout {
+            V::Slice(Slice { layout, bytes, .. }) => match layout {
                 L::Address => A::Address(bcs::from_bytes(bytes)?),
                 L::Bool => A::Bool(bcs::from_bytes(bytes)?),
                 L::U8 => A::U8(bcs::from_bytes(bytes)?),
@@ -861,7 +934,7 @@ pub(crate) mod tests {
     /// Mock Store implementation for testing.
     #[derive(Default, Clone)]
     pub struct MockStore {
-        data: BTreeMap<AccountAddress, OwnedSlice>,
+        data: BTreeMap<AccountAddress, (MoveTypeLayout, Vec<u8>)>,
     }
 
     impl MockStore {
@@ -902,7 +975,7 @@ pub(crate) mod tests {
                 ],
             }));
 
-            self.data.insert(df_id.into(), OwnedSlice { layout, bytes });
+            self.data.insert(df_id.into(), (layout, bytes));
             self
         }
 
@@ -953,18 +1026,8 @@ pub(crate) mod tests {
                 ],
             }));
 
-            let field = OwnedSlice {
-                layout: field_layout,
-                bytes: field_bytes,
-            };
-
-            let value = OwnedSlice {
-                layout: value_layout,
-                bytes: value_bytes,
-            };
-
-            self.data.insert(dof_id.into(), field);
-            self.data.insert(val_id, value);
+            self.data.insert(dof_id.into(), (field_layout, field_bytes));
+            self.data.insert(val_id, (value_layout, value_bytes));
             self
         }
 
@@ -978,23 +1041,21 @@ pub(crate) mod tests {
             value_layout: MoveTypeLayout,
         ) -> Self {
             let name_bytes = bcs::to_bytes(&name).unwrap();
+            let value_bytes = bcs::to_bytes(&value).unwrap();
             let name_type = TypeTag::from(&name_layout);
             let id = derive_object_id(parent, &name_type, &name_bytes).unwrap();
 
-            self.data.insert(
-                id.into(),
-                OwnedSlice {
-                    layout: value_layout,
-                    bytes: bcs::to_bytes(&value).unwrap(),
-                },
-            );
+            self.data.insert(id.into(), (value_layout, value_bytes));
             self
         }
     }
 
     #[async_trait]
     impl Store for MockStore {
-        async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>> {
+        async fn latest(
+            &self,
+            id: AccountAddress,
+        ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
             Ok(self.data.get(&id).cloned())
         }
     }
@@ -1066,6 +1127,7 @@ pub(crate) mod tests {
         let slice = Slice {
             layout: &L::U64,
             bytes,
+            scoped: false,
         };
 
         let serialized = bcs::to_bytes(&slice).unwrap();
@@ -1137,7 +1199,7 @@ pub(crate) mod tests {
     fn test_serialize_address() {
         let addr: AccountAddress = "0x1".parse().unwrap();
         assert_eq!(
-            bcs::to_bytes(&Value::Address(addr)).unwrap(),
+            bcs::to_bytes(&Value::Address(Address::latest(addr))).unwrap(),
             bcs::to_bytes(&addr).unwrap()
         );
     }
@@ -1186,7 +1248,7 @@ pub(crate) mod tests {
             fields: Fields::Named(vec![
                 ("x", Value::U32(100)),
                 ("y", Value::U32(200)),
-                ("z", Value::Address(addr)),
+                ("z", Value::Address(Address::latest(addr))),
             ]),
         });
 
@@ -1320,7 +1382,7 @@ pub(crate) mod tests {
             Value::U64(12345678),
             Value::U128(123456),
             Value::U256(U256::from(42u64)),
-            Value::Address("0x42".parse().unwrap()),
+            Value::Address(Address::latest("0x42".parse().unwrap())),
             Value::String(Cow::Borrowed("hello".as_bytes())),
             Value::Bytes(Cow::Borrowed(&[1, 2, 3])),
             Value::Vector(Vector {
@@ -1331,6 +1393,7 @@ pub(crate) mod tests {
                     Value::Slice(Slice {
                         layout: &L::U8,
                         bytes: &[6],
+                        scoped: false,
                     }),
                 ],
             }),
@@ -1378,46 +1441,57 @@ pub(crate) mod tests {
             Value::Slice(Slice {
                 layout: &L::Bool,
                 bytes: &bool_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &L::U8,
                 bytes: &u8_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &L::U16,
                 bytes: &u16_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &L::U32,
                 bytes: &u32_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &L::U64,
                 bytes: &u64_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &L::U128,
                 bytes: &u128_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &L::U256,
                 bytes: &u256_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &L::Address,
                 bytes: &addr_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &str_layout,
                 bytes: &str_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &type_name_layout,
                 bytes: &type_name_bytes,
+                scoped: false,
             }),
             Value::Slice(Slice {
                 layout: &vec_layout,
                 bytes: &vec_bytes,
+                scoped: false,
             }),
         ];
 
@@ -1451,7 +1525,7 @@ pub(crate) mod tests {
             Value::U64(45),
             Value::U128(46),
             Value::U256(U256::from(47u64)),
-            Value::Address("0x48".parse().unwrap()),
+            Value::Address(Address::latest("0x48".parse().unwrap())),
             Value::String(Cow::Borrowed("hello".as_bytes())),
             Value::Bytes(Cow::Borrowed(&[1, 2, 3])),
         ];
@@ -1484,7 +1558,10 @@ pub(crate) mod tests {
             fields: Fields::Named(vec![
                 ("x", Value::U32(100)),
                 ("y", Value::U32(200)),
-                ("z", Value::Address("0x300".parse().unwrap())),
+                (
+                    "z",
+                    Value::Address(Address::latest("0x300".parse().unwrap())),
+                ),
             ]),
         });
 
@@ -1495,6 +1572,7 @@ pub(crate) mod tests {
             ),
             bytes: &bcs::to_bytes(&(100u32, 200u32, "0x300".parse::<AccountAddress>().unwrap()))
                 .unwrap(),
+            scoped: false,
         });
 
         let expect = json!({
@@ -1524,6 +1602,7 @@ pub(crate) mod tests {
                 vec![("A", vec![("b", L::U64), ("c", L::Bool)])],
             ),
             bytes: &bcs::to_bytes(&(0u8, 42u64, true)).unwrap(),
+            scoped: false,
         });
 
         let expect = json!({

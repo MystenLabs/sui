@@ -10,22 +10,25 @@ use api::types::address::IAddressable;
 use api::types::move_datatype::IMoveDatatype;
 use api::types::move_object::IMoveObject;
 use api::types::object::IObject;
-use async_graphql::EmptySubscription;
 use async_graphql::ObjectType;
 use async_graphql::Schema;
 use async_graphql::SchemaBuilder;
 use async_graphql::SubscriptionType;
 use async_graphql::extensions::ExtensionFactory;
 use async_graphql::extensions::Tracing;
+use async_graphql::http::ALL_WEBSOCKET_PROTOCOLS;
 use async_graphql::http::GraphiQLSource;
+use async_graphql_axum::GraphQLProtocol;
 use async_graphql_axum::GraphQLRequest;
 use async_graphql_axum::GraphQLResponse;
+use async_graphql_axum::GraphQLWebSocket;
 use axum::Extension;
 use axum::Router;
 use axum::extract::ConnectInfo;
-use axum::extract::MatchedPath;
+use axum::extract::WebSocketUpgrade;
 use axum::http::Method;
 use axum::response::Html;
+use axum::response::IntoResponse;
 use axum::routing::MethodRouter;
 use axum::routing::get;
 use axum::routing::post;
@@ -64,11 +67,18 @@ use url::Url;
 
 use crate::api::mutation::Mutation;
 use crate::api::query::Query;
+#[cfg(feature = "staging")]
+use crate::api::subscription::Subscription;
 use crate::error::PanicHandler;
 use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
+#[cfg(not(feature = "staging"))]
+use async_graphql::EmptySubscription as Subscription;
+
+const GRAPHQL_PATH: &str = "/graphql";
+const HEALTH_PATH: &str = "/graphql/health";
 
 mod api;
 pub mod args;
@@ -202,13 +212,13 @@ where
         } = self;
 
         if with_ide {
-            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
-            router = router.route("/graphql", get(graphiql));
+            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}{GRAPHQL_PATH}'");
         } else {
             info!("Skipping GraphiQL IDE setup");
         }
 
         router = router
+            .layer(Extension(IdeEnabled(with_ide)))
             .layer(Extension(schema.finish()))
             .layer(axum::middleware::from_fn_with_state(
                 Version(version),
@@ -259,13 +269,21 @@ impl Default for RpcArgs {
 }
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
-pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
-    Schema::build(Query::default(), Mutation, EmptySubscription)
+pub fn schema() -> SchemaBuilder<Query, Mutation, Subscription> {
+    Schema::build(Query::default(), Mutation, Subscription)
         .register_output_type::<IAddressable>()
         .register_output_type::<IMoveDatatype>()
         .register_output_type::<IMoveObject>()
         .register_output_type::<IObject>()
 }
+
+/// Whether the GraphiQL IDE is enabled on this instance.
+#[derive(Clone, Copy)]
+struct IdeEnabled(bool);
+
+/// Whether subscriptions are enabled on this instance (i.e., `--checkpoint-stream-url` was set).
+#[derive(Clone, Copy)]
+struct SubscriptionsEnabled(bool);
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line).
@@ -288,6 +306,7 @@ pub async fn start_rpc(
     consistent_reader_args: ConsistentReaderArgs,
     args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
+    subscription_args: args::SubscriptionArgs,
     version: &'static str,
     config: RpcConfig,
     pg_pipelines: Vec<String>,
@@ -367,9 +386,13 @@ pub async fn start_rpc(
         metrics.clone(),
     );
 
+    let streaming_task = subscription_args
+        .checkpoint_stream_url
+        .map(|uri| task::streaming::CheckpointStreamTask::new(uri, &config.subscription));
+
     let rpc = rpc
-        .route("/graphql", post(graphql))
-        .route("/graphql/health", get(health::check))
+        .route(GRAPHQL_PATH, post(graphql).get(graphql_get))
+        .route(HEALTH_PATH, get(health::check))
         .layer(watermark_task.watermarks())
         .layer(config.health)
         .layer(DbProbe(database_url))
@@ -390,20 +413,33 @@ pub async fn start_rpc(
         .data(package_store)
         .data(fullnode_client);
 
+    let subscriptions_enabled = streaming_task.is_some();
+    let mut rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
+
+    if let Some(ref task) = streaming_task {
+        rpc = rpc.data(task.broadcaster());
+    }
+
     let s_rpc = rpc.run().await?;
     let s_system_package_task = system_package_task.run();
     let s_watermark = watermark_task.run();
 
-    Ok(s_rpc
+    let mut service = s_rpc
         .attach(s_chain_id)
         .attach(s_system_package_task)
-        .attach(s_watermark))
+        .attach(s_watermark);
+
+    if let Some(task) = streaming_task {
+        service = service.attach(task.run());
+    }
+
+    Ok(service)
 }
 
 /// Handler for RPC requests (POST requests making GraphQL queries).
 async fn graphql(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(schema): Extension<Schema<Query, Mutation, EmptySubscription>>,
+    Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
     Extension(watermark): Extension<WatermarksLock>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
@@ -423,10 +459,56 @@ async fn graphql(
     schema.execute(request).await.into()
 }
 
-/// Handler for GET requests for the online IDE. GraphQL requests are forwarded to the POST handler
-/// at the same path.
-async fn graphiql(path: MatchedPath) -> Html<String> {
-    Html(GraphiQLSource::build().endpoint(path.as_str()).finish())
+/// Handler for GET requests on the GraphQL path. WebSocket upgrade requests are handled as
+/// subscription connections; regular GET requests serve the GraphiQL IDE (if enabled).
+async fn graphql_get(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
+    Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
+    Extension(IdeEnabled(ide_enabled)): Extension<IdeEnabled>,
+    ws: Option<WebSocketUpgrade>,
+    protocol: Option<GraphQLProtocol>,
+) -> impl IntoResponse {
+    match (ws, protocol) {
+        (Some(ws), Some(protocol)) => {
+            handle_ws(ws, protocol, schema, addr, subscriptions_enabled).into_response()
+        }
+        _ if ide_enabled => graphiql().into_response(),
+        _ => axum::http::StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+fn graphiql() -> Html<String> {
+    Html(
+        GraphiQLSource::build()
+            .endpoint(GRAPHQL_PATH)
+            .subscription_endpoint(GRAPHQL_PATH)
+            .finish(),
+    )
+}
+
+fn handle_ws(
+    ws: WebSocketUpgrade,
+    protocol: GraphQLProtocol,
+    schema: Schema<Query, Mutation, Subscription>,
+    addr: SocketAddr,
+    subscriptions_enabled: bool,
+) -> impl IntoResponse {
+    ws.protocols(ALL_WEBSOCKET_PROTOCOLS)
+        .on_upgrade(move |stream| {
+            let mut data = async_graphql::Data::default();
+            data.insert(Session::new(addr));
+
+            GraphQLWebSocket::new(stream, schema, protocol)
+                .with_data(data)
+                .on_connection_init(move |_| async move {
+                    if !subscriptions_enabled {
+                        return Err("Subscriptions are not enabled on this instance.".into());
+                    }
+                    Ok(async_graphql::Data::default())
+                })
+                .serve()
+        })
 }
 
 #[cfg(test)]

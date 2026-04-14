@@ -10,6 +10,7 @@ use sui_types::object::option_visitor::OptionVisitor;
 
 use crate::v2::error::FormatError;
 use crate::v2::value::Accessor;
+use crate::v2::value::Address;
 use crate::v2::value::Slice;
 use crate::v2::value::Value;
 use crate::v2::visitor::address::AddressExtractor;
@@ -105,9 +106,12 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         a: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         match self.path.last() {
-            Some(Accessor::DFIndex(_) | Accessor::DOFIndex(_)) => Ok(Some(Value::Address(a))),
+            Some(Accessor::DFIndex(_) | Accessor::DOFIndex(_) | Accessor::Derived(_)) => {
+                Ok(Some(Value::Address(Address::latest(a))))
+            }
+
             Some(_) => Ok(None),
-            None => Ok(Some(Value::Address(a))),
+            None => Ok(Some(Value::Address(Address::scoped(a)))),
         }
     }
 
@@ -129,6 +133,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
             return Ok(Some(Value::Slice(Slice {
                 layout: driver.layout()?,
                 bytes: &driver.bytes()[driver.start()..driver.position()],
+                scoped: false,
             })));
         };
 
@@ -154,6 +159,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
             return Ok(Some(Value::Slice(Slice {
                 layout: driver.layout()?,
                 bytes: &driver.bytes()[driver.start()..driver.position()],
+                scoped: false,
             })));
         };
 
@@ -166,7 +172,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         ) {
             return AddressExtractor
                 .visit_struct(driver)
-                .map(|a| a.map(Value::Address));
+                .map(|a| a.map(|a| Value::Address(Address::latest(a))));
         }
 
         // If the next accessor is an index, then try and treat this struct as a VecMap, and
@@ -218,6 +224,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
             return Ok(Some(Value::Slice(Slice {
                 layout: driver.layout()?,
                 bytes: &driver.bytes()[driver.start()..driver.position()],
+                scoped: false,
             })));
         };
 

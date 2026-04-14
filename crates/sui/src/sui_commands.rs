@@ -50,8 +50,8 @@ use sui_indexer_alt_framework::{
     ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
 };
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, config::RpcConfig as GraphQlConfig,
-    start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, args::SubscriptionArgs,
+    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
     consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
@@ -1182,6 +1182,7 @@ async fn start(
                 consistent_reader_args,
                 graphql_args,
                 SystemPackageTaskArgs::default(),
+                SubscriptionArgs::default(),
                 "0.0.0",
                 graphql_config,
                 pipelines,

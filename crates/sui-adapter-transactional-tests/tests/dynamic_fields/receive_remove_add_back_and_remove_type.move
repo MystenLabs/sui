@@ -88,16 +88,16 @@ module test::m1 {
 
 //# run test::m1::create --sender A
 
-//# run test::m1::test_dof --args object(2,2) receiving(2,0) receiving(2,1) --sender A
+//# run test::m1::test_dof --args object(2,0) receiving(2,1) receiving(2,2) --sender A
 
 //# run test::m1::create --sender A
 
-//# run test::m1::test_df --args object(4,2) receiving(4,0) receiving(4,1) --sender A
+//# run test::m1::test_df --args object(4,0) receiving(4,1) receiving(4,2) --sender A
 
 //# run test::m1::create --sender A
 
-//# run test::m1::test_dof_wrapper --args object(6,2) receiving(6,0) receiving(6,1) --sender A
+//# run test::m1::test_dof_wrapper --args object(6,0) receiving(6,1) receiving(6,2) --sender A
 
 //# run test::m1::create --sender A
 
-//# run test::m1::test_df_wrapper --args object(8,2) receiving(8,0) receiving(8,1) --sender A
+//# run test::m1::test_df_wrapper --args object(8,0) receiving(8,1) receiving(8,2) --sender A

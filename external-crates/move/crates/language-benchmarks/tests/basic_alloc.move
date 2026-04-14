@@ -6,7 +6,7 @@ module 0x2::bench {
     }
 
     fun bench_inner(): LargeStruct {
-        let mut i = 0;
+        let mut i: u64 = 0;
         let mut alloc = LargeStruct { a: 0, b: 0, c: 0, d: 0, e: 0, f: 0, g: 0, h: 0 };
         while (i < COUNT) {
             alloc = LargeStruct { a: i, b: i, c: i, d: i, e: i, f: i, g: i, h: i };

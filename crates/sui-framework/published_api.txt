@@ -5017,9 +5017,6 @@ Permit
 permit
 	public fun
 	0x1::internal
-empty
-	public fun
-	0x1::vector
 length
 	public fun
 	0x1::vector
@@ -5039,9 +5036,6 @@ destroy_empty
 	public fun
 	0x1::vector
 swap
-	public fun
-	0x1::vector
-singleton
 	public fun
 	0x1::vector
 reverse
@@ -5075,6 +5069,12 @@ take
 	public fun
 	0x1::vector
 flatten
+	public fun
+	0x1::vector
+empty
+	public fun
+	0x1::vector
+singleton
 	public fun
 	0x1::vector
 Option

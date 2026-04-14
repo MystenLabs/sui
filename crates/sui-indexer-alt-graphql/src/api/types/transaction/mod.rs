@@ -48,6 +48,7 @@ use crate::error::RpcError;
 use crate::extensions::query_limits;
 use crate::pagination::Page;
 use crate::scope::Scope;
+use crate::task::streaming::ProcessedTransaction;
 use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
@@ -222,6 +223,45 @@ impl Transaction {
             digest,
             contents: TransactionContents::empty(scope),
         }
+    }
+
+    /// Paginate over pre-loaded transactions, applying in-memory filtering.
+    ///
+    /// Used when transaction data is already available (e.g. from streaming) and doesn't
+    /// require database queries. Cursors encode `tx_sequence_number` for consistency with
+    /// the query API, enabling clients to continue paginating via queries.
+    ///
+    // TODO(DVX-2068): Add cursor consistency test between subscriptions and query API.
+    pub(crate) fn paginate_preloaded_transactions(
+        scope: Scope,
+        transactions: &[ProcessedTransaction],
+        page: &Page<CTransaction>,
+        filter: TransactionFilter,
+    ) -> Result<Connection<String, Transaction>, RpcError> {
+        let after = page.after().map(|c| **c);
+        let before = page.before().map(|c| **c);
+
+        let filtered: Vec<_> = transactions
+            .iter()
+            .filter(|tx| filter.matches(&tx.contents))
+            .filter(|tx| after.is_none_or(|a| tx.tx_sequence_number >= a))
+            .filter(|tx| before.is_none_or(|b| tx.tx_sequence_number <= b))
+            .take(page.limit_with_overhead())
+            .collect();
+
+        page.paginate_results(
+            filtered,
+            |tx| JsonCursor::new(tx.tx_sequence_number),
+            |tx| {
+                Ok(Transaction {
+                    digest: tx.digest,
+                    contents: TransactionContents {
+                        scope: scope.clone(),
+                        contents: Some(Arc::new(tx.contents.clone())),
+                    },
+                })
+            },
+        )
     }
 
     /// Load the transaction from the store, and return it fully inflated (with contents already

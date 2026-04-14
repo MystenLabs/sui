@@ -692,7 +692,7 @@ mod test {
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas::SuiGasStatus;
     use sui_types::in_memory_storage::InMemoryStorage;
-    use sui_types::metrics::LimitsMetrics;
+    use sui_types::metrics::ExecutionMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;
     use sui_types::transaction::CheckedInputObjects;
 
@@ -727,7 +727,7 @@ mod test {
 
         // Use a throwaway metrics registry for genesis transaction execution.
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let metrics = Arc::new(ExecutionMetrics::new(&registry));
         let expensive_checks = false;
         let epoch = EpochData::new_test();
         let transaction_data = &genesis_transaction.data().intent_message().value;

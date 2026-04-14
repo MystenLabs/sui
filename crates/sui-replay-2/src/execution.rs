@@ -31,7 +31,7 @@ use sui_types::{
     execution_params::{ExecutionOrEarlyError, FundsWithdrawStatus, get_early_execution_error},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     object::Object,
     storage::{BackingPackageStore, ChildObjectResolver, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
@@ -44,7 +44,7 @@ use tracing::{debug, debug_span, trace};
 pub struct ReplayExecutor {
     protocol_config: ProtocolConfig,
     executor: Arc<dyn Executor + Send + Sync>,
-    metrics: Arc<LimitsMetrics>,
+    execution_metrics: Arc<ExecutionMetrics>,
 }
 
 // Returned struct from execution. Contains all the data related to a transaction.
@@ -134,7 +134,7 @@ pub fn execute_transaction_to_effects(
         .execute_transaction_to_effects_and_execution_error(
             &store,
             protocol_config,
-            executor.metrics.clone(),
+            executor.execution_metrics.clone(),
             false, // expensive checks
             execution_params,
             &epoch,
@@ -196,12 +196,12 @@ impl ReplayExecutor {
             .context("Filed to create executor. ProtocolConfig inconsistency?")?;
 
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let execution_metrics = Arc::new(ExecutionMetrics::new(&registry));
 
         Ok(Self {
             protocol_config,
             executor,
-            metrics,
+            execution_metrics,
         })
     }
 }

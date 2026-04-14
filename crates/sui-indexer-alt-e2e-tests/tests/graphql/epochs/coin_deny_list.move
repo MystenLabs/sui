@@ -49,7 +49,7 @@ module P::coin {
   }
 }
 
-//# programmable --sender A --inputs object(0x403) object(2,0)
+//# programmable --sender A --inputs object(0x403) object(2,2)
 //> P::coin::poke_deny_list(Input(0), Input(1))
 
 //# create-checkpoint

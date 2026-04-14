@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 13 tasks
 
@@ -46,9 +47,9 @@ task 6, line 42:
 Checkpoint created: 2
 
 task 7, lines 44-45:
-//# programmable --sender A --inputs object(1,0) @B
+//# programmable --sender A --inputs object(1,6) @B
 //> TransferObjects([Input(0)], Input(1))
-mutated: object(0,0), object(1,0)
+mutated: object(0,0), object(1,6)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 

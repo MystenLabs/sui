@@ -44,7 +44,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
     CheckpointVersionSpecificData, CheckpointVersionSpecificDataV1,
 };
-use sui_types::metrics::LimitsMetrics;
+use sui_types::metrics::ExecutionMetrics;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait, get_sui_system_state};
@@ -761,7 +761,7 @@ fn build_unsigned_genesis_data(
 
     // Use a throwaway metrics registry for genesis transaction execution.
     let registry = prometheus::Registry::new();
-    let metrics = Arc::new(LimitsMetrics::new(&registry));
+    let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
     let objects = create_genesis_objects(
         &epoch_data,
@@ -874,7 +874,7 @@ fn create_genesis_checkpoint(
 fn create_genesis_transaction(
     objects: Vec<Object>,
     protocol_config: &ProtocolConfig,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
     epoch_data: &EpochData,
 ) -> (
     Transaction,
@@ -963,7 +963,7 @@ fn create_genesis_objects(
     parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
     system_packages: Vec<SystemPackage>,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
     // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
@@ -1021,7 +1021,7 @@ fn process_package(
     modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
     protocol_config: &ProtocolConfig,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
 ) -> anyhow::Result<()> {
     let dependency_objects = store.get_objects(&dependencies);
     // When publishing genesis packages, since the std framework packages all have
@@ -1093,7 +1093,7 @@ pub fn generate_genesis_system_object(
     genesis_digest: &TransactionDigest,
     genesis_chain_parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
 ) -> anyhow::Result<()> {
     let protocol_config = ProtocolConfig::get_for_version(
         ProtocolVersion::new(genesis_chain_parameters.protocol_version),
