@@ -58,16 +58,16 @@ export default function Home() {
             <HomeCard title="Developers">
               <Link
                 className={`${styles.cardLink} plausible-event-name=homepage+start+button`}
-                to="./guides/developer/getting-started/sui-install"
+                to="/getting-started/onboarding"
               >
                 Getting Started
               </Link>
-              <Link className={styles.cardLink} to="/guides">
+              <Link className={styles.cardLink} to="/getting-started">
                 Sui Developer Basics
               </Link>
               <Link
                 className={styles.cardLink}
-                to="./concepts/sui-move-concepts"
+                to="/develop/write-move/sui-move-concepts"
               >
                 Move
               </Link>
@@ -75,32 +75,32 @@ export default function Home() {
             <HomeCard title="Validators and Node operators">
               <Link
                 className={styles.cardLink}
-                to="./guides/operator/validator/validator-config"
+                to="/operators/validator/validator-config"
               >
                 Validator Configuration
               </Link>
               <Link
                 className={styles.cardLink}
-                to="./guides/operator/sui-full-node"
+                to="/operators/full-node/sui-full-node"
               >
                 Run a Sui Full Node
                 <span className="block bg-auto bg-[url(../static/img/index/right-arrow.svg)]"></span>
               </Link>
               <Link
                 className={styles.cardLink}
-                to="./guides/operator/bridge-node-configuration"
+                to="/operators/bridge-node-configuration"
               >
                 Sui Bridge Node Configuration
               </Link>
             </HomeCard>
             <HomeCard title="About Sui">
-              <Link className={styles.cardLink} to="./concepts/tokenomics">
+              <Link className={styles.cardLink} to="/develop/sui-architecture/tokenomics-overview">
                 Tokenomics
               </Link>
-              <Link className={styles.cardLink} to="./concepts/cryptography">
+              <Link className={styles.cardLink} to="/develop/cryptography">
                 Cryptography
               </Link>
-              <Link className={styles.cardLink} to="standards">
+              <Link className={styles.cardLink} to="/onchain-finance">
                 Standards
               </Link>
             </HomeCard>
@@ -142,7 +142,7 @@ export default function Home() {
               </Link>
               <Link
                 className={styles.cardLink}
-                to="guides/developer/dev-cheat-sheet"
+                to="/getting-started/dev-cheat-sheet"
               >
                 Sui Developer Cheat Sheet
               </Link>
@@ -150,7 +150,7 @@ export default function Home() {
             <HomeCardCTA>
               <Link
                 className={styles.cardCTALink}
-                to="/guides/developer/getting-started/hello-world"
+                to="/getting-started/onboarding/hello-world"
               >
                 <span>Build your dApp on Sui</span>
                 <svg

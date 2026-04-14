@@ -7,17 +7,17 @@ pagination_prev: null
 
 :::info
 
-<ImportContent source="json-rpc-deprecation.mdx" mode="snippet" />
+<ImportContent source="json-rpc-deprecation" mode="snippet" />
 
 :::
 
 :::info
 
-<ImportContent source="data-serving-msg.mdx" mode="snippet" />
+<ImportContent source="data-serving-msg" mode="snippet" />
 
 :::
 
-_SuiJSON_ is a JSON-based format with restrictions that allow Sui to align JSON inputs more closely with Move call arguments.
+SuiJSON is a JSON-based format with restrictions that allow Sui to align JSON inputs more closely with Move call arguments.
 
 This table shows the restrictions placed on JSON types to make them SuiJSON compatible:
 
@@ -34,7 +34,7 @@ This table shows the restrictions placed on JSON types to make them SuiJSON comp
 
 Due to the loosely typed nature of JSON/SuiJSON and the strongly typed nature of Move types, you sometimes need to overload SuiJSON types to represent multiple Move types.
 
-For example `SuiJSON::Number` can represent both _u8_ and _u32_. This means you have to coerce and sometimes convert types.
+For example, `SuiJSON::Number` can represent both `u8` and `u32`. This means you have to coerce and sometimes convert types.
 
 Which type you coerce depends on the expected Move type. For example, if the Move function expects a u8, you must have received a `SuiJSON::Number` with a value less than 256. More importantly, you have no way to easily express Move addresses in JSON, so you encode them as hex strings prefixed by `0x`.
 
