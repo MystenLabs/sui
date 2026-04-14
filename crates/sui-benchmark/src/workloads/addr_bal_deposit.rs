@@ -315,9 +315,9 @@ impl Payload for AddrBalDepositPayload {
                 FundsWithdrawalArg::balance_from_sender(self.deposit_amount, GAS::type_tag());
             let withdrawal_result = builder.funds_withdrawal(withdrawal).unwrap();
 
-            let coin = builder.programmable_move_call(
+            let balance = builder.programmable_move_call(
                 SUI_FRAMEWORK_PACKAGE_ID,
-                Identifier::new("coin").unwrap(),
+                Identifier::new("balance").unwrap(),
                 Identifier::new("redeem_funds").unwrap(),
                 vec![GAS::type_tag()],
                 vec![withdrawal_result],
@@ -326,10 +326,10 @@ impl Payload for AddrBalDepositPayload {
             let recipient_arg = builder.pure(self.target_address).unwrap();
             builder.programmable_move_call(
                 SUI_FRAMEWORK_PACKAGE_ID,
-                Identifier::new("coin").unwrap(),
+                Identifier::new("balance").unwrap(),
                 Identifier::new("send_funds").unwrap(),
                 vec![GAS::type_tag()],
-                vec![coin, recipient_arg],
+                vec![balance, recipient_arg],
             );
         }
 
