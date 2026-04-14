@@ -16155,14 +16155,26 @@ version = "1.72.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bin-version",
+ "clap",
  "indexmap 2.8.0",
  "move-compiler",
+ "move-core-types",
  "move-package-alt",
+ "move-package-alt-compilation",
  "serde",
+ "shared-crypto",
+ "sui-config",
+ "sui-keys",
  "sui-package-management",
+ "sui-protocol-config",
+ "sui-rpc-api",
  "sui-sdk",
+ "sui-types",
  "tempfile",
+ "tokio",
  "toml 0.7.4",
+ "tracing",
 ]
 
 [[package]]
