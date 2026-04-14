@@ -46,11 +46,7 @@ pub enum Error {
 }
 
 impl FullnodeClient {
-    pub async fn new(
-        prefix: Option<&str>,
-        url: Url,
-        registry: &Registry,
-    ) -> Result<Self, Error> {
+    pub async fn new(prefix: Option<&str>, url: Url, registry: &Registry) -> Result<Self, Error> {
         let mut endpoint = Channel::from_shared(url.to_string())
             .context("Failed to create channel for gRPC endpoint")?;
 
