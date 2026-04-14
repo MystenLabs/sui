@@ -306,7 +306,7 @@ module deepbook::clob_v2 {
 
     #[deprecated(note = b"Creating new account is deprecated in Deepbook V2. Please use Deepbook V3.")]
     public fun create_account(_ctx: &mut TxContext): AccountCap {
-        
+
         abort 1337
     }
 
@@ -317,7 +317,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ) {
-        
+
         abort 1337
     }
 
@@ -333,7 +333,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ) {
-        
+
         abort 1337
     }
 
@@ -345,7 +345,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ): Pool<BaseAsset, QuoteAsset> {
-        
+
         abort 1337
     }
 
@@ -361,7 +361,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ) : Pool<BaseAsset, QuoteAsset> {
-        
+
         abort 1337
     }
 
@@ -377,7 +377,7 @@ module deepbook::clob_v2 {
         _creation_fee: Coin<SUI>,
         _ctx: &mut TxContext,
     ) : (Pool<BaseAsset, QuoteAsset>, PoolOwnerCap) {
-        
+
         abort 1337
     }
 
@@ -387,7 +387,7 @@ module deepbook::clob_v2 {
         _coin: Coin<BaseAsset>,
         _account_cap: &AccountCap
     ) {
-        
+
         abort 1337
     }
 
@@ -397,7 +397,7 @@ module deepbook::clob_v2 {
         _coin: Coin<QuoteAsset>,
         _account_cap: &AccountCap
     ) {
-        
+
         abort 1337
     }
 
@@ -443,7 +443,7 @@ module deepbook::clob_v2 {
         _clock: &Clock,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
-        
+
         abort 1337
     }
 
@@ -459,7 +459,7 @@ module deepbook::clob_v2 {
         _clock: &Clock,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        
+
         abort 1337
     }
 
@@ -474,7 +474,7 @@ module deepbook::clob_v2 {
         _quote_coin: Coin<QuoteAsset>,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64) {
-       
+
        abort 1337
     }
 
@@ -488,7 +488,7 @@ module deepbook::clob_v2 {
         _quote_coin: Coin<QuoteAsset>,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        
+
         abort 1337
     }
 
@@ -505,7 +505,7 @@ module deepbook::clob_v2 {
         _clock: &Clock,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>) {
-        
+
         abort 1337
     }
 
@@ -521,7 +521,7 @@ module deepbook::clob_v2 {
         _clock: &Clock,
         _ctx: &mut TxContext,
     ): (Coin<BaseAsset>, Coin<QuoteAsset>, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        
+
         abort 1337
     }
 
@@ -544,7 +544,7 @@ module deepbook::clob_v2 {
         _account_cap: &AccountCap,
         _ctx: &mut TxContext
     ): (u64, u64, bool, u64) {
-        
+
         abort 1337
     }
 
@@ -567,7 +567,7 @@ module deepbook::clob_v2 {
         _account_cap: &AccountCap,
         _ctx: &mut TxContext
     ): (u64, u64, bool, u64, vector<MatchedOrderMetadata<BaseAsset, QuoteAsset>>) {
-        
+
         abort 1337
     }
 
@@ -849,7 +849,7 @@ module deepbook::clob_v2 {
         account_cap: &AccountCap
     ): vector<Order> {
         let owner = account_owner(account_cap);
-        let mut open_orders = vector::empty<Order>();
+        let mut open_orders = vector[];
         if (!usr_open_orders_exist(pool, owner)) {
             return open_orders
         };
@@ -919,8 +919,8 @@ module deepbook::clob_v2 {
         mut price_high: u64,
         clock: &Clock
     ): (vector<u64>, vector<u64>) {
-        let mut price_vec = vector::empty<u64>();
-        let mut depth_vec = vector::empty<u64>();
+        let mut price_vec = vector[];
+        let mut depth_vec = vector[];
         if (critbit::is_empty(&pool.bids)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.bids);
         let (price_high_, _) = critbit::max_leaf(&pool.bids);
@@ -961,8 +961,8 @@ module deepbook::clob_v2 {
         mut price_high: u64,
         clock: &Clock
     ): (vector<u64>, vector<u64>) {
-        let mut price_vec = vector::empty<u64>();
-        let mut depth_vec = vector::empty<u64>();
+        let mut price_vec = vector[];
+        let mut depth_vec = vector[];
         if (critbit::is_empty(&pool.asks)) { return (price_vec, depth_vec) };
         let (price_low_, _) = critbit::min_leaf(&pool.asks);
 
@@ -1035,7 +1035,7 @@ module deepbook::clob_v2 {
     public fun matched_order_metadata_info<BaseAsset, QuoteAsset>(
         _matched_order_metadata: &MatchedOrderMetadata<BaseAsset, QuoteAsset>
     ) : ( ID, u64, bool, address, address, u64, u64, u64, u64) {
-        
+
         abort 1337
     }
 

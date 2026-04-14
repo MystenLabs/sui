@@ -5,13 +5,15 @@
 
 #![allow(unused)]
 
+pub(crate) mod context;
 pub(crate) mod filesystem;
 mod gql;
-pub(crate) mod node;
+mod node;
+pub mod startup;
 pub(crate) mod store;
 
-pub(crate) use gql::GraphQLClient;
-pub(crate) use node::Node;
+pub use gql::GraphQLClient;
+pub use node::Node;
 
 use anyhow::{Error, Result};
 

@@ -96,6 +96,21 @@ impl Scope {
         })
     }
 
+    /// Create a scope for streamed checkpoint data. Sets `checkpoint_viewed_at` to `None`
+    /// because streamed data is resolved from memory, not bounded by an indexed checkpoint.
+    pub(crate) fn for_streamed_checkpoint(
+        package_store: Arc<PackageCache>,
+        resolver_limits: sui_package_resolver::Limits,
+    ) -> Self {
+        Self {
+            checkpoint_viewed_at: None,
+            root_bound: None,
+            execution_objects: Arc::new(BTreeMap::new()),
+            package_store,
+            resolver_limits,
+        }
+    }
+
     /// Create a scope instance for tests with no package data.
     #[cfg(test)]
     pub(crate) fn for_tests() -> Self {

@@ -84,7 +84,7 @@ impl FilesystemStore {
     }
 
     /// Get the latest object version available on disk for the given object ID.
-    pub(crate) fn get_latest_object(&self, object_id: ObjectID) -> anyhow::Result<Option<Object>> {
+    pub(crate) fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
         let object_dir = self.objects_dir().join(object_id.to_string());
 
         if !object_dir.exists() {
@@ -100,7 +100,7 @@ impl FilesystemStore {
     /// file does not exist on disk.
     pub(crate) fn get_object_at_version(
         &self,
-        object_id: ObjectID,
+        object_id: &ObjectID,
         version: u64,
     ) -> anyhow::Result<Option<Object>> {
         let object_dir = self.objects_dir().join(object_id.to_string());
@@ -132,7 +132,9 @@ impl FilesystemStore {
     }
 
     /// Get the highest checkpoint sequence number available on disk.
-    pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
+    pub(crate) fn get_highest_checkpoint_sequence_number(
+        &self,
+    ) -> anyhow::Result<CheckpointSequenceNumber> {
         let checkpoint_dir = self.checkpoints_dir();
 
         anyhow::ensure!(
@@ -215,7 +217,7 @@ mod tests {
         let obj = make_object(id, 5);
 
         store.write_object(&obj).unwrap();
-        let loaded = store.get_latest_object(id).unwrap();
+        let loaded = store.get_latest_object(&id).unwrap();
         assert_eq!(loaded.clone().unwrap(), obj);
         assert_eq!(loaded.unwrap().version(), SequenceNumber::from_u64(5));
     }
@@ -227,14 +229,14 @@ mod tests {
         let obj = make_object(id, 5);
 
         store.write_object(&obj).unwrap();
-        let loaded = store.get_object_at_version(id, 5).unwrap();
+        let loaded = store.get_object_at_version(&id, 5).unwrap();
         assert_eq!(loaded.unwrap(), obj);
     }
 
     #[test]
     fn test_get_latest_object_returns_none_for_unknown_id() {
         let (_dir, store) = test_store();
-        let result = store.get_latest_object(ObjectID::random()).unwrap();
+        let result = store.get_latest_object(&ObjectID::random()).unwrap();
         assert!(result.is_none());
     }
 
@@ -245,7 +247,7 @@ mod tests {
         let obj = make_object(id, 5);
         store.write_object(&obj).unwrap();
 
-        let result = store.get_object_at_version(id, 99).unwrap();
+        let result = store.get_object_at_version(&id, 99).unwrap();
         assert!(result.is_none());
     }
 
@@ -259,18 +261,18 @@ mod tests {
         store.write_object(&v1).unwrap();
         store.write_object(&v3).unwrap();
 
-        let latest = store.get_latest_object(id).unwrap().unwrap();
+        let latest = store.get_latest_object(&id).unwrap().unwrap();
         assert_eq!(latest, v3);
 
         // v1 is still accessible by version
-        let old = store.get_object_at_version(id, 1).unwrap().unwrap();
+        let old = store.get_object_at_version(&id, 1).unwrap().unwrap();
         assert_eq!(old, v1);
     }
 
     #[test]
     fn test_get_highest_checkpoint_errors_when_dir_missing() {
         let (_dir, store) = test_store();
-        let err = store.get_highest_checkpoint().unwrap_err();
+        let err = store.get_highest_checkpoint_sequence_number().unwrap_err();
         assert!(err.to_string().contains("does not exist"));
     }
 
@@ -278,7 +280,7 @@ mod tests {
     fn test_get_highest_checkpoint_errors_when_latest_file_missing() {
         let (_dir, store) = test_store();
         fs::create_dir_all(store.checkpoints_dir()).unwrap();
-        let err = store.get_highest_checkpoint().unwrap_err();
+        let err = store.get_highest_checkpoint_sequence_number().unwrap_err();
         assert!(err.to_string().contains("Latest file not found"));
     }
 }

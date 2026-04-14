@@ -114,7 +114,7 @@ The maximum allowed bitvector size
     <b>assert</b>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a> &gt; 0, <a href="../std/bit_vector.md#std_bit_vector_ELENGTH">ELENGTH</a>);
     <b>assert</b>!(<a href="../std/bit_vector.md#std_bit_vector_length">length</a> &lt; <a href="../std/bit_vector.md#std_bit_vector_MAX_SIZE">MAX_SIZE</a>, <a href="../std/bit_vector.md#std_bit_vector_ELENGTH">ELENGTH</a>);
     <b>let</b> <b>mut</b> counter = 0;
-    <b>let</b> <b>mut</b> bit_field = <a href="../std/vector.md#std_vector_empty">vector::empty</a>();
+    <b>let</b> <b>mut</b> bit_field = <a href="../std/vector.md#std_vector">vector</a>[];
     <b>while</b> (counter &lt; <a href="../std/bit_vector.md#std_bit_vector_length">length</a>) {
         bit_field.push_back(<b>false</b>);
         counter = counter + 1;

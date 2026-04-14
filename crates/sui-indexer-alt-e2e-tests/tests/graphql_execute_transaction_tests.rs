@@ -15,6 +15,7 @@ use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
 use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
+use sui_indexer_alt_graphql::args::SubscriptionArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
@@ -135,6 +136,7 @@ impl GraphQlTestCluster {
             ConsistentReaderArgs::default(),
             graphql_args,
             SystemPackageTaskArgs::default(),
+            SubscriptionArgs::default(),
             "0.0.0",
             GraphQlConfig::default(),
             vec![], // No pipelines since we're not using database

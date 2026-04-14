@@ -36,6 +36,7 @@ use crate::error::RpcError;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
 use crate::scope::Scope;
+use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::watermark::Watermarks;
 
 pub(crate) mod filter;
@@ -43,18 +44,21 @@ pub(crate) mod filter;
 pub(crate) struct Checkpoint {
     pub(crate) sequence_number: u64,
     pub(crate) scope: Scope,
+    /// Pre-processed data from streaming. When set, checkpoint fields are resolved from
+    /// this data instead of fetching from the database.
+    pub(crate) streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
 #[derive(Clone)]
 struct CheckpointContents {
-    // TODO: Remove when the scope is used in a nested field.
-    #[allow(unused)]
     scope: Scope,
     contents: Option<(
         CheckpointSummary,
         NativeCheckpointContents,
         AuthorityStrongQuorumSignInfo,
     )>,
+    /// When set, transactions are resolved from this streamed data instead of the database.
+    streamed_data: Option<Arc<ProcessedCheckpoint>>,
 }
 
 pub(crate) type CCheckpoint = JsonCursor<u64>;
@@ -89,7 +93,11 @@ impl Checkpoint {
 
     #[graphql(flatten)]
     async fn contents(&self, ctx: &Context<'_>) -> Result<CheckpointContents, RpcError> {
-        CheckpointContents::fetch(ctx, self.scope.clone(), self.sequence_number).await
+        if let Some(processed) = &self.streamed_data {
+            CheckpointContents::from_streamed_checkpoint(self.scope.clone(), processed)
+        } else {
+            CheckpointContents::fetch(ctx, self.scope.clone(), self.sequence_number).await
+        }
     }
 }
 
@@ -211,6 +219,7 @@ impl CheckpointContents {
             let Some((summary, _, _)) = &self.contents else {
                 return Ok(None);
             };
+
             let pagination: &PaginationConfig = ctx.data()?;
             let limits = pagination.limits("Checkpoint", "transactions");
             let page = Page::from_params(limits, first, after, last, before)?;
@@ -221,6 +230,15 @@ impl CheckpointContents {
             }) else {
                 return Ok(Some(Connection::new(false, false)));
             };
+
+            if let Some(streamed) = &self.streamed_data {
+                return Ok(Some(Transaction::paginate_preloaded_transactions(
+                    self.scope.clone(),
+                    &streamed.transactions,
+                    &page,
+                    filter,
+                )?));
+            }
 
             Ok(Some(
                 Transaction::paginate(ctx, self.scope.clone(), page, filter).await?,
@@ -245,6 +263,7 @@ impl Checkpoint {
         (sequence_number <= scope_checkpoint).then_some(Self {
             scope,
             sequence_number,
+            streamed_data: None,
         })
     }
 
@@ -309,6 +328,26 @@ impl CheckpointContents {
             .await
             .context("Failed to fetch checkpoint contents")?;
 
-        Ok(Self { scope, contents })
+        Ok(Self {
+            scope,
+            contents,
+            streamed_data: None,
+        })
+    }
+
+    /// Construct from pre-processed streamed checkpoint data.
+    fn from_streamed_checkpoint(
+        scope: Scope,
+        processed: &Arc<ProcessedCheckpoint>,
+    ) -> Result<Self, RpcError> {
+        Ok(Self {
+            scope,
+            contents: Some((
+                processed.summary.clone(),
+                processed.contents.clone(),
+                processed.signature.clone(),
+            )),
+            streamed_data: Some(Arc::clone(processed)),
+        })
     }
 }

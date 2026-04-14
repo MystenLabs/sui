@@ -1,0 +1,79 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-60:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 8109200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 62-64:
+//# programmable --sender A --inputs @A 7u64
+//> 0: test::mod::root(Input(1));
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2295200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 66-68:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::parent();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 70:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 72-73:
+//# programmable --sender A --inputs object(3,0) 7u64 111u64
+//> 0: test::mod::dynamic_field(Input(0), Input(1), Input(2))
+created: object(5,0)
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 4286400,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 6, lines 75-76:
+//# programmable --sender A --inputs object(3,0) 7u64
+//> 0: test::mod::inc_field(Input(0), Input(1))
+mutated: object(0,0), object(3,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 4286400,  storage_rebate: 4243536, non_refundable_storage_fee: 42864
+
+task 7, lines 78-80:
+//# programmable --sender A --inputs object(3,0) 7u64 333u64 @A
+//> 0: test::mod::derived(Input(0), Input(1), Input(2));
+//> 1: TransferObjects([Result(0)], Input(3))
+created: object(7,0), object(7,1)
+mutated: object(0,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 6057200,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 8, lines 82-83:
+//# programmable --sender A --inputs object(7,1)
+//> 0: test::mod::inc_child(Input(0))
+mutated: object(0,0), object(7,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 9, line 85:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 10, lines 87-97:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "dynamicField": "112",
+          "derivedObject": "334"
+        }
+      }
+    }
+  }
+}

@@ -7,7 +7,6 @@ vectors are growable. This module has many native functions.
 
 
 -  [Constants](#@Constants_0)
--  [Function `empty`](#std_vector_empty)
 -  [Function `length`](#std_vector_length)
 -  [Function `borrow`](#std_vector_borrow)
 -  [Function `push_back`](#std_vector_push_back)
@@ -15,7 +14,6 @@ vectors are growable. This module has many native functions.
 -  [Function `pop_back`](#std_vector_pop_back)
 -  [Function `destroy_empty`](#std_vector_destroy_empty)
 -  [Function `swap`](#std_vector_swap)
--  [Function `singleton`](#std_vector_singleton)
 -  [Function `reverse`](#std_vector_reverse)
 -  [Function `append`](#std_vector_append)
 -  [Function `is_empty`](#std_vector_is_empty)
@@ -53,6 +51,8 @@ vectors are growable. This module has many native functions.
 -  [Macro function `is_sorted_by`](#std_vector_is_sorted_by)
 -  [Macro function `take_while`](#std_vector_take_while)
 -  [Macro function `skip_while`](#std_vector_skip_while)
+-  [Function `empty`](#std_vector_empty)
+-  [Function `singleton`](#std_vector_singleton)
 
 
 <pre><code></code></pre>
@@ -73,29 +73,6 @@ The index into the vector is out of bounds
 </code></pre>
 
 
-
-<a name="std_vector_empty"></a>
-
-## Function `empty`
-
-Create an empty vector.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_empty">empty</a>&lt;Element&gt;(): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/vector.md#std_vector_empty">empty</a>&lt;Element&gt;(): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;;
-</code></pre>
-
-
-
-</details>
 
 <a name="std_vector_length"></a>
 
@@ -257,33 +234,6 @@ Aborts if <code>i</code> or <code>j</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/vector.md#std_vector_swap">swap</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, i: <a href="../std/u64.md#std_u64">u64</a>, j: <a href="../std/u64.md#std_u64">u64</a>);
-</code></pre>
-
-
-
-</details>
-
-<a name="std_vector_singleton"></a>
-
-## Function `singleton`
-
-Return an vector of size one containing element <code>e</code>.
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_singleton">singleton</a>&lt;Element&gt;(e: Element): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_singleton">singleton</a>&lt;Element&gt;(e: Element): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt; {
-    <b>let</b> <b>mut</b> v = <a href="../std/vector.md#std_vector_empty">empty</a>();
-    v.<a href="../std/vector.md#std_vector_push_back">push_back</a>(e);
-    v
-}
 </code></pre>
 
 
@@ -1491,6 +1441,54 @@ the predicate <code>p</code> and drop the rest, where <code>n &lt;= v.<a href=".
     };
     v.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
     v
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_empty"></a>
+
+## Function `empty`
+
+Create an empty vector.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_empty">empty</a>&lt;Element&gt;(): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/vector.md#std_vector_empty">empty</a>&lt;Element&gt;(): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;;
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_singleton"></a>
+
+## Function `singleton`
+
+Return an vector of size one containing element <code>e</code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_singleton">singleton</a>&lt;Element&gt;(e: Element): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_singleton">singleton</a>&lt;Element&gt;(e: Element): <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt; {
+    <a href="../std/vector.md#std_vector">vector</a>[e]
 }
 </code></pre>
 

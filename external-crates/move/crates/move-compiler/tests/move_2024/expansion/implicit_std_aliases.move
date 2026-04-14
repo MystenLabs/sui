@@ -4,7 +4,7 @@
 module a::m {
     public struct S { f: Option<u64> }
     fun wow(): vector<Option<u64>> {
-        let mut v = vector::empty();
+        let mut v = vector[];
         vector::push_back(&mut v, option::none());
         v
     }

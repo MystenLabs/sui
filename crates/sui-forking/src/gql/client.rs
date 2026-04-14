@@ -17,6 +17,7 @@ use crate::ObjectRead;
 use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::gql::queries;
+use sui_protocol_config::Chain;
 
 macro_rules! block_on {
     ($expr:expr) => {{
@@ -50,6 +51,7 @@ macro_rules! block_on {
 #[derive(Debug, Clone)]
 pub struct GraphQLClient {
     client: reqwest::Client,
+    node: Node,
     rpc: reqwest::Url,
     version: String,
 }
@@ -61,6 +63,7 @@ impl GraphQLClient {
             .with_context(|| format!("invalid GraphQL URL '{}'", node.gql_url()))?;
         Ok(Self {
             client: reqwest::Client::new(),
+            node,
             rpc,
             version: version.to_string(),
         })
@@ -104,6 +107,22 @@ impl GraphQLClient {
         sequence_number: Option<CheckpointSequenceNumber>,
     ) -> Result<Option<VerifiedCheckpoint>, Error> {
         queries::checkpoint_query::query(sequence_number, self).await
+    }
+
+    /// Get the latest checkpoint sequence number from GraphQL RPC.
+    pub async fn get_latest_checkpoint_sequence_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        queries::latest_checkpoint_query::query(self).await
+    }
+
+    pub(crate) fn chain(&self) -> Chain {
+        match self.node {
+            Node::Mainnet => Chain::Mainnet,
+            Node::Testnet => Chain::Testnet,
+            Node::Devnet => Chain::Unknown,
+            Node::Custom(_) => Chain::Unknown,
+        }
     }
 }
 

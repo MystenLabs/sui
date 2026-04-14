@@ -70,7 +70,7 @@ module sui_system::sui_system {
     }
 
     public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<address> {
-        vector::empty()
+        vector[]
     }
 
     fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {

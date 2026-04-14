@@ -230,11 +230,7 @@ impl MoveValue {
             if let Some(display_v2) = display_v2.map_err(upcast)? {
                 let store = DisplayStore::new(ctx, &self.type_.scope);
 
-                let root = sui_display::v2::OwnedSlice {
-                    bytes: self.native.clone(),
-                    layout,
-                };
-
+                let root = sui_display::v2::OwnedSlice::new(layout, self.native.clone());
                 let interpreter = sui_display::v2::Interpreter::new(root, store);
 
                 for (field, value) in
@@ -316,13 +312,10 @@ impl MoveValue {
             let store = DisplayStore::new(ctx, &self.type_.scope);
 
             // Create an interpreter that combines the root value with the store
-            let root = sui_display::v2::OwnedSlice {
-                bytes: self.native.clone(),
-                layout,
-            };
+            let root = sui_display::v2::OwnedSlice::new(layout, self.native.clone());
+            let interpreter = sui_display::v2::Interpreter::new(root, store);
 
             // Evaluate the extraction and convert to an owned slice
-            let interpreter = sui_display::v2::Interpreter::new(root, store);
             let Some(value) = extract
                 .extract(&interpreter)
                 .await
@@ -334,12 +327,19 @@ impl MoveValue {
             let Some(sui_display::v2::OwnedSlice {
                 layout,
                 bytes: native,
+                scoped,
             }) = value.into_owned_slice()
             else {
                 return Err(bad_user_input(Error::NotASlice));
             };
 
-            let type_ = MoveType::from_layout(layout, self.type_.scope.clone());
+            let scope = if scoped {
+                self.type_.scope.clone()
+            } else {
+                self.type_.scope.without_root_bound()
+            };
+
+            let type_ = MoveType::from_layout(layout, scope);
             Ok(Some(MoveValue { type_, native }))
         }
         .await
@@ -364,11 +364,7 @@ impl MoveValue {
             };
 
             let store = DisplayStore::new(ctx, &self.type_.scope);
-            let root = sui_display::v2::OwnedSlice {
-                bytes: self.native.clone(),
-                layout,
-            };
-
+            let root = sui_display::v2::OwnedSlice::new(layout, self.native.clone());
             let interpreter = sui_display::v2::Interpreter::new(root, store);
             let value = parsed
                 .format::<serde_json::Value>(
@@ -435,41 +431,15 @@ impl<'f, 'r> DisplayStore<'f, 'r> {
     fn new(ctx: &'f Context<'r>, scope: &'f Scope) -> Self {
         Self { ctx, scope }
     }
-}
 
-impl JsonVisitor {
-    fn new(limits: &Limits) -> Self {
-        Self {
-            size_budget: limits.max_move_value_bound,
-            depth_budget: limits.max_move_value_depth,
-        }
-    }
-
-    fn deserialize_value(
-        &mut self,
-        bytes: &[u8],
-        layout: &A::MoveTypeLayout,
-    ) -> Result<serde_json::Value, RV::Error> {
-        A::MoveValue::visit_deserialize(
-            bytes,
-            layout,
-            &mut RV::RpcVisitor::new(RV::LocalMeter::new(
-                &mut self.size_budget,
-                self.depth_budget,
-            )),
-        )
-    }
-}
-
-#[async_trait]
-impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
-    async fn object(
+    async fn fetch(
         &self,
+        scope: Scope,
         id: AccountAddress,
-    ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+    ) -> anyhow::Result<Option<(A::MoveTypeLayout, Vec<u8>)>> {
         // NOTE: We can't use `anyhow::Context` here because `RpcError` doesn't implement
         // `std::error::Error`.
-        let object = Object::latest(self.ctx, self.scope.clone(), id.into())
+        let object = Object::latest(self.ctx, scope, id.into())
             .await
             .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?;
 
@@ -503,7 +473,48 @@ impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
         };
 
         let bytes = move_object.contents().to_owned();
-        Ok(Some(sui_display::v2::OwnedSlice { layout, bytes }))
+        Ok(Some((layout, bytes)))
+    }
+}
+
+impl JsonVisitor {
+    fn new(limits: &Limits) -> Self {
+        Self {
+            size_budget: limits.max_move_value_bound,
+            depth_budget: limits.max_move_value_depth,
+        }
+    }
+
+    fn deserialize_value(
+        &mut self,
+        bytes: &[u8],
+        layout: &A::MoveTypeLayout,
+    ) -> Result<serde_json::Value, RV::Error> {
+        A::MoveValue::visit_deserialize(
+            bytes,
+            layout,
+            &mut RV::RpcVisitor::new(RV::LocalMeter::new(
+                &mut self.size_budget,
+                self.depth_budget,
+            )),
+        )
+    }
+}
+
+#[async_trait]
+impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
+    async fn latest(
+        &self,
+        id: AccountAddress,
+    ) -> anyhow::Result<Option<(A::MoveTypeLayout, Vec<u8>)>> {
+        self.fetch(self.scope.without_root_bound(), id).await
+    }
+
+    async fn scoped(
+        &self,
+        id: AccountAddress,
+    ) -> anyhow::Result<Option<(A::MoveTypeLayout, Vec<u8>)>> {
+        self.fetch(self.scope.clone(), id).await
     }
 }
 

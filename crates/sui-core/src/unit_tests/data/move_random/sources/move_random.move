@@ -19,7 +19,7 @@ module examples::move_random {
 
     // create an object with a vector of size `size` and transfer to recipient
     public entry fun storage_heavy(mut size: u64, recipient: address, ctx: &mut TxContext) {
-        let mut data = vector::empty();
+        let mut data = vector[];
         while (size > 0) {
             vector::push_back(&mut data, size);
             size = size - 1;
@@ -29,7 +29,7 @@ module examples::move_random {
             recipient
         )
     }
-    
+
     // Function that always aborts to test gas price capping
     public entry fun always_abort() {
         abort(42)

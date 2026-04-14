@@ -411,6 +411,36 @@ pub(crate) mod object_query {
     }
 }
 
+pub(crate) mod latest_checkpoint_query {
+    use super::*;
+    use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(graphql_type = "Query")]
+    pub(crate) struct Query {
+        checkpoint: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Checkpoint {
+        sequence_number: CheckpointSequenceNumber,
+    }
+
+    pub(crate) async fn query(data_store: &GraphQLClient) -> Result<Option<u64>, Error> {
+        let query = Query::build(());
+        let response = data_store.run_query(&query).await?;
+        let Some(checkpoint) = response
+            .data
+            .and_then(|data| data.checkpoint)
+            .map(|c| c.sequence_number)
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(checkpoint))
+    }
+}
+
 pub(crate) mod checkpoint_query {
     use fastcrypto::traits::ToFromBytes;
     use roaring::RoaringBitmap;

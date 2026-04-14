@@ -11,7 +11,7 @@
 module Test::M1 {
 
     public entry fun create_n_ids(n: u64, ctx: &mut TxContext) {
-        let mut v: vector<UID> = vector::empty();
+        let mut v: vector<UID> = vector[];
         let mut i = 0;
         while (i < n) {
             let id = object::new(ctx);
