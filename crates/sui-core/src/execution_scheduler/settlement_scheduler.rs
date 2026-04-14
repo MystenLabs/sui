@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::AuthorityMetrics;
 use crate::{
     accumulators::{self, AccumulatorSettlementTxBuilder},
     authority::{
@@ -26,7 +27,7 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     transaction::{TransactionDataAPI, TransactionKey, VerifiedTransaction},
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 #[derive(Clone)]
 pub struct SettlementBatchInfo {
@@ -64,17 +65,20 @@ pub(crate) struct SettlementScheduler {
     execution_scheduler: ExecutionScheduler,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     settlement_queue_sender: Arc<Mutex<Option<SettlementQueueSender>>>,
+    metrics: Arc<AuthorityMetrics>,
 }
 
 impl SettlementScheduler {
     pub(crate) fn new(
         execution_scheduler: ExecutionScheduler,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
+        metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         Self {
             execution_scheduler,
             transaction_cache_read,
             settlement_queue_sender: Arc::new(Mutex::new(None)),
+            metrics,
         }
     }
 
@@ -294,14 +298,12 @@ impl SettlementScheduler {
             tx_index_offset,
         );
 
-        let num_deposits = builder.num_deposits();
-        let num_withdrawals = builder.num_withdrawals();
-        if num_deposits > 0 || num_withdrawals > 0 {
-            info!(
-                "Settlement for checkpoint {checkpoint_seq}: {num_deposits} accumulator deposits, \
-                 {num_withdrawals} withdrawals",
-            );
-        }
+        self.metrics
+            .accumulator_deposits
+            .inc_by(builder.num_deposits());
+        self.metrics
+            .accumulator_withdrawals
+            .inc_by(builder.num_withdrawals());
 
         let funds_changes = builder.collect_funds_changes();
         let settlement_txns = builder.build_tx(

@@ -335,6 +335,8 @@ pub struct AuthorityMetrics {
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
+    pub accumulator_deposits: IntCounter,
+    pub accumulator_withdrawals: IntCounter,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
     pub consensus_finalized_user_transactions: IntGaugeVec,
@@ -693,6 +695,16 @@ impl AuthorityMetrics {
                 "consensus_committed_subdags",
                 "Number of committed subdags, sliced by author",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            accumulator_deposits: register_int_counter_with_registry!(
+                "accumulator_deposits",
+                "Total accumulator deposit (merge) events processed in settlement",
+                registry,
+            ).unwrap(),
+            accumulator_withdrawals: register_int_counter_with_registry!(
+                "accumulator_withdrawals",
+                "Total accumulator withdrawal (split) events processed in settlement",
                 registry,
             ).unwrap(),
             consensus_committed_messages: register_int_gauge_vec_with_registry!(

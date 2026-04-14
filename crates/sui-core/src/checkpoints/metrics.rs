@@ -27,8 +27,6 @@ pub struct CheckpointMetrics {
     pub checkpoint_creation_latency_ms: MystenHistogram,
     pub remote_checkpoint_forks: IntCounter,
     pub split_brain_checkpoint_forks: IntCounter,
-    pub accumulator_deposits: IntCounter,
-    pub accumulator_withdrawals: IntCounter,
     pub checkpoint_fork_crash_mode: IntGaugeVec,
     pub transaction_fork_crash_mode: IntGaugeVec,
     pub last_created_checkpoint_age: Histogram,
@@ -152,18 +150,6 @@ impl CheckpointMetrics {
             split_brain_checkpoint_forks: register_int_counter_with_registry!(
                 "split_brain_checkpoint_forks",
                 "Number of checkpoints that have resulted in a split brain",
-                registry
-            )
-            .unwrap(),
-            accumulator_deposits: register_int_counter_with_registry!(
-                "accumulator_deposits",
-                "Total accumulator deposit (merge) events processed",
-                registry
-            )
-            .unwrap(),
-            accumulator_withdrawals: register_int_counter_with_registry!(
-                "accumulator_withdrawals",
-                "Total accumulator withdrawal (split) events processed",
                 registry
             )
             .unwrap(),
