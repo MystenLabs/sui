@@ -20,10 +20,12 @@ static EMPTY_POOL: std::sync::LazyLock<Arc<MoveTypeLayoutPool>> =
 
 // --- Node types (internal) ---
 
+type LayoutRefs = Arc<[LayoutRef]>;
+
 /// Struct layout node: field types stored as [`LayoutRef`]s.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct MoveStructNode {
-    pub(crate) fields: Box<[LayoutRef]>,
+    pub(crate) fields: LayoutRefs,
 }
 
 /// Enum layout node: each variant is either a known list of field
@@ -31,7 +33,7 @@ pub(crate) struct MoveStructNode {
 /// field layout is not available.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct MoveEnumNode {
-    pub(crate) variants: Box<[Option<Box<[LayoutRef]>>]>,
+    pub(crate) variants: Box<[Option<LayoutRefs>]>,
 }
 
 /// A compound layout node in the compressed node table.
@@ -90,7 +92,7 @@ pub enum MoveDatatypeLayout {
 /// The enum layout of an enum type, as a view into a shared pool.
 #[derive(Debug, Clone)]
 pub struct MoveEnumLayout {
-    pub(crate) variants: Box<[VariantLayout]>,
+    pub(crate) variants: Arc<[VariantLayout]>,
 }
 
 /// The struct layout of a struct type, as a view into a shared pool.
@@ -110,7 +112,7 @@ pub enum VariantLayout {
 #[derive(Debug, Clone)]
 pub struct MoveFieldsLayout {
     pool: Arc<MoveTypeLayoutPool>,
-    fields: Box<[LayoutRef]>,
+    fields: LayoutRefs,
 }
 
 // --- Builder type ---
@@ -423,12 +425,12 @@ impl MoveTypeLayoutBuilder {
     }
 
     pub fn struct_layout(&mut self, fields: &[LayoutHandle]) -> AResult<LayoutHandle> {
-        let field_refs: Box<[LayoutRef]> = fields.iter().map(|h| h.0).collect();
+        let field_refs: LayoutRefs = fields.iter().map(|h| h.0).collect();
         self.add_node(MoveTypeNode::Struct(MoveStructNode { fields: field_refs }))
     }
 
     pub fn enum_layout(&mut self, variants: &[Option<&[LayoutHandle]>]) -> AResult<LayoutHandle> {
-        let variant_refs: Box<[Option<Box<[LayoutRef]>>]> = variants
+        let variant_refs: Box<[Option<LayoutRefs>]> = variants
             .iter()
             .map(|v| v.map(|fields| fields.iter().map(|h| h.0).collect()))
             .collect();

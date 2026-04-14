@@ -30,21 +30,21 @@ pub(crate) struct AnnotatedFieldEntry {
 pub(crate) struct AnnotatedVariantEntry {
     pub name: Identifier,
     pub tag: VariantTag,
-    pub fields: Option<Box<[AnnotatedFieldEntry]>>,
+    pub fields: Option<Arc<[AnnotatedFieldEntry]>>,
 }
 
 /// Annotated struct layout node with type tag and named fields inline.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct MoveStructNode {
     pub(crate) type_: StructTag,
-    pub(crate) fields: Box<[AnnotatedFieldEntry]>,
+    pub(crate) fields: Arc<[AnnotatedFieldEntry]>,
 }
 
 /// Annotated enum layout node with type tag and named variants inline.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct MoveEnumNode {
     pub(crate) type_: StructTag,
-    pub(crate) variants: Box<[AnnotatedVariantEntry]>,
+    pub(crate) variants: Arc<[AnnotatedVariantEntry]>,
 }
 
 /// A compound layout node in the annotated compressed node table.
@@ -113,7 +113,7 @@ pub struct MoveDatatypeLayout {
 #[derive(Debug, Clone)]
 pub struct MoveEnumLayout {
     type_: StructTag,
-    pub(crate) variants: Box<[VariantLayout]>,
+    pub(crate) variants: Arc<[VariantLayout]>,
 }
 
 /// The struct layout with type tag and named fields, as a view into a shared pool.
@@ -140,7 +140,7 @@ pub enum VariantLayout {
 #[derive(Debug, Clone)]
 pub struct MoveFieldsLayout {
     pool: Arc<MoveTypeLayoutPool>,
-    fields: Box<[AnnotatedFieldEntry]>,
+    fields: Arc<[AnnotatedFieldEntry]>,
 }
 
 // --- Builder type ---
@@ -679,7 +679,7 @@ impl MoveTypeLayoutBuilder {
         type_tag: &StructTag,
         fields: &[(&Identifier, LayoutHandle)],
     ) -> AResult<LayoutHandle> {
-        let fields: Box<[AnnotatedFieldEntry]> = fields
+        let fields: Arc<[AnnotatedFieldEntry]> = fields
             .iter()
             .map(|(name, h)| AnnotatedFieldEntry {
                 name: (*name).clone(),
@@ -704,7 +704,7 @@ impl MoveTypeLayoutBuilder {
             Option<&[(&Identifier, LayoutHandle)]>,
         )],
     ) -> AResult<LayoutHandle> {
-        let variant_entries: Box<[AnnotatedVariantEntry]> = variants
+        let variant_entries: Arc<[AnnotatedVariantEntry]> = variants
             .iter()
             .map(|(vn, tag, fields)| {
                 let field_entries = fields.map(|fields| {
