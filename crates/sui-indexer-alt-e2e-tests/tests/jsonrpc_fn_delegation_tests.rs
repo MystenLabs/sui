@@ -40,7 +40,7 @@ struct FnDelegationTestCluster {
 }
 
 impl FnDelegationTestCluster {
-    /// Creates a new test cluster with an RPC with transaction execution enabled.
+    /// Creates a new test cluster with an RPC with delegation governance enabled.
     async fn new() -> anyhow::Result<Self> {
         let onchain_cluster = TestClusterBuilder::new()
             .with_num_validators(1)
@@ -55,7 +55,6 @@ impl FnDelegationTestCluster {
             .build()
             .await;
 
-        // Unwrap since we know the URL should be valid.
         let fullnode_rpc_url = Url::parse(onchain_cluster.rpc_url())?;
 
         let rpc_listen_address =
@@ -80,6 +79,7 @@ impl FnDelegationTestCluster {
             rpc_args,
             NodeArgs {
                 fullnode_rpc_url: Some(fullnode_rpc_url),
+                fullnode_grpc_url: None,
             },
             SystemPackageTaskArgs::default(),
             RpcConfig::default(),
@@ -94,43 +94,6 @@ impl FnDelegationTestCluster {
             service,
             client: Client::new(),
         })
-    }
-
-    /// Builds a simple transaction and returns the digest, tx bytes, and sigs to be used for testing.
-    async fn transfer_transaction(&self) -> anyhow::Result<(String, String, Vec<String>)> {
-        let addresses = self.onchain_cluster.wallet.get_addresses();
-
-        let recipient = addresses[1];
-        let tx = self
-            .onchain_cluster
-            .test_transaction_builder()
-            .await
-            .transfer_sui(Some(1_000), recipient)
-            .build();
-        let tx_digest = tx.digest().to_string();
-        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx).await;
-        let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
-        let tx_bytes = tx_bytes.encoded();
-        let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
-
-        Ok((tx_digest, tx_bytes, sigs))
-    }
-
-    /// Builds a transaction that would abort if called by a normal user.
-    async fn privileged_transaction(&self) -> anyhow::Result<(String, String, Vec<String>)> {
-        let tx: sui_types::transaction::TransactionData = self
-            .onchain_cluster
-            .test_transaction_builder()
-            .await
-            .call_request_remove_validator()
-            .build();
-        let tx_digest = tx.digest().to_string();
-        let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx).await;
-        let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
-        let tx_bytes = tx_bytes.encoded();
-        let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
-
-        Ok((tx_digest, tx_bytes, sigs))
     }
 
     async fn get_validator_address(&self) -> SuiAddress {
@@ -168,222 +131,6 @@ impl FnDelegationTestCluster {
 
         Ok(body)
     }
-}
-
-#[sim_test]
-async fn test_execution() {
-    telemetry_subscribers::init_for_testing();
-    let test_cluster = FnDelegationTestCluster::new()
-        .await
-        .expect("Failed to create test cluster");
-
-    let (tx_digest, tx_bytes, sigs) = test_cluster.transfer_transaction().await.unwrap();
-
-    // Call the executeTransactionBlock method and check that the response is valid.
-    let response = test_cluster
-        .execute_jsonrpc(
-            "sui_executeTransactionBlock".to_string(),
-            json!({
-                "tx_bytes": tx_bytes,
-                "signatures": sigs,
-                "options": {
-                    "showInput": true,
-                    "showRawInput": true,
-                    "showEffects": true,
-                    "showRawEffects": true,
-                    "showEvents": true,
-                    "showObjectChanges": true,
-                    "showBalanceChanges": true,
-                },
-            }),
-        )
-        .await
-        .unwrap();
-
-    tracing::info!("execution rpc response is {:?}", response);
-
-    // Checking that all the requested fields are present in the response.
-    assert_eq!(response["result"]["digest"], tx_digest);
-    assert!(response["result"]["transaction"].is_object());
-    assert!(response["result"]["rawTransaction"].is_string());
-    assert!(response["result"]["effects"].is_object());
-    assert!(response["result"]["rawEffects"].is_array());
-    assert!(response["result"]["events"].is_array());
-    assert!(response["result"]["objectChanges"].is_array());
-    assert!(response["result"]["balanceChanges"].is_array());
-}
-
-#[sim_test]
-async fn test_execution_with_deprecated_mode() {
-    telemetry_subscribers::init_for_testing();
-
-    let test_cluster = FnDelegationTestCluster::new()
-        .await
-        .expect("Failed to create test cluster");
-
-    let (_, tx_bytes, sigs) = test_cluster.transfer_transaction().await.unwrap();
-
-    // Call the executeTransactionBlock method and check that the response is valid.
-    let response = test_cluster
-        .execute_jsonrpc(
-            "sui_executeTransactionBlock".to_string(),
-            json!({
-                "tx_bytes": tx_bytes,
-                "signatures": sigs,
-                "request_type": "WaitForLocalExecution",
-            }),
-        )
-        .await
-        .unwrap();
-
-    tracing::info!("execution rpc response is {:?}", response);
-
-    assert_eq!(response["error"]["code"], -32602);
-    assert_eq!(
-        response["error"]["message"],
-        "Invalid Params: WaitForLocalExecution mode is deprecated"
-    );
-}
-
-#[sim_test]
-async fn test_execution_with_no_sigs() {
-    telemetry_subscribers::init_for_testing();
-
-    let test_cluster = FnDelegationTestCluster::new()
-        .await
-        .expect("Failed to create test cluster");
-
-    let (_, tx_bytes, _) = test_cluster.transfer_transaction().await.unwrap();
-
-    // Call the executeTransactionBlock method and check that the response is valid.
-    let response = test_cluster
-        .execute_jsonrpc(
-            "sui_executeTransactionBlock".to_string(),
-            json!({
-                "tx_bytes": tx_bytes,
-            }),
-        )
-        .await
-        .unwrap();
-
-    tracing::info!("execution rpc response is {:?}", response);
-
-    assert_eq!(response["error"]["code"], -32602);
-    assert_eq!(response["error"]["message"], "Invalid params");
-    assert!(
-        response["error"]["data"]
-            .as_str()
-            .unwrap()
-            .starts_with("missing field `signatures`")
-    );
-}
-
-#[sim_test]
-async fn test_execution_with_empty_sigs() {
-    telemetry_subscribers::init_for_testing();
-
-    let test_cluster = FnDelegationTestCluster::new()
-        .await
-        .expect("Failed to create test cluster");
-
-    let (_, tx_bytes, _) = test_cluster.transfer_transaction().await.unwrap();
-
-    // Call the executeTransactionBlock method and check that the response is valid.
-    let response = test_cluster
-        .execute_jsonrpc(
-            "sui_executeTransactionBlock".to_string(),
-            json!({
-                "tx_bytes": tx_bytes,
-                "signatures": [],
-            }),
-        )
-        .await
-        .unwrap();
-
-    tracing::info!("execution rpc response is {:?}", response);
-
-    assert_eq!(response["error"]["code"], -32002);
-    assert_eq!(
-        response["error"]["message"],
-        "Invalid user signature: Expect 1 signer signatures but got 0"
-    );
-}
-
-#[sim_test]
-async fn test_execution_with_aborted_tx() {
-    telemetry_subscribers::init_for_testing();
-
-    let test_cluster = FnDelegationTestCluster::new()
-        .await
-        .expect("Failed to create test cluster");
-
-    let (_, tx_bytes, sigs) = test_cluster.privileged_transaction().await.unwrap();
-
-    // Call the executeTransactionBlock method and check that the response is valid.
-    let response = test_cluster
-        .execute_jsonrpc(
-            "sui_executeTransactionBlock".to_string(),
-            json!({
-                "tx_bytes": tx_bytes,
-                "signatures": sigs,
-                "options": {
-                    "showEffects": true,
-                },
-            }),
-        )
-        .await
-        .unwrap();
-
-    tracing::info!("execution rpc response is {:?}", response);
-
-    assert_eq!(response["result"]["effects"]["status"]["status"], "failure");
-}
-
-#[sim_test]
-async fn test_dry_run() {
-    let test_cluster = FnDelegationTestCluster::new()
-        .await
-        .expect("Failed to create test cluster");
-
-    let (_, tx_bytes, _) = test_cluster.transfer_transaction().await.unwrap();
-
-    let response = test_cluster
-        .execute_jsonrpc(
-            "sui_dryRunTransactionBlock".to_string(),
-            json!({
-                "tx_bytes": tx_bytes,
-            }),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response["result"]["effects"]["status"]["status"], "success");
-}
-
-#[sim_test]
-async fn test_dry_run_with_invalid_tx() {
-    let test_cluster = FnDelegationTestCluster::new()
-        .await
-        .expect("Failed to create test cluster");
-
-    let response = test_cluster
-        .execute_jsonrpc(
-            "sui_dryRunTransactionBlock".to_string(),
-            json!({
-                "tx_bytes": "invalid_tx_bytes",
-            }),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response["error"]["code"], -32602);
-    assert_eq!(response["error"]["message"], "Invalid params");
-    assert!(
-        response["error"]["data"]
-            .as_str()
-            .unwrap()
-            .starts_with("Invalid value was given to the function")
-    );
 }
 
 #[sim_test]

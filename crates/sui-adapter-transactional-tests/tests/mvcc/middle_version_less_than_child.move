@@ -56,25 +56,25 @@ module test::m {
 
 // All 3 objects have version 2
 
-//# view-object 2,0
-
 //# view-object 2,1
 
 //# view-object 2,2
 
-//# programmable --sender A --inputs object(2,2) 112
+//# view-object 2,0
+
+//# programmable --sender A --inputs object(2,0) 112
 //> test::m::set(Input(0), Input(1))
 
 // The middle object has version 2, while the root and modified leaf have version 3
 
-//# view-object 2,0
-
 //# view-object 2,1
 
 //# view-object 2,2
 
+//# view-object 2,0
+
 // correctly load the leaf even though it has a version greater than its immediate
 // parent
 
-//# programmable --sender A --inputs object(2,2) 112
+//# programmable --sender A --inputs object(2,0) 112
 //> test::m::check(Input(0), Input(1))

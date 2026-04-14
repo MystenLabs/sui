@@ -37,6 +37,7 @@ use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::postgres::schema::watermarks;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
 use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
+use sui_indexer_alt_graphql::args::SubscriptionArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_jsonrpc::NodeArgs as JsonRpcNodeArgs;
@@ -448,6 +449,7 @@ impl OffchainCluster {
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),
+            SubscriptionArgs::default(),
             "0.0.0",
             graphql_config,
             pipelines.iter().map(|p| p.to_string()).collect(),

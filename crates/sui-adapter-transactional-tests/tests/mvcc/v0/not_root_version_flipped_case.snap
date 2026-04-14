@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 12 tasks
 
@@ -41,13 +42,13 @@ mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 5, line 69:
-//# view-object 4,0
-Owner: Object ID: ( fake(4,1) )
+//# view-object 4,1
+Owner: Object ID: ( fake(4,0) )
 Version: 2
 Contents: sui::dynamic_field::Field<u64, u64> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(4,0),
+            bytes: fake(4,1),
         },
     },
     name: 0u64,
@@ -55,19 +56,19 @@ Contents: sui::dynamic_field::Field<u64, u64> {
 }
 
 task 6, lines 71-72:
-//# programmable --sender P2 --inputs object(4,1)
+//# programmable --sender P2 --inputs object(4,0)
 //> 0: test::m::bump(Input(0));
 mutated: object(0,1), object(4,0), object(4,1)
 gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 3626568, non_refundable_storage_fee: 36632
 
 task 7, lines 74-77:
-//# view-object 4,0
-Owner: Object ID: ( fake(4,1) )
+//# view-object 4,1
+Owner: Object ID: ( fake(4,0) )
 Version: 3
 Contents: sui::dynamic_field::Field<u64, u64> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(4,0),
+            bytes: fake(4,1),
         },
     },
     name: 0u64,
@@ -75,28 +76,28 @@ Contents: sui::dynamic_field::Field<u64, u64> {
 }
 
 task 8, lines 79-84:
-//# programmable --sender P2 --inputs object(2,0)@2 object(4,1)@3 1 --dev-inspect
+//# programmable --sender P2 --inputs object(2,0)@2 object(4,0)@3 1 --dev-inspect
 //> 0: test::m::append(Input(0), Input(1));
 //> 1: test::m::check(Input(0), Input(2));
 // checking that with version 3 we get the other value, then flip them to ensure
 // they abort
 created: object(8,0)
 mutated: object(_), object(2,0)
-wrapped: object(4,1)
+wrapped: object(4,0)
 gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
 
 task 9, lines 86-90:
-//# programmable --sender P2 --inputs object(2,0)@2 object(4,1)@2 0 --dev-inspect
+//# programmable --sender P2 --inputs object(2,0)@2 object(4,0)@2 0 --dev-inspect
 //> 0: test::m::append(Input(0), Input(1));
 //> 1: test::m::check(Input(0), Input(2));
 // @2 with value 1 aborts
 created: object(8,0)
 mutated: object(_), object(2,0)
-wrapped: object(4,1)
+wrapped: object(4,0)
 gas summary: computation_cost: 500000, storage_cost: 4126800,  storage_rebate: 2392632, non_refundable_storage_fee: 24168
 
 task 10, lines 92-96:
-//# programmable --sender P2 --inputs object(2,0)@2 object(4,1)@2 1 --dev-inspect
+//# programmable --sender P2 --inputs object(2,0)@2 object(4,0)@2 1 --dev-inspect
 //> 0: test::m::append(Input(0), Input(1));
 //> 1: test::m::check(Input(0), Input(2));
 // @3 with value 0 aborts
@@ -104,7 +105,7 @@ Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { a
 Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 4, instruction: 13, function_name: Some("check") }, 0) in command 1
 
 task 11, lines 98-100:
-//# programmable --sender P2 --inputs object(2,0)@2 object(4,1)@3 0 --dev-inspect
+//# programmable --sender P2 --inputs object(2,0)@2 object(4,0)@3 0 --dev-inspect
 //> 0: test::m::append(Input(0), Input(1));
 //> 1: test::m::check(Input(0), Input(2));
 Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: test, name: Identifier("m") }, function: 4, instruction: 13, function_name: Some("check") }, 0) in command 1

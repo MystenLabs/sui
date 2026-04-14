@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 21 tasks
 
@@ -120,19 +121,6 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 16, line 105:
-//# view-object 15,1
-Owner: Shared( 10 )
-Version: 10
-Contents: Test_DepDepV1::DepDepM1::Obj {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(15,1),
-        },
-    },
-    v: 7u64,
-}
-
-task 17, lines 107-112:
 //# view-object 15,0
 Owner: Shared( 10 )
 Version: 10
@@ -140,6 +128,19 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
     id: sui::object::UID {
         id: sui::object::ID {
             bytes: fake(15,0),
+        },
+    },
+    v: 7u64,
+}
+
+task 17, lines 107-112:
+//# view-object 15,1
+Owner: Shared( 10 )
+Version: 10
+Contents: Test_DepDepV1::DepDepM1::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(15,1),
         },
     },
     v: 0u64,

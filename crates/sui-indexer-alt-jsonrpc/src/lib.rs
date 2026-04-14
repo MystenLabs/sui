@@ -14,6 +14,8 @@ use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
@@ -235,10 +237,14 @@ impl Default for RpcArgs {
 
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct NodeArgs {
-    /// The URL of the fullnode RPC we connect to for transaction execution,
-    /// dry-running, and delegation coin queries etc.
+    /// The URL of the fullnode JSON-RPC, used for delegation governance queries (getStakes,
+    /// getStakesByIds, getValidatorsApy).
     #[arg(long)]
     pub fullnode_rpc_url: Option<url::Url>,
+
+    /// The URL of the fullnode gRPC service, used for transaction execution and dry-running.
+    #[arg(long)]
+    pub fullnode_grpc_url: Option<String>,
 }
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
@@ -253,7 +259,7 @@ pub struct NodeArgs {
 /// `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the credentials JSON file.
 ///
 /// Access to writes (executing and dry-running transactions) is controlled by
-/// `node_args.fullnode_rpc_url`, which can be omitted to disable writes from this RPC.
+/// `node_args.fullnode_grpc_url`, which can be omitted to disable writes from this RPC.
 ///
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
@@ -302,12 +308,27 @@ pub async fn start_rpc(
 
     if let Some(fullnode_rpc_url) = node_args.fullnode_rpc_url {
         let client = context.config().node.client(fullnode_rpc_url)?;
-        rpc.add_module(DelegationGovernance::new(client.clone()))?;
-        rpc.add_module(Write::new(client))?;
+        rpc.add_module(DelegationGovernance::new(client))?;
     } else {
-        warn!(
-            "No fullnode rpc url provided, DelegationGovernance and Write modules will not be added."
-        );
+        warn!("No fullnode rpc url provided, DelegationGovernance module will not be added.");
+    }
+
+    if node_args.fullnode_grpc_url.is_some() {
+        let fullnode_client = FullnodeClient::new(
+            Some("jsonrpc_alt_fullnode"),
+            FullnodeArgs {
+                fullnode_rpc_url: node_args
+                    .fullnode_grpc_url
+                    .as_deref()
+                    .map(|u| Url::parse(u).expect("Invalid fullnode gRPC URL")),
+            },
+            registry,
+        )
+        .await
+        .context("Failed to create fullnode gRPC client")?;
+        rpc.add_module(Write::new(fullnode_client, context.clone()))?;
+    } else {
+        warn!("No fullnode grpc url provided, Write module will not be added.");
     }
 
     let s_rpc = rpc.run().await.context("Failed to start RPC service")?;

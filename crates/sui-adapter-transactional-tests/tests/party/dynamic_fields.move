@@ -38,31 +38,31 @@ public fun remove_df(parent: &mut Parent, ctx: &mut TxContext) {
 //> ex::m::mint()
 
 // child
-//# view-object 2,0
-
-// parent
 //# view-object 2,1
 
+// parent
+//# view-object 2,0
+
 // Transfer party object to dynamic field.
-//# programmable --sender A --inputs object(2,0) object(2,1)
+//# programmable --sender A --inputs object(2,1) object(2,0)
 //> ex::m::add_df(Input(1), Input(0))
 
-//# view-object 2,0
+//# view-object 2,1
 
 //# view-object 5,0
 
 // Verify the dynamic field child object can't be transferred.
-//# programmable --inputs object(2,0) @A --sender A
+//# programmable --inputs object(2,1) @A --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::A>(Input(0), Result(0))
 
 // Pull the object back out.
-//# programmable --sender A --inputs object(2,1)
+//# programmable --sender A --inputs object(2,0)
 //> ex::m::remove_df(Input(0))
 
 // Verify it can again be transferred to a different party.
-//# programmable --inputs object(2,0) @B --sender A
+//# programmable --inputs object(2,1) @B --sender A
 //> 0: sui::party::single_owner(Input(1));
 //> sui::transfer::public_party_transfer<ex::m::Child>(Input(0), Result(0))
 
-//# view-object 2,0
+//# view-object 2,1

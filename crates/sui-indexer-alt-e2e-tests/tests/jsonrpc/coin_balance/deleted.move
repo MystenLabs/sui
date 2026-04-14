@@ -40,11 +40,11 @@ module Test::fake {
 
 //# create-checkpoint
 
-//# view-object 1,1
-
-//# view-object 1,2
-
 //# view-object 1,3
+
+//# view-object 1,5
+
+//# view-object 1,4
 
 //# run-jsonrpc
 {
@@ -52,7 +52,7 @@ module Test::fake {
   "params": ["@{A}", "@{Test}::fake::FAKE"]
 }
 
-//# programmable --sender A --inputs object(1,1) object(1,2) object(1,3)
+//# programmable --sender A --inputs object(1,3) object(1,5) object(1,4)
 //> 0: MergeCoins(Input(0), [Input(1), Input(2)]);
 
 //# create-checkpoint

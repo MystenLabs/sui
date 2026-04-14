@@ -59,58 +59,58 @@ module tto::M1 {
 
 //# run tto::M1::start --sender A
 
-//# view-object 2,0
+//# view-object 2,3
 
 //# view-object 2,2
 
 //# view-object 2,1
 
-//# view-object 2,3
-
-//# run tto::M1::receive --args object(2,3) receiving(2,1) --sender A
-
 //# view-object 2,0
+
+//# run tto::M1::receive --args object(2,0) receiving(2,1) --sender A
+
+//# view-object 2,3
 
 // The grand parent
 //# view-object 2,2
 
 //# view-object 2,1
 
-//# view-object 2,3
+//# view-object 2,0
 
-//# programmable --sender A --inputs object(2,3) 1 2 3
+//# programmable --sender A --inputs object(2,0) 1 2 3
 //> tto::M1::set(Input(0), Input(1), Input(2), Input(3))
 
-//# view-object 2,0
+//# view-object 2,3
 
 // The grand parent
 //# view-object 2,2
 
 //# view-object 2,1
 
-//# view-object 2,3
+//# view-object 2,0
 
-//# programmable --sender A --inputs object(2,3)
+//# programmable --sender A --inputs object(2,0)
 //> tto::M1::remove(Input(0))
 
 // dev-inspect with 'check' and correct values
 
-//# programmable --sender A --inputs object(2,3)@3 0 0 vector[0] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@3 0 0 vector[0] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,3)@4 1 2 vector[3] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@4 1 2 vector[3] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,3)@5 1 2 vector[] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@5 1 2 vector[] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
 // dev-inspect with 'check' and _incorrect_ values
 
-//# programmable --sender A --inputs object(2,3)@4 0 0 vector[0] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@4 0 0 vector[0] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,3)@5 1 2 vector[3] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@5 1 2 vector[3] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))
 
-//# programmable --sender A --inputs object(2,3)@3 1 2 vector[] --dev-inspect
+//# programmable --sender A --inputs object(2,0)@3 1 2 vector[] --dev-inspect
 //> tto::M1::check(Input(0), Input(1), Input(2), Input(3))

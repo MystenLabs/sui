@@ -31,9 +31,9 @@ module q::m {
 //> 3: Publish(p, []);
 //> TransferObjects([Result(1), Result(3)], Input(1))
 
-//# set-address p object(3,1)
+//# set-address p object(3,3)
 
-//# set-address q object(3,0)
+//# set-address q object(3,1)
 
 //# programmable --sender A
 //> 0: q::m::x();

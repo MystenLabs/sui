@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::pin::Pin;
-
 use crate::RpcService;
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_rpc::field::FieldMaskTree;
@@ -12,21 +10,14 @@ use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionService;
 use sui_types::balance_change::derive_balance_changes_2;
+use tonic::codegen::BoxStream;
 
 #[tonic::async_trait]
 impl SubscriptionService for RpcService {
-    /// Server streaming response type for the SubscribeCheckpoints method.
-    type SubscribeCheckpointsStream = Pin<
-        Box<
-            dyn tokio_stream::Stream<Item = Result<SubscribeCheckpointsResponse, tonic::Status>>
-                + Send,
-        >,
-    >;
-
     async fn subscribe_checkpoints(
         &self,
         request: tonic::Request<SubscribeCheckpointsRequest>,
-    ) -> Result<tonic::Response<Self::SubscribeCheckpointsStream>, tonic::Status> {
+    ) -> Result<tonic::Response<BoxStream<SubscribeCheckpointsResponse>>, tonic::Status> {
         let subscription_service_handle = self
             .subscription_service_handle
             .as_ref()

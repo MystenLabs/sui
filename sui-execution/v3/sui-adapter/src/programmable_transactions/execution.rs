@@ -64,7 +64,7 @@ mod checked {
             CommandArgumentError, ExecutionErrorKind, PackageUpgradeError, TypeArgumentError,
         },
         id::RESOLVED_SUI_ID,
-        metrics::LimitsMetrics,
+        metrics::ExecutionMetrics,
         move_package::{
             MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
             normalize_deserialized_modules,
@@ -83,7 +83,7 @@ mod checked {
 
     pub fn execute<Mode: ExecutionMode>(
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         vm: &MoveVM,
         state_view: &mut dyn ExecutionState,
         package_store: &dyn BackingPackageStore,
@@ -134,7 +134,7 @@ mod checked {
     pub fn execute_inner<Mode: ExecutionMode>(
         timings: &mut Vec<ExecutionTiming>,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         vm: &MoveVM,
         state_view: &mut dyn ExecutionState,
         tx_context: Rc<RefCell<TxContext>>,

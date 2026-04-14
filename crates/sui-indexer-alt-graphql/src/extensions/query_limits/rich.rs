@@ -24,7 +24,12 @@ where
     E: std::error::Error + Send + Sync + 'static,
 {
     let limits: &Limits = ctx.data_unchecked();
-    let meter: &Meter = ctx.data_unchecked();
+
+    // Rich query metering is disabled for subscriptions. The meter limits DB queries per
+    // request, but subscriptions resolve fields from streamed data without DB queries.
+    let Some(meter) = ctx.data_opt::<Meter>() else {
+        return Ok(());
+    };
 
     // Use fetch_add with Relaxed ordering since we only need atomicity, not synchronization.
     // The comparison against the limit will catch any overflow.

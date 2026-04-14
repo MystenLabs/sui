@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 11 tasks
 
@@ -65,7 +66,7 @@ Contents: tto::M1::A {
 
 task 7, line 48:
 //# view-object 2,1
-Owner: Object ID: ( fake(5,0) )
+Owner: Object ID: ( fake(5,1) )
 Version: 4
 Contents: tto::M1::A {
     id: sui::object::UID {
@@ -77,26 +78,8 @@ Contents: tto::M1::A {
 }
 
 task 8, line 50:
-//# view-object 5,0
-Owner: Object ID: ( fake(2,0) )
-Version: 4
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(5,0),
-        },
-    },
-    name: sui::dynamic_object_field::Wrapper<u64> {
-        name: 0u64,
-    },
-    value: sui::object::ID {
-        bytes: fake(2,1),
-    },
-}
-
-task 9, line 52:
 //# view-object 5,1
-Owner: Object ID: ( fake(2,1) )
+Owner: Object ID: ( fake(2,0) )
 Version: 4
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
     id: sui::object::UID {
@@ -108,18 +91,36 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
         name: 0u64,
     },
     value: sui::object::ID {
-        bytes: fake(5,2),
+        bytes: fake(2,1),
+    },
+}
+
+task 9, line 52:
+//# view-object 5,2
+Owner: Object ID: ( fake(2,1) )
+Version: 4
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,2),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(5,0),
     },
 }
 
 task 10, line 54:
-//# view-object 5,2
-Owner: Object ID: ( fake(5,1) )
+//# view-object 5,0
+Owner: Object ID: ( fake(5,2) )
 Version: 4
 Contents: tto::M1::A {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(5,2),
+            bytes: fake(5,0),
         },
     },
     value: 100u64,

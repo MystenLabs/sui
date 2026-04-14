@@ -63,7 +63,6 @@ pub struct IngestionMetrics {
     pub total_ingested_bytes: IntCounter,
     pub total_ingested_transient_retries: IntCounterVec,
     pub total_ingested_not_found_retries: IntCounter,
-    pub total_ingested_permanent_errors: IntCounterVec,
     pub total_streamed_checkpoints: IntCounter,
     pub total_skipped_streamed_checkpoints: IntCounter,
     pub total_out_of_order_streamed_checkpoints: IntCounter,
@@ -79,6 +78,7 @@ pub struct IngestionMetrics {
 
     pub ingested_checkpoint_latency: Histogram,
     pub ingested_chain_id_latency: Histogram,
+    pub ingested_latest_checkpoint_latency: Histogram,
 
     pub ingestion_concurrency_limit: IntGauge,
     pub ingestion_concurrency_inflight: IntGauge,
@@ -206,8 +206,7 @@ impl IngestionMetrics {
             .unwrap(),
             total_ingested_bytes: register_int_counter_with_registry!(
                 name("total_ingested_bytes"),
-                "Total number of bytes fetched from the remote store, this metric will not \
-                be updated when data are fetched over gRPC.",
+                "Total number of bytes fetched from the remote store",
                 registry,
             )
             .unwrap(),
@@ -223,14 +222,6 @@ impl IngestionMetrics {
                 name("total_ingested_not_found_retries"),
                 "Total number of retries due to the not found errors while fetching data from the \
                  remote store",
-                registry,
-            )
-            .unwrap(),
-            total_ingested_permanent_errors: register_int_counter_vec_with_registry!(
-                name("total_ingested_permanent_errors"),
-                "Total number of permanent errors encountered while fetching data from the \
-                 remote store, which cause the ingestion service to shutdown",
-                &["reason"],
                 registry,
             )
             .unwrap(),
@@ -307,6 +298,13 @@ impl IngestionMetrics {
             ingested_chain_id_latency: register_histogram_with_registry!(
                 name("ingested_chain_id_latency"),
                 "Time taken to fetch the chain identifier, including retries",
+                INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            ingested_latest_checkpoint_latency: register_histogram_with_registry!(
+                name("ingested_latest_checkpoint_latency"),
+                "Time taken to fetch the latest checkpoint number, including retries",
                 INGESTION_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

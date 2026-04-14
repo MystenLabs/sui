@@ -44,7 +44,7 @@ module q_2::m {
 //> 0: q::m::x();
 //> p::m::foo(Result(0))
 
-//# set-address q_2 object(5,0)
+//# set-address q_2 object(5,1)
 
 //# programmable --sender A
 //> 0: q_2::m::x();

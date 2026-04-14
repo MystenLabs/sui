@@ -36,7 +36,7 @@ module test::regulated_coin {
 
 //# view-object 1,0
 
-//# view-object 1,1
+//# view-object 1,5
 
 //# view-object 1,2
 
@@ -44,10 +44,10 @@ module test::regulated_coin {
 
 //# view-object 1,4
 
-//# view-object 1,5
+//# view-object 1,1
 
 // Transfer away the newly minted coin works normally.
-//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+//# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 
 // Deny account B.
 //# run sui::coin::deny_list_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A

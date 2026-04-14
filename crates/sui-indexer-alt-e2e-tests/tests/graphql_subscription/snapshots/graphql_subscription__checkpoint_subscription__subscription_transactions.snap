@@ -1,0 +1,49 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/checkpoint_subscription.rs
+expression: item
+---
+{
+  "data": {
+    "checkpoints": {
+      "sequenceNumber": "[seq]",
+      "transactions": {
+        "nodes": [
+          {
+            "digest": "[digest]",
+            "sender": {
+              "address": "[address]"
+            },
+            "gasInput": {
+              "gasBudget": "5000000000"
+            },
+            "effects": {
+              "status": "SUCCESS",
+              "balanceChanges": {
+                "nodes": [
+                  {
+                    "amount": "1000",
+                    "coinType": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                    },
+                    "owner": {
+                      "address": "[address]"
+                    }
+                  },
+                  {
+                    "amount": "-2977000",
+                    "coinType": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                    },
+                    "owner": {
+                      "address": "[address]"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

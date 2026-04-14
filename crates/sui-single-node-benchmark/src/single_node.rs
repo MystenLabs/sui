@@ -225,7 +225,7 @@ impl SingleValidator {
             self.epoch_store.executor().execute_transaction_to_effects(
                 &store,
                 self.epoch_store.protocol_config(),
-                self.get_validator().metrics.limits_metrics.clone(),
+                self.get_validator().metrics.execution_metrics.clone(),
                 false,
                 ExecutionOrEarlyError::Ok(()),
                 &self.epoch_store.epoch(),

@@ -440,7 +440,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
 ]
@@ -571,7 +571,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "wasmtimer",
 ]
@@ -617,7 +617,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
  "wasmtimer",
@@ -799,7 +799,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
  "wasmtimer",
@@ -815,7 +815,7 @@ dependencies = [
  "alloy-transport",
  "reqwest",
  "serde_json",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
 ]
@@ -2214,7 +2214,7 @@ dependencies = [
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -2406,7 +2406,7 @@ dependencies = [
  "sync_wrapper 1.0.2",
  "tokio",
  "tokio-tungstenite 0.26.2",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -2494,7 +2494,7 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
 ]
@@ -3747,7 +3747,7 @@ dependencies = [
  "tonic-build",
  "tonic-prost",
  "tonic-rustls",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "typed-store",
@@ -5923,31 +5923,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
-name = "forking-data-store"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bcs",
- "chrono",
- "csv",
- "cynic",
- "cynic-codegen",
- "fastcrypto",
- "lru 0.10.1",
- "prost 0.14.1",
- "reqwest",
- "serde",
- "sui-rpc",
- "sui-rpc-api",
- "sui-types",
- "tempfile",
- "tokio",
- "tonic 0.14.3",
- "tracing",
- "zstd 0.12.3+zstd.1.5.2",
-]
-
-[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7911,7 +7886,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.0",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -8481,7 +8456,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=7fddd55cf8cb27ee10803fb772d7618134a8d138#7fddd55cf8cb27ee10803fb772d7618134a8d138"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=641675ae80ab625e1b3d72f66eae494cee0f0d2b#641675ae80ab625e1b3d72f66eae494cee0f0d2b"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -9751,7 +9726,7 @@ dependencies = [
  "tokio-stream",
  "tonic 0.14.3",
  "tonic-health",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
 ]
@@ -9769,7 +9744,7 @@ dependencies = [
  "simple-server-timing-header",
  "telemetry-subscribers",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -11736,7 +11711,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.6.0",
+ "socket2 0.5.6",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -12262,7 +12237,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util 0.7.18",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.6.8",
  "tower-service",
  "url",
@@ -14144,7 +14119,7 @@ dependencies = [
  "tokio",
  "toml 0.7.4",
  "toml_edit 0.19.10",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "unescape",
@@ -14494,7 +14469,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.14.3",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "typed-store",
  "url",
@@ -14840,8 +14815,8 @@ dependencies = [
 
 [[package]]
 name = "sui-crypto"
-version = "0.2.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e5c53de2e9570229b63bd0508b43f27c11cb5f76#e5c53de2e9570229b63bd0508b43f27c11cb5f76"
+version = "0.3.0"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e494a36a76a0aab8c5d66d5557995faee5c1fb09#e494a36a76a0aab8c5d66d5557995faee5c1fb09"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -15105,7 +15080,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tonic 0.14.3",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "uuid",
@@ -15132,9 +15107,23 @@ name = "sui-forking"
 version = "1.71.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "bin-version",
+ "chrono",
+ "cynic",
+ "cynic-codegen",
+ "fastcrypto",
+ "itertools 0.13.0",
+ "reqwest",
+ "roaring 0.10.9",
+ "serde",
+ "serde_json",
+ "sui-types",
+ "tempfile",
  "tokio",
  "tracing-subscriber",
+ "url",
+ "wiremock",
 ]
 
 [[package]]
@@ -15260,7 +15249,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-util 0.7.18",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -15361,7 +15350,7 @@ dependencies = [
  "tonic 0.14.3",
  "tonic-health",
  "tonic-reflection",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
  "zstd 0.12.3+zstd.1.5.2",
@@ -15374,16 +15363,22 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
+ "coset",
  "datatest-stable",
  "diesel",
  "diesel-async",
  "fastcrypto",
+ "futures",
  "insta",
  "itertools 0.13.0",
  "jsonrpsee",
  "move-core-types",
  "msim",
  "mysten-common",
+ "p256",
+ "passkey-authenticator",
+ "passkey-client",
+ "passkey-types",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -15423,6 +15418,8 @@ dependencies = [
  "tempfile",
  "test-cluster",
  "tokio",
+ "tokio-stream",
+ "tokio-tungstenite 0.26.2",
  "tonic 0.14.3",
  "tracing",
  "url",
@@ -15446,9 +15443,10 @@ dependencies = [
  "diesel-async",
  "diesel_migrations",
  "futures",
+ "http 1.3.1",
+ "mysten-network",
  "num_cpus",
  "object_store 0.13.0",
- "pin-project-lite",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
@@ -15498,6 +15496,7 @@ dependencies = [
  "async-graphql",
  "async-graphql-axum",
  "async-graphql-value",
+ "async-stream",
  "async-trait",
  "axum 0.7.5",
  "axum-extra 0.9.3",
@@ -15581,6 +15580,7 @@ dependencies = [
  "pin-project",
  "pin-project-lite",
  "prometheus",
+ "prost-types 0.14.1",
  "reqwest",
  "rustls",
  "schemars 0.8.21",
@@ -15603,12 +15603,14 @@ dependencies = [
  "sui-package-resolver",
  "sui-pg-db",
  "sui-protocol-config",
+ "sui-rpc",
  "sui-sql-macro",
  "sui-types",
  "telemetry-subscribers",
  "thiserror 1.0.69",
  "tokio",
  "toml 0.7.4",
+ "tonic 0.14.3",
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tower-layer",
@@ -15774,7 +15776,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-util 0.7.18",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "typed-store-error",
@@ -16319,7 +16321,7 @@ dependencies = [
  "tonic-build",
  "tonic-health",
  "tonic-prost",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "url",
@@ -16376,7 +16378,7 @@ dependencies = [
  "telemetry-subscribers",
  "tikv-jemallocator",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "typed-store",
@@ -16527,7 +16529,7 @@ dependencies = [
  "sui-types",
  "thiserror 1.0.69",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -16637,7 +16639,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tokio",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
  "url",
@@ -16788,14 +16790,15 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc"
-version = "0.2.2"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e5c53de2e9570229b63bd0508b43f27c11cb5f76#e5c53de2e9570229b63bd0508b43f27c11cb5f76"
+version = "0.3.0"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e494a36a76a0aab8c5d66d5557995faee5c1fb09#e494a36a76a0aab8c5d66d5557995faee5c1fb09"
 dependencies = [
  "base64 0.22.1",
  "bcs",
  "bytes",
  "futures",
  "http 1.3.1",
+ "http-body 1.0.1",
  "prost 0.14.1",
  "prost-types 0.14.1",
  "serde",
@@ -16805,6 +16808,7 @@ dependencies = [
  "tokio",
  "tonic 0.14.3",
  "tonic-prost",
+ "tower 0.5.3",
 ]
 
 [[package]]
@@ -16857,7 +16861,7 @@ dependencies = [
  "tonic-prost-build",
  "tonic-reflection",
  "tonic-web",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
  "url",
  "walkdir",
@@ -16982,8 +16986,8 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.2.2"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e5c53de2e9570229b63bd0508b43f27c11cb5f76#e5c53de2e9570229b63bd0508b43f27c11cb5f76"
+version = "0.3.0"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e494a36a76a0aab8c5d66d5557995faee5c1fb09#e494a36a76a0aab8c5d66d5557995faee5c1fb09"
 dependencies = [
  "base64ct",
  "bcs",
@@ -17045,7 +17049,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -18221,7 +18225,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=7fddd55cf8cb27ee10803fb772d7618134a8d138#7fddd55cf8cb27ee10803fb772d7618134a8d138"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=641675ae80ab625e1b3d72f66eae494cee0f0d2b#641675ae80ab625e1b3d72f66eae494cee0f0d2b"
 dependencies = [
  "arc-swap",
  "bincode 1.3.3",
@@ -18702,7 +18706,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -18797,7 +18801,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tonic 0.14.3",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -18857,9 +18861,9 @@ dependencies = [
 
 [[package]]
 name = "tower"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
+checksum = "ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4"
 dependencies = [
  "futures-core",
  "futures-util",
@@ -18924,7 +18928,7 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util 0.7.18",
- "tower 0.5.2",
+ "tower 0.5.3",
  "tower-layer",
  "tower-service",
 ]

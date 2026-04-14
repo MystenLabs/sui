@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 14 tasks
 
@@ -18,13 +19,13 @@ task 2, line 37:
 1,0::regulated_coin
 
 task 3, line 39:
-//# view-object 1,1
+//# view-object 1,5
 Owner: Account Address ( A )
 Version: 2
 Contents: sui::coin::Coin<test::regulated_coin::REGULATED_COIN> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(1,1),
+            bytes: fake(1,5),
         },
     },
     balance: sui::balance::Balance<test::regulated_coin::REGULATED_COIN> {
@@ -127,13 +128,13 @@ Contents: sui::coin::RegulatedCoinMetadata<test::regulated_coin::REGULATED_COIN>
 }
 
 task 7, lines 47-49:
-//# view-object 1,5
+//# view-object 1,1
 Owner: Immutable
 Version: 2
 Contents: sui::coin::TreasuryCap<test::regulated_coin::REGULATED_COIN> {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(1,5),
+            bytes: fake(1,1),
         },
     },
     total_supply: sui::balance::Supply<test::regulated_coin::REGULATED_COIN> {
@@ -142,9 +143,9 @@ Contents: sui::coin::TreasuryCap<test::regulated_coin::REGULATED_COIN> {
 }
 
 task 8, lines 50-52:
-//# run sui::pay::split_and_transfer --args object(1,1) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
+//# run sui::pay::split_and_transfer --args object(1,5) 1 @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 created: object(8,0)
-mutated: object(0,0), object(1,1)
+mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 3936800,  storage_rebate: 2437776, non_refundable_storage_fee: 24624
 

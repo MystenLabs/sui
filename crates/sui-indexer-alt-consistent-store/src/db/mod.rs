@@ -35,6 +35,10 @@ const WATERMARK_CF: &str = "$watermark";
 /// Name of the column family the database adds, to track restoration progress.
 const RESTORE_CF: &str = "$restore";
 
+/// Name of the column family the database adds, to record the chain_id that each pipeline has
+/// been indexing data for.
+const CHAIN_ID_CF: &str = "$chain_id";
+
 // Constants for periodic metrics reporting
 const METRICS_ERROR: i64 = -1;
 
@@ -115,6 +119,11 @@ struct Inner {
     #[covariant]
     restore_cf: Arc<rocksdb::BoundColumnFamily<'this>>,
 
+    /// ColumnFamily in `db` that per-pipeline chain_ids are written to.
+    #[borrows(db)]
+    #[covariant]
+    chain_id_cf: Arc<rocksdb::BoundColumnFamily<'this>>,
+
     /// Snapshots from `db`, ordered by checkpoint sequence number, along with their watermarks.
     #[borrows()]
     #[covariant]
@@ -167,18 +176,20 @@ impl Db {
     /// Open the database at `path`, with the given `capacity` for snapshots.
     ///
     /// `options` are passed to RocksDB to configure the database, and `cfs` denotes the column
-    /// families to open. The database will inject its own column family for watermarks, and set
-    /// the option to create missing column families.
+    /// families to open. The database will inject its own column families for internal bookkeeping
+    /// (watermarks, restore progress, chain ID), and set the option to create missing column
+    /// families.
     pub(crate) fn open<'c>(
         path: impl AsRef<Path>,
         mut options: rocksdb::Options,
         capacity: usize,
         cfs: impl IntoIterator<Item = (&'c str, rocksdb::Options)>,
     ) -> Result<Self, Error> {
-        // Add a column family for watermarks, which are managed by the database.
+        // Add column families managed by the database.
         let mut cfs: Vec<_> = cfs.into_iter().collect();
         cfs.push((WATERMARK_CF, rocksdb::Options::default()));
         cfs.push((RESTORE_CF, rocksdb::Options::default()));
+        cfs.push((CHAIN_ID_CF, rocksdb::Options::default()));
         options.create_missing_column_families(true);
 
         let db = rocksdb::DB::open_cf_with_opts(&options, path, cfs)?;
@@ -187,6 +198,7 @@ impl Db {
             db,
             |db| db.cf_handle(WATERMARK_CF).context("WATERMARK_CF not found"),
             |db| db.cf_handle(RESTORE_CF).context("RESTORE_CF not found"),
+            |db| db.cf_handle(CHAIN_ID_CF).context("CHAIN_ID_CF not found"),
             BTreeMap::new(),
         )?;
 
@@ -359,6 +371,40 @@ impl Db {
             Ok(Some(
                 bcs::from_bytes(&watermark).context("Failed to deserialize watermark")?,
             ))
+        })
+    }
+
+    /// Check whether `pipeline` can accept data for the chain identified by `chain_id`.
+    ///
+    /// On the first call for a pipeline this records the chain_id and returns `true`. On
+    /// subsequent calls it returns `true` only if `chain_id` matches the previously recorded
+    /// value. This guards against pointing the indexer at a database that was previously
+    /// populated with data from a different chain.
+    pub(crate) fn accepts_chain_id(
+        &self,
+        pipeline: &str,
+        chain_id: [u8; 32],
+    ) -> Result<bool, Error> {
+        self.0.read().expect("poisoned").with(|f| {
+            let p = key::encode(pipeline.as_bytes());
+
+            match f.db.get_pinned_cf(f.chain_id_cf, &p)? {
+                Some(existing) => {
+                    let stored_len = existing.len();
+                    let stored: [u8; 32] = existing.as_ref().try_into().map_err(|_| {
+                        Error::Internal(anyhow::anyhow!(
+                            "stored chain_id for pipeline {pipeline:?} has wrong length: {stored_len}",
+                        ))
+                    })?;
+                    Ok(stored == chain_id)
+                }
+                None => {
+                    let mut batch = rocksdb::WriteBatch::default();
+                    batch.put_cf(f.chain_id_cf, &p, chain_id);
+                    f.db.write_opt(batch, &sync_write_options())?;
+                    Ok(true)
+                }
+            }
         })
     }
 

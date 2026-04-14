@@ -43,7 +43,7 @@ public fun split_to_balance(
 }
 
 // Initial transfer should succeed before any deny-list action is taken.
-//# programmable --sender A --inputs object(1,1) 1 @B
+//# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 
@@ -51,7 +51,7 @@ public fun split_to_balance(
 //# run sui::coin::deny_list_v2_add --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 
 // Deny entry is not enforced until the next epoch, so the transfer still succeeds.
-//# programmable --sender A --inputs object(1,1) 1 @B
+//# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 
@@ -60,7 +60,7 @@ public fun split_to_balance(
 //# advance-epoch
 
 // After epoch change, the deny list should block the recipient.
-//# programmable --sender A --inputs object(1,1) 1 @B
+//# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 
@@ -73,13 +73,13 @@ public fun split_to_balance(
 //# run sui::coin::deny_list_v2_remove --args object(0x403) object(1,3) @B --type-args test::regulated_coin::REGULATED_COIN --sender A
 
 // Removal only takes effect after the next epoch boundary, so this attempt still fails.
-//# programmable --sender A --inputs object(1,1) 1 @B
+//# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));
 
 //# advance-epoch
 
 // Once the following epoch begins, transfers to @B succeed again.
-//# programmable --sender A --inputs object(1,1) 1 @B
+//# programmable --sender A --inputs object(1,5) 1 @B
 //> 0: test::regulated_coin::split_to_balance(Input(0), Input(1));
 //> 1: sui::balance::send_funds<test::regulated_coin::REGULATED_COIN>(Result(0), Input(2));

@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
 ---
 processed 13 tasks
 
@@ -32,8 +33,8 @@ Response: {
 }
 
 task 4, line 48:
-//# transfer-object 1,1 --sender A --recipient B
-mutated: object(0,0), object(1,1)
+//# transfer-object 1,3 --sender A --recipient B
+mutated: object(0,0), object(1,3)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
@@ -70,14 +71,14 @@ Response: {
 }
 
 task 8, line 65:
-//# transfer-object 1,2 --sender A --recipient B
-mutated: object(0,0), object(1,2)
+//# transfer-object 1,4 --sender A --recipient B
+mutated: object(0,0), object(1,4)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
 task 9, line 67:
-//# transfer-object 1,3 --sender A --recipient B
-mutated: object(0,0), object(1,3)
+//# transfer-object 1,5 --sender A --recipient B
+mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 

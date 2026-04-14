@@ -68,6 +68,16 @@ impl KvArgs {
     }
 }
 
+/// Arguments for configuring GraphQL streaming subscriptions.
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct SubscriptionArgs {
+    /// gRPC URL of a fullnode to stream checkpoints from (e.g.
+    /// `https://fullnode.testnet.sui.io:443`). When set, the instance enables GraphQL
+    /// subscriptions. When not set, subscriptions are not available.
+    #[arg(long)]
+    pub checkpoint_stream_url: Option<Uri>,
+}
+
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
     #[command(subcommand)]
@@ -116,6 +126,9 @@ pub enum Command {
         /// identify the pipelines that the RPC will monitor for watermark purposes.
         #[arg(long, action = clap::ArgAction::Append)]
         indexer_config: Vec<PathBuf>,
+
+        #[command(flatten)]
+        subscription_args: SubscriptionArgs,
     },
 
     /// Output the contents of the default configuration to STDOUT.

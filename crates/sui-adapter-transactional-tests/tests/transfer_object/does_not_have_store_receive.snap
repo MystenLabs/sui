@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 20 tasks
 
@@ -57,22 +58,10 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 7, line 91:
-//# view-object 6,0
-Owner: Account Address ( fake(6,1) )
+//# view-object 6,1
+Owner: Account Address ( fake(6,0) )
 Version: 4
 Contents: test::m::Cup<u64> {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(6,0),
-        },
-    },
-}
-
-task 8, line 93:
-//# view-object 6,1
-Owner: Account Address ( A )
-Version: 4
-Contents: test::m::Parent {
     id: sui::object::UID {
         id: sui::object::ID {
             bytes: fake(6,1),
@@ -80,13 +69,25 @@ Contents: test::m::Parent {
     },
 }
 
+task 8, line 93:
+//# view-object 6,0
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+}
+
 task 9, lines 95-99:
-//# programmable --sender A --inputs object(6,1) receiving(6,0)
+//# programmable --sender A --inputs object(6,0) receiving(6,1)
 //> 0: test::m::receive_cup<u64>(Input(0), Input(1));
 //> 1: test::m::destroy_cup<u64>(Result(0));
 // Try to directly call `public_receive` and `receive` on an object without public transfer.
-mutated: object(0,0), object(6,1)
-deleted: object(6,0)
+mutated: object(0,0), object(6,0)
+deleted: object(6,1)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
 
 task 10, line 101:

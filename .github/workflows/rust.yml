@@ -76,7 +76,7 @@ jobs:
         run: scripts/git-checks.sh
 
   test:
-    needs: [diff, rustfmt, clippy]
+    needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
@@ -121,7 +121,7 @@ jobs:
         shell: bash
 
   test-tidehunter:
-    needs: [diff, rustfmt, clippy]
+    needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
@@ -179,7 +179,7 @@ jobs:
       - run: 'echo "No build required" '
 
   test-extra:
-    needs: [diff, rustfmt, clippy]
+    needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     env:
@@ -308,7 +308,7 @@ jobs:
           cargo bench --package consensus-core --bench commit_finalizer_bench -- --test
 
   windows-build:
-    needs: [diff, rustfmt, clippy]
+    needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
     runs-on: [ windows-ghcloud-128 ]
@@ -358,7 +358,7 @@ jobs:
           cargo nextest run -p sui --no-fail-fast --profile ci --cargo-quiet --filter-expr "not test(shell_tests::with_network)"
 
   simtest:
-    needs: [diff, rustfmt, clippy]
+    needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
     runs-on: [ ubuntu-ghcloud ]
@@ -389,7 +389,7 @@ jobs:
           scripts/simtest/stress-new-tests.sh
 
   simtest-mainnet:
-    needs: [diff, rustfmt, clippy]
+    needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
     runs-on: [ ubuntu-ghcloud ]
@@ -556,6 +556,26 @@ jobs:
       - run: rustup component add rustfmt
       - run: cargo fmt --check
 
+  snapshot-check:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - name: Check for committed *.snap.new files
+        run: |
+          # *.snap.new files are produced by insta when a snapshot test fails.
+          # They must never be committed — review and accept them with `cargo insta review` instead.
+          files=$(git ls-files '*.snap.new')
+          if [ -n "$files" ]; then
+            echo "Error: the following *.snap.new files are committed to the repo:"
+            echo "$files"
+            echo "Run 'cargo insta review' to accept or reject pending snapshots."
+            exit 1
+          fi
+
   cargo-deny:
     name: cargo-deny (bans, licenses, sources)
     needs: diff
@@ -582,7 +602,7 @@ jobs:
 
   sui-excution-cut:
     name: cutting a new execution layer
-    needs: [diff, rustfmt, clippy]
+    needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ ubuntu-ghcloud ]
     steps:
