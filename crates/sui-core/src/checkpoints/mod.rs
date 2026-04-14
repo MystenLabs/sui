@@ -2014,6 +2014,20 @@ impl CheckpointBuilder {
             tx_index_offset,
         );
 
+        let num_deposits = builder.num_deposits();
+        let num_withdrawals = builder.num_withdrawals();
+        if num_deposits > 0 || num_withdrawals > 0 {
+            let num_updates = builder.num_updates();
+            info!(
+                "Checkpoint {checkpoint_seq}: {num_deposits} accumulator deposits, \
+                 {num_withdrawals} withdrawals, {num_updates} account updates"
+            );
+        }
+        self.metrics.accumulator_deposits.inc_by(num_deposits);
+        self.metrics
+            .accumulator_withdrawals
+            .inc_by(num_withdrawals);
+
         let settlement_digests: Vec<_> = builder
             .build_tx(
                 self.epoch_store.protocol_config(),
