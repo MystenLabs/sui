@@ -21,7 +21,7 @@ pub struct ExecutionResult {
     pub _execution_error: Option<ExecutionError>,
 }
 
-/// Execute a transaction and commit it to the store. This will fetch and cache all input objects
+/// Execute a transaction and commit it to the store. This will fetch and store all input objects
 /// before execution to ensure the Simulacrum has all necessary data to execute the transaction.
 pub async fn execute_transaction(
     context: &Context,
@@ -61,7 +61,7 @@ pub async fn execute_transaction(
     })
 }
 
-/// Fetch and cache all input objects for a transaction.
+/// Fetch and store on disk all missing input objects for a transaction.
 pub async fn fetch_input_objects(
     context: &Context,
     tx_data: &TransactionData,
@@ -93,6 +93,8 @@ pub async fn fetch_input_objects(
     Ok(())
 }
 
+/// Fetch an object from RPC. If it does not exist on disk, it will download it and store it on
+/// disk.
 async fn fetch_and_cache_object_from_rpc(
     context: &Context,
     object_id: &ObjectID,
