@@ -533,25 +533,23 @@ mod checkpoint_persistence_tests {
     }
 
     #[test]
-    fn insert_checkpoint_contents_without_matching_summary_is_dropped() {
+    fn insert_checkpoint_contents_without_pending_summary_is_noop() {
         let temp = tempfile::tempdir().expect("tempdir");
         let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
-        let (checkpoint, matching) = build_checkpoint(1);
-        let (_, unrelated) = build_checkpoint(2);
+        let (_, contents) = build_checkpoint(1);
 
-        store.insert_checkpoint(checkpoint.clone());
-        // Unrelated contents — digest mismatch with the pending summary.
-        store.insert_checkpoint_contents(unrelated);
+        // No prior `insert_checkpoint`: the contents should be dropped rather
+        // than panicking or leaving orphaned state on disk.
+        store.insert_checkpoint_contents(contents.clone());
 
         assert!(
-            SimulatorStore::get_checkpoint_by_sequence_number(
-                &store,
-                checkpoint.data().sequence_number,
-            )
-            .is_none(),
-            "mismatched pair should not be persisted",
+            SimulatorStore::get_checkpoint_contents(&store, contents.digest()).is_none(),
+            "orphan contents should not be persisted",
         );
-        let _ = matching;
+        assert!(
+            SimulatorStore::get_highest_checkpint(&store).is_none(),
+            "latest marker should remain empty",
+        );
     }
 }
 
