@@ -14755,6 +14755,8 @@ dependencies = [
  "move-vm-types-v1",
  "move-vm-types-v2",
  "move-vm-types-v3",
+ "mysten-common",
+ "mysten-metrics",
  "petgraph 0.5.1",
  "sui-adapter-latest",
  "sui-adapter-v0",
@@ -14773,6 +14775,7 @@ dependencies = [
  "sui-verifier-v1",
  "sui-verifier-v2",
  "sui-verifier-v3",
+ "tracing",
 ]
 
 [[package]]

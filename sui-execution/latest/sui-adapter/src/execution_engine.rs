@@ -13,7 +13,6 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
-    use mysten_common::debug_fatal;
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
@@ -274,40 +273,6 @@ mod checked {
         );
 
         let status = if let Err(error) = &execution_result {
-            // Elaborate errors in logs if they are unexpected or their status is terse.
-            use ExecutionErrorKind as K;
-            match error.kind() {
-                K::InvariantViolation | K::VMInvariantViolation => {
-                    debug_fatal!(
-                        "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
-                        transaction_digest,
-                        error.source_ref(),
-                    );
-                }
-
-                K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Verification Error. Source: {:?}",
-                        error.source_ref(),
-                    );
-                }
-
-                K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Publish/Upgrade Error. Source: {:?}",
-                        error.source_ref(),
-                    )
-                }
-
-                _ => (),
-            };
-
             ExecutionStatus::new_failure(error.to_execution_failure())
         } else {
             ExecutionStatus::Success

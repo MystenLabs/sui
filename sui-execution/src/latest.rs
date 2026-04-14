@@ -25,6 +25,7 @@ use sui_types::{
 };
 
 use move_bytecode_verifier_meter::Meter;
+use mysten_common::debug_fatal;
 use move_vm_runtime_latest::runtime::MoveRuntime;
 use sui_adapter_latest::adapter::{new_move_runtime, run_metered_move_bytecode_verifier};
 use sui_adapter_latest::execution_engine::{
@@ -132,24 +133,29 @@ impl executor::Executor for Executor {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
-            store,
-            input_objects,
-            gas,
-            gas_status,
-            transaction_kind,
-            rewritten_inputs,
-            transaction_signer,
-            transaction_digest,
-            &self.0,
-            epoch_id,
-            epoch_timestamp_ms,
-            protocol_config,
-            metrics,
-            enable_expensive_checks,
-            execution_params,
-            trace_builder_opt,
-        )
+        let (store_out, gas_status_out, effects, timings, result) =
+            execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
+                store,
+                input_objects,
+                gas,
+                gas_status,
+                transaction_kind,
+                rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                execution_params,
+                trace_builder_opt,
+            );
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
+        (store_out, gas_status_out, effects, timings, result)
     }
 
     fn dev_inspect_transaction(
@@ -214,6 +220,9 @@ impl executor::Executor for Executor {
                 &mut None,
             )
         };
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
         (inner_temp_store, gas_status, effects, result)
     }
 
@@ -277,5 +286,36 @@ impl verifier::Verifier for Verifier<'_> {
         meter: &mut dyn Meter,
     ) -> SuiResult<()> {
         run_metered_move_bytecode_verifier(modules, &self.config, meter, self.metrics)
+    }
+}
+
+fn log_execution_error(transaction_digest: TransactionDigest, error: &ExecutionError) {
+    use sui_types::execution_status::ExecutionErrorKind as K;
+
+    match error.kind() {
+        K::InvariantViolation | K::VMInvariantViolation => {
+            debug_fatal!(
+                "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
+                transaction_digest,
+                error.source()
+            );
+        }
+        K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Verification Error. Source: {:?}",
+                error.source(),
+            );
+        }
+        K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
+            tracing::debug!(
+                kind = ?error.kind(),
+                tx_digest = ?transaction_digest,
+                "Publish/Upgrade Error. Source: {:?}",
+                error.source(),
+            );
+        }
+        _ => (),
     }
 }

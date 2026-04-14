@@ -139,7 +139,7 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, ExecutionErrorTrait, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
 use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -2457,7 +2457,7 @@ impl AuthorityState {
         let execution_error_source = execution_error
             .as_ref()
             .err()
-            .and_then(|e| e.source_ref().as_ref().map(|e| e.to_string()));
+            .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
 
         Ok((
             DryRunTransactionBlockResponse {
