@@ -92,7 +92,7 @@
     },
     {
       "source": "/learn/objects",
-      "destination": "/develop/objects/object-model",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
@@ -102,17 +102,17 @@
     },
     {
       "source": "/learn/index",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/learn",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/learn/sponsored-transactions",
-      "destination": "/develop/transactions/sponsor-txn",
+      "destination": "/develop/transaction-payment/sponsor-txn",
       "permanent": true
     },
     {
@@ -142,7 +142,7 @@
     },
     {
       "source": "/learn/cryptography/sui-signatures",
-      "destination": "/develop/transactions/transaction-auth/signatures",
+      "destination": "/develop/cryptography/signing",
       "permanent": true
     },
     {
@@ -172,7 +172,7 @@
     },
     {
       "source": "/learn/cryptography/sui-move-signatures",
-      "destination": "/develop/transactions/transaction-auth/signatures",
+      "destination": "/develop/cryptography/signing",
       "permanent": true
     },
     {
@@ -192,22 +192,22 @@
     },
     {
       "source": "/learn/tokenomics/storage-fund",
-      "destination": "/develop/sui-architecture/storage-fund",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/learn/tokenomics/sui-token",
-      "destination": "/develop/sui-architecture/sui-token",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/learn/tokenomics/gas-pricing",
-      "destination": "/develop/transaction-payment/gas-pricing",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/learn/tokenomics/proof-of-stake",
-      "destination": "/develop/sui-architecture/proof-of-stake",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
@@ -227,27 +227,27 @@
     },
     {
       "source": "/explore/examples",
-      "destination": "/guides/developer",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/explore/tutorials",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/explore/index",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/explore",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/build/sui-gas-charges",
-      "destination": "/develop/transaction-payment/gas-pricing",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
@@ -262,7 +262,7 @@
     },
     {
       "source": "/build/dev_cheat_sheet",
-      "destination": "/develop/dev-cheat-sheet",
+      "destination": "/getting-started/dev-cheat-sheet",
       "permanent": true
     },
     {
@@ -272,7 +272,7 @@
     },
     {
       "source": "/build/fullnode",
-      "destination": "/operators/sui-full-node",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
@@ -312,12 +312,12 @@
     },
     {
       "source": "/build/comms",
-      "destination": "/develop/sui-101/connect",
+      "destination": "/getting-started/onboarding/configure-sui-client",
       "permanent": true
     },
     {
       "source": "/build/index",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
@@ -327,7 +327,7 @@
     },
     {
       "source": "/build/rust-sdk",
-      "destination": "/references/sdk/rust-sdk",
+      "destination": "/references/rust-sdk",
       "permanent": true
     },
     {
@@ -337,7 +337,7 @@
     },
     {
       "source": "/build/zk_login",
-      "destination": "/develop/cryptography/zklogin-integration/zklogin-integration",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
@@ -352,7 +352,7 @@
     },
     {
       "source": "/build/automated-address-management",
-      "destination": "/develop/publish-upgrade-packages/automated-address-management",
+      "destination": "/develop/manage-packages/automated-address-management",
       "permanent": true
     },
     {
@@ -362,7 +362,7 @@
     },
     {
       "source": "/build/connect-sui-network",
-      "destination": "/develop/sui-101/connect",
+      "destination": "/getting-started/onboarding/configure-sui-client",
       "permanent": true
     },
     {
@@ -387,7 +387,7 @@
     },
     {
       "source": "/build/move/lock-file",
-      "destination": "/references/move/move-lock",
+      "destination": "/references/package-managers/manifest-reference",
       "permanent": true
     },
     {
@@ -397,22 +397,22 @@
     },
     {
       "source": "/build/move/manifest",
-      "destination": "/references/move/move-toml",
+      "destination": "/references/package-managers/manifest-reference",
       "permanent": true
     },
     {
       "source": "/build/move/index",
-      "destination": "/develop/sui-101",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/build/move",
-      "destination": "/develop/sui-101",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/build/move/time",
-      "destination": "/develop/on-chain-primitives/access-time",
+      "destination": "/sui-stack/on-chain-primitives/access-time",
       "permanent": true
     },
     {
@@ -422,12 +422,12 @@
     },
     {
       "source": "/build/programming-with-objects/ch6-collections",
-      "destination": "/develop/objects/tables-tabs",
+      "destination": "/develop/objects/dynamic-fields",
       "permanent": true
     },
     {
       "source": "/build/programming-with-objects/ch1-object-basics",
-      "destination": "/develop/objects/object-model",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
@@ -442,7 +442,7 @@
     },
     {
       "source": "/build/programming-with-objects/index",
-      "destination": "/develop/objects/object-model",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
@@ -457,7 +457,7 @@
     },
     {
       "source": "/reference/sui-json",
-      "destination": "/sui-api-ref",
+      "destination": "/references/sui-api",
       "permanent": true
     },
     {
@@ -472,7 +472,7 @@
     },
     {
       "source": "/concepts/dynamic-fields/events",
-      "destination": "/develop/events",
+      "destination": "/develop/accessing-data/using-events",
       "permanent": true
     },
     {
@@ -502,7 +502,7 @@
     },
     {
       "source": "/learn/sui-bridging",
-      "destination": "/develop/sui-architecture/sui-bridging",
+      "destination": "/onchain-finance/fungible-tokens/sui-bridging",
       "permanent": true
     },
     {
@@ -527,22 +527,22 @@
     },
     {
       "source": "/references/research-papers",
-      "destination": "/develop/research-papers",
+      "destination": "/references/research-papers",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/trading/:path*",
-      "destination": "/getting-started/trustless-swap/:path*",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/trustless-token-swap/:path*",
-      "destination": "/getting-started/trustless-swap/:path*",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography/zklogin/zklogin-example",
-      "destination": "/develop/cryptography/zklogin-integration/zklogin-example",
+      "destination": "/sui-stack/zklogin-integration/zklogin-example",
       "permanent": true
     },
     {
@@ -577,7 +577,7 @@
     },
     {
       "source": "/guides/developer/advanced/asset-tokenization",
-      "destination": "/develop/digital-assets/non-fungible-tokens/create-nft/asset-tokenization",
+      "destination": "/onchain-finance/tokenized-assets/asset-tokenization",
       "permanent": true
     },
     {
@@ -592,22 +592,22 @@
     },
     {
       "source": "/standards/deepbook-pools",
-      "destination": "/onchain-finance/deepbookv3/index",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/standards/routing-a-swap",
-      "destination": "/onchain-finance/deepbookv3/index",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/standards/trade-and-swap",
-      "destination": "/onchain-finance/deepbookv3/index",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/standards/query-the-pool",
-      "destination": "/onchain-finance/deepbookv3/query-the-pool",
+      "destination": "/onchain-finance/deepbookv3/contract-information/query-the-pool",
       "permanent": true
     },
     {
@@ -617,7 +617,7 @@
     },
     {
       "source": "/standards/deepbook-orders",
-      "destination": "/onchain-finance/deepbookv3/orders",
+      "destination": "/onchain-finance/deepbookv3/contract-information/orders",
       "permanent": true
     },
     {
@@ -627,22 +627,22 @@
     },
     {
       "source": "/concepts/tokenomics/sui-coin",
-      "destination": "/develop/sui-architecture/sui-token",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/storage-fund",
-      "destination": "/develop/sui-architecture/storage-fund",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/proof-of-stake",
-      "destination": "/develop/sui-architecture/proof-of-stake",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/validators-staking",
-      "destination": "/develop/sui-architecture/proof-of-stake",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
@@ -672,17 +672,17 @@
     },
     {
       "source": "/references/framework/sui-framework/:path*",
-      "destination": "/references/framework/sui/:path*",
+      "destination": "/references/framework/sui_sui/:path*",
       "permanent": true
     },
     {
       "source": "/references/framework/move-stdlib/:path*",
-      "destination": "/references/framework/std/:path*",
+      "destination": "/references/framework/sui_std/:path*",
       "permanent": true
     },
     {
       "source": "/references/framework/sui-system/:path*",
-      "destination": "/references/framework/sui_system/:path*",
+      "destination": "/references/framework/sui_sui_system/:path*",
       "permanent": true
     },
     {
@@ -712,12 +712,12 @@
     },
     {
       "source": "/standards/deepbookv2/:path*",
-      "destination": "/onchain-finance/deepbookv3/index",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/graphql-migration",
-      "destination": "/develop/data-access/graphql-rpc",
+      "destination": "/develop/accessing-data/graphql/graphql-rpc",
       "permanent": true
     },
     {
@@ -742,12 +742,12 @@
     },
     {
       "source": "/standards/deepbookv3",
-      "destination": "/onchain-finance/deepbookv3/index",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect",
-      "destination": "/develop/sui-101/connect",
+      "destination": "/getting-started/onboarding/configure-sui-client",
       "permanent": true
     },
     {
@@ -757,7 +757,7 @@
     },
     {
       "source": "/guides/developer/getting-started/data-serving",
-      "destination": "/develop/data-access/data-serving",
+      "destination": "/develop/accessing-data/data-serving",
       "permanent": true
     },
     {
@@ -777,7 +777,7 @@
     },
     {
       "source": "/guides/developer/first-app/client-tssdk",
-      "destination": "/develop/sui-101/client-tssdk",
+      "destination": "/getting-started/onboarding/app-frontends",
       "permanent": true
     },
     {
@@ -787,7 +787,7 @@
     },
     {
       "source": "/guides/developer/stablecoins",
-      "destination": "/develop/coin/stablecoins",
+      "destination": "/onchain-finance/fungible-tokens/integrating-with-stablecoins",
       "permanent": true
     },
     {
@@ -797,12 +797,12 @@
     },
     {
       "source": "/guides/developer/getting-started/graphql-rpc",
-      "destination": "/develop/data-access/graphql-rpc",
+      "destination": "/develop/accessing-data/graphql/graphql-rpc",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/gas-pricing",
-      "destination": "concepts/tokenomics/gas-in-sui",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
@@ -822,12 +822,12 @@
     },
     {
       "source": "/guides/developer/sui-101/data-serving",
-      "destination": "/develop/data-access/data-serving",
+      "destination": "/develop/accessing-data/data-serving",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/indexer-functions",
-      "destination": "/develop/data-access/data-serving",
+      "destination": "/develop/accessing-data/data-serving",
       "permanent": true
     },
     {
@@ -837,37 +837,37 @@
     },
     {
       "source": "/concepts/app-devs",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/grpc-overview",
-      "destination": "/develop/data-access/grpc",
+      "destination": "/develop/accessing-data/grpc",
       "permanent": true
     },
     {
       "source": "/concepts/graphql-indexer",
-      "destination": "/develop/data-access/custom-indexers",
+      "destination": "/develop/accessing-data/custom-indexer/custom-indexers",
       "permanent": true
     },
     {
       "source": "/concepts/data-access/graphql-indexer",
-      "destination": "/develop/data-access/custom-indexers",
+      "destination": "/develop/accessing-data/custom-indexer/custom-indexers",
       "permanent": true
     },
     {
       "source": "/concepts/graphql-rpc",
-      "destination": "/develop/data-access/graphql-rpc",
+      "destination": "/develop/accessing-data/graphql/graphql-rpc",
       "permanent": true
     },
     {
       "source": "/concepts/custom-indexing-framework",
-      "destination": "/develop/accessing-data/custom-indexing-framework",
+      "destination": "/develop/accessing-data/custom-indexer",
       "permanent": true
     },
     {
       "source": "/concepts/custom-indexer/pipeline-architecture",
-      "destination": "/develop/data-access/pipeline-architecture",
+      "destination": "/develop/accessing-data/custom-indexer/pipeline-architecture",
       "permanent": true
     },
     {
@@ -897,7 +897,7 @@
     },
     {
       "source": "/concepts/tokenomics/vesting-strategies",
-      "destination": "/develop/coin/vesting-strategies",
+      "destination": "/onchain-finance/fungible-tokens/token-vesting-strategies",
       "permanent": true
     },
     {
@@ -907,7 +907,7 @@
     },
     {
       "source": "/concepts/object-model",
-      "destination": "/develop/objects/object-model",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
@@ -947,7 +947,7 @@
     },
     {
       "source": "/guides/developer/sui-101/move-package-management",
-      "destination": "/develop/publish-upgrade-packages/move-package-management",
+      "destination": "/develop/manage-packages/move-package-management",
       "permanent": true
     },
     {
@@ -962,7 +962,7 @@
     },
     {
       "source": "/concepts/sui-move-concepts/packages/automated-address-management",
-      "destination": "/develop/publish-upgrade-packages/automated-address-management",
+      "destination": "/develop/manage-packages/automated-address-management",
       "permanent": true
     },
     {
@@ -977,12 +977,12 @@
     },
     {
       "source": "/concepts/cryptography/nautilus",
-      "destination": "/develop/nautilus/",
+      "destination": "/sui-stack/nautilus",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography/nautilus/using-nautilus",
-      "destination": "/develop/nautilus/using-nautilus",
+      "destination": "/sui-stack/nautilus/using-nautilus",
       "permanent": true
     },
     {
@@ -992,18 +992,18 @@
     },
     {
       "source": "/guides/developer/sui-101/coin-mgt",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/concepts/coin-mgt",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
-    "source": "/guides/developer/nautilus/marlin.md",
-    "destination": "/develop/nautilus/community-dev-tools.md",
-    "permanent": true
+      "source": "/guides/developer/nautilus/marlin.md",
+      "destination": "/sui-stack/nautilus/community-dev-tools",
+      "permanent": true
     },
     {
       "source": "/guides/developer/advanced/custom-indexer",
@@ -1017,12 +1017,12 @@
     },
     {
       "source": "/guides/developer/advanced/custom-indexer/indexer-data-integration",
-      "destination": "/develop/data-access/indexer-data-integration",
+      "destination": "/develop/accessing-data/custom-indexer/indexer-data-integration",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/custom-indexer/indexer-runtime-perf",
-      "destination": "/develop/data-access/indexer-runtime-perf",
+      "destination": "/develop/accessing-data/custom-indexer/indexer-runtime-perf",
       "permanent": true
     },
     {
@@ -1032,7 +1032,7 @@
     },
     {
       "source": "/guides/developer/advanced/graphql-rpc",
-      "destination": "/develop/data-access/graphql-rpc",
+      "destination": "/develop/accessing-data/graphql/graphql-rpc",
       "permanent": true
     },
     {
@@ -1042,17 +1042,17 @@
     },
     {
       "source": "/guides/developer/advanced/local-fee-markets",
-      "destination": "/develop/objects/local-fee-markets",
+      "destination": "/develop/transaction-payment/local-fee-markets",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/access-time",
-      "destination": "/develop/on-chain-primitives/access-time",
+      "destination": "/sui-stack/on-chain-primitives/access-time",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/randomness-onchain",
-      "destination": "/develop/on-chain-primitives/randomness-onchain",
+      "destination": "/sui-stack/on-chain-primitives/randomness-onchain",
       "permanent": true
     },
     {
@@ -1067,12 +1067,12 @@
     },
     {
       "source": "/guides/developer/sui-101/simulating-refs",
-      "destination": "/develop/objects/simulating-refs",
+      "destination": "/develop/objects/transfers/simulating-refs",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/sponsor-txn",
-      "destination": "/develop/transactions/sponsor-txn",
+      "destination": "/develop/transaction-payment/sponsor-txn",
       "permanent": true
     },
     {
@@ -1087,77 +1087,77 @@
     },
     {
       "source": "/concepts/data-access/custom-indexing-framework",
-      "destination": "/develop/accessing-data/custom-indexing-framework",
+      "destination": "/develop/accessing-data/custom-indexer",
       "permanent": true
     },
     {
       "source": "/concepts/data-access/grpc-overview",
-      "destination": "/develop/data-access/grpc",
+      "destination": "/develop/accessing-data/grpc",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/learn/architecture",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/governance",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/object-model",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/references/rpc",
-      "destination": "/develop",
+      "destination": "/references/sui-api",
       "permanent": true
     },
     {
       "source": "/concepts/sui-object-model",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/gas-fees",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-upgrade",
-      "destination": "/develop",
+      "destination": "/develop/publish-upgrade-packages/upgrade",
       "permanent": true
     },
     {
       "source": "/guides/operator/sui-validator",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/concepts/mysticeti",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
@@ -1167,402 +1167,402 @@
     },
     {
       "source": "/concepts/sui-architecture/checkpoints",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/references/sdk/rust",
-      "destination": "/develop",
+      "destination": "/references/rust-sdk",
       "permanent": true
     },
     {
       "source": "/build/programmable-transaction-blocks",
-      "destination": "/develop",
+      "destination": "/develop/transactions/ptbs/prog-txn-blocks",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/objects",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/games",
-      "destination": "/develop",
+      "destination": "/references/gaming",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-install",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/guides/developer/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/validator/validator-setup",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/references/graphql",
-      "destination": "/develop",
+      "destination": "/references/sui-graphql",
       "permanent": true
     },
     {
       "source": "/references/sui-cli-client",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/technology",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/apps/deepbook",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/apps/sui-wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/concepts/consensus/mysticeti",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/concepts/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-compared",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/staking-and-participation",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/staking-unstaking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-smart-contract",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-testnet",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-testnet-sui",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/install-cli",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/guides/developer/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/working-with-coins",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-cli-client",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-cli/client-commands",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-programmable-transaction-blocks",
-      "destination": "/develop",
+      "destination": "/develop/transactions/ptbs/prog-txn-blocks",
       "permanent": true
     },
     {
       "source": "/guides/user/stake-delegate",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/learn/tokenomics/token-release-schedule",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/object-model/one-time-witness",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-object-runtime/object-basics",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/fungible-tokens",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking-and-participation",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking-rewards",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/gas-fees",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/rpc-api",
-      "destination": "/develop",
+      "destination": "/references/sui-api",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/developer/best-practices/security",
-      "destination": "/develop",
+      "destination": "/develop/security/best-practices",
       "permanent": true
     },
     {
       "source": "/guides/developer/deepbookv3/introduction",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/move-write-package",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/sui-cli-client",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/guides/developer/staking-unstaking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/create-nft",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/sui-addresses",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-grpc",
-      "destination": "/develop",
+      "destination": "/develop/accessing-data/grpc",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-jsonrpc",
-      "destination": "/develop",
+      "destination": "/references/sui-api",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-concepts",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/create-coin-token",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/use-randomness",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-sdk",
-      "destination": "/develop",
+      "destination": "/references/sui-sdks",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-token",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/operator/run-fullnode",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/guides/operator/validator-guide",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/references/rpc/fullnode",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/references/sui-token",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/sui-tokenomics",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/tutorials/apps/simple-dex",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/apps/slush-wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/build/graphql",
-      "destination": "/develop",
+      "destination": "/references/sui-graphql",
       "permanent": true
     },
     {
       "source": "/build/smart-contracts/security",
-      "destination": "/develop",
+      "destination": "/develop/security/best-practices",
       "permanent": true
     },
     {
       "source": "/build/sui-move/token-standard",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography/groth16",
-      "destination": "/develop",
+      "destination": "/develop/cryptography",
       "permanent": true
     },
     {
       "source": "/concepts/object-centric-model",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
       "source": "/concepts/scaling",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/storage/walrus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/sui-storage",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/tokenomics",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-economics",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/object",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-ns",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-token",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/stake-subsidy",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/nft-marketplaces",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/objects",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/sui-testnet",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/transaction-processing",
-      "destination": "/develop",
+      "destination": "/develop/transactions",
       "permanent": true
     },
     {
       "source": "/concepts/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
@@ -1572,167 +1572,167 @@
     },
     {
       "source": "/guides/consumer/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/run-indexer",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/connect-wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/distributed-counter",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/devnet-testnet",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-app/coin-flip",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/full-node",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/build-from-main",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-metamask",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-network",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/sui-wallet",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/publish",
-      "destination": "/develop",
+      "destination": "/develop/publish-upgrade-packages/deploy",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/sui-overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-coin",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-economics/gas-pricing",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-liquid-staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-concepts/coin",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-vs-rust",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/move.toml-manifest",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/reference/arithmetic",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/write-smart-contracts",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-multisig",
-      "destination": "/develop",
+      "destination": "/develop/transactions/transaction-auth/multisig",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallets",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/developer/wallet-integration/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/developer/wallet-standard",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/developer/zklogin-integration",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/operator/sui-foundation-delegation",
-      "destination": "/develop",
+      "destination": "/operators",
       "permanent": true
     },
     {
       "source": "/guides/operator/sui-tool",
-      "destination": "/develop",
+      "destination": "/operators",
       "permanent": true
     },
     {
       "source": "/guides/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/sui-wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/sui-wallet/ledger-support",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/sui-wallet/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/learn/sui-object-model",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
@@ -1742,32 +1742,32 @@
     },
     {
       "source": "/references/cli-client",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/references/cli/tool",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/sui-api/reference/rest/transaction-operations/dry-run-transaction-block",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/sui-graphql/reference",
-      "destination": "/develop",
+      "destination": "/references/sui-graphql",
       "permanent": true
     },
     {
       "source": "/references/sui-tokenomics",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/references/sui-typescript-sdk",
-      "destination": "/develop",
+      "destination": "/references/sui-sdks",
       "permanent": true
     },
     {
@@ -1777,17 +1777,17 @@
     },
     {
       "source": "/tokenomics",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/merge-coins",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/references/move/sui/package",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
@@ -1797,317 +1797,317 @@
     },
     {
       "source": "/applications/walrus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/sui-storage",
       "permanent": true
     },
     {
       "source": "/apps/walrus/overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/sui-storage",
       "permanent": true
     },
     {
       "source": "/architecture",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/build/move/publish",
-      "destination": "/develop",
+      "destination": "/develop/publish-upgrade-packages/deploy",
       "permanent": true
     },
     {
       "source": "/build/rpc",
-      "destination": "/develop",
+      "destination": "/references/sui-api",
       "permanent": true
     },
     {
       "source": "/concepts/architecture/high-level-overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/objects-transactions-gas/objects/object-versioning",
-      "destination": "/develop",
+      "destination": "/develop/objects",
       "permanent": true
     },
     {
       "source": "/concepts/sui-gas",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/sui-gas-model",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/sui-governance",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/gas-coins",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/generics",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/objects/destroying-objects",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-object-model/storage-gas",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/sui-overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-performance",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/gas-fees",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/token/sui-token",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking-and-delegation",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/transaction-deps",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-auth/consensus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-auth/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-types",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/validators",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/contribute/security",
-      "destination": "/develop",
+      "destination": "/develop/security/best-practices",
       "permanent": true
     },
     {
       "source": "/guides/apps/walrus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/sui-storage",
       "permanent": true
     },
     {
       "source": "/guides/consumer/slush",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/consumer/stake",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/consumer/sui-wallets",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/build-from-source",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/programmable-transaction-blocks",
-      "destination": "/develop",
+      "destination": "/develop/transactions/ptbs/prog-txn-blocks",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/pruning",
-      "destination": "/develop",
+      "destination": "/operators",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/testing-modules",
-      "destination": "/develop",
+      "destination": "/develop/testing-debugging",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/token",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/wallet-kit",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/zk-login-salt-management",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/developer/coin/managed",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/common-tasks/create-nft",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/guides/developer/crypto/signing",
-      "destination": "/develop",
+      "destination": "/develop/cryptography",
       "permanent": true
     },
     {
       "source": "/guides/developer/cryptography/keypairs",
-      "destination": "/develop",
+      "destination": "/develop/cryptography",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-app/create-coin",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-app/quick-start",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-move-package",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-devnet",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-to-grpc",
-      "destination": "/develop",
+      "destination": "/develop/accessing-data/grpc",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/connect-wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/create-your-first-dapp",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/first-app",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-a-wallet",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-sui-binary",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-testnet-funds",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/installation",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/move",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/seal",
-      "destination": "/develop",
+      "destination": "/sui-stack/nautilus/seal",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/counter-e2e",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/create-fungible-token",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/gas-fees",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/sign-transaction",
-      "destination": "/develop",
+      "destination": "/develop/transactions/ptbs/sign-and-send-txn",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/testing-tooling",
-      "destination": "/develop",
+      "destination": "/develop/testing-debugging",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-assets/nfts",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-local-network",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/networks",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-local-testnet",
-      "destination": "/develop",
+      "destination": "/develop/testing-debugging",
       "permanent": true
     },
     {
@@ -2117,67 +2117,67 @@
     },
     {
       "source": "/guides/developer/sui-move-concepts/object-ownership",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-examples",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-guides/token-standard",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-standards/closed-loop-token",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/examples/nft",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/flash-loan",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/modules-and-packages",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/move-differences",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/publish-modules",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/publish-package",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-performance",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-sdk-examples",
-      "destination": "/develop",
+      "destination": "/references/sui-sdks",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallet-kit/sign-message",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
@@ -2187,377 +2187,377 @@
     },
     {
       "source": "/guides/developer/token-standard",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/operating-a-validator/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/operator/run-full-node",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/guides/operator/staking-rewards",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/operator/sui-full-node/indexing",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/guides/operator/validator-rewards",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/guides/participant/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/sui-tokenomics/sui-token",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/validator/staking-delegation",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/validator/staking-unstaking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/learn/sui-transaction-model",
-      "destination": "/develop",
+      "destination": "/develop/transactions",
       "permanent": true
     },
     {
       "source": "/learn/tokenomics/stake-subsidy",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/learn/tokenomics/staking-and-participation",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/references/move",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/move/sui/random",
-      "destination": "/develop",
+      "destination": "/sui-stack/on-chain-primitives/randomness-onchain",
       "permanent": true
     },
     {
       "source": "/references/move/syntax/modules",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/references/networks",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/sui-framework/sui/versioned",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/sui-system",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/sui-txns",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/standards/coin-standard",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/standards/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/build/building-from-source",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/concepts/sui-economics/overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/apps/deepbook/reference/fees",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/apps/dexes",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/apps/walrus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/sui-storage",
       "permanent": true
     },
     {
       "source": "/build/build-install",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/build/dapp-kit",
-      "destination": "/develop",
+      "destination": "/references/sui-sdks",
       "permanent": true
     },
     {
       "source": "/build/devnet",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/networks",
       "permanent": true
     },
     {
       "source": "/build/programmable-objects/programmable-transaction-blocks",
-      "destination": "/develop",
+      "destination": "/develop/transactions/ptbs/prog-txn-blocks",
       "permanent": true
     },
     {
       "source": "/build/testing",
-      "destination": "/develop",
+      "destination": "/develop/testing-debugging",
       "permanent": true
     },
     {
       "source": "/build/zklogin",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/concepts/architecture/high-level",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography/merkle-trees",
-      "destination": "/develop",
+      "destination": "/develop/cryptography",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography/sui-addresses",
-      "destination": "/develop",
+      "destination": "/develop/cryptography",
       "permanent": true
     },
     {
       "source": "/concepts/gas",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/gas-fees",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/objects",
-      "destination": "/develop",
+      "destination": "/develop/objects",
       "permanent": true
     },
     {
       "source": "/concepts/objects/kiosk",
-      "destination": "/develop",
+      "destination": "/onchain-finance/kiosk",
       "permanent": true
     },
     {
       "source": "/concepts/overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/randomness",
-      "destination": "/develop",
+      "destination": "/sui-stack/on-chain-primitives/randomness-onchain",
       "permanent": true
     },
     {
       "source": "/concepts/staking-unstaking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-addresses",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/transaction-model",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/transaction-processing",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-bridge",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens/sui-bridging",
       "permanent": true
     },
     {
       "source": "/concepts/sui-consensus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/concepts/sui-consensus/mysticeti",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/concepts/sui-deny-list",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-economy/gas",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/sui-indexer",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/concepts/sui-jsonrpc-api",
-      "destination": "/develop",
+      "destination": "/references/sui-api",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/applications/kiosk",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/applications/nft-protocol/kiosk",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/object-centric-world",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/receiving-objects",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/sponsored-transactions",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/testing",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move/object-model",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move/overview",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/concepts/sui-nodes",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-object-runtime",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
       "source": "/concepts/sui-ownership",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/concepts/token-io/nft",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/stablecoins/usdc",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/staking-and-inflation",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/token-utility",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/transaction-flow",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/transaction-lifecycle",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/programmable-transaction-blocks",
-      "destination": "/develop",
+      "destination": "/develop/transactions/ptbs/prog-txn-blocks",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/transaction-auth/authorized",
-      "destination": "/develop",
+      "destination": "/develop/transactions",
       "permanent": true
     },
     {
       "source": "/guides/app-examples",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
@@ -2567,92 +2567,92 @@
     },
     {
       "source": "/guides/developer/advanced/bcs",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/grpc",
-      "destination": "/develop",
+      "destination": "/develop/accessing-data/grpc",
       "permanent": true
     },
     {
       "source": "/guides/developer/coin-standard",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/cryptography/zklogin-recovery",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/developer/dapp-connect-wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
       "source": "/guides/developer/dapp-kit/dapp-kit-intro",
-      "destination": "/develop",
+      "destination": "/references/sui-sdks",
       "permanent": true
     },
     {
       "source": "/guides/developer/examples/tic-tac-toe",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-app/admin-dashboard",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-app/publish-package",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-app/shared-counter",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-app/write-smart-contract",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-package/publish-package",
-      "destination": "/develop",
+      "destination": "/develop/publish-upgrade-packages/deploy",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/call-move-functions",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/cli-client",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/deploy-on-sui",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/move-setup",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/run-a-local-full-node",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/zk-login",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
@@ -2662,307 +2662,307 @@
     },
     {
       "source": "/guides/developer/kiosk",
-      "destination": "/develop",
+      "destination": "/onchain-finance/kiosk",
       "permanent": true
     },
     {
       "source": "/guides/developer/liquid-staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/move/move-registry",
-      "destination": "/develop",
+      "destination": "/develop/manage-packages",
       "permanent": true
     },
     {
       "source": "/guides/developer/nft/kiosk",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/guides/developer/starter-templates",
-      "destination": "/develop/getting-started",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/create-capabilities",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/creating-coin",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/gas-in-sui",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/graphql",
-      "destination": "/develop",
+      "destination": "/references/sui-graphql",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/working-with-bcs",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/working-with-keys",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-bridge",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens/sui-bridging",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-cli-client/ptb",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-reference",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/create-nft",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/kiosk",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/migration-guide",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/move-prover",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/move-toml",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/object",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-programmability/interacting-with-contracts",
-      "destination": "/develop",
+      "destination": "/develop/transactions",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-prover",
-      "destination": "/develop",
+      "destination": "/develop/testing-debugging",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-sdk/rust-sdk",
-      "destination": "/develop",
+      "destination": "/references/rust-sdk",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-signatures",
-      "destination": "/develop",
+      "destination": "/develop/cryptography/signing",
       "permanent": true
     },
     {
       "source": "/guides/developer/wallet-kit/quickstart",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
       "source": "/guides/developer/wallets/web3-integration",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/operate-a-sui-node",
-      "destination": "/develop",
+      "destination": "/operators",
       "permanent": true
     },
     {
       "source": "/guides/operating-a-validator/staking-and-delegation",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/operating-a-validator/staking-rewards",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/operator/configure-snapshots",
-      "destination": "/develop",
+      "destination": "/operators",
       "permanent": true
     },
     {
       "source": "/guides/operator/run-validator",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/guides/operator/stake-management",
-      "destination": "/develop",
+      "destination": "/operators",
       "permanent": true
     },
     {
       "source": "/guides/operator/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/operator/sui-consensus",
-      "destination": "/develop",
+      "destination": "/operators",
       "permanent": true
     },
     {
       "source": "/guides/operator/sui-fullnode",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/guides/operator/validator/setup-validator",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/guides/operator/validator/validator-setup",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/guides/sui-tokenomics/staking-and-unstaking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/sui-tokenomics/staking-rewards",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/user/sui-wallets/ledger",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/validator/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/intro-to-sui",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/learn/about-sui/performance",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/learn/consensus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/learn/sui-architecture/consensus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/learn/sui-architecture/high-level-view",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/learn/tokenomics/gas-fees",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/references/api/reference",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/fullnode-protocol/grpc-v2",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/references/move-stdlib/crypto/ecdsa_k1",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/move/stdlib/ecdsa_k1",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/move/test_scenario",
-      "destination": "/develop",
+      "destination": "/develop/testing-debugging",
       "permanent": true
     },
     {
       "source": "/references/rpc/servers",
-      "destination": "/develop",
+      "destination": "/references/sui-api",
       "permanent": true
     },
     {
       "source": "/references/sui-consensus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/references/sui-glossary",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/sui-move-examples",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/references/sui-move/coin",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/references/sui-protocol/sui-consensus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/references/sui-token.pdf",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/applications/walrus/overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/sui-storage",
       "permanent": true
     },
     {
       "source": "/build/dapps/connecting-to-wallets",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
@@ -2972,717 +2972,717 @@
     },
     {
       "source": "/build/devex/swap-fees",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/build/move-apps",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/build/sui-sdk-kit/sui-java-sdk",
-      "destination": "/develop",
+      "destination": "/references/sui-sdks",
       "permanent": true
     },
     {
       "source": "/build/wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/concepts/components/narwhal",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography/zklogin/user-salt",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/concepts/deepbook",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/concepts/economics/gas-pricing",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/governance/epoch",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/governance/validators",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/concepts/objects/object-model",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
       "source": "/concepts/parallel-execution",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/consensus-engine",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/consensus/mysticeti",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/fees",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/gas-fees",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/gas-model",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/high-level-architecture",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/object-centric",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/sui-transaction-processing",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/transaction-processing/gas-fees",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture/transactions-and-consensus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/concepts/sui-delegated-pos",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-grants",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/events",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/programming-with-objects",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/storage/gas-storage-fund",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-differences",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move/move-overview",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/concepts/sui-objects/object-ownership",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
       "source": "/concepts/sui-objects/runtime/object-runtime",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/staking-delegation",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/staking-rewards",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-tokenomics/sui-token",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/sui-transaction-builder/gas-fees",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/technology-overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/airdrop",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/gas",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/gas-distribution",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/object-renting",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/package-publish",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/token-sui",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/gas",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/mysticeti",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/prog-txns/mysticeti",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/developing/building-apps/first-app",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/build/smart-contracts",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/consumer/zk-login",
-      "destination": "/develop",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/dev-inspect",
-      "destination": "/develop",
+      "destination": "/develop/transactions",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/create-currency",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens/currency",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/fungible-token",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/games/coin-flip",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/nft",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/personal-message",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/prediction-market",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/random",
-      "destination": "/develop",
+      "destination": "/sui-stack/on-chain-primitives/randomness-onchain",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/sponsored-transactions",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/sponsor-txn",
       "permanent": true
     },
     {
       "source": "/guides/developer/coin/create-coin",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-app/blackjack",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/first-app/write-move-packages",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/flash-loans",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/guides/developer/framework/move",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-start",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/cli",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/first-move-move",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/get-tokens",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/sui-wallets",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/wallets",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/graphql/reference/queries",
-      "destination": "/develop",
+      "destination": "/references/sui-graphql",
       "permanent": true
     },
     {
       "source": "/guides/developer/object-io",
-      "destination": "/develop",
+      "destination": "/develop/objects",
       "permanent": true
     },
     {
       "source": "/guides/developer/sdk/rust-sdk",
-      "destination": "/develop",
+      "destination": "/references/rust-sdk",
       "permanent": true
     },
     {
       "source": "/guides/developer/security/gas-charges",
-      "destination": "/develop",
+      "destination": "/develop/transaction-payment/gas-in-sui",
       "permanent": true
     },
     {
       "source": "/guides/developer/smart-contracts/upgrade-packages",
-      "destination": "/develop",
+      "destination": "/develop/publish-upgrade-packages/upgrade",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/coin-management",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/connect-wallet",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/send-receive-tokens",
-      "destination": "/develop",
+      "destination": "/develop/objects/transfers",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/using-move",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/using-phantom",
-      "destination": "/develop",
+      "destination": "/develop/write-move/sui-move-concepts",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/working-objects",
-      "destination": "/develop",
+      "destination": "/develop/objects",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-api/graphql",
-      "destination": "/develop",
+      "destination": "/references/sui-graphql",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-architecture/high-level",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-examples/fungible-tokens",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-land/move-toml",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move-tutorial/ch01-get-started",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/coin",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-move/publishing",
-      "destination": "/develop",
+      "destination": "/develop/write-move",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-nft",
-      "destination": "/develop",
+      "destination": "/onchain-finance/tokenized-assets",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallet-kit",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-wallet-standard",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/developer/testing",
-      "destination": "/develop",
+      "destination": "/develop/testing-debugging",
       "permanent": true
     },
     {
       "source": "/guides/developer/troubleshooting",
-      "destination": "/develop",
+      "destination": "/develop/testing-debugging/common-errors",
       "permanent": true
     },
     {
       "source": "/guides/developer/wallet-integrations",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
       "source": "/guides/developer/wallet-kit",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
     },
     {
       "source": "/guides/developer/walrus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/sui-storage",
       "permanent": true
     },
     {
       "source": "/guides/operating/staking-unstaking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/operator/full-node/setup",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/guides/operator/fullnode/run-fullnode",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/guides/operator/prune-node",
-      "destination": "/develop",
+      "destination": "/operators",
       "permanent": true
     },
     {
       "source": "/guides/operator/validator-activities",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/guides/operator/validator/update-validator-info",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/guides/user/stake-sui",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/user/sui-wallets/hardware-wallets/ledger",
-      "destination": "/develop",
+      "destination": "/onchain-finance/asset-custody/wallets",
       "permanent": true
     },
     {
       "source": "/guides/validator/run-a-validator",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/learn/architecture/high-level-overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/learn/architecture/overview",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/learn/move/move-overview",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/learn/objects/object-ownership",
-      "destination": "/develop",
+      "destination": "/develop/objects",
       "permanent": true
     },
     {
       "source": "/learn/tokenomics/sui-economy",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/quick-start",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/references/cli/suiup",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/dapp-kit",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/sdk/typescript",
-      "destination": "/develop",
+      "destination": "/references/sui-sdks",
       "permanent": true
     },
     {
       "source": "/references/sui-dapp-toolkit",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/sui-framework/staking-pool",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/references/sui-token/use",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/references/sui-types/transaction",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/references/transaction-format",
-      "destination": "/develop",
+      "destination": "/references",
       "permanent": true
     },
     {
       "source": "/sui-paper/sui.pdf",
-      "destination": "/develop",
+      "destination": "/references/research-papers",
       "permanent": true
     },
     {
       "source": "/sui-rpc",
-      "destination": "/develop",
+      "destination": "/references/sui-api",
       "permanent": true
     },
     {
       "source": "/technology/architecture",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/technology/transaction-flow",
-      "destination": "/develop",
+      "destination": "/develop/transactions/transaction-lifecycle",
       "permanent": true
     },
     {
       "source": "/sui-whitepaper",
-      "destination": "/develop",
+      "destination": "/references/research-papers",
       "permanent": true
     },
     {
       "source": "/contribute-to-sui-repos",
-      "destination": "/develop",
+      "destination": "/references/contribute/contribution-process",
       "permanent": true
     },
     {
       "source": "/guides/bridge",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens/sui-bridging",
       "permanent": true
     },
     {
       "source": "/learn/tokenomics/staking",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/coin",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/guides/developer/deepbook",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/references/sui-move/modules/coin_registry",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-token-standard",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/references/cli/client",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/contribute/faq",
-      "destination": "/develop",
+      "destination": "/references/contribute/contribution-process",
       "permanent": true
     },
     {
       "source": "/deepbook",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/references/rpc/mainnet",
-      "destination": "/develop",
+      "destination": "/references/sui-api",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/create-coin/loyalty",
-      "destination": "/develop",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/operator/full-node",
-      "destination": "/develop",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
       "source": "/guides/validator/run-validator",
-      "destination": "/develop",
+      "destination": "/operators/validator",
       "permanent": true
     },
     {
       "source": "/learn/architecture/consensus/mysticeti",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/guides/developer/deepbookv3/flash-loans",
-      "destination": "/develop",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
       "permanent": true
     },
     {
       "source": "/concepts/tokenomics/rewards",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/tokenomics-overview",
       "permanent": true
     },
     {
       "source": "/concepts/economics",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-cli/client",
-      "destination": "/develop",
+      "destination": "/references/cli",
       "permanent": true
     },
     {
       "source": "/explore/panzerdogs",
-      "destination": "/develop",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
@@ -3697,32 +3697,32 @@
     },
     {
       "source": "/exchange-integration-guide",
-      "destination": "/develop",
+      "destination": "/references/exchange-integration-guide",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography/transaction-auth",
-      "destination": "/develop",
+      "destination": "/develop/transactions",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started/cli-install",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/concepts/sui-architecture",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
       "source": "/concepts/consensus",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture/consensus",
       "permanent": true
     },
     {
       "source": "/build/programming-with-objects",
-      "destination": "/develop",
+      "destination": "/develop/objects",
       "permanent": true
     },
     {
@@ -3732,27 +3732,27 @@
     },
     {
       "source": "/guides/developer/nautilus/index",
-      "destination": "/develop/nautilus",
+      "destination": "/sui-stack/nautilus",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101",
-      "destination": "/develop",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/client-tssdk",
-      "destination": "/getting-started/client-tssdk",
+      "destination": "/getting-started/onboarding/app-frontends",
       "permanent": true
     },
     {
       "source": "/guides/developer/sui-101/common-errors",
-      "destination": "/develop/common-errors",
+      "destination": "/develop/testing-debugging/common-errors",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/coin-mgt",
-      "destination": "/develop"
+      "destination": "/onchain-finance/fungible-tokens"
     },
     {
       "source": "/concepts/transactions",
@@ -3786,27 +3786,27 @@
     },
     {
       "source": "/concepts/transactions/sponsored-transactions",
-      "destination": "/develop/transactions/sponsor-txn",
+      "destination": "/develop/transaction-payment/sponsor-txn",
       "permanent": true
     },
     {
       "source": "/guides/developer/accessing-data/custom-indexer/indexer-runtime-perf",
-      "destination": "/develop/data-access/indexer-runtime-perf",
+      "destination": "/develop/accessing-data/custom-indexer/indexer-runtime-perf",
       "permanent": true
     },
     {
       "source": "/guides/developer/accessing-data/custom-indexer/pipeline-architecture",
-      "destination": "/develop/data-access/pipeline-architecture",
+      "destination": "/develop/accessing-data/custom-indexer/pipeline-architecture",
       "permanent": true
     },
     {
       "source": "/guides/developer/accessing-data/custom-indexer/indexer-data-integration",
-      "destination": "/develop/data-access/indexer-data-integration",
+      "destination": "/develop/accessing-data/custom-indexer/indexer-data-integration",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography/nautilus/nautilus-design",
-      "destination": "/develop/nautilus/nautilus-design",
+      "destination": "/sui-stack/nautilus/nautilus-design",
       "permanent": true
     },
     {
@@ -3821,32 +3821,32 @@
     },
     {
       "source": "/guides/developer/currency",
-      "destination": "/develop/coin/currency",
+      "destination": "/onchain-finance/fungible-tokens/currency",
       "permanent": true
     },
     {
       "source": "/guides/developer/cryptography/zklogin-integration",
-      "destination": "/develop/cryptography/zklogin-integration/zklogin-integration",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography/zklogin",
-      "destination": "/develop/cryptography/zklogin-integration/zklogin",
+      "destination": "/sui-stack/zklogin-integration/zklogin",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/conventions",
-      "destination": "/develop/move-best-practices",
+      "destination": "/develop/write-move/move-best-practices",
       "permanent": true
     },
     {
       "source": "/concepts/sui-move-concepts/packages",
-      "destination": "/develop/publish-upgrade-packages/package-overview",
+      "destination": "/develop/write-move/package-overview",
       "permanent": true
     },
     {
       "source": "/concepts/transactions/gas-smashing",
-      "destination": "/develop/transactions/gas-smashing",
+      "destination": "/develop/transaction-payment/gas-smashing",
       "permanent": true
     },
     {
@@ -3876,12 +3876,12 @@
     },
     {
       "source": "/guides/developer/advanced/efficient-smart-contracts",
-      "destination": "/develop/dev-cheat-sheet",
+      "destination": "/getting-started/dev-cheat-sheet",
       "permanent": true
     },
     {
       "source": "/guides/developer/advanced/maximize-reach",
-      "destination": "/develop/dev-cheat-sheet",
+      "destination": "/getting-started/dev-cheat-sheet",
       "permanent": true
     },
     {
@@ -3891,12 +3891,12 @@
     },
     {
       "source": "/guides/developer/advanced/security-best-practices",
-      "destination": "/develop/dev-cheat-sheet",
+      "destination": "/getting-started/dev-cheat-sheet",
       "permanent": true
     },
     {
       "source": "/guides/developer/coin-index",
-      "destination": "/develop/coin",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
@@ -3906,17 +3906,17 @@
     },
     {
       "source": "/guides/developer/nft-index",
-      "destination": "/develop/digital-assets/non-fungible-tokens/create-nft",
+      "destination": "/onchain-finance/tokenized-assets/create-nft",
       "permanent": true
     },
     {
       "source": "/guides/developer/zklogin-onboarding",
-      "destination": "/develop/cryptography/zklogin-integration/zklogin-integration",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/operator",
-      "destination": "/operators/sui-full-node",
+      "destination": "/operators/full-node/sui-full-node",
       "permanent": true
     },
     {
@@ -3926,7 +3926,7 @@
     },
     {
       "source": "/concepts/cryptography/system/validator-signatures",
-      "destination": "/develop/transactions/transaction-auth/signatures",
+      "destination": "/develop/cryptography/signing",
       "permanent": true
     },
     {
@@ -3961,27 +3961,27 @@
     },
     {
       "source": "/guides/developer/nautilus/nautilus-overview",
-      "destination": "/develop/nautilus",
+      "destination": "/sui-stack/nautilus",
       "permanent": true
     },
     {
       "source": "/guides/developer/nft/nft-rental",
-      "destination": "/develop/digital-assets/non-fungible-tokens/create-nft",
+      "destination": "/onchain-finance/tokenized-assets/create-nft",
       "permanent": true
     },
     {
       "source": "/guides/developer/nft/nft-soulbound",
-      "destination": "/develop/digital-assets/non-fungible-tokens/create-nft",
+      "destination": "/onchain-finance/tokenized-assets/create-nft",
       "permanent": true
     },
     {
       "source": "/guides/developer/objects",
-      "destination": "/develop/objects/object-model",
+      "destination": "/develop/sui-architecture/object-model",
       "permanent": true
     },
     {
       "source": "/guides/developer/packages",
-      "destination": "/develop/publish-upgrade-packages/package-overview",
+      "destination": "/develop/write-move/package-overview",
       "permanent": true
     },
     {
@@ -3996,52 +3996,52 @@
     },
     {
       "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme",
-      "destination": "/references/sui-api/sui-graphql/beta/reference",
+      "destination": "/references/sui-graphql",
       "permanent": true
     },
     {
       "source": "/references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature",
-      "destination": "/references/sui-api/sui-graphql/beta/reference",
+      "destination": "/references/sui-graphql",
       "permanent": true
     },
     {
       "source": "/concepts/cryptography.md",
-      "destination": "/develop/cryptography/index.md",
+      "destination": "/develop/cryptography",
       "permanent": true
     },
     {
       "source": "/guides/developer/accessing-data/custom-indexer.md",
-      "destination": "/develop/accessing-data/custom-indexer/index.md",
+      "destination": "/develop/accessing-data/custom-indexer",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples.md",
-      "destination": "/getting-started/index.md",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/coin.md",
-      "destination": "/develop/coin/index.md",
+      "destination": "/onchain-finance/fungible-tokens",
       "permanent": true
     },
     {
       "source": "/guides/developer/cryptography.md",
-      "destination": "/develop/cryptography/index.md",
+      "destination": "/develop/cryptography",
       "permanent": true
     },
     {
       "source": "/guides/developer/cryptography/zklogin-integration.md",
-      "destination": "/develop/cryptography/zklogin-integration/index.md",
+      "destination": "/sui-stack/zklogin-integration",
       "permanent": true
     },
     {
       "source": "/guides/developer/getting-started.md",
-      "destination": "/getting-started/onboarding/index.md",
+      "destination": "/getting-started/onboarding",
       "permanent": true
     },
     {
       "source": "/guides/developer/nautilus.md",
-      "destination": "/develop/nautilus/index.md",
+      "destination": "/sui-stack/nautilus",
       "permanent": true
     },
     {
@@ -4066,7 +4066,7 @@
     },
     {
       "source": "/references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md",
-      "destination": "/references/sui-api/sui-graphql/beta/reference",
+      "destination": "/references/sui-graphql",
       "permanent": true
     },
     {
@@ -4091,7 +4091,7 @@
     },
     {
       "source": "/sui-compared",
-      "destination": "/develop",
+      "destination": "/develop/sui-architecture",
       "permanent": true
     },
     {
@@ -4101,7 +4101,7 @@
     },
     {
       "source": "/guides/developer/nautilus/marlin",
-      "destination": "/develop/nautilus/community-dev-tools",
+      "destination": "/sui-stack/nautilus/community-dev-tools",
       "permanent": true
     },
     {
@@ -4110,65 +4110,65 @@
       "permanent": true
     },
     {
-    "source": "/guides/developer/coin",
-    "destination": "/develop/digital-assets/fungible-tokens",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/coin/currency",
-    "destination": "/develop/digital-assets/fungible-tokens",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/address-balances-migration",
-    "destination": "/develop/digital-assets/migrate-address-balances",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/coin/regulated",
-    "destination": "/develop/digital-assets/fungible-tokens/regulated-tokens",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/coin/in-game-token",
-    "destination": "/develop/digital-assets/examples-patterns/in-game-currency",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/coin/loyalty",
-    "destination": "/develop/digital-assets/examples-patterns/loyalty-tokens",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/coin/vesting-strategies",
-    "destination": "/develop/digital-assets/fungible-tokens/token-vesting-strategies",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/nft",
-    "destination": "/develop/digital-assets/non-fungible-tokens",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/nft/nft",
-    "destination": "/develop/digital-assets/non-fungible-tokens/create-nft",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/nft/nft-soulbound",
-    "destination": "/develop/digital-assets/examples-patterns/soulbound-tokens",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/nft/nft-rental",
-    "destination": "/develop/digital-assets/examples-patterns/nft-rental",
-    "permanent": true
-  },
-  {
-    "source": "/guides/developer/nft/asset-tokenization",
-    "destination": "/develop/digital-assets/non-fungible-tokens/asset-tokenization",
-    "permanent": true
-  }
+      "source": "/guides/developer/coin",
+      "destination": "/onchain-finance/fungible-tokens",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/coin/currency",
+      "destination": "/onchain-finance/fungible-tokens",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/address-balances-migration",
+      "destination": "/onchain-finance/asset-custody/address-balance-migration",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/coin/regulated",
+      "destination": "/onchain-finance/fungible-tokens/regulated-tokens",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/coin/in-game-token",
+      "destination": "/onchain-finance/examples-patterns/in-game-currency",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/coin/loyalty",
+      "destination": "/onchain-finance/examples-patterns/loyalty-tokens",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/coin/vesting-strategies",
+      "destination": "/onchain-finance/fungible-tokens/token-vesting-strategies",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft",
+      "destination": "/onchain-finance/tokenized-assets",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft/nft",
+      "destination": "/onchain-finance/tokenized-assets/create-nft",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft/nft-soulbound",
+      "destination": "/onchain-finance/examples-patterns/soulbound-tokens",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft/nft-rental",
+      "destination": "/onchain-finance/examples-patterns/nft-rental",
+      "permanent": true
+    },
+    {
+      "source": "/guides/developer/nft/asset-tokenization",
+      "destination": "/onchain-finance/tokenized-assets/asset-tokenization",
+      "permanent": true
+    }
   ],
   "rewrites": [
     {
