@@ -1,0 +1,34 @@
+---
+source: crates/move-package-alt/src/stubs.rs
+assertion_line: 329
+expression: rendered
+---
+/// Auto-generated stub for on-chain package at 0x0000000000000000000000000000000000000000000000000000000000000001
+module 0x0000000000000000000000000000000000000000000000000000000000000001::example {
+    public struct Coin has copy, drop, store {
+        value: u64,
+    }
+    public struct Box<phantom T0: store> has store {
+        id: u64,
+        value: u64,
+    }
+    public struct Wrapper<T0: store> has store {
+        inner: T0,
+    }
+    public enum Color has copy, drop {
+        Red,
+        Green,
+        Blue {
+            r: u8,
+            g: u8,
+            b: u8,
+        },
+    }
+    public native fun create_coin(p0: u64): 0x0000000000000000000000000000000000000000000000000000000000000001::example::Coin;
+    public native fun coin_value(p0: &0x0000000000000000000000000000000000000000000000000000000000000001::example::Coin): u64;
+    public native fun destroy_coin(p0: 0x0000000000000000000000000000000000000000000000000000000000000001::example::Coin): u64;
+    public native fun wrapper_inner<T0: store>(p0: &0x0000000000000000000000000000000000000000000000000000000000000001::example::Wrapper<T0>): &T0;
+    public native fun multi_return(): (u64, bool);
+    public(package) native fun package_only(p0: u64): u64;
+    public entry native fun public_entry(p0: u64, p1: u64): u64;
+}
