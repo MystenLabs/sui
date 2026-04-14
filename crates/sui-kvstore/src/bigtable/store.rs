@@ -71,7 +71,13 @@ impl Connection for BigTableConnection<'_> {
         pipeline_task: &str,
         _checkpoint_hi_inclusive: Option<u64>,
     ) -> Result<Option<InitWatermark>> {
-        self.delegate_to_reader_watermark(pipeline_task).await
+        Ok(self
+            .committer_watermark(pipeline_task)
+            .await?
+            .map(|w| InitWatermark {
+                checkpoint_hi_inclusive: Some(w.checkpoint_hi_inclusive),
+                reader_lo: None,
+            }))
     }
 
     async fn accepts_chain_id(
@@ -135,5 +141,61 @@ impl ConcurrentConnection for BigTableConnection<'_> {
         _pruner_hi: u64,
     ) -> Result<bool> {
         Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::testing::BigTableEmulator;
+    use crate::testing::INSTANCE_ID;
+    use crate::testing::create_tables;
+    use crate::testing::require_bigtable_emulator;
+
+    const PIPELINE: &str = "pipeline";
+    const EPOCH_HI: u64 = 7;
+    const CHECKPOINT_HI: u64 = 200;
+    const TX_HI: u64 = 42;
+    const TIMESTAMP_MS_HI: u64 = 99;
+
+    /// Spawn a BigTable emulator and return a connected store.
+    async fn store_conn() -> (BigTableEmulator, BigTableStore) {
+        require_bigtable_emulator();
+        let emulator = tokio::task::spawn_blocking(BigTableEmulator::start)
+            .await
+            .unwrap()
+            .unwrap();
+        create_tables(emulator.host(), INSTANCE_ID).await.unwrap();
+        let client = BigTableClient::new_local(emulator.host().to_string(), INSTANCE_ID.into())
+            .await
+            .unwrap();
+        (emulator, BigTableStore::new(client))
+    }
+
+    #[tokio::test]
+    async fn test_init_watermark_returns_existing_on_conflict() {
+        let (_emulator, store) = store_conn().await;
+        let mut conn = store.connect().await.unwrap();
+
+        let watermark = CommitterWatermark {
+            epoch_hi_inclusive: EPOCH_HI,
+            checkpoint_hi_inclusive: CHECKPOINT_HI,
+            tx_hi: TX_HI,
+            timestamp_ms_hi_inclusive: TIMESTAMP_MS_HI,
+        };
+        conn.set_committer_watermark(PIPELINE, watermark)
+            .await
+            .unwrap();
+
+        // init must surface the existing committer watermark regardless of the input.
+        let init = conn
+            .init_watermark(PIPELINE, Some(0))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(init.checkpoint_hi_inclusive, Some(CHECKPOINT_HI));
+        // BigTable has no trailing-edge / reader watermark concept.
+        assert_eq!(init.reader_lo, None);
     }
 }
