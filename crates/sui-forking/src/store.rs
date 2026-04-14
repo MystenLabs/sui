@@ -86,43 +86,94 @@ impl DataStore {
         self.gql.chain()
     }
 
-    /// Fetch a verified checkpoint summary together with its contents from the
-    /// remote GraphQL endpoint. When `checkpoint` is `None`, the store's
-    /// `forked_at_checkpoint` is used as the default.
-    pub(crate) async fn get_verified_checkpoint_from_rpc(
+    /// Get a checkpoint summary by sequence number. Prefers the local cache;
+    /// on miss, any pre-fork checkpoint (`sequence <= forked_at_checkpoint`)
+    /// is fetched from the remote GraphQL endpoint and written back to disk
+    /// so subsequent reads hit the cache. Post-fork checkpoints are never
+    /// fetched remotely — they only exist if the local executor produced
+    /// them, so a miss returns `None`.
+    pub(crate) fn get_checkpoint_by_sequence_number(
         &self,
-        checkpoint: Option<CheckpointSequenceNumber>,
-    ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
-        let checkpoint = checkpoint.unwrap_or(self.forked_at_checkpoint);
-        self.gql.get_verified_checkpoint(Some(checkpoint))
+        sequence: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+        if let Some(checkpoint) = self.local.get_checkpoint_by_sequence_number(sequence)? {
+            return Ok(Some(checkpoint));
+        }
+        if sequence > self.forked_at_checkpoint {
+            return Ok(None);
+        }
+        Ok(self
+            .fetch_and_cache_checkpoint(sequence)?
+            .map(|(checkpoint, _)| checkpoint))
     }
 
-    /// Ensure the startup (forked-at) checkpoint is available on disk. If both
-    /// the summary and contents are already cached locally, this is a no-op;
-    /// otherwise the pair is fetched from the remote GraphQL endpoint and
-    /// persisted via [`FilesystemStore`].
-    pub(crate) async fn download_and_persist_startup_checkpoint(&self) -> anyhow::Result<()> {
-        let sequence = self.forked_at_checkpoint;
-
-        // `get_checkpoint_contents_by_sequence_number` reads the summary to
-        // derive `content_digest` before loading the contents, so a `Some`
-        // result here implies both halves are already cached.
-        if self
-            .local
-            .get_checkpoint_contents_by_sequence_number(sequence)?
-            .is_some()
-        {
-            return Ok(());
+    /// Get checkpoint contents by sequence number, with the same local-first
+    /// remote-fallback policy as [`Self::get_checkpoint_by_sequence_number`].
+    pub(crate) fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Option<CheckpointContents>> {
+        if let Some(contents) = self.local.get_checkpoint_contents_by_sequence_number(sequence)? {
+            return Ok(Some(contents));
         }
+        if sequence > self.forked_at_checkpoint {
+            return Ok(None);
+        }
+        Ok(self
+            .fetch_and_cache_checkpoint(sequence)?
+            .map(|(_, contents)| contents))
+    }
 
-        let (checkpoint, contents) = self
-            .get_verified_checkpoint_from_rpc(Some(sequence))
-            .await?
-            .ok_or_else(|| anyhow!("checkpoint {} not found on remote", sequence))?;
+    /// Look up a checkpoint summary by its digest. Local only: the GraphQL
+    /// checkpoint query is keyed by sequence number, so there is no remote
+    /// fallback for digest lookups.
+    pub(crate) fn get_checkpoint_by_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+        self.local.get_checkpoint_by_digest(digest)
+    }
 
+    /// Look up checkpoint contents by their digest. Local only: contents are
+    /// content-addressed on disk, but the remote GraphQL schema does not
+    /// expose a contents-by-digest query, so there is no fallback path.
+    pub(crate) fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> anyhow::Result<Option<CheckpointContents>> {
+        self.local.get_checkpoint_contents_by_digest(digest)
+    }
+
+    /// Return the highest checkpoint summary cached locally. This never
+    /// consults the remote endpoint — the local executor is the source of
+    /// truth for "latest" in a forked network.
+    pub(crate) fn get_highest_verified_checkpoint(
+        &self,
+    ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+        self.local.get_highest_verified_checkpoint()
+    }
+
+    /// Eagerly populate the cache with the startup (forked-at) checkpoint so
+    /// any bootstrap failure surfaces now instead of on first access.
+    pub(crate) fn download_and_persist_startup_checkpoint(&self) -> anyhow::Result<()> {
+        self.get_checkpoint_by_sequence_number(self.forked_at_checkpoint)?
+            .ok_or_else(|| anyhow!("checkpoint {} not found on remote", self.forked_at_checkpoint))?;
+        Ok(())
+    }
+
+    /// Fetch a checkpoint pair from the remote GraphQL endpoint and persist
+    /// both halves to disk. Shared by the sequence-keyed cache-aware getters.
+    fn fetch_and_cache_checkpoint(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
+        let Some((checkpoint, contents)) = self.gql.get_verified_checkpoint(Some(sequence))?
+        else {
+            return Ok(None);
+        };
         self.local.write_checkpoint_summary(&checkpoint)?;
         self.local.write_checkpoint_contents(&contents)?;
-        Ok(())
+        Ok(Some((checkpoint, contents)))
     }
 
     /// Get the object at the latest version available on disk. If not found, it will fetch the
@@ -319,26 +370,24 @@ impl SimulatorStore for DataStore {
         &self,
         sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        self.local
-            .get_checkpoint_by_sequence_number(sequence_number)
+        DataStore::get_checkpoint_by_sequence_number(self, sequence_number)
             .ok()
             .flatten()
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        self.local.get_checkpoint_by_digest(digest).ok().flatten()
+        DataStore::get_checkpoint_by_digest(self, digest).ok().flatten()
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        self.local.get_highest_verified_checkpoint().ok().flatten()
+        DataStore::get_highest_verified_checkpoint(self).ok().flatten()
     }
 
     fn get_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        self.local
-            .get_checkpoint_contents_by_digest(digest)
+        DataStore::get_checkpoint_contents_by_digest(self, digest)
             .ok()
             .flatten()
     }
@@ -514,6 +563,18 @@ mod checkpoint_persistence_tests {
         let loaded_contents = SimulatorStore::get_checkpoint_contents(&store, contents.digest())
             .expect("contents should be persisted");
         assert_eq!(loaded_contents.digest(), contents.digest());
+    }
+
+    #[test]
+    fn post_fork_sequence_miss_returns_none_without_remote() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DataStore::new_for_testing(temp.path().to_path_buf());
+        // `new_for_testing` pins `forked_at_checkpoint = 0`, so any positive
+        // sequence is "post-fork". The dummy GraphQL endpoint is unreachable,
+        // so reaching the network would surface as an error here.
+        let result = DataStore::get_checkpoint_by_sequence_number(&store, 42)
+            .expect("post-fork miss should short-circuit before the remote");
+        assert!(result.is_none());
     }
 
     #[test]
