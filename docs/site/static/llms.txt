@@ -171,7 +171,7 @@
 
 ### Onchain Finance/Asset Custody/Address Balances
 - [Migrate Address
-    Balances](https://docs.sui.io/onchain-finance/asset-custody/address-balances/address-balance-migration.md)
+    Balances](https://docs.sui.io/onchain-finance/asset-custody/address-balance-migration.md)
 
 ### Onchain Finance/Asset Custody/Wallets
 - [Wallets Index](https://docs.sui.io/onchain-finance/asset-custody/wallets/index.md)
