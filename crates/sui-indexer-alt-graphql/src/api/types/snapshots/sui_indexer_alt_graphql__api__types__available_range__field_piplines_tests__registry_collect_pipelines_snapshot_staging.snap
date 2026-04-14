@@ -1490,6 +1490,9 @@ Query.type
 Query.simulateTransaction
   => {}
 
+Query.verifySignature
+  => {}
+
 Query.verifyZkLoginSignature
   => {}
 
@@ -1617,6 +1620,9 @@ SharedInput.initialSharedVersion
   => {}
 
 SharedInput.mutable
+  => {}
+
+SignatureVerifyResult.success
   => {}
 
 SimulationResult.effects
