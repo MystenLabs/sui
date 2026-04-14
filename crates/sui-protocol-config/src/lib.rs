@@ -2801,6 +2801,7 @@ impl ProtocolConfig {
         if version.0 >= ProtocolVersion::MIN.0 && version.0 <= ProtocolVersion::MAX_ALLOWED.0 {
             let mut ret = Self::get_for_version_impl(version, chain);
             ret.version = version;
+            ret = Self::apply_config_override(version, ret);
             Some(ret)
         } else {
             None
@@ -5443,6 +5444,26 @@ mod test {
 
         prot.set_attr_for_testing("max_arguments".to_string(), "456".to_string());
         assert_eq!(prot.max_arguments(), 456);
+    }
+
+    #[test]
+    fn test_get_for_version_if_supported_applies_test_overrides() {
+        let before =
+            ProtocolConfig::get_for_version_if_supported(ProtocolVersion::new(1), Chain::Unknown)
+                .unwrap();
+
+        assert!(!before.enable_coin_reservation_obj_refs());
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        });
+
+        let after =
+            ProtocolConfig::get_for_version_if_supported(ProtocolVersion::new(1), Chain::Unknown)
+                .unwrap();
+
+        assert!(after.enable_coin_reservation_obj_refs());
     }
 
     #[test]
