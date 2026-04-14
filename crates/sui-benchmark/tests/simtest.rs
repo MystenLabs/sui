@@ -1264,6 +1264,7 @@ mod test {
             in_flight_ratio,
             duration,
             composite_config: config.composite_config,
+            deposit_target_address: None,
         };
 
         let workloads_builders = WorkloadConfiguration::create_workload_builders(

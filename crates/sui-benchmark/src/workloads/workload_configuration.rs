@@ -5,6 +5,7 @@ use crate::bank::BenchmarkBank;
 use crate::drivers::Interval;
 use crate::options::{Opts, RunSpec};
 use crate::system_state_observer::SystemStateObserver;
+use crate::workloads::addr_bal_deposit::{AddrBalDepositConfig, AddrBalDepositWorkloadBuilder};
 use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
 use crate::workloads::party::PartyWorkloadBuilder;
@@ -18,6 +19,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_types::base_types::SuiAddress;
 use tracing::info;
 
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
@@ -61,6 +63,7 @@ pub struct WorkloadConfig {
     pub in_flight_ratio: u64,
     pub duration: Interval,
     pub composite_config: Option<super::composite::CompositeWorkloadConfig>,
+    pub deposit_target_address: Option<SuiAddress>,
 }
 pub struct WorkloadConfiguration;
 
@@ -100,6 +103,7 @@ impl WorkloadConfiguration {
                 num_workers,
                 in_flight_ratio,
                 duration,
+                deposit_target_address,
             } => {
                 info!(
                     "Number of benchmark groups to run: {}",
@@ -149,6 +153,10 @@ impl WorkloadConfiguration {
                         } else {
                             None
                         },
+                        deposit_target_address: deposit_target_address.as_ref().map(|addr| {
+                            SuiAddress::from_str(addr)
+                                .expect("Invalid deposit target address format")
+                        }),
                     };
                     let builders =
                         Self::create_workload_builders(config, system_state_observer.clone()).await;
@@ -232,6 +240,7 @@ impl WorkloadConfiguration {
             in_flight_ratio,
             duration,
             composite_config,
+            deposit_target_address,
         }: WorkloadConfig,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Option<WorkloadBuilderInfo>> {
@@ -242,6 +251,27 @@ impl WorkloadConfiguration {
             num_workers,
             duration
         );
+        let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
+
+        if let Some(target) = deposit_target_address {
+            info!("Deposit target address mode: all traffic deposits to {target}");
+            let config = AddrBalDepositConfig {
+                target_address: target,
+                deposit_amount: 1000,
+                seed_amount: 1_000_000_000,
+                metrics: None,
+            };
+            return vec![AddrBalDepositWorkloadBuilder::build_info(
+                config,
+                target_qps,
+                num_workers,
+                in_flight_ratio,
+                reference_gas_price,
+                duration,
+                group,
+            )];
+        }
+
         let total_weight = weights.shared_counter
             + weights.shared_deletion
             + weights.transfer_object
@@ -255,7 +285,6 @@ impl WorkloadConfiguration {
             + weights.party
             + weights.conflicting_transfer
             + weights.composite;
-        let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
             weights.shared_counter as f32 / total_weight as f32,
