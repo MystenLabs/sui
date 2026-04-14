@@ -499,7 +499,8 @@ pub(crate) mod checkpoint_query {
     fn decode_checkpoint(
         checkpoint: Checkpoint,
     ) -> Result<(VerifiedCheckpoint, CheckpointContents), Error> {
-        let contents: CheckpointContents = decode_bcs(checkpoint.content_bcs, "checkpoint contents")?;
+        let contents: CheckpointContents =
+            decode_bcs(checkpoint.content_bcs, "checkpoint contents")?;
         let summary: CheckpointSummary = decode_bcs(checkpoint.summary_bcs, "checkpoint summary")?;
         let Some(validator_signatures) = checkpoint.validator_signatures else {
             return Err(anyhow!(

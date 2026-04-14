@@ -285,7 +285,9 @@ impl FilesystemStore {
         checkpoint: &VerifiedCheckpoint,
     ) -> anyhow::Result<()> {
         let sequence = checkpoint.data().sequence_number;
-        let path = self.checkpoint_seq_dir(sequence).join(CHECKPOINT_SUMMARY_FILE);
+        let path = self
+            .checkpoint_seq_dir(sequence)
+            .join(CHECKPOINT_SUMMARY_FILE);
         self.write_bcs_file(&path, checkpoint.inner())?;
 
         self.update_latest_checkpoint_marker(sequence)?;
@@ -313,7 +315,9 @@ impl FilesystemStore {
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
-        let path = self.checkpoint_seq_dir(sequence).join(CHECKPOINT_SUMMARY_FILE);
+        let path = self
+            .checkpoint_seq_dir(sequence)
+            .join(CHECKPOINT_SUMMARY_FILE);
         if !path.exists() {
             return Ok(None);
         }
@@ -389,7 +393,10 @@ impl FilesystemStore {
         };
         if current.map_or(true, |c| sequence > c) {
             fs::write(&path, sequence.to_string()).with_context(|| {
-                format!("Failed to write latest checkpoint marker: {}", path.display())
+                format!(
+                    "Failed to write latest checkpoint marker: {}",
+                    path.display()
+                )
             })?;
         }
         Ok(())
@@ -453,10 +460,7 @@ fn append_index_line(
 
 /// Scan a space-delimited index file for `key`. Returns the value from the
 /// last matching line (last-wins), so re-appending the same key is idempotent.
-fn lookup_index(
-    path: &Path,
-    key: &str,
-) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
+fn lookup_index(path: &Path, key: &str) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
     if !path.exists() {
         return Ok(None);
     }

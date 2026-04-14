@@ -113,7 +113,10 @@ impl DataStore {
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<CheckpointContents>> {
-        if let Some(contents) = self.local.get_checkpoint_contents_by_sequence_number(sequence)? {
+        if let Some(contents) = self
+            .local
+            .get_checkpoint_contents_by_sequence_number(sequence)?
+        {
             return Ok(Some(contents));
         }
         if sequence > self.forked_at_checkpoint {
@@ -157,7 +160,12 @@ impl DataStore {
     /// any bootstrap failure surfaces now instead of on first access.
     pub(crate) fn download_and_persist_startup_checkpoint(&self) -> anyhow::Result<()> {
         self.get_checkpoint_by_sequence_number(self.forked_at_checkpoint)?
-            .ok_or_else(|| anyhow!("checkpoint {} not found on remote", self.forked_at_checkpoint))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "checkpoint {} not found on remote",
+                    self.forked_at_checkpoint
+                )
+            })?;
         Ok(())
     }
 
@@ -167,8 +175,7 @@ impl DataStore {
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
-        let Some((checkpoint, contents)) = self.gql.get_verified_checkpoint(Some(sequence))?
-        else {
+        let Some((checkpoint, contents)) = self.gql.get_verified_checkpoint(Some(sequence))? else {
             return Ok(None);
         };
         self.local.write_checkpoint_summary(&checkpoint)?;
@@ -376,11 +383,15 @@ impl SimulatorStore for DataStore {
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        DataStore::get_checkpoint_by_digest(self, digest).ok().flatten()
+        DataStore::get_checkpoint_by_digest(self, digest)
+            .ok()
+            .flatten()
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        DataStore::get_highest_verified_checkpoint(self).ok().flatten()
+        DataStore::get_highest_verified_checkpoint(self)
+            .ok()
+            .flatten()
     }
 
     fn get_checkpoint_contents(
@@ -532,7 +543,6 @@ impl SimulatorStore for DataStore {
         self
     }
 }
-
 
 #[cfg(test)]
 #[path = "tests/store_checkpoint_persistence.rs"]

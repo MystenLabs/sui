@@ -39,9 +39,8 @@ fn make_object(id: ObjectID, version: u64) -> Object {
 }
 
 fn build_checkpoint(sequence: u64) -> (VerifiedCheckpoint, CheckpointContents) {
-    let data =
-        sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(sequence)
-            .build_checkpoint();
+    let data = sui_types::test_checkpoint_data_builder::TestCheckpointBuilder::new(sequence)
+        .build_checkpoint();
     let checkpoint = VerifiedCheckpoint::new_unchecked(data.summary);
     (checkpoint, data.contents)
 }
@@ -206,14 +205,24 @@ fn test_checkpoint_lookups_return_none_when_missing() {
     let (_dir, store) = test_store();
     let (checkpoint, contents) = build_checkpoint(1);
 
-    assert!(store.get_checkpoint_by_sequence_number(1).unwrap().is_none());
+    assert!(
+        store
+            .get_checkpoint_by_sequence_number(1)
+            .unwrap()
+            .is_none()
+    );
     assert!(
         store
             .get_checkpoint_contents_by_sequence_number(1)
             .unwrap()
             .is_none()
     );
-    assert!(store.get_checkpoint_by_digest(checkpoint.digest()).unwrap().is_none());
+    assert!(
+        store
+            .get_checkpoint_by_digest(checkpoint.digest())
+            .unwrap()
+            .is_none()
+    );
     assert!(
         store
             .get_checkpoint_contents_by_digest(contents.digest())

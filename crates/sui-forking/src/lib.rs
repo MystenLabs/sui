@@ -20,9 +20,9 @@ use anyhow::{Error, Result};
 
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
-use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointSequenceNumber, VerifiedCheckpoint,
-};
+use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 use sui_types::transaction::TransactionData;

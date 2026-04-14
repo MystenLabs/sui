@@ -13,7 +13,10 @@ use super::*;
 
 fn build_checkpoint(sequence: u64) -> (VerifiedCheckpoint, CheckpointContents) {
     let data = TestCheckpointBuilder::new(sequence).build_checkpoint();
-    (VerifiedCheckpoint::new_unchecked(data.summary), data.contents)
+    (
+        VerifiedCheckpoint::new_unchecked(data.summary),
+        data.contents,
+    )
 }
 
 #[test]

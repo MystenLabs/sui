@@ -10,6 +10,7 @@ use std::num::NonZeroUsize;
 use std::time::Duration;
 
 use rand::rngs::OsRng;
+
 use simulacrum::Simulacrum;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_swarm_config::network_config::NetworkConfig;
