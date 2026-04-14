@@ -173,6 +173,9 @@ macro_rules! fetch_child_object_unbounded {
                         ),
                     ));
                 }
+                Owner::PartyPermissioned { .. } => {
+                    unimplemented!("PartyPermissioned does not exist for this execution version")
+                }
             };
             match &object.data {
                 Data::Package(_) => {

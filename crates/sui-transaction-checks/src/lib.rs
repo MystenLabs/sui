@@ -742,7 +742,10 @@ mod checked {
             }
             match object.owner() {
                 Owner::AddressOwner(_) | Owner::ConsensusAddressOwner { .. } => (),
-                Owner::Immutable | Owner::Shared { .. } | Owner::ObjectOwner(_) => {
+                Owner::Immutable
+                | Owner::Shared { .. }
+                | Owner::ObjectOwner(_)
+                | Owner::PartyPermissioned { .. } => {
                     return Err(UserInputError::Unsupported(
                         "Gasless transactions only support owned object inputs".to_string(),
                     ));

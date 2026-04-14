@@ -952,6 +952,9 @@ fn check_circular_ownership(
                 }
                 object_owner_map.insert(id, new_owner);
             }
+            Owner::PartyPermissioned { .. } => {
+                unimplemented!("PartyPermissioned does not exist for this execution version")
+            }
         }
     }
     Ok(())

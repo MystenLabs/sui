@@ -150,6 +150,7 @@ impl From<BalanceChangeContents> for GrpcBalanceChange {
                 grpc.set_coin_type(coin_type);
                 grpc.set_amount(amount.to_string());
                 grpc
+            }
         }
     }
 }
