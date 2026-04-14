@@ -10,7 +10,7 @@ This example implements a governance-controlled currency in Move. Transferring t
 
 ## Initialize the currency
 
-To create the King Credits currency, initialize the currency using the `coin::create_currency` module and configure the currency policy with `token::add_rule_for_action`:
+To create the King Credits currency, initialize the currency using the `coin_registry::new_currency_with_otw` module and configure the currency policy with `token::add_rule_for_action`:
 
 <ImportContent source="I3/king_credits/sources/king_credits.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" noComments />
 

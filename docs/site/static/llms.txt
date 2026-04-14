@@ -18,8 +18,6 @@
 
 ### Develop/Accessing Data/Archival Store
 - [Archival Store Index](https://docs.sui.io/develop/accessing-data/archival-store/index.md)
-- [Using Archival
-    Store](https://docs.sui.io/develop/accessing-data/archival-store/using-archival-store.md)
 - [What Is Archival
     Store](https://docs.sui.io/develop/accessing-data/archival-store/what-is-archival-store.md)
 - [Authenticated Events](https://docs.sui.io/develop/accessing-data/authenticated-events.md)
@@ -44,9 +42,7 @@
 - [Query With Graphql](https://docs.sui.io/develop/accessing-data/graphql/query-with-graphql.md)
 
 ### Develop/Accessing Data/Grpc
-- [Grpc Index](https://docs.sui.io/develop/accessing-data/grpc/index.md)
-- [Using Grpc](https://docs.sui.io/develop/accessing-data/grpc/using-grpc.md)
-- [What Is Grpc](https://docs.sui.io/develop/accessing-data/grpc/what-is-grpc.md)
+- [Grpc Overview](https://docs.sui.io/develop/accessing-data/grpc/using-grpc.md)
 - [Accessing Data Index](https://docs.sui.io/develop/accessing-data/index.md)
 - [Using Events](https://docs.sui.io/develop/accessing-data/using-events.md)
 - [Ecvrf](https://docs.sui.io/develop/cryptography/ecvrf.md)
@@ -87,6 +83,7 @@
 - [Custom Policies](https://docs.sui.io/develop/publish-upgrade-packages/custom-policies.md)
 - [Deploy](https://docs.sui.io/develop/publish-upgrade-packages/deploy.md)
 - [Publish Upgrade Packages Index](https://docs.sui.io/develop/publish-upgrade-packages/index.md)
+- [Openzeppelin](https://docs.sui.io/develop/publish-upgrade-packages/openzeppelin.md)
 - [Upgrade](https://docs.sui.io/develop/publish-upgrade-packages/upgrade.md)
 - [Versioning](https://docs.sui.io/develop/publish-upgrade-packages/versioning.md)
 - [Best Practices](https://docs.sui.io/develop/security/best-practices.md)
@@ -103,6 +100,7 @@
 - [Sui Storage](https://docs.sui.io/develop/sui-architecture/sui-storage.md)
 - [Tokenomics Overview](https://docs.sui.io/develop/sui-architecture/tokenomics-overview.md)
 - [Common Errors](https://docs.sui.io/develop/testing-debugging/common-errors.md)
+- [Debugging](https://docs.sui.io/develop/testing-debugging/debugging.md)
 - [Testing Debugging Index](https://docs.sui.io/develop/testing-debugging/index.md)
 - [Testing](https://docs.sui.io/develop/testing-debugging/testing.md)
 - [Gas In Sui](https://docs.sui.io/develop/transaction-payment/gas-in-sui.md)
@@ -118,7 +116,6 @@
 - [Ptbs Index](https://docs.sui.io/develop/transactions/ptbs/index.md)
 - [Inputs And Results](https://docs.sui.io/develop/transactions/ptbs/inputs-and-results.md)
 - [Prog Txn Blocks](https://docs.sui.io/develop/transactions/ptbs/prog-txn-blocks.md)
-- [Sign And Send Txn](https://docs.sui.io/develop/transactions/ptbs/sign-and-send-txn.md)
 
 ### Develop/Transactions/Transaction Auth
 - [Address Aliases](https://docs.sui.io/develop/transactions/transaction-auth/address-aliases.md)
@@ -139,6 +136,19 @@
 
 - [Getting Started](https://docs.sui.io/getting-started.md)
 - [Agent Skills](https://docs.sui.io/getting-started/agent-skills.md)
+- [Blackjack](https://docs.sui.io/getting-started/app-examples/blackjack.md)
+- [Client Tssdk](https://docs.sui.io/getting-started/app-examples/client-tssdk.md)
+- [Coin Flip](https://docs.sui.io/getting-started/app-examples/coin-flip.md)
+- [App Examples Index](https://docs.sui.io/getting-started/app-examples/index.md)
+- [Oracle](https://docs.sui.io/getting-started/app-examples/oracle.md)
+- [Plinko](https://docs.sui.io/getting-started/app-examples/plinko.md)
+- [Recaptcha](https://docs.sui.io/getting-started/app-examples/recaptcha.md)
+- [Reviews Rating](https://docs.sui.io/getting-started/app-examples/reviews-rating.md)
+- [Tic Tac Toe](https://docs.sui.io/getting-started/app-examples/tic-tac-toe.md)
+- [Trustless Swap
+    Frontend](https://docs.sui.io/getting-started/app-examples/trustless-swap-frontend.md)
+- [Trustless Swap](https://docs.sui.io/getting-started/app-examples/trustless-swap.md)
+- [Weather Oracle](https://docs.sui.io/getting-started/app-examples/weather-oracle.md)
 - [Dev Cheat Sheet](https://docs.sui.io/getting-started/dev-cheat-sheet.md)
 - [App Frontends](https://docs.sui.io/getting-started/onboarding/app-frontends.md)
 - [Configure Sui Client](https://docs.sui.io/getting-started/onboarding/configure-sui-client.md)
@@ -177,6 +187,8 @@
 - [What Is A Wallet](https://docs.sui.io/onchain-finance/asset-custody/wallets/what-is-a-wallet.md)
 - [Zk Login Wallets](https://docs.sui.io/onchain-finance/asset-custody/wallets/zk-login-wallets.md)
 - [Action Request](https://docs.sui.io/onchain-finance/closed-loop-token/action-request.md)
+- [Coin Token
+    Comparison](https://docs.sui.io/onchain-finance/closed-loop-token/coin-token-comparison.md)
 - [Closed Loop Token Index](https://docs.sui.io/onchain-finance/closed-loop-token/index.md)
 - [Rules](https://docs.sui.io/onchain-finance/closed-loop-token/rules.md)
 - [Spending](https://docs.sui.io/onchain-finance/closed-loop-token/spending.md)
@@ -258,6 +270,7 @@
 - [Sui Bridging](https://docs.sui.io/onchain-finance/fungible-tokens/sui-bridging.md)
 - [Token Vesting
     Strategies](https://docs.sui.io/onchain-finance/fungible-tokens/token-vesting-strategies.md)
+- [Onchain Finance Index](https://docs.sui.io/onchain-finance/index.md)
 - [Kiosk Index](https://docs.sui.io/onchain-finance/kiosk/index.md)
 - [Kiosk Apps](https://docs.sui.io/onchain-finance/kiosk/kiosk-apps.md)
 - [Kiosk Example](https://docs.sui.io/onchain-finance/kiosk/kiosk-example.md)
@@ -954,7 +967,6 @@
 ## Sui Stack
 
 - [Sui Stack](https://docs.sui.io/sui-stack.md)
-- [Indexer Walrus](https://docs.sui.io/sui-stack/indexer-walrus.md)
 - [Community Dev Tools](https://docs.sui.io/sui-stack/nautilus/community-dev-tools.md)
 - [Customize Nautilus](https://docs.sui.io/sui-stack/nautilus/customize-nautilus.md)
 - [Nautilus Index](https://docs.sui.io/sui-stack/nautilus/index.md)

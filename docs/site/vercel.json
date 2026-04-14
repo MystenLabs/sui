@@ -532,12 +532,12 @@
     },
     {
       "source": "/guides/developer/app-examples/trading/:path*",
-      "destination": "/getting-started/app-examples/trustless-swap/:path*",
+      "destination": "/getting-started/trustless-swap/:path*",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/trustless-token-swap/:path*",
-      "destination": "/getting-started/app-examples/trustless-swap/:path*",
+      "destination": "/getting-started/trustless-swap/:path*",
       "permanent": true
     },
     {
@@ -3742,7 +3742,7 @@
     },
     {
       "source": "/guides/developer/sui-101/client-tssdk",
-      "destination": "/getting-started/app-examples/client-tssdk",
+      "destination": "/getting-started/client-tssdk",
       "permanent": true
     },
     {
@@ -3936,22 +3936,22 @@
     },
     {
       "source": "/guides/developer/app-examples/auction",
-      "destination": "/getting-started/app-examples",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/meta-pricing-oracle",
-      "destination": "/getting-started/app-examples",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/recaptcha",
-      "destination": "/getting-started/app-examples",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
       "source": "/guides/developer/app-examples/turnip-town",
-      "destination": "/getting-started/app-examples",
+      "destination": "/getting-started",
       "permanent": true
     },
     {
@@ -4016,7 +4016,7 @@
     },
     {
       "source": "/guides/developer/app-examples.md",
-      "destination": "/getting-started/app-examples/index.md",
+      "destination": "/getting-started/index.md",
       "permanent": true
     },
     {
