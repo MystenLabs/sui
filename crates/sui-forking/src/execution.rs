@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Shared transaction execution logic for the forking gRPC services.
+//! Transaction execution logic for the forked network, including pre-execution input object
+//! fetching and caching.
 
 use sui_rpc_api::RpcError;
 use sui_types::base_types::ObjectID;
