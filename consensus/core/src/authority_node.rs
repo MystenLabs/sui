@@ -144,6 +144,8 @@ where
     core_thread_handle: CoreThreadHandle,
     subscriber: Subscriber<N::ValidatorClient, AuthorityService<ChannelCoreThreadDispatcher>>,
     network_manager: N,
+    #[cfg(feature = "clickhouse-debug")]
+    clickhouse_writer_handle: Option<JoinHandle<()>>,
 }
 
 impl<N> AuthorityNode<N>
@@ -239,10 +241,49 @@ where
         ));
 
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
-        let store = Arc::new(RocksDBStore::new(
+        let rocksdb_store = Arc::new(RocksDBStore::new(
             store_path,
             context.parameters.use_fifo_compaction,
         ));
+
+        #[cfg(feature = "clickhouse-debug")]
+        let (store, clickhouse_writer_handle): (
+            Arc<dyn super::storage::Store>,
+            Option<JoinHandle<()>>,
+        ) = {
+            if context.parameters.clickhouse.enabled {
+                use super::storage::clickhouse_writer::{ClickHouseWriter, DualWriteStore};
+
+                let (sender, receiver) =
+                    tokio::sync::mpsc::channel(context.parameters.clickhouse.channel_capacity);
+                let writer = ClickHouseWriter::new(&context.parameters.clickhouse, receiver);
+                let handle = spawn_logged_monitored_task!(writer.run(), "clickhouse_debug_writer");
+                let dual_store = DualWriteStore::new(
+                    rocksdb_store,
+                    sender,
+                    context.committee.epoch(),
+                    context.parameters.clickhouse.include_raw_bytes,
+                );
+                info!(
+                    "ClickHouse debug writer enabled, writing to {}",
+                    context.parameters.clickhouse.url
+                );
+                (Arc::new(dual_store), Some(handle))
+            } else {
+                (rocksdb_store, None)
+            }
+        };
+
+        #[cfg(not(feature = "clickhouse-debug"))]
+        let store: Arc<dyn super::storage::Store> = {
+            if context.parameters.clickhouse.enabled {
+                warn!(
+                    "ClickHouse debug writer enabled in config but 'clickhouse-debug' feature is not compiled. Ignoring."
+                );
+            }
+            rocksdb_store
+        };
+
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(
@@ -419,6 +460,8 @@ where
             core_thread_handle,
             subscriber,
             network_manager,
+            #[cfg(feature = "clickhouse-debug")]
+            clickhouse_writer_handle,
         }
     }
 
@@ -447,6 +490,19 @@ where
         // Stop block subscriptions before stopping network server.
         self.subscriber.stop();
         self.network_manager.stop().await;
+
+        // The DualWriteStore sender is dropped when DagState and other components above are
+        // stopped, which causes the writer's recv() loop to exit naturally. We await with a
+        // timeout as a safety net, falling back to abort if it doesn't finish.
+        #[cfg(feature = "clickhouse-debug")]
+        if let Some(handle) = self.clickhouse_writer_handle {
+            tokio::select! {
+                _ = handle => {}
+                _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+                    warn!("ClickHouse debug writer did not shut down within 5s");
+                }
+            }
+        }
 
         self.context
             .metrics

@@ -9,6 +9,9 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+clickhouse-debug = ["dep:clickhouse"]
+
 [dependencies]
 anyhow.workspace = true
 arc-swap.workspace = true
@@ -17,6 +20,7 @@ base64.workspace = true
 bcs.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
+clickhouse = { workspace = true, optional = true }
 consensus-config.workspace = true
 consensus-types.workspace = true
 dashmap.workspace = true
