@@ -16841,6 +16841,7 @@ dependencies = [
  "sui-rpc",
  "sui-sdk-types",
  "sui-transaction-builder",
+ "sui-transaction-checks",
  "sui-types",
  "tap",
  "thiserror 1.0.69",
