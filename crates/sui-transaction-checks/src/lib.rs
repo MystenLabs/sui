@@ -685,12 +685,11 @@ mod checked {
                             input_initial_shared_version == *actual_initial_shared_version,
                             UserInputError::SharedObjectStartingVersionMismatch
                         );
-                        // TODO PartyPermissioned WIP should we allow sponsor here?
                         // Check the owner has permissions for this kind of mutability
                         let sender_permissions = permissions.permissions_for(owner);
                         match mutability {
                             SharedObjectMutability::Immutable => {
-                                todo!("Better error kind here ");
+                                // TODO better error kind here
                                 fp_ensure!(
                                     sender_permissions.can_access_immutably_at_signing(),
                                     UserInputError::IncorrectUserSignature {
@@ -702,7 +701,7 @@ mod checked {
                                 )
                             }
                             SharedObjectMutability::Mutable => {
-                                todo!("Better error kind here ");
+                                // TODO better error kind here
                                 fp_ensure!(
                                     sender_permissions.can_access_mutably_at_signing(),
                                     UserInputError::IncorrectUserSignature {

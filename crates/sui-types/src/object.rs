@@ -834,7 +834,9 @@ impl Owner {
     pub fn is_consensus(&self) -> bool {
         matches!(
             self,
-            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. }
+            Owner::Shared { .. }
+                | Owner::ConsensusAddressOwner { .. }
+                | Owner::PartyPermissioned { .. }
         )
     }
 }

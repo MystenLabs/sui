@@ -794,7 +794,7 @@ impl TemporaryStore<'_> {
                             .unwrap_or(ObjectPermissions::NONE);
                         sender_permissions
                             .union(sponsor_permissions)
-                            .can_write()
+                            .can_access_mutably_at_signing()
                             .then_some(id)
                     }
                     Owner::ObjectOwner(_parent) => {
