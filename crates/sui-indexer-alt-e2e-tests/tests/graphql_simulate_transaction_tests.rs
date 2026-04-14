@@ -21,12 +21,12 @@ use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
-use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::TempDb;
@@ -192,7 +192,7 @@ impl GraphQlTestCluster {
             Some(database_url),
             fullnode_args,
             DbArgs::default(),
-            GraphQlKvArgs::default(),
+            KvArgs::default(),
             ConsistentReaderArgs::default(),
             GraphQlArgs {
                 rpc_listen_address: graphql_listen_address,

@@ -15,12 +15,12 @@ use serde_json::Value;
 use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
-use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::get_available_port;
@@ -50,7 +50,7 @@ impl SubscriptionTestCluster {
                 fullnode_rpc_url: Some(rpc_url.parse().unwrap()),
             },
             DbArgs::default(),
-            GraphQlKvArgs::default(),
+            KvArgs::default(),
             ConsistentReaderArgs::default(),
             GraphQlArgs {
                 rpc_listen_address: graphql_listen_address,

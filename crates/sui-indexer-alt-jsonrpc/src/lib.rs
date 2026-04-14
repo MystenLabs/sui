@@ -6,16 +6,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
+use async_graphql::dataloader::DataLoader;
 use jsonrpsee::server::BatchRequestConfig;
 use jsonrpsee::server::RpcServiceBuilder;
 use jsonrpsee::server::ServerBuilder;
 use prometheus::Registry;
 use serde_json::json;
 use sui_futures::service::Service;
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
@@ -235,6 +236,7 @@ impl Default for RpcArgs {
     }
 }
 
+/// Configuration for the fullnode RPC that this service will connect to.
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct NodeArgs {
     /// The URL of the fullnode JSON-RPC, used for delegation governance queries (getStakes,
@@ -265,9 +267,8 @@ pub struct NodeArgs {
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
     database_url: Option<Url>,
-    bigtable_instance: Option<String>,
     db_args: DbArgs,
-    bigtable_args: BigtableArgs,
+    kv_args: KvArgs,
     consistent_reader_args: ConsistentReaderArgs,
     rpc_args: RpcArgs,
     node_args: NodeArgs,
@@ -279,9 +280,8 @@ pub async fn start_rpc(
 
     let context = Context::new(
         database_url,
-        bigtable_instance,
         db_args,
-        bigtable_args,
+        kv_args,
         consistent_reader_args,
         rpc_config,
         rpc.metrics(),

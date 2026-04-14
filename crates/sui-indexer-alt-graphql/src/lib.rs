@@ -47,6 +47,7 @@ use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
@@ -302,7 +303,7 @@ pub async fn start_rpc(
     database_url: Option<Url>,
     fullnode_args: FullnodeArgs,
     db_args: DbArgs,
-    kv_args: args::KvArgs,
+    kv_args: KvArgs,
     consistent_reader_args: ConsistentReaderArgs,
     args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
