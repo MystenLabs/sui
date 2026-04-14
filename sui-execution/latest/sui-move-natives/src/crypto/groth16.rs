@@ -16,6 +16,7 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 
 pub const INVALID_VERIFYING_KEY: u64 = 0;
+
 pub const INVALID_CURVE: u64 = 1;
 pub const TOO_MANY_PUBLIC_INPUTS: u64 = 2;
 
@@ -77,6 +78,23 @@ pub fn prepare_verifying_key_internal(
     // Charge the base cost for this oper
     native_charge_gas_early_exit!(context, base_cost);
     let cost = context.gas_used();
+
+    if get_extension!(context, ObjectRuntime)?
+        .protocol_config
+        .limit_groth16_pvk_inputs()
+    {
+        // A verifying key is serialized as: alpha (G1) + beta (G2) + gamma (G2) + delta (G2)
+        // + gamma_abc_len (u64) + gamma_abc (Vec<G1>), where gamma_abc has
+        // num_public_inputs + 1 elements.
+        let max_vk_len = match curve {
+            BLS12381 => 776,
+            BN254 => 520,
+            _ => unreachable!(),
+        };
+        if verifying_key.len() > max_vk_len {
+            return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
+        }
+    }
 
     let result;
     if curve == BLS12381 {

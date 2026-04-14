@@ -1076,6 +1076,11 @@ struct FeatureFlags {
     // fallback for manual epoch close.
     #[serde(skip_serializing_if = "is_false")]
     timestamp_based_epoch_close: bool,
+
+    // If true, groth16::prepare_verifying_key checks that the verifying key has no more than
+    // MAX_PUBLIC_INPUTS public inputs.
+    #[serde(skip_serializing_if = "is_false")]
+    limit_groth16_pvk_inputs: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2802,6 +2807,10 @@ impl ProtocolConfig {
 
     pub fn timestamp_based_epoch_close(&self) -> bool {
         self.feature_flags.timestamp_based_epoch_close
+    }
+
+    pub fn limit_groth16_pvk_inputs(&self) -> bool {
+        self.feature_flags.limit_groth16_pvk_inputs
     }
 }
 
