@@ -90,7 +90,7 @@ pub enum MoveDatatypeLayout {
 /// The enum layout of an enum type, as a view into a shared pool.
 #[derive(Debug, Clone)]
 pub struct MoveEnumLayout {
-    pub variants: Box<[VariantLayout]>,
+    pub(crate) variants: Box<[VariantLayout]>,
 }
 
 /// The struct layout of a struct type, as a view into a shared pool.
@@ -242,6 +242,7 @@ impl MoveLayoutView {
             MoveLayoutView::Enum(ev) => {
                 let variants = ev
                     .variants()
+                    .iter()
                     .map(|vfv| match vfv {
                         VariantLayout::Known(fv) => {
                             fv.fields().map(|f| f.inflate()).collect::<AResult<_>>()
@@ -339,15 +340,15 @@ impl MoveEnumLayout {
     }
 
     /// Iterate over all variants.
-    pub fn variants(&self) -> impl ExactSizeIterator<Item = &VariantLayout> {
-        self.variants.iter()
+    pub fn variants(&self) -> &[VariantLayout] {
+        &self.variants
     }
 }
 
 impl fmt::Display for MoveEnumLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "enum ")?;
-        for (tag, vfv) in self.variants().enumerate() {
+        for (tag, vfv) in self.variants().iter().enumerate() {
             write!(f, "variant_tag: {} {{ ", tag)?;
             match vfv {
                 VariantLayout::Known(fv) => {

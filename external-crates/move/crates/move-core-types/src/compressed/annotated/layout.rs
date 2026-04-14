@@ -263,6 +263,7 @@ impl MoveLayoutView {
             MoveLayoutView::Enum(ev) => {
                 let variants = ev
                     .variants()
+                    .iter()
                     .map(|vl| match vl.fields() {
                         Some(fields) => {
                             let field_layouts = fields
@@ -406,6 +407,7 @@ impl MoveDatatypeLayout {
             MoveDatatypeLayout_::Enum(move_enum_layout) => {
                 let variants = move_enum_layout
                     .variants()
+                    .iter()
                     .map(|vl| match vl {
                         VariantLayout::Known { name, tag, fields } => {
                             let field_layouts = fields
@@ -590,15 +592,15 @@ impl MoveEnumLayout {
     }
 
     /// Iterate over all variants.
-    pub fn variants(&self) -> impl ExactSizeIterator<Item = &VariantLayout> {
-        self.variants.iter()
+    pub fn variants(&self) -> &[VariantLayout] {
+        &self.variants
     }
 }
 
 impl fmt::Display for MoveEnumLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {{ ", self.type_)?;
-        for (i, vl) in self.variants().enumerate() {
+        for (i, vl) in self.variants().iter().enumerate() {
             if i > 0 {
                 write!(f, ", ")?;
             }
