@@ -10,7 +10,7 @@
 //# publish
 module a::m {
 
-use sui::dynamic_field::{add, exists_, borrow, borrow_mut};
+use sui::dynamic_field::{add, exists, borrow, borrow_mut};
 
 public struct Wrapper has key {
     id: UID,
@@ -68,7 +68,7 @@ entry fun t3(obj: Obj, ctx: &mut TxContext) {
 }
 
 entry fun t4(wrapper: &mut Wrapper) {
-    assert!(!exists_<u64>(&mut wrapper.id, 0u64), 0);
+    assert!(!exists<u64>(&mut wrapper.id, 0u64), 0);
     assert!(count(borrow(&wrapper.old, 0u64)) == 1u64, 0);
 }
 

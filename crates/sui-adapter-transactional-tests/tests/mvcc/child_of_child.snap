@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 926
 ---
 processed 14 tasks
 
@@ -11,7 +10,7 @@ task 1, lines 8-66:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 9249200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9241600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 68-70:
 //# programmable --sender A --inputs @A
@@ -101,8 +100,8 @@ Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: test, name
 task 12, lines 102-103:
 //# programmable --sender A --inputs object(2,0)@4 1 2 vector[3] --dev-inspect
 //> test::m::check(Input(0), Input(1), Input(2), Input(3))
-Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
-Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 11, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+Error: Transaction Effects Status: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 13, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
+Execution Error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 13, instruction: 0, function_name: Some("borrow_child_object") }, 1) in command 0
 
 task 13, lines 105-106:
 //# programmable --sender A --inputs object(2,0)@2 1 2 vector[] --dev-inspect
