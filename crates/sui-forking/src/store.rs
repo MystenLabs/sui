@@ -54,6 +54,10 @@ pub(crate) struct DataStore {
     forked_at_checkpoint: CheckpointSequenceNumber,
     gql: GraphQLClient,
     local: FilesystemStore,
+    /// Holds a checkpoint summary between `insert_checkpoint` and the
+    /// subsequent `insert_checkpoint_contents` call, so the two halves can
+    /// be persisted together once the matching contents arrive.
+    pending_checkpoint: Option<VerifiedCheckpoint>,
 }
 
 impl DataStore {
@@ -74,6 +78,7 @@ impl DataStore {
             forked_at_checkpoint,
             gql,
             local,
+            pending_checkpoint: None,
         })
     }
 
@@ -86,16 +91,44 @@ impl DataStore {
         self.gql.chain()
     }
 
-    /// Fetch a verified checkpoint from the remote GraphQL endpoint. When `checkpoint` is `None`,
-    /// the store's `forked_at_checkpoint` is used as the default.
+    /// Fetch a verified checkpoint summary together with its contents from the
+    /// remote GraphQL endpoint. When `checkpoint` is `None`, the store's
+    /// `forked_at_checkpoint` is used as the default.
     pub(crate) async fn get_verified_checkpoint_from_rpc(
         &self,
         checkpoint: Option<CheckpointSequenceNumber>,
-    ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+    ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
         let checkpoint = checkpoint.unwrap_or(self.forked_at_checkpoint);
-        let verified_checkpoint = self.gql.get_verified_checkpoint(Some(checkpoint))?;
+        self.gql.get_verified_checkpoint(Some(checkpoint))
+    }
 
-        Ok(verified_checkpoint)
+    /// Ensure the startup (forked-at) checkpoint is available on disk. If both
+    /// the summary and contents are already cached locally, this is a no-op;
+    /// otherwise the pair is fetched from the remote GraphQL endpoint and
+    /// persisted via [`FilesystemStore`].
+    pub(crate) async fn download_and_persist_startup_checkpoint(&self) -> anyhow::Result<()> {
+        let sequence = self.forked_at_checkpoint;
+
+        let summary_cached = self
+            .local
+            .get_checkpoint_by_sequence_number(sequence)?
+            .is_some();
+        let contents_cached = self
+            .local
+            .get_checkpoint_contents_by_sequence_number(sequence)?
+            .is_some();
+        if summary_cached && contents_cached {
+            return Ok(());
+        }
+
+        let (checkpoint, contents) = self
+            .get_verified_checkpoint_from_rpc(Some(sequence))
+            .await?
+            .ok_or_else(|| anyhow!("checkpoint {} not found on remote", sequence))?;
+
+        self.local.write_checkpoint_summary(&checkpoint)?;
+        self.local.write_checkpoint_contents(sequence, &contents)?;
+        Ok(())
     }
 
     /// Get the object at the latest version available on disk. If not found, it will fetch the
@@ -193,6 +226,7 @@ impl DataStore {
             forked_at_checkpoint: 0,
             gql,
             local,
+            pending_checkpoint: None,
         }
     }
 }
@@ -290,24 +324,30 @@ impl ChildObjectResolver for DataStore {
 impl SimulatorStore for DataStore {
     fn get_checkpoint_by_sequence_number(
         &self,
-        _sequence_number: CheckpointSequenceNumber,
+        sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        todo!("SimulatorStore::get_checkpoint_by_sequence_number")
+        self.local
+            .get_checkpoint_by_sequence_number(sequence_number)
+            .ok()
+            .flatten()
     }
 
-    fn get_checkpoint_by_digest(&self, _digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        todo!("SimulatorStore::get_checkpoint_by_digest")
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
+        self.local.get_checkpoint_by_digest(digest).ok().flatten()
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        todo!()
+        self.local.get_highest_verified_checkpoint().ok().flatten()
     }
 
     fn get_checkpoint_contents(
         &self,
-        _digest: &CheckpointContentsDigest,
+        digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        todo!("SimulatorStore::get_checkpoint_contents")
+        self.local
+            .get_checkpoint_contents_by_digest(digest)
+            .ok()
+            .flatten()
     }
 
     fn get_committee_by_epoch(&self, _epoch: EpochId) -> Option<Committee> {
@@ -353,12 +393,55 @@ impl SimulatorStore for DataStore {
         todo!("SimulatorStore::owned_objects")
     }
 
-    fn insert_checkpoint(&mut self, _checkpoint: VerifiedCheckpoint) {
-        todo!("SimulatorStore::insert_checkpoint")
+    fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
+        // Simulacrum always calls `insert_checkpoint` followed by
+        // `insert_checkpoint_contents`. Stash the summary here so the pair can
+        // be persisted together once the matching contents arrive.
+        if let Some(previous) = self.pending_checkpoint.take() {
+            tracing::warn!(
+                previous_sequence = previous.data().sequence_number,
+                next_sequence = checkpoint.data().sequence_number,
+                "overwriting pending checkpoint before matching contents were inserted",
+            );
+        }
+        self.pending_checkpoint = Some(checkpoint);
     }
 
-    fn insert_checkpoint_contents(&mut self, _contents: CheckpointContents) {
-        todo!("SimulatorStore::insert_checkpoint_contents")
+    fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
+        let Some(checkpoint) = self.pending_checkpoint.take() else {
+            tracing::warn!("checkpoint contents inserted without a pending checkpoint summary");
+            return;
+        };
+
+        if checkpoint.data().content_digest != *contents.digest() {
+            tracing::warn!(
+                sequence_number = checkpoint.data().sequence_number,
+                "checkpoint content digest mismatch between summary and contents; dropping",
+            );
+            return;
+        }
+
+        let sequence = checkpoint.data().sequence_number;
+
+        // Pre-fork checkpoint was persisted at seed time; don't rewrite it.
+        // Resuming an already-persisted post-fork checkpoint is also a no-op.
+        if self
+            .local
+            .get_checkpoint_by_sequence_number(sequence)
+            .ok()
+            .flatten()
+            .is_some()
+        {
+            return;
+        }
+
+        if let Err(err) = self.local.write_checkpoint_summary(&checkpoint) {
+            tracing::error!(sequence_number = sequence, "failed to persist checkpoint summary: {err:?}");
+            return;
+        }
+        if let Err(err) = self.local.write_checkpoint_contents(sequence, &contents) {
+            tracing::error!(sequence_number = sequence, "failed to persist checkpoint contents: {err:?}");
+        }
     }
 
     fn insert_committee(&mut self, _committee: Committee) {
@@ -414,6 +497,61 @@ impl SimulatorStore for DataStore {
 
     fn backing_store(&self) -> &dyn BackingStore {
         self
+    }
+}
+
+#[cfg(test)]
+mod checkpoint_persistence_tests {
+    use simulacrum::store::SimulatorStore;
+    use sui_types::messages_checkpoint::{CheckpointContents, VerifiedCheckpoint};
+    use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
+
+    use super::*;
+
+    fn build_checkpoint(sequence: u64) -> (VerifiedCheckpoint, CheckpointContents) {
+        let data = TestCheckpointBuilder::new(sequence).build_checkpoint();
+        (VerifiedCheckpoint::new_unchecked(data.summary), data.contents)
+    }
+
+    #[test]
+    fn insert_checkpoint_pair_persists_both_to_disk() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
+        let (checkpoint, contents) = build_checkpoint(42);
+        let sequence = checkpoint.data().sequence_number;
+
+        store.insert_checkpoint(checkpoint.clone());
+        store.insert_checkpoint_contents(contents.clone());
+
+        let loaded = SimulatorStore::get_checkpoint_by_sequence_number(&store, sequence)
+            .expect("checkpoint should be persisted");
+        assert_eq!(loaded.data(), checkpoint.data());
+
+        let loaded_contents = SimulatorStore::get_checkpoint_contents(&store, contents.digest())
+            .expect("contents should be persisted");
+        assert_eq!(loaded_contents.digest(), contents.digest());
+    }
+
+    #[test]
+    fn insert_checkpoint_contents_without_matching_summary_is_dropped() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
+        let (checkpoint, matching) = build_checkpoint(1);
+        let (_, unrelated) = build_checkpoint(2);
+
+        store.insert_checkpoint(checkpoint.clone());
+        // Unrelated contents — digest mismatch with the pending summary.
+        store.insert_checkpoint_contents(unrelated);
+
+        assert!(
+            SimulatorStore::get_checkpoint_by_sequence_number(
+                &store,
+                checkpoint.data().sequence_number,
+            )
+            .is_none(),
+            "mismatched pair should not be persisted",
+        );
+        let _ = matching;
     }
 }
 
