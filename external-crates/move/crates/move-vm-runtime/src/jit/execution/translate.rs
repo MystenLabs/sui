@@ -806,7 +806,10 @@ fn field_handles(
             let offset = f_handle.field as usize;
             Ok(FieldHandle {
                 offset,
-                owner: structs.safe_get(f_handle.owner.0 as usize)?.def_vtable_key.clone(),
+                owner: structs
+                    .safe_get(f_handle.owner.0 as usize)?
+                    .def_vtable_key
+                    .clone(),
             })
         })
         .collect::<PartialVMResult<Vec<_>>>()?;

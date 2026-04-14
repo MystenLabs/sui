@@ -23,10 +23,7 @@ use std::sync::Arc;
 
 #[allow(unused_imports)]
 use crate::{
-    execution::{
-        dispatch_tables::VMDispatchTables,
-        values::values_impl as values,
-    },
+    execution::{dispatch_tables::VMDispatchTables, values::values_impl as values},
     jit::execution::ast::InternedDisplay,
 };
 

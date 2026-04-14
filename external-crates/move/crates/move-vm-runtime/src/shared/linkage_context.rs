@@ -3,11 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::shared::types::{OriginalId, VersionId};
 use move_binary_format::{
     errors::{Location, VMResult},
     partial_vm_error,
 };
-use crate::shared::types::{OriginalId, VersionId};
 
 #[allow(unused_imports)]
 use move_binary_format::errors::PartialVMResult;
