@@ -21,7 +21,7 @@ use move_binary_format::{errors::*, partial_vm_error};
 
 use std::sync::Arc;
 
-#[cfg(any(debug_assertions, feature = "testing"))]
+#[allow(unused_imports)]
 use crate::{
     execution::{
         dispatch_tables::VMDispatchTables,
@@ -30,17 +30,17 @@ use crate::{
     jit::execution::ast::InternedDisplay,
 };
 
-#[cfg(any(debug_assertions, feature = "testing"))]
+#[allow(unused_imports)]
 use std::fmt::Write;
 
-#[cfg(any(debug_assertions, feature = "testing"))]
+#[allow(unused)]
 macro_rules! debug_write {
     ($($toks: tt)*) => {
         write!($($toks)*).expect("failed to write to buffer")
     };
 }
 
-#[cfg(any(debug_assertions, feature = "testing"))]
+#[allow(unused)]
 macro_rules! debug_writeln {
     ($($toks: tt)*) => {
         writeln!($($toks)*).expect("failed to write to buffer")
@@ -180,7 +180,7 @@ impl MachineState {
     // Debugging and logging helpers.
     //
 
-    #[cfg(any(debug_assertions, feature = "testing"))]
+    #[allow(dead_code)]
     #[allow(clippy::expect_used)]
     pub(super) fn debug_print_frame<B: Write>(
         &self,
@@ -280,7 +280,7 @@ impl MachineState {
         Ok(())
     }
 
-    #[cfg(any(debug_assertions, feature = "testing"))]
+    #[allow(dead_code)]
     pub(crate) fn debug_print_stack_trace<B: Write>(
         &self,
         vtables: &VMDispatchTables,

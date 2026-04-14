@@ -9,9 +9,9 @@ use move_binary_format::{
 };
 use crate::shared::types::{OriginalId, VersionId};
 
-#[cfg(any(debug_assertions, feature = "testing"))]
+#[allow(unused_imports)]
 use move_binary_format::errors::PartialVMResult;
-#[cfg(any(debug_assertions, feature = "testing"))]
+#[allow(unused_imports)]
 use move_core_types::language_storage::TypeTag;
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage

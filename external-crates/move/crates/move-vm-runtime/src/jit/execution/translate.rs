@@ -797,7 +797,6 @@ fn cache_signatures(
 fn field_handles(
     context: &mut PackageContext<'_>,
     module: &CompiledModule,
-    #[cfg_attr(not(any(debug_assertions, feature = "testing")), allow(unused))]
     structs: &[StructDef],
 ) -> PartialVMResult<ArenaVec<FieldHandle>> {
     let field_handles = module
@@ -807,7 +806,6 @@ fn field_handles(
             let offset = f_handle.field as usize;
             Ok(FieldHandle {
                 offset,
-                #[cfg(any(debug_assertions, feature = "testing"))]
                 owner: structs.safe_get(f_handle.owner.0 as usize)?.def_vtable_key.clone(),
             })
         })
@@ -944,7 +942,6 @@ fn field_instantiations(
 
             Ok(FieldInstantiation {
                 offset,
-                #[cfg(any(debug_assertions, feature = "testing"))]
                 owner: field_handles.safe_get(fh_idx.0 as usize)?.owner.clone(),
             })
         })
