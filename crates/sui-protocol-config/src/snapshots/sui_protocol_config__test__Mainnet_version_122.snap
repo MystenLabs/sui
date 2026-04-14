@@ -676,8 +676,10 @@ translation_per_type_node_charge: 1
 translation_per_reference_node_charge: 1
 translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
+gasless_max_computation_units: 5000
 gasless_max_unused_inputs: 1
 gasless_max_pure_input_bytes: 32
+gasless_max_tps: 300
 include_special_package_amendments:
   0139cc6e573fac2726fda782e1df80eb3a61eee5721014f262f8b983784799bd:
     64213b0e4a52bac468d4ac3f140242f70714381653a1919a6d57cd49c628207a: 64213b0e4a52bac468d4ac3f140242f70714381653a1919a6d57cd49c628207a
@@ -1214,3 +1216,4 @@ include_special_package_amendments:
   fed8ff791ee1476d3ddc1db512847cf8b1e0685a1a87ddce559eddca29fcbb0e:
     "0000000000000000000000000000000000000000000000000000000000000003": "0000000000000000000000000000000000000000000000000000000000000003"
     859de5e155d57462d3fe0aeb980b9a3f9cdccf76522d9499f372789183440aca: 859de5e155d57462d3fe0aeb980b9a3f9cdccf76522d9499f372789183440aca
+gasless_max_tx_size_bytes: 16384

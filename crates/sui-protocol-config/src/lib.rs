@@ -1961,6 +1961,10 @@ pub struct ProtocolConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[skip_accessor]
     include_special_package_amendments: Option<Arc<Amendments>>,
+
+    /// Maximum serialized size in bytes of a gasless transaction (SenderSignedData).
+    /// Bounds the persistent storage impact of each admitted gasless transaction.
+    gasless_max_tx_size_bytes: Option<u64>,
 }
 
 /// An aliased address.
@@ -2769,6 +2773,10 @@ impl ProtocolConfig {
         self.gasless_max_pure_input_bytes.unwrap_or(u64::MAX)
     }
 
+    pub fn get_gasless_max_tx_size_bytes(&self) -> u64 {
+        self.gasless_max_tx_size_bytes.unwrap_or(u64::MAX)
+    }
+
     pub fn disallow_jump_orphans(&self) -> bool {
         self.feature_flags.disallow_jump_orphans
     }
@@ -3371,6 +3379,7 @@ impl ProtocolConfig {
             gasless_max_pure_input_bytes: None,
             gasless_max_tps: None,
             include_special_package_amendments: None,
+            gasless_max_tx_size_bytes: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4848,6 +4857,9 @@ impl ProtocolConfig {
                         Chain::Testnet => Some(TESTNET_LINKAGE_AMENDMENTS.clone()),
                         Chain::Unknown => None,
                     };
+                    cfg.gasless_max_tx_size_bytes = Some(16 * 1024);
+                    cfg.gasless_max_tps = Some(300);
+                    cfg.gasless_max_computation_units = Some(5_000);
                 }
                 // Use this template when making changes:
                 //
@@ -5244,9 +5256,10 @@ impl ProtocolConfig {
         self.enable_address_balance_gas_payments_for_testing();
         self.feature_flags.enable_gasless = true;
         self.feature_flags.gasless_verify_remaining_balance = true;
-        self.gasless_max_computation_units = Some(50_000);
+        self.gasless_max_computation_units = Some(5_000);
         self.gasless_allowed_token_types = Some(vec![]);
         self.gasless_max_tps = Some(1000);
+        self.gasless_max_tx_size_bytes = Some(16 * 1024);
     }
 
     pub fn disable_gasless_for_testing(&mut self) {
