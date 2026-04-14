@@ -27,6 +27,7 @@ use crate::config::SubscriptionConfig;
 
 use super::processed_checkpoint::ProcessedCheckpoint;
 
+// TODO: Make these configurable via SubscriptionConfig.
 const MAX_GRPC_MESSAGE_SIZE_BYTES: usize = 128 * 1024 * 1024;
 const CONNECTION_TIMEOUT: Duration = Duration::from_secs(30);
 
