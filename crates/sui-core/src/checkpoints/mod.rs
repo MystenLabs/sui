@@ -1628,6 +1628,12 @@ impl CheckpointBuilder {
 
         let funds_changes = builder.collect_funds_changes();
         let num_updates = builder.num_updates();
+        self.metrics
+            .accumulator_deposits
+            .inc_by(builder.num_deposits());
+        self.metrics
+            .accumulator_withdrawals
+            .inc_by(builder.num_withdrawals());
         let settlement_txns = builder.build_tx(
             self.epoch_store.protocol_config(),
             epoch,
