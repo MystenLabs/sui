@@ -81,7 +81,7 @@ where
             std::ops::Bound::Unbounded => u64::MAX,
         };
 
-        let buffer_size = config.checkpoint_buffer_size as u64;
+        let buffer_size = checkpoint_buffer_size(config.checkpoint_buffer_size);
 
         let subscribers = Arc::new(subscribers);
 
@@ -95,7 +95,8 @@ where
 
         // If the first attempt at streaming connection fails, we back off for an initial number
         // of checkpoints to process using ingestion. This value doubles on each subsequent failure.
-        let mut streaming_backoff_batch_size = config.streaming_backoff_initial_batch_size as u64;
+        let mut streaming_backoff_batch_size =
+            normalized_streaming_backoff_batch_size(config.streaming_backoff_initial_batch_size);
 
         // Initialize the overall checkpoint_hi watermark to start_cp.
         // This value is updated every outer loop iteration after both streaming and broadcasting complete.
@@ -213,6 +214,27 @@ fn backpressured_checkpoint_stream(
     })
 }
 
+fn normalized_streaming_backoff_batch_size(batch_size: usize) -> u64 {
+    u64::try_from(batch_size.max(1)).unwrap_or(u64::MAX)
+}
+
+fn fallback_ingestion_end(checkpoint_hi: u64, end_cp: u64, backoff_batch_size: u64) -> u64 {
+    checkpoint_hi
+        .saturating_add(backoff_batch_size.max(1))
+        .min(end_cp)
+}
+
+fn next_streaming_backoff_batch_size(backoff_batch_size: u64, max_batch_size: usize) -> u64 {
+    backoff_batch_size
+        .max(1)
+        .saturating_mul(2)
+        .min(normalized_streaming_backoff_batch_size(max_batch_size))
+}
+
+fn checkpoint_buffer_size(buffer_size: usize) -> u64 {
+    u64::try_from(buffer_size).unwrap_or(u64::MAX)
+}
+
 /// Fetch and broadcasts checkpoints from a range [start..end) to subscribers. This task is
 /// ingest_hi-aware via the backpressured stream that gates checkpoint yielding based on
 /// the current ingest_hi, resuming when ingest_hi advances.
@@ -281,14 +303,16 @@ where
 
     // Convenient closure to handle streaming fallback logic due to connection or peek failure.
     let mut fallback = |reason: &str| {
-        let ingestion_end = (checkpoint_hi + backoff_batch_size).min(end_cp);
+        let ingestion_end = fallback_ingestion_end(checkpoint_hi, end_cp, backoff_batch_size);
         warn!(
             checkpoint_hi,
             ingestion_end, "{reason}, falling back to ingestion"
         );
         metrics.total_streaming_connection_failures.inc();
-        *streaming_backoff_batch_size =
-            (backoff_batch_size * 2).min(config.streaming_backoff_max_batch_size as u64);
+        *streaming_backoff_batch_size = next_streaming_backoff_batch_size(
+            backoff_batch_size,
+            config.streaming_backoff_max_batch_size,
+        );
         (noop_streaming_task(ingestion_end), ingestion_end)
     };
 
@@ -316,11 +340,14 @@ where
     };
 
     // We have successfully connected and peeked, reset backoff batch size.
-    *streaming_backoff_batch_size = config.streaming_backoff_initial_batch_size as u64;
+    *streaming_backoff_batch_size =
+        normalized_streaming_backoff_batch_size(config.streaming_backoff_initial_batch_size);
 
     let network_latest_cp = *checkpoint_envelope.checkpoint.summary.sequence_number();
     let ingestion_end = network_latest_cp.min(end_cp);
-    if network_latest_cp > checkpoint_hi + config.checkpoint_buffer_size as u64 {
+    if network_latest_cp
+        > checkpoint_hi.saturating_add(checkpoint_buffer_size(config.checkpoint_buffer_size))
+    {
         info!(
             network_latest_cp,
             checkpoint_hi, "Outside buffer size, delaying streaming start"
@@ -1541,5 +1568,62 @@ mod tests {
         assert_eq!(metrics.latest_streamed_checkpoint.get(), 14);
 
         svc.join().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn setup_streaming_task_fallback_makes_progress_with_zero_backoff_state() {
+        let metrics = test_ingestion_metrics();
+        let subscribers = Arc::new(vec![]);
+        let mut streaming_client = Some(
+            MockStreamingClient::new(std::iter::empty::<u64>(), None).fail_connection_times(1),
+        );
+        let mut streaming_backoff_batch_size = 0;
+
+        let (_stream_guard, ingestion_end) = setup_streaming_task(
+            &mut streaming_client,
+            10,
+            20,
+            &mut streaming_backoff_batch_size,
+            &IngestionConfig {
+                streaming_backoff_initial_batch_size: 0,
+                streaming_backoff_max_batch_size: 0,
+                ..test_config()
+            },
+            &subscribers,
+            None,
+            &metrics,
+        )
+        .await;
+
+        assert_eq!(ingestion_end, 11);
+        assert_eq!(streaming_backoff_batch_size, 1);
+    }
+
+    #[tokio::test]
+    async fn setup_streaming_task_saturates_buffer_window_near_u64_max() {
+        let metrics = test_ingestion_metrics();
+        let subscribers = Arc::new(vec![]);
+        let config = IngestionConfig {
+            checkpoint_buffer_size: usize::MAX,
+            ..test_config()
+        };
+        let mut streaming_client = Some(MockStreamingClient::new([u64::MAX - 1], None));
+        let mut streaming_backoff_batch_size =
+            normalized_streaming_backoff_batch_size(config.streaming_backoff_initial_batch_size);
+
+        let (stream_guard, ingestion_end) = setup_streaming_task(
+            &mut streaming_client,
+            u64::MAX - 2,
+            u64::MAX,
+            &mut streaming_backoff_batch_size,
+            &config,
+            &subscribers,
+            None,
+            &metrics,
+        )
+        .await;
+
+        assert_eq!(ingestion_end, u64::MAX - 1);
+        assert_eq!(stream_guard.await.unwrap(), u64::MAX);
     }
 }

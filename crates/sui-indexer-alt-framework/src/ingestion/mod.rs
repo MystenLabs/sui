@@ -90,6 +90,26 @@ pub struct IngestionService {
 }
 
 impl IngestionConfig {
+    fn validate(&self) -> anyhow::Result<()> {
+        if self.streaming_backoff_initial_batch_size == 0 {
+            anyhow::bail!("streaming_backoff_initial_batch_size must be greater than 0");
+        }
+
+        if self.streaming_backoff_max_batch_size == 0 {
+            anyhow::bail!("streaming_backoff_max_batch_size must be greater than 0");
+        }
+
+        if self.streaming_backoff_max_batch_size < self.streaming_backoff_initial_batch_size {
+            anyhow::bail!(
+                "streaming_backoff_max_batch_size ({}) must be greater than or equal to streaming_backoff_initial_batch_size ({})",
+                self.streaming_backoff_max_batch_size,
+                self.streaming_backoff_initial_batch_size,
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn retry_interval(&self) -> Duration {
         Duration::from_millis(self.retry_interval_ms)
     }
@@ -119,6 +139,8 @@ impl IngestionService {
         metrics_prefix: Option<&str>,
         registry: &Registry,
     ) -> Result<Self> {
+        config.validate().map_err(Error::StreamingError)?;
+
         let metrics = IngestionMetrics::new(metrics_prefix, registry);
         let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone())?;
         let streaming_client = args.streaming.streaming_url.map(|uri| {
@@ -572,5 +594,54 @@ mod tests {
         );
         let result = latest_checkpoint_number(&mut streaming, &client).await;
         assert_eq!(result.unwrap(), FALLBACK);
+    }
+
+    #[test]
+    fn reject_zero_initial_streaming_backoff_batch_size() {
+        let config = IngestionConfig {
+            streaming_backoff_initial_batch_size: 0,
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            config.validate(),
+            Err(error)
+                if error
+                    .to_string()
+                    .contains("streaming_backoff_initial_batch_size")
+        ));
+    }
+
+    #[test]
+    fn reject_zero_max_streaming_backoff_batch_size() {
+        let config = IngestionConfig {
+            streaming_backoff_max_batch_size: 0,
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            config.validate(),
+            Err(error)
+                if error
+                    .to_string()
+                    .contains("streaming_backoff_max_batch_size")
+        ));
+    }
+
+    #[test]
+    fn reject_max_streaming_backoff_batch_size_smaller_than_initial() {
+        let config = IngestionConfig {
+            streaming_backoff_initial_batch_size: 8,
+            streaming_backoff_max_batch_size: 4,
+            ..Default::default()
+        };
+
+        assert!(matches!(
+            config.validate(),
+            Err(error)
+                if error
+                    .to_string()
+                    .contains("must be greater than or equal to")
+        ));
     }
 }
