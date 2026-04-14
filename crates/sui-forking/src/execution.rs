@@ -31,7 +31,7 @@ pub async fn execute_transaction(
     fetch_input_objects(context, &tx_data).await?;
 
     // Execute the transaction
-    let simulacrum = &context.simulacrum;
+    let simulacrum = &context.simulacrum();
     let (effects, execution_error) = {
         let mut sim = simulacrum.write().await;
         let (effects, execution_error) =
@@ -97,7 +97,7 @@ async fn fetch_and_cache_object_from_rpc(
     context: &Context,
     object_id: &ObjectID,
 ) -> Result<(), anyhow::Error> {
-    let simulacrum = context.simulacrum.read().await;
+    let simulacrum = context.simulacrum().read().await;
     let data_store = simulacrum.store();
     let obj = data_store.get_object(object_id).ok().flatten();
     obj.ok_or_else(|| anyhow::anyhow!("Object {} not found in store during execution", object_id))?;
