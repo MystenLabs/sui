@@ -594,7 +594,7 @@ mod tests {
         let env = default_environment();
         let dep = &ManifestDependencyInfo::Local(LocalDepInfo { local: path });
 
-        let info = cache_package::<Vanilla>(&env, dep).await.unwrap();
+        let info = cache_package::<Vanilla>(&env, dep, &Vanilla).await.unwrap();
 
         let CachedPackageInfo {
             name,

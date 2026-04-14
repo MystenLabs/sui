@@ -214,6 +214,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
 mod tests {
     use std::collections::BTreeMap;
 
+    use crate::Vanilla;
     use test_log::test;
 
     use crate::{
@@ -376,7 +377,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -417,7 +418,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -460,7 +461,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -498,7 +499,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert!(graph.get_package(&"a".to_string()).published().is_none());
     }
 
@@ -520,7 +521,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert!(graph.get_package(&"a".to_string()).published().is_none());
     }
 
@@ -544,7 +545,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides);
+        graph.make_ephemeral(overrides, &Vanilla);
         assert_eq!(
             graph
                 .get_package(&"a".to_string())

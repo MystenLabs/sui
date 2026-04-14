@@ -17,7 +17,8 @@ use crate::{
     schema::{
         EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
         LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
-        OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
+        OnChainDepInfo, OriginalID, PackageName, Pin, PublishAddresses, PublishedID, RenderToml,
+        RootDepInfo,
     },
 };
 
@@ -31,8 +32,31 @@ use super::{CombinedDependency, Dependency};
 pub enum Pinned {
     Local(PinnedLocalDependency),
     Git(PinnedGitDependency),
-    OnChain(OnChainDepInfo),
+    OnChain(PinnedOnChainDependency),
     Root(PackagePath),
+}
+
+/// A pinned on-chain dependency, identified by its chain ID and published address.
+/// The cache directory is `~/.move/on-chain/<chain_id>/<published_at>/`.
+#[derive(Clone, Debug)]
+pub struct PinnedOnChainDependency {
+    /// The chain identifier for the network this package is on.
+    pub chain_id: EnvironmentID,
+    /// The address the package is published at on-chain.
+    pub published_at: PublishedID,
+    /// The original publishing address (may differ from `published_at` after upgrades).
+    pub original_id: OriginalID,
+}
+
+impl PinnedOnChainDependency {
+    /// Return the cache directory path for this on-chain dependency:
+    /// `$MOVE_HOME/on-chain/<chain_id>/<published_at>/`
+    pub fn cache_path(&self) -> PathBuf {
+        PathBuf::from(move_command_line_common::env::MOVE_HOME.as_str())
+            .join("on-chain")
+            .join(&self.chain_id)
+            .join(self.published_at.to_string())
+    }
 }
 
 /// Invariant: if a PinnedDependencyInfo has `dep_info` `Root`, then its `containing_file` is either a
@@ -81,7 +105,18 @@ impl PinnedDependencyInfo {
             let transformed = match dep.0.dep_info {
                 Resolved::Local(ref loc) => loc.clone().pin(parent)?,
                 Resolved::Git(ref git) => git.pin().await?,
-                Resolved::OnChain(_) => todo!(),
+                Resolved::OnChain(_) => {
+                    let addresses = dep.0.addresses.as_ref().ok_or_else(|| {
+                        PackageError::OnChainDepMissingAddress {
+                            name: dep.0.name.to_string(),
+                        }
+                    })?;
+                    Pinned::OnChain(PinnedOnChainDependency {
+                        chain_id: environment_id.clone(),
+                        published_at: addresses.published_at.clone(),
+                        original_id: addresses.original_id.clone(),
+                    })
+                }
             };
 
             // TODO: can avoid clones above if we don't use `map` here
@@ -125,7 +160,7 @@ impl PinnedDependencyInfo {
                         })?;
                 let file = dep.0.containing_file;
                 let pinned_dep = PinnedDependencyInfo(dep.0.map(|_| {
-                    Pinned::from_lockfile(file, lockfile_dep)
+                    Pinned::from_lockfile_source(file, lockfile_dep)
                         .expect("system dependencies are valid pins")
                 }));
                 system_deps.push(pinned_dep);
@@ -183,26 +218,25 @@ impl Pinned {
         match &self {
             Pinned::Git(dep) => dep.inner.path_to_tree(),
             Pinned::Local(dep) => dep.absolute_path_to_package.clone(),
-            Pinned::OnChain(_dep) => todo!(),
+            Pinned::OnChain(dep) => dep.cache_path(),
             Pinned::Root(path) => path.path().to_path_buf(),
         }
     }
 
-    /// Create a pinned dependency from a pin in a lockfile. This involves attaching the context of
-    /// the file it is contained in (`containing_file`) and the environment it is defined in
-    /// (`env`).
+    /// Create a pinned dependency from a lockfile `pin` in environment `chain_id`.
+    /// `containing_file` is the lockfile path, used to resolve relative local dependency paths.
     ///
-    /// The returned dependency has the `override` field set, since we assume dependencies are
-    /// only pinned to the lockfile after the linkage checks have been performed.
+    /// For on-chain dependencies, uses `pin.address_override` to reconstruct the cache path.
     ///
     /// We do not set the `rename-from` field, since when we are creating the pinned dependency we
-    /// don't yet know what the rename-from field  should be. The caller is responsible for calling
+    /// don't yet know what the rename-from field should be. The caller is responsible for calling
     /// [Self::with_rename_from] if they need to establish the rename-from check invariant.
     pub fn from_lockfile(
         containing_file: FileHandle,
-        pin: &LockfileDependencyInfo,
+        pin: &Pin,
+        chain_id: &EnvironmentID,
     ) -> PackageResult<Self> {
-        match &pin {
+        match &pin.source {
             LockfileDependencyInfo::Local(loc) => Ok(Pinned::Local(PinnedLocalDependency {
                 absolute_path_to_package: containing_file
                     .path()
@@ -213,7 +247,51 @@ impl Pinned {
                     .clean(),
                 relative_path_from_root_package: loc.local.to_path_buf().clean(),
             })),
-            LockfileDependencyInfo::OnChain(chain) => Ok(Pinned::OnChain(chain.clone())),
+            LockfileDependencyInfo::OnChain(_) => {
+                let addresses =
+                    pin.address_override
+                        .as_ref()
+                        .ok_or_else(|| PackageError::OnChainDepMissingAddress {
+                            name: "unknown".to_string(),
+                        })?;
+                Ok(Pinned::OnChain(PinnedOnChainDependency {
+                    chain_id: chain_id.clone(),
+                    published_at: addresses.published_at.clone(),
+                    original_id: addresses.original_id.clone(),
+                }))
+            }
+            LockfileDependencyInfo::Git(git) => Ok(Pinned::Git(git.clone().try_into()?)),
+            LockfileDependencyInfo::Root(_) => Ok(Pinned::Root(PackagePath::new(
+                containing_file
+                    .as_ref()
+                    .parent()
+                    .expect("files have parents")
+                    .to_path_buf(),
+            )?)),
+        }
+    }
+
+    /// Create a pinned dependency from just a `LockfileDependencyInfo` source (without the full
+    /// [Pin] context). Only valid for non-on-chain dependencies (local, git, root).
+    /// Panics if called with an on-chain source.
+    fn from_lockfile_source(
+        containing_file: FileHandle,
+        source: &LockfileDependencyInfo,
+    ) -> PackageResult<Self> {
+        match source {
+            LockfileDependencyInfo::OnChain(_) => {
+                panic!("from_lockfile_source cannot be used for on-chain dependencies")
+            }
+            LockfileDependencyInfo::Local(loc) => Ok(Pinned::Local(PinnedLocalDependency {
+                absolute_path_to_package: containing_file
+                    .path()
+                    .parent()
+                    .expect("files have parents")
+                    .join(&loc.local)
+                    .to_path_buf()
+                    .clean(),
+                relative_path_from_root_package: loc.local.to_path_buf().clean(),
+            })),
             LockfileDependencyInfo::Git(git) => Ok(Pinned::Git(git.clone().try_into()?)),
             LockfileDependencyInfo::Root(_) => Ok(Pinned::Root(PackagePath::new(
                 containing_file
@@ -237,7 +315,9 @@ impl Pinned {
                 let rev = fmt_truncated(git.inner.sha(), 6, 2);
                 format!(r#"git = "{repo}", path = "{path}", rev = "{rev}""#)
             }
-            Pinned::OnChain(_on_chain) => "on-chain = true".to_string(),
+            Pinned::OnChain(dep) => {
+                format!("on-chain = true, published-at = \"{}\"", dep.published_at)
+            }
             Pinned::Root(_) => "local = \".\"".to_string(),
         }
     }
@@ -297,7 +377,7 @@ impl LocalDepInfo {
                 absolute_path_to_package: parent.unfetched_path().join(&self.local).clean(),
                 relative_path_from_root_package: self.local.clean(),
             }),
-            Pinned::OnChain(_) => todo!(),
+            Pinned::OnChain(_) => return Err(PackageError::OnChainLocalDep),
         };
 
         Ok(info)
@@ -321,7 +401,9 @@ impl From<Pinned> for LockfileDependencyInfo {
                 rev: git.inner.sha().clone(),
                 path: git.inner.path_in_repo().to_path_buf(),
             }),
-            Pinned::OnChain(on_chain) => Self::OnChain(on_chain),
+            Pinned::OnChain(_) => Self::OnChain(OnChainDepInfo {
+                on_chain: true.try_into().expect("true is ConstTrue"),
+            }),
             Pinned::Root(_) => Self::Root(RootDepInfo { root: true }),
         }
     }
