@@ -37,8 +37,7 @@ async fn main() -> Result<()> {
         node_str, checkpoint,
     );
 
-    let rpc_args = sui_forking::rpc::RpcArgs::default();
-    let handle = tokio::spawn(sui_forking::startup::run(context, rpc_args, VERSION));
+    let handle = tokio::spawn(sui_forking::startup::run(context));
     handle.await??;
 
     Ok(())

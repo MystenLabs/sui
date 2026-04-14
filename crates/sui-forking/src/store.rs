@@ -186,7 +186,7 @@ impl DataStore {
     /// pre-populate the local cache with the data they need.
     #[cfg(test)]
     pub(crate) fn new_for_testing(root: std::path::PathBuf) -> Self {
-        let gql = GraphQLStore::new(Node::Custom("http://localhost:1".to_string()), "test")
+        let gql = GraphQLClient::new(Node::Custom("http://localhost:1".to_string()), "test")
             .expect("graphql store with localhost url should construct");
         let local = FilesystemStore::new_with_root(root);
         Self {
@@ -270,9 +270,8 @@ impl ChildObjectResolver for DataStore {
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        let recv_object = match self.get_object(receiving_object_id).ok().flatten() {
-            None => return Ok(None),
-            Some(obj) => obj,
+        let Some(recv_object) = self.get_object(receiving_object_id).ok().flatten() else {
+            return Ok(None);
         };
         if recv_object.owner != sui_types::object::Owner::AddressOwner((*owner).into()) {
             return Ok(None);

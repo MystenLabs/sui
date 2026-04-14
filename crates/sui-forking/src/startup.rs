@@ -6,7 +6,6 @@ use std::num::NonZeroUsize;
 use anyhow::{Result, anyhow};
 use prometheus::Registry;
 use rand::rngs::OsRng;
-use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_server::TransactionExecutionServiceServer;
 use tracing::info;
 
 use simulacrum::Simulacrum;
@@ -19,9 +18,6 @@ use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 
 use crate::Node;
 use crate::context::Context;
-use crate::rpc::RpcArgs;
-use crate::rpc::RpcService;
-use crate::rpc::transaction_execution_service::ForkingTransactionExecutionService;
 use crate::store::DataStore;
 
 /// Initialize a forked network by fetching state from the remote endpoint at
@@ -82,27 +78,11 @@ pub async fn initialize(
     Ok(Context::new(simulacrum, chain_identifier))
 }
 
-/// Run the forked network: spin up the gRPC `TransactionExecutionService` and wait for shutdown.
-///
-/// Builds an internal `RpcService` backed by `context`, registers the
-/// [`ForkingTransactionExecutionService`] on it, and serves it until the underlying
-/// `sui_futures::service::Service` exits (either on its own, on Ctrl+C, or on a fatal task error).
-pub async fn run(context: Context, rpc_args: RpcArgs, version: &'static str) -> Result<()> {
-    let registry = Registry::new();
-
-    let tx_execution_service = ForkingTransactionExecutionService::new(context);
-    let rpc = RpcService::new(rpc_args, version, &registry)
-        .await?
-        .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
-        .add_service(TransactionExecutionServiceServer::new(tx_execution_service));
-
-    let service = rpc.run().await?;
-
+/// Run the forked network
+/// context.
+pub async fn run(context: Context) -> Result<()> {
     info!("forked network running, waiting for shutdown signal (Ctrl+C)");
-    service
-        .main()
-        .await
-        .map_err(|e| anyhow!("forked network service exited with error: {e}"))?;
+    tokio::signal::ctrl_c().await?;
     info!("shutdown signal received, stopping forked network");
     Ok(())
 }
