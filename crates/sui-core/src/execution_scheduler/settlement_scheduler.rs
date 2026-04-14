@@ -26,7 +26,7 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     transaction::{TransactionDataAPI, TransactionKey, VerifiedTransaction},
 };
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 #[derive(Clone)]
 pub struct SettlementBatchInfo {
@@ -293,6 +293,15 @@ impl SettlementScheduler {
             checkpoint_seq,
             tx_index_offset,
         );
+
+        let num_deposits = builder.num_deposits();
+        let num_withdrawals = builder.num_withdrawals();
+        if num_deposits > 0 || num_withdrawals > 0 {
+            info!(
+                "Settlement for checkpoint {checkpoint_seq}: {num_deposits} accumulator deposits, \
+                 {num_withdrawals} withdrawals",
+            );
+        }
 
         let funds_changes = builder.collect_funds_changes();
         let settlement_txns = builder.build_tx(
