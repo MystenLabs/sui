@@ -1817,6 +1817,7 @@ mod test {
         .await
         .unwrap();
 
+        let query_proxy = fullnode_proxy.clone();
         let test_duration = Duration::from_secs(60);
         let bench_task = tokio::spawn(async move {
             let driver = BenchDriver::new(5, false);
@@ -1835,6 +1836,18 @@ mod test {
                 .unwrap();
             tracing::info!("end of test {:?}", benchmark_stats);
             assert!(benchmark_stats.num_error_txes < 100);
+
+            // Verify the target address actually received deposits by querying
+            // its address balance.
+            let target_balance = query_proxy
+                .get_sui_address_balance(target)
+                .await
+                .unwrap_or(0);
+            tracing::info!("target address balance: {} MIST", target_balance,);
+            assert!(
+                target_balance > 0,
+                "target address should have received deposits, but balance is 0",
+            );
         });
 
         bench_task.await.unwrap();
