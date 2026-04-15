@@ -581,8 +581,7 @@ where
     // inside the executor).
     let profile_mode = crate::profiling::BytecodeProfileMode::from_env();
     for executor in executor_provider.cached_executors() {
-        profile_mode
-            .end_of_session(&crate::profiling::ExecutorProfileSink(&*executor.executor));
+        profile_mode.end_of_session(&crate::profiling::ExecutorProfileSink(&*executor.executor));
     }
 
     if verbose {

@@ -47,5 +47,5 @@
 
 pub mod counters;
 
-pub use counters::{BytecodeCounters, BytecodeSnapshot};
 pub use crate::shared::constants::{MOVE_VM_DUMP_PROFILE_FILE_ENV, MOVE_VM_PROFILE_MODE_ENV};
+pub use counters::{BytecodeCounters, BytecodeSnapshot};

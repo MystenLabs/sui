@@ -40,9 +40,7 @@ pub trait ProfileSink {
     fn emit_bytecode_profile(&self);
     fn reset_bytecode_profile(&self);
     #[cfg(feature = "tracing")]
-    fn bytecode_profile_snapshot(
-        &self,
-    ) -> Option<sui_execution::profiling::BytecodeSnapshot>;
+    fn bytecode_profile_snapshot(&self) -> Option<sui_execution::profiling::BytecodeSnapshot>;
 }
 
 /// Adapter that forwards `ProfileSink` calls to the underlying `Executor`.
@@ -58,13 +56,10 @@ impl ProfileSink for ExecutorProfileSink<'_> {
         self.0.reset_bytecode_profile();
     }
     #[cfg(feature = "tracing")]
-    fn bytecode_profile_snapshot(
-        &self,
-    ) -> Option<sui_execution::profiling::BytecodeSnapshot> {
+    fn bytecode_profile_snapshot(&self) -> Option<sui_execution::profiling::BytecodeSnapshot> {
         self.0.bytecode_profile_snapshot()
     }
 }
-
 
 /// Where bytecode profile snapshots get emitted relative to transaction
 /// boundaries during replay.
@@ -163,7 +158,10 @@ fn per_tx_path(digest: &TransactionDigest) -> Option<PathBuf> {
     let base = std::env::var(MOVE_VM_DUMP_PROFILE_FILE_ENV).ok()?;
     let base = PathBuf::from(base);
     // `<stem>.<digest>.<ext>` if there's an extension, otherwise `<base>.<digest>`.
-    let stem = base.file_stem().and_then(|s| s.to_str()).unwrap_or("profile");
+    let stem = base
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("profile");
     let ext = base.extension().and_then(|e| e.to_str()).unwrap_or("json");
     let parent = base.parent().filter(|p| !p.as_os_str().is_empty());
     let filename = format!("{}.{}.{}", stem, digest, ext);
@@ -204,9 +202,7 @@ mod tests {
             self.reset_calls.fetch_add(1, Ordering::SeqCst);
         }
         #[cfg(feature = "tracing")]
-        fn bytecode_profile_snapshot(
-            &self,
-        ) -> Option<sui_execution::profiling::BytecodeSnapshot> {
+        fn bytecode_profile_snapshot(&self) -> Option<sui_execution::profiling::BytecodeSnapshot> {
             self.snapshot_calls.fetch_add(1, Ordering::SeqCst);
             None
         }
@@ -241,7 +237,10 @@ mod tests {
 
     #[test]
     fn test_default_mode() {
-        assert_eq!(BytecodeProfileMode::default(), BytecodeProfileMode::EndOfReplay);
+        assert_eq!(
+            BytecodeProfileMode::default(),
+            BytecodeProfileMode::EndOfReplay
+        );
     }
 
     /// `PerTransaction` mode: reset on entry, emit on exit, no end-of-session

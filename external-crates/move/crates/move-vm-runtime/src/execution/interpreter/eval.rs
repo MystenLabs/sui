@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "tracing")]
+use crate::profiling::BytecodeCounters;
 use crate::{
     cache::identifier_interner::IdentifierInterner,
     dbg_println,
@@ -29,8 +31,6 @@ use crate::{
         vm_pointer::VMPointer,
     },
 };
-#[cfg(feature = "tracing")]
-use crate::profiling::BytecodeCounters;
 
 use move_binary_format::{checked_as, errors::*, partial_vm_error};
 use move_core_types::{
@@ -51,7 +51,14 @@ enum StepStatus {
     Done,
 }
 
-pub(super) struct RunContext<'vm_cache, 'native, 'native_lifetimes, 'tracer, 'trace_builder, 'counters> {
+pub(super) struct RunContext<
+    'vm_cache,
+    'native,
+    'native_lifetimes,
+    'tracer,
+    'trace_builder,
+    'counters,
+> {
     pub(super) vtables: &'vm_cache mut VMDispatchTables,
     pub(super) vm_config: Arc<VMConfig>,
     pub(super) extensions: &'native mut NativeContextExtensions<'native_lifetimes>,
@@ -171,8 +178,9 @@ fn step(
     let instruction = &partial_error_to_error(state, run_context, instructions.safe_get(pc))?;
 
     #[cfg(feature = "tracing")]
-    run_context.bytecode_counters.increment((*instruction).into());
-
+    run_context
+        .bytecode_counters
+        .increment((*instruction).into());
 
     fail_point!("move_vm::interpreter_loop", |_| {
         Err(state.set_location(partial_vm_error!(

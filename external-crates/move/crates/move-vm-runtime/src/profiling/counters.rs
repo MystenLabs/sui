@@ -126,7 +126,10 @@ pub struct BytecodeCounters {
 impl BytecodeCounters {
     /// Create a new set of bytecode counters, all initialized to zero.
     pub fn new() -> Self {
-        let counts = ALL_OPCODES.iter().map(|op| (*op, AtomicU64::new(0))).collect();
+        let counts = ALL_OPCODES
+            .iter()
+            .map(|op| (*op, AtomicU64::new(0)))
+            .collect();
         Self { counts }
     }
 
@@ -195,9 +198,13 @@ impl BytecodeSnapshot {
     /// Iterator over opcodes with non-zero counts, yielding `(Opcodes, count)` pairs.
     /// Order is unspecified (HashMap iteration order).
     pub fn iter(&self) -> impl Iterator<Item = (Opcodes, u64)> + '_ {
-        self.counts
-            .iter()
-            .filter_map(|(op, count)| if *count > 0 { Some((*op, *count)) } else { None })
+        self.counts.iter().filter_map(|(op, count)| {
+            if *count > 0 {
+                Some((*op, *count))
+            } else {
+                None
+            }
+        })
     }
 
     /// Format as a human-readable report, sorted by count descending.
@@ -277,13 +284,14 @@ impl BytecodeSnapshot {
         out.push_str(&format!("  \"total\": {},\n", total));
         out.push_str("  \"opcodes\": [\n");
 
+        let last = entries.len().saturating_sub(1);
         for (i, (opcode, count)) in entries.iter().enumerate() {
             let pct = if total > 0 {
                 (*count as f64 / total as f64) * 100.0
             } else {
                 0.0
             };
-            let comma = if i + 1 < entries.len() { "," } else { "" };
+            let comma = if i < last { "," } else { "" };
             out.push_str(&format!(
                 "    {{ \"opcode\": \"{:?}\", \"count\": {}, \"percentage\": {:.4} }}{}\n",
                 opcode, count, pct, comma
@@ -319,6 +327,7 @@ impl BytecodeSnapshot {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used)]
 mod tests {
     use super::*;
 

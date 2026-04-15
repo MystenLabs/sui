@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "tracing")]
+use crate::profiling::BytecodeCounters;
 use crate::{
     execution::{
         dispatch_tables::VMDispatchTables,
@@ -14,8 +16,6 @@ use crate::{
     shared::{gas::GasMeter, vm_pointer::VMPointer},
     try_block,
 };
-#[cfg(feature = "tracing")]
-use crate::profiling::BytecodeCounters;
 use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
 use std::sync::Arc;

@@ -136,8 +136,7 @@ pub fn execute_transaction_to_effects(
         Some(error) => ExecutionOrEarlyError::Err(error),
         None => ExecutionOrEarlyError::Ok(()),
     };
-    profile_mode
-        .before_transaction(&crate::profiling::ExecutorProfileSink(&*executor.executor));
+    profile_mode.before_transaction(&crate::profiling::ExecutorProfileSink(&*executor.executor));
 
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor

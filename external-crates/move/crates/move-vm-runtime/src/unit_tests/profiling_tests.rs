@@ -134,8 +134,14 @@ fn test_profiling_counts_loop_iterations() {
     let adapter = run_and_return_adapter(&module, "sum_to_n", vec![MoveValue::U64(10)]);
     let snapshot = adapter.get_telemetry_report().bytecode_stats;
 
-    assert!(snapshot.get(Opcodes::ADD) >= 10, "Expected ADD from loop body");
-    assert!(snapshot.get(Opcodes::LT) >= 10, "Expected LT from loop guard");
+    assert!(
+        snapshot.get(Opcodes::ADD) >= 10,
+        "Expected ADD from loop body"
+    );
+    assert!(
+        snapshot.get(Opcodes::LT) >= 10,
+        "Expected LT from loop guard"
+    );
 }
 
 #[test]
@@ -265,10 +271,8 @@ fn test_profiling_dump_to_file_end_to_end() {
     let snapshot = adapter.get_telemetry_report().bytecode_stats;
     assert!(snapshot.total() > 0);
 
-    let path = std::env::temp_dir().join(format!(
-        "move_vm_profile_e2e_{}.json",
-        std::process::id()
-    ));
+    let path =
+        std::env::temp_dir().join(format!("move_vm_profile_e2e_{}.json", std::process::id()));
     let _ = std::fs::remove_file(&path);
 
     snapshot.dump_to_file(&path);
@@ -399,11 +403,8 @@ fn test_profiling_reset_clears_counters() {
     let module_id = ModuleId::new(TEST_ADDR, Identifier::new("test").unwrap());
     let module = (module_id, code);
 
-    let adapter = run_and_return_adapter(
-        &module,
-        "add",
-        vec![MoveValue::U64(1), MoveValue::U64(2)],
-    );
+    let adapter =
+        run_and_return_adapter(&module, "add", vec![MoveValue::U64(1), MoveValue::U64(2)]);
 
     // Before reset: non-zero.
     let before = adapter.get_telemetry_report().bytecode_stats;
