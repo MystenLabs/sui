@@ -487,3 +487,92 @@ fn size_config_for_gas_model_version(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::gas_model::tables::unit_cost_schedule;
+
+    /// Drives `SuiGasMeter` through the same sequence of fixed-cost instructions
+    /// under both gas-model versions (pre-batching v11 vs batching v12) and
+    /// reports the gas each path charged.
+    ///
+    /// The block is `{LdU64, LdU64, Add}` so aggregates are deterministic and
+    /// hand-verifiable under `unit_cost_schedule` (all tier multipliers = 1).
+    fn drive_block(gas_model_version: u64) -> u64 {
+        let cost_table = unit_cost_schedule();
+        // Large enough budget that tiers don't advance during the block.
+        let budget: u64 = 1_000_000_000;
+        let gas_price: u64 = 1;
+        let mut status = GasStatus::new(cost_table, budget, gas_price, gas_model_version);
+        let initial: u64 = u64::from(GasMeter::remaining_gas(&SuiGasMeter(&mut status)));
+
+        let block = [
+            SimpleInstruction::LdU64,
+            SimpleInstruction::LdU64,
+            SimpleInstruction::Add,
+        ];
+        let (mut agg_instrs, mut agg_pushes, mut agg_pops, mut agg_push_size, mut agg_pop_size) =
+            (0u64, 0u64, 0u64, 0u64, 0u64);
+        for instr in block {
+            let (pops, pushes, pop_size, push_size) =
+                get_simple_instruction_stack_change(instr).unwrap();
+            agg_instrs += 1;
+            agg_pushes += pushes;
+            agg_pops += pops;
+            agg_push_size += u64::from(push_size);
+            agg_pop_size += u64::from(pop_size);
+        }
+
+        let mut meter = SuiGasMeter(&mut status);
+        // In v12, the JIT prepends Charge to the block; in v11 it's a no-op.
+        meter
+            .charge_block(
+                agg_instrs,
+                agg_pushes,
+                agg_pops,
+                agg_push_size,
+                agg_pop_size,
+            )
+            .unwrap();
+        // Per-instruction traversal happens in both versions.
+        for instr in block {
+            meter.charge_simple_instr(instr).unwrap();
+        }
+
+        let remaining: u64 = u64::from(GasMeter::remaining_gas(&SuiGasMeter(&mut status)));
+        initial - remaining
+    }
+
+    /// A basic block charges identical gas under v11 (per-instruction) and v12
+    /// (batched Charge) up to the expected `pushes * stack_height_tier_mult`
+    /// delta. The delta is inherent to the v12 design: `charge_block` does not
+    /// include a stack-height gas term, and `charge_simple_instr` under v12
+    /// only tracks stack height without charging. This documents that the
+    /// protocol gate is consistent with the gas model it enables.
+    #[test]
+    fn gas_parity_v11_vs_v12_with_documented_delta() {
+        let gas_v11 = drive_block(11);
+        let gas_v12 = drive_block(12);
+
+        // LdU64, LdU64, Add — 3 pushes total, stack_height_tier_mult = 1 under
+        // unit_cost_schedule, so the v11 path charges 3 extra units for
+        // `pushes * height_mult` that v12 omits by design.
+        let expected_delta: u64 = 3;
+        assert_eq!(
+            gas_v11,
+            gas_v12 + expected_delta,
+            "v11 gas {} should exceed v12 gas {} by exactly {} (pushes * height_tier_mult)",
+            gas_v11,
+            gas_v12,
+            expected_delta,
+        );
+
+        // Hand-verification under unit_cost_schedule (abstract sizes of U64/U256
+        // are 1 unit each): instructions=3, push_size=3, pushes=3.
+        // v11 per-instruction: (1+1+1) + (1+1+1) + (1+1+1) = 9
+        // v12 batched charge:  (3+3+0)                      = 6
+        assert_eq!(gas_v11, 9);
+        assert_eq!(gas_v12, 6);
+    }
+}
