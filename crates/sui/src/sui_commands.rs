@@ -1166,9 +1166,7 @@ async fn start(
             ..Default::default()
         };
 
-        let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: Some(socket_addr_to_url(fullnode_rpc_address)?),
-        };
+        let fullnode_args = FullnodeArgs::new(socket_addr_to_url(fullnode_rpc_address)?);
 
         let mut graphql_config = GraphQlConfig::default();
         graphql_config.zklogin.env = sui_indexer_alt_graphql::config::ZkLoginEnv::Test;

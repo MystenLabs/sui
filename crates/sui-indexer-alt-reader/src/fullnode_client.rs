@@ -23,7 +23,7 @@ pub struct FullnodeArgs {
     /// gRPC URL for full node operations such as executeTransaction and simulateTransaction.
     /// `Option` so the flag stays optional when flattened into a parent args struct.
     #[clap(long)]
-    pub fullnode_rpc_url: Option<Url>,
+    pub(crate) fullnode_rpc_url: Option<Url>,
 }
 
 /// A client for executing and simulating transactions via the full node gRPC service.
@@ -39,6 +39,14 @@ pub enum Error {
 
     #[error(transparent)]
     GrpcExecutionError(#[from] tonic::Status),
+}
+
+impl FullnodeArgs {
+    pub fn new(url: Url) -> Self {
+        Self {
+            fullnode_rpc_url: Some(url),
+        }
+    }
 }
 
 impl FullnodeClient {

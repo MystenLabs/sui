@@ -123,9 +123,7 @@ impl GraphQlTestCluster {
             no_ide: true,
         };
 
-        let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: Some(validator_cluster.rpc_url().parse().unwrap()),
-        };
+        let fullnode_args = FullnodeArgs::new(validator_cluster.rpc_url().parse().unwrap());
 
         // Start GraphQL server that connects directly to TestCluster's RPC
         let service = start_graphql(
