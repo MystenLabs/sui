@@ -70,6 +70,7 @@ mod checked {
             deprecate_global_storage_ops_during_deserialization: protocol_config
                 .deprecate_global_storage_ops_during_deserialization(),
             normalize_depth_formula: protocol_config.normalize_depth_formula(),
+            enable_charge_instruction: false,
         }
     }
 
