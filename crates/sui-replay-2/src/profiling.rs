@@ -25,7 +25,7 @@
 //!   and drops its own executor, so counters cannot survive across
 //!   transactions and the end-of-session emission walks an empty cache.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use sui_execution::Executor;
 use sui_execution::profiling::{MOVE_VM_DUMP_PROFILE_FILE_ENV, MOVE_VM_PROFILE_MODE_ENV};
 use sui_types::digests::TransactionDigest;
@@ -133,8 +133,8 @@ impl BytecodeProfileMode {
             Self::PerTransaction => executor.emit_bytecode_profile(),
             Self::PerTransactionFile => {
                 if let Some(snapshot) = executor.bytecode_profile_snapshot() {
-                    if let Some(path) = per_tx_path(digest) {
-                        snapshot.dump_to_file(path);
+                    if let Some(base) = dump_file_base() {
+                        snapshot.dump_to_file(per_tx_path(base, digest));
                     } else {
                         // No base path configured — fall back to the
                         // tracing log so the data is not silently dropped.
@@ -162,12 +162,21 @@ impl BytecodeProfileMode {
     }
 }
 
-/// Compute the per-transaction dump path: `<base>.<digest>.json` if
-/// `MOVE_VM_DUMP_PROFILE_FILE` is set, otherwise `None`.
-fn per_tx_path(digest: &TransactionDigest) -> Option<PathBuf> {
-    let base = std::env::var(MOVE_VM_DUMP_PROFILE_FILE_ENV).ok()?;
-    let base = PathBuf::from(base);
-    // `<stem>.<digest>.<ext>` if there's an extension, otherwise `<base>.<digest>`.
+/// Cached `MOVE_VM_DUMP_PROFILE_FILE` value. Looked up once per process to
+/// avoid repeated `std::env::var` calls (which take a global OS lock on Unix)
+/// from the per-transaction hooks.
+fn dump_file_base() -> Option<&'static Path> {
+    static CACHED: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    CACHED
+        .get_or_init(|| std::env::var(MOVE_VM_DUMP_PROFILE_FILE_ENV).ok().map(PathBuf::from))
+        .as_deref()
+}
+
+/// Splice a transaction digest into a dump file path:
+/// `<stem>.<digest>.<ext>` next to the base path. If the input has no
+/// extension, defaults to `.json`. Pure function — no env access — so it is
+/// directly testable.
+fn per_tx_path(base: &Path, digest: &TransactionDigest) -> PathBuf {
     let stem = base
         .file_stem()
         .and_then(|s| s.to_str())
@@ -175,10 +184,10 @@ fn per_tx_path(digest: &TransactionDigest) -> Option<PathBuf> {
     let ext = base.extension().and_then(|e| e.to_str()).unwrap_or("json");
     let parent = base.parent().filter(|p| !p.as_os_str().is_empty());
     let filename = format!("{}.{}.{}", stem, digest, ext);
-    Some(match parent {
+    match parent {
         Some(p) => p.join(filename),
         None => PathBuf::from(filename),
-    })
+    }
 }
 
 #[cfg(test)]
@@ -221,11 +230,7 @@ mod tests {
     #[test]
     fn test_per_tx_path_with_extension() {
         let digest = TransactionDigest::ZERO;
-        let base = PathBuf::from("/tmp/profile.json");
-        let stem = base.file_stem().and_then(|s| s.to_str()).unwrap();
-        let ext = base.extension().and_then(|e| e.to_str()).unwrap();
-        let parent = base.parent().unwrap();
-        let result = parent.join(format!("{}.{}.{}", stem, digest, ext));
+        let result = per_tx_path(Path::new("/tmp/profile.json"), &digest);
         assert_eq!(
             result.to_string_lossy(),
             format!("/tmp/profile.{}.json", digest)
@@ -235,13 +240,22 @@ mod tests {
     #[test]
     fn test_per_tx_path_no_extension() {
         let digest = TransactionDigest::ZERO;
-        let base = PathBuf::from("/tmp/profile");
-        let stem = base.file_stem().and_then(|s| s.to_str()).unwrap();
-        let parent = base.parent().unwrap();
-        let result = parent.join(format!("{}.{}.{}", stem, digest, "json"));
+        let result = per_tx_path(Path::new("/tmp/profile"), &digest);
+        // Defaults to .json when the input has no extension.
         assert_eq!(
             result.to_string_lossy(),
             format!("/tmp/profile.{}.json", digest)
+        );
+    }
+
+    #[test]
+    fn test_per_tx_path_bare_filename() {
+        // No parent directory in the input — output is just a filename.
+        let digest = TransactionDigest::ZERO;
+        let result = per_tx_path(Path::new("profile.json"), &digest);
+        assert_eq!(
+            result.to_string_lossy(),
+            format!("profile.{}.json", digest)
         );
     }
 

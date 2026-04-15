@@ -271,8 +271,8 @@ impl executor::Executor for Executor {
         Some(self.0.bytecode_profile_snapshot())
     }
 
+    #[cfg(feature = "tracing")]
     fn reset_bytecode_profile(&self) {
-        #[cfg(feature = "tracing")]
         self.0.reset_bytecode_profile();
     }
 }
