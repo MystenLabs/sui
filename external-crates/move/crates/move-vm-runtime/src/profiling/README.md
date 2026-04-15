@@ -54,9 +54,20 @@ MOVE_VM_DUMP_PROFILE_FILE=/tmp/profile.json \
 
 ### Replay-driven profiling
 
-`sui-replay-2` calls `Executor::emit_bytecode_profile()` after each transaction
-when built with `--features tracing`. Point `MOVE_VM_DUMP_PROFILE_FILE` at a
-path and run a replay to get a per-transaction dump.
+`sui-replay-2` invokes the profiling hooks once per transaction (and once at
+session end). The dumping policy is controlled by `MOVE_VM_PROFILE_MODE`:
+
+- `per-transaction` — reset before each tx, emit after; the dump file is
+  overwritten on every tx (final file = last tx).
+- `per-transaction-file` — reset before each tx, write per-tx snapshot to
+  `<base>.<digest>.json` (one file per tx).
+- `end-of-replay` (default) — accumulate across the whole run, emit once at
+  the end.
+
+`end-of-replay` requires `--cache-executor` because counters live inside the
+executor; without caching each transaction's executor (and counters) is
+dropped before the session-end hook runs. The per-transaction modes work in
+either configuration.
 
 ## Output formats
 

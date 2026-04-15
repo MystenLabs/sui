@@ -576,6 +576,9 @@ where
 
     // End-of-session bytecode profile emission. Only the EndOfReplay mode
     // does anything here; the per-transaction modes have already emitted.
+    // Note: `cached_executors()` is empty unless `--cache-executor` is set,
+    // so EndOfReplay only does useful work in that case (the counters live
+    // inside the executor).
     let profile_mode = crate::profiling::BytecodeProfileMode::from_env();
     for executor in executor_provider.cached_executors() {
         profile_mode

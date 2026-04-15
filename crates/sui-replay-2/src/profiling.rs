@@ -20,7 +20,10 @@
 //!   transaction digest spliced in as `<base>.<digest>.json`, producing one
 //!   file per transaction.
 //! - `end-of-replay` (default) — accumulate counts across the whole replay
-//!   session and emit a single snapshot at the end.
+//!   session and emit a single snapshot at the end. **Only meaningful with
+//!   `--cache-executor`**: without executor caching each transaction creates
+//!   and drops its own executor, so counters cannot survive across
+//!   transactions and the end-of-session emission walks an empty cache.
 
 use std::path::PathBuf;
 use sui_execution::Executor;
@@ -76,6 +79,10 @@ pub enum BytecodeProfileMode {
     PerTransactionFile,
     /// Accumulate across the entire replay session; emit once when the
     /// session ends.
+    ///
+    /// Requires `--cache-executor` to do anything useful: counters live
+    /// inside the executor, so without caching each transaction's counters
+    /// are dropped before the session-end hook runs.
     #[default]
     EndOfReplay,
 }
