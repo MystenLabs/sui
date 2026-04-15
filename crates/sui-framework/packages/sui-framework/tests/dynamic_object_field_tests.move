@@ -270,6 +270,21 @@ fun replace_different_type() {
     id.delete();
 }
 
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+fun replace_wrong_old_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    // ValueOld is Fake but actual value is Counter, so remove_opt call in replace should abort
+    let _old: Option<Fake> = dynamic_object_field::replace(
+        &mut id,
+        0u64,
+        Fake { id: scenario.new_object() },
+    );
+    abort
+}
+
 // === Macro Tests ===
 
 #[test]

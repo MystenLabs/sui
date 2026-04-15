@@ -193,6 +193,17 @@ fun replace_different_type() {
     id.delete();
 }
 
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun replace_wrong_old_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    // ValueOld is u8 but actual value is u64, so remove_opt call in replace should abort
+    let _old = dynamic_field::replace<u64, u8, u8>(&mut id, 0, 7u8);
+    abort
+}
+
 // === Macro Tests ===
 
 #[test]
