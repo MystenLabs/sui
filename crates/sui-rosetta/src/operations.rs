@@ -30,7 +30,9 @@ use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::{ADD_STAKE_FUN_NAME, WITHDRAW_STAKE_FUN_NAME};
 use sui_types::sui_system_state::SUI_SYSTEM_MODULE_NAME;
-use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+};
 
 use crate::types::internal_operation::{
     ConsolidateAllStakedSuiToFungible, MergeAndRedeemFungibleStakedSui, PayCoin, PaySui, Stake,
@@ -277,11 +279,15 @@ impl Operations {
         let metadata = op.metadata.ok_or_else(|| {
             Error::MissingInput("ConsolidateAllStakedSuiToFungible metadata".to_string())
         })?;
-        let OperationMetadata::ConsolidateAllStakedSuiToFungible { validator } = metadata else {
+        let OperationMetadata::ConsolidateAllStakedSuiToFungible { validator, .. } = metadata
+        else {
             return Err(Error::InvalidInput(
                 "Cannot find validator from ConsolidateAllStakedSuiToFungible metadata.".into(),
             ));
         };
+        let validator = validator.ok_or_else(|| {
+            Error::MissingInput("validator required for ConsolidateAllStakedSuiToFungible".into())
+        })?;
         Ok(InternalOperation::ConsolidateAllStakedSuiToFungible(
             ConsolidateAllStakedSuiToFungible { sender, validator },
         ))
@@ -615,6 +621,28 @@ impl Operations {
         let mut stake_ids = vec![];
         let mut currency: Option<Currency> = None;
 
+        // Detect FSS consolidation/redemption PTBs by signature MoveCalls.
+        // PR 2 will prepend a `has_redeem` check in front of this block.
+        let has_convert_fss = commands.iter().any(|c| {
+            matches!(
+                &c.command,
+                Some(Command::MoveCall(m)) if Self::is_convert_to_fss_call(m)
+            )
+        });
+        let has_join_fss = commands.iter().any(|c| {
+            matches!(
+                &c.command,
+                Some(Command::MoveCall(m)) if Self::is_join_fss_call(m)
+            )
+        });
+        if (has_convert_fss || has_join_fss)
+            && let Some(ops) = Self::parse_consolidate(sender, inputs, commands, status)
+        {
+            return Ok(ops);
+        }
+        // If has_convert_fss || has_join_fss but parse_consolidate returned None, we fall
+        // through; the unrecognized MoveCalls hit `_ => None` and emit a generic_op.
+
         for command in commands {
             let result = match &command.command {
                 Some(Command::SplitCoins(split)) => {
@@ -749,6 +777,162 @@ impl Operations {
         Ok(operations)
     }
 
+    /// Parse a PTB that represents `ConsolidateAllStakedSuiToFungible`.
+    ///
+    /// Accepts three valid shapes produced by `consolidate_to_fungible_pt`:
+    /// 1. Pure FSS merge (S=0, F>=2): only `join_fungible_staked_sui` calls, no convert, no transfer.
+    /// 2. Convert-only (S>=1, F=0): convert(s) + optional new-FSS joins + trailing `TransferObjects` to sender.
+    /// 3. Mixed (S>=1, F>=1): existing-FSS joins + convert(s) + new-FSS joins + cross-merge join, no transfer.
+    ///
+    /// Returns `None` on any shape mismatch, causing the caller to fall through to generic op emission.
+    fn parse_consolidate(
+        sender: SuiAddress,
+        inputs: &[Input],
+        commands: &[sui_rpc::proto::sui::rpc::v2::Command],
+        status: Option<OperationStatus>,
+    ) -> Option<Vec<Operation>> {
+        use std::collections::BTreeSet;
+
+        if !Self::first_input_is_sui_system_state(inputs) {
+            return None;
+        }
+
+        let mut staked_sui_indices: Vec<u32> = Vec::new();
+        let mut fss_indices: Vec<u32> = Vec::new();
+        let mut staked_seen: BTreeSet<u32> = BTreeSet::new();
+        let mut fss_seen: BTreeSet<u32> = BTreeSet::new();
+        let mut saw_transfer = false;
+
+        for (idx, command) in commands.iter().enumerate() {
+            if saw_transfer {
+                return None;
+            }
+            match &command.command {
+                Some(Command::MoveCall(m)) if Self::is_convert_to_fss_call(m) => {
+                    if m.arguments.len() != 2 {
+                        return None;
+                    }
+                    let staked_arg = &m.arguments[1];
+                    if staked_arg.kind() != ArgumentKind::Input {
+                        return None;
+                    }
+                    let i = staked_arg.input();
+                    if fss_seen.contains(&i) {
+                        return None;
+                    }
+                    if staked_seen.insert(i) {
+                        staked_sui_indices.push(i);
+                    }
+                }
+                Some(Command::MoveCall(m)) if Self::is_join_fss_call(m) => {
+                    if m.arguments.len() != 2 {
+                        return None;
+                    }
+                    for arg in &m.arguments {
+                        match arg.kind() {
+                            ArgumentKind::Input => {
+                                let i = arg.input();
+                                if staked_seen.contains(&i) {
+                                    return None;
+                                }
+                                if fss_seen.insert(i) {
+                                    fss_indices.push(i);
+                                }
+                            }
+                            ArgumentKind::Result => {}
+                            _ => return None,
+                        }
+                    }
+                }
+                Some(Command::TransferObjects(transfer)) => {
+                    if transfer.objects.len() != 1 {
+                        return None;
+                    }
+                    if transfer.objects[0].kind() != ArgumentKind::Result {
+                        return None;
+                    }
+                    let addr_arg = transfer.address();
+                    if addr_arg.kind() != ArgumentKind::Input {
+                        return None;
+                    }
+                    let recipient = inputs.get(addr_arg.input() as usize).and_then(|inp| {
+                        if inp.kind() == InputKind::Pure {
+                            bcs::from_bytes::<SuiAddress>(inp.pure()).ok()
+                        } else {
+                            None
+                        }
+                    })?;
+                    if recipient != sender {
+                        return None;
+                    }
+                    if idx + 1 != commands.len() {
+                        return None;
+                    }
+                    saw_transfer = true;
+                }
+                _ => return None,
+            }
+        }
+
+        if staked_sui_indices.is_empty() && fss_indices.is_empty() {
+            return None;
+        }
+
+        let staked_sui_ids = Self::input_indices_to_object_ids(inputs, &staked_sui_indices)?;
+        let fss_ids = Self::input_indices_to_object_ids(inputs, &fss_indices)?;
+
+        Some(vec![Operation {
+            operation_identifier: Default::default(),
+            type_: OperationType::ConsolidateAllStakedSuiToFungible,
+            status,
+            account: Some(sender.into()),
+            amount: None,
+            coin_change: None,
+            metadata: Some(OperationMetadata::ConsolidateAllStakedSuiToFungible {
+                validator: None,
+                staked_sui_ids,
+                fss_ids,
+            }),
+        }])
+    }
+
+    /// Returns true iff inputs[0] is a `SharedObject` reference to the SUI_SYSTEM_STATE (0x5).
+    ///
+    /// Note on mutability: the Move functions `convert_to_fungible_staked_sui` and
+    /// `redeem_fungible_staked_sui` take `&mut SuiSystemState`, so the chain will reject
+    /// immutable shared references at execution time. This check is therefore sufficient
+    /// without an explicit mutable-shared flag.
+    fn first_input_is_sui_system_state(inputs: &[Input]) -> bool {
+        let Some(first) = inputs.first() else {
+            return false;
+        };
+        if first.kind() != InputKind::Shared {
+            return false;
+        }
+        let Some(oid_str) = first.object_id.as_ref() else {
+            return false;
+        };
+        let Ok(oid) = ObjectID::from_str(oid_str) else {
+            return false;
+        };
+        oid == SUI_SYSTEM_STATE_OBJECT_ID
+    }
+
+    /// Resolves a list of input indices to ObjectIDs. Returns None if any index is
+    /// out-of-bounds or references an input that isn't `ImmutableOrOwned`.
+    fn input_indices_to_object_ids(inputs: &[Input], indices: &[u32]) -> Option<Vec<ObjectID>> {
+        indices
+            .iter()
+            .map(|&i| {
+                let inp = inputs.get(i as usize)?;
+                if inp.kind() != InputKind::ImmutableOrOwned {
+                    return None;
+                }
+                ObjectID::from_str(inp.object_id.as_ref()?).ok()
+            })
+            .collect()
+    }
+
     fn is_stake_call(tx: &MoveCall) -> bool {
         let package_id = match ObjectID::from_str(tx.package()) {
             Ok(id) => id,
@@ -784,6 +968,45 @@ impl Operations {
             && tx.module() == SUI_SYSTEM_MODULE_NAME.as_str()
             && (tx.function() == WITHDRAW_STAKE_FUN_NAME.as_str()
                 || tx.function() == "request_withdraw_stake_non_entry")
+    }
+
+    /// Recognizes `0x3::sui_system::convert_to_fungible_staked_sui` — the signature
+    /// MoveCall for `ConsolidateAllStakedSuiToFungible`.
+    fn is_convert_to_fss_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(e) => {
+                warn!(
+                    package = tx.package(),
+                    error = %e,
+                    "Failed to parse package ID for MoveCall"
+                );
+                return false;
+            }
+        };
+        package_id == SUI_SYSTEM_PACKAGE_ID
+            && tx.module() == SUI_SYSTEM_MODULE_NAME.as_str()
+            && tx.function() == "convert_to_fungible_staked_sui"
+    }
+
+    /// Recognizes `0x3::staking_pool::join_fungible_staked_sui` — used by both
+    /// `ConsolidateAllStakedSuiToFungible` (for merging FSS) and
+    /// `MergeAndRedeemFungibleStakedSui` (PR 2).
+    fn is_join_fss_call(tx: &MoveCall) -> bool {
+        let package_id = match ObjectID::from_str(tx.package()) {
+            Ok(id) => id,
+            Err(e) => {
+                warn!(
+                    package = tx.package(),
+                    error = %e,
+                    "Failed to parse package ID for MoveCall"
+                );
+                return false;
+            }
+        };
+        package_id == SUI_SYSTEM_PACKAGE_ID
+            && tx.module() == "staking_pool"
+            && tx.function() == "join_fungible_staked_sui"
     }
 
     /// Recognizes `coin::redeem_funds<T>` calls used for address-balance withdrawals.
@@ -1267,7 +1490,12 @@ pub enum OperationMetadata {
         stake_ids: Vec<ObjectID>,
     },
     ConsolidateAllStakedSuiToFungible {
-        validator: SuiAddress,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        validator: Option<SuiAddress>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        staked_sui_ids: Vec<ObjectID>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        fss_ids: Vec<ObjectID>,
     },
     MergeAndRedeemFungibleStakedSui {
         validator: SuiAddress,
@@ -1399,10 +1627,40 @@ mod tests {
     use super::*;
     use crate::SUI;
     use crate::types::ConstructionMetadata;
+    use crate::types::internal_operation::consolidate_to_fungible_pt;
     use sui_rpc::proto::sui::rpc::v2::Transaction;
-    use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
+    use sui_types::Identifier;
+    use sui_types::base_types::{ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress};
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData};
+    use sui_types::transaction::{
+        CallArg, Command as NativeCommand, ObjectArg, ProgrammableTransaction,
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER, TransactionData,
+    };
+
+    fn random_object_ref() -> ObjectRef {
+        (
+            ObjectID::random(),
+            SequenceNumber::from(1),
+            ObjectDigest::random(),
+        )
+    }
+
+    /// Parse a native `ProgrammableTransaction` via the proto pipeline.
+    /// Exact same conversion pattern used by `test_operation_data_parsing_pay_sui` at line 1637.
+    fn parse_pt(sender: SuiAddress, pt: ProgrammableTransaction) -> Vec<Operation> {
+        let gas = random_object_ref();
+        let gas_price = 10;
+        let data = TransactionData::new_programmable(
+            sender,
+            vec![gas],
+            pt,
+            TEST_ONLY_GAS_UNIT_FOR_TRANSFER * gas_price,
+            gas_price,
+        );
+        let proto_tx: Transaction = data.into();
+        let tx_kind = proto_tx.kind.expect("tx missing kind");
+        Operations::from_transaction(tx_kind, sender, None).expect("parse failed")
+    }
 
     #[tokio::test]
     async fn test_operation_data_parsing_pay_sui() -> Result<(), anyhow::Error> {
@@ -1609,5 +1867,406 @@ mod tests {
             }
             _ => panic!("Expected MergeAndRedeemFungibleStakedSui"),
         }
+    }
+
+    // ==============================================================================
+    // PR 1: Consolidate parser — happy-path tests (11 tests)
+    // ==============================================================================
+
+    fn assert_consolidate_ops(
+        ops: &[Operation],
+        expected_sender: SuiAddress,
+        expected_staked_sui: &[ObjectID],
+        expected_fss: &[ObjectID],
+    ) {
+        assert_eq!(ops.len(), 1);
+        let op = &ops[0];
+        assert_eq!(op.type_, OperationType::ConsolidateAllStakedSuiToFungible);
+        assert_eq!(
+            op.account.as_ref().map(|a| a.address),
+            Some(expected_sender)
+        );
+        assert!(op.amount.is_none());
+        let Some(OperationMetadata::ConsolidateAllStakedSuiToFungible {
+            validator,
+            staked_sui_ids,
+            fss_ids,
+        }) = op.metadata.clone()
+        else {
+            panic!("wrong metadata variant: {:?}", op.metadata);
+        };
+        assert!(validator.is_none(), "validator must be None on parse");
+        assert_eq!(staked_sui_ids, expected_staked_sui);
+        assert_eq!(fss_ids, expected_fss);
+    }
+
+    #[test]
+    fn test_parse_consolidate_pure_merge_2_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss_a = random_object_ref();
+        let fss_b = random_object_ref();
+        let pt = consolidate_to_fungible_pt(sender, vec![fss_a, fss_b], vec![]).expect("pt");
+        let ops = parse_pt(sender, pt);
+        assert_consolidate_ops(&ops, sender, &[], &[fss_a.0, fss_b.0]);
+    }
+
+    #[test]
+    fn test_parse_consolidate_pure_merge_3_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let a = random_object_ref();
+        let b = random_object_ref();
+        let c = random_object_ref();
+        let pt = consolidate_to_fungible_pt(sender, vec![a, b, c], vec![]).expect("pt");
+        assert_consolidate_ops(&parse_pt(sender, pt), sender, &[], &[a.0, b.0, c.0]);
+    }
+
+    #[test]
+    fn test_parse_consolidate_pure_merge_5_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let refs: Vec<_> = (0..5).map(|_| random_object_ref()).collect();
+        let pt = consolidate_to_fungible_pt(sender, refs.clone(), vec![]).expect("pt");
+        let expected: Vec<_> = refs.iter().map(|r| r.0).collect();
+        assert_consolidate_ops(&parse_pt(sender, pt), sender, &[], &expected);
+    }
+
+    #[test]
+    fn test_parse_consolidate_single_convert_no_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let staked = random_object_ref();
+        let pt = consolidate_to_fungible_pt(sender, vec![], vec![staked]).expect("pt");
+        assert_consolidate_ops(&parse_pt(sender, pt), sender, &[staked.0], &[]);
+    }
+
+    #[test]
+    fn test_parse_consolidate_multi_convert_no_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let s1 = random_object_ref();
+        let s2 = random_object_ref();
+        let s3 = random_object_ref();
+        let pt = consolidate_to_fungible_pt(sender, vec![], vec![s1, s2, s3]).expect("pt");
+        assert_consolidate_ops(&parse_pt(sender, pt), sender, &[s1.0, s2.0, s3.0], &[]);
+    }
+
+    #[test]
+    fn test_parse_consolidate_single_stake_single_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss = random_object_ref();
+        let staked = random_object_ref();
+        let pt = consolidate_to_fungible_pt(sender, vec![fss], vec![staked]).expect("pt");
+        assert_consolidate_ops(&parse_pt(sender, pt), sender, &[staked.0], &[fss.0]);
+    }
+
+    #[test]
+    fn test_parse_consolidate_single_stake_multi_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let f1 = random_object_ref();
+        let f2 = random_object_ref();
+        let staked = random_object_ref();
+        let pt = consolidate_to_fungible_pt(sender, vec![f1, f2], vec![staked]).expect("pt");
+        assert_consolidate_ops(&parse_pt(sender, pt), sender, &[staked.0], &[f1.0, f2.0]);
+    }
+
+    #[test]
+    fn test_parse_consolidate_multi_stake_single_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss = random_object_ref();
+        let s1 = random_object_ref();
+        let s2 = random_object_ref();
+        let pt = consolidate_to_fungible_pt(sender, vec![fss], vec![s1, s2]).expect("pt");
+        assert_consolidate_ops(&parse_pt(sender, pt), sender, &[s1.0, s2.0], &[fss.0]);
+    }
+
+    #[test]
+    fn test_parse_consolidate_multi_stake_multi_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let f1 = random_object_ref();
+        let f2 = random_object_ref();
+        let s1 = random_object_ref();
+        let s2 = random_object_ref();
+        let pt = consolidate_to_fungible_pt(sender, vec![f1, f2], vec![s1, s2]).expect("pt");
+        assert_consolidate_ops(&parse_pt(sender, pt), sender, &[s1.0, s2.0], &[f1.0, f2.0]);
+    }
+
+    #[test]
+    fn test_parse_consolidate_large_mixed() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss: Vec<_> = (0..3).map(|_| random_object_ref()).collect();
+        let staked: Vec<_> = (0..3).map(|_| random_object_ref()).collect();
+        let pt = consolidate_to_fungible_pt(sender, fss.clone(), staked.clone()).expect("pt");
+        let expected_s: Vec<_> = staked.iter().map(|r| r.0).collect();
+        let expected_f: Vec<_> = fss.iter().map(|r| r.0).collect();
+        assert_consolidate_ops(&parse_pt(sender, pt), sender, &expected_s, &expected_f);
+    }
+
+    #[test]
+    fn test_parse_consolidate_classification_correctness() {
+        // No overlap between staked_sui_ids and fss_ids after parsing a mixed PTB.
+        let sender = SuiAddress::random_for_testing_only();
+        let f1 = random_object_ref();
+        let f2 = random_object_ref();
+        let s1 = random_object_ref();
+        let s2 = random_object_ref();
+        let pt = consolidate_to_fungible_pt(sender, vec![f1, f2], vec![s1, s2]).expect("pt");
+        let ops = parse_pt(sender, pt);
+        let Some(OperationMetadata::ConsolidateAllStakedSuiToFungible {
+            staked_sui_ids,
+            fss_ids,
+            ..
+        }) = ops[0].metadata.clone()
+        else {
+            panic!();
+        };
+        let staked_set: std::collections::HashSet<_> = staked_sui_ids.iter().collect();
+        let fss_set: std::collections::HashSet<_> = fss_ids.iter().collect();
+        assert!(
+            staked_set.is_disjoint(&fss_set),
+            "classification crossed categories"
+        );
+    }
+
+    // ==============================================================================
+    // PR 1: Fall-through tests (4 tests) — malformed PTBs must NOT be labeled Consolidate
+    // ==============================================================================
+
+    fn assert_falls_through_to_generic(ops: &[Operation]) {
+        assert_eq!(ops.len(), 1);
+        assert_eq!(
+            ops[0].type_,
+            OperationType::ProgrammableTransaction,
+            "expected fall-through to generic ProgrammableTransaction, got: {:?}",
+            ops[0].type_
+        );
+    }
+
+    #[test]
+    fn test_parse_falls_through_consolidate_with_merge_coins() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss_a = random_object_ref();
+        let fss_b = random_object_ref();
+        let coin_a = random_object_ref();
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let _sys = builder.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+        let first = builder.obj(ObjectArg::ImmOrOwnedObject(fss_a)).unwrap();
+        let other = builder.obj(ObjectArg::ImmOrOwnedObject(fss_b)).unwrap();
+        builder.command(NativeCommand::move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            Identifier::new("staking_pool").unwrap(),
+            Identifier::new("join_fungible_staked_sui").unwrap(),
+            vec![],
+            vec![first, other],
+        ));
+        // Rogue MergeCoins breaks Consolidate shape validation.
+        let coin_target = builder.obj(ObjectArg::ImmOrOwnedObject(coin_a)).unwrap();
+        builder.command(NativeCommand::MergeCoins(coin_target, vec![]));
+
+        let ops = parse_pt(sender, builder.finish());
+        assert_falls_through_to_generic(&ops);
+    }
+
+    #[test]
+    fn test_parse_falls_through_consolidate_with_unrelated_movecall() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss_a = random_object_ref();
+        let fss_b = random_object_ref();
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let _sys = builder.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+        let first = builder.obj(ObjectArg::ImmOrOwnedObject(fss_a)).unwrap();
+        let other = builder.obj(ObjectArg::ImmOrOwnedObject(fss_b)).unwrap();
+        builder.command(NativeCommand::move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            Identifier::new("staking_pool").unwrap(),
+            Identifier::new("join_fungible_staked_sui").unwrap(),
+            vec![],
+            vec![first, other],
+        ));
+        // Unrelated MoveCall (e.g., 0x2::sui::transfer doesn't exist, so use any other function).
+        builder.command(NativeCommand::move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("destroy_zero").unwrap(),
+            vec![],
+            vec![other],
+        ));
+
+        let ops = parse_pt(sender, builder.finish());
+        assert_falls_through_to_generic(&ops);
+    }
+
+    #[test]
+    fn test_parse_falls_through_convert_without_system_state() {
+        // Build a PTB where inputs[0] is an ImmOrOwned object (not SUI_SYSTEM_STATE shared).
+        let sender = SuiAddress::random_for_testing_only();
+        let staked = random_object_ref();
+        let other_obj = random_object_ref();
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        // Put a random object first — parser should reject.
+        let _not_system = builder.obj(ObjectArg::ImmOrOwnedObject(other_obj)).unwrap();
+        let staked_arg = builder.obj(ObjectArg::ImmOrOwnedObject(staked)).unwrap();
+        let sys = builder.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+        let new_fss = builder.command(NativeCommand::move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            Identifier::new("sui_system").unwrap(),
+            Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+            vec![],
+            vec![sys, staked_arg],
+        ));
+        let sender_arg = builder.pure(sender).unwrap();
+        builder.command(NativeCommand::TransferObjects(vec![new_fss], sender_arg));
+
+        let ops = parse_pt(sender, builder.finish());
+        assert_falls_through_to_generic(&ops);
+    }
+
+    #[test]
+    fn test_parse_falls_through_extra_command_after_transfer() {
+        // Valid Consolidate shape + an extra command after TransferObjects → reject.
+        let sender = SuiAddress::random_for_testing_only();
+        let staked = random_object_ref();
+        let other_obj = random_object_ref();
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let sys = builder.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+        let staked_arg = builder.obj(ObjectArg::ImmOrOwnedObject(staked)).unwrap();
+        let new_fss = builder.command(NativeCommand::move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            Identifier::new("sui_system").unwrap(),
+            Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+            vec![],
+            vec![sys, staked_arg],
+        ));
+        let sender_arg = builder.pure(sender).unwrap();
+        builder.command(NativeCommand::TransferObjects(vec![new_fss], sender_arg));
+        // Extra command: destroy_zero on an unrelated coin.
+        let extra = builder.obj(ObjectArg::ImmOrOwnedObject(other_obj)).unwrap();
+        builder.command(NativeCommand::move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("destroy_zero").unwrap(),
+            vec![],
+            vec![extra],
+        ));
+
+        let ops = parse_pt(sender, builder.finish());
+        assert_falls_through_to_generic(&ops);
+    }
+
+    // ==============================================================================
+    // PR 1: Robustness tests (4 tests, but #38-39 belong in e2e — see plan)
+    // ==============================================================================
+
+    #[test]
+    fn test_parse_empty_ptb() {
+        let sender = SuiAddress::random_for_testing_only();
+        let pt = ProgrammableTransactionBuilder::new().finish();
+        let ops = parse_pt(sender, pt);
+        // Zero commands: parser should produce a generic op (existing behavior).
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0].type_, OperationType::ProgrammableTransaction);
+    }
+
+    #[test]
+    fn test_parse_only_merge_coins() {
+        // PTB with only regular MergeCoins (non-FSS) — falls through, unrelated to our dispatch.
+        let sender = SuiAddress::random_for_testing_only();
+        let coin_a = random_object_ref();
+        let coin_b = random_object_ref();
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let target = builder.obj(ObjectArg::ImmOrOwnedObject(coin_a)).unwrap();
+        let source = builder.obj(ObjectArg::ImmOrOwnedObject(coin_b)).unwrap();
+        builder.command(NativeCommand::MergeCoins(target, vec![source]));
+        let ops = parse_pt(sender, builder.finish());
+        // Either ProgrammableTransaction (generic) or whatever the existing parser produces.
+        // Not our typed FSS op.
+        assert_ne!(
+            ops[0].type_,
+            OperationType::ConsolidateAllStakedSuiToFungible
+        );
+        assert_ne!(ops[0].type_, OperationType::MergeAndRedeemFungibleStakedSui);
+    }
+
+    // Tests #38 (garbage bytes) and #39 (truncated tx data) are HTTP-level and belong in
+    // end_to_end_tests.rs — see plan section D.
+
+    // ==============================================================================
+    // PR 1: Metadata serialization compat (2 tests)
+    // ==============================================================================
+
+    #[test]
+    fn test_meta_consolidate_old_input_deserializes() {
+        let validator = SuiAddress::random_for_testing_only();
+        let json = serde_json::json!({
+            "ConsolidateAllStakedSuiToFungible": { "validator": validator.to_string() }
+        });
+        let meta: OperationMetadata = serde_json::from_value(json).unwrap();
+        match meta {
+            OperationMetadata::ConsolidateAllStakedSuiToFungible {
+                validator: v,
+                staked_sui_ids,
+                fss_ids,
+            } => {
+                assert_eq!(v, Some(validator));
+                assert!(staked_sui_ids.is_empty());
+                assert!(fss_ids.is_empty());
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_meta_consolidate_new_parse_output_serializes() {
+        let id_a = ObjectID::random();
+        let id_b = ObjectID::random();
+        let meta = OperationMetadata::ConsolidateAllStakedSuiToFungible {
+            validator: None,
+            staked_sui_ids: vec![id_a],
+            fss_ids: vec![id_b],
+        };
+        let json = serde_json::to_value(&meta).unwrap();
+        let obj = json
+            .as_object()
+            .unwrap()
+            .get("ConsolidateAllStakedSuiToFungible")
+            .unwrap()
+            .as_object()
+            .unwrap();
+        assert!(
+            !obj.contains_key("validator"),
+            "validator must be omitted when None"
+        );
+        assert_eq!(
+            obj.get("staked_sui_ids").unwrap().as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(obj.get("fss_ids").unwrap().as_array().unwrap().len(), 1);
+    }
+
+    // ==============================================================================
+    // PR 1: Write-side preservation (1 test)
+    // ==============================================================================
+
+    #[test]
+    fn test_write_consolidate_requires_validator() {
+        let sender = SuiAddress::random_for_testing_only();
+        let op = Operation {
+            operation_identifier: Default::default(),
+            type_: OperationType::ConsolidateAllStakedSuiToFungible,
+            status: None,
+            account: Some(sender.into()),
+            amount: None,
+            coin_change: None,
+            metadata: Some(OperationMetadata::ConsolidateAllStakedSuiToFungible {
+                validator: None,
+                staked_sui_ids: vec![],
+                fss_ids: vec![],
+            }),
+        };
+        let err = Operations::new(vec![op])
+            .into_internal()
+            .expect_err("should fail without validator");
+        let msg = format!("{err}");
+        assert!(msg.contains("validator"), "unexpected error: {msg}");
     }
 }
