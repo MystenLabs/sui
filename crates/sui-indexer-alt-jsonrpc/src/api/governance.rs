@@ -85,16 +85,9 @@ trait DelegationGovernanceApi {
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys>;
 }
 
-pub(crate) struct Governance {
-    ctx: Context,
-}
-pub(crate) struct DelegationGovernance(HttpClient);
+pub(crate) struct Governance(pub Context);
 
-impl Governance {
-    pub(crate) fn new(ctx: Context) -> Self {
-        Self { ctx }
-    }
-}
+pub(crate) struct DelegationGovernance(HttpClient);
 
 impl DelegationGovernance {
     pub(crate) fn new(client: HttpClient) -> Self {
@@ -105,22 +98,22 @@ impl DelegationGovernance {
 #[async_trait::async_trait]
 impl GovernanceApiServer for Governance {
     async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
-        Ok(rgp_response(&self.ctx).await?)
+        Ok(rgp_response(&self.0).await?)
     }
 
     async fn get_latest_sui_system_state(&self) -> RpcResult<SuiSystemStateSummary> {
-        Ok(latest_sui_system_state_response(&self.ctx).await?)
+        Ok(latest_sui_system_state_response(&self.0).await?)
     }
 
     async fn get_stakes_by_ids(
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
-        Ok(delegated_stakes_response(&self.ctx, staked_sui_ids).await?)
+        Ok(delegated_stakes_response(&self.0, staked_sui_ids).await?)
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
-        let config = &self.ctx.config().objects;
+        let config = &self.0.config().objects;
 
         let tag = StructTag {
             address: SUI_SYSTEM_ADDRESS,
@@ -134,7 +127,7 @@ impl GovernanceApiServer for Governance {
 
         loop {
             let page = self
-                .ctx
+                .0
                 .consistent_reader()
                 .list_owned_objects(
                     None,
@@ -159,7 +152,7 @@ impl GovernanceApiServer for Governance {
             }
         }
 
-        Ok(delegated_stakes_response(&self.ctx, all_stake_ids).await?)
+        Ok(delegated_stakes_response(&self.0, all_stake_ids).await?)
     }
 }
 
