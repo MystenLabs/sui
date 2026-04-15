@@ -16,8 +16,8 @@ use sui_indexer_alt_jsonrpc::RpcArgs;
 use sui_indexer_alt_jsonrpc::args::SystemPackageTaskArgs;
 use sui_indexer_alt_jsonrpc::config::RpcConfig;
 use sui_indexer_alt_jsonrpc::start_rpc;
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_macros::sim_test;
 use sui_pg_db::DbArgs;
 use sui_pg_db::temp::get_available_port;
@@ -72,9 +72,8 @@ impl FnDelegationTestCluster {
 
         let service = start_rpc(
             None,
-            None,
             DbArgs::default(),
-            BigtableArgs::default(),
+            KvArgs::default(),
             ConsistentReaderArgs::default(),
             rpc_args,
             NodeArgs {

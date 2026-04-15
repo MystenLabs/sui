@@ -21,7 +21,6 @@ use sui_indexer_alt_jsonrpc::RpcArgs;
 use sui_indexer_alt_jsonrpc::args::SystemPackageTaskArgs;
 use sui_indexer_alt_jsonrpc::config::RpcConfig;
 use sui_indexer_alt_jsonrpc::start_rpc;
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_pg_db::DbArgs;

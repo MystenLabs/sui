@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
+use prometheus::Registry;
 use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::TransactionData as KVTransactionData;
 use sui_kvstore::TransactionEventsData as KVTransactionEventsData;
@@ -129,7 +130,47 @@ pub enum BalanceChangeContents {
 }
 
 impl KvArgs {
-    pub fn bigtable_args(&self) -> BigtableArgs {
+    pub async fn bigtable_reader(
+        &self,
+        client_name: String,
+        registry: &Registry,
+    ) -> anyhow::Result<Option<BigtableReader>> {
+        let Some(instance_id) = self.bigtable_instance.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            BigtableReader::new(
+                instance_id.clone(),
+                client_name,
+                self.bigtable_args(),
+                registry,
+            )
+            .await?,
+        ))
+    }
+
+    pub async fn ledger_grpc_reader(
+        &self,
+        prefix: Option<&str>,
+        registry: &Registry,
+    ) -> anyhow::Result<Option<LedgerGrpcReader>> {
+        let Some(ledger_grpc_url) = self.ledger_grpc_url.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            LedgerGrpcReader::new(
+                ledger_grpc_url.clone(),
+                self.ledger_grpc_args(),
+                prefix,
+                registry,
+            )
+            .await?,
+        ))
+    }
+
+    fn bigtable_args(&self) -> BigtableArgs {
         BigtableArgs {
             bigtable_statement_timeout_ms: self.kv_statement_timeout_ms,
             bigtable_project: self.bigtable_project.clone(),
@@ -138,7 +179,7 @@ impl KvArgs {
         }
     }
 
-    pub fn ledger_grpc_args(&self) -> LedgerGrpcArgs {
+    fn ledger_grpc_args(&self) -> LedgerGrpcArgs {
         LedgerGrpcArgs {
             ledger_grpc_statement_timeout_ms: self.kv_statement_timeout_ms,
             ledger_grpc_max_decoding_message_size: self.kv_max_decoding_message_size,
@@ -147,16 +188,20 @@ impl KvArgs {
 }
 
 impl KvLoader {
-    pub fn new_with_bigtable(bigtable_loader: Arc<DataLoader<BigtableReader>>) -> Self {
-        Self::Bigtable(bigtable_loader)
-    }
-
-    pub fn new_with_pg(pg_loader: Arc<DataLoader<PgReader>>) -> Self {
-        Self::Pg(pg_loader)
-    }
-
-    pub fn new_with_ledger_grpc(ledger_grpc_loader: Arc<DataLoader<LedgerGrpcReader>>) -> Self {
-        Self::LedgerGrpc(ledger_grpc_loader)
+    /// Create a KvLoader from the available KV sources, preferring Bigtable, then Ledger gRPC, with
+    /// a fallback to the shared Postgres `DataLoader`.
+    pub fn from_kv_sources(
+        bigtable: Option<BigtableReader>,
+        ledger_grpc: Option<LedgerGrpcReader>,
+        pg_loader: Arc<DataLoader<PgReader>>,
+    ) -> Self {
+        if let Some(reader) = bigtable {
+            Self::Bigtable(Arc::new(reader.as_data_loader()))
+        } else if let Some(reader) = ledger_grpc {
+            Self::LedgerGrpc(Arc::new(reader.as_data_loader()))
+        } else {
+            Self::Pg(pg_loader)
+        }
     }
 
     pub async fn load_one_object(

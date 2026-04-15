@@ -42,14 +42,12 @@ use headers::ContentLength;
 use health::DbProbe;
 use prometheus::Registry;
 use sui_futures::service::Service;
-use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
@@ -320,48 +318,27 @@ pub async fn start_rpc(
     let fullnode_client =
         FullnodeClient::new(Some("graphql_fullnode"), fullnode_args, registry).await?;
 
-    let pg_reader =
-        PgReader::new(Some("graphql_db"), database_url.clone(), db_args, registry).await?;
-
-    let bigtable_reader = if let Some(instance_id) = kv_args.bigtable_instance.as_ref() {
-        let reader = BigtableReader::new(
-            instance_id.clone(),
-            "indexer-alt-graphql".to_owned(),
-            kv_args.bigtable_args(),
-            registry,
-        )
-        .await?;
-
-        Some(reader)
-    } else {
-        None
-    };
-
-    let ledger_grpc_reader = if let Some(ledger_grpc_url) = kv_args.ledger_grpc_url.as_ref() {
-        let reader = LedgerGrpcReader::new(
-            ledger_grpc_url.clone(),
-            kv_args.ledger_grpc_args(),
-            Some("graphql_ledger_grpc"),
-            registry,
-        )
-        .await
-        .context("Failed to create Ledger gRPC reader")?;
-        Some(reader)
-    } else {
-        None
-    };
-
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;
 
+    let bigtable_reader = kv_args
+        .bigtable_reader("indexer-alt-graphql".to_owned(), registry)
+        .await?;
+
+    let ledger_grpc_reader = kv_args
+        .ledger_grpc_reader(Some("graphql_ledger_grpc"), registry)
+        .await?;
+
+    let pg_reader =
+        PgReader::new(Some("graphql_db"), database_url.clone(), db_args, registry).await?;
+
     let pg_loader = Arc::new(pg_reader.as_data_loader());
-    let kv_loader = if let Some(reader) = bigtable_reader.as_ref() {
-        KvLoader::new_with_bigtable(Arc::new(reader.as_data_loader()))
-    } else if let Some(reader) = ledger_grpc_reader.as_ref() {
-        KvLoader::new_with_ledger_grpc(Arc::new(reader.as_data_loader()))
-    } else {
-        KvLoader::new_with_pg(pg_loader.clone())
-    };
+
+    let kv_loader = KvLoader::from_kv_sources(
+        bigtable_reader.clone(),
+        ledger_grpc_reader.clone(),
+        pg_loader.clone(),
+    );
 
     let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
 
