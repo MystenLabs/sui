@@ -25,25 +25,27 @@ use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::ProtocolConfig;
-use sui_types::transaction::TransactionData;
+use sui_types::transaction::VerifiedTransaction;
 
 // ============================================================================
 // Read traits
 // ============================================================================
 
-/// Transaction data with effects and checkpoint.
+/// Signed transaction envelope paired with its execution effects and the checkpoint
+/// it was finalized in. The checkpoint is used by [`crate::store::DataStore`] as a
+/// pre-fork guard: remote results whose `checkpoint > forked_at_checkpoint` must not
+/// leak into a fork that has already diverged from the upstream chain.
 #[derive(Clone, Debug)]
 pub(crate) struct TransactionInfo {
-    pub(crate) data: TransactionData,
+    pub(crate) transaction: VerifiedTransaction,
     pub(crate) effects: TransactionEffects,
-    pub(crate) checkpoint: u64,
+    pub(crate) checkpoint: CheckpointSequenceNumber,
 }
 
 /// `TransactionRead` trait is used to retrieve transaction data for a given digest.
 pub(crate) trait TransactionRead {
-    /// Given a transaction digest, return transaction info including data, effects,
-    /// and the checkpoint that transaction was executed in.
-    /// Returns `None` if the transaction is not found.
+    /// Given a transaction digest, return the signed transaction, its effects, and the
+    /// checkpoint it was finalized in. Returns `None` if the transaction is not found.
     fn transaction_data_and_effects(
         &self,
         tx_digest: &str,

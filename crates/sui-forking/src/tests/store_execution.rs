@@ -93,10 +93,16 @@ fn test_advance_clock_executes_and_persists() {
 
     // The transaction was persisted to the filesystem cache.
     let tx_digest = effects.transaction_digest();
-    let persisted = sim.store().get_transaction(tx_digest);
+    let persisted = sim
+        .store()
+        .get_transaction(tx_digest)
+        .expect("transaction read should not error");
     assert!(persisted.is_some(), "transaction not persisted on disk");
 
-    let persisted_effects = sim.store().get_transaction_effects(tx_digest);
+    let persisted_effects = sim
+        .store()
+        .get_transaction_effects(tx_digest)
+        .expect("effects read should not error");
     assert_eq!(persisted_effects.unwrap(), effects);
 }
 
@@ -151,11 +157,17 @@ fn test_transfer_sui_executes_and_persists() {
     // The transaction is persisted on disk.
     let tx_digest = effects.transaction_digest();
     assert!(
-        sim.store().get_transaction(tx_digest).is_some(),
+        sim.store()
+            .get_transaction(tx_digest)
+            .expect("transaction read should not error")
+            .is_some(),
         "transaction not persisted on disk",
     );
     assert_eq!(
-        sim.store().get_transaction_effects(tx_digest).unwrap(),
+        sim.store()
+            .get_transaction_effects(tx_digest)
+            .expect("effects read should not error")
+            .unwrap(),
         effects,
     );
 

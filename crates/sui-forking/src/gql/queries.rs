@@ -29,7 +29,13 @@ mod schema {
 
 pub(crate) mod txn_query {
     use super::*;
-    use sui_types::transaction::TransactionData;
+    use fastcrypto::traits::ToFromBytes;
+    use sui_types::signature::GenericSignature;
+    use sui_types::transaction::{
+        Transaction as SuiTransaction, TransactionData, VerifiedTransaction,
+    };
+
+    use crate::TransactionInfo;
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "Base64")]
@@ -50,7 +56,13 @@ pub(crate) mod txn_query {
     #[derive(cynic::QueryFragment)]
     pub(crate) struct Transaction {
         transaction_bcs: Option<Base64>,
+        signatures: Vec<UserSignature>,
         effects: Option<TransactionEffects>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct UserSignature {
+        signature_bytes: Option<Base64>,
     }
 
     #[derive(cynic::QueryFragment)]
@@ -67,7 +79,7 @@ pub(crate) mod txn_query {
     pub(crate) async fn query(
         digest: String,
         client: &GraphQLClient,
-    ) -> Result<Option<(TransactionData, sui_types::effects::TransactionEffects, u64)>, Error> {
+    ) -> Result<Option<TransactionInfo>, Error> {
         let query = Query::build(TransactionDataArgs {
             digest: digest.clone(),
         });
@@ -102,6 +114,23 @@ pub(crate) mod txn_query {
             digest
         ))?;
 
+        let signatures: Vec<GenericSignature> = transaction
+            .signatures
+            .into_iter()
+            .map(|sig| {
+                let encoded = sig
+                    .signature_bytes
+                    .ok_or_else(|| anyhow!("Missing signatureBytes for transaction {}", digest))?;
+                let bytes = CryptoBase64::decode(&encoded.0).context(format!(
+                    "User signature does not decode for digest: {}",
+                    digest
+                ))?;
+                GenericSignature::from_bytes(&bytes).map_err(|e| {
+                    anyhow!("User signature parse failed for digest {}: {}", digest, e)
+                })
+            })
+            .collect::<Result<_, _>>()?;
+
         let effect_frag = transaction
             .effects
             .ok_or_else(|| anyhow!("Missing effects in transaction data response"))?;
@@ -124,10 +153,18 @@ pub(crate) mod txn_query {
 
         let checkpoint = effect_frag
             .checkpoint
-            .ok_or_else(|| anyhow!("Missing checkpoint in transaction query response"))?
+            .ok_or_else(|| anyhow!("Missing checkpoint in transaction data response"))?
             .sequence_number;
 
-        Ok(Some((txn_data, effects, checkpoint)))
+        let transaction = VerifiedTransaction::new_unchecked(
+            SuiTransaction::from_generic_sig_data(txn_data, signatures),
+        );
+
+        Ok(Some(TransactionInfo {
+            transaction,
+            effects,
+            checkpoint,
+        }))
     }
 }
 

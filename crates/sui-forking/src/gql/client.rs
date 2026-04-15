@@ -130,9 +130,9 @@ impl GraphQLClient {
 impl TransactionRead for GraphQLClient {
     fn transaction_data_and_effects(
         &self,
-        _tx_digest: &str,
+        tx_digest: &str,
     ) -> Result<Option<TransactionInfo>, Error> {
-        todo!("GraphQL transaction reads are not implemented in the skeleton")
+        block_on!(queries::txn_query::query(tx_digest.to_owned(), self))
     }
 }
 
@@ -503,5 +503,116 @@ mod tests {
             .expect("versioned object query should succeed");
 
         assert_eq!(objects, vec![None]);
+    }
+
+    fn transaction_response_body(
+        tx: &sui_types::full_checkpoint_content::ExecutedTransaction,
+        checkpoint: u64,
+    ) -> serde_json::Value {
+        let signatures: Vec<_> = tx
+            .signatures
+            .iter()
+            .map(|sig| {
+                json!({
+                    "signatureBytes": FastCryptoBase64::from_bytes(sig.as_ref()).encoded(),
+                })
+            })
+            .collect();
+        json!({
+            "data": {
+                "transaction": {
+                    "transactionBcs": FastCryptoBase64::from_bytes(
+                        &bcs::to_bytes(&tx.transaction).expect("transaction data should serialize"),
+                    )
+                    .encoded(),
+                    "signatures": signatures,
+                    "effects": {
+                        "checkpoint": { "sequenceNumber": checkpoint },
+                        "effectsBcs": FastCryptoBase64::from_bytes(
+                            &bcs::to_bytes(&tx.effects).expect("effects should serialize"),
+                        )
+                        .encoded(),
+                    },
+                }
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_data_and_effects() {
+        let server = MockServer::start().await;
+        let checkpoint = TestCheckpointBuilder::new(1)
+            .start_transaction(0)
+            .finish_transaction()
+            .build_checkpoint();
+        let executed = checkpoint
+            .transactions
+            .into_iter()
+            .next()
+            .expect("checkpoint should have one transaction");
+        let digest = sui_types::transaction::Transaction::from_generic_sig_data(
+            executed.transaction.clone(),
+            executed.signatures.clone(),
+        )
+        .digest()
+        .base58_encode();
+
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .and(header("user-agent", "sui-forking-vtest-version"))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "digest": digest,
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(transaction_response_body(&executed, 42)),
+            )
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let info = store
+            .transaction_data_and_effects(&digest)
+            .expect("transaction query should succeed")
+            .expect("transaction should be present");
+
+        assert_eq!(info.transaction.digest().base58_encode(), digest);
+        assert_eq!(info.effects, executed.effects);
+        assert_eq!(info.checkpoint, 42);
+
+        let requests = server
+            .received_requests()
+            .await
+            .expect("wiremock should record requests");
+        let request_body: serde_json::Value = requests[0]
+            .body_json()
+            .expect("request body should be json");
+        let query = request_body
+            .get("query")
+            .and_then(serde_json::Value::as_str)
+            .expect("query string should be present");
+        assert!(query.contains("transactionBcs"));
+        assert!(query.contains("signatures"));
+        assert!(query.contains("signatureBytes"));
+        assert!(query.contains("effectsBcs"));
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_returns_none() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "data": { "transaction": null }
+            })))
+            .mount(&server)
+            .await;
+
+        let store = mock_store(&server);
+        let info = store
+            .transaction_data_and_effects("missing-digest")
+            .expect("transaction query should succeed");
+        assert!(info.is_none());
     }
 }
