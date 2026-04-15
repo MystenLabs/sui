@@ -969,6 +969,13 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     normalize_depth_formula: bool,
 
+    // If true, the Move VM JIT inserts a `Charge` opcode at the top of each
+    // basic block that batches the block's fixed gas costs into a single
+    // deduction. When false, gas is charged per-instruction as before. Must
+    // be gated in lockstep with the gas model version that consumes it.
+    #[serde(skip_serializing_if = "is_false")]
+    gas_charge_instruction_batching: bool,
+
     // If true, skip GC'ed accept votes in CommitFinalizer.
     #[serde(skip_serializing_if = "is_false")]
     consensus_skip_gced_accept_votes: bool,
@@ -2632,6 +2639,10 @@ impl ProtocolConfig {
 
     pub fn normalize_depth_formula(&self) -> bool {
         self.feature_flags.normalize_depth_formula
+    }
+
+    pub fn gas_charge_instruction_batching(&self) -> bool {
+        self.feature_flags.gas_charge_instruction_batching
     }
 
     pub fn consensus_skip_gced_accept_votes(&self) -> bool {

@@ -35,6 +35,12 @@ pub struct VMConfig {
     pub deprecate_global_storage_ops_during_deserialization: bool,
     /// Normalize all formula to have a consistent structure.
     pub normalize_depth_formula: bool,
+    /// Enable the `Charge` bytecode instruction that batches per-basic-block
+    /// fixed gas costs into a single deduction. When `false`, the JIT's
+    /// Charge-insertion pass is skipped and the interpreter uses the
+    /// pre-batched per-instruction charging path. Must only be enabled under
+    /// protocol versions that have signed up for the new behavior.
+    pub enable_charge_instruction: bool,
 }
 
 impl Default for VMConfig {
@@ -55,6 +61,7 @@ impl Default for VMConfig {
             variant_nodes: true,
             deprecate_global_storage_ops_during_deserialization: false,
             normalize_depth_formula: true,
+            enable_charge_instruction: false,
         }
     }
 }

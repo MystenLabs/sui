@@ -34,7 +34,8 @@ fn find_function_blocks(
     let (verif_pkg, _) = adapter
         .verify_package(package_address, serialized_package)
         .unwrap();
-    let pkg = optimization::to_optimized_form(verif_pkg).expect("optimization failed");
+    let pkg = optimization::to_optimized_form(verif_pkg, /* enable_charge_instruction */ true)
+        .expect("optimization failed");
     let module_id = ModuleId::new(package_address, Identifier::new("charge_tests").unwrap());
     let module = pkg.modules.get(&module_id).expect("module not found");
 
