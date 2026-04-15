@@ -1,10 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 
 use futures::StreamExt;
-use mysten_metrics::{monitored_mpsc, monitored_scope, spawn_monitored_task};
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use parking_lot::Mutex;
 use tokio::{
     task::{JoinHandle, JoinSet},
@@ -140,54 +146,11 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 }
             };
 
-            // Spin up multiple worker tasks to process the blocks from peer. That's essential as the amount of blocks received from a peer can be high and
-            // sequential processing would be too slow.
-            let num_workers = context.committee.size();
-            const WORKER_CHANNEL_CAPACITY: usize = 100;
+            // On-demand task spawning with atomic counter for tracking active tasks
+            let max_parallel_tasks = context.committee.size();
+            let active_tasks = Arc::new(AtomicUsize::new(0));
+            let mut tasks = JoinSet::new();
 
-            // Spawn worker pool - each worker processes blocks independently
-            // Each worker gets its own channel to eliminate mutex contention
-            let mut workers = JoinSet::new();
-            let mut senders = Vec::new();
-
-            for worker_id in 0..num_workers {
-                let (block_tx, mut block_rx) = monitored_mpsc::channel(
-                    &format!("subscriber_blocks_peer_worker_{}", worker_id),
-                    WORKER_CHANNEL_CAPACITY,
-                );
-                senders.push(block_tx);
-
-                let observer_service = observer_service.clone();
-
-                let peer_cloned = peer.clone();
-                workers.spawn(async move {
-                    while let Some(block) = block_rx.recv().await {
-                        let _scope = monitored_scope("ObserverSubscriberWorker::handle_block");
-
-                        let result = observer_service.handle_block(peer_cloned.clone(), block).await;
-                        if let Err(e) = result {
-                            match e {
-                                ConsensusError::BlockRejected { block_ref, reason } => {
-                                    debug!(
-                                        "Worker {} failed to process block from peer for block {:?}: {}",
-                                        worker_id, block_ref, reason
-                                    );
-                                }
-                                _ => {
-                                    info!(
-                                        "Worker {} received invalid block from peer: {}",
-                                        worker_id, e
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    debug!("Observer Subscriber Worker {} shutting down", worker_id);
-                });
-            }
-
-            // Stream consumer - continuously feeds blocks to worker pool
-            let mut next_worker = 0;
             'stream: loop {
                 let _scope = monitored_scope("ObserverSubscriberStreamConsumer");
 
@@ -199,39 +162,56 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                             .observer_subscribed_blocks
                             .inc();
 
-                        // Try to send to next worker in round-robin fashion
-                        // If the channel is full, try the next worker (up to num_workers attempts)
-                        let mut sent = false;
-                        'workers: for _ in 0..num_workers {
-                            match senders[next_worker].try_send(block.clone()) {
-                                Ok(_) => {
-                                    sent = true;
-                                    next_worker = (next_worker + 1) % num_workers;
-                                    break 'workers;
+                        // Backpressure: wait if we've hit max parallelism
+                        while active_tasks.load(Ordering::Acquire) >= max_parallel_tasks {
+                            // Block until a task completes instead of busy-waiting
+                            match tasks.join_next().await {
+                                Some(Ok(_)) => {
+                                    // Task completed successfully, counter already decremented
                                 }
-                                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                                    // Channel full, try next worker
-                                    next_worker = (next_worker + 1) % num_workers;
-                                    continue 'workers;
+                                Some(Err(e)) => {
+                                    warn!("Task failed with error: {}", e);
                                 }
-                                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                                None => {
+                                    // This shouldn't happen if our counter is accurate
                                     warn!(
-                                        "Observer Subscriber Worker {} channel closed",
-                                        next_worker
+                                        "No tasks to join but counter shows {} active tasks",
+                                        active_tasks.load(Ordering::Acquire)
                                     );
-                                    break 'stream;
+                                    break;
                                 }
                             }
                         }
 
-                        // If all workers are saturated, block on the original worker
-                        if !sent {
-                            if senders[next_worker].send(block).await.is_err() {
-                                warn!("Observer SubscriberWorker {} channel closed", next_worker);
-                                break 'stream;
+                        // Spawn a new task to handle this block
+                        active_tasks.fetch_add(1, Ordering::AcqRel);
+                        let counter = active_tasks.clone();
+                        let observer_service = observer_service.clone();
+                        let peer_cloned = peer.clone();
+
+                        tasks.spawn(async move {
+                            let _scope = monitored_scope("ObserverSubscriberTask::handle_block");
+
+                            let result = observer_service
+                                .handle_block(peer_cloned.clone(), block)
+                                .await;
+                            if let Err(e) = result {
+                                match e {
+                                    ConsensusError::BlockRejected { block_ref, reason } => {
+                                        debug!(
+                                            "Failed to process block from peer for block {:?}: {}",
+                                            block_ref, reason
+                                        );
+                                    }
+                                    _ => {
+                                        info!("Received invalid block from peer: {}", e);
+                                    }
+                                }
                             }
-                            next_worker = (next_worker + 1) % num_workers;
-                        }
+
+                            // Decrement counter when done
+                            counter.fetch_sub(1, Ordering::AcqRel);
+                        });
 
                         // Reset retries when a block is received.
                         retries = 0;
@@ -244,11 +224,22 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 }
             }
 
-            // Signal workers to exit by dropping all senders
-            drop(senders);
+            // Wait for all spawned tasks to complete
+            while let Some(result) = tasks.join_next().await {
+                match result {
+                    Ok(_) => {} // Task completed successfully
+                    Err(e) => warn!("Task failed during cleanup: {}", e),
+                }
+            }
 
-            // Wait for all workers to complete processing
-            while workers.join_next().await.is_some() {}
+            // Sanity check: ensure all tasks have completed
+            let remaining = active_tasks.load(Ordering::Acquire);
+            if remaining > 0 {
+                warn!(
+                    "Warning: {} tasks still marked as active after cleanup",
+                    remaining
+                );
+            }
         }
     }
 }
