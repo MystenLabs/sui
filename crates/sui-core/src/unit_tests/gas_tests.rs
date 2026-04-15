@@ -109,7 +109,7 @@ async fn test_tx_more_than_maximum_gas_budget() {
 // Helpers for OOG scenarios
 //
 
-async fn publish_move_random_package(
+pub(super) async fn publish_move_random_package(
     authority_state: &Arc<AuthorityState>,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
@@ -245,7 +245,7 @@ where
 }
 
 // make a `coin_num` coins distributing `gas_amount` across them
-fn make_gas_coins(owner: SuiAddress, gas_amount: u64, coin_num: u64) -> Vec<Object> {
+pub(super) fn make_gas_coins(owner: SuiAddress, gas_amount: u64, coin_num: u64) -> Vec<Object> {
     let mut objects = vec![];
     let coin_balance = gas_amount / coin_num;
     for _ in 1..coin_num {
@@ -268,7 +268,7 @@ fn make_gas_coins(owner: SuiAddress, gas_amount: u64, coin_num: u64) -> Vec<Obje
 }
 
 // Touch gas coins so that `storage_rebate` is set
-async fn touch_gas_coins(
+pub(super) async fn touch_gas_coins(
     authority_state: &AuthorityState,
     sender: SuiAddress,
     sender_key: &AccountKeyPair,

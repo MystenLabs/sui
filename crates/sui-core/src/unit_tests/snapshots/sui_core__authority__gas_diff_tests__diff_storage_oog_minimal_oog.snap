@@ -1,0 +1,13 @@
+---
+source: crates/sui-core/src/unit_tests/gas_diff_tests.rs
+expression: out
+---
+status: Failure(InsufficientGas)
+computation_cost: 1002000
+storage_cost: 0
+storage_rebate: 0
+non_refundable_storage_fee: 0
+gas_object_balance_change: -1002000
+mutated_count: 1
+created_count: 0
+deleted_count: 0

@@ -1,0 +1,13 @@
+---
+source: crates/sui-core/src/unit_tests/gas_diff_tests.rs
+expression: out
+---
+status: Failure(MoveAbort(code=42), command=0)
+computation_cost: 1000000
+storage_cost: 988000
+storage_rebate: 4890600
+non_refundable_storage_fee: 49400
+gas_object_balance_change: 8002902600
+mutated_count: 1
+created_count: 0
+deleted_count: 4

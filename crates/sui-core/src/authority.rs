@@ -235,6 +235,10 @@ pub mod move_integration_tests;
 mod gas_tests;
 
 #[cfg(test)]
+#[path = "unit_tests/gas_diff_tests.rs"]
+mod gas_diff_tests;
+
+#[cfg(test)]
 #[path = "unit_tests/gas_data_tests.rs"]
 mod gas_data_tests;
 

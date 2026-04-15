@@ -1,0 +1,13 @@
+---
+source: crates/sui-core/src/unit_tests/gas_diff_tests.rs
+expression: out
+---
+status: Success
+computation_cost: 1000000
+storage_cost: 2622000
+storage_rebate: 978120
+non_refundable_storage_fee: 9880
+gas_object_balance_change: -2643880
+mutated_count: 1
+created_count: 1
+deleted_count: 0
