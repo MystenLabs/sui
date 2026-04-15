@@ -161,7 +161,7 @@ impl GraphQlTestCluster {
         let database_url = database.database().url().clone();
 
         let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: Some(validator_cluster.rpc_url().parse().unwrap()),
+            fullnode_rpc_url: validator_cluster.rpc_url().parse().unwrap(),
         };
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
@@ -190,7 +190,7 @@ impl GraphQlTestCluster {
 
         let s_graphql = start_graphql(
             Some(database_url),
-            fullnode_args,
+            Some(fullnode_args),
             DbArgs::default(),
             KvArgs::default(),
             ConsistentReaderArgs::default(),

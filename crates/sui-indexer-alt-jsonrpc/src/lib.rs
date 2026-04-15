@@ -13,6 +13,7 @@ use prometheus::Registry;
 use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
@@ -312,10 +313,15 @@ pub async fn start_rpc(
     }
 
     if let Some(fullnode_grpc_url) = node_args.fullnode_grpc_url.as_deref() {
-        let url = Url::parse(fullnode_grpc_url).context("Invalid fullnode gRPC URL")?;
-        let fullnode_client = FullnodeClient::new(Some("jsonrpc_alt_fullnode"), url, registry)
-            .await
-            .context("Failed to create fullnode gRPC client")?;
+        let fullnode_rpc_url =
+            Url::parse(fullnode_grpc_url).context("Invalid fullnode gRPC URL")?;
+        let fullnode_client = FullnodeClient::new(
+            Some("jsonrpc_alt_fullnode"),
+            FullnodeArgs { fullnode_rpc_url },
+            registry,
+        )
+        .await
+        .context("Failed to create fullnode gRPC client")?;
         rpc.add_module(Write::new(fullnode_client, context.clone()))?;
     } else {
         warn!("No fullnode grpc url provided, Write module will not be added.");

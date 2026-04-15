@@ -18,18 +18,14 @@ use url::Url;
 
 use crate::metrics::FullnodeClientMetrics;
 
-#[derive(clap::Args, Debug, Clone, Default)]
+#[derive(clap::Args, Debug, Clone)]
 pub struct FullnodeArgs {
     /// gRPC URL for full node operations such as executeTransaction and simulateTransaction.
     #[clap(long)]
-    pub fullnode_rpc_url: Option<Url>,
+    pub fullnode_rpc_url: Url,
 }
 
 /// A client for executing and simulating transactions via the full node gRPC service.
-///
-/// This client always wraps a live gRPC connection. Callers that may be deployed without a
-/// fullnode URL should store it as `Option<FullnodeClient>` and handle the absence at the caller
-/// level, rather than asking the client to represent its own "not configured" state.
 #[derive(Clone)]
 pub struct FullnodeClient {
     execution_client: TransactionExecutionServiceClient<Channel>,
@@ -46,11 +42,15 @@ pub enum Error {
 }
 
 impl FullnodeClient {
-    pub async fn new(prefix: Option<&str>, url: Url, registry: &Registry) -> Result<Self, Error> {
-        let mut endpoint = Channel::from_shared(url.to_string())
+    pub async fn new(
+        prefix: Option<&str>,
+        args: FullnodeArgs,
+        registry: &Registry,
+    ) -> Result<Self, Error> {
+        let mut endpoint = Channel::from_shared(args.fullnode_rpc_url.to_string())
             .context("Failed to create channel for gRPC endpoint")?;
 
-        if url.scheme() == "https" {
+        if args.fullnode_rpc_url.scheme() == "https" {
             endpoint = endpoint
                 .tls_config(ClientTlsConfig::new().with_native_roots())
                 .context("Failed to configure TLS for gRPC endpoint")?;
@@ -180,7 +180,10 @@ mod tests {
     async fn fn_client(url: &str) -> Result<FullnodeClient, Error> {
         let url = Url::parse(url).unwrap();
         let registry = Registry::new();
-        FullnodeClient::new(None, url, &registry).await
+        let args = FullnodeArgs {
+            fullnode_rpc_url: url,
+        };
+        FullnodeClient::new(None, args, &registry).await
     }
 
     #[tokio::test]

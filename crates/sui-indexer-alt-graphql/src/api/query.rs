@@ -758,8 +758,7 @@ impl Query {
         checks_enabled: Option<bool>,
         do_gas_selection: Option<bool>,
     ) -> Result<SimulationResult, RpcError<TransactionInputError>> {
-        let fullnode_client: &Option<FullnodeClient> = ctx.data()?;
-        let Some(fullnode_client) = fullnode_client.as_ref() else {
+        let Some(fullnode_client) = ctx.data_opt::<FullnodeClient>() else {
             return Err(feature_unavailable("simulating transactions"));
         };
 

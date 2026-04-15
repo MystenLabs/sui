@@ -43,7 +43,7 @@ pub enum Command {
         database_url: Url,
 
         #[command(flatten)]
-        fullnode_args: FullnodeArgs,
+        fullnode_args: Option<FullnodeArgs>,
 
         #[command(flatten)]
         db_args: DbArgs,

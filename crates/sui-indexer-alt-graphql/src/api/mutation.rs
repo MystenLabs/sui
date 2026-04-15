@@ -63,8 +63,7 @@ impl Mutation {
     ) -> Result<ExecutionResult, RpcError<TransactionInputError>> {
         // Get the gRPC client from context. If the service was started without a fullnode URL
         // there is no client to dispatch the transaction to.
-        let fullnode_client: &Option<FullnodeClient> = ctx.data()?;
-        let Some(fullnode_client) = fullnode_client.as_ref() else {
+        let Some(fullnode_client) = ctx.data_opt::<FullnodeClient>() else {
             return Err(feature_unavailable("executing transactions"));
         };
 

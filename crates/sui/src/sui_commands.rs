@@ -1167,7 +1167,7 @@ async fn start(
         };
 
         let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: Some(socket_addr_to_url(fullnode_rpc_address)?),
+            fullnode_rpc_url: socket_addr_to_url(fullnode_rpc_address)?,
         };
 
         let mut graphql_config = GraphQlConfig::default();
@@ -1176,7 +1176,7 @@ async fn start(
         rpc_services = rpc_services.merge(
             start_graphql(
                 database_url.clone(),
-                fullnode_args,
+                Some(fullnode_args),
                 DbArgs::default(),
                 KvArgs::default(),
                 consistent_reader_args,

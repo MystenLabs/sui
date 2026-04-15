@@ -299,7 +299,7 @@ struct SubscriptionsEnabled(bool);
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
     database_url: Option<Url>,
-    fullnode_args: FullnodeArgs,
+    fullnode_args: Option<FullnodeArgs>,
     db_args: DbArgs,
     kv_args: KvArgs,
     consistent_reader_args: ConsistentReaderArgs,
@@ -314,11 +314,11 @@ pub async fn start_rpc(
     let rpc = RpcService::new(args, version, schema(), registry);
     let metrics = rpc.metrics();
 
-    // Create gRPC full node client wrapper. If no URL was configured, the client is stored as
-    // `None` in the schema data and resolvers that depend on it return `FeatureUnavailable`.
-    let fullnode_client = if let Some(url) = fullnode_args.fullnode_rpc_url {
+    // Create gRPC full node client wrapper. If left unconfigured, the client will not be stored in
+    // the schema data, and resolvers that depend on it return `FeatureUnavailable`.
+    let fullnode_client = if let Some(args) = fullnode_args {
         Some(
-            FullnodeClient::new(Some("graphql_fullnode"), url, registry)
+            FullnodeClient::new(Some("graphql_fullnode"), args, registry)
                 .await
                 .context("Failed to create fullnode gRPC client")?,
         )
@@ -376,7 +376,7 @@ pub async fn start_rpc(
         .checkpoint_stream_url
         .map(|uri| task::streaming::CheckpointStreamTask::new(uri, &config.subscription));
 
-    let rpc = rpc
+    let mut rpc = rpc
         .route(GRAPHQL_PATH, post(graphql).get(graphql_get))
         .route(HEALTH_PATH, get(health::check))
         .layer(watermark_task.watermarks())
@@ -396,11 +396,14 @@ pub async fn start_rpc(
         .data(consistent_reader)
         .data(pg_loader)
         .data(kv_loader)
-        .data(package_store)
-        .data(fullnode_client);
+        .data(package_store);
+
+    if let Some(fullnode_client) = fullnode_client {
+        rpc = rpc.data(fullnode_client);
+    }
 
     let subscriptions_enabled = streaming_task.is_some();
-    let mut rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
+    rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
 
     if let Some(ref task) = streaming_task {
         rpc = rpc.data(task.broadcaster());
