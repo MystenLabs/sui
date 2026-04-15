@@ -23,13 +23,8 @@ use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::Context;
 use async_trait::async_trait;
-use object_store::Error as ObjectStoreError;
 use object_store::ObjectStore;
-use object_store::ObjectStoreExt as _;
-use object_store::PutMode;
-use object_store::PutOptions;
 use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
 use scoped_futures::ScopedBoxFuture;
@@ -657,36 +652,12 @@ impl Connection for AnalyticsConnection<'_> {
         pipeline_task: &str,
         chain_id: [u8; 32],
     ) -> anyhow::Result<bool> {
-        let object_store = self.store.mode.object_store();
-        let path = chain_id_path(pipeline_task);
-
-        // Try to claim the path with a conditional create first. If it doesn't exist,
-        // we win the race and accept. If it already exists, fall back to read + compare.
-        match object_store
-            .put_opts(
-                &path,
-                chain_id.to_vec().into(),
-                PutOptions {
-                    mode: PutMode::Create,
-                    ..Default::default()
-                },
-            )
-            .await
-        {
-            Ok(_) => Ok(true),
-            Err(ObjectStoreError::AlreadyExists { .. }) => {
-                let bytes = object_store.get(&path).await?.bytes().await?;
-                let stored: [u8; 32] = bytes.as_ref().try_into().ok().with_context(|| {
-                    format!(
-                        "stored chain_id at {} has wrong length: {}",
-                        path,
-                        bytes.len()
-                    )
-                })?;
-                Ok(stored == chain_id)
-            }
-            Err(e) => Err(e.into()),
-        }
+        sui_indexer_alt_object_store::accepts_chain_id(
+            self.store.mode.object_store().as_ref(),
+            pipeline_task,
+            chain_id,
+        )
+        .await
     }
 
     /// Determine the watermark.
@@ -724,12 +695,6 @@ impl Connection for AnalyticsConnection<'_> {
 
 #[async_trait]
 impl SequentialConnection for AnalyticsConnection<'_> {}
-
-/// Construct the object store path for a chain_id file.
-/// Path format: `_metadata/chain_id/{pipeline_task}`
-pub(crate) fn chain_id_path(pipeline_task: &str) -> ObjectPath {
-    ObjectPath::from(format!("_metadata/chain_id/{}", pipeline_task))
-}
 
 /// Construct the object store path for an analytics file.
 /// Path format: {pipeline}/epoch_{epoch}/{start}_{end}.{ext}

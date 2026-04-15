@@ -252,7 +252,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_committer_watermark_multiple_epochs() {
-        let object_store: Arc<dyn object_store::ObjectStore> = Arc::new(InMemory::new());
+        let (object_store, store) = in_memory_store();
         // Epoch 0 - files written to output_prefix "test_pipeline"
         create_test_file(&object_store, "test_pipeline", 0, 0, 100).await;
         create_test_file(&object_store, "test_pipeline", 0, 100, 200).await;
@@ -260,8 +260,6 @@ mod tests {
         create_test_file(&object_store, "test_pipeline", 1, 200, 300).await;
         create_test_file(&object_store, "test_pipeline", 1, 300, 400).await;
 
-        let config = test_config(object_store.clone());
-        let store = AnalyticsStore::new(object_store, config, test_metrics());
         let mut conn = store.connect().await.unwrap();
 
         // Use pipeline name "Checkpoint" which maps to output_prefix "test_pipeline"
