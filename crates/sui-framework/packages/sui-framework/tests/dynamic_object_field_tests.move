@@ -221,8 +221,6 @@ fun transfer_object() {
     id2.delete();
 }
 
-// === Replace Tests ===
-
 #[test]
 fun replace_existing() {
     let sender = @0x0;
@@ -268,9 +266,6 @@ fun replace_different_type() {
     assert_eq!(destroy(old.destroy_some()), 1);
     // new value is a Fake, confirm it exists
     assert!(exists_with_type<u64, Fake>(&id, 0));
-    // clean up the Fake
-    let Fake { id: fake_id } = remove(&mut id, 0u64);
-    fake_id.delete();
     scenario.end();
     id.delete();
 }

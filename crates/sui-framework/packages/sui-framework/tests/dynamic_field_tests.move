@@ -155,8 +155,6 @@ fun delete_uid_with_fields() {
     id.delete();
 }
 
-// === Replace Tests ===
-
 #[test]
 fun replace_existing() {
     let sender = @0x0;
@@ -189,7 +187,7 @@ fun replace_different_type() {
     let mut id = scenario.new_object();
     add(&mut id, 0u64, 42u64);
     let old = dynamic_field::replace<u64, u8, u64>(&mut id, 0, 7u8);
-    assert_eq!(old, option::some(42));
+    assert_eq!(old, option::some(42u64));
     assert_eq!(*borrow<u64, u8>(&id, 0), 7);
     scenario.end();
     id.delete();
