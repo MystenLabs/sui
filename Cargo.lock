@@ -15122,7 +15122,6 @@ dependencies = [
  "serde_json",
  "simulacrum",
  "sui-protocol-config",
- "sui-rpc-api",
  "sui-swarm-config",
  "sui-types",
  "tempfile",
