@@ -1,21 +1,47 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Profile data collection for the Move VM interpreter.
+//! Bytecode execution profiling for the Move VM interpreter.
 //!
-//! This module provides infrastructure for collecting bytecode execution statistics
-//! to enable profile-guided optimization of the interpreter dispatch loop.
+//! Counts how many times each opcode is dispatched so callers can identify
+//! hot opcodes, validate gas calibration, or compare workload distributions.
 //!
-//! Counters are per-`MoveRuntime` (held inside `TelemetryContext`). Snapshots
-//! are exposed through `MoveRuntimeTelemetry::bytecode_stats` when the
-//! `tracing` feature is enabled.
+//! See `README.md` in this directory for a full usage guide.
 //!
-//! # Usage
+//! # Scope
 //!
-//! Enable the `tracing` feature to collect bytecode frequency data:
+//! Counters are **per `MoveRuntime`**. A process with two runtimes has two
+//! independent counter sets. This prevents concurrent replay sessions from
+//! contaminating each other's counts.
 //!
-//! ```bash
-//! cargo build --features move-vm-runtime/tracing
+//! # Feature-gating
+//!
+//! Only compiled in when the `tracing` feature is enabled. When disabled, the
+//! increment in the interpreter hot loop is removed by the compiler, so there
+//! is zero runtime overhead.
+//!
+//! # Example
+//!
+//! Pulling a snapshot through the telemetry API:
+//!
+//! ```ignore
+//! use move_vm_runtime::runtime::MoveRuntime;
+//!
+//! # fn make_runtime() -> MoveRuntime { unimplemented!() }
+//! let runtime = make_runtime();
+//! // ... execute transactions ...
+//!
+//! let report = runtime.get_telemetry_report();
+//! let stats = &report.bytecode_stats;
+//! println!("total instructions: {}", stats.total());
+//! println!("{}", stats.format_report());
+//! ```
+//!
+//! Emitting via tracing and, optionally, dumping JSON to a file:
+//!
+//! ```ignore
+//! // If MOVE_VM_DUMP_PROFILE_FILE is set, the snapshot is written there.
+//! runtime.emit_bytecode_profile();
 //! ```
 
 pub mod counters;

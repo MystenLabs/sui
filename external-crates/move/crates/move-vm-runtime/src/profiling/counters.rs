@@ -3,12 +3,18 @@
 
 //! Bytecode execution counters for profile-guided optimization.
 //!
-//! This module provides per-VM atomic counters for tracking bytecode execution
-//! frequency. Counters live inside `TelemetryContext` (one per `MoveRuntime`)
-//! so concurrent VM instances do not contaminate each other's counts.
+//! Provides per-VM atomic counters for tracking bytecode execution frequency.
+//! Counters live inside `TelemetryContext` (one per `MoveRuntime`) so
+//! concurrent VM instances do not contaminate each other's counts.
 //!
-//! Bytecode statistics are exposed through the telemetry infrastructure via
-//! `MoveRuntimeTelemetry::bytecode_stats`.
+//! Snapshots are exposed through the telemetry infrastructure via
+//! `MoveRuntimeTelemetry::bytecode_stats`, and can be rendered as:
+//!
+//! - Human-readable report (`BytecodeSnapshot::format_report`)
+//! - CSV for spreadsheets (`BytecodeSnapshot::format_csv`)
+//! - JSON for analysis tools (`BytecodeSnapshot::format_json`)
+//!
+//! See `profiling/README.md` for a usage guide.
 
 use move_binary_format::file_format_common::Opcodes;
 use std::collections::HashMap;
