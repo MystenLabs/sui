@@ -222,6 +222,42 @@ fun transfer_object() {
 }
 
 #[test]
+fun remove_opt_existing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    bump(borrow_mut(&mut id, 0u64));
+    let old: Option<Counter> = dynamic_object_field::remove_opt(&mut id, 0u64);
+    assert_eq!(destroy(old.destroy_some()), 1);
+    assert!(!exists<u64>(&id, 0));
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun remove_opt_missing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    let old: Option<Counter> = dynamic_object_field::remove_opt(&mut id, 0u64);
+    old.destroy_none();
+    scenario.end();
+    id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun remove_opt_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    // Value is Fake but actual value is Counter, so remove_opt should abort
+    let _old: Option<Fake> = dynamic_object_field::remove_opt(&mut id, 0u64);
+    abort
+}
+
+#[test]
 fun replace_existing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -270,7 +306,7 @@ fun replace_different_type() {
     id.delete();
 }
 
-#[test, expected_failure(abort_code = sui::dynamic_field::EFieldAlreadyExists)]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
 fun replace_wrong_old_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -462,32 +498,6 @@ fun get_mut_fold_missing() {
         |_: &mut Counter| abort 0,
     );
     assert_eq!(result, 99);
-    scenario.end();
-    id.delete();
-}
-
-#[test]
-fun remove_opt_existing() {
-    let sender = @0x0;
-    let mut scenario = test_scenario::begin(sender);
-    let mut id = scenario.new_object();
-    add(&mut id, 0u64, new(&mut scenario));
-    bump(borrow_mut(&mut id, 0u64));
-    let old: Option<Counter> = dynamic_object_field::remove_opt(&mut id, 0u64);
-    // counter was bumped once, so count should be 1
-    assert_eq!(destroy(old.destroy_some()), 1);
-    assert!(!exists<u64>(&id, 0));
-    scenario.end();
-    id.delete();
-}
-
-#[test]
-fun remove_opt_missing() {
-    let sender = @0x0;
-    let mut scenario = test_scenario::begin(sender);
-    let mut id = scenario.new_object();
-    let old: Option<Counter> = dynamic_object_field::remove_opt(&mut id, 0u64);
-    old.destroy_none();
     scenario.end();
     id.delete();
 }

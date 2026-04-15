@@ -156,6 +156,41 @@ fun delete_uid_with_fields() {
 }
 
 #[test]
+fun remove_opt_existing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let old: Option<u64> = dynamic_field::remove_opt(&mut id, 0u64);
+    assert_eq!(old, option::some(42));
+    assert!(!exists<u64>(&id, 0));
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun remove_opt_missing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    let old: Option<u64> = dynamic_field::remove_opt(&mut id, 0u64);
+    assert_eq!(old, option::none());
+    scenario.end();
+    id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun remove_opt_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    // Value is u8 but actual value is u64, so remove_opt should abort
+    let _old: Option<u8> = dynamic_field::remove_opt(&mut id, 0u64);
+    abort
+}
+
+#[test]
 fun replace_existing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);

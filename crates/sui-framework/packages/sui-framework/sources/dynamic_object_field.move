@@ -94,7 +94,7 @@ public fun remove_opt<Name: copy + drop + store, Value: key + store>(
     object: &mut UID,
     name: Name,
 ): Option<Value> {
-    if (exists_with_type<Name, Value>(object, name)) {
+    if (exists(object, name)) {
         option::some(remove(object, name))
     } else {
         option::none()
