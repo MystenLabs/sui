@@ -15,10 +15,10 @@ use ingestion::IngestionService;
 use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
 use prometheus::Registry;
-use sui_indexer_alt_framework_store_traits::ConcurrentStore;
 use sui_indexer_alt_framework_store_traits::Connection;
-use sui_indexer_alt_framework_store_traits::SequentialStore;
+use sui_indexer_alt_framework_store_traits::InitWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
+use sui_indexer_alt_framework_store_traits::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
 use tracing::info;
 
@@ -26,6 +26,7 @@ use crate::metrics::IngestionMetrics;
 use crate::pipeline::Processor;
 use crate::pipeline::concurrent::ConcurrentConfig;
 use crate::pipeline::concurrent::{self};
+use crate::pipeline::sequential::Handler;
 use crate::pipeline::sequential::SequentialConfig;
 use crate::pipeline::sequential::{self};
 use crate::service::Service;
@@ -275,6 +276,37 @@ impl<S: Store> Indexer<S> {
         self.next_sequential_checkpoint
     }
 
+    /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
+    /// they will be idle until the ingestion service starts, and serves it checkpoint data.
+    ///
+    /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
+    /// keep the watermark table up-to-date with the highest point they can guarantee all data
+    /// exists for, for their pipeline.
+    pub async fn concurrent_pipeline<H>(
+        &mut self,
+        handler: H,
+        config: ConcurrentConfig,
+    ) -> Result<()>
+    where
+        H: concurrent::Handler<Store = S> + Send + Sync + 'static,
+    {
+        let Some(next_checkpoint) = self.add_pipeline::<H>().await? else {
+            return Ok(());
+        };
+
+        self.pipelines.push(concurrent::pipeline::<H>(
+            handler,
+            next_checkpoint,
+            config,
+            self.store.clone(),
+            self.task.clone(),
+            self.ingestion_service.subscribe().0,
+            self.metrics.clone(),
+        ));
+
+        Ok(())
+    }
+
     /// Start ingesting checkpoints from `next_checkpoint`. Individual pipelines
     /// will start processing and committing once the ingestion service has caught up to their
     /// respective watermarks.
@@ -320,10 +352,7 @@ impl<S: Store> Indexer<S> {
     /// calculated above.
     ///
     /// Returns `Ok(None)` if the pipeline is disabled.
-    async fn add_pipeline<P: Processor + 'static>(
-        &mut self,
-        pipeline_task: String,
-    ) -> Result<Option<u64>> {
+    async fn add_pipeline<P: Processor + 'static>(&mut self) -> Result<Option<u64>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
             "Pipeline {:?} already added",
@@ -337,64 +366,41 @@ impl<S: Store> Indexer<S> {
             return Ok(None);
         }
 
+        let mut conn = self
+            .store
+            .connect()
+            .await
+            .context("Failed to establish connection to store")?;
+
+        let pipeline_task =
+            pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
+
         // Create a new record based on `proposed_next_checkpoint` if one does not exist.
         // Otherwise, use the existing record and disregard the proposed value.
         let proposed_next_checkpoint = self.first_checkpoint.unwrap_or(0);
-        let mut conn = self.store.connect().await?;
-        let init_watermark = conn
-            .init_watermark(&pipeline_task, proposed_next_checkpoint.checked_sub(1))
+        let InitWatermark {
+            checkpoint_hi_inclusive,
+            reader_lo,
+        } = conn
+            .init_watermark(
+                &pipeline_task,
+                InitWatermark {
+                    checkpoint_hi_inclusive: proposed_next_checkpoint.checked_sub(1),
+                    reader_lo: proposed_next_checkpoint,
+                },
+            )
             .await
             .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
 
-        let next_checkpoint = if let Some(init_watermark) = init_watermark {
-            if let Some(checkpoint_hi_inclusive) = init_watermark.checkpoint_hi_inclusive {
-                checkpoint_hi_inclusive + 1
-            } else {
-                0
-            }
-        } else {
-            proposed_next_checkpoint
-        };
+        let next_checkpoint = checkpoint_hi_inclusive.map_or(reader_lo, |c| c + 1);
 
-        self.next_checkpoint = next_checkpoint.min(self.next_checkpoint);
+        self.next_checkpoint = self.next_checkpoint.min(next_checkpoint);
 
         Ok(Some(next_checkpoint))
     }
 }
 
-impl<S: ConcurrentStore> Indexer<S> {
-    /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
-    /// they will be idle until the ingestion service starts, and serves it checkpoint data.
-    ///
-    /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
-    /// keep the watermark table up-to-date with the highest point they can guarantee all data
-    /// exists for, for their pipeline.
-    pub async fn concurrent_pipeline<H: concurrent::Handler<Store = S>>(
-        &mut self,
-        handler: H,
-        config: ConcurrentConfig,
-    ) -> Result<()> {
-        let pipeline_task =
-            pipeline_task::<S>(H::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
-        let Some(next_checkpoint) = self.add_pipeline::<H>(pipeline_task).await? else {
-            return Ok(());
-        };
-
-        self.pipelines.push(concurrent::pipeline::<H>(
-            handler,
-            next_checkpoint,
-            config,
-            self.store.clone(),
-            self.task.clone(),
-            self.ingestion_service.subscribe().0,
-            self.metrics.clone(),
-        ));
-
-        Ok(())
-    }
-}
-
-impl<T: SequentialStore> Indexer<T> {
+impl<T: TransactionalStore> Indexer<T> {
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     ///
@@ -405,11 +411,14 @@ impl<T: SequentialStore> Indexer<T> {
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
-    pub async fn sequential_pipeline<H: sequential::Handler<Store = T>>(
+    pub async fn sequential_pipeline<H>(
         &mut self,
         handler: H,
         config: SequentialConfig,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        H: Handler<Store = T> + Send + Sync + 'static,
+    {
         if self.task.is_some() {
             bail!(
                 "Sequential pipelines do not support pipeline tasks. \
@@ -418,11 +427,11 @@ impl<T: SequentialStore> Indexer<T> {
             );
         }
 
-        let Some(next_checkpoint) = self.add_pipeline::<H>(H::NAME.to_owned()).await? else {
+        let Some(next_checkpoint) = self.add_pipeline::<H>().await? else {
             return Ok(());
         };
 
-        // Track the minimum next_checkpoint across all sequential pipelines
+        // Track the minimum checkpoint_hi across all sequential pipelines
         self.next_sequential_checkpoint = Some(
             self.next_sequential_checkpoint
                 .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
@@ -462,8 +471,6 @@ mod tests {
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::ConcurrentConfig;
     use crate::store::CommitterWatermark;
-    use crate::store::ConcurrentConnection as _;
-    use crate::store::Connection as _;
 
     use super::*;
 
@@ -703,7 +710,9 @@ mod tests {
 
         let mut conn = store.connect().await.unwrap();
 
-        conn.init_watermark(A::NAME, Some(0)).await.unwrap();
+        conn.init_watermark(A::NAME, InitWatermark::default())
+            .await
+            .unwrap();
         conn.set_committer_watermark(
             A::NAME,
             CommitterWatermark {
@@ -714,7 +723,9 @@ mod tests {
         .await
         .unwrap();
 
-        conn.init_watermark(B::NAME, Some(0)).await.unwrap();
+        conn.init_watermark(B::NAME, InitWatermark::default())
+            .await
+            .unwrap();
         conn.set_committer_watermark(
             B::NAME,
             CommitterWatermark {
@@ -725,7 +736,9 @@ mod tests {
         .await
         .unwrap();
 
-        conn.init_watermark(C::NAME, Some(0)).await.unwrap();
+        conn.init_watermark(C::NAME, InitWatermark::default())
+            .await
+            .unwrap();
         conn.set_committer_watermark(
             C::NAME,
             CommitterWatermark {
@@ -736,7 +749,9 @@ mod tests {
         .await
         .unwrap();
 
-        conn.init_watermark(D::NAME, Some(0)).await.unwrap();
+        conn.init_watermark(D::NAME, InitWatermark::default())
+            .await
+            .unwrap();
         conn.set_committer_watermark(
             D::NAME,
             CommitterWatermark {
