@@ -431,6 +431,7 @@ impl OffchainCluster {
             kv_args.clone(),
             consistent_reader_args.clone(),
             jsonrpc_args,
+            JsonRpcNodeArgs::default(),
             SystemPackageTaskArgs::default(),
             jsonrpc_config,
             registry,
