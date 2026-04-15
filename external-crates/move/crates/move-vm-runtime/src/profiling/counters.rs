@@ -243,6 +243,66 @@ impl BytecodeSnapshot {
 
         csv
     }
+
+    /// Format as JSON for consumption by analysis tools.
+    ///
+    /// Shape:
+    /// ```json
+    /// {
+    ///   "total": 1234,
+    ///   "opcodes": [
+    ///     { "opcode": "ADD", "count": 500, "percentage": 40.5186 },
+    ///     { "opcode": "LT",  "count": 300, "percentage": 24.3112 }
+    ///   ]
+    /// }
+    /// ```
+    ///
+    /// Rows are sorted by count descending. Zero-count opcodes are omitted.
+    /// Hand-rolled (no serde dependency) because this crate is
+    /// infrastructure-level and serde would pull in a significant
+    /// transitive surface.
+    pub fn format_json(&self) -> String {
+        let total = self.total();
+        let mut entries: Vec<_> = self.iter().collect();
+        entries.sort_by(|a, b| b.1.cmp(&a.1));
+
+        let mut out = String::new();
+        out.push_str("{\n");
+        out.push_str(&format!("  \"total\": {},\n", total));
+        out.push_str("  \"opcodes\": [\n");
+
+        for (i, (opcode, count)) in entries.iter().enumerate() {
+            let pct = if total > 0 {
+                (*count as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
+            let comma = if i + 1 < entries.len() { "," } else { "" };
+            out.push_str(&format!(
+                "    {{ \"opcode\": \"{:?}\", \"count\": {}, \"percentage\": {:.4} }}{}\n",
+                opcode, count, pct, comma
+            ));
+        }
+
+        out.push_str("  ]\n");
+        out.push('}');
+        out
+    }
+
+    /// If `MOVE_VM_DUMP_PROFILE_FILE` is set to a path, write this snapshot's
+    /// JSON representation there. Otherwise a no-op.
+    ///
+    /// Errors (bad path, I/O failure) are logged via `tracing::warn!` rather
+    /// than propagated — a failed profile dump should not fail execution.
+    pub fn maybe_dump_to_env_file(&self) {
+        let Ok(path) = std::env::var("MOVE_VM_DUMP_PROFILE_FILE") else {
+            return;
+        };
+        match std::fs::write(&path, self.format_json()) {
+            Ok(()) => tracing::debug!(%path, "wrote bytecode profile"),
+            Err(e) => tracing::warn!(%path, error = %e, "failed to write bytecode profile"),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -378,4 +438,30 @@ mod tests {
         assert_eq!(a.get(Opcodes::ADD), 2);
         assert_eq!(b.get(Opcodes::ADD), 1);
     }
+
+    #[test]
+    fn test_format_json() {
+        let counters = BytecodeCounters::new();
+        counters.increment(Opcodes::ADD);
+        counters.increment(Opcodes::SUB);
+        counters.increment(Opcodes::SUB);
+
+        let json = counters.snapshot().format_json();
+        assert!(json.contains("\"total\": 3"));
+        assert!(json.contains("\"opcode\": \"SUB\""));
+        assert!(json.contains("\"count\": 2"));
+        assert!(json.contains("\"opcode\": \"ADD\""));
+        assert!(json.contains("\"count\": 1"));
+        // SUB appears before ADD (sorted by count descending).
+        assert!(json.find("SUB").unwrap() < json.find("ADD").unwrap());
+    }
+
+    #[test]
+    fn test_format_json_empty() {
+        let snapshot = BytecodeCounters::new().snapshot();
+        let json = snapshot.format_json();
+        assert!(json.contains("\"total\": 0"));
+        assert!(json.contains("\"opcodes\": ["));
+    }
+
 }

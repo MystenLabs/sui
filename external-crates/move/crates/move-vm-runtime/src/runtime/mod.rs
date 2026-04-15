@@ -79,6 +79,22 @@ impl MoveRuntime {
         self.telemetry.to_runtime_telemetry(&self.cache)
     }
 
+    /// Emit the current bytecode profile via `tracing::info!` and, if the
+    /// `MOVE_VM_DUMP_PROFILE_FILE` env var is set, also write the JSON
+    /// representation to that path.
+    ///
+    /// No-op (and accepts no data) when the `tracing` feature is disabled.
+    #[cfg(feature = "tracing")]
+    pub fn emit_bytecode_profile(&self) {
+        let snapshot = self.telemetry.bytecode_counters().snapshot();
+        tracing::info!(
+            total = snapshot.total(),
+            profile = %snapshot.format_csv(),
+            "move-vm bytecode profile"
+        );
+        snapshot.maybe_dump_to_env_file();
+    }
+
     /// Resolve a package, loading it if necessary. This will use the provided `ModuleResolver` to
     /// fetch the package if it is not already cached.
     /// If there is an error loading or verifying the package, an error is returned.

@@ -176,9 +176,15 @@ pub fn execute_transaction_to_effects(
         }
     }
 
-    // Capture profiling snapshot after execution. Per-runtime counters are
-    // not currently reachable through the `Executor` trait; see follow-up
-    // commit that adds a snapshot accessor.
+    // Emit the bytecode profile. With the `tracing` feature this logs a CSV
+    // summary via tracing::info! and, if MOVE_VM_DUMP_PROFILE_FILE is set,
+    // writes a JSON snapshot to that path. Callers still receive the snapshot
+    // via `bytecode_profile` below for programmatic use.
+    executor.executor.emit_bytecode_profile();
+
+    // Snapshot is collected at the executor level. We don't have direct access
+    // to it from the `Executor` trait yet; this is a placeholder until the
+    // trait exposes a snapshot accessor.
     #[cfg(feature = "tracing")]
     let bytecode_profile = sui_execution::profiling::BytecodeSnapshot::default();
 

@@ -258,6 +258,11 @@ impl executor::Executor for Executor {
     ) -> Box<dyn LayoutResolver + 'r> {
         Box::new(TypeLayoutResolver::new(&self.0, store))
     }
+
+    #[cfg(feature = "tracing")]
+    fn emit_bytecode_profile(&self) {
+        self.0.emit_bytecode_profile();
+    }
 }
 
 impl verifier::Verifier for Verifier<'_> {
