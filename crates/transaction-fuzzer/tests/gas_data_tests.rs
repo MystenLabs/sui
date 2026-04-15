@@ -249,12 +249,12 @@ fn test_gas_data_dev_inspect_no_skip_fuzz() {
 }
 
 // ---------------------------------------------------------------------------
-// Edge case helpers — each returns a GasDataWithObjects for a specific scenario.
+// Scenario helpers — each returns a GasDataWithObjects for a specific scenario.
 // Used by both deterministic tests (for error assertions) and proptests (for
 // panic-freedom coverage via prop_oneof!).
 // ---------------------------------------------------------------------------
 
-fn make_edge_case_valid(rgp: u64) -> GasDataWithObjects {
+fn make_valid_gas_data(rgp: u64) -> GasDataWithObjects {
     let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let budget = rgp * 200_000;
     let gas_obj = make_gas_coin(sender, budget);
@@ -266,7 +266,7 @@ fn make_edge_case_valid(rgp: u64) -> GasDataWithObjects {
     }
 }
 
-fn make_edge_case_price_zero() -> GasDataWithObjects {
+fn make_gas_data_price_zero() -> GasDataWithObjects {
     let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let budget = 100_000_000;
     let gas_obj = make_gas_coin(sender, budget);
@@ -278,7 +278,7 @@ fn make_edge_case_price_zero() -> GasDataWithObjects {
     }
 }
 
-fn make_edge_case_price_below_rgp(rgp: u64) -> GasDataWithObjects {
+fn make_gas_data_price_below_rgp(rgp: u64) -> GasDataWithObjects {
     let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let budget = 100_000_000;
     let gas_obj = make_gas_coin(sender, budget);
@@ -290,7 +290,7 @@ fn make_edge_case_price_below_rgp(rgp: u64) -> GasDataWithObjects {
     }
 }
 
-fn make_edge_case_budget_zero(rgp: u64) -> GasDataWithObjects {
+fn make_gas_data_budget_zero(rgp: u64) -> GasDataWithObjects {
     let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let gas_obj = make_gas_coin(sender, 1_000_000_000);
     let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp, 0);
@@ -301,7 +301,7 @@ fn make_edge_case_budget_zero(rgp: u64) -> GasDataWithObjects {
     }
 }
 
-fn make_edge_case_budget_exceeds_max(rgp: u64, max_budget: u64) -> GasDataWithObjects {
+fn make_gas_data_budget_exceeds_max(rgp: u64, max_budget: u64) -> GasDataWithObjects {
     let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let over_budget = max_budget + 1;
     let gas_obj = make_gas_coin(sender, over_budget);
@@ -313,7 +313,7 @@ fn make_edge_case_budget_exceeds_max(rgp: u64, max_budget: u64) -> GasDataWithOb
     }
 }
 
-fn make_edge_case_balance_insufficient(rgp: u64) -> GasDataWithObjects {
+fn make_gas_data_balance_insufficient(rgp: u64) -> GasDataWithObjects {
     let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let budget = rgp * 200_000;
     let gas_obj = make_gas_coin(sender, 1);
@@ -332,12 +332,12 @@ fn gen_gas_data_with_edge_cases() -> BoxedStrategy<GasDataWithObjects> {
     let max_budget = sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
 
     prop_oneof![
-        1 => Just(()).prop_map(move |_| make_edge_case_valid(rgp)),
-        1 => Just(()).prop_map(move |_| make_edge_case_price_zero()),
-        1 => Just(()).prop_map(move |_| make_edge_case_price_below_rgp(rgp)),
-        1 => Just(()).prop_map(move |_| make_edge_case_budget_zero(rgp)),
-        1 => Just(()).prop_map(move |_| make_edge_case_budget_exceeds_max(rgp, max_budget)),
-        1 => Just(()).prop_map(move |_| make_edge_case_balance_insufficient(rgp)),
+        1 => Just(()).prop_map(move |_| make_valid_gas_data(rgp)),
+        1 => Just(()).prop_map(move |_| make_gas_data_price_zero()),
+        1 => Just(()).prop_map(move |_| make_gas_data_price_below_rgp(rgp)),
+        1 => Just(()).prop_map(move |_| make_gas_data_budget_zero(rgp)),
+        1 => Just(()).prop_map(move |_| make_gas_data_budget_exceeds_max(rgp, max_budget)),
+        1 => Just(()).prop_map(move |_| make_gas_data_balance_insufficient(rgp)),
         6 => any_with::<GasDataWithObjects>(GasDataGenConfig::owned_by_sender_or_immut()),
     ]
     .boxed()
@@ -375,7 +375,7 @@ fn test_gas_data_edge_cases_dry_run_fuzz() {
 fn test_valid_gas_data_all_modes() {
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
-    let case = make_edge_case_valid(rgp);
+    let case = make_valid_gas_data(rgp);
     let sender = case.sender_key.public().into();
 
     let results = run_all_modes(
@@ -405,7 +405,7 @@ fn test_valid_gas_data_all_modes() {
 #[cfg_attr(msim, ignore)]
 fn test_gas_price_zero() {
     let mut executor = Executor::new();
-    let case = make_edge_case_price_zero();
+    let case = make_gas_data_price_zero();
     let sender = case.sender_key.public().into();
 
     let results = run_all_modes(
@@ -436,7 +436,7 @@ fn test_gas_price_zero() {
 fn test_gas_price_below_rgp() {
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
-    let case = make_edge_case_price_below_rgp(rgp);
+    let case = make_gas_data_price_below_rgp(rgp);
     let sender = case.sender_key.public().into();
 
     let results = run_all_modes(
@@ -467,7 +467,7 @@ fn test_gas_price_below_rgp() {
 fn test_gas_budget_zero() {
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
-    let case = make_edge_case_budget_zero(rgp);
+    let case = make_gas_data_budget_zero(rgp);
     let sender = case.sender_key.public().into();
 
     let results = run_all_modes(
@@ -499,7 +499,7 @@ fn test_gas_budget_exceeds_max() {
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
     let max_budget = sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
-    let case = make_edge_case_budget_exceeds_max(rgp, max_budget);
+    let case = make_gas_data_budget_exceeds_max(rgp, max_budget);
     let sender = case.sender_key.public().into();
 
     let results = run_all_modes(
@@ -556,7 +556,7 @@ fn test_gas_data_address_balance_dry_run_fuzz() {
 fn test_gas_balance_insufficient() {
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
-    let case = make_edge_case_balance_insufficient(rgp);
+    let case = make_gas_data_balance_insufficient(rgp);
     let sender = case.sender_key.public().into();
 
     let results = run_all_modes(
