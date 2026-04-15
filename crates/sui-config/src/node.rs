@@ -778,6 +778,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "EveFrontier".to_string(),
         "TestEveFrontier".to_string(),
         "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_Bpct2JyBg".to_string(), // test Gamma Prime, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_4HdQTpt3E".to_string(), // Gamma Prime, external partner
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
