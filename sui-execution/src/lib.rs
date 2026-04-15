@@ -14,7 +14,7 @@ pub use verifier::Verifier;
 pub mod executor;
 pub mod verifier;
 
-#[cfg(feature = "profiling")]
+#[cfg(feature = "tracing")]
 pub use move_vm_runtime_latest::profiling;
 
 mod latest;

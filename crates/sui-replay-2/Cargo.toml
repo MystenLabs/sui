@@ -54,6 +54,3 @@ tracing = [
     "sui-types/tracing",
     "sui-execution/tracing",
 ]
-profiling = [
-    "sui-execution/profiling",
-]
