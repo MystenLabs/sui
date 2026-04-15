@@ -258,7 +258,7 @@ impl WorkloadConfiguration {
             let config = AddrBalDepositConfig {
                 target_address: target,
                 deposit_amount: 1000,
-                seed_amount: 1_000_000_000,
+                seed_amount: 100_000_000_000,
                 metrics: None,
             };
             return vec![AddrBalDepositWorkloadBuilder::build_info(

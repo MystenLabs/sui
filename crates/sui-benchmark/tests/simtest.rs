@@ -1751,7 +1751,7 @@ mod test {
         let config = sui_benchmark::workloads::addr_bal_deposit::AddrBalDepositConfig {
             target_address: target,
             deposit_amount: 1000,
-            seed_amount: 1_000_000_000,
+            seed_amount: 100_000_000_000,
             metrics: Some(metrics.clone()),
         };
 
