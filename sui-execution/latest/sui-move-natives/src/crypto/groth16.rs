@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
+use fastcrypto::groups::bls12381::{G1Element, G1_ELEMENT_BYTE_LENGTH, G2_ELEMENT_BYTE_LENGTH};
+use fastcrypto_zkp::groth16::VerifyingKey;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
@@ -82,18 +84,22 @@ pub fn prepare_verifying_key_internal(
         .protocol_config
         .limit_groth16_pvk_inputs()
     {
-        // A verifying key is serialized as: alpha (G1) + beta (G2) + gamma (G2) + delta (G2)
-        // + gamma_abc_len (u64) + gamma_abc (Vec<G1>), where gamma_abc has
-        // num_public_inputs + 1 elements.
-        let max_vk_len = match curve {
-            // G1=48, G2=96: 48 + 3*96 + 8 + (MAX_PUBLIC_INPUTS+1)*48
-            BLS12381 => 48 + 3 * 96 + 8 + (MAX_PUBLIC_INPUTS + 1) * 48,
-            // G1=32, G2=64: 32 + 3*64 + 8 + (MAX_PUBLIC_INPUTS+1)*32
-            BN254 => 32 + 3 * 64 + 8 + (MAX_PUBLIC_INPUTS + 1) * 32,
+        // The type parameter is not used by get_public_inputs_num, only the const generics matter.
+        type Vk = VerifyingKey<G1Element>;
+        let num_public_inputs = match curve {
+            BLS12381 => Vk::get_public_inputs_num::<
+                { G1_ELEMENT_BYTE_LENGTH },
+                { G2_ELEMENT_BYTE_LENGTH },
+            >(verifying_key.len()),
+            BN254 => Vk::get_public_inputs_num::<32, 64>(verifying_key.len()),
             _ => unreachable!(),
         };
-        if verifying_key.len() > max_vk_len {
-            return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
+        if let Ok(n) = num_public_inputs {
+            if n > MAX_PUBLIC_INPUTS {
+                return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
+            }
+        } else {
+            return Ok(NativeResult::err(cost, INVALID_VERIFYING_KEY));
         }
     }
 
