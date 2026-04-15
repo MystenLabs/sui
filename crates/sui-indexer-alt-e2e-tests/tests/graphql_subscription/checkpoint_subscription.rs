@@ -355,10 +355,16 @@ async fn test_subscription_object_json() {
         .unwrap();
     writer.run_migrations(None).await.unwrap();
 
+    // Index only checkpoint 0 (system packages) so that sui::SUI resolves from the DB.
+    // The test package published below will NOT be in the DB — its type resolution must
+    // come from the StreamingPackageStore (populated from the streamed checkpoint).
     let indexer = sui_indexer_alt::setup_indexer(
         database_url.clone(),
         DbArgs::default(),
-        sui_indexer_alt_framework::IndexerArgs::default(),
+        sui_indexer_alt_framework::IndexerArgs {
+            last_checkpoint: Some(0),
+            ..Default::default()
+        },
         sui_indexer_alt_framework::ingestion::ClientArgs {
             ingestion:
                 sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
@@ -381,7 +387,6 @@ async fn test_subscription_object_json() {
         SubscriptionTestCluster::new_with_db(&validator_cluster, database_url.clone()).await;
     let sender = validator_cluster.wallet.active_address().unwrap();
     let package_id = object_wrapping_harness::publish(&mut validator_cluster).await;
-    wait_for_kv_packages(&db, 0).await;
 
     let mut stream = cluster
         .subscribe_with_variables(
@@ -414,8 +419,7 @@ async fn test_subscription_object_json() {
 
     let (digest, _) =
         object_wrapping_harness::create_item(&mut validator_cluster, package_id, 42).await;
-    let checkpoint =
-        wait_for_matching_item(&mut stream, &[digest], checkpoint_tx_digests).await;
+    let checkpoint = wait_for_matching_item(&mut stream, &[digest], checkpoint_tx_digests).await;
 
     let mut settings = graphql_redactions();
     settings.add_redaction(".**.json.id", "[id]");

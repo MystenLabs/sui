@@ -163,7 +163,6 @@ pub struct Limits {
     /// Maximum number of "rich" queries that can be performed in a single request. Rich queries are
     /// queries that require dedicated requests to the backing store.
     pub max_rich_queries: usize,
-
 }
 
 #[DefaultConfig]

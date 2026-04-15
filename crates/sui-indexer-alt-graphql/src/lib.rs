@@ -367,13 +367,18 @@ pub async fn start_rpc(
         metrics.clone(),
     );
 
-    let streaming_task = subscription_args.checkpoint_stream_url.map(|uri| {
+    let streaming_setup = subscription_args.checkpoint_stream_url.map(|uri| {
         let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
             package_store.clone(),
             NonZeroUsize::new(config.subscription.package_cache_capacity)
                 .expect("package_cache_capacity must be non-zero"),
         ));
-        task::streaming::CheckpointStreamTask::new(uri, &config.subscription, streaming_packages)
+        let task = task::streaming::CheckpointStreamTask::new(
+            uri,
+            &config.subscription,
+            streaming_packages.clone(),
+        );
+        (task, streaming_packages)
     });
 
     let mut rpc = rpc
@@ -402,11 +407,13 @@ pub async fn start_rpc(
         rpc = rpc.data(fullnode_client);
     }
 
-    let subscriptions_enabled = streaming_task.is_some();
+    let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
 
-    if let Some(ref task) = streaming_task {
-        rpc = rpc.data(task.broadcaster());
+    if let Some((ref task, ref streaming_packages)) = streaming_setup {
+        rpc = rpc
+            .data(task.broadcaster())
+            .data(streaming_packages.clone());
     }
 
     let s_rpc = rpc.run().await?;
@@ -418,7 +425,7 @@ pub async fn start_rpc(
         .attach(s_system_package_task)
         .attach(s_watermark);
 
-    if let Some(task) = streaming_task {
+    if let Some((task, _)) = streaming_setup {
         service = service.attach(task.run());
     }
 

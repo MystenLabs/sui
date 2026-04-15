@@ -296,21 +296,21 @@ pub async fn wait_for_kv_packages(db: &sui_pg_db::temp::TempDb, target_checkpoin
 
     tokio::time::timeout(Duration::from_secs(30), async {
         loop {
-            if let Ok(mut conn) = reader.connect().await {
-                if let Ok(hi) = conn
+            if let Ok(mut conn) = reader.connect().await
+                && let Ok(hi) = conn
                     .results(
                         w::watermarks
                             .select(w::checkpoint_hi_inclusive)
                             .filter(w::pipeline.eq("kv_packages")),
                     )
                     .await
-                    && hi
-                        .first()
-                        .is_some_and(|&cp: &i64| cp as u64 >= target_checkpoint)
-                {
-                    return;
-                }
+                && hi
+                    .first()
+                    .is_some_and(|&cp: &i64| cp as u64 >= target_checkpoint)
+            {
+                return;
             }
+
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     })

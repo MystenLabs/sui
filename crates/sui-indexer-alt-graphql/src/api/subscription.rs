@@ -13,6 +13,7 @@ use crate::config::Limits;
 use crate::error::RpcError;
 use crate::scope::Scope;
 use crate::task::streaming::CheckpointBroadcaster;
+use crate::task::streaming::StreamingPackageStore;
 
 #[derive(Default)]
 pub struct Subscription;
@@ -26,7 +27,9 @@ impl Subscription {
         &self,
         ctx: &Context<'_>,
     ) -> Result<impl futures::Stream<Item = Result<Checkpoint, RpcError>>, RpcError> {
-        let package_store = ctx.data::<Arc<PackageCache>>()?.clone();
+        let package_store = ctx
+            .data::<Arc<StreamingPackageStore<PackageCache>>>()?
+            .clone();
         let limits: &Limits = ctx.data()?;
         let resolver_limits = limits.package_resolver();
         let broadcaster: &CheckpointBroadcaster = ctx.data()?;

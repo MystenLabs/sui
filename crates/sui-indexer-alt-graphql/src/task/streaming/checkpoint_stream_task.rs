@@ -11,7 +11,6 @@ use sui_futures::service::Service;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_package_resolver::Package;
-use sui_package_resolver::PackageStore;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
