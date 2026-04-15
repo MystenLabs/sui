@@ -77,7 +77,7 @@ export default function Home() {
                 Using Objects
               </Link>
               <Link className={styles.cardLink} to="/develop/accessing-data">
-                Accessing and Indexing Data
+                Accessing Data
               </Link>
             </HomeCard>
             <HomeCard title="Onchain Finance">
@@ -98,19 +98,19 @@ export default function Home() {
               <Link className={styles.cardLink} to="/sui-stack/zklogin-integration">
                 zkLogin
               </Link>
-              <Link className={styles.cardLink} to="/references/gaming">
-                Gaming
+              <Link className={styles.cardLink} to="/sui-stack/sagat">
+                Sagat
               </Link>
             </HomeCard>
             <HomeCard title="References">
               <Link className={styles.cardLink} to="/references/cli">
-                CLI
+                Sui CLI
               </Link>
               <Link className={styles.cardLink} to="/references/sui-api">
                 Sui API
               </Link>
               <Link className={styles.cardLink} to="/references/framework">
-                Framework
+                Move Framework
               </Link>
             </HomeCard>
             <HomeCard title="Node Operators">
