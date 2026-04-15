@@ -16,7 +16,6 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 
 pub const INVALID_VERIFYING_KEY: u64 = 0;
-
 pub const INVALID_CURVE: u64 = 1;
 pub const TOO_MANY_PUBLIC_INPUTS: u64 = 2;
 
@@ -87,8 +86,10 @@ pub fn prepare_verifying_key_internal(
         // + gamma_abc_len (u64) + gamma_abc (Vec<G1>), where gamma_abc has
         // num_public_inputs + 1 elements.
         let max_vk_len = match curve {
-            BLS12381 => 776,
-            BN254 => 520,
+            // G1=48, G2=96: 48 + 3*96 + 8 + (MAX_PUBLIC_INPUTS+1)*48
+            BLS12381 => 48 + 3 * 96 + 8 + (MAX_PUBLIC_INPUTS + 1) * 48,
+            // G1=32, G2=64: 32 + 3*64 + 8 + (MAX_PUBLIC_INPUTS+1)*32
+            BN254 => 32 + 3 * 64 + 8 + (MAX_PUBLIC_INPUTS + 1) * 32,
             _ => unreachable!(),
         };
         if verifying_key.len() > max_vk_len {
