@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::Arc;
@@ -674,30 +675,17 @@ pub struct PartyPermissions {
     /// The default permissions, used for any party member not explicitly listed in `members`.
     default_permissions: ObjectPermissions,
     /// The permissions for each party member.
-    /// NOTE this should be sorted by SuiAddress
-    members: Vec<(SuiAddress, ObjectPermissions)>,
+    members: BTreeMap<SuiAddress, ObjectPermissions>,
 }
 
 impl PartyPermissions {
-    /// Returns `None` if `members` is not unique per address.
     /// Returns `None` if it could be represented as a single `ConsensusAddressOwner`
     pub fn new(
         default_permissions: ObjectPermissions,
-        mut members: Vec<(SuiAddress, ObjectPermissions)>,
+        members: BTreeMap<SuiAddress, ObjectPermissions>,
     ) -> Option<Self> {
         if Self::is_consensus_address_owner(default_permissions, &members) {
             return None;
-        }
-
-        if !members.is_sorted_by_key(|(a, _)| *a) {
-            members.sort_by_key(|(a, _)| *a);
-        }
-        for window in members.windows(2) {
-            let [(addr1, _), (addr2, _)] = window.try_into().unwrap();
-            if addr1 == addr2 {
-                // Not unique
-                return None;
-            }
         }
         Some(Self {
             default_permissions,
@@ -707,18 +695,17 @@ impl PartyPermissions {
 
     pub fn is_consensus_address_owner(
         default_permissions: ObjectPermissions,
-        members: &[(SuiAddress, ObjectPermissions)],
+        members: &BTreeMap<SuiAddress, ObjectPermissions>,
     ) -> bool {
         default_permissions == ObjectPermissions::NONE
             && members.len() == 1
-            && members[0].1 == ObjectPermissions::ALL
+            && members.values().next() == Some(&ObjectPermissions::ALL)
     }
 
     pub fn permissions_for(&self, address: &SuiAddress) -> ObjectPermissions {
         self.members
-            .iter()
-            .find(|(a, _)| a == address)
-            .map(|(_, p)| *p)
+            .get(address)
+            .copied()
             .unwrap_or(self.default_permissions)
     }
 }
@@ -727,7 +714,7 @@ impl Display for PartyPermissions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "PartyPermissions {{ default_permissions: {}, members: [",
+            "PartyPermissions {{ default_permissions: {}, members: {{",
             self.default_permissions.0
         )?;
         let mut first = true;
@@ -738,7 +725,7 @@ impl Display for PartyPermissions {
             write!(f, "{} => {}", address, permissions.0)?;
             first = false;
         }
-        write!(f, "] }}")
+        write!(f, "}} }}")
     }
 }
 
