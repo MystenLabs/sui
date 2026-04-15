@@ -43,10 +43,10 @@ fn find_function_blocks(
         let func_def = &module.compiled_module.function_defs()[ndx.0 as usize];
         let func_handle = &module.compiled_module.function_handles()[func_def.function.0 as usize];
         let name = module.compiled_module.identifier_at(func_handle.name);
-        if name.as_str() == func_name {
-            if let Some(code) = &func.code {
-                return code.code.clone();
-            }
+        if name.as_str() == func_name
+            && let Some(code) = &func.code
+        {
+            return code.code.clone();
         }
     }
     panic!("Function '{}' not found", func_name);
@@ -95,7 +95,7 @@ fn execute_metered(
     // Use InternalGas directly to avoid Gas/InternalGas multiplier confusion.
     // GasStatus::new takes Gas, so convert: 1 Gas = 1000 InternalGas.
     // We ceil-divide to ensure we have at least the requested internal gas.
-    let gas_units = (internal_gas_budget + 999) / 1000;
+    let gas_units = internal_gas_budget.div_ceil(1000);
     let mut gas_meter =
         gas_schedule::GasStatus::new(&cost_table, gas_schedule::Gas::new(gas_units));
     let initial_gas: u64 = crate::shared::gas::GasMeter::remaining_gas(&gas_meter).into();
@@ -131,7 +131,7 @@ fn execute_metered(
 fn test_charge_inserted_in_blocks() {
     let blocks = find_function_blocks("charge_tests.move", "pure_arithmetic");
     // Every block with fixed-cost instructions should start with Charge
-    for (_label, code) in &blocks {
+    for code in blocks.values() {
         if code.is_empty() {
             continue;
         }
@@ -154,7 +154,7 @@ fn test_charge_values_correct() {
     let blocks = find_function_blocks("charge_tests.move", "looping");
     let mut total_instructions = 0u64;
     let mut total_pushes = 0u64;
-    for (_label, code) in &blocks {
+    for code in blocks.values() {
         if let Some(info) = code.first().and_then(get_charge_info) {
             total_instructions += info.instructions;
             total_pushes += info.pushes;
@@ -168,7 +168,7 @@ fn test_charge_values_correct() {
     assert!(total_pushes > 0, "Expected some pushes, got 0",);
     // Verify that Charge values are self-consistent: each block's charge should
     // have instructions >= pushes (most instructions push at most 1 value)
-    for (_label, code) in &blocks {
+    for code in blocks.values() {
         if let Some(info) = code.first().and_then(get_charge_info) {
             assert!(
                 info.instructions > 0,

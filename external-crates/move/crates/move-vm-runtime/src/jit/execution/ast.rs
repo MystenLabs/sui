@@ -349,12 +349,10 @@ pub enum Type {
 // Bytecode
 // -------------------------------------------------------------------------------------------------
 
-/// `Bytecode` is a VM instruction of variable size. The type of the bytecode (opcode) defines
-/// the size of the bytecode.
-///
-/// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
-/// instruction stream.
-/// Pre-computed gas charge data for a basic block.
+/// Pre-computed gas charge aggregates for a basic block, emitted by the
+/// `optimization::insert_charge` pass and consumed by the interpreter's
+/// `Bytecode::Charge` handler. See the `Charge` variant below for the full
+/// list of opcodes whose gas cost is subsumed into this single charge.
 pub(crate) struct ChargeInfo {
     pub instructions: u64,
     pub pushes: u64,
@@ -363,10 +361,12 @@ pub(crate) struct ChargeInfo {
     pub pop_size: u64,
 }
 
+/// `Bytecode` is a VM instruction of variable size. The type of the bytecode (opcode) defines
+/// the size of the bytecode.
+///
+/// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
+/// instruction stream.
 pub(crate) enum Bytecode {
-    /// Pre-computed gas charge for a basic block.
-    /// Charges gas for all fixed-cost instructions in the block at once.
-    Charge(ArenaBox<ChargeInfo>),
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be a copyable type.
     ///
@@ -859,6 +859,32 @@ pub(crate) enum Bytecode {
     /// Stack transition:
     /// ```..., enum_value_ref -> ...```
     VariantSwitch(VMPointer<VariantJumpTable>),
+    /// Synthetic instruction inserted by the `optimization::insert_charge` pass
+    /// at the head of every basic block that contains at least one fixed-cost
+    /// instruction. Accounts, in aggregate, for the gas cost that would
+    /// otherwise be charged per-instruction by `charge_simple_instr` during
+    /// interpretation of the block's fixed-cost instructions.
+    ///
+    /// The aggregated gas cost covers these opcodes:
+    ///   - Loads: `LdU8`..`LdU256`, `LdTrue`, `LdFalse`
+    ///   - Arithmetic: `Add`, `Sub`, `Mul`, `Mod`, `Div`
+    ///   - Bitwise: `BitOr`, `BitAnd`, `Xor`, `Shl`, `Shr`
+    ///   - Boolean: `Or`, `And`, `Not`
+    ///   - Comparison: `Lt`, `Gt`, `Le`, `Ge`
+    ///   - Branches: `BrTrue`, `BrFalse`, `Branch`
+    ///   - Casts: `CastU8`..`CastU256`
+    ///   - References: `FreezeRef`, `{Mut,Imm}BorrowLoc`,
+    ///     `{Mut,Imm}BorrowField{,Generic}`
+    ///   - Terminators: `Ret`, `Nop`, `Abort`
+    ///
+    /// Variable-cost opcodes (whose gas depends on runtime value sizes) are
+    /// NOT covered here and continue to charge individually: `LdConst`,
+    /// `CopyLoc`, `MoveLoc`, `StLoc`, `Pop`, `ReadRef`, `WriteRef`, `Eq`,
+    /// `Neq`, all `Pack`/`Unpack` forms, all vector ops, all variant ops,
+    /// `VariantSwitch`, `Call`/`CallGeneric`.
+    ///
+    /// Stack transition: no operand stack effect (gas-only instruction).
+    Charge(ArenaBox<ChargeInfo>),
 }
 
 // -------------------------------------------------------------------------------------------------

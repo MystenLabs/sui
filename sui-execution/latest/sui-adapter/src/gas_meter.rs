@@ -405,9 +405,15 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         push_size: u64,
         pop_size: u64,
     ) -> PartialVMResult<()> {
-        // Do not pass pushes/pops — stack height is tracked per-instruction by
-        // charge_simple_instr. Only charge gas (instruction count + sizes).
-        self.0.charge(instructions, 0, 0, push_size, pop_size)
+        if use_charge_batching(self.0.gas_model_version) {
+            // Do not pass pushes/pops — stack height is tracked per-instruction by
+            // charge_simple_instr. Only charge gas (instruction count + sizes).
+            self.0.charge(instructions, 0, 0, push_size, pop_size)
+        } else {
+            // Legacy: Charge instruction is a no-op because charge_simple_instr
+            // already charged per-instruction.
+            Ok(())
+        }
     }
 
     fn remaining_gas(&self) -> InternalGas {

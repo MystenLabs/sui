@@ -58,7 +58,9 @@ pub struct Code {
     pub(crate) code: BTreeMap<Label, Vec<Bytecode>>,
 }
 
-/// Pre-computed gas charge data for a basic block.
+/// Pre-computed gas charge aggregates for a basic block, emitted by the
+/// `optimization::insert_charge` pass. See the `Charge` variant for the full
+/// list of opcodes whose gas cost is subsumed into this single charge.
 #[derive(Clone)]
 pub struct ChargeInfo {
     pub instructions: u64,
@@ -71,9 +73,6 @@ pub struct ChargeInfo {
 /// Optimized Bytecode
 #[derive(Clone)]
 pub enum Bytecode {
-    /// Pre-computed gas charge for a basic block.
-    /// Charges gas for all fixed-cost instructions in the block at once.
-    Charge(Box<ChargeInfo>),
     Pop,
     Ret,
     BrTrue(Label),
@@ -150,6 +149,14 @@ pub enum Bytecode {
     UnpackVariantGenericImmRef(VariantInstantiationHandleIndex),
     UnpackVariantGenericMutRef(VariantInstantiationHandleIndex),
     VariantSwitch(VariantJumpTableIndex),
+    /// Synthetic instruction inserted by the `optimization::insert_charge` pass
+    /// at the head of every basic block that contains at least one fixed-cost
+    /// instruction. Accounts, in aggregate, for the gas cost that would
+    /// otherwise be charged per-instruction by `charge_simple_instr` during
+    /// interpretation of the block's fixed-cost instructions. See the
+    /// `execution::ast::Bytecode::Charge` doc for the full list of subsumed
+    /// opcodes.
+    Charge(Box<ChargeInfo>),
 }
 
 impl ::std::fmt::Debug for Bytecode {

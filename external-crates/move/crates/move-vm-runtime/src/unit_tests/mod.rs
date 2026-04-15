@@ -22,6 +22,7 @@ mod charge_instruction_tests;
 mod compatibility_tests;
 mod exec_func_effects_tests;
 mod function_arg_tests;
+mod insert_charge_tests;
 mod instantiation_tests;
 mod interpreter_heap_tests;
 mod jit_tests;

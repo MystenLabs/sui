@@ -5,15 +5,16 @@ use crate::validation::verification::ast as input;
 use move_binary_format::errors::PartialVMResult;
 
 pub mod ast;
+pub mod insert_charge;
 pub mod translate;
 
 pub fn to_optimized_form(input: input::Package) -> PartialVMResult<ast::Package> {
-    translate::package(input)
+    let pkg = translate::package(input)?;
+    optimize(pkg)
 }
 
-/// For future usage, this will be the entry point for optimizations. For now this is uncalled.
-#[allow(dead_code)]
-pub fn optimize(input: input::Package) -> PartialVMResult<ast::Package> {
-    // There are currently no optimizations implemented.
-    translate::package(input)
+/// Entry point for optimization passes. Currently applies the Charge-insertion
+/// pass which hoists per-instruction gas costs out of the interpreter loop.
+pub fn optimize(pkg: ast::Package) -> PartialVMResult<ast::Package> {
+    insert_charge::pass(pkg)
 }
