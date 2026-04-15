@@ -1656,4 +1656,25 @@ mod tests {
         test_for_value(u32::MAX as u64 + 1);
         test_for_value(u64::MAX);
     }
+
+    #[test]
+    fn test_owner_variant_sizes() {
+        use super::{ObjectPermissions, PartyPermissions, SequenceNumber};
+        use std::collections::BTreeMap;
+
+        // AddressOwner / ObjectOwner
+        assert_eq!(std::mem::size_of::<SuiAddress>(), 32);
+        // Shared
+        assert_eq!(std::mem::size_of::<(SequenceNumber)>(), 8);
+        // ConsensusAddressOwner
+        assert_eq!(std::mem::size_of::<(SequenceNumber, SuiAddress)>(), 40);
+        // PartyPermissioned
+        assert_eq!(
+            std::mem::size_of::<(SequenceNumber, PartyPermissions)>(),
+            40
+        );
+
+        // largest variant (40) + tag and alignment
+        assert_eq!(std::mem::size_of::<Owner>(), 48);
+    }
 }
