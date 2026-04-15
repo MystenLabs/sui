@@ -1027,6 +1027,105 @@ mod tests {
     }
 
     #[test]
+    fn test_max_total_linkage_size_fails_on_many_small_deps() {
+        // A small package with many small deps that individually fit under
+        // `max_move_package_size` but collectively exceed the total linkage cap.
+        let deps: Vec<_> = (0..20)
+            .map(|i| make_dep_package(&format!("dep_{}", i), 10).1)
+            .collect();
+        let main_module = create_test_module("main", AccountAddress::random(), 10);
+
+        let per_dep = deps[0].size() as u64;
+        // Cap sized so a handful of deps fit, but not all 20.
+        let max = per_dep * 5;
+        let protocol_config = test_protocol_config(Some(max));
+
+        let result = MovePackage::new_initial(
+            &[main_module],
+            &protocol_config,
+            deps.iter().collect::<Vec<_>>(),
+        );
+
+        let err = result.expect_err("many small deps should exceed the total linkage cap");
+        match err.kind() {
+            ExecutionErrorKind::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => {
+                assert_eq!(*max_object_size, max);
+                // 20 deps × per_dep + main pkg — comfortably above the cap.
+                assert!(*object_size > per_dep * 20);
+            }
+            k => panic!("Expected MovePackageTooBig, got: {:?}", k),
+        }
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_fails_on_single_huge_dep() {
+        // A single dependency whose own size exceeds the total linkage cap, even
+        // though it is under the per-package cap (which is u64::MAX in this test).
+        let (_, huge_dep) = make_dep_package("huge_dep", 500);
+        let main_module = create_test_module("main", AccountAddress::random(), 5);
+
+        let huge_size = huge_dep.size() as u64;
+        let max = huge_size - 1; // dep alone is already over.
+        let protocol_config = test_protocol_config(Some(max));
+
+        let result =
+            MovePackage::new_initial(&[main_module], &protocol_config, vec![&huge_dep]);
+
+        let err = result.expect_err("single huge dep should exceed the total linkage cap");
+        match err.kind() {
+            ExecutionErrorKind::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => {
+                assert_eq!(*max_object_size, max);
+                assert!(*object_size > huge_size);
+            }
+            k => panic!("Expected MovePackageTooBig, got: {:?}", k),
+        }
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_enforced_on_upgrade() {
+        // The check must also fire on the upgrade path (`new_upgraded`), not just
+        // `new_initial`.
+        let (_, dep_package) = make_dep_package("dep", 50);
+        let original_module = create_test_module("upgraded", AccountAddress::random(), 5);
+
+        // First publish the original under a permissive cap so we have a package
+        // to upgrade.
+        let permissive = test_protocol_config(Some(u64::MAX));
+        let original = MovePackage::new_initial(
+            &[original_module.clone()],
+            &permissive,
+            vec![&dep_package],
+        )
+        .expect("original publish should succeed under permissive cap");
+
+        // Now upgrade with the same modules, but tighten the cap so
+        // original.size() + dep.size() exceeds it.
+        let tight_max = dep_package.size() as u64;
+        let strict = test_protocol_config(Some(tight_max));
+
+        let result =
+            original.new_upgraded(original.id(), &[original_module], &strict, vec![&dep_package]);
+
+        let err = result.expect_err("upgrade should be rejected when total linkage exceeds cap");
+        match err.kind() {
+            ExecutionErrorKind::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => {
+                assert_eq!(*max_object_size, tight_max);
+                assert!(*object_size > tight_max);
+            }
+            k => panic!("Expected MovePackageTooBig on upgrade, got: {:?}", k),
+        }
+    }
+
+    #[test]
     fn test_max_total_linkage_size_check_fails() {
         let (_, dep_package) = make_dep_package("large_dependency", 200);
         let main_module = create_test_module("large_main", AccountAddress::random(), 200);
