@@ -41,6 +41,8 @@ use crate::GraphQLClient;
 use crate::Node;
 use crate::ObjectKey;
 use crate::ObjectRead;
+use crate::TransactionInfo;
+use crate::TransactionRead;
 use crate::VersionQuery;
 use crate::filesystem::FilesystemStore;
 
@@ -86,12 +88,9 @@ impl DataStore {
         self.gql.chain()
     }
 
-    /// Get a checkpoint summary by sequence number. Prefers the local cache;
-    /// on miss, any pre-fork checkpoint (`sequence <= forked_at_checkpoint`)
-    /// is fetched from the remote GraphQL endpoint and written back to disk
-    /// so subsequent reads hit the cache. Post-fork checkpoints are never
-    /// fetched remotely — they only exist if the local executor produced
-    /// them, so a miss returns `None`.
+    /// Get a checkpoint summary by sequence number. Tries the local filesystem first. If it's a
+    /// miss, then fetches it from remote if it's at or before the fork checkpoint and caches it
+    /// locally for next time.
     pub(crate) fn get_checkpoint_by_sequence_number(
         &self,
         sequence: CheckpointSequenceNumber,
@@ -169,8 +168,13 @@ impl DataStore {
         Ok(())
     }
 
-    /// Fetch a checkpoint pair from the remote GraphQL endpoint and persist
-    /// both halves to disk. Shared by the sequence-keyed cache-aware getters.
+    /// Get the highest checkpoint sequence number available on disk.
+    pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
+        self.local.get_highest_checkpoint_sequence_number()
+    }
+
+    /// Fetch checkpoint summary and contents from the remote GraphQL endpoint and persist them to
+    /// disk. Shared by the sequence-keyed cache-aware getters.
     fn fetch_and_cache_checkpoint(
         &self,
         sequence: CheckpointSequenceNumber,
@@ -265,9 +269,65 @@ impl DataStore {
             .map(|(object, _)| object))
     }
 
-    /// Get the highest checkpoint sequence number available on disk.
-    pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
-        self.local.get_highest_checkpoint_sequence_number()
+    /// Get a signed transaction by digest. First tries the local filesystem, and on miss it falls
+    /// back to the remote GraphQL endpoint. If the transaction is found remotely and is at or
+    /// before the fork checkpoint, then it is saved to disk before being returned. Transactions
+    /// produced by the local executor are always on disk.
+    ///
+    /// Note that currently historical reads do not include events, whereas local execution does
+    /// write events to disk.
+    pub(crate) fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> anyhow::Result<Option<VerifiedTransaction>> {
+        if let Some(transaction) = self.local.get_transaction(digest)? {
+            return Ok(Some(transaction));
+        }
+        Ok(self
+            .fetch_and_cache_transaction(digest)?
+            .map(|info| info.transaction))
+    }
+
+    /// Get transaction effects by digest, with the same local-first remote-fallback
+    /// policy as [`Self::get_transaction`].
+    pub(crate) fn get_transaction_effects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> anyhow::Result<Option<TransactionEffects>> {
+        if let Some(effects) = self.local.get_transaction_effects(digest)? {
+            return Ok(Some(effects));
+        }
+        Ok(self
+            .fetch_and_cache_transaction(digest)?
+            .map(|info| info.effects))
+    }
+
+    /// Fetch a transaction and its effects from the remote GraphQL endpoint and persist both halves
+    /// to disk. Shared by [`Self::get_transaction`] and [`Self::get_transaction_effects`] so a
+    /// single remote round-trip is used.
+    ///
+    /// Pre-fork guard: transaction digests aren't ordered, so we can't reject post-fork requests
+    /// up front the way [`Self::get_checkpoint_by_sequence_number`] does. Instead we check
+    /// `info.checkpoint` on the remote response and drop anything executed strictly after
+    /// `forked_at_checkpoint` so our fork doesn't silently absorb upstream activity that
+    /// happened after the fork point.
+    fn fetch_and_cache_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> anyhow::Result<Option<TransactionInfo>> {
+        let Some(info) = self
+            .gql
+            .transaction_data_and_effects(&digest.base58_encode())?
+        else {
+            return Ok(None);
+        };
+        if info.checkpoint > self.forked_at_checkpoint {
+            return Ok(None);
+        }
+        self.local.write_transaction(digest, &info.transaction)?;
+        self.local
+            .write_transaction_effects(digest, &info.effects)?;
+        Ok(Some(info))
     }
 
     /// Construct a `DataStore` for tests, backed by an explicit local root and a fake (unused)
@@ -280,6 +340,24 @@ impl DataStore {
         let local = FilesystemStore::new_with_root(root);
         Self {
             forked_at_checkpoint: 0,
+            gql,
+            local,
+        }
+    }
+
+    /// Test-only constructor that lets callers point the GraphQL client at an arbitrary URL
+    /// (e.g., a wiremock `MockServer`) and pin `forked_at_checkpoint` explicitly.
+    #[cfg(test)]
+    pub(crate) fn new_for_testing_with_remote(
+        root: std::path::PathBuf,
+        gql_url: String,
+        forked_at_checkpoint: CheckpointSequenceNumber,
+    ) -> Self {
+        let gql = GraphQLClient::new(Node::Custom(gql_url), "test")
+            .expect("graphql store with custom url should construct");
+        let local = FilesystemStore::new_with_root(root);
+        Self {
+            forked_at_checkpoint,
             gql,
             local,
         }
@@ -412,11 +490,13 @@ impl SimulatorStore for DataStore {
     }
 
     fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
-        self.local.get_transaction(digest).ok().flatten()
+        DataStore::get_transaction(self, digest).ok().flatten()
     }
 
     fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
-        self.local.get_transaction_effects(digest).ok().flatten()
+        DataStore::get_transaction_effects(self, digest)
+            .ok()
+            .flatten()
     }
 
     fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
@@ -555,3 +635,7 @@ mod checkpoint_persistence_tests;
 #[cfg(test)]
 #[path = "tests/store_execution.rs"]
 mod execution_tests;
+
+#[cfg(test)]
+#[path = "tests/store_transaction_fallback.rs"]
+mod transaction_fallback_tests;
