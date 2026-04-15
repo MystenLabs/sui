@@ -75,7 +75,7 @@ impl SurferTask {
                                 start_version: initial_shared_version,
                                 ..
                             }
-                            | Owner::PartyPermissioned {
+                            | Owner::Party {
                                 start_version: initial_shared_version,
                                 ..
                             } => {

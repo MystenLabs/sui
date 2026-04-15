@@ -154,8 +154,8 @@ pub fn end_transaction(
             Owner::ConsensusAddressOwner { .. } => {
                 unimplemented!("ConsensusAddressOwner does not exist for this execution version")
             }
-            Owner::PartyPermissioned { .. } => {
-                unimplemented!("PartyPermissioned does not exist for this execution version")
+            Owner::Party { .. } => {
+                unimplemented!("Party does not exist for this execution version")
             }
         }
     }
@@ -607,8 +607,8 @@ fn transaction_effects(
             Owner::ConsensusAddressOwner { .. } => {
                 unimplemented!("ConsensusAddressOwner does not exist for this execution version")
             }
-            Owner::PartyPermissioned { .. } => {
-                unimplemented!("PartyPermissioned does not exist for this execution version")
+            Owner::Party { .. } => {
+                unimplemented!("Party does not exist for this execution version")
             }
         }
     }

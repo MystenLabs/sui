@@ -150,9 +150,9 @@ impl<'a> Resolver<'a> for ToObject {
                     Tx::SharedObjectMutability::Immutable
                 },
             },
-            Owner::PartyPermissioned { .. } => {
+            Owner::Party { .. } => {
                 // We need to know the sender to determine mutability
-                todo!("PartyPermissioned WIP")
+                todo!("Party WIP")
             }
             Owner::ObjectOwner(_) => {
                 error!(loc => help: {

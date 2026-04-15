@@ -677,9 +677,9 @@ impl TemporaryStore<'_> {
                             "Input objects must be address owned, shared, consensus, or immutable"
                         )
                     }
-                    Owner::PartyPermissioned { .. } => {
+                    Owner::Party { .. } => {
                         unimplemented!(
-                            "PartyPermissioned does not exist for this execution version"
+                            "Party does not exist for this execution version"
                         )
                     }
                 }
@@ -769,9 +769,9 @@ impl TemporaryStore<'_> {
                         );
                         continue;
                     }
-                    Owner::PartyPermissioned { .. } => {
+                    Owner::Party { .. } => {
                         unimplemented!(
-                            "PartyPermissioned does not exist for this execution version"
+                            "Party does not exist for this execution version"
                         )
                     }
                 }
@@ -1189,8 +1189,8 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         | (Owner::ObjectOwner(_), _)
         | (Owner::Shared { .. }, _)
         | (Owner::ConsensusAddressOwner { .. }, _) => false,
-        (Owner::PartyPermissioned { .. }, _) => {
-            unimplemented!("PartyPermissioned does not exist for this execution version")
+        (Owner::Party { .. }, _) => {
+            unimplemented!("Party does not exist for this execution version")
         }
     };
 

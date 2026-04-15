@@ -744,7 +744,7 @@ impl SuiValue {
                 initial_shared_version,
             } => initial_shared_version,
             Owner::ConsensusAddressOwner { start_version, .. } => start_version,
-            Owner::PartyPermissioned { start_version, .. } => start_version,
+            Owner::Party { start_version, .. } => start_version,
         };
         Ok(ObjectArg::SharedObject {
             id,
@@ -772,9 +772,9 @@ impl SuiValue {
                 initial_shared_version,
                 mutability: SharedObjectMutability::Mutable,
             }),
-            Owner::PartyPermissioned { .. } => {
+            Owner::Party { .. } => {
                 // We need to know the sender for mutability flag
-                todo!("PartyPermissioned WIP")
+                todo!("Party WIP")
             }
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 let obj_ref = obj.compute_object_reference();

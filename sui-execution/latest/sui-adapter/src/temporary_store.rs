@@ -786,7 +786,7 @@ impl TemporaryStore<'_> {
                         // us from catching this.
                         None
                     }
-                    Owner::PartyPermissioned { permissions, .. } => {
+                    Owner::Party { permissions, .. } => {
                         let sender_permissions = permissions.permissions_for(sender);
                         let sponsor_permissions = sponsor
                             .as_ref()
@@ -882,7 +882,7 @@ impl TemporaryStore<'_> {
                     }
                     // We mutated a shared object -- we checked if this object was in the
                     // authenticated set at the top of this loop and it wasn't so this is a failure.
-                    owner @ Owner::Shared { .. } | owner @ Owner::PartyPermissioned { .. } => {
+                    owner @ Owner::Shared { .. } | owner @ Owner::Party { .. } => {
                         panic!(
                             "Unauthenticated root at {to_authenticate:?} with owner {owner:?}\n\
                              Potentially covering objects in: {authenticated_for_mutation:#?}"
@@ -1500,11 +1500,11 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         (Owner::Immutable, Owner::Immutable) => true,
         (Owner::ObjectOwner(a), Owner::ObjectOwner(b)) => a == b,
         (
-            Owner::PartyPermissioned {
+            Owner::Party {
                 permissions: a,
                 start_version: _,
             },
-            Owner::PartyPermissioned {
+            Owner::Party {
                 permissions: b,
                 start_version: _,
             },
@@ -1517,7 +1517,7 @@ fn was_object_mutated(object: &Object, original: &Object) -> bool {
         | (Owner::ObjectOwner(_), _)
         | (Owner::Shared { .. }, _)
         | (Owner::ConsensusAddressOwner { .. }, _)
-        | (Owner::PartyPermissioned { .. }, _) => false,
+        | (Owner::Party { .. }, _) => false,
     };
 
     !data_equal || !owner_equal

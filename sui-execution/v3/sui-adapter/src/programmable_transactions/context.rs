@@ -1818,7 +1818,7 @@ mod checked {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
             }
-            Owner::PartyPermissioned { .. } => todo!("PartyPermissioned WIP"),
+            Owner::Party { .. } => todo!("Party WIP"),
         };
         let owner = obj.owner.clone();
         let version = obj.version();

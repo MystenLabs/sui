@@ -412,7 +412,7 @@ impl TransactionBuilder {
                 },
             },
             // We need to know the sender/signer to know if this should be Mutable or Immutable
-            Owner::PartyPermissioned { .. } => todo!("PartyPermissioned WIP"),
+            Owner::Party { .. } => todo!("Party WIP"),
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 ObjectArg::ImmOrOwnedObject(obj_ref)
             }
@@ -547,7 +547,7 @@ impl TransactionBuilder {
                     start_version: initial_shared_version,
                     ..
                 }
-                | Owner::PartyPermissioned {
+                | Owner::Party {
                     start_version: initial_shared_version,
                     ..
                 } => ObjectArg::SharedObject {

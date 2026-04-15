@@ -85,7 +85,7 @@ impl DynamicFieldProcessor {
             Owner::Shared { .. } => None,
             Owner::Immutable => None,
             Owner::ConsensusAddressOwner { owner, .. } => Some(*owner),
-            Owner::PartyPermissioned { .. } => None,
+            Owner::Party { .. } => None,
         };
         let Some(parent_id) = owner_id else {
             return Ok(None);

@@ -103,8 +103,8 @@ fn input<Mode: ExecutionMode>(
                     );
                     L::ObjectArg::OwnedObject(oref)
                 }
-                Owner::PartyPermissioned { .. } => {
-                    unimplemented!("PartyPermissioned does not exist for this execution version")
+                Owner::Party { .. } => {
+                    unimplemented!("Party does not exist for this execution version")
                 }
             };
             (L::InputArg::Object(arg), L::InputType::Fixed(ty))
@@ -131,8 +131,8 @@ fn input<Mode: ExecutionMode>(
                 }
                 Owner::Shared { .. } => L::SharedObjectKind::Legacy,
                 Owner::ConsensusAddressOwner { .. } => L::SharedObjectKind::Party,
-                Owner::PartyPermissioned { .. } => {
-                    unimplemented!("PartyPermissioned does not exist for this execution version")
+                Owner::Party { .. } => {
+                    unimplemented!("Party does not exist for this execution version")
                 }
             };
             (

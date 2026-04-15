@@ -370,7 +370,7 @@ mod checked {
                     }
                     Owner::Shared { .. }
                     | Owner::ConsensusAddressOwner { .. }
-                    | Owner::PartyPermissioned { .. } => {
+                    | Owner::Party { .. } => {
                         fp_bail!(UserInputError::NotSharedObjectError.into())
                     }
                     Owner::Immutable => fp_bail!(
@@ -598,7 +598,7 @@ mod checked {
                     }
                     Owner::Shared { .. }
                     | Owner::ConsensusAddressOwner { .. }
-                    | Owner::PartyPermissioned { .. } => {
+                    | Owner::Party { .. } => {
                         // This object is a mutable consensus object. However the transaction
                         // specifies it as an owned object. This is inconsistent.
                         return Err(UserInputError::NotOwnedObjectError);
@@ -677,7 +677,7 @@ mod checked {
                         )
                     }
 
-                    Owner::PartyPermissioned {
+                    Owner::Party {
                         start_version: actual_initial_shared_version,
                         permissions,
                     } => {
@@ -713,7 +713,7 @@ mod checked {
                                 )
                             }
                             SharedObjectMutability::NonExclusiveWrite => {
-                                todo!("PartyPermissioned WIP")
+                                todo!("Party WIP")
                             }
                         }
                     }
@@ -744,7 +744,7 @@ mod checked {
                 Owner::Immutable
                 | Owner::Shared { .. }
                 | Owner::ObjectOwner(_)
-                | Owner::PartyPermissioned { .. } => {
+                | Owner::Party { .. } => {
                     return Err(UserInputError::Unsupported(
                         "Gasless transactions only support owned object inputs".to_string(),
                     ));

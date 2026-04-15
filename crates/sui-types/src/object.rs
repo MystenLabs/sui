@@ -671,14 +671,14 @@ impl Display for ObjectPermissions {
     Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
 #[cfg_attr(feature = "fuzzing", derive(proptest_derive::Arbitrary))]
-pub struct PartyPermissions {
+pub struct Party {
     /// The default permissions, used for any party member not explicitly listed in `members`.
     default_permissions: ObjectPermissions,
     /// The permissions for each party member.
     members: BTreeMap<SuiAddress, ObjectPermissions>,
 }
 
-impl PartyPermissions {
+impl Party {
     /// Returns `None` if it could be represented as a single `ConsensusAddressOwner`
     pub fn new(
         default_permissions: ObjectPermissions,
@@ -710,11 +710,11 @@ impl PartyPermissions {
     }
 }
 
-impl Display for PartyPermissions {
+impl Display for Party {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "PartyPermissions {{ default_permissions: {}, members: {{",
+            "Party {{ default_permissions: {}, members: {{",
             self.default_permissions.0
         )?;
         let mut first = true;
@@ -755,9 +755,9 @@ pub enum Owner {
         // The owner of the object.
         owner: SuiAddress,
     },
-    PartyPermissioned {
+    Party {
         start_version: SequenceNumber,
-        permissions: PartyPermissions,
+        permissions: Party,
     },
 }
 
@@ -771,7 +771,7 @@ impl Owner {
             | Self::Immutable
             | Self::ObjectOwner(_)
             | Self::ConsensusAddressOwner { .. }
-            | Self::PartyPermissioned { .. } => Err(SuiErrorKind::UnexpectedOwnerType.into()),
+            | Self::Party { .. } => Err(SuiErrorKind::UnexpectedOwnerType.into()),
         }
     }
 
@@ -783,7 +783,7 @@ impl Owner {
             Self::AddressOwner(address)
             | Self::ObjectOwner(address)
             | Self::ConsensusAddressOwner { owner: address, .. } => Ok(*address),
-            Self::Shared { .. } | Self::Immutable | Self::PartyPermissioned { .. } => {
+            Self::Shared { .. } | Self::Immutable | Self::Party { .. } => {
                 Err(SuiErrorKind::UnexpectedOwnerType.into())
             }
         }
@@ -797,7 +797,7 @@ impl Owner {
                 initial_shared_version,
             } => Some(*initial_shared_version),
             Self::ConsensusAddressOwner { start_version, .. }
-            | Self::PartyPermissioned { start_version, .. } => Some(*start_version),
+            | Self::Party { start_version, .. } => Some(*start_version),
             Self::Immutable | Self::AddressOwner(_) | Self::ObjectOwner(_) => None,
         }
     }
@@ -821,9 +821,7 @@ impl Owner {
     pub fn is_consensus(&self) -> bool {
         matches!(
             self,
-            Owner::Shared { .. }
-                | Owner::ConsensusAddressOwner { .. }
-                | Owner::PartyPermissioned { .. }
+            Owner::Shared { .. } | Owner::ConsensusAddressOwner { .. } | Owner::Party { .. }
         )
     }
 }
@@ -837,7 +835,7 @@ impl PartialEq<ObjectID> for Owner {
             | Self::Shared { .. }
             | Self::Immutable
             | Self::ConsensusAddressOwner { .. }
-            | Self::PartyPermissioned { .. } => false,
+            | Self::Party { .. } => false,
         }
     }
 }
@@ -870,16 +868,11 @@ impl Display for Owner {
                     owner
                 )
             }
-            Self::PartyPermissioned {
+            Self::Party {
                 start_version,
                 permissions,
             } => {
-                write!(
-                    f,
-                    "PartyPermissioned( {}, {} )",
-                    start_version.value(),
-                    permissions
-                )
+                write!(f, "Party( {}, {} )", start_version.value(), permissions)
             }
         }
     }
@@ -1659,20 +1652,16 @@ mod tests {
 
     #[test]
     fn test_owner_variant_sizes() {
-        use super::{ObjectPermissions, PartyPermissions, SequenceNumber};
-        use std::collections::BTreeMap;
+        use super::{Party, SequenceNumber};
 
         // AddressOwner / ObjectOwner
         assert_eq!(std::mem::size_of::<SuiAddress>(), 32);
         // Shared
-        assert_eq!(std::mem::size_of::<(SequenceNumber)>(), 8);
+        assert_eq!(std::mem::size_of::<SequenceNumber>(), 8);
         // ConsensusAddressOwner
         assert_eq!(std::mem::size_of::<(SequenceNumber, SuiAddress)>(), 40);
-        // PartyPermissioned
-        assert_eq!(
-            std::mem::size_of::<(SequenceNumber, PartyPermissions)>(),
-            40
-        );
+        // Party
+        assert_eq!(std::mem::size_of::<(SequenceNumber, Party)>(), 40);
 
         // largest variant (40) + tag and alignment
         assert_eq!(std::mem::size_of::<Owner>(), 48);

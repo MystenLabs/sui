@@ -147,7 +147,7 @@ macro_rules! fetch_child_object_unbounded {
                 | Owner::Immutable
                 | Owner::Shared { .. }
                 | Owner::ConsensusAddressOwner { .. }
-                | Owner::PartyPermissioned { .. } => {
+                | Owner::Party { .. } => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                         format!(
                             "Bad owner for {}. \

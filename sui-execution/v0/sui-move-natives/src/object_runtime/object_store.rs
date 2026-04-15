@@ -126,8 +126,8 @@ impl Inner<'_> {
                     Owner::ConsensusAddressOwner { .. } => {
                         unimplemented!("ConsensusAddressOwner does not exist for this execution version")
                     }
-                    Owner::PartyPermissioned { .. } => {
-                        unimplemented!("PartyPermissioned does not exist for this execution version")
+                    Owner::Party { .. } => {
+                        unimplemented!("Party does not exist for this execution version")
                     }
                 };
                 match object.data {

@@ -163,7 +163,7 @@ impl ExecutionEffects {
             | Owner::Shared { .. }
             | Owner::Immutable
             | Owner::ConsensusAddressOwner { .. }
-            | Owner::PartyPermissioned { .. } => unreachable!(), // owner of gas object is always an address
+            | Owner::Party { .. } => unreachable!(), // owner of gas object is always an address
         }
     }
 

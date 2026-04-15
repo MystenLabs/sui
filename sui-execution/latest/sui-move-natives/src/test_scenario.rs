@@ -248,8 +248,8 @@ pub fn end_transaction(
                     .or_default()
                     .insert(id);
             }
-            Owner::PartyPermissioned { .. } => {
-                todo!("PartyPermissioned WIP")
+            Owner::Party { .. } => {
+                todo!("Party WIP")
             }
         }
     }
@@ -877,8 +877,8 @@ fn transaction_effects(
             Owner::ConsensusAddressOwner { owner, .. } => {
                 transferred_to_account.push((pack_id(id), Value::address(owner.into())))
             }
-            Owner::PartyPermissioned { .. } => {
-                todo!("PartyPermissioned WIP")
+            Owner::Party { .. } => {
+                todo!("Party WIP")
             }
         }
     }

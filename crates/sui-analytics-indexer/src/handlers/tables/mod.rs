@@ -168,8 +168,8 @@ pub fn get_owner_type(object: &Object) -> OwnerType {
         Owner::Shared { .. } => OwnerType::Shared,
         Owner::Immutable => OwnerType::Immutable,
         Owner::ConsensusAddressOwner { .. } => OwnerType::AddressOwner,
-        Owner::PartyPermissioned { .. } => {
-            todo!("PartyPermissioned WIP");
+        Owner::Party { .. } => {
+            todo!("Party WIP");
             // Probably fine here? maybe?
             OwnerType::Shared
         }
@@ -183,7 +183,7 @@ pub fn get_owner_address(object: &Object) -> Option<String> {
         Owner::Shared { .. } => None,
         Owner::Immutable => None,
         Owner::ConsensusAddressOwner { owner, .. } => Some(owner.to_string()),
-        Owner::PartyPermissioned { .. } => None,
+        Owner::Party { .. } => None,
     }
 }
 
@@ -194,7 +194,7 @@ pub fn get_is_consensus(object: &Object) -> bool {
         Owner::Shared { .. } => true,
         Owner::Immutable => false,
         Owner::ConsensusAddressOwner { .. } => true,
-        Owner::PartyPermissioned { .. } => true,
+        Owner::Party { .. } => true,
     }
 }
 

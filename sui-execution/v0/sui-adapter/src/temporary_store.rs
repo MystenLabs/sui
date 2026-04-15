@@ -543,8 +543,8 @@ impl TemporaryStore<'_> {
                         "ConsensusAddressOwner does not exist for this execution version"
                     )
                 }
-                Owner::PartyPermissioned { .. } => {
-                    unimplemented!("PartyPermissioned does not exist for this execution version")
+                Owner::Party { .. } => {
+                    unimplemented!("Party does not exist for this execution version")
                 }
             }
         }
@@ -581,9 +581,9 @@ impl TemporaryStore<'_> {
                                 "ConsensusAddressOwner does not exist for this execution version"
                             )
                         }
-                        Owner::PartyPermissioned { .. } => {
+                        Owner::Party { .. } => {
                             unimplemented!(
-                                "PartyPermissioned does not exist for this execution version"
+                                "Party does not exist for this execution version"
                             )
                         }
                     }
@@ -616,9 +616,9 @@ impl TemporaryStore<'_> {
                                 "ConsensusAddressOwner does not exist for this execution version"
                             )
                         }
-                        Owner::PartyPermissioned { .. } => {
+                        Owner::Party { .. } => {
                             unimplemented!(
-                                "PartyPermissioned does not exist for this execution version"
+                                "Party does not exist for this execution version"
                             )
                         }
                     }
