@@ -364,6 +364,19 @@ impl ConsensusAdapter {
         self.max_pending_transactions
     }
 
+    /// Fast, weakly-consistent overload check for use when the admission
+    /// queue is disabled or in failover.
+    pub fn check_consensus_overload(&self) -> SuiResult {
+        let inflight = self.num_inflight_transactions.load(Ordering::Relaxed) as usize;
+        if inflight > self.max_pending_transactions {
+            return Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into());
+        }
+        if self.submit_semaphore.available_permits() == 0 {
+            return Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into());
+        }
+        Ok(())
+    }
+
     /// Submits transactions to consensus within the reconfiguration lock and
     /// returns their consensus positions.
     pub async fn submit_and_get_positions(

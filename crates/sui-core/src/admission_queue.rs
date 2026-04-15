@@ -3,6 +3,7 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::ConsensusAdapter;
+use arc_swap::ArcSwap;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     Histogram, IntCounter, IntGauge, Registry, register_histogram_with_registry,
@@ -10,8 +11,9 @@ use prometheus::{
 };
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::net::IpAddr;
-use std::sync::Arc;
-use std::time::Instant;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use sui_macros::handle_fail_point_if;
 use sui_network::tonic;
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
@@ -222,10 +224,23 @@ struct InsertCommand {
 #[derive(Clone)]
 pub struct AdmissionQueueHandle {
     sender: mpsc::Sender<InsertCommand>,
-    pub(crate) bypass_threshold: usize,
+    /// The moment the queue last submitted an entry to consensus.
+    last_drain: Arc<Mutex<Instant>>,
+    queue_depth: Arc<AtomicUsize>,
+    failover_timeout: Duration,
 }
 
 impl AdmissionQueueHandle {
+    /// Returns true if the queue has been non-empty for longer than
+    /// `failover_timeout` without any drain to consensus. Callers should
+    /// bypass the queue entirely when this is true.
+    pub fn failover_tripped(&self) -> bool {
+        if self.queue_depth.load(Ordering::Relaxed) == 0 {
+            return false;
+        }
+        self.last_drain.lock().unwrap().elapsed() > self.failover_timeout
+    }
+
     /// Returns Ok(receiver for consensus position) if accepted, Err if rejected.
     pub async fn try_insert(
         &self,
@@ -267,6 +282,7 @@ impl AdmissionQueueHandle {
 pub struct AdmissionQueueManager {
     capacity: usize,
     bypass_threshold: usize,
+    failover_timeout: Duration,
     metrics: Arc<AdmissionQueueMetrics>,
     consensus_adapter: Arc<ConsensusAdapter>,
     slot_freed_notify: Arc<tokio::sync::Notify>,
@@ -278,6 +294,7 @@ impl AdmissionQueueManager {
         metrics: Arc<AdmissionQueueMetrics>,
         capacity_fraction: f64,
         bypass_fraction: f64,
+        failover_timeout: Duration,
         slot_freed_notify: Arc<tokio::sync::Notify>,
     ) -> Self {
         let max_pending = consensus_adapter.max_pending_transactions();
@@ -289,6 +306,7 @@ impl AdmissionQueueManager {
         Self {
             capacity,
             bypass_threshold: (max_pending as f64 * bypass_fraction) as usize,
+            failover_timeout,
             metrics,
             consensus_adapter,
             slot_freed_notify,
@@ -302,6 +320,7 @@ impl AdmissionQueueManager {
         Self {
             capacity: 10_000,
             bypass_threshold: usize::MAX,
+            failover_timeout: Duration::from_secs(30),
             metrics: Arc::new(AdmissionQueueMetrics::new_for_tests()),
             consensus_adapter,
             slot_freed_notify,
@@ -312,9 +331,16 @@ impl AdmissionQueueManager {
         &self.metrics
     }
 
+    pub(crate) fn bypass_threshold(&self) -> usize {
+        self.bypass_threshold
+    }
+
     /// Spawns a new per-epoch admission queue actor and returns a handle.
     /// The previous actor shuts down when its handle is dropped.
     pub fn spawn(&self, epoch_store: Arc<AuthorityPerEpochStore>) -> AdmissionQueueHandle {
+        let last_drain = Arc::new(Mutex::new(Instant::now()));
+        let queue_depth = Arc::new(AtomicUsize::new(0));
+
         let (sender, receiver) = mpsc::channel(self.capacity.max(1024));
 
         let event_loop = AdmissionQueueEventLoop {
@@ -323,13 +349,54 @@ impl AdmissionQueueManager {
             consensus_adapter: self.consensus_adapter.clone(),
             slot_freed_notify: self.slot_freed_notify.clone(),
             epoch_store,
+            last_drain: last_drain.clone(),
+            queue_depth: queue_depth.clone(),
+            last_published_depth: 0,
         };
         spawn_monitored_task!(event_loop.run());
 
         AdmissionQueueHandle {
             sender,
-            bypass_threshold: self.bypass_threshold,
+            last_drain,
+            queue_depth,
+            failover_timeout: self.failover_timeout,
         }
+    }
+}
+
+/// Shared handle to a live admission queue. Holds the manager (for spawning a
+/// fresh per-epoch actor on reconfig), the per-epoch `ArcSwap` handle, and the
+/// cached (config-derived) bypass threshold. Cloned cheaply by `Arc`; passed
+/// both to `ValidatorService` (for hot-path routing) and through
+/// `ValidatorComponents` (for epoch rotation).
+#[derive(Clone)]
+pub struct AdmissionQueueContext {
+    manager: Arc<AdmissionQueueManager>,
+    swap: Arc<ArcSwap<AdmissionQueueHandle>>,
+}
+
+impl AdmissionQueueContext {
+    pub fn spawn(
+        manager: Arc<AdmissionQueueManager>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
+    ) -> Self {
+        let initial_handle = manager.spawn(epoch_store);
+        let swap = Arc::new(ArcSwap::new(Arc::new(initial_handle)));
+        Self { manager, swap }
+    }
+
+    /// Spawns a new per-epoch actor and atomically replaces the current handle.
+    /// The old actor shuts down when its handle is dropped.
+    pub fn rotate_for_epoch(&self, epoch_store: Arc<AuthorityPerEpochStore>) {
+        self.swap.store(Arc::new(self.manager.spawn(epoch_store)));
+    }
+
+    pub(crate) fn bypass_threshold(&self) -> usize {
+        self.manager.bypass_threshold()
+    }
+
+    pub(crate) fn load(&self) -> arc_swap::Guard<Arc<AdmissionQueueHandle>> {
+        self.swap.load()
     }
 }
 
@@ -341,20 +408,23 @@ struct AdmissionQueueEventLoop {
     consensus_adapter: Arc<ConsensusAdapter>,
     slot_freed_notify: Arc<tokio::sync::Notify>,
     epoch_store: Arc<AuthorityPerEpochStore>,
+    last_drain: Arc<Mutex<Instant>>,
+    queue_depth: Arc<AtomicUsize>,
+    last_published_depth: usize,
 }
 
 impl AdmissionQueueEventLoop {
     pub async fn run(mut self) {
         loop {
-            // Process all pending inserts from the channel (non-blocking).
             self.process_pending_inserts();
+            self.publish_queue_depth();
 
-            // Drain to consensus if the queue has entries and capacity is available.
             if !handle_fail_point_if("admission_queue_disable_drain")
                 && !self.queue.is_empty()
                 && self.has_consensus_capacity()
             {
                 self.drain_batch();
+                self.publish_queue_depth();
                 continue;
             }
 
@@ -404,6 +474,14 @@ impl AdmissionQueueEventLoop {
         }
     }
 
+    fn publish_queue_depth(&mut self) {
+        let len = self.queue.len();
+        if len != self.last_published_depth {
+            self.queue_depth.store(len, Ordering::Relaxed);
+            self.last_published_depth = len;
+        }
+    }
+
     fn process_pending_inserts(&mut self) {
         while let Ok(cmd) = self.receiver.try_recv() {
             self.handle_insert(cmd);
@@ -429,6 +507,7 @@ impl AdmissionQueueEventLoop {
             let es = self.epoch_store.clone();
             spawn_monitored_task!(submit_queue_entry(entry, adapter, es));
         }
+        *self.last_drain.lock().unwrap() = Instant::now();
     }
 
     fn handle_insert(&mut self, cmd: InsertCommand) {
@@ -678,6 +757,9 @@ mod tests {
             consensus_adapter,
             slot_freed_notify,
             epoch_store,
+            last_drain: Arc::new(Mutex::new(Instant::now())),
+            queue_depth: Arc::new(AtomicUsize::new(0)),
+            last_published_depth: 0,
         };
 
         let handle = tokio::spawn(event_loop.run());
@@ -690,5 +772,75 @@ mod tests {
             .await
             .expect("actor did not shut down within timeout")
             .expect("actor task panicked");
+    }
+
+    async fn build_consensus_adapter() -> (
+        Arc<ConsensusAdapter>,
+        Arc<AuthorityPerEpochStore>,
+        Arc<tokio::sync::Notify>,
+    ) {
+        use crate::authority::test_authority_builder::TestAuthorityBuilder;
+        use crate::checkpoints::CheckpointStore;
+        use crate::consensus_adapter::{ConnectionMonitorStatusForTests, ConsensusAdapterMetrics};
+        use crate::mysticeti_adapter::LazyMysticetiClient;
+        use sui_types::base_types::AuthorityName;
+
+        let state = TestAuthorityBuilder::new().build().await;
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let slot_freed_notify = Arc::new(tokio::sync::Notify::new());
+        let adapter = Arc::new(ConsensusAdapter::new(
+            Arc::new(LazyMysticetiClient::new()),
+            CheckpointStore::new_for_tests(),
+            AuthorityName::ZERO,
+            Arc::new(ConnectionMonitorStatusForTests {}),
+            100_000,
+            100_000,
+            None,
+            None,
+            ConsensusAdapterMetrics::new_test(),
+            epoch_store.protocol_config().clone(),
+            slot_freed_notify.clone(),
+        ));
+        (adapter, epoch_store, slot_freed_notify)
+    }
+
+    #[tokio::test]
+    async fn test_failover_tripped_when_actor_stalls() {
+        // Construct a handle with a tiny failover window and no running actor.
+        // Failover requires queue_depth > 0, so simulate a non-empty queue.
+        let handle = AdmissionQueueHandle {
+            sender: mpsc::channel(1).0,
+            last_drain: Arc::new(Mutex::new(Instant::now())),
+            queue_depth: Arc::new(AtomicUsize::new(1)),
+            failover_timeout: Duration::from_millis(10),
+        };
+        assert!(!handle.failover_tripped());
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert!(handle.failover_tripped());
+
+        // An empty queue is never a failover, even if last_drain is stale.
+        handle.queue_depth.store(0, Ordering::Relaxed);
+        assert!(!handle.failover_tripped());
+    }
+
+    #[tokio::test]
+    async fn test_idle_actor_does_not_trip_failover() {
+        // A healthy actor with an empty queue must never trip failover, even
+        // after long idle periods while blocked on `receiver.recv()`.
+        let (adapter, epoch_store, notify) = build_consensus_adapter().await;
+        let manager = AdmissionQueueManager::new(
+            adapter,
+            Arc::new(AdmissionQueueMetrics::new_for_tests()),
+            0.5,
+            0.9,
+            Duration::from_millis(10),
+            notify,
+        );
+        let handle = manager.spawn(epoch_store);
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(
+            !handle.failover_tripped(),
+            "idle actor with empty queue must not trip failover"
+        );
     }
 }

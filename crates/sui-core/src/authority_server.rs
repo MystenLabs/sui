@@ -62,7 +62,7 @@ use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, info, instrument};
 
-use crate::admission_queue::{AdmissionQueueHandle, AdmissionQueueManager};
+use crate::admission_queue::{AdmissionQueueContext, AdmissionQueueManager};
 use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
@@ -78,7 +78,6 @@ use crate::{
     checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
 };
-use arc_swap::ArcSwap;
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
 
 #[cfg(test)]
@@ -410,6 +409,18 @@ impl ValidatorServiceMetrics {
     }
 }
 
+/// Where `handle_submit_transaction` routes a request.
+enum AdmissionQueueSubmitMode {
+    /// System has capacity: submit directly to consensus, skipping the queue.
+    Bypass,
+    /// System is overloaded: admit via the priority queue.
+    Queue,
+    /// Queue is not available — either turned off by config or temporarily
+    /// disabled by failover. Submit directly to consensus, but reject
+    /// individual txs when consensus is saturated (pre-queue behavior).
+    Disabled,
+}
+
 #[derive(Clone)]
 pub struct ValidatorService {
     state: Arc<AuthorityState>,
@@ -418,8 +429,7 @@ pub struct ValidatorService {
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
     gasless_limiter: GaslessRateLimiter,
-    admission_queue: Arc<ArcSwap<AdmissionQueueHandle>>,
-    admission_queue_bypass_threshold: usize,
+    admission_queue: Option<AdmissionQueueContext>,
 }
 
 impl ValidatorService {
@@ -428,11 +438,10 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         validator_metrics: Arc<ValidatorServiceMetrics>,
         client_id_source: Option<ClientIdSource>,
-        admission_queue: Arc<ArcSwap<AdmissionQueueHandle>>,
+        admission_queue: Option<AdmissionQueueContext>,
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
         let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
-        let admission_queue_bypass_threshold = admission_queue.load().bypass_threshold;
         Self {
             state,
             consensus_adapter,
@@ -441,7 +450,6 @@ impl ValidatorService {
             client_id_source,
             gasless_limiter,
             admission_queue,
-            admission_queue_bypass_threshold,
         }
     }
 
@@ -453,11 +461,11 @@ impl ValidatorService {
         let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
         let epoch_store = state.epoch_store_for_testing().clone();
         let slot_freed_notify = Arc::new(tokio::sync::Notify::new());
-        let service =
-            AdmissionQueueManager::new_for_tests(consensus_adapter.clone(), slot_freed_notify);
-        let handle = service.spawn(epoch_store);
-        let admission_queue_bypass_threshold = handle.bypass_threshold;
-        let admission_queue = Arc::new(ArcSwap::new(Arc::new(handle)));
+        let manager = Arc::new(AdmissionQueueManager::new_for_tests(
+            consensus_adapter.clone(),
+            slot_freed_notify,
+        ));
+        let admission_queue = Some(AdmissionQueueContext::spawn(manager, epoch_store));
         Self {
             state,
             consensus_adapter,
@@ -466,7 +474,6 @@ impl ValidatorService {
             client_id_source: None,
             gasless_limiter,
             admission_queue,
-            admission_queue_bypass_threshold,
         }
     }
 
@@ -589,7 +596,6 @@ impl ValidatorService {
             client_id_source,
             gasless_limiter: _,
             admission_queue: _,
-            admission_queue_bypass_threshold: _,
         } = self.clone();
 
         let submitter_client_addr = if let Some(client_id_source) = &client_id_source {
@@ -738,6 +744,8 @@ impl ValidatorService {
             .with_label_values(&[req_type])
             .start_timer();
 
+        let submit_mode = self.classify_submit_mode(is_ping_request);
+
         for (idx, tx_bytes) in request.transactions.iter().enumerate() {
             let transaction = match bcs::from_bytes::<Transaction>(tx_bytes) {
                 Ok(txn) => txn,
@@ -767,6 +775,20 @@ impl ValidatorService {
                 state.check_system_overload_at_signing(),
             );
             if let Err(error) = overload_check_res {
+                metrics
+                    .num_rejected_tx_during_overload
+                    .with_label_values(&[error.as_ref()])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected { error });
+                continue;
+            }
+
+            // Use the pre-queue per-tx consensus overload reject when the
+            // queue is disabled or in failover.
+            if matches!(submit_mode, AdmissionQueueSubmitMode::Disabled)
+                && let Err(error) = self.consensus_adapter.check_consensus_overload()
+            {
+                state.update_overload_metrics("consensus");
                 metrics
                     .num_rejected_tx_during_overload
                     .with_label_values(&[error.as_ref()])
@@ -1013,10 +1035,11 @@ impl ValidatorService {
                 .collect()
         };
 
-        let consensus_positions: Vec<ConsensusPosition> =
-            if is_ping_request || self.should_bypass_admission_queue() {
-                // Submit directly to consensus, bypassing the admission queue.
-                self.metrics.admission_queue_direct_bypasses.inc();
+        let consensus_positions: Vec<ConsensusPosition> = match submit_mode {
+            AdmissionQueueSubmitMode::Bypass | AdmissionQueueSubmitMode::Disabled => {
+                if matches!(submit_mode, AdmissionQueueSubmitMode::Bypass) {
+                    self.metrics.admission_queue_direct_bypasses.inc();
+                }
                 let futures = tx_groups.into_iter().map(|txns| {
                     debug!(
                         "handle_submit_transaction: submitting consensus transactions ({}): {}",
@@ -1034,9 +1057,13 @@ impl ValidatorService {
                     .into_iter()
                     .flatten()
                     .collect()
-            } else {
-                // Consensus is overloaded — route through the priority admission queue.
-                let aq = self.admission_queue.load();
+            }
+            AdmissionQueueSubmitMode::Queue => {
+                let aq = self
+                    .admission_queue
+                    .as_ref()
+                    .expect("Queue mode implies admission_queue is Some")
+                    .load();
                 let mut receivers = Vec::with_capacity(tx_groups.len());
                 for txns in tx_groups {
                     let gas_price = Self::extract_gas_price(&txns);
@@ -1052,7 +1079,8 @@ impl ValidatorService {
                 }))
                 .await?;
                 results.into_iter().flatten().collect()
-            };
+            }
+        };
 
         if is_ping_request {
             // For ping requests, return the special consensus position.
@@ -1115,9 +1143,27 @@ impl ValidatorService {
             .unwrap_or(0)
     }
 
-    fn should_bypass_admission_queue(&self) -> bool {
+    fn classify_submit_mode(&self, is_ping_request: bool) -> AdmissionQueueSubmitMode {
+        let Some(aq) = &self.admission_queue else {
+            return AdmissionQueueSubmitMode::Disabled;
+        };
+
+        if is_ping_request {
+            return AdmissionQueueSubmitMode::Bypass;
+        }
+
         let inflight = usize::try_from(self.consensus_adapter.num_inflight_transactions()).unwrap();
-        inflight < self.admission_queue_bypass_threshold
+        if inflight < aq.bypass_threshold() {
+            return AdmissionQueueSubmitMode::Bypass;
+        }
+
+        // Failover is consulted only on the overloaded path so the hot path
+        // avoids the ArcSwap load.
+        if aq.load().failover_tripped() {
+            return AdmissionQueueSubmitMode::Disabled;
+        }
+
+        AdmissionQueueSubmitMode::Queue
     }
 
     async fn collect_effects_data(

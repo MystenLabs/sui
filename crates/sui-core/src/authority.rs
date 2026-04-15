@@ -1318,7 +1318,7 @@ impl AuthorityState {
         overload_monitor_accept_tx(load_shedding_percentage, tx_data.digest())
     }
 
-    fn update_overload_metrics(&self, source: &str) {
+    pub(crate) fn update_overload_metrics(&self, source: &str) {
         self.metrics
             .transaction_overload_sources
             .with_label_values(&[source])
