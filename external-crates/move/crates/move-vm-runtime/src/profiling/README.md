@@ -109,11 +109,6 @@ println!("{} instructions in this txn", snap.total());
 runtime.emit_bytecode_profile();
 ```
 
-```bash
-MOVE_VM_DUMP_PROFILE_FILE=/tmp/profile.json \
-  cargo run --features tracing -p sui-replay-2 -- <args>
-```
-
 ### Replay-driven profiling
 
 `sui-replay-2` invokes the profiling hooks once per transaction (and once at
@@ -127,10 +122,50 @@ session end). The dumping policy is controlled by `MOVE_VM_PROFILE_MODE`:
 
 Unrecognised values are logged at `warn` level and fall back to the default.
 
-`end-of-replay` requires `--cache-executor`. Without executor caching, each
-transaction creates and drops its own executor, so counters cannot survive
-across transactions and the session-end hook walks an empty cache. The
-per-transaction modes work in either configuration.
+#### Caveats
+
+- **Execution version**: profiling overrides only exist on the `latest`
+  execution layer. Transactions that ran on older execution versions
+  (v0/v1/v2/v3) hit the default no-op `Executor::emit_bytecode_profile`
+  and produce no output, even with the env vars set. Pick a recent
+  transaction (or `--digest` whose protocol version uses `latest`) to
+  exercise the profiler.
+- **`end-of-replay` requires `--cache-executor`**. Without executor caching,
+  each transaction creates and drops its own executor, so counters cannot
+  survive across transactions and the session-end hook walks an empty
+  cache. The per-transaction modes work in either configuration.
+
+#### Worked example
+
+Replay a single recent mainnet transaction and dump its bytecode profile
+to `/tmp/profile.json`:
+
+```bash
+MOVE_VM_DUMP_PROFILE_FILE=/tmp/profile.json \
+  cargo run --features tracing -p sui-replay-2 -- \
+    --digest 29rv278vQ2WrKp5CuemUQ5EAKBiYpAR84MHFypyMCkM3 \
+    --cache-executor --trace --overwrite
+```
+
+Sample output (`/tmp/profile.json`) — counts from the small system
+transaction above:
+
+```json
+{
+  "total": 13,
+  "opcodes": [
+    { "opcode": "MOVE_LOC", "count": 3, "percentage": 23.0769 },
+    { "opcode": "CALL", "count": 2, "percentage": 15.3846 },
+    { "opcode": "RET", "count": 2, "percentage": 15.3846 },
+    { "opcode": "EQ", "count": 1, "percentage": 7.6923 },
+    { "opcode": "BRANCH", "count": 1, "percentage": 7.6923 },
+    { "opcode": "BR_FALSE", "count": 1, "percentage": 7.6923 },
+    { "opcode": "LD_CONST", "count": 1, "percentage": 7.6923 },
+    { "opcode": "WRITE_REF", "count": 1, "percentage": 7.6923 },
+    { "opcode": "MUT_BORROW_FIELD", "count": 1, "percentage": 7.6923 }
+  ]
+}
+```
 
 ## Output formats
 
