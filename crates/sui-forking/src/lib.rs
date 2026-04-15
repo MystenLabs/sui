@@ -10,11 +10,13 @@ mod execution;
 pub(crate) mod filesystem;
 mod gql;
 mod node;
+mod rpc;
 pub mod startup;
-pub(crate) mod store;
+pub mod store;
 
 pub use gql::GraphQLClient;
 pub use node::Node;
+pub use store::DataStore;
 
 use anyhow::{Error, Result};
 

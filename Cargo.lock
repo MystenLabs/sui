@@ -15108,6 +15108,7 @@ name = "sui-forking"
 version = "1.71.0"
 dependencies = [
  "anyhow",
+ "axum 0.8.3",
  "bcs",
  "bin-version",
  "chrono",
@@ -15115,6 +15116,7 @@ dependencies = [
  "cynic-codegen",
  "fastcrypto",
  "itertools 0.13.0",
+ "move-core-types",
  "prometheus",
  "rand 0.8.5",
  "reqwest",
@@ -15123,6 +15125,7 @@ dependencies = [
  "serde_json",
  "simulacrum",
  "sui-protocol-config",
+ "sui-rpc-api",
  "sui-swarm-config",
  "sui-types",
  "tempfile",

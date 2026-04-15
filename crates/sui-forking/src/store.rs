@@ -52,7 +52,8 @@ use crate::filesystem::FilesystemStore;
 ///
 /// Implements [`SimulatorStore`] so it can be passed directly into
 /// [`simulacrum::Simulacrum::new_from_custom_state`].
-pub(crate) struct DataStore {
+#[derive(Clone)]
+pub struct DataStore {
     forked_at_checkpoint: CheckpointSequenceNumber,
     gql: GraphQLClient,
     local: FilesystemStore,
@@ -64,7 +65,7 @@ impl DataStore {
     /// The local filesystem cache is rooted under a per-network, per-checkpoint directory
     /// (see [`FilesystemStore`]). The GraphQL client is constructed eagerly but no remote
     /// requests are made until reads happen.
-    pub(crate) async fn new(
+    pub async fn new(
         node: Node,
         forked_at_checkpoint: CheckpointSequenceNumber,
         version: &str,
@@ -79,12 +80,12 @@ impl DataStore {
         })
     }
 
-    fn forked_at_checkpoint(&self) -> CheckpointSequenceNumber {
+    pub fn forked_at_checkpoint(&self) -> CheckpointSequenceNumber {
         self.forked_at_checkpoint
     }
 
     /// Return the chain (mainnet/testnet/devnet/unknown) this store is connected to.
-    pub fn get_chain_identifier(&self) -> Chain {
+    pub fn chain(&self) -> Chain {
         self.gql.chain()
     }
 

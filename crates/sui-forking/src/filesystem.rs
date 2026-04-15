@@ -70,6 +70,7 @@ const CHECKPOINT_DIGEST_INDEX_FILE: &str = "digest_index";
 const LATEST_FILE: &str = "latest";
 
 /// Local filesystem-backed store for Sui data.
+#[derive(Clone)]
 pub(crate) struct FilesystemStore {
     root: PathBuf,
 }
