@@ -61,8 +61,6 @@ use sui_types::{gas_coin::GAS, sui_system_state::sui_system_state_summary::SuiSy
 use tokio::time::sleep;
 use tracing::{debug, info, instrument, warn};
 
-use crate::drivers::bench_driver::ClientType;
-
 pub mod bank;
 
 /// Shared metrics for benchmark proxies that use TransactionDriver.
@@ -330,10 +328,7 @@ pub trait ValidatorProxy {
 
     async fn get_latest_system_state_object(&self) -> Result<SuiSystemStateSummary, anyhow::Error>;
 
-    async fn execute_transaction_block(
-        &self,
-        tx: Transaction,
-    ) -> (ClientType, anyhow::Result<ExecutionEffects>);
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects>;
 
     /// Submit a transaction to multiple validators to cause consensus amplification.
     /// Used to test the unpaid amplification deferral logic.
@@ -342,7 +337,7 @@ pub trait ValidatorProxy {
         &self,
         tx: Transaction,
         _num_validators: usize,
-    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+    ) -> anyhow::Result<ExecutionEffects> {
         self.execute_transaction_block(tx).await
     }
 
@@ -541,28 +536,19 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             .into_sui_system_state_summary())
     }
 
-    async fn execute_transaction_block(
-        &self,
-        tx: Transaction,
-    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
         debug!("Using TransactionDriver for transaction {:?}", tx_digest);
-        (
-            ClientType::TransactionDriver,
-            self.submit_transaction_block(tx).await,
-        )
+        self.submit_transaction_block(tx).await
     }
 
     async fn execute_transaction_block_with_amplification(
         &self,
         tx: Transaction,
         num_validators: usize,
-    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
-        (
-            ClientType::TransactionDriver,
-            self.submit_transaction_with_amplification(tx, num_validators)
-                .await,
-        )
+    ) -> anyhow::Result<ExecutionEffects> {
+        self.submit_transaction_with_amplification(tx, num_validators)
+            .await
     }
 
     fn clone_committee(&self) -> Arc<Committee> {
@@ -946,10 +932,7 @@ impl ValidatorProxy for FullNodeProxy {
         Ok(self.sui_client.get_system_state_summary(None).await?)
     }
 
-    async fn execute_transaction_block(
-        &self,
-        tx: Transaction,
-    ) -> (ClientType, anyhow::Result<ExecutionEffects>) {
+    async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let tx_digest = *tx.digest();
         let start = Instant::now();
         let mut retry_cnt = 0;
@@ -963,21 +946,15 @@ impl ValidatorProxy for FullNodeProxy {
                 .await
             {
                 Ok(resp) => {
-                    return (
-                        ClientType::QuorumDriver,
-                        Ok(ExecutionEffects::ExecutedTransaction(resp)),
-                    );
+                    return Ok(ExecutionEffects::ExecutedTransaction(resp));
                 }
                 Err(err) => {
                     if !is_retryable_sdk_error(&err) {
-                        return (
-                            ClientType::QuorumDriver,
-                            Err(anyhow::anyhow!(
-                                "Transaction {:?} failed with non-retriable error: {:?}",
-                                tx_digest,
-                                err
-                            )),
-                        );
+                        return Err(anyhow::anyhow!(
+                            "Transaction {:?} failed with non-retriable error: {:?}",
+                            tx_digest,
+                            err
+                        ));
                     }
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
                     warn!(
@@ -992,13 +969,10 @@ impl ValidatorProxy for FullNodeProxy {
                 }
             }
         }
-        (
-            ClientType::QuorumDriver,
-            Err(anyhow::anyhow!(
-                "Transaction {:?} failed for {retry_cnt} times",
-                tx_digest
-            )),
-        )
+        Err(anyhow::anyhow!(
+            "Transaction {:?} failed for {retry_cnt} times",
+            tx_digest
+        ))
     }
 
     fn clone_committee(&self) -> Arc<Committee> {
