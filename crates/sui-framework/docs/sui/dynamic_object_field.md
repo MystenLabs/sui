@@ -305,7 +305,7 @@ otherwise.
     <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): Option&lt;Value&gt; {
-    <b>if</b> (<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists_with_type">exists_with_type</a>&lt;Name, Value&gt;(<a href="../sui/object.md#sui_object">object</a>, name)) {
+    <b>if</b> (<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_exists">exists</a>(<a href="../sui/object.md#sui_object">object</a>, name)) {
         option::some(<a href="../sui/dynamic_object_field.md#sui_dynamic_object_field_remove">remove</a>(<a href="../sui/object.md#sui_object">object</a>, name))
     } <b>else</b> {
         option::none()

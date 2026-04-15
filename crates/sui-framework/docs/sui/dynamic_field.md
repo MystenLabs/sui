@@ -334,7 +334,7 @@ Removes the dynamic field if it exists. Returns <code>some(Value)</code> if it e
     <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): Option&lt;Value&gt; {
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;Name&gt;(<a href="../sui/object.md#sui_object">object</a>, name)) {
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>(<a href="../sui/object.md#sui_object">object</a>, name)) {
         option::some(<a href="../sui/dynamic_field.md#sui_dynamic_field_remove">remove</a>(<a href="../sui/object.md#sui_object">object</a>, name))
     } <b>else</b> {
         option::none()
