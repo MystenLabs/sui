@@ -250,7 +250,7 @@ pub(crate) struct StructInstantiation {
 #[derive(Debug)]
 pub(crate) struct FieldHandle {
     pub offset: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "used by InternedDisplay for debug output")]
     pub owner: VirtualTableKey,
 }
 
@@ -258,7 +258,7 @@ pub(crate) struct FieldHandle {
 #[derive(Debug)]
 pub(crate) struct FieldInstantiation {
     pub offset: usize,
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "used by InternedDisplay for debug output")]
     pub owner: VirtualTableKey,
 }
 
@@ -1624,7 +1624,7 @@ impl std::fmt::Debug for ArenaType {
 /// Trait for types that can be displayed with an interner.
 /// This is similar to `std::fmt::Display` but takes an interner as argument. It is used for
 /// printing stack traces and other debug situations.
-#[allow(dead_code)]
+#[allow(dead_code, reason = "used for debug-time stack trace printing")]
 pub trait InternedDisplay<B: std::fmt::Write> {
     fn fmt(&self, f: &mut B, interner: &IdentifierInterner) -> ::std::fmt::Result;
 }

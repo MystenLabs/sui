@@ -129,7 +129,10 @@ impl<Loc: Copy, Lbl: Ord + Clone + fmt::Display> Graph<Loc, Lbl> {
     }
 
     /// Returns the direct successors of the specified reference by NodeIndex
-    #[allow(dead_code)]
+    #[allow(
+        dead_code,
+        reason = "only called from #[cfg(debug_assertions)] blocks below"
+    )]
     fn successors_idx(
         &self,
         r: NodeIndex,

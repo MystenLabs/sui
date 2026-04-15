@@ -213,7 +213,7 @@ impl NativeFunctions {
 pub struct NativeContext<'a, 'b, 'c> {
     // If this native was the base invocation, we do not create a machine state. This is only used
     // for printing stack traces, and in that case we will print that there is no call stack.
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "consumed by print_stack_trace in debug builds")]
     state: Option<&'a MachineState>,
     vtables: &'a VMDispatchTables,
     extensions: &'a mut NativeContextExtensions<'b>,

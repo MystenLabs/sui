@@ -177,7 +177,7 @@ impl MachineState {
     // Debugging and logging helpers.
     //
 
-    #[allow(dead_code)]
+    #[cfg(any(debug_assertions, feature = "testing"))]
     #[allow(clippy::expect_used)]
     pub(super) fn debug_print_frame<B: Write>(
         &self,
@@ -277,7 +277,7 @@ impl MachineState {
         Ok(())
     }
 
-    #[allow(dead_code)]
+    #[cfg(any(debug_assertions, feature = "testing"))]
     pub(crate) fn debug_print_stack_trace<B: Write>(
         &self,
         vtables: &VMDispatchTables,

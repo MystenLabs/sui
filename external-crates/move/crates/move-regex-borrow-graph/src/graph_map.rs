@@ -138,7 +138,7 @@ impl<N, E> GraphMap<N, E> {
     }
 
     /// Returns the weight of the edge from `from` to `to`, or None if the edge does not exist.
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "only used in tests")]
     pub fn edge_weight(&self, from: NodeIndex, to: NodeIndex) -> Option<&E> {
         self.edge_weights.get(&(from, to))
     }
@@ -236,7 +236,7 @@ impl<N, E> GraphMap<N, E> {
     }
 
     /// Returns an iterator over all edges in the graph, as (from, weight, to) triples.
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "only used in tests")]
     pub fn all_edges_idx(&self) -> impl Iterator<Item = (NodeIndex, &E, NodeIndex)> + '_ {
         self.edge_weights.iter().map(|((p, s), e)| (*p, e, *s))
     }
@@ -264,7 +264,7 @@ impl<N, E> GraphMap<N, E> {
         }))
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "only used in tests")]
     pub(crate) fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {

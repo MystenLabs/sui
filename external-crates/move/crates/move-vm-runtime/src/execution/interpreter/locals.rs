@@ -174,7 +174,7 @@ impl MachineHeap {
 // -------------------------------------------------------------------------------------------------
 
 impl StackFrame {
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "used for debug printing of stack frames")]
     pub(crate) fn iter(&self) -> std::slice::Iter<'_, MemBox<Value>> {
         self.slice.iter()
     }
