@@ -1,23 +1,8 @@
 {
   "redirects": [
     {
-      "source": "/concepts/tokenomics/:path*",
-      "destination": "/develop/sui-architecture/:path*",
-      "permanent": true
-    },
-    {
-      "source": "/concepts/cryptography/:path*",
-      "destination": "/develop/cryptography/:path*",
-      "permanent": true
-    },
-    {
       "source": "/concepts/sui-move-concepts",
       "destination": "/develop/write-move/sui-move-concepts",
-      "permanent": true
-    },
-    {
-      "source": "/concepts/:path*",
-      "destination": "/develop/:path*",
       "permanent": true
     },
     {
@@ -548,21 +533,6 @@
     {
       "source": "/operator/validator/validator-committee",
       "destination": "/develop/sui-architecture/consensus",
-      "permanent": true
-    },
-    {
-      "source": "/concepts/cryptography/transaction-auth/:path*",
-      "destination": "/develop/transactions/transaction-auth/:path*",
-      "permanent": true
-    },
-    {
-      "source": "/concepts/object-ownership/:path*",
-      "destination": "/develop/objects/object-ownership/:path*",
-      "permanent": true
-    },
-    {
-      "source": "/concepts/transfers/:path*",
-      "destination": "/develop/objects/transfers/:path*",
       "permanent": true
     },
     {
@@ -2588,6 +2558,21 @@
     {
       "source": "/tooling",
       "destination": "/getting-started/tooling",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/data-access/indexer-data-integration",
+      "destination": "/develop/accessing-data/custom-indexer/indexer-data-integration",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/data-access/indexer-runtime-perf",
+      "destination": "/develop/accessing-data/custom-indexer/indexer-runtime-perf",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/cryptography/system/checkpoint-verification",
+      "destination": "/develop/sui-architecture/checkpoint-verification",
       "permanent": true
     },
     {
