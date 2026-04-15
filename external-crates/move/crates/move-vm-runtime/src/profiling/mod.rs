@@ -16,9 +16,10 @@
 //!
 //! # Feature-gating
 //!
-//! Only compiled in when the `tracing` feature is enabled. When disabled, the
-//! increment in the interpreter hot loop is removed by the compiler, so there
-//! is zero runtime overhead.
+//! The module (types, constants, formatting helpers) is always available.
+//! The per-runtime counter storage and the increment in the interpreter hot
+//! loop are gated behind the `tracing` feature, so there is zero runtime
+//! overhead when it is disabled.
 //!
 //! # Example
 //!
@@ -47,3 +48,4 @@
 pub mod counters;
 
 pub use counters::{BytecodeCounters, BytecodeSnapshot};
+pub use crate::shared::constants::{MOVE_VM_DUMP_PROFILE_FILE_ENV, MOVE_VM_PROFILE_MODE_ENV};

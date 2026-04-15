@@ -27,6 +27,7 @@
 
 use std::path::PathBuf;
 use sui_execution::Executor;
+use sui_execution::profiling::{MOVE_VM_DUMP_PROFILE_FILE_ENV, MOVE_VM_PROFILE_MODE_ENV};
 use sui_types::digests::TransactionDigest;
 
 /// Minimal interface the profile-mode dispatcher needs from an executor.
@@ -64,8 +65,6 @@ impl ProfileSink for ExecutorProfileSink<'_> {
     }
 }
 
-const MODE_ENV: &str = "MOVE_VM_PROFILE_MODE";
-const DUMP_PATH_ENV: &str = "MOVE_VM_DUMP_PROFILE_FILE";
 
 /// Where bytecode profile snapshots get emitted relative to transaction
 /// boundaries during replay.
@@ -92,7 +91,7 @@ impl BytecodeProfileMode {
     /// or unrecognised. An unrecognised value is logged at warn level so it
     /// doesn't fail silently.
     pub fn from_env() -> Self {
-        let Ok(raw) = std::env::var(MODE_ENV) else {
+        let Ok(raw) = std::env::var(MOVE_VM_PROFILE_MODE_ENV) else {
             return Self::default();
         };
         match raw.to_ascii_lowercase().as_str() {
@@ -105,7 +104,7 @@ impl BytecodeProfileMode {
                 tracing::warn!(
                     %other,
                     default = ?Self::default(),
-                    "unknown {MODE_ENV} value; falling back to default",
+                    "unknown {MOVE_VM_PROFILE_MODE_ENV} value; falling back to default",
                 );
                 Self::default()
             }
@@ -161,7 +160,7 @@ impl BytecodeProfileMode {
 /// Compute the per-transaction dump path: `<base>.<digest>.json` if
 /// `MOVE_VM_DUMP_PROFILE_FILE` is set, otherwise `None`.
 fn per_tx_path(digest: &TransactionDigest) -> Option<PathBuf> {
-    let base = std::env::var(DUMP_PATH_ENV).ok()?;
+    let base = std::env::var(MOVE_VM_DUMP_PROFILE_FILE_ENV).ok()?;
     let base = PathBuf::from(base);
     // `<stem>.<digest>.<ext>` if there's an extension, otherwise `<base>.<digest>`.
     let stem = base.file_stem().and_then(|s| s.to_str()).unwrap_or("profile");

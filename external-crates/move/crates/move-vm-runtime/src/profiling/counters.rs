@@ -312,7 +312,7 @@ impl BytecodeSnapshot {
     /// If `MOVE_VM_DUMP_PROFILE_FILE` is set to a path, write this snapshot's
     /// JSON representation there. Otherwise a no-op.
     pub fn maybe_dump_to_env_file(&self) {
-        if let Ok(path) = std::env::var("MOVE_VM_DUMP_PROFILE_FILE") {
+        if let Ok(path) = std::env::var(crate::shared::constants::MOVE_VM_DUMP_PROFILE_FILE_ENV) {
             self.dump_to_file(path);
         }
     }
