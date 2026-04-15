@@ -85,7 +85,17 @@ impl BytecodeProfileMode {
     /// Parse the `MOVE_VM_PROFILE_MODE` env var; returns the default if unset
     /// or unrecognised. An unrecognised value is logged at warn level so it
     /// doesn't fail silently.
+    ///
+    /// The parsed value is cached in a process-wide `OnceLock`, so callers
+    /// that hit this on every transaction pay the env lookup (which takes a
+    /// global OS lock on Unix) exactly once per process.
     pub fn from_env() -> Self {
+        static CACHED: std::sync::OnceLock<BytecodeProfileMode> = std::sync::OnceLock::new();
+        *CACHED.get_or_init(Self::parse_env)
+    }
+
+    /// Parse the env var without caching. Internal helper for `from_env`.
+    fn parse_env() -> Self {
         let Ok(raw) = std::env::var(MOVE_VM_PROFILE_MODE_ENV) else {
             return Self::default();
         };
