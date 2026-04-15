@@ -3,66 +3,153 @@
 
 //! Bytecode execution counters for profile-guided optimization.
 //!
-//! This module provides atomic counters for tracking bytecode execution frequency.
-//! The counters are designed for minimal overhead when profiling is enabled.
+//! This module provides per-VM atomic counters for tracking bytecode execution
+//! frequency. Counters live inside `TelemetryContext` (one per `MoveRuntime`)
+//! so concurrent VM instances do not contaminate each other's counts.
 //!
 //! Bytecode statistics are exposed through the telemetry infrastructure via
 //! `MoveRuntimeTelemetry::bytecode_stats`.
 
 use move_binary_format::file_format_common::Opcodes;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Number of bytecode variants to track.
-/// This should cover all opcodes defined in `Opcodes`.
-const BYTECODE_COUNT: usize = 128;
+/// All opcode variants, populated once at `BytecodeCounters::new`.
+///
+/// Kept in one place so adding a new opcode variant is a single-site change
+/// (no hidden coupling to an array length).
+const ALL_OPCODES: &[Opcodes] = &[
+    Opcodes::POP,
+    Opcodes::RET,
+    Opcodes::BR_TRUE,
+    Opcodes::BR_FALSE,
+    Opcodes::BRANCH,
+    Opcodes::LD_U64,
+    Opcodes::LD_CONST,
+    Opcodes::LD_TRUE,
+    Opcodes::LD_FALSE,
+    Opcodes::COPY_LOC,
+    Opcodes::MOVE_LOC,
+    Opcodes::ST_LOC,
+    Opcodes::MUT_BORROW_LOC,
+    Opcodes::IMM_BORROW_LOC,
+    Opcodes::MUT_BORROW_FIELD,
+    Opcodes::IMM_BORROW_FIELD,
+    Opcodes::CALL,
+    Opcodes::PACK,
+    Opcodes::UNPACK,
+    Opcodes::READ_REF,
+    Opcodes::WRITE_REF,
+    Opcodes::ADD,
+    Opcodes::SUB,
+    Opcodes::MUL,
+    Opcodes::MOD,
+    Opcodes::DIV,
+    Opcodes::BIT_OR,
+    Opcodes::BIT_AND,
+    Opcodes::XOR,
+    Opcodes::OR,
+    Opcodes::AND,
+    Opcodes::NOT,
+    Opcodes::EQ,
+    Opcodes::NEQ,
+    Opcodes::LT,
+    Opcodes::GT,
+    Opcodes::LE,
+    Opcodes::GE,
+    Opcodes::ABORT,
+    Opcodes::NOP,
+    Opcodes::EXISTS_DEPRECATED,
+    Opcodes::MUT_BORROW_GLOBAL_DEPRECATED,
+    Opcodes::IMM_BORROW_GLOBAL_DEPRECATED,
+    Opcodes::MOVE_FROM_DEPRECATED,
+    Opcodes::MOVE_TO_DEPRECATED,
+    Opcodes::FREEZE_REF,
+    Opcodes::SHL,
+    Opcodes::SHR,
+    Opcodes::LD_U8,
+    Opcodes::LD_U128,
+    Opcodes::CAST_U8,
+    Opcodes::CAST_U64,
+    Opcodes::CAST_U128,
+    Opcodes::MUT_BORROW_FIELD_GENERIC,
+    Opcodes::IMM_BORROW_FIELD_GENERIC,
+    Opcodes::CALL_GENERIC,
+    Opcodes::PACK_GENERIC,
+    Opcodes::UNPACK_GENERIC,
+    Opcodes::EXISTS_GENERIC_DEPRECATED,
+    Opcodes::MUT_BORROW_GLOBAL_GENERIC_DEPRECATED,
+    Opcodes::IMM_BORROW_GLOBAL_GENERIC_DEPRECATED,
+    Opcodes::MOVE_FROM_GENERIC_DEPRECATED,
+    Opcodes::MOVE_TO_GENERIC_DEPRECATED,
+    Opcodes::VEC_PACK,
+    Opcodes::VEC_LEN,
+    Opcodes::VEC_IMM_BORROW,
+    Opcodes::VEC_MUT_BORROW,
+    Opcodes::VEC_PUSH_BACK,
+    Opcodes::VEC_POP_BACK,
+    Opcodes::VEC_UNPACK,
+    Opcodes::VEC_SWAP,
+    Opcodes::LD_U16,
+    Opcodes::LD_U32,
+    Opcodes::LD_U256,
+    Opcodes::CAST_U16,
+    Opcodes::CAST_U32,
+    Opcodes::CAST_U256,
+    Opcodes::PACK_VARIANT,
+    Opcodes::PACK_VARIANT_GENERIC,
+    Opcodes::UNPACK_VARIANT,
+    Opcodes::UNPACK_VARIANT_IMM_REF,
+    Opcodes::UNPACK_VARIANT_MUT_REF,
+    Opcodes::UNPACK_VARIANT_GENERIC,
+    Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF,
+    Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF,
+    Opcodes::VARIANT_SWITCH,
+];
 
-/// Global bytecode counters instance.
-/// This is a global static to avoid passing counters through the call stack.
-pub static BYTECODE_COUNTERS: BytecodeCounters = BytecodeCounters::new();
-
-/// Per-instruction execution counters.
-/// Array indices map to `Opcodes` discriminant values.
+/// Per-VM bytecode execution counters.
+///
+/// Each `MoveRuntime` owns one of these (held via `Arc` inside
+/// `TelemetryContext`). Multiple runtimes running concurrently in the same
+/// process therefore see independent counts.
+#[derive(Debug)]
 pub struct BytecodeCounters {
-    counts: [AtomicU64; BYTECODE_COUNT],
+    counts: HashMap<Opcodes, AtomicU64>,
 }
 
 impl BytecodeCounters {
     /// Create a new set of bytecode counters, all initialized to zero.
-    pub const fn new() -> Self {
-        // Initialize all counters to 0 using const initialization
-        const ZERO: AtomicU64 = AtomicU64::new(0);
-        Self {
-            counts: [ZERO; BYTECODE_COUNT],
-        }
+    pub fn new() -> Self {
+        let counts = ALL_OPCODES.iter().map(|op| (*op, AtomicU64::new(0))).collect();
+        Self { counts }
     }
 
     /// Increment the counter for a specific opcode.
     ///
-    /// Uses `Relaxed` ordering for minimal overhead - we don't need
-    /// strict ordering guarantees for profiling data.
+    /// Uses `Relaxed` ordering for minimal overhead — profiling data does not
+    /// need strict ordering guarantees.
     #[inline(always)]
     pub fn increment(&self, opcode: Opcodes) {
-        let idx = opcode as usize;
-        if idx < BYTECODE_COUNT {
-            self.counts[idx].fetch_add(1, Ordering::Relaxed);
+        if let Some(counter) = self.counts.get(&opcode) {
+            counter.fetch_add(1, Ordering::Relaxed);
         }
     }
 
     /// Take a snapshot of all counters.
     ///
-    /// This reads all counters atomically (individually, not as a group)
-    /// and returns a copyable snapshot for analysis.
+    /// Each counter is read atomically (individually, not as a group).
     pub fn snapshot(&self) -> BytecodeSnapshot {
-        let mut counts = [0u64; BYTECODE_COUNT];
-        for (i, counter) in self.counts.iter().enumerate() {
-            counts[i] = counter.load(Ordering::Relaxed);
-        }
+        let counts = self
+            .counts
+            .iter()
+            .map(|(op, counter)| (*op, counter.load(Ordering::Relaxed)))
+            .collect();
         BytecodeSnapshot { counts }
     }
 
     /// Reset all counters to zero.
     pub fn reset(&self) {
-        for counter in &self.counts {
+        for counter in self.counts.values() {
             counter.store(0, Ordering::Relaxed);
         }
     }
@@ -70,50 +157,44 @@ impl BytecodeCounters {
     /// Get the count for a specific opcode.
     #[inline]
     pub fn get(&self, opcode: Opcodes) -> u64 {
-        let idx = opcode as usize;
-        if idx < BYTECODE_COUNT {
-            self.counts[idx].load(Ordering::Relaxed)
-        } else {
-            0
-        }
+        self.counts
+            .get(&opcode)
+            .map_or(0, |c| c.load(Ordering::Relaxed))
+    }
+}
+
+impl Default for BytecodeCounters {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 /// A point-in-time snapshot of bytecode execution counts.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct BytecodeSnapshot {
-    counts: [u64; BYTECODE_COUNT],
+    counts: HashMap<Opcodes, u64>,
 }
 
 impl BytecodeSnapshot {
     /// Get the count for a specific opcode.
     pub fn get(&self, opcode: Opcodes) -> u64 {
-        let idx = opcode as usize;
-        if idx < BYTECODE_COUNT {
-            self.counts[idx]
-        } else {
-            0
-        }
+        self.counts.get(&opcode).copied().unwrap_or(0)
     }
 
-    /// Get total instruction count across all opcodes.
+    /// Total instruction count across all opcodes.
     pub fn total(&self) -> u64 {
-        self.counts.iter().sum()
+        self.counts.values().sum()
     }
 
-    /// Returns an iterator over all opcodes with non-zero counts.
-    /// Yields `(Opcodes, count)` pairs in opcode order (not sorted by frequency).
-    pub fn iter(&self) -> impl Iterator<Item = (Opcodes, u64)> {
-        self.counts.iter().enumerate().filter_map(|(idx, &count)| {
-            if count > 0 {
-                Opcodes::from_u8(idx as u8).map(|op| (op, count))
-            } else {
-                None
-            }
-        })
+    /// Iterator over opcodes with non-zero counts, yielding `(Opcodes, count)` pairs.
+    /// Order is unspecified (HashMap iteration order).
+    pub fn iter(&self) -> impl Iterator<Item = (Opcodes, u64)> + '_ {
+        self.counts
+            .iter()
+            .filter_map(|(op, count)| if *count > 0 { Some((*op, *count)) } else { None })
     }
 
-    /// Format as a human-readable report.
+    /// Format as a human-readable report, sorted by count descending.
     pub fn format_report(&self) -> String {
         let total = self.total();
         if total == 0 {
@@ -140,19 +221,9 @@ impl BytecodeSnapshot {
 
         report
     }
-}
 
-impl Default for BytecodeSnapshot {
-    fn default() -> Self {
-        Self {
-            counts: [0u64; BYTECODE_COUNT],
-        }
-    }
-}
-
-impl BytecodeSnapshot {
-    /// Format as CSV with header row.
-    /// Format: opcode,count,percentage
+    /// Format as CSV with header row. Columns: opcode, count, percentage.
+    /// Rows are sorted by count descending.
     pub fn format_csv(&self) -> String {
         let total = self.total();
         let mut entries: Vec<_> = self.iter().collect();
@@ -228,20 +299,11 @@ mod tests {
 
         let snapshot = counters.snapshot();
         let entries: Vec<_> = snapshot.iter().collect();
-
-        // Verify all three opcodes are present
         assert_eq!(entries.len(), 3);
 
-        // Find each opcode and verify count
-        let add_entry = entries
-            .iter()
-            .find(|(op, _)| *op as u8 == Opcodes::ADD as u8);
-        let sub_entry = entries
-            .iter()
-            .find(|(op, _)| *op as u8 == Opcodes::SUB as u8);
-        let mul_entry = entries
-            .iter()
-            .find(|(op, _)| *op as u8 == Opcodes::MUL as u8);
+        let add_entry = entries.iter().find(|(op, _)| *op == Opcodes::ADD);
+        let sub_entry = entries.iter().find(|(op, _)| *op == Opcodes::SUB);
+        let mul_entry = entries.iter().find(|(op, _)| *op == Opcodes::MUL);
 
         assert_eq!(add_entry.unwrap().1, 1);
         assert_eq!(sub_entry.unwrap().1, 2);
@@ -262,12 +324,11 @@ mod tests {
         let mut sorted: Vec<_> = snapshot.iter().collect();
         sorted.sort_by(|a, b| b.1.cmp(&a.1));
 
-        // Compare using `as u8` since Opcodes doesn't implement PartialEq
-        assert_eq!(sorted[0].0 as u8, Opcodes::MUL as u8);
+        assert_eq!(sorted[0].0, Opcodes::MUL);
         assert_eq!(sorted[0].1, 3);
-        assert_eq!(sorted[1].0 as u8, Opcodes::SUB as u8);
+        assert_eq!(sorted[1].0, Opcodes::SUB);
         assert_eq!(sorted[1].1, 2);
-        assert_eq!(sorted[2].0 as u8, Opcodes::ADD as u8);
+        assert_eq!(sorted[2].0, Opcodes::ADD);
         assert_eq!(sorted[2].1, 1);
     }
 
@@ -284,24 +345,13 @@ mod tests {
         let snapshot = counters.snapshot();
         let csv = snapshot.format_csv();
 
-        // Verify header
         assert!(csv.starts_with("opcode,count,percentage\n"));
 
-        // Verify each line has proper format: opcode,count,percentage
         let lines: Vec<&str> = csv.lines().collect();
-        assert!(lines.len() >= 4); // header + 3 opcodes
-
-        // Verify MUL appears first (highest count)
+        assert!(lines.len() >= 4);
         assert!(lines[1].starts_with("MUL,3,"));
-
-        // Verify SUB appears second
         assert!(lines[2].starts_with("SUB,2,"));
-
-        // Verify ADD appears third
         assert!(lines[3].starts_with("ADD,1,"));
-
-        // Verify percentages are present - check they start with expected values
-        // (exact precision may vary slightly)
         assert!(lines[1].contains("50."));
         assert!(lines[2].contains("33."));
         assert!(lines[3].contains("16."));
@@ -312,8 +362,20 @@ mod tests {
         let counters = BytecodeCounters::new();
         let snapshot = counters.snapshot();
         let csv = snapshot.format_csv();
-
-        // Should only have header when no counts
         assert_eq!(csv, "opcode,count,percentage\n");
+    }
+
+    #[test]
+    fn test_counters_are_independent() {
+        // Two independent counter sets should not see each other's increments.
+        let a = BytecodeCounters::new();
+        let b = BytecodeCounters::new();
+
+        a.increment(Opcodes::ADD);
+        a.increment(Opcodes::ADD);
+        b.increment(Opcodes::ADD);
+
+        assert_eq!(a.get(Opcodes::ADD), 2);
+        assert_eq!(b.get(Opcodes::ADD), 1);
     }
 }

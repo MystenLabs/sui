@@ -6,8 +6,9 @@
 //! This module provides infrastructure for collecting bytecode execution statistics
 //! to enable profile-guided optimization of the interpreter dispatch loop.
 //!
-//! Bytecode statistics are exposed through the telemetry infrastructure via
-//! `MoveRuntimeTelemetry::bytecode_stats` when the `tracing` feature is enabled.
+//! Counters are per-`MoveRuntime` (held inside `TelemetryContext`). Snapshots
+//! are exposed through `MoveRuntimeTelemetry::bytecode_stats` when the
+//! `tracing` feature is enabled.
 //!
 //! # Usage
 //!
@@ -19,4 +20,4 @@
 
 pub mod counters;
 
-pub use counters::{BYTECODE_COUNTERS, BytecodeCounters, BytecodeSnapshot};
+pub use counters::{BytecodeCounters, BytecodeSnapshot};

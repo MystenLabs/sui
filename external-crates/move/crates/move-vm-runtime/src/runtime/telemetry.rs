@@ -9,7 +9,7 @@ use std::{
 
 use crate::cache::move_cache::MoveCache;
 #[cfg(feature = "tracing")]
-use crate::profiling::BytecodeSnapshot;
+use crate::profiling::{BytecodeCounters, BytecodeSnapshot};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -123,6 +123,10 @@ pub(crate) struct TelemetryContext {
     pub(crate) max_callstack_size: AtomicU64,
     /// Max Value Stack Size -- the maximum value stack size observed for this transaction
     pub(crate) max_valuestack_size: AtomicU64,
+    /// Per-runtime bytecode execution counters. Empty (no allocations) when the
+    /// `tracing` feature is disabled.
+    #[cfg(feature = "tracing")]
+    pub(crate) bytecode_counters: BytecodeCounters,
 }
 
 /// Transaction Telemetry Information
@@ -213,7 +217,16 @@ impl TelemetryContext {
             redundant_compilations: AtomicU64::new(0),
             max_callstack_size: AtomicU64::new(0),
             max_valuestack_size: AtomicU64::new(0),
+            #[cfg(feature = "tracing")]
+            bytecode_counters: BytecodeCounters::new(),
         }
+    }
+
+    /// Per-runtime bytecode counters. Available only when the `tracing`
+    /// feature is enabled.
+    #[cfg(feature = "tracing")]
+    pub(crate) fn bytecode_counters(&self) -> &BytecodeCounters {
+        &self.bytecode_counters
     }
 
     pub(crate) fn with_transaction_telemetry<F, R>(&self, f: F) -> R
@@ -351,7 +364,7 @@ impl TelemetryContext {
             total_time,
             total_count,
             #[cfg(feature = "tracing")]
-            bytecode_stats: crate::profiling::BYTECODE_COUNTERS.snapshot(),
+            bytecode_stats: self.bytecode_counters.snapshot(),
         }
     }
 }

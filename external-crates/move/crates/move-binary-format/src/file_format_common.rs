@@ -273,7 +273,7 @@ pub enum SerializedJumpTableFlag {
 #[rustfmt::skip]
 #[allow(non_camel_case_types)]
 #[repr(u8)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Opcodes {
     POP                            = 0x01,
     RET                            = 0x02,

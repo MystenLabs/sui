@@ -14,6 +14,8 @@ use crate::{
     shared::{gas::GasMeter, vm_pointer::VMPointer},
     try_block,
 };
+#[cfg(feature = "tracing")]
+use crate::profiling::BytecodeCounters;
 use move_binary_format::errors::*;
 use move_vm_config::runtime::VMConfig;
 use std::sync::Arc;
@@ -30,6 +32,7 @@ pub(crate) mod state;
 pub(crate) fn run(
     vtables: &mut VMDispatchTables,
     telemetry: &mut TransactionTelemetryContext,
+    #[cfg(feature = "tracing")] bytecode_counters: &BytecodeCounters,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
     tracer: &mut Option<VMTracer<'_>>,
@@ -81,7 +84,17 @@ pub(crate) fn run(
                     ))
             })?;
             let state = MachineState::new(Arc::clone(&vtables.interner), call_stack);
-            eval::run(state, vtables, telemetry, vm_config, extensions, tracer, gas_meter)
+            eval::run(
+                state,
+                vtables,
+                telemetry,
+                #[cfg(feature = "tracing")]
+                bytecode_counters,
+                vm_config,
+                extensions,
+                tracer,
+                gas_meter,
+            )
         }
     };
 

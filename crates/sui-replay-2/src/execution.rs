@@ -81,10 +81,6 @@ pub fn execute_transaction_to_effects(
 > {
     debug!(op = "execute_tx", phase = "start", "execution");
 
-    // Reset profiling counters before execution
-    #[cfg(feature = "tracing")]
-    sui_execution::profiling::BYTECODE_COUNTERS.reset();
-
     // TODO: Hook up...
     let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
 
@@ -180,9 +176,11 @@ pub fn execute_transaction_to_effects(
         }
     }
 
-    // Capture profiling snapshot after execution
+    // Capture profiling snapshot after execution. Per-runtime counters are
+    // not currently reachable through the `Executor` trait; see follow-up
+    // commit that adds a snapshot accessor.
     #[cfg(feature = "tracing")]
-    let bytecode_profile = sui_execution::profiling::BYTECODE_COUNTERS.snapshot();
+    let bytecode_profile = sui_execution::profiling::BytecodeSnapshot::default();
 
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((
