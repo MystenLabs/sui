@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Context;
+use anyhow::anyhow;
+use mysten_common::ZipDebugEqIteratorExt;
 use prometheus::Registry;
 use prost_types::FieldMask;
+use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
+use sui_sdk_types::Address;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
@@ -149,6 +153,146 @@ impl FullnodeClient {
             .await
             .map(|r| r.into_inner())
             .map_err(Into::into)
+    }
+
+    /// Construct and dry run a PTB to calculate the rewards for a list of staked SUI objects.
+    pub async fn calculate_rewards(
+        &self,
+        staked_sui_ids: &[Address],
+    ) -> Result<Vec<(Address, u64)>, Error> {
+        let mut ptb = proto::ProgrammableTransaction::default()
+            .with_inputs(vec![proto::Input::default().with_object_id("0x5")]);
+        let system_object = proto::Argument::new_input(0);
+
+        for id in staked_sui_ids {
+            let staked_sui = proto::Argument::new_input(ptb.inputs.len() as u16);
+            ptb.inputs.push(proto::Input::default().with_object_id(id));
+            ptb.commands.push(
+                proto::MoveCall::default()
+                    .with_package("0x3")
+                    .with_module("sui_system")
+                    .with_function("calculate_rewards")
+                    .with_arguments(vec![system_object, staked_sui])
+                    .into(),
+            );
+        }
+
+        let transaction = proto::Transaction::default()
+            .with_kind(ptb)
+            .with_sender("0x0");
+
+        let resp = self
+            .simulate_transaction(
+                transaction,
+                false,
+                false,
+                FieldMask::from_paths([
+                    "command_outputs.return_values.value",
+                    "transaction.effects.status",
+                ]),
+            )
+            .await?;
+
+        if !resp.transaction().effects().status().success() {
+            return Err(Error::Internal(anyhow!("transaction execution failed")));
+        }
+
+        if staked_sui_ids.len() != resp.command_outputs.len() {
+            return Err(Error::Internal(anyhow!(
+                "missing transaction command_outputs"
+            )));
+        }
+
+        let mut rewards = Vec::with_capacity(staked_sui_ids.len());
+        for (id, output) in staked_sui_ids.iter().zip_debug_eq(resp.command_outputs) {
+            let bcs_rewards = output
+                .return_values
+                .first()
+                .and_then(|o| o.value_opt())
+                .ok_or_else(|| Error::Internal(anyhow!("missing bcs")))?;
+
+            let reward =
+                if bcs_rewards.name() == "u64" && bcs_rewards.value().len() == size_of::<u64>() {
+                    u64::from_le_bytes(bcs_rewards.value().try_into().unwrap())
+                } else {
+                    return Err(Error::Internal(anyhow!("missing rewards")));
+                };
+            rewards.push((*id, reward));
+        }
+
+        Ok(rewards)
+    }
+
+    /// Construct and dry run a PTB to get the corresponding validator addresses for a list of
+    /// staking pool ids.
+    pub async fn get_validator_address_by_pool_id(
+        &self,
+        pool_ids: &[Address],
+    ) -> Result<Vec<(Address, Address)>, Error> {
+        let mut ptb = proto::ProgrammableTransaction::default()
+            .with_inputs(vec![proto::Input::default().with_object_id("0x5")]);
+        let system_object = proto::Argument::new_input(0);
+
+        for id in pool_ids {
+            let pool_id = proto::Argument::new_input(ptb.inputs.len() as u16);
+            ptb.inputs
+                .push(proto::Input::default().with_pure(id.into_inner().to_vec()));
+            ptb.commands.push(
+                proto::MoveCall::default()
+                    .with_package("0x3")
+                    .with_module("sui_system")
+                    .with_function("validator_address_by_pool_id")
+                    .with_arguments(vec![system_object, pool_id])
+                    .into(),
+            );
+        }
+
+        let transaction = proto::Transaction::default()
+            .with_kind(ptb)
+            .with_sender("0x0");
+
+        let resp = self
+            .simulate_transaction(
+                transaction,
+                false,
+                false,
+                FieldMask::from_paths([
+                    "command_outputs.return_values.value",
+                    "transaction.effects.status",
+                ]),
+            )
+            .await?;
+
+        if !resp.transaction().effects().status().success() {
+            return Err(Error::Internal(anyhow!("transaction execution failed")));
+        }
+
+        if pool_ids.len() != resp.command_outputs.len() {
+            return Err(Error::Internal(anyhow!(
+                "Mismatch between transaction inputs and command_outputs"
+            )));
+        }
+
+        let mut addresses = Vec::with_capacity(pool_ids.len());
+        for (id, output) in pool_ids.iter().zip_debug_eq(resp.command_outputs) {
+            let validator_address = output
+                .return_values
+                .first()
+                .and_then(|o| o.value_opt())
+                .ok_or_else(|| Error::Internal(anyhow!("missing bcs")))?;
+
+            let address = if validator_address.name() == "address"
+                && validator_address.value().len() == Address::LENGTH
+            {
+                Address::from_bytes(validator_address.value())
+                    .map_err(|e| Error::Internal(anyhow!(e)))?
+            } else {
+                return Err(Error::Internal(anyhow!("missing address")));
+            };
+            addresses.push((*id, address));
+        }
+
+        Ok(addresses)
     }
 }
 
