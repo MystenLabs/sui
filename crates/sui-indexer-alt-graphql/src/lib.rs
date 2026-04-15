@@ -299,7 +299,7 @@ struct SubscriptionsEnabled(bool);
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
     database_url: Option<Url>,
-    fullnode_args: Option<FullnodeArgs>,
+    fullnode_args: FullnodeArgs,
     db_args: DbArgs,
     kv_args: KvArgs,
     consistent_reader_args: ConsistentReaderArgs,
@@ -316,15 +316,9 @@ pub async fn start_rpc(
 
     // Create gRPC full node client wrapper. If left unconfigured, the client will not be stored in
     // the schema data, and resolvers that depend on it return `FeatureUnavailable`.
-    let fullnode_client = if let Some(args) = fullnode_args {
-        Some(
-            FullnodeClient::new(Some("graphql_fullnode"), args, registry)
-                .await
-                .context("Failed to create fullnode gRPC client")?,
-        )
-    } else {
-        None
-    };
+    let fullnode_client = FullnodeClient::new(Some("graphql_fullnode"), fullnode_args, registry)
+        .await
+        .context("Failed to create fullnode gRPC client")?;
 
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;

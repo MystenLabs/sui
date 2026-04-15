@@ -46,9 +46,9 @@ impl SubscriptionTestCluster {
 
         let service = start_graphql(
             None,
-            Some(FullnodeArgs {
-                fullnode_rpc_url: rpc_url.parse().unwrap(),
-            }),
+            FullnodeArgs {
+                fullnode_rpc_url: Some(rpc_url.parse().unwrap()),
+            },
             DbArgs::default(),
             KvArgs::default(),
             ConsistentReaderArgs::default(),

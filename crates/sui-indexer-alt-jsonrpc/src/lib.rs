@@ -312,16 +312,22 @@ pub async fn start_rpc(
         warn!("No fullnode rpc url provided, DelegationGovernance module will not be added.");
     }
 
-    if let Some(fullnode_grpc_url) = node_args.fullnode_grpc_url.as_deref() {
-        let fullnode_rpc_url =
-            Url::parse(fullnode_grpc_url).context("Invalid fullnode gRPC URL")?;
-        let fullnode_client = FullnodeClient::new(
-            Some("jsonrpc_alt_fullnode"),
-            FullnodeArgs { fullnode_rpc_url },
-            registry,
-        )
-        .await
-        .context("Failed to create fullnode gRPC client")?;
+    let fullnode_grpc_url = node_args
+        .fullnode_grpc_url
+        .as_deref()
+        .map(Url::parse)
+        .transpose()
+        .context("Invalid fullnode gRPC URL")?;
+
+    let fullnode_client = FullnodeClient::new(
+        Some("jsonrpc_alt_fullnode"),
+        FullnodeArgs { fullnode_rpc_url },
+        registry,
+    )
+    .await
+    .context("Failed to create fullnode gRPC client")?;
+
+    if let Some(fullnode_client) = fullnode_client {
         rpc.add_module(Write::new(fullnode_client, context.clone()))?;
     } else {
         warn!("No fullnode grpc url provided, Write module will not be added.");
