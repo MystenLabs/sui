@@ -1495,6 +1495,9 @@ exists
 remove_opt
 	public fun
 	0x2::dynamic_field
+replace
+	public fun
+	0x2::dynamic_field
 exists_with_type
 	public fun
 	0x2::dynamic_field
@@ -2336,6 +2339,9 @@ id
 	public fun
 	0x2::dynamic_object_field
 remove_opt
+	public fun
+	0x2::dynamic_object_field
+replace
 	public fun
 	0x2::dynamic_object_field
 exists_
