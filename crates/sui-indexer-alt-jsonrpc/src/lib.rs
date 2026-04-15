@@ -277,27 +277,26 @@ pub async fn start_rpc(
 ) -> anyhow::Result<Service> {
     let mut rpc = RpcService::new(rpc_args, registry).context("Failed to create RPC service")?;
 
-    let fullnode_client = node_args
+    let fullnode_args = node_args
         .fullnode_grpc_url
         .as_deref()
-        .map(|fullnode_grpc_url| {
-            let fullnode_rpc_url =
-                Url::parse(fullnode_grpc_url).context("Invalid fullnode gRPC URL")?;
-            FullnodeClient::new(
-                Some("jsonrpc_alt_fullnode"),
-                FullnodeArgs { fullnode_rpc_url },
-                registry,
-            )
+        .map(Url::parse)
+        .transpose()
+        .context("Invalid fullnode gRPC URL")?
+        .map(FullnodeArgs::new)
+        .unwrap_or_default();
+
+    let fullnode_client =
+        FullnodeClient::new(Some("jsonrpc_alt_fullnode"), fullnode_args, registry)
             .await
-            .context("Failed to create fullnode gRPC client")
-        })
-        .transpose()?;
+            .context("Failed to create fullnode gRPC client")?;
 
     let context = Context::new(
         database_url,
         db_args,
         kv_args,
         consistent_reader_args,
+        fullnode_client.clone(),
         rpc_config,
         rpc.metrics(),
         registry,
@@ -327,20 +326,6 @@ pub async fn start_rpc(
     } else {
         warn!("No fullnode rpc url provided, DelegationGovernance module will not be added.");
     }
-
-    let fullnode_args = node_args
-        .fullnode_grpc_url
-        .as_deref()
-        .map(Url::parse)
-        .transpose()
-        .context("Invalid fullnode gRPC URL")?
-        .map(FullnodeArgs::new)
-        .unwrap_or_default();
-
-    let fullnode_client =
-        FullnodeClient::new(Some("jsonrpc_alt_fullnode"), fullnode_args, registry)
-            .await
-            .context("Failed to create fullnode gRPC client")?;
 
     if let Some(fullnode_client) = fullnode_client {
         rpc.add_module(Write::new(fullnode_client, context.clone()))?;
