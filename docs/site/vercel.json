@@ -61,6 +61,11 @@
       "permanent": true
     },
     {
+      "source": "/standards/currency",
+      "destination": "/onchain-finance/fungible-tokens/currency",
+      "permanent": true
+    },
+    {
       "source": "/standards/wallet-standard",
       "destination": "/onchain-finance/asset-custody/wallets/wallet-standard",
       "permanent": true
@@ -4111,12 +4116,12 @@
     },
     {
       "source": "/guides/developer/coin",
-      "destination": "/onchain-finance/fungible-tokens",
+      "destination": "/onchain-finance/fungible-tokens/coin",
       "permanent": true
     },
     {
       "source": "/guides/developer/coin/currency",
-      "destination": "/onchain-finance/fungible-tokens",
+      "destination": "/onchain-finance/fungible-tokens/currency",
       "permanent": true
     },
     {
