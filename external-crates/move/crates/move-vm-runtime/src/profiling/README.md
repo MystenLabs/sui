@@ -9,16 +9,19 @@ times each opcode is dispatched so you can:
 
 ## Enabling
 
-Profiling lives behind the `tracing` feature. Build or test with:
+Profiling lives behind the `tracing` feature. `move-vm-runtime` is in the
+`external-crates/move` workspace, so `-p move-vm-runtime` commands must be
+run from inside that workspace. Commands for `sui-replay-2` run from the
+top-level sui workspace.
 
 ```bash
 # Build the runtime with profiling enabled
-cargo build --features move-vm-runtime/tracing
+(cd external-crates/move && cargo build -p move-vm-runtime --features tracing)
 
 # Run only the profiling tests
-cargo test  --features move-vm-runtime/tracing -- test_profiling
+(cd external-crates/move && cargo test -p move-vm-runtime --features tracing -- profiling)
 
-# Replay a transaction with profiling enabled
+# Replay a transaction with profiling enabled (from the sui workspace)
 cargo run --features tracing -p sui-replay-2 -- <args>
 ```
 
@@ -206,11 +209,11 @@ follow-up before relying on profiling in production.
 Run profiling tests:
 
 ```bash
-# move-vm-runtime
-cargo test --features tracing -p move-vm-runtime -- profiling
+# move-vm-runtime (runs from the move workspace)
+(cd external-crates/move && cargo test -p move-vm-runtime --features tracing -- profiling)
 
-# sui-replay-2
-cargo test --features tracing -p sui-replay-2 -- profiling
+# sui-replay-2 (runs from the sui workspace)
+cargo test -p sui-replay-2 --features tracing -- profiling
 ```
 
 ## Extending
