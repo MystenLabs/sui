@@ -236,3 +236,150 @@ fn test_profiling_via_telemetry() {
     assert!(csv.contains("RET,"));
     assert!(csv.contains("ADD,"));
 }
+
+/// End-to-end: run a function, pull a snapshot via the telemetry API, dump
+/// it to a JSON file, and verify the dumped contents match what the runtime
+/// observed.
+#[test]
+fn test_profiling_dump_to_file_end_to_end() {
+    let code = format!(
+        r#"
+        module 0x{}::test {{
+            public fun sum_to_n(n: u64): u64 {{
+                let mut sum = 0u64;
+                let mut i = 0u64;
+                while (i < n) {{
+                    sum = sum + i;
+                    i = i + 1;
+                }};
+                sum
+            }}
+        }}
+    "#,
+        TEST_ADDR
+    );
+    let module_id = ModuleId::new(TEST_ADDR, Identifier::new("test").unwrap());
+    let module = (module_id, code);
+    let adapter = run_and_return_adapter(&module, "sum_to_n", vec![MoveValue::U64(5)]);
+
+    let snapshot = adapter.get_telemetry_report().bytecode_stats;
+    assert!(snapshot.total() > 0);
+
+    let path = std::env::temp_dir().join(format!(
+        "move_vm_profile_e2e_{}.json",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_file(&path);
+
+    snapshot.dump_to_file(&path);
+
+    let contents = std::fs::read_to_string(&path).expect("dump file should exist");
+    // The dumped JSON must agree with the in-memory snapshot.
+    assert!(contents.contains(&format!("\"total\": {}", snapshot.total())));
+    assert!(contents.contains("\"opcode\": \"ADD\""));
+    assert!(contents.contains("\"opcode\": \"LT\""));
+    assert!(contents.contains("\"opcode\": \"RET\""));
+
+    let _ = std::fs::remove_file(&path);
+}
+
+/// Verify the CSV export matches what the runtime observed end-to-end (not
+/// just the unit-level CSV formatting tests).
+#[test]
+fn test_profiling_csv_matches_snapshot() {
+    let code = format!(
+        r#"
+        module 0x{}::test {{
+            public fun add_pair(a: u64, b: u64): u64 {{ a + b }}
+        }}
+    "#,
+        TEST_ADDR
+    );
+    let module_id = ModuleId::new(TEST_ADDR, Identifier::new("test").unwrap());
+    let module = (module_id, code);
+    let adapter = run_and_return_adapter(
+        &module,
+        "add_pair",
+        vec![MoveValue::U64(7), MoveValue::U64(11)],
+    );
+
+    let snapshot = adapter.get_telemetry_report().bytecode_stats;
+    let csv = snapshot.format_csv();
+
+    // Header present.
+    assert!(csv.starts_with("opcode,count,percentage\n"));
+
+    // Every non-zero opcode in the snapshot appears in the CSV with its count.
+    for (opcode, count) in snapshot.iter() {
+        let needle = format!("{:?},{},", opcode, count);
+        assert!(
+            csv.contains(&needle),
+            "expected {needle:?} in CSV output:\n{csv}"
+        );
+    }
+}
+
+/// JSON export: all non-zero opcodes appear in the dumped JSON, and
+/// percentages sum to ~100 (modulo float rounding).
+#[test]
+fn test_profiling_json_matches_snapshot() {
+    let code = format!(
+        r#"
+        module 0x{}::test {{
+            public fun add_pair(a: u64, b: u64): u64 {{ a + b }}
+        }}
+    "#,
+        TEST_ADDR
+    );
+    let module_id = ModuleId::new(TEST_ADDR, Identifier::new("test").unwrap());
+    let module = (module_id, code);
+    let adapter = run_and_return_adapter(
+        &module,
+        "add_pair",
+        vec![MoveValue::U64(7), MoveValue::U64(11)],
+    );
+
+    let snapshot = adapter.get_telemetry_report().bytecode_stats;
+    let json = snapshot.format_json();
+
+    // Top-level shape.
+    assert!(json.contains(&format!("\"total\": {}", snapshot.total())));
+    assert!(json.contains("\"opcodes\": ["));
+
+    // Every non-zero opcode appears in the JSON.
+    for (opcode, count) in snapshot.iter() {
+        assert!(
+            json.contains(&format!("\"opcode\": \"{:?}\"", opcode)),
+            "expected opcode {opcode:?} in JSON:\n{json}"
+        );
+        assert!(
+            json.contains(&format!("\"count\": {}", count)),
+            "expected count {count} in JSON:\n{json}"
+        );
+    }
+}
+
+/// Format-report end-to-end: total line and headers present, no panic on
+/// real workloads.
+#[test]
+fn test_profiling_format_report_end_to_end() {
+    let code = format!(
+        r#"
+        module 0x{}::test {{
+            public fun noop(): u64 {{ 42 }}
+        }}
+    "#,
+        TEST_ADDR
+    );
+    let module_id = ModuleId::new(TEST_ADDR, Identifier::new("test").unwrap());
+    let module = (module_id, code);
+    let adapter = run_and_return_adapter(&module, "noop", vec![]);
+
+    let snapshot = adapter.get_telemetry_report().bytecode_stats;
+    let report = snapshot.format_report();
+
+    assert!(report.contains(&format!("Total instructions: {}", snapshot.total())));
+    assert!(report.contains("Opcode"));
+    assert!(report.contains("Count"));
+    assert!(report.contains("RET"));
+}

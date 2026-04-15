@@ -295,18 +295,25 @@ impl BytecodeSnapshot {
         out
     }
 
+    /// Write this snapshot's JSON representation to the given path.
+    ///
+    /// Errors are logged via `tracing::warn!` rather than propagated — a
+    /// failed profile dump should not fail execution.
+    pub fn dump_to_file(&self, path: impl AsRef<std::path::Path>) {
+        let path = path.as_ref();
+        match std::fs::write(path, self.format_json()) {
+            Ok(()) => tracing::debug!(path = %path.display(), "wrote bytecode profile"),
+            Err(e) => {
+                tracing::warn!(path = %path.display(), error = %e, "failed to write bytecode profile")
+            }
+        }
+    }
+
     /// If `MOVE_VM_DUMP_PROFILE_FILE` is set to a path, write this snapshot's
     /// JSON representation there. Otherwise a no-op.
-    ///
-    /// Errors (bad path, I/O failure) are logged via `tracing::warn!` rather
-    /// than propagated — a failed profile dump should not fail execution.
     pub fn maybe_dump_to_env_file(&self) {
-        let Ok(path) = std::env::var("MOVE_VM_DUMP_PROFILE_FILE") else {
-            return;
-        };
-        match std::fs::write(&path, self.format_json()) {
-            Ok(()) => tracing::debug!(%path, "wrote bytecode profile"),
-            Err(e) => tracing::warn!(%path, error = %e, "failed to write bytecode profile"),
+        if let Ok(path) = std::env::var("MOVE_VM_DUMP_PROFILE_FILE") {
+            self.dump_to_file(path);
         }
     }
 }
@@ -470,4 +477,54 @@ mod tests {
         assert!(json.contains("\"opcodes\": ["));
     }
 
+    #[test]
+    fn test_format_report() {
+        let counters = BytecodeCounters::new();
+        counters.increment(Opcodes::ADD);
+        counters.increment(Opcodes::SUB);
+        counters.increment(Opcodes::SUB);
+
+        let report = counters.snapshot().format_report();
+        assert!(report.contains("Total instructions: 3"));
+        assert!(report.contains("ADD"));
+        assert!(report.contains("SUB"));
+        // SUB has higher count, should appear first.
+        assert!(report.find("SUB").unwrap() < report.find("ADD").unwrap());
+    }
+
+    #[test]
+    fn test_format_report_empty() {
+        let report = BytecodeCounters::new().snapshot().format_report();
+        assert_eq!(report, "No bytecode executions recorded.");
+    }
+
+    #[test]
+    fn test_dump_to_file_writes_json() {
+        let path = std::env::temp_dir().join(format!(
+            "move_vm_profile_dump_test_{}.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+
+        let counters = BytecodeCounters::new();
+        counters.increment(Opcodes::ADD);
+        counters.increment(Opcodes::RET);
+        counters.snapshot().dump_to_file(&path);
+
+        let contents = std::fs::read_to_string(&path).expect("file should exist");
+        assert!(contents.contains("\"total\": 2"));
+        assert!(contents.contains("\"opcode\": \"ADD\""));
+        assert!(contents.contains("\"opcode\": \"RET\""));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn test_dump_to_file_failure_does_not_panic() {
+        // Writing to a path under a non-existent directory should log a
+        // warning but not panic — profile dumps must never fail execution.
+        let path = std::path::PathBuf::from("/this/path/definitely/does/not/exist/profile.json");
+        BytecodeCounters::new().snapshot().dump_to_file(&path);
+        // No assertion needed — the lack of a panic is the test.
+    }
 }
