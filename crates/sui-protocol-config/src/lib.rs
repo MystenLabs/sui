@@ -28,7 +28,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 122;
+const MAX_PROTOCOL_VERSION: u64 = 123;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -1285,8 +1285,8 @@ pub struct ProtocolConfig {
     /// Maximum size of a Move package object, in bytes. Enforced by the Sui adapter at the end of a publish transaction.
     max_move_package_size: Option<u64>,
 
-    /// Maximum size of a Move package with its dependencies, in bytes. This limits the overall size of a loaded package and its dependencies.
-    /// TODO: Enforced by the <WHO?> at <WHERE?>.
+    /// Maximum size of a Move package with its transitive dependencies, in bytes. Enforced by
+    /// `MovePackage::new_initial` / `new_upgraded` at publish / upgrade time.
     max_total_linkage_size: Option<u64>,
 
     /// Max number of publish or upgrade commands allowed in a programmable transaction block.
@@ -4588,10 +4588,6 @@ impl ProtocolConfig {
                     cfg.event_emit_auth_stream_cost = Some(52);
                     cfg.feature_flags.better_loader_errors = true;
                     cfg.feature_flags.generate_df_type_layouts = true;
-                    cfg.max_package_dependencies = Some(100);
-                    cfg.max_move_package_size = Some(1024 * 1024);
-                    // Product of previous package and dependency limits.
-                    cfg.max_total_linkage_size = Some(32 * 100 * 1024);
                 }
                 99 => {
                     cfg.feature_flags.use_new_commit_handler = true;
@@ -4809,6 +4805,15 @@ impl ProtocolConfig {
                         .early_return_receive_object_mismatched_type = true;
                 }
                 122 => {}
+                123 => {
+                    // Raise per-package and per-dependency caps, but add a total-linkage
+                    // cap so the on-disk footprint of a package plus its transitive deps
+                    // can't grow as the product of the two previous limits.
+                    cfg.max_package_dependencies = Some(100);
+                    cfg.max_move_package_size = Some(1024 * 1024);
+                    // Product of previous package and dependency limits.
+                    cfg.max_total_linkage_size = Some(32 * 100 * 1024);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
