@@ -49,7 +49,6 @@ sui-indexer-alt-jsonrpc.workspace = true
 sui-indexer-alt-reader.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-pg-db.workspace = true
-sui-sql-macro.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc.workspace = true
 sui-storage.workspace = true

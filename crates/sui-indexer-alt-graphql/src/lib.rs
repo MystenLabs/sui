@@ -343,11 +343,7 @@ pub async fn start_rpc(
         pg_loader.clone(),
     );
 
-    let package_store = Arc::new(PackageCache::new_with_capacity(
-        DbPackageStore::new(pg_loader.clone()),
-        NonZeroUsize::new(config.limits.package_cache_capacity)
-            .expect("package_cache_capacity must be non-zero"),
-    ));
+    let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
 
     let system_package_task = SystemPackageTask::new(
         system_package_task_args,
@@ -372,7 +368,12 @@ pub async fn start_rpc(
     );
 
     let streaming_task = subscription_args.checkpoint_stream_url.map(|uri| {
-        task::streaming::CheckpointStreamTask::new(uri, &config.subscription, package_store.clone())
+        let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
+            package_store.clone(),
+            NonZeroUsize::new(config.subscription.package_cache_capacity)
+                .expect("package_cache_capacity must be non-zero"),
+        ));
+        task::streaming::CheckpointStreamTask::new(uri, &config.subscription, streaming_packages)
     });
 
     let mut rpc = rpc

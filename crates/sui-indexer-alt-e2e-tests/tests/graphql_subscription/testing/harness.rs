@@ -281,8 +281,9 @@ pub fn graphql_redactions() -> insta::Settings {
 
 /// Poll the kv_packages watermark until it reaches `target_checkpoint`.
 pub async fn wait_for_kv_packages(db: &sui_pg_db::temp::TempDb, target_checkpoint: u64) {
-    use diesel::QueryableByName;
-    use diesel::sql_types::BigInt;
+    use diesel::ExpressionMethods;
+    use diesel::QueryDsl;
+    use sui_indexer_alt_schema::schema::watermarks::dsl as w;
 
     let reader = sui_indexer_alt_reader::pg_reader::PgReader::new(
         Some("wait_for_kv_packages"),
@@ -296,20 +297,16 @@ pub async fn wait_for_kv_packages(db: &sui_pg_db::temp::TempDb, target_checkpoin
     tokio::time::timeout(Duration::from_secs(30), async {
         loop {
             if let Ok(mut conn) = reader.connect().await {
-                #[derive(QueryableByName)]
-                struct W {
-                    #[diesel(sql_type = BigInt)]
-                    checkpoint_hi_inclusive: i64,
-                }
-                if let Ok(rows) = conn
-                    .results::<_, _, W>(sui_sql_macro::query!(
-                        "SELECT checkpoint_hi_inclusive FROM watermarks \
-                         WHERE pipeline = 'kv_packages'"
-                    ))
+                if let Ok(hi) = conn
+                    .results(
+                        w::watermarks
+                            .select(w::checkpoint_hi_inclusive)
+                            .filter(w::pipeline.eq("kv_packages")),
+                    )
                     .await
-                    && rows
+                    && hi
                         .first()
-                        .is_some_and(|r| r.checkpoint_hi_inclusive as u64 >= target_checkpoint)
+                        .is_some_and(|&cp: &i64| cp as u64 >= target_checkpoint)
                 {
                     return;
                 }
