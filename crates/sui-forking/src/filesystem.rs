@@ -391,7 +391,7 @@ impl FilesystemStore {
         } else {
             None
         };
-        if current.map_or(true, |c| sequence > c) {
+        if current.is_none_or(|c| sequence > c) {
             fs::write(&path, sequence.to_string()).with_context(|| {
                 format!(
                     "Failed to write latest checkpoint marker: {}",
