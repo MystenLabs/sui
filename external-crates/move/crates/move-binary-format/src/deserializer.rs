@@ -2021,7 +2021,7 @@ impl SerializedJumpTableFlag {
 }
 
 fn load_opcode(value: u8) -> BinaryLoaderResult<Opcodes> {
-    Opcodes::from_u8(value).ok_or_else(|| PartialVMError::new(StatusCode::UNKNOWN_OPCODE))
+    Opcodes::try_from(value).map_err(|_| PartialVMError::new(StatusCode::UNKNOWN_OPCODE))
 }
 
 //
