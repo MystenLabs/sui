@@ -123,7 +123,7 @@ impl FilesystemStore {
     }
 
     /// Return the directory for a specific transaction.
-    fn transaction_dir(&self, digest: &TransactionDigest) -> PathBuf {
+    fn tx_dir(&self, digest: &TransactionDigest) -> PathBuf {
         self.transactions_dir().join(digest.to_string())
     }
 
@@ -134,7 +134,7 @@ impl FilesystemStore {
         digest: &TransactionDigest,
         transaction: &VerifiedTransaction,
     ) -> Result<(), Error> {
-        let path = self.transaction_dir(digest).join(TX_DATA_FILE);
+        let path = self.tx_dir(digest).join(TX_DATA_FILE);
         self.write_bcs_file(&path, transaction.inner())
     }
 
@@ -144,7 +144,7 @@ impl FilesystemStore {
         digest: &TransactionDigest,
         effects: &TransactionEffects,
     ) -> Result<(), Error> {
-        let path = self.transaction_dir(digest).join(TX_EFFECTS_FILE);
+        let path = self.tx_dir(digest).join(TX_EFFECTS_FILE);
         self.write_bcs_file(&path, effects)
     }
 
@@ -154,7 +154,7 @@ impl FilesystemStore {
         digest: &TransactionDigest,
         events: &TransactionEvents,
     ) -> Result<(), Error> {
-        let path = self.transaction_dir(digest).join(TX_EVENTS_FILE);
+        let path = self.tx_dir(digest).join(TX_EVENTS_FILE);
         self.write_bcs_file(&path, events)
     }
 
@@ -163,7 +163,7 @@ impl FilesystemStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, Error> {
-        let path = self.transaction_dir(digest).join(TX_DATA_FILE);
+        let path = self.tx_dir(digest).join(TX_DATA_FILE);
         if !path.exists() {
             return Ok(None);
         }
@@ -176,7 +176,7 @@ impl FilesystemStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<TransactionEffects>, Error> {
-        let path = self.transaction_dir(digest).join(TX_EFFECTS_FILE);
+        let path = self.tx_dir(digest).join(TX_EFFECTS_FILE);
         if !path.exists() {
             return Ok(None);
         }
@@ -188,7 +188,7 @@ impl FilesystemStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<TransactionEvents>, Error> {
-        let path = self.transaction_dir(digest).join(TX_EVENTS_FILE);
+        let path = self.tx_dir(digest).join(TX_EVENTS_FILE);
         if !path.exists() {
             return Ok(None);
         }
