@@ -6,11 +6,6 @@
       "permanent": true
     },
     {
-      "source": "/guides/operator/:path*",
-      "destination": "/operators/:path*",
-      "permanent": true
-    },
-    {
       "source": "/concepts/tokenomics/:path*",
       "destination": "/develop/sui-architecture/:path*",
       "permanent": true
@@ -4172,6 +4167,86 @@
     {
       "source": "/guides/developer/nft/asset-tokenization",
       "destination": "/onchain-finance/tokenized-assets/asset-tokenization",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/sui-full-node",
+      "destination": "/operators/full-node/sui-full-node",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/monitoring",
+      "destination": "/operators/full-node/monitoring",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/updates",
+      "destination": "/operators/full-node/updates",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/bridge-node-configuration",
+      "destination": "/operators/bridge-node-configuration",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/data-management",
+      "destination": "/operators/data-management",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/archival-stack-setup",
+      "destination": "/operators/data-management/archival-stack-setup",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/archives",
+      "destination": "/operators/data-management/archives",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/indexer-stack-setup",
+      "destination": "/operators/data-management/indexer-stack-setup",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/managing-data",
+      "destination": "/operators/data-management/managing-data",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/remote-store-setup",
+      "destination": "/operators/data-management/remote-store-setup",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/exchange-integration",
+      "destination": "/operators/exchange-integration",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/genesis",
+      "destination": "/operators/genesis",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/observability",
+      "destination": "/operators/observability",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/snapshots",
+      "destination": "/operators/snapshots",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/validator",
+      "destination": "/operators/validator",
+      "permanent": true
+    },
+    {
+      "source": "/guides/operator/alerts",
+      "destination": "/operators/validator/alerts",
       "permanent": true
     }
   ],
