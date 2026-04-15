@@ -277,6 +277,22 @@ pub async fn start_rpc(
 ) -> anyhow::Result<Service> {
     let mut rpc = RpcService::new(rpc_args, registry).context("Failed to create RPC service")?;
 
+    let fullnode_client = node_args
+        .fullnode_grpc_url
+        .as_deref()
+        .map(|fullnode_grpc_url| {
+            let fullnode_rpc_url =
+                Url::parse(fullnode_grpc_url).context("Invalid fullnode gRPC URL")?;
+            FullnodeClient::new(
+                Some("jsonrpc_alt_fullnode"),
+                FullnodeArgs { fullnode_rpc_url },
+                registry,
+            )
+            .await
+            .context("Failed to create fullnode gRPC client")
+        })
+        .transpose()?;
+
     let context = Context::new(
         database_url,
         db_args,
@@ -297,6 +313,7 @@ pub async fn start_rpc(
     rpc.add_module(Checkpoints(context.clone()))?;
     rpc.add_module(Coins(context.clone()))?;
     rpc.add_module(DynamicFields(context.clone()))?;
+    rpc.add_module(Governance::new(context.clone()))?;
     rpc.add_module(MoveUtils(context.clone()))?;
     rpc.add_module(NameService(context.clone()))?;
     rpc.add_module(Objects(context.clone()))?;
@@ -328,7 +345,9 @@ pub async fn start_rpc(
     if let Some(fullnode_client) = fullnode_client {
         rpc.add_module(Write::new(fullnode_client, context.clone()))?;
     } else {
-        warn!("No fullnode grpc url provided, Governance and Write modules will not be added.");
+        warn!(
+            "No fullnode grpc url provided, Write module will not be added, and `getStakes` and `getStakesByIds` will not be availble on Governance module."
+        );
     }
 
     let s_rpc = rpc.run().await.context("Failed to start RPC service")?;

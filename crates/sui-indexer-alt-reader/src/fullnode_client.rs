@@ -3,6 +3,7 @@
 
 use anyhow::Context;
 use anyhow::anyhow;
+use async_graphql::dataloader::DataLoader;
 use mysten_common::ZipDebugEqIteratorExt;
 use prometheus::Registry;
 use prost_types::FieldMask;
@@ -79,6 +80,10 @@ impl FullnodeClient {
         let execution_client = TransactionExecutionServiceClient::new(layered);
 
         Ok(Some(Self { execution_client }))
+    }
+
+    pub fn as_data_loader(&self) -> DataLoader<Self> {
+        DataLoader::new(self.clone(), tokio::spawn)
     }
 
     /// Execute a transaction on the Sui network via gRPC.

@@ -87,16 +87,12 @@ trait DelegationGovernanceApi {
 
 pub(crate) struct Governance {
     ctx: Context,
-    execution_loader: Arc<DataLoader<FullnodeClient>>,
 }
 pub(crate) struct DelegationGovernance(HttpClient);
 
 impl Governance {
-    pub(crate) fn new(ctx: Context, execution_loader: Arc<DataLoader<FullnodeClient>>) -> Self {
-        Self {
-            ctx,
-            execution_loader,
-        }
+    pub(crate) fn new(ctx: Context) -> Self {
+        Self { ctx }
     }
 }
 
@@ -120,7 +116,7 @@ impl GovernanceApiServer for Governance {
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
-        Ok(delegated_stakes_response(&self.ctx, &self.execution_loader, staked_sui_ids).await?)
+        Ok(delegated_stakes_response(&self.ctx, staked_sui_ids).await?)
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
@@ -163,7 +159,7 @@ impl GovernanceApiServer for Governance {
             }
         }
 
-        Ok(delegated_stakes_response(&self.ctx, &self.execution_loader, all_stake_ids).await?)
+        Ok(delegated_stakes_response(&self.ctx, all_stake_ids).await?)
     }
 }
 
@@ -258,9 +254,10 @@ async fn latest_sui_system_state_response(
 /// never existed) will be omitted from the response.
 async fn delegated_stakes_response(
     ctx: &Context,
-    execution_loader: &DataLoader<FullnodeClient>,
     stake_ids: Vec<ObjectID>,
 ) -> Result<Vec<DelegatedStake>, RpcError> {
+    let execution_loader = ctx.execution_loader()?;
+
     let staked_sui_futures = stake_ids.iter().map(|id| load_live(ctx, *id));
     let maybe_objects = future::try_join_all(staked_sui_futures)
         .await
