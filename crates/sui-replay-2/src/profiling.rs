@@ -1,0 +1,295 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Bytecode profile dumping policy for the replay tool.
+//!
+//! The profiling counters in the Move VM accumulate monotonically over the
+//! lifetime of a `MoveRuntime`. When replaying many transactions in one
+//! process, the choice of *when* to dump matters; this module captures that
+//! choice as an enum and applies it from the replay loop.
+//!
+//! # Modes
+//!
+//! Set `MOVE_VM_PROFILE_MODE` to one of:
+//!
+//! - `per-transaction` — reset counters before each transaction; emit a
+//!   per-transaction snapshot afterwards. With `MOVE_VM_DUMP_PROFILE_FILE`
+//!   set, the file is overwritten on each transaction (so the final file
+//!   reflects the last replayed transaction only).
+//! - `per-transaction-file` — same as above but the dump file path has the
+//!   transaction digest spliced in as `<base>.<digest>.json`, producing one
+//!   file per transaction.
+//! - `end-of-replay` (default) — accumulate counts across the whole replay
+//!   session and emit a single snapshot at the end.
+
+use std::path::PathBuf;
+use sui_execution::Executor;
+use sui_types::digests::TransactionDigest;
+
+/// Minimal interface the profile-mode dispatcher needs from an executor.
+/// Lets us unit-test the per-mode wiring without standing up the full
+/// `Executor` trait surface.
+///
+/// Production code uses [`ExecutorProfileSink`] to bridge an
+/// `&dyn Executor` into this trait.
+pub trait ProfileSink {
+    fn emit_bytecode_profile(&self);
+    fn reset_bytecode_profile(&self);
+    #[cfg(feature = "tracing")]
+    fn bytecode_profile_snapshot(
+        &self,
+    ) -> Option<sui_execution::profiling::BytecodeSnapshot>;
+}
+
+/// Adapter that forwards `ProfileSink` calls to the underlying `Executor`.
+/// Avoids the lack of cross-trait upcasting in Rust (we can't cast
+/// `&dyn Executor` to `&dyn ProfileSink` directly).
+pub struct ExecutorProfileSink<'a>(pub &'a dyn Executor);
+
+impl ProfileSink for ExecutorProfileSink<'_> {
+    fn emit_bytecode_profile(&self) {
+        self.0.emit_bytecode_profile();
+    }
+    fn reset_bytecode_profile(&self) {
+        self.0.reset_bytecode_profile();
+    }
+    #[cfg(feature = "tracing")]
+    fn bytecode_profile_snapshot(
+        &self,
+    ) -> Option<sui_execution::profiling::BytecodeSnapshot> {
+        self.0.bytecode_profile_snapshot()
+    }
+}
+
+const MODE_ENV: &str = "MOVE_VM_PROFILE_MODE";
+const DUMP_PATH_ENV: &str = "MOVE_VM_DUMP_PROFILE_FILE";
+
+/// Where bytecode profile snapshots get emitted relative to transaction
+/// boundaries during replay.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BytecodeProfileMode {
+    /// Reset before each transaction; dump after each transaction (file gets
+    /// overwritten on every transaction).
+    PerTransaction,
+    /// Reset before each transaction; write each per-transaction snapshot to
+    /// `<base>.<digest>.json`.
+    PerTransactionFile,
+    /// Accumulate across the entire replay session; emit once when the
+    /// session ends.
+    #[default]
+    EndOfReplay,
+}
+
+impl BytecodeProfileMode {
+    /// Parse the `MOVE_VM_PROFILE_MODE` env var; returns the default if unset
+    /// or unrecognised. An unrecognised value is logged at warn level so it
+    /// doesn't fail silently.
+    pub fn from_env() -> Self {
+        let Ok(raw) = std::env::var(MODE_ENV) else {
+            return Self::default();
+        };
+        match raw.to_ascii_lowercase().as_str() {
+            "per-transaction" | "per_transaction" | "pertx" => Self::PerTransaction,
+            "per-transaction-file" | "per_transaction_file" | "pertxfile" => {
+                Self::PerTransactionFile
+            }
+            "end-of-replay" | "end_of_replay" | "end" | "session" => Self::EndOfReplay,
+            other => {
+                tracing::warn!(
+                    %other,
+                    default = ?Self::default(),
+                    "unknown {MODE_ENV} value; falling back to default",
+                );
+                Self::default()
+            }
+        }
+    }
+
+    /// Hook called before a transaction begins executing.
+    pub fn before_transaction(self, executor: &dyn ProfileSink) {
+        match self {
+            Self::PerTransaction | Self::PerTransactionFile => {
+                executor.reset_bytecode_profile();
+            }
+            Self::EndOfReplay => {} // accumulate across transactions
+        }
+    }
+
+    /// Hook called after a transaction finishes executing.
+    #[cfg(feature = "tracing")]
+    pub fn after_transaction(self, executor: &dyn ProfileSink, digest: &TransactionDigest) {
+        match self {
+            Self::PerTransaction => executor.emit_bytecode_profile(),
+            Self::PerTransactionFile => {
+                if let Some(snapshot) = executor.bytecode_profile_snapshot() {
+                    if let Some(path) = per_tx_path(digest) {
+                        snapshot.dump_to_file(path);
+                    } else {
+                        // No base path configured — fall back to the
+                        // tracing log so the data is not silently dropped.
+                        tracing::info!(
+                            total = snapshot.total(),
+                            profile = %snapshot.format_csv(),
+                            %digest,
+                            "move-vm bytecode profile",
+                        );
+                    }
+                }
+            }
+            Self::EndOfReplay => {} // wait for end_of_session
+        }
+    }
+
+    #[cfg(not(feature = "tracing"))]
+    pub fn after_transaction(self, _executor: &dyn ProfileSink, _digest: &TransactionDigest) {}
+
+    /// Hook called once when the replay session ends.
+    pub fn end_of_session(self, executor: &dyn ProfileSink) {
+        if matches!(self, Self::EndOfReplay) {
+            executor.emit_bytecode_profile();
+        }
+    }
+}
+
+/// Compute the per-transaction dump path: `<base>.<digest>.json` if
+/// `MOVE_VM_DUMP_PROFILE_FILE` is set, otherwise `None`.
+fn per_tx_path(digest: &TransactionDigest) -> Option<PathBuf> {
+    let base = std::env::var(DUMP_PATH_ENV).ok()?;
+    let base = PathBuf::from(base);
+    // `<stem>.<digest>.<ext>` if there's an extension, otherwise `<base>.<digest>`.
+    let stem = base.file_stem().and_then(|s| s.to_str()).unwrap_or("profile");
+    let ext = base.extension().and_then(|e| e.to_str()).unwrap_or("json");
+    let parent = base.parent().filter(|p| !p.as_os_str().is_empty());
+    let filename = format!("{}.{}.{}", stem, digest, ext);
+    Some(match parent {
+        Some(p) => p.join(filename),
+        None => PathBuf::from(filename),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Tiny fake that records which `ProfileSink` hooks were called so we
+    /// can verify the per-mode dispatch logic without standing up a full VM.
+    struct RecordingSink {
+        emit_calls: AtomicUsize,
+        reset_calls: AtomicUsize,
+        snapshot_calls: AtomicUsize,
+    }
+
+    impl RecordingSink {
+        fn new() -> Self {
+            Self {
+                emit_calls: AtomicUsize::new(0),
+                reset_calls: AtomicUsize::new(0),
+                snapshot_calls: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    impl ProfileSink for RecordingSink {
+        fn emit_bytecode_profile(&self) {
+            self.emit_calls.fetch_add(1, Ordering::SeqCst);
+        }
+        fn reset_bytecode_profile(&self) {
+            self.reset_calls.fetch_add(1, Ordering::SeqCst);
+        }
+        #[cfg(feature = "tracing")]
+        fn bytecode_profile_snapshot(
+            &self,
+        ) -> Option<sui_execution::profiling::BytecodeSnapshot> {
+            self.snapshot_calls.fetch_add(1, Ordering::SeqCst);
+            None
+        }
+    }
+
+    #[test]
+    fn test_per_tx_path_with_extension() {
+        let digest = TransactionDigest::ZERO;
+        let base = PathBuf::from("/tmp/profile.json");
+        let stem = base.file_stem().and_then(|s| s.to_str()).unwrap();
+        let ext = base.extension().and_then(|e| e.to_str()).unwrap();
+        let parent = base.parent().unwrap();
+        let result = parent.join(format!("{}.{}.{}", stem, digest, ext));
+        assert_eq!(
+            result.to_string_lossy(),
+            format!("/tmp/profile.{}.json", digest)
+        );
+    }
+
+    #[test]
+    fn test_per_tx_path_no_extension() {
+        let digest = TransactionDigest::ZERO;
+        let base = PathBuf::from("/tmp/profile");
+        let stem = base.file_stem().and_then(|s| s.to_str()).unwrap();
+        let parent = base.parent().unwrap();
+        let result = parent.join(format!("{}.{}.{}", stem, digest, "json"));
+        assert_eq!(
+            result.to_string_lossy(),
+            format!("/tmp/profile.{}.json", digest)
+        );
+    }
+
+    #[test]
+    fn test_default_mode() {
+        assert_eq!(BytecodeProfileMode::default(), BytecodeProfileMode::EndOfReplay);
+    }
+
+    /// `PerTransaction` mode: reset on entry, emit on exit, no end-of-session
+    /// emission. Only runs with the `tracing` feature, which is the only
+    /// configuration where the per-tx hooks actually do anything.
+    #[test]
+    #[cfg(feature = "tracing")]
+    fn test_per_transaction_mode_calls() {
+        let exec = RecordingSink::new();
+        let digest = TransactionDigest::ZERO;
+        let mode = BytecodeProfileMode::PerTransaction;
+
+        mode.before_transaction(&exec);
+        mode.after_transaction(&exec, &digest);
+        mode.end_of_session(&exec);
+
+        assert_eq!(exec.reset_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(exec.emit_calls.load(Ordering::SeqCst), 1);
+    }
+
+    /// `PerTransactionFile` mode: reset on entry, snapshot on exit, no
+    /// end-of-session emission.
+    #[test]
+    #[cfg(feature = "tracing")]
+    fn test_per_transaction_file_mode_calls() {
+        let exec = RecordingSink::new();
+        let digest = TransactionDigest::ZERO;
+        let mode = BytecodeProfileMode::PerTransactionFile;
+
+        mode.before_transaction(&exec);
+        mode.after_transaction(&exec, &digest);
+        mode.end_of_session(&exec);
+
+        assert_eq!(exec.reset_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(exec.snapshot_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(exec.emit_calls.load(Ordering::SeqCst), 0);
+    }
+
+    /// `EndOfReplay` mode: no per-tx resets or emissions, single emit at
+    /// session end.
+    #[test]
+    fn test_end_of_replay_mode_calls() {
+        let exec = RecordingSink::new();
+        let digest = TransactionDigest::ZERO;
+        let mode = BytecodeProfileMode::EndOfReplay;
+
+        mode.before_transaction(&exec);
+        mode.after_transaction(&exec, &digest);
+        mode.before_transaction(&exec);
+        mode.after_transaction(&exec, &digest);
+        // Only one end_of_session call across multiple txns.
+        mode.end_of_session(&exec);
+
+        assert_eq!(exec.reset_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(exec.emit_calls.load(Ordering::SeqCst), 1);
+    }
+}

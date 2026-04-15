@@ -33,6 +33,7 @@ pub mod artifacts;
 pub mod displays;
 pub mod execution;
 pub mod package_tools;
+pub mod profiling;
 pub mod replay_txn;
 pub mod summary_metrics;
 pub mod tracing;
@@ -572,6 +573,14 @@ where
     }
 
     tx_spinner.finish_and_clear();
+
+    // End-of-session bytecode profile emission. Only the EndOfReplay mode
+    // does anything here; the per-transaction modes have already emitted.
+    let profile_mode = crate::profiling::BytecodeProfileMode::from_env();
+    for executor in executor_provider.cached_executors() {
+        profile_mode
+            .end_of_session(&crate::profiling::ExecutorProfileSink(&*executor.executor));
+    }
 
     if verbose {
         let mut out = std::io::stdout().lock();

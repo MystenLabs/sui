@@ -43,7 +43,7 @@ use tracing::{debug, debug_span, trace};
 #[derive(Clone)]
 pub struct ReplayExecutor {
     protocol_config: ProtocolConfig,
-    executor: Arc<dyn Executor + Send + Sync>,
+    pub(crate) executor: Arc<dyn Executor + Send + Sync>,
     execution_metrics: Arc<ExecutionMetrics>,
 }
 
@@ -80,6 +80,10 @@ pub fn execute_transaction_to_effects(
     Error,
 > {
     debug!(op = "execute_tx", phase = "start", "execution");
+
+    // Read the configured profile mode once per transaction. Cheap (one env
+    // lookup) and avoids threading the mode through call sites.
+    let profile_mode = crate::profiling::BytecodeProfileMode::from_env();
 
     // TODO: Hook up...
     let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
@@ -132,6 +136,9 @@ pub fn execute_transaction_to_effects(
         Some(error) => ExecutionOrEarlyError::Err(error),
         None => ExecutionOrEarlyError::Ok(()),
     };
+    profile_mode
+        .before_transaction(&crate::profiling::ExecutorProfileSink(&*executor.executor));
+
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(
@@ -176,17 +183,18 @@ pub fn execute_transaction_to_effects(
         }
     }
 
-    // Emit the bytecode profile. With the `tracing` feature this logs a CSV
-    // summary via tracing::info! and, if MOVE_VM_DUMP_PROFILE_FILE is set,
-    // writes a JSON snapshot to that path. Callers still receive the snapshot
-    // via `bytecode_profile` below for programmatic use.
-    executor.executor.emit_bytecode_profile();
-
-    // Snapshot is collected at the executor level. We don't have direct access
-    // to it from the `Executor` trait yet; this is a placeholder until the
-    // trait exposes a snapshot accessor.
+    // Capture the snapshot before invoking the per-mode after-transaction
+    // hook (which may reset counters).
     #[cfg(feature = "tracing")]
-    let bytecode_profile = sui_execution::profiling::BytecodeSnapshot::default();
+    let bytecode_profile = executor
+        .executor
+        .bytecode_profile_snapshot()
+        .unwrap_or_default();
+
+    profile_mode.after_transaction(
+        &crate::profiling::ExecutorProfileSink(&*executor.executor),
+        &digest,
+    );
 
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((

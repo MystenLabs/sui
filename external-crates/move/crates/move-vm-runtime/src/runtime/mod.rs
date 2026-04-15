@@ -83,7 +83,7 @@ impl MoveRuntime {
     /// `MOVE_VM_DUMP_PROFILE_FILE` env var is set, also write the JSON
     /// representation to that path.
     ///
-    /// No-op (and accepts no data) when the `tracing` feature is disabled.
+    /// No-op when the `tracing` feature is disabled.
     #[cfg(feature = "tracing")]
     pub fn emit_bytecode_profile(&self) {
         let snapshot = self.telemetry.bytecode_counters().snapshot();
@@ -93,6 +93,20 @@ impl MoveRuntime {
             "move-vm bytecode profile"
         );
         snapshot.maybe_dump_to_env_file();
+    }
+
+    /// Take a snapshot of the current bytecode counters without emitting.
+    /// Returned snapshot can be rendered, written, or differenced.
+    #[cfg(feature = "tracing")]
+    pub fn bytecode_profile_snapshot(&self) -> crate::profiling::BytecodeSnapshot {
+        self.telemetry.bytecode_counters().snapshot()
+    }
+
+    /// Reset all per-runtime bytecode counters to zero.
+    /// Useful for measuring per-transaction (rather than cumulative) stats.
+    #[cfg(feature = "tracing")]
+    pub fn reset_bytecode_profile(&self) {
+        self.telemetry.bytecode_counters().reset();
     }
 
     /// Resolve a package, loading it if necessary. This will use the provided `ModuleResolver` to

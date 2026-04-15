@@ -140,4 +140,17 @@ pub trait Executor {
     /// executor overrides this meaningfully when built with the `tracing`
     /// feature.
     fn emit_bytecode_profile(&self) {}
+
+    /// Take a snapshot of the current bytecode counters. Returns `None` for
+    /// executor versions without profiling support.
+    #[cfg(feature = "tracing")]
+    fn bytecode_profile_snapshot(
+        &self,
+    ) -> Option<move_vm_runtime_latest::profiling::BytecodeSnapshot> {
+        None
+    }
+
+    /// Reset the bytecode counters to zero. No-op for executor versions
+    /// without profiling support.
+    fn reset_bytecode_profile(&self) {}
 }
