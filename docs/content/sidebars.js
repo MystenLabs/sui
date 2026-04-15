@@ -278,7 +278,6 @@ export default {
             ],
           },
           'onchain-finance/asset-custody/address-balance-migration',
-
           {
             type: 'category',
             label: 'Wallets',
@@ -516,10 +515,10 @@ export default {
       link: { type: 'doc', id: 'operators/data-management/index', },
       items: [
         'operators/data-management/managing-data',
-        'operators/data-management/archival-stack-setup',
-        'operators/data-management/archives',
         'operators/data-management/indexer-stack-setup',
         'operators/data-management/remote-store-setup',
+        'operators/data-management/archival-stack-setup',
+        'operators/data-management/archives',
       ],
     },
     {
@@ -527,11 +526,11 @@ export default {
 		label: 'Validators',
 		link: { type: 'doc', id: 'operators/validator/index', },
 		items: [
-      'operators/validator/node-tools',
-      'operators/validator/alerts',
       'operators/validator/validator-config',
-      'operators/validator/validator-rewards',
       'operators/validator/validator-tasks',
+      'operators/validator/node-tools',
+      'operators/validator/validator-rewards',
+      'operators/validator/alerts',
 		],
 	},
     'operators/exchange-integration',
