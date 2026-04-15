@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use futures::StreamExt;
 use mysten_metrics::{monitored_mpsc, monitored_scope, spawn_monitored_task};
@@ -22,14 +22,14 @@ use crate::{
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
 /// taking care of retrying when subscription streams break. Blocks returned from peers are sent
-/// to the observer service for processing.
+/// to the observer service for processing. The `ObserverSubscriber` can only subscribe to one peer at a time.
 #[allow(unused)]
 pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetworkService> {
     context: Arc<Context>,
     network_client: Arc<C>,
     observer_service: Arc<S>,
     dag_state: Arc<parking_lot::RwLock<DagState>>,
-    subscriptions: Arc<Mutex<BTreeMap<PeerId, Option<JoinHandle<()>>>>>,
+    subscription: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
 
 #[allow(unused)]
@@ -45,11 +45,12 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             network_client,
             observer_service,
             dag_state,
-            subscriptions: Arc::new(Mutex::new(BTreeMap::new())),
+            subscription: Arc::new(Mutex::new(None)),
         }
     }
 
-    /// Subscribe to a peer (validator or observer) to receive block streams.
+    /// Subscribe to a peer (validator or observer) to receive block streams. The `ObserverSubscriber` can only subscribe to one peer at a time.
+    /// The method will abort the existing subscription (if any) and start a new one.
     pub(crate) fn subscribe(&self, peer: PeerId) {
         let context = self.context.clone();
         let network_client = self.network_client.clone();
@@ -66,35 +67,24 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             rounds
         };
 
-        let mut subscriptions = self.subscriptions.lock();
-        self.unsubscribe_locked(&peer, &mut subscriptions);
-        subscriptions.insert(
-            peer.clone(),
-            Some(spawn_monitored_task!(Self::subscription_loop(
-                context,
-                network_client,
-                observer_service,
-                peer,
-                highest_round_per_authority,
-            ))),
-        );
-    }
-
-    /// Stop all active subscriptions.
-    pub(crate) fn stop(&self) {
-        let mut subscriptions = self.subscriptions.lock();
-        let peers: Vec<_> = subscriptions.keys().cloned().collect();
-        for peer in peers {
-            self.unsubscribe_locked(&peer, &mut subscriptions);
+        if let Some(handle) = self.subscription.lock().take() {
+            handle.abort();
         }
+
+        let mut subscription = self.subscription.lock();
+        *subscription = Some(spawn_monitored_task!(Self::subscription_loop(
+            context,
+            network_client,
+            observer_service,
+            peer,
+            highest_round_per_authority,
+        )));
     }
 
-    fn unsubscribe_locked(
-        &self,
-        peer: &PeerId,
-        subscriptions: &mut BTreeMap<PeerId, Option<JoinHandle<()>>>,
-    ) {
-        if let Some(Some(handle)) = subscriptions.remove(peer) {
+    /// Stop the active subscription (if any).
+    pub(crate) fn stop(&self) {
+        let mut subscription = self.subscription.lock();
+        if let Some(handle) = subscription.take() {
             handle.abort();
         }
     }
@@ -296,17 +286,23 @@ mod tests {
     impl ObserverNetworkClient for ObserverSubscriberTestClient {
         async fn stream_blocks(
             &self,
-            _peer: PeerId,
+            peer: PeerId,
             _highest_round_per_authority: Vec<u64>,
             _timeout: Duration,
         ) -> ConsensusResult<ObserverBlockStream> {
-            let block_stream = stream::unfold((), |_| async {
+            // Return different block content based on peer to distinguish them in tests
+            let block_value = match peer {
+                PeerId::Validator(idx) => idx.value() as u8 + 1,
+                PeerId::Observer(_) => 99u8,
+            };
+
+            let block_stream = stream::unfold(block_value, move |val| async move {
                 sleep(Duration::from_millis(1)).await;
                 let item = ObserverBlockStreamItem {
-                    block: Bytes::from(vec![1u8; 8]),
+                    block: Bytes::from(vec![val; 8]),
                     highest_commit_index: 42,
                 };
-                Some((item, ()))
+                Some((item, val))
             })
             .take(10);
             Ok(Box::pin(block_stream))
@@ -415,13 +411,13 @@ mod tests {
         assert!(calls.len() >= 100);
         for (p, item) in calls.iter() {
             assert_eq!(*p, peer);
-            assert_eq!(item.block, Bytes::from(vec![1u8; 8]));
+            assert_eq!(item.block, Bytes::from(vec![3u8; 8])); // Peer index 2 + 1 = 3
             assert_eq!(item.highest_commit_index, 42);
         }
     }
 
     #[tokio::test]
-    async fn test_observer_subscriber_stop() {
+    async fn test_observer_subscriber_override() {
         telemetry_subscribers::init_for_testing();
         let (context, _keys) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -437,21 +433,57 @@ mod tests {
             dag_state,
         );
 
-        // Subscribe to a validator peer
-        let peer = PeerId::Validator(context.committee.to_authority_index(2).unwrap());
-        subscriber.subscribe(peer);
+        // Subscribe to first peer (validator 0)
+        let peer1 = PeerId::Validator(context.committee.to_authority_index(0).unwrap());
+        subscriber.subscribe(peer1.clone());
 
-        // Wait a bit for some blocks to be received
+        // Wait for some blocks to be received from peer1
+        sleep(Duration::from_millis(50)).await;
+        {
+            let calls = observer_service.handle_block_calls.lock();
+            assert!(!calls.is_empty(), "Should have received blocks from peer1");
+            // Verify blocks are from peer1 (value = 0 + 1 = 1)
+            for (p, item) in calls.iter() {
+                assert_eq!(*p, peer1);
+                assert_eq!(item.block, Bytes::from(vec![1u8; 8]));
+            }
+        }
+
+        // Clear the received blocks for clarity
+        observer_service.handle_block_calls.lock().clear();
+
+        // Subscribe to second peer (validator 2) - this should override the first subscription
+        let peer2 = PeerId::Validator(context.committee.to_authority_index(2).unwrap());
+        subscriber.subscribe(peer2.clone());
+
+        // Wait for blocks from the new peer
         sleep(Duration::from_millis(100)).await;
-        let initial_count = observer_service.handle_block_calls.lock().len();
-        assert!(initial_count > 0);
+        {
+            let calls = observer_service.handle_block_calls.lock();
+            assert!(!calls.is_empty(), "Should have received blocks from peer2");
+            // Verify ALL blocks are from peer2 (value = 2 + 1 = 3), none from peer1
+            for (p, item) in calls.iter() {
+                assert_eq!(*p, peer2, "All blocks should be from peer2 after override");
+                assert_eq!(
+                    item.block,
+                    Bytes::from(vec![3u8; 8]),
+                    "Block content should match peer2"
+                );
+            }
+        }
 
-        // Stop all subscriptions
+        // Clear blocks again
+        let count_before_stop = observer_service.handle_block_calls.lock().len();
+
+        // Test that stop() still works
         subscriber.stop();
 
-        // Wait a bit more and verify no new blocks are received
-        sleep(Duration::from_millis(100)).await;
-        let final_count = observer_service.handle_block_calls.lock().len();
-        assert_eq!(initial_count, final_count);
+        // Wait and verify no new blocks are received after stop
+        sleep(Duration::from_millis(50)).await;
+        let count_after_stop = observer_service.handle_block_calls.lock().len();
+        assert_eq!(
+            count_before_stop, count_after_stop,
+            "No new blocks should be received after stop()"
+        );
     }
 }
