@@ -9,11 +9,17 @@ times each opcode is dispatched so you can:
 
 ## Enabling
 
-Profiling lives behind the `tracing` feature. Build or run with:
+Profiling lives behind the `tracing` feature. Build or test with:
 
 ```bash
+# Build the runtime with profiling enabled
 cargo build --features move-vm-runtime/tracing
+
+# Run only the profiling tests
 cargo test  --features move-vm-runtime/tracing -- test_profiling
+
+# Replay a transaction with profiling enabled
+cargo run --features tracing -p sui-replay-2 -- <args>
 ```
 
 When the feature is disabled the increment in the dispatch hot loop compiles
@@ -23,16 +29,59 @@ out entirely — zero runtime cost.
 
 Counters are **per `MoveRuntime`**. A process with two runtimes has two
 independent counter sets; snapshots from one cannot see increments from the
-other. This matters for concurrent replay and for test isolation.
+other. This matters for:
+
+- Concurrent replay sessions
+- Test isolation (each test adapter creates its own runtime)
+- Validators that spawn one runtime per execution-layer version
+
+Within a single runtime, counters are atomic and may be incremented from
+multiple threads concurrently. Counts merge at `Relaxed` ordering — fine for
+frequency profiling, not suitable for ordering or causality reasoning.
+
+## API surface
+
+All APIs are gated by the `tracing` feature unless noted.
+
+### On `MoveRuntime`
+
+| Method | Purpose |
+|--------|---------|
+| `bytecode_profile_snapshot()` | Take a `BytecodeSnapshot` without emitting anything. |
+| `emit_bytecode_profile()` | Log a CSV summary via `tracing::info!` and, if `MOVE_VM_DUMP_PROFILE_FILE` is set, write JSON to that path. |
+| `reset_bytecode_profile()` | Zero out all counters. Used to measure per-transaction (rather than cumulative) stats. |
+| `get_telemetry_report()` | Returns `MoveRuntimeTelemetry` whose `bytecode_stats` field contains the same snapshot. (Always available; `bytecode_stats` is `cfg(feature = "tracing")`.) |
+
+### On `sui_execution::Executor`
+
+The same three methods (`emit_bytecode_profile`, `reset_bytecode_profile`,
+`bytecode_profile_snapshot`) are available on the cross-version `Executor`
+trait. They are no-ops on the older v0/v1/v2/v3 executors and only do
+meaningful work on `latest`. `bytecode_profile_snapshot` returns
+`Option<BytecodeSnapshot>` for that reason.
+
+### On `BytecodeSnapshot`
+
+| Method | Output |
+|--------|--------|
+| `total()` | Total instruction count across all opcodes. |
+| `get(opcode)` | Count for a single opcode. |
+| `iter()` | Yields `(Opcodes, count)` for every non-zero opcode. |
+| `format_report()` | Human-readable, sorted by count descending. |
+| `format_csv()` | CSV with header. |
+| `format_json()` | JSON suitable for analysis tools. |
+| `dump_to_file(path)` | Writes the JSON to `path`. Errors logged via `tracing::warn!`, never propagated. |
+| `maybe_dump_to_env_file()` | If `MOVE_VM_DUMP_PROFILE_FILE` is set, calls `dump_to_file` with that path. Otherwise no-op. |
 
 ## Reading the data
 
-### Via the telemetry API (in-process)
+### In-process via the telemetry API
 
 ```rust
 use move_vm_runtime::runtime::MoveRuntime;
 
-let runtime: MoveRuntime = /* ... */;
+# fn make_runtime() -> MoveRuntime { unimplemented!() }
+let runtime = make_runtime();
 // run transactions ...
 let report = runtime.get_telemetry_report();
 let stats = &report.bytecode_stats;
@@ -40,12 +89,22 @@ println!("total instructions: {}", stats.total());
 println!("{}", stats.format_report());
 ```
 
-### Via the env-var dump
+### Per-transaction measurement
 
-Set `MOVE_VM_DUMP_PROFILE_FILE` to a path, then call
-`MoveRuntime::emit_bytecode_profile()` (or, at the sui-execution layer,
-`Executor::emit_bytecode_profile()`). The full snapshot is written as JSON to
-that path; the summary is also logged via `tracing::info!`.
+```rust
+runtime.reset_bytecode_profile();
+// run transaction ...
+let snap = runtime.bytecode_profile_snapshot();
+println!("{} instructions in this txn", snap.total());
+```
+
+### Tracing + env-file dump (one shot)
+
+```rust
+// Logs CSV via tracing::info! AND, if MOVE_VM_DUMP_PROFILE_FILE is set,
+// writes JSON to that path.
+runtime.emit_bytecode_profile();
+```
 
 ```bash
 MOVE_VM_DUMP_PROFILE_FILE=/tmp/profile.json \
@@ -57,21 +116,22 @@ MOVE_VM_DUMP_PROFILE_FILE=/tmp/profile.json \
 `sui-replay-2` invokes the profiling hooks once per transaction (and once at
 session end). The dumping policy is controlled by `MOVE_VM_PROFILE_MODE`:
 
-- `per-transaction` — reset before each tx, emit after; the dump file is
-  overwritten on every tx (final file = last tx).
-- `per-transaction-file` — reset before each tx, write per-tx snapshot to
-  `<base>.<digest>.json` (one file per tx).
-- `end-of-replay` (default) — accumulate across the whole run, emit once at
-  the end.
+| Value | Behaviour |
+|-------|-----------|
+| `per-transaction` (aliases: `per_transaction`, `pertx`) | Reset before each tx, emit after. The dump file is overwritten on every tx (final file = last tx). |
+| `per-transaction-file` (aliases: `per_transaction_file`, `pertxfile`) | Reset before each tx, write per-tx snapshot to `<base>.<digest>.json` (one file per tx). |
+| `end-of-replay` (aliases: `end_of_replay`, `end`, `session`; default) | Accumulate across the whole run, emit once at the end. |
 
-`end-of-replay` requires `--cache-executor` because counters live inside the
-executor; without caching each transaction's executor (and counters) is
-dropped before the session-end hook runs. The per-transaction modes work in
-either configuration.
+Unrecognised values are logged at `warn` level and fall back to the default.
+
+`end-of-replay` requires `--cache-executor`. Without executor caching, each
+transaction creates and drops its own executor, so counters cannot survive
+across transactions and the session-end hook walks an empty cache. The
+per-transaction modes work in either configuration.
 
 ## Output formats
 
-### CSV (`BytecodeSnapshot::format_csv`)
+### CSV (`format_csv`)
 
 ```
 opcode,count,percentage
@@ -81,7 +141,7 @@ RET,2000,12.5196
 ...
 ```
 
-### JSON (`BytecodeSnapshot::format_json`)
+### JSON (`format_json`)
 
 ```json
 {
@@ -94,7 +154,11 @@ RET,2000,12.5196
 }
 ```
 
-### Human report (`BytecodeSnapshot::format_report`)
+The JSON writer is hand-rolled (no `serde` dependency) because this crate is
+infrastructure-level. The schema is fixed and small; if you need a more
+elaborate format, parse this and reshape downstream.
+
+### Human report (`format_report`)
 
 ```
 Total instructions: 15965
@@ -110,18 +174,49 @@ RET                              2000    12.52%
 Rows are sorted by count descending in every format; zero-count opcodes are
 omitted from the output.
 
-## Cost
+## Cost model
 
-- **Feature off** — single `#[cfg]`-gated line in `step`; no code emitted.
-- **Feature on** — one `HashMap::get` + `AtomicU64::fetch_add(Relaxed)` per
-  dispatched instruction. Relaxed ordering; no fences, no contention with
-  non-profiling paths.
+- **Feature off** — the increment in the dispatch hot loop is behind
+  `#[cfg(feature = "tracing")]`; no code is emitted.
+- **Feature on** — per dispatched instruction, one `HashMap::get` followed
+  by an `AtomicU64::fetch_add(Relaxed)`. No fences, no contention with
+  non-profiling code paths. The counter map is sized at `MoveRuntime`
+  construction and never resized, so the hot path performs no allocation.
 
-The counter map is sized at `MoveRuntime` construction and never resized, so
-the hot path does no allocation.
+The cost has not been benchmarked end-to-end; treat the "near-zero overhead
+when on" claim as a design intent rather than a measured result. A
+microbenchmark of the dispatch loop with feature on/off would be a good
+follow-up before relying on profiling in production.
+
+## Environment variables
+
+| Variable | Effect |
+|----------|--------|
+| `MOVE_VM_DUMP_PROFILE_FILE` | Path that `emit_bytecode_profile` and `maybe_dump_to_env_file` write JSON to. Unset = no file dump (still logs via `tracing::info!`). |
+| `MOVE_VM_PROFILE_MODE` | Replay-time policy (see the table above). Unset = `end-of-replay`. |
+
+## Tests
+
+| Test | What it covers |
+|------|----------------|
+| `profiling::counters::tests::*` | Unit-level: increment/snapshot/reset, CSV/JSON/report formatting, dump-to-file success and failure paths, per-counter independence. |
+| `unit_tests::profiling_tests::*` | End-to-end through `InMemoryTestAdapter`: counts on real workloads, per-runtime isolation, telemetry-API round-trip, dump-to-file matches in-memory snapshot, CSV/JSON consistency. |
+| `sui_replay_2::profiling::tests::*` | Replay-side dispatch: each `BytecodeProfileMode` calls the right hooks at the right boundaries; per-tx-path filename formatting. |
+
+Run profiling tests:
+
+```bash
+# move-vm-runtime
+cargo test --features tracing -p move-vm-runtime -- profiling
+
+# sui-replay-2
+cargo test --features tracing -p sui-replay-2 -- profiling
+```
 
 ## Extending
 
-Adding a new opcode variant: extend the `ALL_OPCODES` list in
-`counters.rs`. The list is the authoritative set of opcodes tracked; a
-variant missing from the list will silently drop its increments.
+Adding a new opcode variant: extend the `ALL_OPCODES` list in `counters.rs`.
+That list is the authoritative set of opcodes tracked; a variant missing
+from the list will silently drop its increments. (No assertion enforces
+exhaustiveness today — the cost is silent under-counting, not a crash, so it
+won't fail loudly in tests if you forget.)
