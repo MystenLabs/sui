@@ -162,6 +162,36 @@ impl BytecodeProfileMode {
     }
 }
 
+/// RAII guard that pairs `before_transaction` (on construction) with
+/// `after_transaction` (on drop). Ensures the after-hook runs even when
+/// the surrounding code returns early via `?` or panics — without it,
+/// per-transaction modes would leak counters from the failed tx into
+/// the next, and PerTransactionFile would silently miss the dump.
+pub struct ProfileGuard<'a> {
+    mode: BytecodeProfileMode,
+    sink: &'a dyn ProfileSink,
+    digest: TransactionDigest,
+}
+
+impl<'a> ProfileGuard<'a> {
+    /// Run the before-transaction hook and return a guard that will run
+    /// the after-transaction hook on drop.
+    pub fn enter(
+        mode: BytecodeProfileMode,
+        sink: &'a dyn ProfileSink,
+        digest: TransactionDigest,
+    ) -> Self {
+        mode.before_transaction(sink);
+        Self { mode, sink, digest }
+    }
+}
+
+impl Drop for ProfileGuard<'_> {
+    fn drop(&mut self) {
+        self.mode.after_transaction(self.sink, &self.digest);
+    }
+}
+
 /// Cached `MOVE_VM_DUMP_PROFILE_FILE` value. Looked up once per process to
 /// avoid repeated `std::env::var` calls (which take a global OS lock on Unix)
 /// from the per-transaction hooks.
@@ -319,6 +349,50 @@ mod tests {
         mode.end_of_session(&exec);
 
         assert_eq!(exec.reset_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(exec.emit_calls.load(Ordering::SeqCst), 1);
+    }
+
+    /// `ProfileGuard::enter` runs `before_transaction`; the guard's `Drop`
+    /// runs `after_transaction`. Verifies the pair fires correctly on a
+    /// happy-path scope exit.
+    #[test]
+    fn test_profile_guard_pairs_hooks() {
+        let exec = RecordingSink::new();
+        let digest = TransactionDigest::ZERO;
+
+        {
+            let _g = ProfileGuard::enter(BytecodeProfileMode::PerTransaction, &exec, digest);
+            // Scope ends here; Drop fires after_transaction.
+        }
+
+        // PerTransaction: 1 reset on entry, 1 emit on drop.
+        assert_eq!(exec.reset_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(exec.emit_calls.load(Ordering::SeqCst), 1);
+    }
+
+    /// The whole point of the guard: `after_transaction` must run even if
+    /// the surrounding code returns early via `?` or panics.
+    #[test]
+    fn test_profile_guard_runs_after_hook_on_early_return() {
+        let exec = RecordingSink::new();
+        let digest = TransactionDigest::ZERO;
+
+        // Helper that takes the guard, then early-returns.
+        fn maybe_fail(
+            exec: &RecordingSink,
+            digest: TransactionDigest,
+        ) -> Result<(), &'static str> {
+            let _g =
+                ProfileGuard::enter(BytecodeProfileMode::PerTransaction, exec, digest);
+            // Pretend the executor or post-checks errored.
+            Err("simulated failure")
+        }
+
+        let res = maybe_fail(&exec, digest);
+        assert!(res.is_err());
+
+        // Even though we returned Err, the guard's Drop ran the after-hook.
+        assert_eq!(exec.reset_calls.load(Ordering::SeqCst), 1);
         assert_eq!(exec.emit_calls.load(Ordering::SeqCst), 1);
     }
 }

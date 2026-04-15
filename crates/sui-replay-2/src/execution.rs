@@ -136,7 +136,13 @@ pub fn execute_transaction_to_effects(
         Some(error) => ExecutionOrEarlyError::Err(error),
         None => ExecutionOrEarlyError::Ok(()),
     };
-    profile_mode.before_transaction(&crate::profiling::ExecutorProfileSink(&*executor.executor));
+    let profile_sink = crate::profiling::ExecutorProfileSink(&*executor.executor);
+    // RAII guard: runs before_transaction now, after_transaction on drop.
+    // Keeps the per-tx hooks paired even if the code below returns early
+    // (e.g. the "created object not found" check) or panics inside the
+    // executor.
+    let _profile_guard =
+        crate::profiling::ProfileGuard::enter(profile_mode, &profile_sink, digest);
 
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
@@ -182,18 +188,13 @@ pub fn execute_transaction_to_effects(
         }
     }
 
-    // Capture the snapshot before invoking the per-mode after-transaction
-    // hook (which may reset counters).
+    // Capture the snapshot before the guard drops (its Drop impl runs
+    // after_transaction, which may reset the counters).
     #[cfg(feature = "tracing")]
     let bytecode_profile = executor
         .executor
         .bytecode_profile_snapshot()
         .unwrap_or_default();
-
-    profile_mode.after_transaction(
-        &crate::profiling::ExecutorProfileSink(&*executor.executor),
-        &digest,
-    );
 
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((

@@ -509,6 +509,25 @@ where
     use crate::replay_txn::ExecutorProvider;
     use std::time::Instant;
 
+    // EndOfReplay accumulates counters across the run, which only works if
+    // executors live across transactions. Without --cache-executor each
+    // transaction drops its executor (and counters) before the session-end
+    // hook runs, silently producing no output. Auto-enable caching and warn
+    // rather than fail — the user clearly intends to profile.
+    let cache_executor = if matches!(
+        crate::profiling::BytecodeProfileMode::from_env(),
+        crate::profiling::BytecodeProfileMode::EndOfReplay,
+    ) && !cache_executor
+    {
+        warn!(
+            "MOVE_VM_PROFILE_MODE=end-of-replay needs --cache-executor to retain \
+             counters across transactions; auto-enabling it."
+        );
+        true
+    } else {
+        cache_executor
+    };
+
     data_store.setup(None)?;
     let mut total_metrics = TotalMetrics::new();
     let mut executor_provider = ExecutorProvider::new(cache_executor);
