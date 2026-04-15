@@ -914,15 +914,18 @@ fn build_upgraded_type_origin_table(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sui_protocol_config::{Chain, ProtocolVersion};
     use move_binary_format::file_format::{
-        empty_module, Bytecode, CodeUnit, FunctionDefinition, FunctionHandle,
-        FunctionHandleIndex, IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex,
-        Visibility,
+        Bytecode, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
+        IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex, Visibility, empty_module,
     };
     use move_core_types::identifier::Identifier;
+    use sui_protocol_config::{Chain, ProtocolVersion};
 
-    fn create_test_module(name: &str, address: AccountAddress, num_functions: usize) -> CompiledModule {
+    fn create_test_module(
+        name: &str,
+        address: AccountAddress,
+        num_functions: usize,
+    ) -> CompiledModule {
         let mut module = empty_module();
         module.version = VERSION_6;
 
@@ -967,7 +970,9 @@ mod tests {
 
     fn serialize_module(module: &CompiledModule) -> Vec<u8> {
         let mut bytes = vec![];
-        module.serialize_with_version(VERSION_6, &mut bytes).unwrap();
+        module
+            .serialize_with_version(VERSION_6, &mut bytes)
+            .unwrap();
         bytes
     }
 
@@ -1004,8 +1009,7 @@ mod tests {
         let main_module = create_test_module("main", AccountAddress::random(), 5);
         let protocol_config = test_protocol_config(Some(1024 * 1024));
 
-        let result =
-            MovePackage::new_initial(&[main_module], &protocol_config, vec![&dep_package]);
+        let result = MovePackage::new_initial(&[main_module], &protocol_config, vec![&dep_package]);
 
         assert!(
             result.is_ok(),
@@ -1021,8 +1025,7 @@ mod tests {
         // No total linkage cap => check is skipped entirely.
         let protocol_config = test_protocol_config(None);
 
-        let result =
-            MovePackage::new_initial(&[main_module], &protocol_config, vec![&dep_package]);
+        let result = MovePackage::new_initial(&[main_module], &protocol_config, vec![&dep_package]);
         assert!(result.is_ok(), "Check must be disabled when config is None");
     }
 
@@ -1071,8 +1074,7 @@ mod tests {
         let max = huge_size - 1; // dep alone is already over.
         let protocol_config = test_protocol_config(Some(max));
 
-        let result =
-            MovePackage::new_initial(&[main_module], &protocol_config, vec![&huge_dep]);
+        let result = MovePackage::new_initial(&[main_module], &protocol_config, vec![&huge_dep]);
 
         let err = result.expect_err("single huge dep should exceed the total linkage cap");
         match err.kind() {
@@ -1098,7 +1100,7 @@ mod tests {
         // to upgrade.
         let permissive = test_protocol_config(Some(u64::MAX));
         let original = MovePackage::new_initial(
-            &[original_module.clone()],
+            std::slice::from_ref(&original_module),
             &permissive,
             vec![&dep_package],
         )
@@ -1109,8 +1111,12 @@ mod tests {
         let tight_max = dep_package.size() as u64;
         let strict = test_protocol_config(Some(tight_max));
 
-        let result =
-            original.new_upgraded(original.id(), &[original_module], &strict, vec![&dep_package]);
+        let result = original.new_upgraded(
+            original.id(),
+            &[original_module],
+            &strict,
+            vec![&dep_package],
+        );
 
         let err = result.expect_err("upgrade should be rejected when total linkage exceeds cap");
         match err.kind() {
@@ -1135,8 +1141,7 @@ mod tests {
         let max = dep_size; // main package alone will push us over.
         let protocol_config = test_protocol_config(Some(max));
 
-        let result =
-            MovePackage::new_initial(&[main_module], &protocol_config, vec![&dep_package]);
+        let result = MovePackage::new_initial(&[main_module], &protocol_config, vec![&dep_package]);
 
         let err = result.expect_err("Expected error for package exceeding max_total_linkage_size");
         match err.kind() {
