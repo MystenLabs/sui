@@ -70,18 +70,6 @@ struct MetricsGuard {
     timer: Option<HistogramTimer>,
 }
 
-impl MetricsGuard {
-    fn record(&mut self, ok: bool) {
-        self.timer.take();
-        let counter = if ok {
-            &self.metrics.requests_succeeded
-        } else {
-            &self.metrics.requests_failed
-        };
-        counter.with_label_values(&[&self.method]).inc();
-    }
-}
-
 impl DbReaderMetrics {
     pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
         let prefix = prefix.unwrap_or("db");
@@ -216,6 +204,18 @@ impl GrpcMetricsLayer {
         Self {
             metrics: Arc::new(GrpcMetrics::new(prefix, registry)),
         }
+    }
+}
+
+impl MetricsGuard {
+    fn record(&mut self, ok: bool) {
+        self.timer.take();
+        let counter = if ok {
+            &self.metrics.requests_succeeded
+        } else {
+            &self.metrics.requests_failed
+        };
+        counter.with_label_values(&[&self.method]).inc();
     }
 }
 
