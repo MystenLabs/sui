@@ -10,6 +10,7 @@ use fastcrypto::groups::FromTrustedByteArray;
 use fastcrypto::groups::ristretto255::RistrettoPoint;
 use fastcrypto::pedersen::PedersenCommitment;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::partial_vm_error;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::execution::Type;
@@ -66,11 +67,10 @@ pub fn verify_bulletproofs_ristretto255(
         context,
         cost_parameters
             .verify_bulletproofs_ristretto255_base_cost
-            .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "verify_bulletproofs_ristretto255_base_cost not available".to_string()
-                )
-            )?
+            .ok_or_else(|| partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "verify_bulletproofs_ristretto255_base_cost not available".to_string()
+            ))?
     );
 
     let commitments = pop_arg!(args, VectorRef);
@@ -90,9 +90,8 @@ pub fn verify_bulletproofs_ristretto255(
         return Ok(NativeResult::err(context.gas_used(), INVALID_RANGE));
     };
 
-    let length = commitments
-        .len(&Type::Vector(Box::new(Type::U8)))?
-        .value_as::<u64>()?;
+    let vector_u8_type = Type::Vector(Box::new(Type::U8));
+    let length = commitments.len(&vector_u8_type)?.value_as::<u64>()?;
 
     // The performance is linear in the product of length and range bits, so it is computed as base_cost + cost_per_bit * length * range_bits.
     let total_bits = length * range_bits as u64;
@@ -105,28 +104,27 @@ pub fn verify_bulletproofs_ristretto255(
         context,
         cost_parameters
             .verify_bulletproofs_ristretto255_cost_per_bit_and_commitment
-            .ok_or_else(
-                || PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
-                    "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment not available"
-                        .to_string()
-                )
-            )?
+            .ok_or_else(|| partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment not available"
+                    .to_string()
+            ))?
             * total_bits.into()
     );
 
     let commitments = (0..length)
         .map(|i| {
             commitments
-                .borrow_elem(i as usize, &Type::Vector(Box::new(Type::U8)))
+                .borrow_elem(i as usize, &vector_u8_type)
                 .and_then(|reference| reference.value_as::<VectorRef>())
                 .and_then(|v| Ok(v.as_bytes_ref()?.to_vec()))
                 .and_then(|v| {
                     v.try_into()
-                        .map_err(|_| PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))
+                        .map_err(|_| partial_vm_error!(INTERNAL_TYPE_ERROR))
                 })
                 .and_then(|b| {
                     RistrettoPoint::from_trusted_byte_array(&b)
-                        .map_err(|_| PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR))
+                        .map_err(|_| partial_vm_error!(INTERNAL_TYPE_ERROR))
                 })
                 .map(PedersenCommitment)
         })
