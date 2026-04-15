@@ -494,6 +494,7 @@ impl Data {
     }
 }
 
+/// A single permission that can be granted on a party-owned object.
 #[repr(u8)]
 #[derive(Debug, Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ObjectPermission {
@@ -526,6 +527,7 @@ impl Display for ObjectPermission {
     }
 }
 
+/// A bitflag set of `ObjectPermission`s.
 #[derive(
     Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
@@ -667,6 +669,8 @@ impl Display for ObjectPermissions {
     }
 }
 
+/// Per-address permission map for a party-owned object.
+/// Addresses not in `members` receive `default_permissions`.
 #[derive(
     Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
 )]
@@ -755,8 +759,15 @@ pub enum Owner {
         // The owner of the object.
         owner: SuiAddress,
     },
+    /// Object is sequenced via consensus with per-address permissions.
+    /// Each address can be granted a subset of {Read, Write, Delete, Transfer}.
+    /// Addresses not explicitly listed fall back to the default permissions.
     Party {
+        /// The version at which the object most recently became a party object.
+        /// Serves the same function as `initial_shared_version`, except it may change
+        /// if the object's Owner type changes.
         start_version: SequenceNumber,
+        /// The permission map for this object.
         permissions: Party,
     },
 }
