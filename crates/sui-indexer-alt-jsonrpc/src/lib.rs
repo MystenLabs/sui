@@ -6,7 +6,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
-use async_graphql::dataloader::DataLoader;
 use jsonrpsee::server::BatchRequestConfig;
 use jsonrpsee::server::RpcServiceBuilder;
 use jsonrpsee::server::ServerBuilder;
