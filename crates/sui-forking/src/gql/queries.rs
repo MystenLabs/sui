@@ -14,7 +14,7 @@
 
 use anyhow::{Context, Error, anyhow};
 use cynic::QueryBuilder;
-use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
+use fastcrypto::encoding::{Base64 as FastCryptoBase64, Encoding};
 use itertools::Itertools;
 
 use crate::gql::client::GraphQLClient;
@@ -93,7 +93,7 @@ pub(crate) mod txn_query {
         };
 
         let txn_data: TransactionData = bcs::from_bytes(
-            &CryptoBase64::decode(
+            &FastCryptoBase64::decode(
                 &transaction
                     .transaction_bcs
                     .ok_or_else(|| {
@@ -121,7 +121,7 @@ pub(crate) mod txn_query {
                 let encoded = sig
                     .signature_bytes
                     .ok_or_else(|| anyhow!("Missing signatureBytes for transaction {}", digest))?;
-                let bytes = CryptoBase64::decode(&encoded.0).context(format!(
+                let bytes = FastCryptoBase64::decode(&encoded.0).context(format!(
                     "User signature does not decode for digest: {}",
                     digest
                 ))?;
@@ -135,7 +135,7 @@ pub(crate) mod txn_query {
             .effects
             .ok_or_else(|| anyhow!("Missing effects in transaction data response"))?;
         let effects: sui_types::effects::TransactionEffects = bcs::from_bytes(
-            &CryptoBase64::decode(
+            &FastCryptoBase64::decode(
                 &effect_frag
                     .effects_bcs
                     .ok_or_else(|| anyhow!("Missing effects bcs in transaction data response"))?
@@ -355,7 +355,7 @@ pub(crate) mod object_query {
                     .object_bcs
                     .ok_or_else(|| anyhow!("Object bcs is None for object"))?
                     .0;
-                let bytes = CryptoBase64::decode(&b64)?;
+                let bytes = FastCryptoBase64::decode(&b64)?;
                 let obj: Object = bcs::from_bytes(&bytes)?;
                 let version = frag
                     .version
@@ -545,7 +545,7 @@ pub(crate) mod checkpoint_query {
             ));
         };
 
-        let signature_bytes = CryptoBase64::decode(
+        let signature_bytes = FastCryptoBase64::decode(
             &validator_signatures
                 .signature
                 .ok_or_else(|| anyhow!("Missing aggregated checkpoint signature"))?
@@ -588,7 +588,7 @@ pub(crate) mod checkpoint_query {
     where
         T: serde::de::DeserializeOwned,
     {
-        let bytes = CryptoBase64::decode(
+        let bytes = FastCryptoBase64::decode(
             &field
                 .ok_or_else(|| anyhow!("Missing {} in checkpoint response", label))?
                 .0,
@@ -608,10 +608,8 @@ pub(crate) mod checkpoint_query {
 
         fn encode_bcs<T: serde::Serialize>(value: &T) -> Base64 {
             Base64(
-                FastCryptoBase64::from_bytes(
-                    &bcs::to_bytes(value).expect("value should serialize"),
-                )
-                .encoded(),
+                FastCryptoBase64::from_bytes(&bcs::to_bytes(value).expect("value should serialize"))
+                    .encoded(),
             )
         }
 
@@ -626,8 +624,7 @@ pub(crate) mod checkpoint_query {
                 content_bcs: Some(encode_bcs(&contents)),
                 validator_signatures: Some(ValidatorAggregatedSignature {
                     signature: Some(Base64(
-                        FastCryptoBase64::from_bytes(certified.auth_sig().signature.as_ref())
-                            .encoded(),
+                        FastCryptoBase64::from_bytes(certified.auth_sig().signature.as_ref()).encoded(),
                     )),
                     signers_map: certified
                         .auth_sig()
@@ -679,10 +676,8 @@ pub(crate) mod checkpoint_query {
                 content_bcs: Some(encode_bcs(&checkpoint.contents)),
                 validator_signatures: Some(ValidatorAggregatedSignature {
                     signature: Some(Base64(
-                        FastCryptoBase64::from_bytes(
-                            checkpoint.summary.auth_sig().signature.as_ref(),
-                        )
-                        .encoded(),
+                        FastCryptoBase64::from_bytes(checkpoint.summary.auth_sig().signature.as_ref())
+                            .encoded(),
                     )),
                     signers_map: vec![-1],
                 }),
