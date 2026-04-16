@@ -24,7 +24,7 @@ const GAS_BUDGET: u64 = 50_000_000;
 
 #[derive(Clone)]
 pub struct AddrBalDepositConfig {
-    pub target_address: SuiAddress,
+    pub target_addresses: Vec<SuiAddress>,
     pub deposit_amount: u64,
     pub seed_amount: u64,
     pub metrics: Option<Arc<Mutex<AddrBalDepositMetrics>>>,
@@ -33,7 +33,7 @@ pub struct AddrBalDepositConfig {
 impl std::fmt::Debug for AddrBalDepositConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AddrBalDepositConfig")
-            .field("target_address", &self.target_address)
+            .field("target_addresses", &self.target_addresses)
             .field("deposit_amount", &self.deposit_amount)
             .field("seed_amount", &self.seed_amount)
             .finish()
@@ -234,7 +234,7 @@ impl Workload<dyn Payload> for AddrBalDepositWorkload {
         for i in 0..self.num_payloads {
             let (_, sender, ref keypair) = self.payload_gas[i as usize];
             payloads.push(Box::new(AddrBalDepositPayload {
-                target_address: self.config.target_address,
+                target_addresses: self.config.target_addresses.clone(),
                 deposit_amount: self.config.deposit_amount,
                 sender,
                 keypair: keypair.clone(),
@@ -255,7 +255,7 @@ impl Workload<dyn Payload> for AddrBalDepositWorkload {
 }
 
 pub struct AddrBalDepositPayload {
-    target_address: SuiAddress,
+    target_addresses: Vec<SuiAddress>,
     deposit_amount: u64,
     sender: SuiAddress,
     keypair: Arc<AccountKeyPair>,
@@ -268,7 +268,7 @@ pub struct AddrBalDepositPayload {
 impl std::fmt::Debug for AddrBalDepositPayload {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AddrBalDepositPayload")
-            .field("target", &self.target_address)
+            .field("targets", &self.target_addresses.len())
             .finish()
     }
 }
@@ -311,26 +311,28 @@ impl Payload for AddrBalDepositPayload {
         {
             let builder = tx_builder.ptb_builder_mut();
 
-            let withdrawal =
-                FundsWithdrawalArg::balance_from_sender(self.deposit_amount, GAS::type_tag());
-            let withdrawal_result = builder.funds_withdrawal(withdrawal).unwrap();
+            for target in &self.target_addresses {
+                let withdrawal =
+                    FundsWithdrawalArg::balance_from_sender(self.deposit_amount, GAS::type_tag());
+                let withdrawal_result = builder.funds_withdrawal(withdrawal).unwrap();
 
-            let balance = builder.programmable_move_call(
-                SUI_FRAMEWORK_PACKAGE_ID,
-                Identifier::new("balance").unwrap(),
-                Identifier::new("redeem_funds").unwrap(),
-                vec![GAS::type_tag()],
-                vec![withdrawal_result],
-            );
+                let balance = builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::new("balance").unwrap(),
+                    Identifier::new("redeem_funds").unwrap(),
+                    vec![GAS::type_tag()],
+                    vec![withdrawal_result],
+                );
 
-            let recipient_arg = builder.pure(self.target_address).unwrap();
-            builder.programmable_move_call(
-                SUI_FRAMEWORK_PACKAGE_ID,
-                Identifier::new("balance").unwrap(),
-                Identifier::new("send_funds").unwrap(),
-                vec![GAS::type_tag()],
-                vec![balance, recipient_arg],
-            );
+                let recipient_arg = builder.pure(*target).unwrap();
+                builder.programmable_move_call(
+                    SUI_FRAMEWORK_PACKAGE_ID,
+                    Identifier::new("balance").unwrap(),
+                    Identifier::new("send_funds").unwrap(),
+                    vec![GAS::type_tag()],
+                    vec![balance, recipient_arg],
+                );
+            }
         }
 
         let tx = tx_builder.build_and_sign(self.keypair.as_ref());
@@ -347,9 +349,9 @@ impl Payload for AddrBalDepositPayload {
                         metrics.success += 1;
                         if metrics.success % 100 == 1 {
                             tracing::warn!(
-                                "addr_bal_deposit: {} successful deposits to {} so far",
+                                "addr_bal_deposit: {} successful deposits to {} target(s) so far",
                                 metrics.success,
-                                self.target_address,
+                                self.target_addresses.len(),
                             );
                         }
                     } else {

@@ -1264,7 +1264,7 @@ mod test {
             in_flight_ratio,
             duration,
             composite_config: config.composite_config,
-            deposit_target_address: None,
+            deposit_target_addresses: vec![],
         };
 
         let workloads_builders = WorkloadConfiguration::create_workload_builders(
@@ -1749,7 +1749,7 @@ mod test {
             sui_benchmark::workloads::addr_bal_deposit::AddrBalDepositMetrics::default(),
         ));
         let config = sui_benchmark::workloads::addr_bal_deposit::AddrBalDepositConfig {
-            target_address: target,
+            target_addresses: vec![target],
             deposit_amount: 1000,
             seed_amount: 100_000 * sui_types::gas_coin::MIST_PER_SUI,
             metrics: Some(metrics.clone()),
