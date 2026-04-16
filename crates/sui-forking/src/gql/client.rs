@@ -148,6 +148,25 @@ impl GraphQLClient {
     ) -> Result<Option<TransactionEvents>, Error> {
         block_on!(queries::events_query::query(tx_digest, self))
     }
+
+    /// Query `serviceConfig.availableRange` for both "Checkpoint" and
+    /// "Transaction" types and return the max of their `first.sequenceNumber`.
+    pub(crate) fn get_lowest_available_checkpoint(
+        &self,
+    ) -> Result<CheckpointSequenceNumber, Error> {
+        let checkpoint_low = block_on!(queries::available_range_query::query("Checkpoint", self))?;
+        let transaction_low =
+            block_on!(queries::available_range_query::query("Transaction", self))?;
+        Ok(checkpoint_low.max(transaction_low))
+    }
+
+    /// Query `serviceConfig.availableRange` for "Object" type and return
+    /// `first.sequenceNumber`.
+    pub(crate) fn get_lowest_available_checkpoint_objects(
+        &self,
+    ) -> Result<CheckpointSequenceNumber, Error> {
+        block_on!(queries::available_range_query::query("Object", self))
+    }
 }
 
 impl ObjectRead for GraphQLClient {

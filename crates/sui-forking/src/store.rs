@@ -192,6 +192,22 @@ impl DataStore {
         self.local.get_highest_checkpoint_sequence_number()
     }
 
+    /// Query the remote GraphQL endpoint to determine the lowest checkpoint for
+    /// which both checkpoint and transaction data are available.
+    pub(crate) fn get_lowest_available_checkpoint(
+        &self,
+    ) -> anyhow::Result<CheckpointSequenceNumber> {
+        self.gql.get_lowest_available_checkpoint()
+    }
+
+    /// Query the remote GraphQL endpoint to determine the lowest checkpoint for
+    /// which object data is available.
+    pub(crate) fn get_lowest_available_checkpoint_objects(
+        &self,
+    ) -> anyhow::Result<CheckpointSequenceNumber> {
+        self.gql.get_lowest_available_checkpoint_objects()
+    }
+
     /// Fetch checkpoint summary and contents from the remote GraphQL endpoint and persist them to
     /// disk. Shared by the sequence-keyed cache-aware getters.
     fn fetch_and_cache_checkpoint(
@@ -742,8 +758,12 @@ impl ReadStore for DataStore {
             })
     }
 
+    /// This will be called for most requests to correctly fetch the earliest checkpoint at which
+    /// transactions and checkpoint data are available. The GraphQL endpoint is the source of truth
+    /// for this.
     fn get_lowest_available_checkpoint(&self) -> StorageResult<CheckpointSequenceNumber> {
-        Ok(0)
+        DataStore::get_lowest_available_checkpoint(self)
+            .map_err(|e| StorageError::custom(e.to_string()))
     }
 
     fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
@@ -819,7 +839,8 @@ impl ReadStore for DataStore {
 
 impl RpcStateReader for DataStore {
     fn get_lowest_available_checkpoint_objects(&self) -> StorageResult<CheckpointSequenceNumber> {
-        Ok(0)
+        DataStore::get_lowest_available_checkpoint_objects(self)
+            .map_err(|e| StorageError::custom(e.to_string()))
     }
 
     fn get_chain_identifier(&self) -> StorageResult<ChainIdentifier> {

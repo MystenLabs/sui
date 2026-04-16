@@ -168,6 +168,59 @@ pub(crate) mod txn_query {
     }
 }
 
+pub(crate) mod available_range_query {
+    use super::*;
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct AvailableRangeArgs {
+        pub type_name: String,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "AvailableRangeArgs")]
+    pub(crate) struct Query {
+        service_config: ServiceConfig,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "AvailableRangeArgs")]
+    pub(crate) struct ServiceConfig {
+        #[arguments(type: $type_name)]
+        available_range: AvailableRange,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct AvailableRange {
+        first: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Checkpoint {
+        sequence_number: u64,
+    }
+
+    /// Query the lowest available checkpoint sequence number for a given type
+    /// (e.g., "Checkpoint" or "Transaction").
+    pub(crate) async fn query(type_name: &str, client: &GraphQLClient) -> Result<u64, Error> {
+        let operation = Query::build(AvailableRangeArgs {
+            type_name: type_name.to_owned(),
+        });
+        let response = client.run_query(&operation).await.context(format!(
+            "Failed to query availableRange for type '{}'",
+            type_name,
+        ))?;
+        let data = response
+            .data
+            .ok_or_else(|| anyhow!("No data in availableRange response for '{}'", type_name))?;
+        Ok(data
+            .service_config
+            .available_range
+            .first
+            .map(|c| c.sequence_number)
+            .unwrap_or(0))
+    }
+}
+
 pub(crate) mod events_query {
     use super::*;
     use sui_types::effects::TransactionEvents;
