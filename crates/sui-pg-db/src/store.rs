@@ -211,6 +211,7 @@ impl store::ConcurrentConnection for Connection<'_> {
         Ok(diesel::update(watermarks::table)
             .set(watermarks::pruner_hi.eq(pruner_hi as i64))
             .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::pruner_hi.lt(pruner_hi as i64))
             .execute(self)
             .await?
             > 0)
@@ -248,4 +249,47 @@ impl store::SequentialStore for Db {
         let mut conn = self.connect().await?;
         AsyncConnection::transaction(&mut conn, |conn| f(conn)).await
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_indexer_alt_framework_store_traits::concurrent_connection_tests;
+    use sui_indexer_alt_framework_store_traits::connection_tests;
+    use sui_indexer_alt_framework_store_traits::sequential_connection_tests;
+    use sui_indexer_alt_framework_store_traits::testing::Harness;
+
+    use crate::Db;
+    use crate::DbArgs;
+    use crate::MIGRATIONS;
+    use crate::temp::TempDb;
+
+    struct PgDbHarness {
+        store: Db,
+        _temp_db: TempDb,
+    }
+
+    #[async_trait::async_trait(?Send)]
+    impl Harness for PgDbHarness {
+        type Store = Db;
+
+        async fn new() -> Self {
+            let temp_db = TempDb::new().unwrap();
+            let db = Db::for_write(temp_db.database().url().clone(), DbArgs::default())
+                .await
+                .unwrap();
+            db.run_migrations(Some(&MIGRATIONS)).await.unwrap();
+            Self {
+                store: db,
+                _temp_db: temp_db,
+            }
+        }
+
+        fn store(&self) -> &Self::Store {
+            &self.store
+        }
+    }
+
+    connection_tests!(PgDbHarness);
+    concurrent_connection_tests!(PgDbHarness);
+    sequential_connection_tests!(PgDbHarness);
 }
