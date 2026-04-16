@@ -50,6 +50,7 @@ feature_flags:
   enable_group_ops_native_functions: true
   enable_group_ops_native_function_msm: true
   enable_ristretto255_group_ops: true
+  enable_verify_bulletproofs_ristretto255: true
   enable_nitro_attestation: true
   enable_nitro_attestation_upgraded_parsing: true
   enable_nitro_attestation_all_nonzero_pcrs_parsing: true
@@ -412,6 +413,8 @@ group_ops_ristretto_scalar_mul_cost: 11
 group_ops_ristretto_point_mul_cost: 1200
 group_ops_ristretto_scalar_div_cost: 151
 group_ops_ristretto_point_div_cost: 2500
+verify_bulletproofs_ristretto255_base_cost: 30000
+verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: 6500
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2

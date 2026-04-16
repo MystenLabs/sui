@@ -9,10 +9,9 @@ use fastcrypto::error::FastCryptoResult;
 use fastcrypto::groups::FromTrustedByteArray;
 use fastcrypto::groups::ristretto255::RistrettoPoint;
 use fastcrypto::pedersen::PedersenCommitment;
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::errors::PartialVMResult;
 use move_binary_format::partial_vm_error;
 use move_core_types::gas_algebra::InternalGas;
-use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::execution::Type;
 use move_vm_runtime::execution::values::{Value, VectorRef};
 use move_vm_runtime::natives::functions::{NativeContext, NativeResult};
@@ -69,7 +68,7 @@ pub fn verify_bulletproofs_ristretto255(
             .verify_bulletproofs_ristretto255_base_cost
             .ok_or_else(|| partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "verify_bulletproofs_ristretto255_base_cost not available".to_string()
+                "verify_bulletproofs_ristretto255_base_cost not available",
             ))?
     );
 
@@ -106,8 +105,7 @@ pub fn verify_bulletproofs_ristretto255(
             .verify_bulletproofs_ristretto255_cost_per_bit_and_commitment
             .ok_or_else(|| partial_vm_error!(
                 UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment not available"
-                    .to_string()
+                "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment not available",
             ))?
             * total_bits.into()
     );
