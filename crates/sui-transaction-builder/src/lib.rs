@@ -402,6 +402,10 @@ impl TransactionBuilder {
             | Owner::ConsensusAddressOwner {
                 start_version: initial_shared_version,
                 ..
+            }
+            | Owner::Party {
+                start_version: initial_shared_version,
+                ..
             } => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
@@ -411,8 +415,6 @@ impl TransactionBuilder {
                     SharedObjectMutability::Immutable
                 },
             },
-            // We need to know the sender/signer to know if this should be Mutable or Immutable
-            Owner::Party { .. } => todo!("Party WIP"),
             Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                 ObjectArg::ImmOrOwnedObject(obj_ref)
             }

@@ -801,7 +801,7 @@ impl Owner {
     }
 
     // Returns initial_shared_version for Shared objects, and start_version
-    // for ConsensusAddressOwner objects.
+    // for ConsensusAddressOwner and Party objects.
     pub fn start_version(&self) -> Option<SequenceNumber> {
         match self {
             Self::Shared {

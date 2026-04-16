@@ -660,10 +660,10 @@ fn resolve_object(
             .pipe(Ok)
         }
         sui_types::object::Owner::Shared { .. }
-        | sui_types::object::Owner::ConsensusAddressOwner { .. } => {
+        | sui_types::object::Owner::ConsensusAddressOwner { .. }
+        | sui_types::object::Owner::Party { .. } => {
             resolve_shared_input_with_object(called_packages, arg_uses, arg_idx, object)
         }
-        sui_types::object::Owner::Party { .. } => todo!("Party WIP"),
         sui_types::object::Owner::ObjectOwner(_) => Err(RpcError::new(
             tonic::Code::InvalidArgument,
             format!("object {object_id} is object owned and cannot be used as an input"),

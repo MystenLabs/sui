@@ -141,6 +141,10 @@ impl<'a> Resolver<'a> for ToObject {
             | Owner::ConsensusAddressOwner {
                 start_version: initial_shared_version,
                 ..
+            }
+            | Owner::Party {
+                start_version: initial_shared_version,
+                ..
             } => ObjectArg::SharedObject {
                 id: object_ref.0,
                 initial_shared_version,
@@ -150,10 +154,6 @@ impl<'a> Resolver<'a> for ToObject {
                     Tx::SharedObjectMutability::Immutable
                 },
             },
-            Owner::Party { .. } => {
-                // We need to know the sender to determine mutability
-                todo!("Party WIP")
-            }
             Owner::ObjectOwner(_) => {
                 error!(loc => help: {
                     "{obj_id} is an object-owned object, you can only use immutable, shared, or owned objects here."
