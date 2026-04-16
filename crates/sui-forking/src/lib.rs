@@ -10,7 +10,6 @@ mod execution;
 pub(crate) mod filesystem;
 mod gql;
 mod node;
-mod rpc;
 pub mod startup;
 pub mod store;
 
