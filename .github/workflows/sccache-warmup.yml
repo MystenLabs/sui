@@ -91,6 +91,22 @@ jobs:
           sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
           df -h /
 
+      - name: Install mold linker (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mold
+          mold --version
+
+      - name: Configure RUSTFLAGS for mold (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        # Keep in sync with .cargo/config.toml [build].rustflags — RUSTFLAGS env replaces
+        # (not appends to) the config file's rustflags.
+        run: |
+          echo "RUSTFLAGS=-C force-frame-pointers=yes -C force-unwind-tables=yes -A unknown_lints -A mismatched_lifetime_syntaxes -C link-arg=-fuse-ld=mold" >> "$GITHUB_ENV"
+
       - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
 
       - name: Register cargo problem matcher
