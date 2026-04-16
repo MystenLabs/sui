@@ -90,7 +90,7 @@ pub(crate) trait ObjectRead {
 pub(crate) trait CheckpointRead {
     /// Return the verified checkpoint summary together with its decoded
     /// contents. If `sequence` is `None`, return the latest checkpoint.
-    fn get_verified_checkpoint(
+    fn get_checkpoint(
         &self,
         sequence: Option<CheckpointSequenceNumber>,
     ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error>;

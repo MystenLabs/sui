@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use anyhow::anyhow;
+use tracing::info;
 
 use simulacrum::store::SimulatorStore;
 use sui_protocol_config::Chain;
@@ -97,9 +98,14 @@ impl DataStore {
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
         if let Some(checkpoint) = self.local.get_checkpoint_by_sequence_number(sequence)? {
+            info!("Found checkpoint {sequence} in local filesystem");
             return Ok(Some(checkpoint));
         }
         if sequence > self.forked_at_checkpoint {
+            info!(
+                "Checkpoint requested for sequence {sequence} > forked_at_checkpoint {}, returning None",
+                self.forked_at_checkpoint
+            );
             return Ok(None);
         }
         Ok(self
@@ -180,11 +186,14 @@ impl DataStore {
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
-        let Some((checkpoint, contents)) = self.gql.get_verified_checkpoint(Some(sequence))? else {
+        let Some((checkpoint, contents)) = self.gql.get_checkpoint(Some(sequence))? else {
             return Ok(None);
         };
         self.local.write_checkpoint_summary(&checkpoint)?;
         self.local.write_checkpoint_contents(&contents)?;
+        info!(
+            "Found checkpoint {sequence} on remote GraphQL endpoint and cached to local filesystem"
+        );
         Ok(Some((checkpoint, contents)))
     }
 
@@ -285,6 +294,24 @@ impl DataStore {
             .map(|info| info.transaction))
     }
 
+    /// Get the checkpoint that finalized a transaction. Local-only: the checkpoint
+    /// file is written alongside the transaction by both the remote-fetch path
+    /// and the post-fork executor path.
+    pub(crate) fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
+        if let Some(seq) = self.local.get_transaction_checkpoint(digest)? {
+            return Ok(Some(seq));
+        }
+        // If the checkpoint file is missing but the transaction itself hasn't
+        // been fetched yet, try fetching it — that will also write the
+        // checkpoint file as a side-effect.
+        Ok(self
+            .fetch_and_cache_transaction(digest)?
+            .map(|info| info.checkpoint))
+    }
+
     /// Get transaction effects by digest, with the same local-first remote-fallback
     /// policy as [`Self::get_transaction`].
     pub(crate) fn get_transaction_effects(
@@ -324,7 +351,34 @@ impl DataStore {
         self.local.write_transaction(digest, &info.transaction)?;
         self.local
             .write_transaction_effects(digest, &info.effects)?;
+        self.local
+            .write_transaction_checkpoint(digest, info.checkpoint)?;
+
+        // Fetch and persist events separately — they require paginated queries.
+        let events = self
+            .gql
+            .get_transaction_events(&digest.base58_encode())?
+            .unwrap_or_default();
+        self.local.write_transaction_events(digest, &events)?;
+
         Ok(Some(info))
+    }
+
+    /// Look up the checkpoint sequence number that references the given contents
+    /// digest by scanning the highest persisted checkpoint. Called from
+    /// `insert_checkpoint_contents` to build the tx→checkpoint reverse mapping.
+    fn checkpoint_sequence_for_contents(
+        &self,
+        contents_digest: &CheckpointContentsDigest,
+    ) -> Option<CheckpointSequenceNumber> {
+        // The summary persisted by the immediately preceding `insert_checkpoint`
+        // call is typically the highest checkpoint. Read it back and verify the
+        // content_digest matches.
+        let checkpoint = self.local.get_highest_verified_checkpoint().ok()??;
+        if checkpoint.data().content_digest == *contents_digest {
+            return Some(checkpoint.data().sequence_number);
+        }
+        None
     }
 
     /// Construct a `DataStore` for tests, backed by an explicit local root and a fake (unused)
@@ -566,6 +620,23 @@ impl SimulatorStore for DataStore {
                 contents_digest = %digest,
                 "failed to persist checkpoint contents: {err:?}",
             );
+        }
+
+        // Build the tx_digest → checkpoint reverse mapping. The summary
+        // (persisted by the preceding `insert_checkpoint` call) carries the
+        // sequence number we need.
+        if let Some(sequence) = self.checkpoint_sequence_for_contents(&digest) {
+            for exec_digest in contents.iter() {
+                if let Err(err) = self
+                    .local
+                    .write_transaction_checkpoint(&exec_digest.transaction, sequence)
+                {
+                    tracing::error!(
+                        tx_digest = %exec_digest.transaction,
+                        "failed to persist transaction checkpoint: {err:?}",
+                    );
+                }
+            }
         }
     }
 

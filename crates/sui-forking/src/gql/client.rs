@@ -8,6 +8,7 @@ use reqwest::header::USER_AGENT;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
+use sui_types::effects::TransactionEvents;
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 
@@ -103,7 +104,9 @@ impl GraphQLClient {
             .context("Failed to read response in GQL query")
     }
 
-    async fn get_verified_checkpoint_impl(
+    /// Get a checkpoint (summary and contents) by sequence number from GraphQL RPC. If
+    /// `sequence_number` is `None`, gets the latest checkpoint.
+    async fn get_checkpoint_impl(
         &self,
         sequence_number: Option<CheckpointSequenceNumber>,
     ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error> {
@@ -136,6 +139,17 @@ impl TransactionRead for GraphQLClient {
     }
 }
 
+impl GraphQLClient {
+    /// Fetch all events for a transaction, paginating through the GraphQL
+    /// events connection. Returns `None` if the transaction doesn't exist.
+    pub(crate) fn get_transaction_events(
+        &self,
+        tx_digest: &str,
+    ) -> Result<Option<TransactionEvents>, Error> {
+        block_on!(queries::events_query::query(tx_digest, self))
+    }
+}
+
 impl ObjectRead for GraphQLClient {
     fn get_objects(&self, keys: &[ObjectKey]) -> Result<Vec<Option<(Object, u64)>>, Error> {
         block_on!(crate::gql::queries::object_query::query(keys, self))
@@ -143,11 +157,11 @@ impl ObjectRead for GraphQLClient {
 }
 
 impl CheckpointRead for GraphQLClient {
-    fn get_verified_checkpoint(
+    fn get_checkpoint(
         &self,
         sequence: Option<CheckpointSequenceNumber>,
     ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error> {
-        Ok(block_on!(self.get_verified_checkpoint_impl(sequence))?)
+        Ok(block_on!(self.get_checkpoint_impl(sequence))?)
     }
 }
 
@@ -312,7 +326,7 @@ mod tests {
 
         let store = mock_store(&server);
         let (verified, contents) = store
-            .get_verified_checkpoint_impl(Some(11))
+            .get_checkpoint_impl(Some(11))
             .await
             .expect("checkpoint query should succeed")
             .expect("checkpoint should be present");
