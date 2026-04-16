@@ -104,12 +104,14 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
+    use sui_indexer_alt_framework_store_traits::testing::mock_store::MockWatermark;
     use sui_pg_db::FieldCount;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::time::Duration;
 
     use crate::metrics::IndexerMetrics;
-    use crate::mocks::store::*;
+    use crate::mocks::store::FallibleMockConnection;
+    use crate::mocks::store::FallibleMockStore;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::BatchStatus;
 
@@ -137,7 +139,7 @@ mod tests {
 
     #[async_trait]
     impl Handler for DataPipeline {
-        type Store = MockStore;
+        type Store = FallibleMockStore;
         type Batch = Vec<Self::Value>;
 
         fn batch(
@@ -152,14 +154,14 @@ mod tests {
         async fn commit<'a>(
             &self,
             _batch: &Self::Batch,
-            _conn: &mut MockConnection<'a>,
+            _conn: &mut FallibleMockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(0)
         }
     }
 
     struct TestSetup {
-        store: MockStore,
+        store: FallibleMockStore,
         #[allow(unused)]
         handle: Service,
     }
@@ -170,7 +172,7 @@ mod tests {
         connection_failure_attempts: usize,
         set_reader_watermark_failure_attempts: usize,
     ) -> TestSetup {
-        let store = MockStore::new()
+        let store = FallibleMockStore::new()
             .with_watermark(DataPipeline::NAME, watermark)
             .with_reader_watermark_failures(set_reader_watermark_failure_attempts)
             .with_connection_failures(connection_failure_attempts);

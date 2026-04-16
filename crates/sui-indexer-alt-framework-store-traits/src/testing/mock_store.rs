@@ -1,11 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Canonical in-memory `Connection` test double for the indexer framework.
-//!
-//! Lives in this crate (rather than alongside framework code) so sanity tests and trait-level
-//! tests can use it without a dependency cycle — the framework crate depends on this crate, not
-//! the other way around.
+//! Canonical in-memory `Connection` test double for store trait tests.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -44,8 +40,7 @@ pub struct MockWatermark {
     pub chain_id: Option<[u8; 32]>,
 }
 
-/// In-memory `Store`/`Connection` for testing framework mechanics. Operators should largely test
-/// their real store implementations.
+/// In-memory `Store`/`Connection` for exercising the shared store-trait test macros.
 #[derive(Clone, Default)]
 pub struct MockStore {
     /// Maps each pipeline's name to its watermark.
@@ -112,8 +107,6 @@ impl SequentialStore for MockStore {
             &'r mut Self::Connection<'_>,
         ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>,
     {
-        // Snapshot watermark state so a closure that returns `Err` rolls back atomically.
-        // Simulates the real SQL transaction semantics the framework relies on.
         let snapshot: HashMap<String, MockWatermark> = self
             .watermarks
             .iter()

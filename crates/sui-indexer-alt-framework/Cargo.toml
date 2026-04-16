@@ -55,6 +55,7 @@ wiremock.workspace = true
 sui-pg-db.workspace = true
 dashmap.workspace = true
 
+sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
 sui-synthetic-ingestion.workspace = true
 
 [features]
