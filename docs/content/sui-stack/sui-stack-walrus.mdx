@@ -1,13 +1,13 @@
 ---
 title: Data Storage Using Walrus
-description: Learn how to store and retrieve data on Walrus.
+description: Learn how to store and retrieve data on Walrus by walking through OnlyFins, a content platform built on Sui and Walrus.
 keywords: [walrus, blob storage, walrus SDK, OnlyFins, Sui Stack, upload, read, seal]
 draft: true
 ---
 
 This guide uses [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) as a concrete example throughout. OnlyFins is a content platform where creators upload images stored on Walrus. Posts are Sui objects. Images are Walrus blobs, optionally encrypted with Seal. Users pay onchain to unlock encrypted content.
 
-Each section explains a Walrus concept or operation and shows where it appears in OnlyFins. When OnlyFins does not yet cover a pattern, the guide notes what would need to be added and links to the [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) as the authoritative source. The [Encrypting Data with Seal](../seal/encrypting-data.mdx) guide builds on this same app.
+Each section explains a Walrus concept or operation and shows where it appears in OnlyFins. For patterns OnlyFins does not cover, the guide draws on [Walrus Onboarding](https://github.com/MystenLabs/Walrus-Onboarding) modules and [quack-intelligence](https://github.com/StefPler/quack-intelligence), a community frontend app. The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the authoritative reference for all SDK options. The [Encrypting Data with Seal](../seal/encrypting-data.mdx) guide builds on this same app.
 
 ## Introduction to Walrus
 
@@ -99,17 +99,49 @@ const client = new SuiGrpcClient({
 
 The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the single source of truth for all SDK patterns, options, and examples.
 
+For React apps, wrap your component tree with a context provider that initializes the client once and makes it available throughout the app. The `WalrusProvider` from [quack-intelligence](https://github.com/StefPler/quack-intelligence) shows this pattern using `SuiGrpcClient`:
+
+<ImportContent
+  source="dapp/src/contexts/WalrusProvider.tsx"
+  mode="code"
+  org="StefPler"
+  repo="quack-intelligence"
+  language="tsx"
+/>
+
 ## Uploading data
 
 There are 2 primary ways to upload data to Walrus: using the CLI directly, or using the TS SDK programmatically. The TS SDK offers 2 upload APIs: `writeBlob` for raw blobs, and the `WalrusFile` API which uploads files as quilts by default.
 
 ### Using the TS SDK with a Signer
 
-The `WalrusFile` API's `writeFiles` method handles encoding, onchain registration, upload, and certification in a single call when you provide a `Signer` instance. All provided files are written into a single quilt. This is the right approach for backend scripts or jobs where a server-side wallet controls the upload.
+Use `writeBlob` with a `Signer` instance for server-side uploads where a backend script or job controls the wallet. The Walrus Onboarding Module 07 provides two clean examples: a direct upload and an upload through the relay. Both use the `$extend(walrus())` pattern:
 
-There is currently no example of this pattern in OnlyFins. The seeding workflow uses the CLI for uploads instead. Adding a backend script that uses `writeFiles` to programmatically upload the OnlyFins content to Walrus is a planned addition to the app. For the current authoritative example of Signer-based uploads, see the [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus#writing-files).
+<ImportContent
+  source="07-Walrus-SDK-upload-relay/hands-on-source-code/src/examples/basic-upload-example.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="Walrus-Onboarding"
+  language="ts"
+  fun="uploadBlob"
+/>
 
-In OnlyFins, the signer pattern does appear in the post registration step. After uploading images with the CLI and recording the blob IDs, `createPosts.ts` uses a `Keypair` signer to build and execute a PTB that registers each post onchain with its blob ID. The signer setup in `config.ts` shows the pattern for loading `Ed25519Keypair` instances from environment variables:
+To reduce the number of requests from ~2,200 to a single relay request, configure the upload relay when extending the client:
+
+<ImportContent
+  source="07-Walrus-SDK-upload-relay/hands-on-source-code/src/examples/basic-upload-example.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="Walrus-Onboarding"
+  language="ts"
+  fun="uploadWithRelay"
+/>
+
+:::info
+These examples use `SuiClient` from `@mysten/sui/client`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The Walrus SDK setup and `writeBlob` API are identical regardless of which client you use. The same note applies to the `downloadWithErrorHandling` example later in this guide, which is from the same module.
+:::
+
+In OnlyFins, the signer pattern appears in the post registration step. After uploading images with the CLI and recording the blob IDs, `createPosts.ts` uses a `Keypair` signer to build and execute a PTB that registers each post onchain with its blob ID. The signer setup in `config.ts` shows the pattern for loading `Ed25519Keypair` instances from environment variables:
 
 <ImportContent
   source="backend/src/config.ts"
@@ -131,6 +163,10 @@ With signers configured, `createPosts.ts` builds a PTB that calls `posts::create
   fun="main"
 />
 
+:::info
+`createPosts.ts` uses `SuiClient` from `@mysten/sui/client`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The `Transaction` building and `signAndExecuteTransaction` patterns are identical regardless of which client you use.
+:::
+
 ### Using the TS SDK with user wallets
 
 When uploads are signed by a user wallet in a browser, wallets use popups that browsers block if they are not opened in direct response to a user interaction. The `writeFilesFlow` method breaks the upload into discrete steps, each triggered by a separate user action.
@@ -145,7 +181,41 @@ The flow has 5 steps:
 
 There is currently no example of this pattern in OnlyFins. Two external references cover it: [relay.wal.app](https://relay.wal.app/) is a deployed demo with an open-sourced repository that shows a complete production-ready browser upload flow. The [`write-from-wallet`](https://github.com/MystenLabs/ts-sdks/tree/main/packages/walrus/examples/write-from-wallet) example in the TS SDK repo is a more concise undeployed version. Both use `writeFilesFlow` with `@mysten/dapp-kit-react`.
 
-Adding a user-wallet upload flow to OnlyFins is a candidate for a future version of the app.
+The `walrus.service.ts` in [quack-intelligence](https://github.com/StefPler/quack-intelligence) shows both a single-blob browser upload flow and a quilt (batch) browser upload flow using `writeBlobFlow` and `writeFilesFlow` from a standalone `WalrusClient`:
+
+<ImportContent
+  source="dapp/src/services/walrus.service.ts"
+  mode="code"
+  org="StefPler"
+  repo="quack-intelligence"
+  language="ts"
+  fun="createUploadBlobFlow"
+/>
+
+<ImportContent
+  source="dapp/src/services/walrus.service.ts"
+  mode="code"
+  org="StefPler"
+  repo="quack-intelligence"
+  language="ts"
+  fun="createUploadQuiltFlow"
+/>
+
+### Using the WalrusFile API to batch upload as a quilt
+
+When uploading multiple files together, use `writeFiles` with `WalrusFile.from()` to attach identifiers and tags to each file. All files are stored in a single quilt, which is more efficient than uploading them separately:
+
+<ImportContent
+  source="11-Batch-storage/hands-on-source-code/03-creation-process/ts/03-create-simple.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="Walrus-Onboarding"
+  language="ts"
+/>
+
+:::info
+This example uses `SuiClient` from `@mysten/sui/client`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The `writeFiles` API and `WalrusFile.from()` patterns are identical regardless of which client you use.
+:::
 
 ## Reading data
 
@@ -177,15 +247,46 @@ The `transformSuiObjectsToPosts` utility extracts the `image_blob_id` field from
 
 ### Reading metadata and attributes
 
-Blobs support custom key-value attributes stored as dynamic fields on the Sui blob object. These can include content type, content length, or any app-specific metadata set at upload time or updated afterward. Attributes travel with the blob object on Sui and are readable alongside the blob content.
+Blobs support custom key-value attributes stored as dynamic fields on the Sui blob object. Attributes can include content type, content length, or any app-specific metadata. They are set at upload time or updated afterward, travel with the blob object on Sui, and are readable alongside the blob content.
 
-There is currently no example of reading or writing blob attributes in OnlyFins. For the authoritative API reference and example, see the [`attributes.ts`](https://github.com/MystenLabs/ts-sdks/blob/main/packages/walrus/examples/basics/attributes.ts) example in the TS SDK repo, which covers `readBlobAttributes`, `executeWriteBlobAttributesTransaction`, and passing attributes at write time through `writeBlob`.
+The `attributes.ts` example in the TS SDK shows all three operations in one script: setting attributes at upload through the `attributes` parameter on `writeBlob`, reading them with `readBlobAttributes`, and updating or deleting individual keys with `executeWriteBlobAttributesTransaction`:
+
+<ImportContent
+  source="packages/walrus/examples/basics/attributes.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="ts-sdks"
+  language="ts"
+/>
 
 ### Using the WalrusFile API
 
 The `WalrusFile` API is the recommended way to read Walrus data with the TS SDK. The `getFiles` method accepts both blob IDs and quilt IDs and returns `WalrusFile` instances that work like `Response` objects from the `fetch` API. Reading files in batches is more efficient when loading multiple files from the same quilt because the client can optimize requests.
 
-There is currently no deployed app example of reading with the `WalrusFile` API. OnlyFins reads using plain aggregator fetches instead. The reading in [relay.wal.app](https://relay.wal.app/) currently uses aggregators but could be replaced with the `WalrusFile` API. For the current authoritative reference, see the [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus#reading-files).
+The Walrus Onboarding Module 11 shows how to retrieve files from a quilt by identifier using `getBlob` and `blob.files()`:
+
+<ImportContent
+  source="11-Batch-storage/hands-on-source-code/04-retrieval-process/ts/01-get-files-identifiers.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="Walrus-Onboarding"
+  language="ts"
+/>
+
+:::info
+This example uses `SuiClient` from `@mysten/sui/client`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The `getBlob` and `blob.files()` patterns are identical regardless of which client you use.
+:::
+
+The `quack-intelligence` service layer shows how to read a single file including its content-type tag and identifier:
+
+<ImportContent
+  source="dapp/src/services/walrus.service.ts"
+  mode="code"
+  org="StefPler"
+  repo="quack-intelligence"
+  language="ts"
+  fun="downloadFile"
+/>
 
 :::caution
 Reads through the Walrus SDK require approximately 335 requests to storage nodes regardless of whether you use an upload relay. For high-read-volume scenarios, aggregator-based reads are significantly more efficient.
@@ -205,6 +306,17 @@ OnlyFins reads all images using plain HTTP fetches to the aggregator. The `fetch
 />
 
 For unencrypted posts, the aggregator URL from `transformSuiObjectsToPosts` is used directly as an image source. For encrypted posts, `fetchFromWalrus` retrieves the encrypted bytes before passing them to Seal for decryption.
+
+When reading directly with the TS SDK, the Walrus Onboarding Module 07 shows `readBlob` with proper typed error handling for the most common failure modes:
+
+<ImportContent
+  source="07-Walrus-SDK-upload-relay/hands-on-source-code/src/examples/basic-download-example.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="Walrus-Onboarding"
+  language="ts"
+  fun="downloadWithErrorHandling"
+/>
 
 ## Managing blobs
 
@@ -226,6 +338,16 @@ const { data } = useSuiClientQuery('getOwnedObjects', {
 });
 ```
 
+When displaying blob owners, resolve their SuiNS name if one exists rather than showing a raw address. The `useDisplayName` hook from quack-intelligence wraps `useResolveSuiNSName` from Sui dApp Kit with a graceful fallback to a formatted address:
+
+<ImportContent
+  source="dapp/src/hooks/useDisplayName.ts"
+  mode="code"
+  org="StefPler"
+  repo="quack-intelligence"
+  language="ts"
+/>
+
 ### Sharing blobs
 
 Walrus provides a standard for wrapping a blob in a shared object that can be funded and whose lifetime can be extended by anyone, not just the original owner. This is useful for content that multiple parties want to keep available.
@@ -238,7 +360,26 @@ Blobs must be marked as `deletable: true` at registration time to be eligible fo
 
 #### Using the TS SDK
 
-There is currently no deployed app example that demonstrates blob deletion. Adding this feature is a candidate for [relay.wal.app](https://relay.wal.app/) or an owned-blob display app. For the current authoritative example, see [`delete-blob.ts`](https://github.com/MystenLabs/ts-sdks/blob/main/packages/walrus/examples/basics/delete-blob.ts) in the TS SDK repo, which uses `executeDeleteBlobTransaction` on a `WalrusClient` instance.
+The `walrus.service.ts` in quack-intelligence shows how to build a delete transaction from a standalone `WalrusClient`:
+
+<ImportContent
+  source="dapp/src/services/walrus.service.ts"
+  mode="code"
+  org="StefPler"
+  repo="quack-intelligence"
+  language="ts"
+  fun="deleteBlobTransaction"
+/>
+
+The `useDeleteFile` hook composes this with `useSignAndExecuteTransaction` from Sui dApp Kit to handle the full browser wallet flow:
+
+<ImportContent
+  source="dapp/src/hooks/useDeleteFile.ts"
+  mode="code"
+  org="StefPler"
+  repo="quack-intelligence"
+  language="ts"
+/>
 
 #### Using Move
 
@@ -250,7 +391,26 @@ Blob storage is purchased for a set number of epochs. You can extend the storage
 
 #### Using the TS SDK
 
-There is currently no deployed app example that demonstrates blob extension. Adding this feature is a candidate for [relay.wal.app](https://relay.wal.app/) or an owned-blob display app. For the current authoritative example, see [`extend-blob.ts`](https://github.com/MystenLabs/ts-sdks/blob/main/packages/walrus/examples/basics/extend-blob.ts) in the TS SDK repo, which uses `executeExtendBlobTransaction`.
+The `walrus.service.ts` in quack-intelligence shows how to build an extension transaction:
+
+<ImportContent
+  source="dapp/src/services/walrus.service.ts"
+  mode="code"
+  org="StefPler"
+  repo="quack-intelligence"
+  language="ts"
+  fun="extendStorageTransaction"
+/>
+
+The `useExtendStorage` hook composes this with `useSignAndExecuteTransaction` and also updates the app's own onchain record with the new total epoch count:
+
+<ImportContent
+  source="dapp/src/hooks/useExtendStorage.ts"
+  mode="code"
+  org="StefPler"
+  repo="quack-intelligence"
+  language="ts"
+/>
 
 #### Using Move
 
