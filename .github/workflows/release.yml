@@ -162,9 +162,6 @@ jobs:
           sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
           df -h /
 
-      - uses: ./.github/actions/setup-mold
-        if: ${{ env.s3_existing_archive == '' }}
-
       - name: Setup sccache
         if: ${{ env.s3_existing_archive == '' }}
         id: sccache
