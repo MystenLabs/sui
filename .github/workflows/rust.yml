@@ -102,7 +102,11 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Install BigTable emulator
         run: |
           echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
@@ -147,7 +151,11 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
@@ -205,7 +213,11 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
@@ -376,7 +388,11 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
@@ -408,7 +424,11 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
