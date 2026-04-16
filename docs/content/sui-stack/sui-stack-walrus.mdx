@@ -1,0 +1,265 @@
+---
+title: Data Storage Using Walrus
+description: Learn how to store and retrieve data on Walrus.
+keywords: [walrus, blob storage, walrus SDK, OnlyFins, Sui Stack, upload, read, seal]
+draft: true
+---
+
+This guide uses [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) as a concrete example throughout. OnlyFins is a content platform where creators upload images stored on Walrus. Posts are Sui objects. Images are Walrus blobs, optionally encrypted with Seal. Users pay onchain to unlock encrypted content.
+
+Each section explains a Walrus concept or operation and shows where it appears in OnlyFins. When OnlyFins does not yet cover a pattern, the guide notes what would need to be added and links to the [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) as the authoritative source. The [Encrypting Data with Seal](../seal/encrypting-data.mdx) guide builds on this same app.
+
+## Introduction to Walrus
+
+Walrus is a decentralized storage and data availability protocol built specifically for large binary files, or blobs. It uses Sui for coordination, payment, and governance, making it a natural storage layer for apps built on Sui.
+
+### Blob storage
+
+Walrus stores data as blobs, which are arbitrary binary objects. All blobs stored on Walrus are public and discoverable by anyone. You must not use Walrus to store secrets or private data without additional measures to protect confidentiality. For securing data before upload, see [Data encryption](#data-encryption).
+
+Walrus uses erasure coding to distribute encoded parts of each blob across all storage nodes, maintaining storage costs at approximately 5 times the size of the original blob. This is significantly more cost-efficient than full replication and more resilient than partial replication.
+
+A quilt is a higher-level storage format that groups multiple files into a single blob. The `WalrusFile` API uses quilts by default, which is more efficient when uploading collections of files together.
+
+### Blob ID and object ID
+
+Every blob has 2 identifiers:
+
+- **Blob ID:** A content-addressed hash of the blob data, computed offchain and deterministic from the blob's contents.
+- **Object ID:** The Sui object ID of the onchain blob registration record. Because blobs are Sui objects, they can be owned by addresses, transferred, wrapped in other objects, or managed through Sui smart contracts.
+
+In OnlyFins, the `image_blob_id` field on each `Post` Sui object stores the blob ID. The frontend uses this to construct a fetch URL. The object ID lets the app manage blob lifecycle onchain, the same way it manages any other Sui object.
+
+### Storage nodes
+
+Storage nodes are the servers that store encoded blob data. When you write a blob, the Walrus client distributes encoded shards across the active storage node committee. When you read a blob, the client fetches enough shards to reconstruct the original data. Writing a blob directly to storage nodes requires approximately 2,200 requests. Reading requires approximately 335 requests.
+
+### Upload relay
+
+The upload relay is a server-side proxy that accepts blob data from a client and handles the distribution to storage nodes. Using an upload relay significantly reduces the number of requests a client must make to write a blob. This is especially important in browser environments where issuing thousands of direct requests to storage nodes is not practical. Reads through the Walrus SDK still require many requests regardless of whether you use an upload relay.
+
+### Publisher
+
+A publisher is an HTTP server that accepts blob data over a REST API and handles the entire Walrus write flow on your behalf. Publishers are the most direct way to integrate uploads in server-side applications without using the TS SDK.
+
+For production environments, use the `send-object-to` parameter when uploading through a publisher. This instructs the publisher to transfer the resulting blob object to a specified Sui address after upload, so you retain ownership of blobs stored through a shared publisher.
+
+### Aggregator
+
+An aggregator is an HTTP server that serves blobs over a standard REST API. Aggregators are the most direct way to read Walrus data without using the TS SDK, and they work well with standard caches and CDNs.
+
+OnlyFins uses an aggregator to serve all images in the frontend. The aggregator base URL is a single constant that all image fetches are built from:
+
+<ImportContent
+  source="frontend/src/constants.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="onlyfins-example-app"
+  language="ts"
+  variable="WALRUS_AGGREGATOR_URL"
+/>
+
+For most apps, publishers and aggregators are the recommended integration path because they abstract away all storage node communication. The Walrus documentation covers running and configuring publishers and aggregators. The TS SDK is the right tool when your app needs direct interaction with Walrus or when users need to pay for their own storage.
+
+## Tooling
+
+Two tools cover most Walrus integration scenarios.
+
+### CLI
+
+The Walrus CLI provides direct access to all Walrus operations from the command line, including storing, reading, and managing blobs. OnlyFins uses the CLI in its seeding workflow to upload images before registering them onchain. See the [Walrus CLI documentation](https://docs.walrus.site/usage/client-cli.html) for setup and usage.
+
+### TS SDK
+
+The Walrus TS SDK (`@mysten/walrus`) extends the Sui TypeScript SDK client with Walrus-specific methods. It exposes high-level methods for reading and writing blobs, as well as lower-level methods for individual steps when you need more control.
+
+The TS SDK is most useful when:
+
+- Users need to pay for their own storage directly through their wallets.
+- Your app needs to interact directly with Walrus storage nodes or an upload relay.
+- You need full control over the registration, upload, and certification flow.
+
+Install the SDK:
+
+```bash
+$ npm install --save @mysten/walrus @mysten/sui
+```
+
+Set up the client by extending a `SuiGrpcClient` with the Walrus plugin:
+
+```ts
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { walrus } from '@mysten/walrus';
+
+const client = new SuiGrpcClient({
+  network: 'testnet',
+  baseUrl: 'https://fullnode.testnet.sui.io:443',
+}).$extend(walrus());
+```
+
+The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the single source of truth for all SDK patterns, options, and examples.
+
+## Uploading data
+
+There are 2 primary ways to upload data to Walrus: using the CLI directly, or using the TS SDK programmatically. The TS SDK offers 2 upload APIs: `writeBlob` for raw blobs, and the `WalrusFile` API which uploads files as quilts by default.
+
+### Using the TS SDK with a Signer
+
+The `WalrusFile` API's `writeFiles` method handles encoding, onchain registration, upload, and certification in a single call when you provide a `Signer` instance. All provided files are written into a single quilt. This is the right approach for backend scripts or jobs where a server-side wallet controls the upload.
+
+There is currently no example of this pattern in OnlyFins. The seeding workflow uses the CLI for uploads instead. Adding a backend script that uses `writeFiles` to programmatically upload the OnlyFins content to Walrus is a planned addition to the app. For the current authoritative example of Signer-based uploads, see the [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus#writing-files).
+
+In OnlyFins, the signer pattern does appear in the post registration step. After uploading images with the CLI and recording the blob IDs, `createPosts.ts` uses a `Keypair` signer to build and execute a PTB that registers each post onchain with its blob ID. The signer setup in `config.ts` shows the pattern for loading `Ed25519Keypair` instances from environment variables:
+
+<ImportContent
+  source="backend/src/config.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="onlyfins-example-app"
+  language="ts"
+  fun="getKeypair"
+/>
+
+With signers configured, `createPosts.ts` builds a PTB that calls `posts::create_post` for each post, embedding the Walrus blob ID as a field on the resulting `Post` Sui object:
+
+<ImportContent
+  source="backend/src/createPosts.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="onlyfins-example-app"
+  language="ts"
+  fun="main"
+/>
+
+### Using the TS SDK with user wallets
+
+When uploads are signed by a user wallet in a browser, wallets use popups that browsers block if they are not opened in direct response to a user interaction. The `writeFilesFlow` method breaks the upload into discrete steps, each triggered by a separate user action.
+
+The flow has 5 steps:
+
+1. `encode`: Encode the files and compute a blob ID.
+2. `register`: Return a transaction that registers the blob onchain.
+3. `upload`: Upload data to storage nodes or the upload relay.
+4. `certify`: Return a transaction that certifies the blob onchain.
+5. `listFiles`: Return the list of created files.
+
+There is currently no example of this pattern in OnlyFins. Two external references cover it: [relay.wal.app](https://relay.wal.app/) is a deployed demo with an open-sourced repository that shows a complete production-ready browser upload flow. The [`write-from-wallet`](https://github.com/MystenLabs/ts-sdks/tree/main/packages/walrus/examples/write-from-wallet) example in the TS SDK repo is a more concise undeployed version. Both use `writeFilesFlow` with `@mysten/dapp-kit-react`.
+
+Adding a user-wallet upload flow to OnlyFins is a candidate for a future version of the app.
+
+## Reading data
+
+Reading assumes you know the blob ID or quilt ID of the data you want to retrieve. In OnlyFins, blob IDs are stored as fields on `Post` Sui objects and discovered by querying the blockchain. For how to discover blobs you own dynamically, see [Querying blobs](#querying-blobs).
+
+### Finding the blobs you want to read
+
+In OnlyFins, the `Feed` component fetches a known set of post object IDs from Sui using `useSuiClientQuery` with `multiGetObjects`. This is the same pattern you would use to fetch any Sui object by ID:
+
+<ImportContent
+  source="frontend/src/components/Feed.tsx"
+  mode="code"
+  org="MystenLabs"
+  repo="onlyfins-example-app"
+  language="tsx"
+  component="Feed"
+/>
+
+The `transformSuiObjectsToPosts` utility extracts the `image_blob_id` field from each Sui object and constructs the aggregator URL. For encrypted posts it also extracts the `encryption_id` field used in the decryption flow:
+
+<ImportContent
+  source="frontend/src/utils/post-transform.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="onlyfins-example-app"
+  language="ts"
+  fun="transformSuiObjectsToPosts"
+/>
+
+### Reading metadata and attributes
+
+Blobs support custom key-value attributes stored as dynamic fields on the Sui blob object. These can include content type, content length, or any app-specific metadata set at upload time or updated afterward. Attributes travel with the blob object on Sui and are readable alongside the blob content.
+
+There is currently no example of reading or writing blob attributes in OnlyFins. For the authoritative API reference and example, see the [`attributes.ts`](https://github.com/MystenLabs/ts-sdks/blob/main/packages/walrus/examples/basics/attributes.ts) example in the TS SDK repo, which covers `readBlobAttributes`, `executeWriteBlobAttributesTransaction`, and passing attributes at write time through `writeBlob`.
+
+### Using the WalrusFile API
+
+The `WalrusFile` API is the recommended way to read Walrus data with the TS SDK. The `getFiles` method accepts both blob IDs and quilt IDs and returns `WalrusFile` instances that work like `Response` objects from the `fetch` API. Reading files in batches is more efficient when loading multiple files from the same quilt because the client can optimize requests.
+
+There is currently no deployed app example of reading with the `WalrusFile` API. OnlyFins reads using plain aggregator fetches instead. The reading in [relay.wal.app](https://relay.wal.app/) currently uses aggregators but could be replaced with the `WalrusFile` API. For the current authoritative reference, see the [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus#reading-files).
+
+:::caution
+Reads through the Walrus SDK require approximately 335 requests to storage nodes regardless of whether you use an upload relay. For high-read-volume scenarios, aggregator-based reads are significantly more efficient.
+:::
+
+### Reading with an aggregator
+
+OnlyFins reads all images using plain HTTP fetches to the aggregator. The `fetchFromWalrus` utility wraps the fetch with retry logic and a 25-second timeout:
+
+<ImportContent
+  source="frontend/src/utils/walrus-fetch.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="onlyfins-example-app"
+  language="ts"
+  fun="fetchFromWalrus"
+/>
+
+For unencrypted posts, the aggregator URL from `transformSuiObjectsToPosts` is used directly as an image source. For encrypted posts, `fetchFromWalrus` retrieves the encrypted bytes before passing them to Seal for decryption.
+
+## Managing blobs
+
+Because blobs are Sui objects, you manage them using the same tools and patterns you use for any other Sui object. The sections below cover the most common blob management operations.
+
+### Querying blobs
+
+Blobs can be owned by individual wallet addresses or wrapped in other Sui objects. Querying personally owned blobs is done exactly like querying any owned Sui object type, using `getOwnedObjects` with a `StructType` filter on the Walrus blob type.
+
+OnlyFins queries a fixed hardcoded list of post objects rather than dynamically discovering blobs by owner. Adding a view that displays all blobs owned by the connected wallet can be done by deploying a version of Sui dApp Kit's `react-client-dapp` starter with an object type filter added to the owned-objects query. The result would look like this:
+
+```ts
+const { data } = useSuiClientQuery('getOwnedObjects', {
+  owner: currentAccount.address,
+  filter: {
+    StructType: `${WALRUS_PACKAGE_ID}::blob::Blob`,
+  },
+  options: { showContent: true },
+});
+```
+
+### Sharing blobs
+
+Walrus provides a standard for wrapping a blob in a shared object that can be funded and whose lifetime can be extended by anyone, not just the original owner. This is useful for content that multiple parties want to keep available.
+
+Sharing blobs is currently only supported through the Walrus CLI or manually through Move. A PTB template for sharing existing blobs is a planned addition to this guide.
+
+### Deleting blobs
+
+Blobs must be marked as `deletable: true` at registration time to be eligible for deletion. Permanent blobs cannot be deleted.
+
+#### Using the TS SDK
+
+There is currently no deployed app example that demonstrates blob deletion. Adding this feature is a candidate for [relay.wal.app](https://relay.wal.app/) or an owned-blob display app. For the current authoritative example, see [`delete-blob.ts`](https://github.com/MystenLabs/ts-sdks/blob/main/packages/walrus/examples/basics/delete-blob.ts) in the TS SDK repo, which uses `executeDeleteBlobTransaction` on a `WalrusClient` instance.
+
+#### Using Move
+
+Similar to sharing, a PTB template for deleting blobs through a wallet in a browser is a planned addition to this guide. PTBs are a useful way to express Move-level operations without writing a full Move module.
+
+### Extending the lifetime of blobs
+
+Blob storage is purchased for a set number of epochs. You can extend the storage period of a blob before it expires.
+
+#### Using the TS SDK
+
+There is currently no deployed app example that demonstrates blob extension. Adding this feature is a candidate for [relay.wal.app](https://relay.wal.app/) or an owned-blob display app. For the current authoritative example, see [`extend-blob.ts`](https://github.com/MystenLabs/ts-sdks/blob/main/packages/walrus/examples/basics/extend-blob.ts) in the TS SDK repo, which uses `executeExtendBlobTransaction`.
+
+#### Using Move
+
+Similar to sharing and deletion, a PTB template for extending blobs through a wallet in a browser is a planned addition to this guide.
+
+## Data encryption
+
+All blobs stored on Walrus are public. To restrict access to content, you must encrypt it before uploading and decrypt it after retrieval. OnlyFins demonstrates this pattern end-to-end using Seal.
+
+Seal is a decentralized secrets management service that provides threshold encryption and onchain access control for Walrus data. It integrates directly with Sui's object model, letting you tie decryption access to ownership of specific Sui objects or other onchain conditions. In OnlyFins, a user receives a `ViewerToken` Sui object after paying for a post, and Seal checks ownership of that token before issuing decryption key shares.
+
+The backend `encryptImages.ts` script handles encryption before upload. The frontend `usePostDecryption` hook handles decryption after reading. Both are covered in depth in [Encrypting Data with Seal](../seal/encrypting-data.mdx), which builds on this same OnlyFins app.
