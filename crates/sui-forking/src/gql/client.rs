@@ -5,10 +5,10 @@ use anyhow::{Context, Error, Result};
 use cynic::{GraphQlResponse, Operation};
 use reqwest::header::USER_AGENT;
 
+use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
-use sui_types::effects::TransactionEvents;
 use sui_types::object::Object;
 use sui_types::supported_protocol_versions::ProtocolConfig;
 

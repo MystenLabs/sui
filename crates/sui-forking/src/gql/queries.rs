@@ -261,14 +261,10 @@ pub(crate) mod events_query {
                 let Some(bcs_str) = node.event_bcs else {
                     continue;
                 };
-                let bytes = FastCryptoBase64::decode(&bcs_str.0).context(format!(
-                    "Event BCS does not decode for tx {}",
-                    digest
-                ))?;
-                let event: Event = bcs::from_bytes(&bytes).context(format!(
-                    "Cannot deserialize event for tx {}",
-                    digest
-                ))?;
+                let bytes = FastCryptoBase64::decode(&bcs_str.0)
+                    .context(format!("Event BCS does not decode for tx {}", digest))?;
+                let event: Event = bcs::from_bytes(&bytes)
+                    .context(format!("Cannot deserialize event for tx {}", digest))?;
                 all_events.push(event);
             }
 
@@ -722,8 +718,10 @@ pub(crate) mod checkpoint_query {
 
         fn encode_bcs<T: serde::Serialize>(value: &T) -> Base64 {
             Base64(
-                FastCryptoBase64::from_bytes(&bcs::to_bytes(value).expect("value should serialize"))
-                    .encoded(),
+                FastCryptoBase64::from_bytes(
+                    &bcs::to_bytes(value).expect("value should serialize"),
+                )
+                .encoded(),
             )
         }
 
@@ -738,7 +736,8 @@ pub(crate) mod checkpoint_query {
                 content_bcs: Some(encode_bcs(&contents)),
                 validator_signatures: Some(ValidatorAggregatedSignature {
                     signature: Some(Base64(
-                        FastCryptoBase64::from_bytes(certified.auth_sig().signature.as_ref()).encoded(),
+                        FastCryptoBase64::from_bytes(certified.auth_sig().signature.as_ref())
+                            .encoded(),
                     )),
                     signers_map: certified
                         .auth_sig()
@@ -790,8 +789,10 @@ pub(crate) mod checkpoint_query {
                 content_bcs: Some(encode_bcs(&checkpoint.contents)),
                 validator_signatures: Some(ValidatorAggregatedSignature {
                     signature: Some(Base64(
-                        FastCryptoBase64::from_bytes(checkpoint.summary.auth_sig().signature.as_ref())
-                            .encoded(),
+                        FastCryptoBase64::from_bytes(
+                            checkpoint.summary.auth_sig().signature.as_ref(),
+                        )
+                        .encoded(),
                     )),
                     signers_map: vec![-1],
                 }),
