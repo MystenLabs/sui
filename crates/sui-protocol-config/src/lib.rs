@@ -1054,6 +1054,9 @@ struct FeatureFlags {
     enable_gasless: bool,
 
     #[serde(skip_serializing_if = "is_false")]
+    gasless_verify_remaining_balance: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
     disallow_jump_orphans: bool,
 
     // If true, return early on type mismatch in receive_object.
@@ -2739,6 +2742,10 @@ impl ProtocolConfig {
 
     pub fn enable_gasless(&self) -> bool {
         self.feature_flags.enable_gasless
+    }
+
+    pub fn gasless_verify_remaining_balance(&self) -> bool {
+        self.feature_flags.gasless_verify_remaining_balance
     }
 
     pub fn gasless_allowed_token_types(&self) -> &[(String, u64)] {
@@ -4822,6 +4829,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
                     }
+                    cfg.feature_flags.gasless_verify_remaining_balance = true;
                 }
                 // Use this template when making changes:
                 //
@@ -5217,6 +5225,7 @@ impl ProtocolConfig {
     pub fn enable_gasless_for_testing(&mut self) {
         self.enable_address_balance_gas_payments_for_testing();
         self.feature_flags.enable_gasless = true;
+        self.feature_flags.gasless_verify_remaining_balance = true;
         self.gasless_max_computation_units = Some(50_000);
         self.gasless_allowed_token_types = Some(vec![]);
         self.gasless_max_tps = Some(1000);
