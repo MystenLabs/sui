@@ -177,13 +177,8 @@ impl Connection for BigTableConnection<'_> {
         }))
     }
 
-    async fn accepts_chain_id(
-        &mut self,
-        _pipeline_task: &str,
-        _chain_id: [u8; 32],
-    ) -> Result<bool> {
-        // TODO: Implement storing chain_id
-        Ok(true)
+    async fn accepts_chain_id(&mut self, pipeline_task: &str, chain_id: [u8; 32]) -> Result<bool> {
+        self.client.accepts_chain_id(pipeline_task, chain_id).await
     }
 
     async fn committer_watermark(
@@ -327,6 +322,36 @@ mod tests {
             .await
             .unwrap();
         (emulator, BigTableStore::new(client))
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_first_call_writes_and_accepts() {
+        let (_emulator, store) = store_conn().await;
+        let mut conn = store.connect().await.unwrap();
+
+        let chain_id = [1u8; 32];
+        assert!(conn.accepts_chain_id(PIPELINE, chain_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_matching_accepts() {
+        let (_emulator, store) = store_conn().await;
+        let mut conn = store.connect().await.unwrap();
+
+        let chain_id = [1u8; 32];
+        assert!(conn.accepts_chain_id(PIPELINE, chain_id).await.unwrap());
+        assert!(conn.accepts_chain_id(PIPELINE, chain_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_mismatching_rejects() {
+        let (_emulator, store) = store_conn().await;
+        let mut conn = store.connect().await.unwrap();
+
+        let chain_id_a = [1u8; 32];
+        let chain_id_b = [2u8; 32];
+        assert!(conn.accepts_chain_id(PIPELINE, chain_id_a).await.unwrap());
+        assert!(!conn.accepts_chain_id(PIPELINE, chain_id_b).await.unwrap());
     }
 
     #[tokio::test]

@@ -417,6 +417,44 @@ impl BigTableClient {
         Ok(!predicate_matched)
     }
 
+    /// Returns `true` iff the supplied `chain_id` matches the chain_id stored for `pipeline`.
+    /// On the first call (no chain_id cell yet) writes `chain_id` and returns `true`. The
+    /// chain_id cell is independent of the v1 watermark cells, so this can be invoked before
+    /// `init_watermark`.
+    pub async fn accepts_chain_id(&mut self, pipeline: &str, chain_id: [u8; 32]) -> Result<bool> {
+        use tables::watermarks::col;
+        let mutations =
+            build_set_cell_mutations([(col::CHAIN_ID, Bytes::copy_from_slice(&chain_id))]);
+        let predicate = column_exists_filter(col::CHAIN_ID);
+        // Predicate is "row already has a chain_id" → false_mutations write the new chain_id
+        // when nothing is stored yet.
+        let predicate_matched = self
+            .check_and_mutate_row(
+                tables::watermarks::NAME,
+                tables::watermarks::encode_key(pipeline),
+                Some(predicate),
+                Vec::new(),
+                mutations,
+            )
+            .await?;
+        if !predicate_matched {
+            return Ok(true);
+        }
+        let row = self.get_pipeline_watermark_rows(pipeline).await?;
+        let cell = row
+            .iter()
+            .find_map(|(c, v)| (c.as_ref() == col::CHAIN_ID.as_bytes()).then_some(v))
+            .context("chain_id missing after CAS reported it present")?;
+        let stored: [u8; 32] = cell.as_ref().try_into().map_err(|_| {
+            anyhow::anyhow!(
+                "`{}` column has unexpected length {} (expected 32)",
+                col::CHAIN_ID,
+                cell.len()
+            )
+        })?;
+        Ok(stored == chain_id)
+    }
+
     /// Create the row for a pipeline iff no schema-version cell exists yet. Used by
     /// `init_watermark` for fresh rows and the v0 → v1 bootstrap. Returns `true` iff the
     /// write happened.
@@ -446,7 +484,7 @@ impl BigTableClient {
             cells.push((col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)));
         }
         let mutations = build_set_cell_mutations(cells);
-        let predicate = schema_version_column_exists_filter();
+        let predicate = column_exists_filter(tables::watermarks::col::SCHEMA_VERSION);
         // Predicate is "row has any schema-version cell" → false_mutations write the new row.
         let predicate_matched = self
             .check_and_mutate_row(
@@ -1272,10 +1310,9 @@ fn column_value_at_least_filter(column: &str, value: Bytes) -> RowFilter {
     }
 }
 
-/// Build a `RowFilter` matching any cell in the `sui:v` (schema-version) column. Used as the
-/// predicate for the "create-if-absent" path: if the predicate matches, the row already exists
-/// in the new schema.
-fn schema_version_column_exists_filter() -> RowFilter {
+/// Build a `RowFilter` matching any cell in the `sui:<column>` column. Used as a CAS predicate
+/// for "create-if-absent" paths: if the predicate matches, the cell already exists.
+fn column_exists_filter(column: &str) -> RowFilter {
     RowFilter {
         filter: Some(Filter::Chain(Chain {
             filters: vec![
@@ -1285,7 +1322,7 @@ fn schema_version_column_exists_filter() -> RowFilter {
                 RowFilter {
                     filter: Some(Filter::ColumnQualifierRegexFilter(Bytes::from(format!(
                         "^{}$",
-                        tables::watermarks::col::SCHEMA_VERSION
+                        column
                     )))),
                 },
             ],

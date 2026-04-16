@@ -35,6 +35,9 @@ pub mod col {
     pub const READER_LO: &str = "rl";
     pub const PRUNER_HI: &str = "ph";
     pub const PRUNER_TIMESTAMP_MS: &str = "ptm";
+    /// Per-pipeline chain id (raw 32 bytes). Independent of the `v1` schema cells —
+    /// written by `accepts_chain_id` and ignored by watermark decoding.
+    pub const CHAIN_ID: &str = "cid";
 }
 
 /// Current schema version written into the `v` cell.
