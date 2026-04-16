@@ -7,8 +7,8 @@ use crate::{
     cfgir::visitor::CFGIRVisitor,
     command_line::compiler::Visitor,
     diagnostics::{
-        codes::{DiagnosticInfo, Severity, custom},
-        warning_filters::WarningFilter,
+        codes::{DiagnosticInfo, DiagnosticsID, Severity, custom},
+        filter::FilterName,
     },
     typing::visitor::TypingVisitor,
 };
@@ -181,17 +181,19 @@ lints!(
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
-pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
+pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
     (
         Some(ALLOW_ATTR_CATEGORY.into()),
         STYLE_WARNING_FILTERS
             .iter()
             .map(|(category, code, filter_name)| {
-                WarningFilter::code(
-                    Some(LINT_WARNING_PREFIX),
-                    *category,
-                    *code,
-                    Some(filter_name),
+                (
+                    Symbol::from(*filter_name),
+                    vec![DiagnosticsID::exact(
+                        Some(LINT_WARNING_PREFIX),
+                        *category,
+                        *code,
+                    )],
                 )
             })
             .collect(),

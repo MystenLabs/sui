@@ -12,7 +12,7 @@ use crate::{
         cfg::ImmForwardCFG,
     },
     command_line::compiler::Visitor,
-    diagnostics::{Diagnostic, Diagnostics, warning_filters::WarningFilters},
+    diagnostics::{Diagnostic, Diagnostics, filter::FilterScope},
     expansion::ast::ModuleIdent,
     hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
     parser::ast::{ConstantName, DatatypeName, Field, FunctionName},
@@ -76,7 +76,7 @@ pub trait CFGIRVisitorConstructor: Send {
 }
 
 pub trait CFGIRVisitorContext {
-    fn push_warning_filter_scope(&mut self, filters: WarningFilters);
+    fn push_warning_filter_scope(&mut self, filters: FilterScope);
     fn pop_warning_filter_scope(&mut self);
 
     fn visit_module_custom(&mut self, _ident: ModuleIdent, _mdef: &G::ModuleDefinition) -> bool {
@@ -383,7 +383,7 @@ macro_rules! simple_visitor {
         impl crate::cfgir::visitor::CFGIRVisitorContext for Context<'_> {
             fn push_warning_filter_scope(
                 &mut self,
-                filters: crate::diagnostics::warning_filters::WarningFilters,
+                filters: crate::diagnostics::filter::FilterScope,
             ) {
                 self.reporter.push_warning_filter_scope(filters)
             }

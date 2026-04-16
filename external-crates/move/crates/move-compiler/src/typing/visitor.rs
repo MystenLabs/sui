@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     command_line::compiler::Visitor,
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::filter::FilterScope,
     expansion::ast::{Fields, ModuleIdent},
     naming::ast::{self as N, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName, VariantName},
@@ -45,7 +45,7 @@ pub enum LValueKind {
 }
 
 pub trait TypingVisitorContext {
-    fn push_warning_filter_scope(&mut self, filters: WarningFilters);
+    fn push_warning_filter_scope(&mut self, filters: FilterScope);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum
@@ -615,7 +615,7 @@ macro_rules! simple_visitor {
         impl crate::typing::visitor::TypingVisitorContext for Context<'_> {
             fn push_warning_filter_scope(
                 &mut self,
-                filters: crate::diagnostics::warning_filters::WarningFilters,
+                filters: crate::diagnostics::filter::FilterScope,
             ) {
                 self.reporter.push_warning_filter_scope(filters)
             }
@@ -650,7 +650,7 @@ pub trait TypingMutVisitorConstructor: Send + Sync {
 }
 
 pub trait TypingMutVisitorContext {
-    fn push_warning_filter_scope(&mut self, filter: WarningFilters);
+    fn push_warning_filter_scope(&mut self, filter: FilterScope);
     fn pop_warning_filter_scope(&mut self);
 
     /// Indicates if types should be visited during the traversal of other forms (struct and enum

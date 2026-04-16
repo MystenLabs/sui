@@ -11,7 +11,7 @@ use crate::{
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
     diag,
-    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
@@ -88,7 +88,7 @@ impl<'env> Context<'env> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -160,7 +160,6 @@ pub fn program(
 ) -> G::Program {
     let H::Program {
         modules: hmodules,
-        warning_filters_table,
         info,
     } = prog;
 
@@ -171,7 +170,6 @@ pub fn program(
 
     let mut program = G::Program {
         modules,
-        warning_filters_table,
         info: info.clone(),
     };
     visit_program(&mut context, pre_compiled_program, &mut program);
@@ -1118,7 +1116,7 @@ impl AbsintVisitorContext<'_> {
 }
 
 impl CFGIRVisitorContext for AbsintVisitorContext<'_> {
-    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

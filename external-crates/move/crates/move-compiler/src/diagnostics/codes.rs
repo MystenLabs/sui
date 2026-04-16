@@ -18,8 +18,44 @@ pub enum Severity {
 /// An optional prefix to distinguish between different types of warnings (internal vs. possibly
 /// multiple externally provided ones).
 pub type ExternalPrefix = Option<&'static str>;
+
+/// Wildcard sentinel for category/code fields in a [`DiagnosticsID`] used as a filter key.
+pub const ANY: u8 = u8::MAX;
+
 /// The ID for a diagnostic, consisting of an optional prefix, a category, and a code.
-pub type DiagnosticsID = (ExternalPrefix, u8, u8);
+/// Also used as a filter key with [`ANY`] wildcards for category/code.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+pub struct DiagnosticsID {
+    pub prefix: ExternalPrefix,
+    pub category: u8,
+    pub code: u8,
+}
+
+impl DiagnosticsID {
+    pub const fn exact(prefix: ExternalPrefix, category: u8, code: u8) -> Self {
+        Self {
+            prefix,
+            category,
+            code,
+        }
+    }
+
+    pub const fn category(prefix: ExternalPrefix, category: u8) -> Self {
+        Self {
+            prefix,
+            category,
+            code: ANY,
+        }
+    }
+
+    pub const fn all(prefix: ExternalPrefix) -> Self {
+        Self {
+            prefix,
+            category: ANY,
+            code: ANY,
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug, Hash)]
 pub struct DiagnosticInfo {
@@ -325,6 +361,7 @@ codes!(
             { msg: "unknown bytecode instruction function", severity: NonblockingError },
         ValueWarning: { msg: "issue with attribute value", severity: Warning },
         AmbiguousAttributeValue: { msg: "ambiguous attribute value", severity: NonblockingError },
+        UnfulfilledExpectation: { msg: "unfulfilled '#[expect(...)]'", severity: Warning },
     ],
     Tests: [
         TestFailed: { msg: "test failure", severity: BlockingError },
@@ -415,7 +452,11 @@ impl DiagnosticInfo {
     }
 
     pub fn id(&self) -> DiagnosticsID {
-        (self.external_prefix, self.category, self.code)
+        DiagnosticsID {
+            prefix: self.external_prefix,
+            category: self.category,
+            code: self.code,
+        }
     }
 
     pub fn message(&self) -> &'static str {

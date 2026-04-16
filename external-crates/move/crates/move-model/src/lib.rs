@@ -22,7 +22,7 @@ use move_binary_format::file_format::{
 use move_compiler::{
     self, Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER, PASS_TYPING,
     compiled_unit::{self, AnnotatedCompiledUnit},
-    diagnostics::{Diagnostics, warning_filters::WarningFiltersBuilder},
+    diagnostics::{Diagnostics, filter::FilterScope},
     expansion::ast::{self as E, ModuleIdent, ModuleIdent_},
     parser::ast::{self as P, TargetKind},
     shared::{NumericalAddress, PackagePaths, parse_named_address, unique_map::UniqueMap},
@@ -60,7 +60,7 @@ pub fn run_model_builder<
 >(
     move_sources: Vec<PackagePaths<Paths, NamedAddress>>,
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
-    warning_filter: Option<WarningFiltersBuilder>,
+    warning_filter: Option<FilterScope>,
 ) -> anyhow::Result<GlobalEnv> {
     run_model_builder_with_options(
         move_sources,
@@ -80,7 +80,7 @@ pub fn run_model_builder_with_options<
     move_sources: Vec<PackagePaths<Paths, NamedAddress>>,
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
     options: ModelBuilderOptions,
-    warning_filter: Option<WarningFiltersBuilder>,
+    warning_filter: Option<FilterScope>,
 ) -> anyhow::Result<GlobalEnv> {
     run_model_builder_with_options_and_compilation_flags(
         move_sources,
@@ -101,7 +101,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
     options: ModelBuilderOptions,
     flags: Flags,
-    warning_filter: Option<WarningFiltersBuilder>,
+    warning_filter: Option<FilterScope>,
 ) -> anyhow::Result<GlobalEnv> {
     let mut env = GlobalEnv::new();
     env.set_extension(options);
@@ -215,7 +215,6 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     // Step 3: selective compilation.
     let expansion_ast = {
         let E::Program {
-            warning_filters_table,
             modules,
         } = expansion_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
@@ -227,14 +226,12 @@ pub fn run_model_builder_with_options_and_compilation_flags<
             })
         });
         E::Program {
-            warning_filters_table,
             modules,
         }
     };
     let typing_ast = {
         let T::Program {
             info,
-            warning_filters_table,
             modules,
         } = typing_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
@@ -247,7 +244,6 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         });
         T::Program {
             info,
-            warning_filters_table,
             modules,
         }
     };

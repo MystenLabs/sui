@@ -3,7 +3,7 @@
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     expansion::ast::ModuleIdent,
     ice,
     naming::ast::{self as N, BlockLabel},
@@ -212,7 +212,7 @@ impl<'env> Context<'env> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

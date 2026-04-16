@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod codes;
+pub mod filter;
 pub mod warning_filters;
 
 use crate::{
@@ -10,13 +11,11 @@ use crate::{
     command_line::COLOR_MODE_ENV_VAR,
     diagnostics::{
         codes::{Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity},
-        warning_filters::{FilterName, FilterPrefix, WarningFilters, WarningFiltersScope},
+        filter::{FilterEngine, FilterName, FilterPrefix, FilterScope},
     },
     shared::{
         files::{ByteSpan, FileByteSpan, FileId, MappedFiles},
-        format_allow_attr,
         ide::{IDEAnnotation, IDEInfo},
-        known_attributes,
     },
 };
 use codespan_reporting::{
@@ -49,7 +48,7 @@ pub struct DiagnosticReporter<'env> {
     known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     diags: Arc<RwLock<Diagnostics>>,
     ide_information: Arc<RwLock<IDEInfo>>,
-    warning_filters_scope: WarningFiltersScope,
+    engine: FilterEngine,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
@@ -61,7 +60,6 @@ pub struct Diagnostics {
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
 struct Diagnostics_ {
     diagnostics: Vec<Diagnostic>,
-    // diagnostics filtered in source code
     filtered_source_diagnostics: Vec<Diagnostic>,
     severity_count: BTreeMap<Severity, usize>,
 }
@@ -377,48 +375,47 @@ pub fn report_migration_to_buffer(files: &MappedFiles, diags: Diagnostics) -> Ve
 //**************************************************************************************************
 
 impl<'env> DiagnosticReporter<'env> {
-    pub const fn new(
+    pub fn new(
         flags: &'env Flags,
         known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
         diags: Arc<RwLock<Diagnostics>>,
         ide_information: Arc<RwLock<IDEInfo>>,
-        warning_filters_scope: WarningFiltersScope,
+        engine: FilterEngine,
     ) -> Self {
         Self {
             flags,
             known_filter_names,
             diags,
             ide_information,
-            warning_filters_scope,
+            engine,
         }
     }
 
-    /// Creates a dummy reporter -- this can be passed in anywhere a reporter is expected, but will
-    /// not actually report the diagnostics or IDE information. This can be useful to speculatively
-    /// look up information in, e.g., exapsnion or name resolution.
+    /// Creates a dummy reporter that will not actually report diagnostics or IDE
+    /// information. Useful for speculative lookups in expansion or name resolution.
     pub fn dummy_reporter(
         flags: &'env Flags,
         known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
-        warning_filters_scope: WarningFiltersScope,
+        engine: FilterEngine,
     ) -> Self {
         Self {
             flags,
             known_filter_names,
             diags: Arc::new(RwLock::new(Diagnostics::new())),
             ide_information: Arc::new(RwLock::new(IDEInfo::new())),
-            warning_filters_scope,
+            engine,
         }
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
-        self.warning_filters_scope.push(filters)
+    pub fn push_warning_filter_scope(&mut self, scope: FilterScope) {
+        self.engine.push(scope)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.warning_filters_scope.pop()
+        self.engine.pop()
     }
 
-    pub fn add_diag(&self, mut diag: Diagnostic) {
+    pub fn add_diag(&self, diag: Diagnostic) {
         if diag.info().severity() <= Severity::NonblockingError
             && self
                 .diags
@@ -426,36 +423,27 @@ impl<'env> DiagnosticReporter<'env> {
                 .unwrap()
                 .any_syntax_error_with_primary_loc(diag.primary_loc())
         {
-            // do not report multiple diags for the same location (unless they are blocking) to
-            // avoid noise that is likely to confuse the developer trying to localize the problem
-            //
-            // TODO: this check is O(n^2) for n diags - shouldn't be a huge problem but fix if it
-            // becomes one
             return;
         }
 
-        if !self.warning_filters_scope.is_filtered(&diag) {
-            // add help to suppress warning, if applicable
-            // TODO do we want a centralized place for tips like this?
-            if diag.info().severity() == Severity::Warning {
-                if let Some((prefix, name)) = self.known_filter_names.get(&diag.info().id()) {
-                    let help = format!(
-                        "This warning can be suppressed with '#[{}({})]' \
-                         applied to the 'module' or module member ('const', 'fun', or 'struct')",
-                        known_attributes::DiagnosticAttribute::ALLOW,
-                        format_allow_attr(*prefix, *name),
-                    );
-                    diag.add_note(help)
+        let warnings_are_errors = self.flags.warnings_are_errors();
+        let result = self.engine.to_filtered(diag, self.known_filter_names);
+        let mut diags = self.diags.write().unwrap();
+        result
+            .filtered
+            .into_iter()
+            .for_each(|d| diags.add_source_filtered(d));
+        result
+            .new
+            .into_iter()
+            .map(|d| {
+                if d.info().severity() == Severity::Warning && warnings_are_errors {
+                    d.set_severity(Severity::NonblockingError)
+                } else {
+                    d
                 }
-                if self.flags.warnings_are_errors() {
-                    diag = diag.set_severity(Severity::NonblockingError)
-                }
-            }
-            self.diags.write().unwrap().add(diag)
-        } else if !self.warning_filters_scope.is_filtered_for_dependency() {
-            // unwrap above is safe as the filter has been used (thus it must exist)
-            self.diags.write().unwrap().add_source_filtered(diag)
-        }
+            })
+            .for_each(|d| diags.add(d));
     }
 
     pub fn add_diags(&self, diags: Diagnostics) {

@@ -41,6 +41,7 @@ pub(crate) fn to_known_attributes(
         KA::DeprecationAttribute::DEPRECATED => parse_deprecated(context, attribute),
         // -- diagnostic attributes ------
         KA::DiagnosticAttribute::ALLOW => parse_allow(context, attribute),
+        KA::DiagnosticAttribute::EXPECT => parse_expect(context, attribute),
         KA::DiagnosticAttribute::LINT_ALLOW => parse_lint_allow(context, attribute),
         // -- error attribtue ------------
         KA::ErrorAttribute::ERROR => {
@@ -272,6 +273,85 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
                 &format!(
                     "parameterized attribute as '#[{}(<warning_name_1>, <warning_name_2>, ...)]'",
                     KA::DiagnosticAttribute::ALLOW
+                ),
+            );
+            context.add_diag(diag!(Attributes::ValueWarning, (loc, msg)));
+            vec![]
+        }
+    }
+}
+
+fn parse_expect(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+    use ParsedAttribute_ as PA;
+
+    fn parse_expect_inner(
+        context: &mut Context,
+        attribute: ParsedAttribute,
+    ) -> Vec<(Option<Name>, Name)> {
+        let sp!(loc, attr) = attribute;
+        match attr {
+            PA::Name(name) => vec![(None, name)],
+            PA::Parameterized(prefix, sub_attrs) => {
+                let sp!(_, sub_attrs) = sub_attrs;
+                let mut expect_set = BTreeSet::new();
+                for attr in sub_attrs {
+                    let Some(name) = expect_name_attr(context, attr) else {
+                        continue;
+                    };
+                    let pair = (Some(prefix), name);
+                    if let Some((_, prev)) = expect_set.get(&pair) {
+                        let msg = format!("Duplicate lint '{}'", name);
+                        context.add_diag(diag!(
+                            Declarations::InvalidAttribute,
+                            (name.loc, msg),
+                            (prev.loc, "Lint first appears here"),
+                        ));
+                    } else {
+                        let _ = expect_set.insert(pair);
+                    }
+                }
+                expect_set.into_iter().collect()
+            }
+            attr @ PA::Assigned(_, _) => {
+                let msg = make_attribute_format_error(
+                    &attr,
+                    "a stand alone warning filter identifier, e.g. '#[expect(unused)]'",
+                );
+                context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+                vec![]
+            }
+        }
+    }
+
+    let sp!(loc, attr) = attribute;
+    match attr {
+        PA::Parameterized(_, inner_attrs) => {
+            let sp!(_, inner_attrs) = inner_attrs;
+            let mut expect_set = BTreeSet::new();
+            for inner_attr in inner_attrs.into_iter() {
+                let new_attrs = parse_expect_inner(context, inner_attr);
+                for pair @ (_prefix, name) in new_attrs {
+                    if let Some((_, prev)) = expect_set.get(&pair) {
+                        let msg = format!("Duplicate lint '{}'", name);
+                        context.add_diag(diag!(
+                            Declarations::InvalidAttribute,
+                            (name.loc, msg),
+                            (prev.loc, "Lint first appears here"),
+                        ));
+                    } else {
+                        let _ = expect_set.insert(pair);
+                    }
+                }
+            }
+            let diagnostic = sp(loc, Attribute_::Expect { expect_set });
+            vec![diagnostic]
+        }
+        PA::Name(_) | PA::Assigned(_, _) => {
+            let msg = make_attribute_format_error(
+                &attr,
+                &format!(
+                    "parameterized attribute as '#[{}(<warning_name_1>, <warning_name_2>, ...)]'",
+                    KA::DiagnosticAttribute::EXPECT
                 ),
             );
             context.add_diag(diag!(Attributes::ValueWarning, (loc, msg)));

@@ -216,6 +216,9 @@ pub enum Attribute_ {
     Allow {
         allow_set: BTreeSet<(Option<Name>, Name)>,
     },
+    Expect {
+        expect_set: BTreeSet<(Option<Name>, Name)>,
+    },
     LintAllow {
         allow_set: BTreeSet<Name>,
     },
@@ -887,6 +890,7 @@ impl Attribute_ {
             Attribute_::Mode { .. } => AK::Mode.name(),
             Attribute_::Syntax { .. } => AK::Syntax.name(),
             Attribute_::Allow { .. } => AK::Allow.name(),
+            Attribute_::Expect { .. } => AK::Expect.name(),
             Attribute_::LintAllow { .. } => AK::LintAllow.name(),
             Attribute_::Test => AK::Test.name(),
             Attribute_::ExpectedFailure { .. } => AK::ExpectedFailure.name(),
@@ -1691,6 +1695,25 @@ impl AstDebug for Attribute_ {
                 w.write("allow(");
                 let mut first = true;
                 for (prefix, name) in allow_set {
+                    if !first {
+                        w.write(",");
+                    }
+                    first = false;
+                    if let Some(pref) = prefix {
+                        w.write(pref.value.as_str());
+                        w.write("(");
+                        w.write(name.value.as_str());
+                        w.write(")");
+                    } else {
+                        w.write(name.value.as_str());
+                    }
+                }
+                w.write(")");
+            }
+            A::Expect { expect_set } => {
+                w.write("expect(");
+                let mut first = true;
+                for (prefix, name) in expect_set {
                     if !first {
                         w.write(",");
                     }

@@ -4,7 +4,7 @@
 
 use crate::{
     debug_display, debug_display_verbose, diag,
-    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     editions::{FeatureGate, Flavor},
     expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
     hlir::{
@@ -181,7 +181,7 @@ impl<'env> Context<'env> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -313,16 +313,11 @@ pub fn program(compilation_env: &CompilationEnv, prog: T::Program) -> H::Program
     let mut context = Context::new(compilation_env, &prog);
     let T::Program {
         modules: tmodules,
-        warning_filters_table,
         info,
     } = prog;
     let modules = modules(&mut context, tmodules);
 
-    H::Program {
-        modules,
-        warning_filters_table,
-        info,
-    }
+    H::Program { modules, info }
 }
 
 fn modules(

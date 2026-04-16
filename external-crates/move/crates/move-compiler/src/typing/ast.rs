@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diagnostics::{
-        DiagnosticReporter,
-        warning_filters::{WarningFilters, WarningFiltersTable},
-    },
+    diagnostics::{DiagnosticReporter, filter::FilterScope},
     expansion::ast::{
         Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
     },
@@ -40,8 +37,6 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Program {
     pub info: Arc<TypingProgramInfo>,
-    /// Safety: This table should not be dropped as long as any `WarningFilters` are alive
-    pub warning_filters_table: Arc<WarningFiltersTable>,
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
@@ -53,7 +48,7 @@ pub struct Program {
 pub struct ModuleDefinition {
     pub doc: DocComment,
     pub loc: Loc,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: FilterScope,
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     /// The named address map used by this module during `expansion`.
@@ -89,7 +84,7 @@ pub type FunctionBody = Spanned<FunctionBody_>;
 #[derive(PartialEq, Debug, Clone)]
 pub struct Function {
     pub doc: DocComment,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: FilterScope,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -112,7 +107,7 @@ pub struct Function {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Constant {
     pub doc: DocComment,
-    pub warning_filter: WarningFilters,
+    pub warning_filter: FilterScope,
     // index in the original order as defined in the source file
     pub index: usize,
     pub attributes: Attributes,
@@ -443,11 +438,7 @@ impl fmt::Display for BuiltinFunction_ {
 
 impl AstDebug for Program {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Program {
-            modules,
-            info: _,
-            warning_filters_table: _,
-        } = self;
+        let Program { modules, info: _ } = self;
 
         for (m, mdef) in modules.key_cloned_iter() {
             w.write(format!("module {}", m));

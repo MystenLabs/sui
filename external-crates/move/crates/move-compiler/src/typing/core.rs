@@ -7,7 +7,7 @@ use crate::{
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{NameResolution, TypeSafety},
-        warning_filters::WarningFilters,
+        filter::FilterScope,
     },
     editions::FeatureGate,
     expansion::ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
@@ -453,7 +453,7 @@ impl<'env> ModuleContext<'env> {
         self.reporter.add_ide_annotation(loc, info);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -850,7 +850,7 @@ impl<'env, 'outer> Context<'env, 'outer> {
         self.reporter.add_ide_annotation(loc, info);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

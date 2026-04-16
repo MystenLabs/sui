@@ -6,9 +6,10 @@ use crate::{
     PreCompiledProgramInfo, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
-        warning_filters::{
-            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, WarningFilters, WarningFiltersBuilder,
-            WarningFiltersTable,
+        codes::DiagnosticsID,
+        filter::{
+            DEPENDENCY_DROP_FILTER_SCOPE, FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD,
+            FilterKind, FilterScope, Override_,
         },
     },
     editions::{self, Edition, FeatureGate, Flavor},
@@ -57,7 +58,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     iter::IntoIterator,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use super::ast::StdlibDefinitions;
@@ -89,10 +90,6 @@ pub(super) struct DefnContext<'env> {
 pub(super) struct Context<'env> {
     defn_context: DefnContext<'env>,
     address: Option<Address>,
-    warning_filters_table: Mutex<WarningFiltersTable>,
-    // Cached warning filters for all available prefixes. Used by non-source defs
-    // and dependency packages
-    all_filter_alls: WarningFilters,
     pub path_expander: Option<Box<dyn PathExpander>>,
 }
 
@@ -112,9 +109,6 @@ impl<'env> Context<'env> {
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,
         address_conflicts: BTreeSet<Symbol>,
     ) -> Self {
-        let mut warning_filters_table = WarningFiltersTable::new();
-        let all_filter_alls = WarningFiltersBuilder::new_all_filter_alls(compilation_env);
-        let all_filter_alls = warning_filters_table.add(all_filter_alls);
         let reporter = compilation_env.diagnostic_reporter_at_top_level();
         let defn_context = DefnContext {
             env: compilation_env,
@@ -131,33 +125,16 @@ impl<'env> Context<'env> {
         Context {
             defn_context,
             address: None,
-            warning_filters_table: Mutex::new(warning_filters_table),
-            all_filter_alls,
             path_expander: None,
         }
     }
 
-    /// Hands back the warning filters table and any unused module extension.
-    fn finish(
-        self,
-    ) -> (
-        WarningFiltersTable,
-        BTreeMap<Address, BTreeMap<ModuleName, P::ModuleDefinition>>,
-    ) {
-        let Context {
-            defn_context,
-            warning_filters_table,
-            ..
-        } = self;
+    fn finish(self) -> BTreeMap<Address, BTreeMap<ModuleName, P::ModuleDefinition>> {
+        let Context { defn_context, .. } = self;
         let DefnContext {
             module_extensions, ..
         } = defn_context;
-        (
-            warning_filters_table
-                .into_inner()
-                .expect("Missing warning filters table"),
-            module_extensions,
-        )
+        module_extensions
     }
 
     fn env(&self) -> &CompilationEnv {
@@ -369,7 +346,7 @@ impl<'env> Context<'env> {
         self.defn_context.add_ide_annotation(loc, info);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.defn_context.push_warning_filter_scope(filters)
     }
 
@@ -497,7 +474,7 @@ impl DefnContext<'_> {
         self.reporter.add_ide_annotation(loc, info);
     }
 
-    pub(super) fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub(super) fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -796,7 +773,7 @@ pub fn program(
 
     // Finish up context, and report any unused extensions
 
-    let (warning_filters_table, module_extensions) = ctxt.finish();
+    let module_extensions = ctxt.finish();
 
     for (addr, pkg) in module_extensions {
         if matches!(addr, Address::NamedUnassigned(_)) {
@@ -819,10 +796,7 @@ pub fn program(
         }
     }
 
-    let warning_filters_table = Arc::new(warning_filters_table);
-
     E::Program {
-        warning_filters_table,
         modules: module_map,
     }
 }
@@ -1561,8 +1535,7 @@ fn module_warning_filter(
     context: &mut Context,
     package: Option<Symbol>,
     attributes: &E::Attributes,
-) -> WarningFilters {
-    let mut filters = warning_filter_(context, attributes);
+) -> FilterScope {
     let is_dep = !matches!(
         context.defn_context.target_kind,
         P::TargetKind::Source { .. }
@@ -1571,60 +1544,77 @@ fn module_warning_filter(
         context.env().package_config(pkg).is_dependency
     };
     if is_dep {
-        // For dependencies (non source defs or package deps), we check the filters for errors
-        // but then throw them away and actually ignore _all_ warnings
-        context.all_filter_alls
+        // Check attributes for errors, then drop everything for dependencies.
+        let _ = warning_filter_(context, attributes);
+        *DEPENDENCY_DROP_FILTER_SCOPE
     } else {
+        let mut overrides = warning_filter_(context, attributes);
         let config = context.env().package_config(package);
-        filters.union(&config.warning_filter);
-        context
-            .warning_filters_table
-            .get_mut()
-            .expect("Warning filters table missing")
-            .add(filters)
+        overrides.extend(config.warning_filter.overrides().iter().cloned());
+        FilterScope::new(overrides)
     }
 }
 
-fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
-    let mut wf = warning_filter_(context, attributes);
-    // If a struct is marked as deprecated, do not report unused fields in it.
+fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> FilterScope {
+    let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        let new_filters = context.env().filter_from_str(none, FILTER_DEPRECATED);
-        wf.add_all(new_filters);
-        let new_filters = context
-            .env()
-            .filter_from_str(none, FILTER_UNUSED_STRUCT_FIELD);
-        wf.add_all(new_filters);
+        add_allow_overrides(
+            &mut overrides,
+            context.env().filter_from_str(none, FILTER_DEPRECATED),
+        );
+        add_allow_overrides(
+            &mut overrides,
+            context
+                .env()
+                .filter_from_str(none, FILTER_UNUSED_STRUCT_FIELD),
+        );
     }
-    context
-        .warning_filters_table
-        .get_mut()
-        .expect("Warning filter table missing")
-        .add(wf)
+    FilterScope::new(overrides)
 }
 
-fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
-    let mut wf = warning_filter_(context, attributes);
-    // If a function is marked as deprecated, do not report deprecations used within it.
+fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) -> FilterScope {
+    let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        let new_filters = context.env().filter_from_str(none, FILTER_DEPRECATED);
-        wf.add_all(new_filters);
+        add_allow_overrides(
+            &mut overrides,
+            context.env().filter_from_str(none, FILTER_DEPRECATED),
+        );
     }
-    context.warning_filters_table.get_mut().unwrap().add(wf)
+    FilterScope::new(overrides)
 }
 
-fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> WarningFilters {
-    let wf = warning_filter_(context, attributes);
-    context.warning_filters_table.get_mut().unwrap().add(wf)
+fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> FilterScope {
+    FilterScope::new(warning_filter_(context, attributes))
 }
 
-/// Finds the warning filters from the #[allow(_)] attribute and the deprecated #[lint_allow(_)]
-/// attribute.
-fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFiltersBuilder {
-    let mut warning_filters = WarningFiltersBuilder::new_for_source();
-    // Attributes are guaranteedto be sets by now, and everything was flattened during parsing.
+fn add_allow_overrides(overrides: &mut Vec<(Loc, Override_)>, ids: Vec<DiagnosticsID>) {
+    for id in ids {
+        overrides.push((
+            Loc::invalid(),
+            Override_ {
+                filter: id,
+                kind: FilterKind::Allow,
+            },
+        ));
+    }
+}
+
+fn add_expect_overrides(overrides: &mut Vec<(Loc, Override_)>, loc: Loc, ids: Vec<DiagnosticsID>) {
+    for id in ids {
+        overrides.push((
+            loc,
+            Override_ {
+                filter: id,
+                kind: FilterKind::Expect,
+            },
+        ));
+    }
+}
+
+fn warning_filter_(context: &Context, attributes: &E::Attributes) -> Vec<(Loc, Override_)> {
+    let mut overrides = vec![];
     if let Some(lint_allow) = attributes.get_(&known_attributes::AttributeKind_::LintAllow) {
         let KnownAttribute::Diagnostic(DiagnosticAttribute::LintAllow { allow_set }) =
             &lint_allow.value
@@ -1636,7 +1626,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
                     lint_allow.value.attribute_kind()
                 )
             )));
-            return WarningFiltersBuilder::new_for_source();
+            return vec![];
         };
 
         let prefix = Some(DiagnosticAttribute::LINT_SYMBOL);
@@ -1651,7 +1641,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
                 context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
                 continue;
             };
-            warning_filters.add_all(filters);
+            add_allow_overrides(&mut overrides, filters);
         }
     };
 
@@ -1665,7 +1655,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
                     allow.value.attribute_kind()
                 )
             )));
-            return WarningFiltersBuilder::new_for_source();
+            return vec![];
         };
 
         for (prefix, name) in allow_set {
@@ -1680,10 +1670,40 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
                 context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
                 continue;
             };
-            warning_filters.add_all(filters);
+            add_allow_overrides(&mut overrides, filters);
         }
     };
-    warning_filters
+
+    if let Some(expect) = attributes.get_(&known_attributes::AttributeKind_::Expect) {
+        let KnownAttribute::Diagnostic(DiagnosticAttribute::Expect { expect_set }) = &expect.value
+        else {
+            context.add_diag(ice!((
+                expect.loc,
+                format!(
+                    "Expected diagnostics based on kind, but found {}",
+                    expect.value.attribute_kind()
+                )
+            )));
+            return vec![];
+        };
+
+        let attr_loc = expect.loc;
+        for (prefix, name) in expect_set {
+            let prefix = prefix.map(|sym| sym.value);
+            let sp!(name_loc, name) = *name;
+            let filters = context.env().filter_from_str(prefix, name);
+            if filters.is_empty() {
+                let msg = format!(
+                    "Unknown warning filter '{}'",
+                    format_allow_attr(prefix, name)
+                );
+                context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
+                continue;
+            };
+            add_expect_overrides(&mut overrides, attr_loc, filters);
+        }
+    };
+    overrides
 }
 
 //**************************************************************************************************
