@@ -2047,8 +2047,19 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
 }
 
 // Drops a database if there is no other handle to it, with retries and timeout.
-#[cfg(not(tidehunter))]
-pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksdb::Error> {
+// Detects the storage variant (RocksDB vs. tidehunter) from the directory
+// contents and dispatches to the matching cleanup. Both variants coexist in
+// tidehunter builds — some stores (e.g. rpc-index) are pure RocksDB even when
+// the tidehunter feature is enabled elsewhere in the binary.
+pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
+    #[cfg(tidehunter)]
+    if is_tidehunter_db(&path) {
+        return safe_drop_tidehunter_db(path, timeout).await;
+    }
+    safe_drop_rocksdb(path, timeout).await
+}
+
+async fn safe_drop_rocksdb(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
         ..Default::default()
@@ -2058,14 +2069,21 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
             Ok(()) => return Ok(()),
             Err(err) => match backoff.next_backoff() {
                 Some(duration) => tokio::time::sleep(duration).await,
-                None => return Err(err),
+                None => return Err(std::io::Error::other(err)),
             },
         }
     }
 }
 
 #[cfg(tidehunter)]
-pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
+fn is_tidehunter_db(path: &Path) -> bool {
+    // `shape.yaml` is written by TideHunterDb::open and is the canonical marker
+    // for a tidehunter DB directory; RocksDB never creates it.
+    path.join("shape.yaml").exists()
+}
+
+#[cfg(tidehunter)]
+async fn safe_drop_tidehunter_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
         ..Default::default()
