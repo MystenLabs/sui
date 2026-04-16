@@ -500,7 +500,7 @@ This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a 
 ) {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) { $f(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)); }
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;$Name&gt;(o, name)) { $f(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)) }
 }
 </code></pre>
 
@@ -532,7 +532,7 @@ This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then callin
 ) {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) { $f(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)); }
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;$Name&gt;(o, name)) { $f(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)) }
 }
 </code></pre>
 
@@ -566,7 +566,7 @@ This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a 
 ): $R {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) $some(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)) <b>else</b> $none
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;$Name&gt;(o, name)) $some(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)) <b>else</b> $none
 }
 </code></pre>
 
@@ -600,7 +600,7 @@ This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then callin
 ): $R {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) $some(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)) <b>else</b> $none
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;$Name&gt;(o, name)) $some(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)) <b>else</b> $none
 }
 </code></pre>
 

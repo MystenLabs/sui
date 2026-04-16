@@ -171,7 +171,7 @@ public macro fun get_do<$Name: copy + drop + store, $Value: store, $R: drop>(
 ) {
     let o = $object;
     let name = $name;
-    if (exists_with_type<$Name, $Value>(o, name)) { $f(borrow(o, name)); }
+    if (exists<$Name>(o, name)) { $f(borrow(o, name)); }
 }
 
 /// If the field exists, calls `$f` on a mutable reference to the value; otherwise, does nothing.
@@ -183,7 +183,7 @@ public macro fun get_mut_do<$Name: copy + drop + store, $Value: store, $R: drop>
 ) {
     let o = $object;
     let name = $name;
-    if (exists_with_type<$Name, $Value>(o, name)) { $f(borrow_mut(o, name)); }
+    if (exists<$Name>(o, name)) { $f(borrow_mut(o, name)); }
 }
 
 /// If the field exists, applies `$some` to an immutable reference to the value; otherwise, returns
@@ -197,7 +197,7 @@ public macro fun get_fold<$Name: copy + drop + store, $Value: store, $R>(
 ): $R {
     let o = $object;
     let name = $name;
-    if (exists_with_type<$Name, $Value>(o, name)) $some(borrow(o, name)) else $none
+    if (exists<$Name>(o, name)) $some(borrow(o, name)) else $none
 }
 
 /// If the field exists, applies `$some` to a mutable reference to the value; otherwise, returns
@@ -211,7 +211,7 @@ public macro fun get_mut_fold<$Name: copy + drop + store, $Value: store, $R>(
 ): $R {
     let o = $object;
     let name = $name;
-    if (exists_with_type<$Name, $Value>(o, name)) $some(borrow_mut(o, name)) else $none
+    if (exists<$Name>(o, name)) $some(borrow_mut(o, name)) else $none
 }
 
 // === Deprecated ===
