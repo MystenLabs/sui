@@ -18,21 +18,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Install mold linker (Linux)
-      if: runner.os == 'Linux'
-      shell: bash
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y mold
-        mold --version
-
-    - name: Configure RUSTFLAGS for mold (Linux)
-      if: runner.os == 'Linux'
-      shell: bash
-      # RUSTFLAGS env replaces (not appends to) [build].rustflags from .cargo/config.toml,
-      # so the baseline flags are replicated here. Keep in sync with .cargo/config.toml.
-      run: |
-        echo "RUSTFLAGS=-C force-frame-pointers=yes -C force-unwind-tables=yes -A unknown_lints -A mismatched_lifetime_syntaxes -C link-arg=-fuse-ld=mold" >> "$GITHUB_ENV"
+    - uses: ./.github/actions/setup-mold
 
     - name: Configure AWS credentials
       if: inputs.aws-access-key-id != ''
