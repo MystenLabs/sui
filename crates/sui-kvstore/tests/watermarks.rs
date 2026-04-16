@@ -15,6 +15,9 @@ use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_indexer_alt_framework_store_traits::ConcurrentConnection;
 use sui_indexer_alt_framework_store_traits::Connection;
 use sui_indexer_alt_framework_store_traits::Store;
+use sui_indexer_alt_framework_store_traits::concurrent_connection_tests;
+use sui_indexer_alt_framework_store_traits::connection_tests;
+use sui_indexer_alt_framework_store_traits::testing::Harness;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableConnection;
 use sui_kvstore::BigTableStore;
@@ -34,7 +37,6 @@ const CHECKPOINT_HI: u64 = 200;
 const TX_HI: u64 = 42;
 const TIMESTAMP_MS_HI: u64 = 99;
 const READER_LO: u64 = 123;
-const PRUNER_HI: u64 = 77;
 
 struct WatermarkHarness {
     store: BigTableStore,
@@ -101,6 +103,19 @@ impl WatermarkHarness {
     }
 }
 
+#[async_trait::async_trait(?Send)]
+impl Harness for WatermarkHarness {
+    type Store = BigTableStore;
+
+    async fn new() -> Self {
+        WatermarkHarness::new().await.unwrap()
+    }
+
+    fn store(&self) -> &Self::Store {
+        &self.store
+    }
+}
+
 /// Snapshot of a watermark row's distinguishing cells.
 #[derive(Default)]
 struct RawCells {
@@ -121,6 +136,10 @@ struct RawCells {
     /// The `ptm` (pruner_timestamp_ms) cell value, if present.
     pruner_timestamp_ms: Option<u64>,
 }
+
+// Shared connection test macros use `WatermarkHarness` so the emulator stays alive for each test.
+connection_tests!(WatermarkHarness);
+concurrent_connection_tests!(WatermarkHarness);
 
 async fn read_raw_cells(client: &mut BigTableClient, pipeline: &str) -> Result<RawCells> {
     let key = tables::watermarks::encode_key(pipeline);
@@ -166,58 +185,6 @@ async fn read_raw_cells(client: &mut BigTableClient, pipeline: &str) -> Result<R
 }
 
 #[tokio::test]
-async fn test_init_watermark_fresh_none() -> Result<()> {
-    let harness = WatermarkHarness::new().await?;
-    let mut conn = harness.connect().await?;
-    let init = conn.init_watermark(PIPELINE, None).await?.unwrap();
-    assert_eq!(init.checkpoint_hi_inclusive, None);
-    assert_eq!(init.reader_lo, Some(0));
-
-    // The row should have the v1 cells but no v0 `w` cell.
-    let cells = harness.cells(PIPELINE).await?;
-    assert!(
-        cells.w.is_none(),
-        "fresh init(None) must not write the `w` cell"
-    );
-    assert!(cells.has_v1, "fresh init(None) must write the v1 cells");
-    assert_eq!(cells.schema_version, Some(1));
-    assert!(
-        cells.checkpoint_hi.is_none(),
-        "fresh init(None) must leave `chi` absent"
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_init_watermark_fresh_some() -> Result<()> {
-    let harness = WatermarkHarness::new().await?;
-    let mut conn = harness.connect().await?;
-    let init = conn
-        .init_watermark(PIPELINE, Some(CHECKPOINT_HI))
-        .await?
-        .unwrap();
-    assert_eq!(init.checkpoint_hi_inclusive, Some(CHECKPOINT_HI));
-    assert_eq!(init.reader_lo, Some(CHECKPOINT_HI + 1));
-
-    let cells = harness.cells(PIPELINE).await?;
-    assert!(
-        cells.w.is_some(),
-        "fresh init(Some) must write the `w` cell"
-    );
-    assert!(cells.has_v1);
-    assert_eq!(cells.schema_version, Some(1));
-    assert_eq!(cells.checkpoint_hi, Some(CHECKPOINT_HI));
-
-    // Calling init again should return the existing values without rewriting.
-    let init2 = conn.init_watermark(PIPELINE, Some(0)).await?.unwrap();
-    assert_eq!(init2.checkpoint_hi_inclusive, Some(CHECKPOINT_HI));
-    assert_eq!(init2.reader_lo, Some(CHECKPOINT_HI + 1));
-    let cells2 = harness.cells(PIPELINE).await?;
-    assert_eq!(cells2.schema_version, Some(1));
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_init_watermark_v0_bootstrap() -> Result<()> {
     let harness = WatermarkHarness::new().await?;
 
@@ -255,52 +222,6 @@ async fn test_init_watermark_v0_bootstrap() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_committer_watermark_roundtrip_and_regression() -> Result<()> {
-    let harness = WatermarkHarness::new().await?;
-    let mut conn = harness.connect().await?;
-    conn.init_watermark(PIPELINE, None).await?;
-
-    // First commit creates the v0 `w` cell.
-    let initial = CommitterWatermark {
-        epoch_hi_inclusive: EPOCH_HI / 2,
-        checkpoint_hi_inclusive: CHECKPOINT_HI / 2,
-        tx_hi: TX_HI / 2,
-        timestamp_ms_hi_inclusive: TIMESTAMP_MS_HI / 2,
-    };
-    assert!(conn.set_committer_watermark(PIPELINE, initial).await?);
-
-    let read = conn.committer_watermark(PIPELINE).await?.unwrap();
-    assert_eq!(read.checkpoint_hi_inclusive, CHECKPOINT_HI / 2);
-    let cells = harness.cells(PIPELINE).await?;
-    assert!(cells.w.is_some(), "set_committer_watermark must write `w`");
-    assert!(cells.has_v1);
-    assert_eq!(cells.schema_version, Some(1));
-
-    // Advance.
-    let updated = CommitterWatermark {
-        epoch_hi_inclusive: EPOCH_HI,
-        checkpoint_hi_inclusive: CHECKPOINT_HI,
-        tx_hi: TX_HI,
-        timestamp_ms_hi_inclusive: TIMESTAMP_MS_HI,
-    };
-    assert!(conn.set_committer_watermark(PIPELINE, updated).await?);
-    let read = conn.committer_watermark(PIPELINE).await?.unwrap();
-    assert_eq!(read.checkpoint_hi_inclusive, CHECKPOINT_HI);
-
-    // Regression must be rejected.
-    let regressed = CommitterWatermark {
-        epoch_hi_inclusive: EPOCH_HI,
-        checkpoint_hi_inclusive: CHECKPOINT_HI / 2 + 1,
-        tx_hi: TX_HI,
-        timestamp_ms_hi_inclusive: TIMESTAMP_MS_HI,
-    };
-    assert!(!conn.set_committer_watermark(PIPELINE, regressed).await?);
-    let read = conn.committer_watermark(PIPELINE).await?.unwrap();
-    assert_eq!(read.checkpoint_hi_inclusive, CHECKPOINT_HI);
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_set_reader_watermark_after_init_none_skips_v0() -> Result<()> {
     let harness = WatermarkHarness::new().await?;
     let mut conn = harness.connect().await?;
@@ -319,25 +240,6 @@ async fn test_set_reader_watermark_after_init_none_skips_v0() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_reader_watermark_roundtrip_with_committed_checkpoint() -> Result<()> {
-    let harness = WatermarkHarness::new().await?;
-    harness
-        .bootstrap_with_committed_checkpoint(PIPELINE, CHECKPOINT_HI)
-        .await?;
-    let mut conn = harness.connect().await?;
-
-    let reader = conn.reader_watermark(PIPELINE).await?.unwrap();
-    assert_eq!(reader.checkpoint_hi_inclusive, CHECKPOINT_HI);
-    assert_eq!(reader.reader_lo, 0);
-
-    assert!(conn.set_reader_watermark(PIPELINE, READER_LO).await?);
-    // The v0 `w` cell must still be present after a reader-only update.
-    let cells = harness.cells(PIPELINE).await?;
-    assert!(cells.w.is_some(), "v0 `w` cell must survive reader updates");
-    Ok(())
-}
-
-#[tokio::test]
 async fn test_pruner_watermark_saturates_when_ready() -> Result<()> {
     let harness = WatermarkHarness::new().await?;
     harness
@@ -350,23 +252,6 @@ async fn test_pruner_watermark_saturates_when_ready() -> Result<()> {
         .await?
         .unwrap();
     assert_eq!(pruner.wait_for_ms, 0);
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_set_pruner_watermark_roundtrip() -> Result<()> {
-    let harness = WatermarkHarness::new().await?;
-    harness
-        .bootstrap_with_committed_checkpoint(PIPELINE, CHECKPOINT_HI)
-        .await?;
-    let mut conn = harness.connect().await?;
-
-    assert!(conn.set_pruner_watermark(PIPELINE, PRUNER_HI).await?);
-    let pruner = conn
-        .pruner_watermark(PIPELINE, Duration::ZERO)
-        .await?
-        .unwrap();
-    assert_eq!(pruner.pruner_hi, PRUNER_HI);
     Ok(())
 }
 
@@ -418,25 +303,6 @@ async fn test_set_reader_watermark_advances_pruner_timestamp() -> Result<()> {
         second_ts > first_ts,
         "pruner_timestamp_ms must advance with reader update (was {first_ts}, now {second_ts})"
     );
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_set_pruner_watermark_rejects_stale() -> Result<()> {
-    let harness = WatermarkHarness::new().await?;
-    harness
-        .bootstrap_with_committed_checkpoint(PIPELINE, CHECKPOINT_HI)
-        .await?;
-    let mut conn = harness.connect().await?;
-
-    assert!(conn.set_pruner_watermark(PIPELINE, PRUNER_HI).await?);
-    let advanced = harness.cells(PIPELINE).await?;
-
-    assert!(!conn.set_pruner_watermark(PIPELINE, PRUNER_HI).await?);
-    assert!(!conn.set_pruner_watermark(PIPELINE, PRUNER_HI - 1).await?);
-
-    let after_rejects = harness.cells(PIPELINE).await?;
-    assert_eq!(after_rejects.pruner_hi, advanced.pruner_hi);
     Ok(())
 }
 
