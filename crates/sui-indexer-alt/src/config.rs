@@ -4,6 +4,7 @@
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
+use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
@@ -48,7 +49,6 @@ pub struct IndexerConfig {
 #[derive(Clone, Default, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct IngestionLayer {
-    pub checkpoint_buffer_size: Option<usize>,
     pub ingest_concurrency: Option<ConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
     pub streaming_backoff_initial_batch_size: Option<usize>,
@@ -62,7 +62,7 @@ pub struct IngestionLayer {
 #[serde(deny_unknown_fields)]
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
-    pub checkpoint_lag: Option<u64>,
+    pub ingestion: Option<PipelineIngestionLayer>,
     pub fanout: Option<ConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
@@ -74,6 +74,7 @@ pub struct SequentialLayer {
 #[serde(deny_unknown_fields)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
+    pub ingestion: Option<PipelineIngestionLayer>,
     pub pruner: Option<PrunerLayer>,
     pub fanout: Option<ConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
@@ -82,6 +83,13 @@ pub struct ConcurrentLayer {
     pub processor_channel_size: Option<usize>,
     pub collector_channel_size: Option<usize>,
     pub committer_channel_size: Option<usize>,
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct PipelineIngestionLayer {
+    pub subscriber_channel_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -178,9 +186,6 @@ impl IndexerConfig {
 impl IngestionLayer {
     pub fn finish(self, base: IngestionConfig) -> anyhow::Result<IngestionConfig> {
         Ok(IngestionConfig {
-            checkpoint_buffer_size: self
-                .checkpoint_buffer_size
-                .unwrap_or(base.checkpoint_buffer_size),
             ingest_concurrency: self.ingest_concurrency.unwrap_or(base.ingest_concurrency),
             retry_interval_ms: self.retry_interval_ms.unwrap_or(base.retry_interval_ms),
             streaming_backoff_initial_batch_size: self
@@ -207,7 +212,11 @@ impl SequentialLayer {
             } else {
                 base.committer
             },
-            checkpoint_lag: self.checkpoint_lag.unwrap_or(base.checkpoint_lag),
+            ingestion: if let Some(ingestion) = self.ingestion {
+                ingestion.finish(base.ingestion)
+            } else {
+                base.ingestion
+            },
             fanout: self.fanout.or(base.fanout),
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
@@ -226,6 +235,11 @@ impl ConcurrentLayer {
             } else {
                 base.committer
             },
+            ingestion: if let Some(ingestion) = self.ingestion {
+                ingestion.finish(base.ingestion)
+            } else {
+                base.ingestion
+            },
             pruner: match (self.pruner, base.pruner) {
                 (None, _) | (_, None) => None,
                 (Some(pruner), Some(base)) => Some(pruner.finish(base)?),
@@ -238,6 +252,16 @@ impl ConcurrentLayer {
             collector_channel_size: self.collector_channel_size.or(base.collector_channel_size),
             committer_channel_size: self.committer_channel_size.or(base.committer_channel_size),
         })
+    }
+}
+
+impl PipelineIngestionLayer {
+    pub fn finish(self, base: pipeline::IngestionConfig) -> pipeline::IngestionConfig {
+        pipeline::IngestionConfig {
+            subscriber_channel_size: self
+                .subscriber_channel_size
+                .or(base.subscriber_channel_size),
+        }
     }
 }
 
@@ -310,7 +334,6 @@ impl Merge for IndexerConfig {
 impl Merge for IngestionLayer {
     fn merge(self, other: IngestionLayer) -> anyhow::Result<IngestionLayer> {
         Ok(IngestionLayer {
-            checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
             ingest_concurrency: other.ingest_concurrency.or(self.ingest_concurrency),
             retry_interval_ms: other.retry_interval_ms.or(self.retry_interval_ms),
             streaming_backoff_initial_batch_size: other
@@ -333,7 +356,7 @@ impl Merge for SequentialLayer {
     fn merge(self, other: SequentialLayer) -> anyhow::Result<SequentialLayer> {
         Ok(SequentialLayer {
             committer: self.committer.merge(other.committer)?,
-            checkpoint_lag: other.checkpoint_lag.or(self.checkpoint_lag),
+            ingestion: self.ingestion.merge(other.ingestion)?,
             fanout: other.fanout.or(self.fanout),
             min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
             max_batch_checkpoints: other.max_batch_checkpoints.or(self.max_batch_checkpoints),
@@ -346,6 +369,7 @@ impl Merge for ConcurrentLayer {
     fn merge(self, other: ConcurrentLayer) -> anyhow::Result<ConcurrentLayer> {
         Ok(ConcurrentLayer {
             committer: self.committer.merge(other.committer)?,
+            ingestion: self.ingestion.merge(other.ingestion)?,
             pruner: self.pruner.merge(other.pruner)?,
             fanout: other.fanout.or(self.fanout),
             min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
@@ -354,6 +378,16 @@ impl Merge for ConcurrentLayer {
             processor_channel_size: other.processor_channel_size.or(self.processor_channel_size),
             collector_channel_size: other.collector_channel_size.or(self.collector_channel_size),
             committer_channel_size: other.committer_channel_size.or(self.committer_channel_size),
+        })
+    }
+}
+
+impl Merge for PipelineIngestionLayer {
+    fn merge(self, other: PipelineIngestionLayer) -> anyhow::Result<PipelineIngestionLayer> {
+        Ok(PipelineIngestionLayer {
+            subscriber_channel_size: other
+                .subscriber_channel_size
+                .or(self.subscriber_channel_size),
         })
     }
 }
@@ -429,7 +463,6 @@ impl<T: Merge> Merge for Option<T> {
 impl From<IngestionConfig> for IngestionLayer {
     fn from(config: IngestionConfig) -> Self {
         Self {
-            checkpoint_buffer_size: Some(config.checkpoint_buffer_size),
             ingest_concurrency: Some(config.ingest_concurrency),
             retry_interval_ms: Some(config.retry_interval_ms),
             streaming_backoff_initial_batch_size: Some(config.streaming_backoff_initial_batch_size),
@@ -444,7 +477,7 @@ impl From<SequentialConfig> for SequentialLayer {
     fn from(config: SequentialConfig) -> Self {
         Self {
             committer: Some(config.committer.into()),
-            checkpoint_lag: Some(config.checkpoint_lag),
+            ingestion: Some(config.ingestion.into()),
             fanout: config.fanout,
             min_eager_rows: config.min_eager_rows,
             max_batch_checkpoints: config.max_batch_checkpoints,
@@ -457,6 +490,7 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
     fn from(config: ConcurrentConfig) -> Self {
         Self {
             committer: Some(config.committer.into()),
+            ingestion: Some(config.ingestion.into()),
             pruner: config.pruner.map(Into::into),
             fanout: config.fanout,
             min_eager_rows: config.min_eager_rows,
@@ -465,6 +499,14 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
             processor_channel_size: config.processor_channel_size,
             collector_channel_size: config.collector_channel_size,
             committer_channel_size: config.committer_channel_size,
+        }
+    }
+}
+
+impl From<pipeline::IngestionConfig> for PipelineIngestionLayer {
+    fn from(config: pipeline::IngestionConfig) -> Self {
+        Self {
+            subscriber_channel_size: config.subscriber_channel_size,
         }
     }
 }
@@ -515,7 +557,7 @@ mod tests {
                     collect_interval_ms: Some(1000),
                     watermark_interval_ms: None,
                 }),
-                checkpoint_lag: Some(100),
+                min_eager_rows: Some(100),
                 ..Default::default()
             }),
             ev_emit_mod: Some(ConcurrentLayer {
@@ -536,7 +578,7 @@ mod tests {
                     collect_interval_ms: None,
                     watermark_interval_ms: Some(500),
                 }),
-                checkpoint_lag: Some(200),
+                min_eager_rows: Some(200),
                 ..Default::default()
             }),
             ev_emit_mod: None,
@@ -556,7 +598,7 @@ mod tests {
                         watermark_interval_ms: Some(500),
                         ..
                     }),
-                    checkpoint_lag: Some(200),
+                    min_eager_rows: Some(200),
                     ..
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
@@ -583,7 +625,7 @@ mod tests {
                         watermark_interval_ms: Some(500),
                         ..
                     }),
-                    checkpoint_lag: Some(100),
+                    min_eager_rows: Some(100),
                     ..
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {

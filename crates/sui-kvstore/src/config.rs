@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
+use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::{self as framework};
@@ -126,6 +127,7 @@ impl CommitterLayer {
 #[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
     pub committer: Option<CommitterLayer>,
+    pub ingestion: Option<PipelineIngestionLayer>,
     /// Maximum rows per BigTable batch for this pipeline.
     pub max_rows: Option<usize>,
     /// Per-pipeline rate limit (rows per second). Overrides the default
@@ -140,6 +142,12 @@ pub struct ConcurrentLayer {
     pub committer_channel_size: Option<usize>,
 }
 
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+pub struct PipelineIngestionLayer {
+    pub subscriber_channel_size: Option<usize>,
+}
+
 impl ConcurrentLayer {
     pub fn finish(self, base: ConcurrentConfig) -> ConcurrentConfig {
         ConcurrentConfig {
@@ -147,6 +155,11 @@ impl ConcurrentLayer {
                 c.finish(base.committer)
             } else {
                 base.committer
+            },
+            ingestion: if let Some(i) = self.ingestion {
+                i.finish(base.ingestion)
+            } else {
+                base.ingestion
             },
             pruner: None,
             fanout: self.fanout.or(base.fanout),
@@ -156,6 +169,16 @@ impl ConcurrentLayer {
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
             collector_channel_size: self.collector_channel_size.or(base.collector_channel_size),
             committer_channel_size: self.committer_channel_size.or(base.committer_channel_size),
+        }
+    }
+}
+
+impl PipelineIngestionLayer {
+    pub fn finish(self, base: pipeline::IngestionConfig) -> pipeline::IngestionConfig {
+        pipeline::IngestionConfig {
+            subscriber_channel_size: self
+                .subscriber_channel_size
+                .or(base.subscriber_channel_size),
         }
     }
 }
@@ -182,7 +205,6 @@ pub struct PipelineLayer {
 #[derive(Clone, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct IngestionConfig {
-    pub checkpoint_buffer_size: usize,
     pub ingest_concurrency: framework::config::ConcurrencyConfig,
     pub retry_interval_ms: u64,
     pub streaming_backoff_initial_batch_size: usize,
@@ -200,7 +222,6 @@ impl Default for IngestionConfig {
 impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
     fn from(config: framework::ingestion::IngestionConfig) -> Self {
         Self {
-            checkpoint_buffer_size: config.checkpoint_buffer_size,
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,
             streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,
@@ -214,7 +235,6 @@ impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
 impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
     fn from(config: IngestionConfig) -> Self {
         framework::ingestion::IngestionConfig {
-            checkpoint_buffer_size: config.checkpoint_buffer_size,
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,
             streaming_backoff_initial_batch_size: config.streaming_backoff_initial_batch_size,

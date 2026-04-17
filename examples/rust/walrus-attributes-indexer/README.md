@@ -52,19 +52,8 @@ For the purpose of this guide, the StructTag of the `Metadata` dynamic field is 
 
 ## Defaults
 
-As of writing, the SequentialConfig is defined [here](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs#L68) consisting of a committer config and a checkpoint lag. The default values set `checkpoint_lag` to 0, and the committer config as follows:
+As of writing, the SequentialConfig is defined [here](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs) and the committer config defaults are:
 ```
-/// Configuration for a sequential pipeline
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct SequentialConfig {
-    /// Configuration for the writer, that makes forward progress.
-    pub committer: CommitterConfig,
-
-    /// How many checkpoints to hold back writes for.
-    pub checkpoint_lag: u64,
-}
-
-// Defaults
 impl Default for CommitterConfig {
     fn default() -> Self {
         Self {
@@ -76,20 +65,20 @@ impl Default for CommitterConfig {
 }
 ```
 
-The ingestion config is defined [here](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/ingestion/mod.rs#L59) with defaults configured to:
+The ingestion config is defined [here](https://github.com/MystenLabs/sui/blob/main/crates/sui-indexer-alt-framework/src/ingestion/mod.rs) with defaults configured to:
 ```
 impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
-            checkpoint_buffer_size: 5000,
-            ingest_concurrency: 200,
+            ingest_concurrency: ConcurrencyConfig::Adaptive { initial: 1, min: 1, max: 500, dead_band: None },
             retry_interval_ms: 200,
+            // ...streaming fields elided
         }
     }
 }
 ```
 
-This means that by default, the blog post pipeline will have a write concurrency of 5, and the regulator will buffer at most 5000 checkpoints from the latest checkpoint committed by the blog post pipeline.
+This means that by default, the blog post pipeline will have a write concurrency of 5, and the adaptive ingestion controller throttles fetch concurrency as the pipeline's subscriber channel fills.
 
 ## Follow-Along
 The following uploads the `blog_post.rs` file to Walrus, and runs the indexer locally with `--last-checkpoint` to verify that the indexer is working correctly.
