@@ -95,6 +95,66 @@ The `<Value>` type passed to `borrow` and `borrow_mut` must match the type of th
 
 You must access dynamic object field values through these APIs. A transaction that attempts to use those objects as inputs (by value or by reference), is rejected for having invalid inputs.
 
+## Conditional and higher-order field access
+
+`sui::dynamic_field` and `sui::dynamic_object_field` also provide convenience functions for conditionally accessing or adding fields, and for applying closures to field values.
+
+### Borrow or add
+
+These functions borrow a field by name, automatically adding it with a provided default value if the field does not already exist:
+
+**Dynamic field**
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="borrow_or_add" noComments />
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="borrow_mut_or_add" noComments />
+
+**Dynamic object field**
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move" mode="code" fun="borrow_or_add" noComments />
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move" mode="code" fun="borrow_mut_or_add" noComments />
+
+These functions avoid the need to separately check for field existence before borrowing. If the field exists, a reference to its value is returned. If it does not exist, the field is first added using the provided default value, and then a reference to the new value is returned.
+
+### Execute a closure if the field exists
+
+These functions execute a provided closure on the field's value if the field exists, returning an `Option` with the closure's result, or `option::none()` if the field is absent:
+
+**Dynamic field**
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="get_do" noComments />
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="get_mut_do" noComments />
+
+**Dynamic object field**
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move" mode="code" fun="get_do" noComments />
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move" mode="code" fun="get_mut_do" noComments />
+
+`get_do` passes an immutable reference to the field's value to the closure, while `get_mut_do` passes a mutable reference, allowing the closure to modify the field in place.
+
+### Fold over the field's value
+
+These functions apply a provided closure and a default value to produce a result, regardless of whether the field exists:
+
+**Dynamic field**
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="get_fold" noComments />
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="get_mut_fold" noComments />
+
+**Dynamic object field**
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move" mode="code" fun="get_fold" noComments />
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move" mode="code" fun="get_mut_fold" noComments />
+
+If the field exists, the closure is called with a reference to its value and the result is returned. If the field does not exist, the provided default value is returned directly. `get_fold` uses an immutable reference and `get_mut_fold` uses a mutable reference.
+
+These higher-order functions eliminate the need to separately check for field existence before accessing or adding a field, and are particularly useful for patterns that would otherwise require multiple steps.
+
 ## Removing a dynamic field
 
 Similar to unwrapping an object held in a regular field, you can remove a dynamic field, exposing its value:
