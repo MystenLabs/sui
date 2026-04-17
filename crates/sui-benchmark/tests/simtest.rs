@@ -1794,7 +1794,6 @@ mod test {
             Arc::new(observer)
         };
 
-        let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let target_qps = 20u64;
         let num_workers = 10u64;
         let in_flight_ratio = 2u64;
@@ -1805,7 +1804,6 @@ mod test {
                 target_qps,
                 num_workers,
                 in_flight_ratio,
-                reference_gas_price,
                 Interval::from_str("unbounded").unwrap(),
                 0,
             )

@@ -281,7 +281,6 @@ impl WorkloadConfiguration {
                 target_qps,
                 num_workers,
                 in_flight_ratio,
-                reference_gas_price,
                 duration,
                 group,
             )];

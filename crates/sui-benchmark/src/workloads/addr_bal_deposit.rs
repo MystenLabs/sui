@@ -71,7 +71,6 @@ impl AddrBalDepositWorkloadBuilder {
         target_qps: u64,
         num_workers: u64,
         in_flight_ratio: u64,
-        reference_gas_price: u64,
         duration: Interval,
         group: u32,
     ) -> Option<WorkloadBuilderInfo> {
@@ -87,8 +86,6 @@ impl AddrBalDepositWorkloadBuilder {
             max_ops,
             duration,
         };
-
-        let _ = reference_gas_price;
         let workload_builder = Box::<dyn WorkloadBuilder<dyn Payload>>::from(Box::new(
             AddrBalDepositWorkloadBuilder {
                 config,
