@@ -478,20 +478,18 @@ impl ConsensusAdapter {
             debug!("Submitting {:?} to consensus", transaction_keys);
             guard.submitted = true;
 
-            // The full submission future: acquire the submit semaphore permit
-            // then run the inner submit+status loop. Holding the semaphore
-            // acquire inside this future lets the race below cancel a
-            // submission while it is still queued behind the inflight limit.
-            let submit_fut = async {
-                let _permit: SemaphorePermit = self
-                    .submit_semaphore
-                    .acquire()
-                    .count_in_flight(self.metrics.sequencing_in_flight_semaphore_wait.clone())
-                    .await
-                    .expect("Consensus adapter does not close semaphore");
-                let _in_flight_submission_guard =
-                    GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
+            let _permit: SemaphorePermit = self
+                .submit_semaphore
+                .acquire()
+                .count_in_flight(self.metrics.sequencing_in_flight_semaphore_wait.clone())
+                .await
+                .expect("Consensus adapter does not close semaphore");
+            let _in_flight_submission_guard =
+                GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
+            // Submit the transaction to consensus, racing against the processed waiter in
+            // case another validator sequences the transaction first.
+            let submit_fut = async {
                 const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
 
                 loop {
@@ -560,12 +558,11 @@ impl ConsensusAdapter {
                 submit_fut.await;
                 ProcessedMethod::Consensus
             } else {
-                // Race `processed_notify` against submission. If the tx is
-                // processed by another path (consensus output from someone
-                // else's submission, or checkpoint state sync) while we're
-                // either waiting for a permit or inside the submit loop, the
-                // submission future is dropped — cancelling the pending
-                // `acquire().await` or the retry loop cleanly.
+                // Race `processed_notify` against the submit loop. If the tx is
+                // processed via another path (consensus output from another
+                // validator's submission, or checkpoint state sync) while we're
+                // inside the submit loop, the submission future is dropped and
+                // the retry loop is cancelled cleanly.
                 let processed_waiter = self
                     .processed_notify(transaction_keys.clone(), epoch_store)
                     .boxed();
@@ -580,8 +577,7 @@ impl ConsensusAdapter {
         }
         debug!("{transaction_keys:?} processed by consensus");
 
-        let is_user_tx = is_soft_bundle
-            || transactions[0].is_user_transaction();
+        let is_user_tx = transactions[0].is_user_transaction();
         if is_user_tx && epoch_store.should_send_end_of_publish() {
             // sending message outside of any locks scope
             if let Err(err) = self.submit(
