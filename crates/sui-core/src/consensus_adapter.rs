@@ -10,9 +10,9 @@ use std::time::Instant;
 
 use consensus_core::BlockStatus;
 use futures::FutureExt;
+use futures::StreamExt;
 use futures::future::{self, Either, select};
 use futures::stream::FuturesUnordered;
-use futures::{StreamExt, pin_mut};
 use mysten_common::debug_fatal;
 use mysten_metrics::{
     GaugeGuard, InflightGuardFutureExt, LATENCY_SEC_BUCKETS, spawn_monitored_task,
@@ -440,28 +440,18 @@ impl ConsensusAdapter {
 
         let mut guard = InflightDropGuard::acquire(&self, tx_type);
 
-        let processed_via_consensus_or_checkpoint = if skip_processed_checks {
-            // If we need to get consensus position, don't bypass consensus submission
-            // for tx digest returned from consensus/checkpoint processing
-            future::pending().boxed()
+        // Skip submission if the tx is already processed via consensus output
+        // or checkpoint state sync. `skip_processed_checks` is set by callers
+        // that need a consensus position (mfp/ping), so we must submit even
+        // if already processed.
+        let already_processed = if skip_processed_checks {
+            None
         } else {
-            self.await_consensus_or_checkpoint(transaction_keys.clone(), epoch_store)
-                .boxed()
+            self.check_processed_via_consensus_or_checkpoint(&transaction_keys, epoch_store)
         };
-        pin_mut!(processed_via_consensus_or_checkpoint);
-
-        // If the transaction was already processed by consensus or checkpoint state sync,
-        // skip submission.
-        let processed_waiter = match processed_via_consensus_or_checkpoint
-            .as_mut()
-            .now_or_never()
-        {
-            Some(observed) => {
-                guard.processed_method = observed;
-                None
-            }
-            None => Some(processed_via_consensus_or_checkpoint),
-        };
+        if let Some(method) = &already_processed {
+            guard.processed_method = *method;
+        }
 
         // Log warnings for administrative transactions that fail to get sequenced
         let _monitor = if matches!(
@@ -494,22 +484,24 @@ impl ConsensusAdapter {
             None
         };
 
-        if let Some(processed_waiter) = processed_waiter {
+        if already_processed.is_none() {
             debug!("Submitting {:?} to consensus", transaction_keys);
             guard.submitted = true;
 
-            let _permit: SemaphorePermit = self
-                .submit_semaphore
-                .acquire()
-                .count_in_flight(self.metrics.sequencing_in_flight_semaphore_wait.clone())
-                .await
-                .expect("Consensus adapter does not close semaphore");
-            let _in_flight_submission_guard =
-                GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
+            // The full submission future: acquire the submit semaphore permit
+            // then run the inner submit+status loop. Holding the semaphore
+            // acquire inside this future lets the race below cancel a
+            // submission while it is still queued behind the inflight limit.
+            let submit_fut = async {
+                let _permit: SemaphorePermit = self
+                    .submit_semaphore
+                    .acquire()
+                    .count_in_flight(self.metrics.sequencing_in_flight_semaphore_wait.clone())
+                    .await
+                    .expect("Consensus adapter does not close semaphore");
+                let _in_flight_submission_guard =
+                    GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
-            // Submit the transaction to consensus, racing against the processed waiter in
-            // case another validator sequences the transaction first.
-            let submit_inner = async {
                 const RETRY_DELAY_STEP: Duration = Duration::from_secs(1);
 
                 loop {
@@ -574,12 +566,21 @@ impl ConsensusAdapter {
             };
 
             guard.processed_method = if skip_processed_checks {
-                // When getting consensus positions, we only care about submit_inner completing
-                submit_inner.await;
+                // When getting consensus positions, we only care about submit_fut completing.
+                submit_fut.await;
                 ProcessedMethod::Consensus
             } else {
-                match select(processed_waiter, submit_inner.boxed()).await {
-                    Either::Left((observed_via_consensus, _submit_inner)) => observed_via_consensus,
+                // Race `processed_notify` against submission. If the tx is
+                // processed by another path (consensus output from someone
+                // else's submission, or checkpoint state sync) while we're
+                // either waiting for a permit or inside the submit loop, the
+                // submission future is dropped — cancelling the pending
+                // `acquire().await` or the retry loop cleanly.
+                let processed_waiter = self
+                    .processed_notify(transaction_keys.clone(), epoch_store)
+                    .boxed();
+                match select(processed_waiter, submit_fut.boxed()).await {
+                    Either::Left((observed, _submit_fut)) => observed,
                     Either::Right(((), processed_waiter)) => {
                         debug!("Submitted {transaction_keys:?} to consensus");
                         processed_waiter.await
@@ -677,9 +678,90 @@ impl ConsensusAdapter {
         (consensus_positions, status_waiter)
     }
 
-    /// Waits for transactions to appear either to consensus output or been executed via a checkpoint (state sync).
-    /// Returns the processed method, whether the transactions have been processed via consensus, or have been synced via checkpoint.
-    async fn await_consensus_or_checkpoint(
+    /// Sync check for whether `transaction_keys` are already processed via
+    /// consensus output or checkpoint state sync. Returns `Some(method)` if
+    /// every key is already processed (Checkpoint dominates when any key was
+    /// processed via checkpoint or synced-checkpoint), else `None`.
+    ///
+    /// Also increments `sequencing_certificate_processed` with the matching
+    /// label for each key found processed, mirroring what `processed_notify`
+    /// emits for its async wake-ups.
+    fn check_processed_via_consensus_or_checkpoint(
+        self: &Arc<Self>,
+        transaction_keys: &[SequencedConsensusTransactionKey],
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<ProcessedMethod> {
+        let mut seen_checkpoint = false;
+        for transaction_key in transaction_keys {
+            // Check consensus-processed first; if already visible in consensus
+            // output we don't need to submit again.
+            if epoch_store
+                .is_consensus_message_processed(transaction_key)
+                .expect("Storage error when checking consensus message processed")
+            {
+                self.metrics
+                    .sequencing_certificate_processed
+                    .with_label_values(&["consensus"])
+                    .inc();
+                continue;
+            }
+
+            // For a cert-shaped key, check whether state sync executed the tx
+            // via a checkpoint.
+            if let SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                digest,
+            )) = transaction_key
+                && epoch_store
+                    .is_transaction_executed_in_checkpoint(digest)
+                    .expect("Storage error when checking transaction executed in checkpoint")
+            {
+                self.metrics
+                    .sequencing_certificate_processed
+                    .with_label_values(&["checkpoint"])
+                    .inc();
+                seen_checkpoint = true;
+                continue;
+            }
+
+            // For a checkpoint-signature key, check whether a checkpoint at
+            // or above the target sequence number has already been synced —
+            // in which case the signature is redundant.
+            if let SequencedConsensusTransactionKey::External(
+                ConsensusTransactionKey::CheckpointSignature(_, seq)
+                | ConsensusTransactionKey::CheckpointSignatureV2(_, seq, _),
+            ) = transaction_key
+                && let Some(synced_seq) = self
+                    .checkpoint_store
+                    .get_highest_synced_checkpoint_seq_number()
+                    .expect("Storage error when reading highest synced checkpoint")
+                && synced_seq >= *seq
+            {
+                self.metrics
+                    .sequencing_certificate_processed
+                    .with_label_values(&["synced_checkpoint"])
+                    .inc();
+                seen_checkpoint = true;
+                continue;
+            }
+
+            // Not processed via any path — caller must submit.
+            return None;
+        }
+
+        if seen_checkpoint {
+            Some(ProcessedMethod::Checkpoint)
+        } else {
+            Some(ProcessedMethod::Consensus)
+        }
+    }
+
+    /// Async wait for any of `transaction_keys` to become processed via
+    /// consensus output or a checkpoint (either state-synced or executed
+    /// locally). Used in the in-flight race against submission: cancelling
+    /// the submit future when we learn the tx is processed by another path.
+    /// Returns `Checkpoint` if any key resolves via a checkpoint path, else
+    /// `Consensus`.
+    async fn processed_notify(
         self: &Arc<Self>,
         transaction_keys: Vec<SequencedConsensusTransactionKey>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -812,7 +894,7 @@ struct InflightDropGuard<'a> {
     processed_method: ProcessedMethod,
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 enum ProcessedMethod {
     Consensus,
     Checkpoint,
