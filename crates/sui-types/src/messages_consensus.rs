@@ -470,7 +470,6 @@ pub enum ConsensusTransactionKind {
 impl ConsensusTransactionKind {
     pub fn as_user_transaction(&self) -> Option<&Transaction> {
         match self {
-            ConsensusTransactionKind::UserTransaction(tx) => Some(tx),
             ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.tx()),
             _ => None,
         }
@@ -478,7 +477,6 @@ impl ConsensusTransactionKind {
 
     pub fn into_user_transaction(self) -> Option<Transaction> {
         match self {
-            ConsensusTransactionKind::UserTransaction(tx) => Some(*tx),
             ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.into_tx()),
             _ => None,
         }
@@ -747,12 +745,8 @@ impl ConsensusTransaction {
     }
 
     pub fn is_user_transaction(&self) -> bool {
-        // CertifiedTransaction is unused and not accepted now.
-        matches!(
-            self.kind,
-            ConsensusTransactionKind::UserTransaction(_)
-                | ConsensusTransactionKind::UserTransactionV2(_)
-        )
+        // CertifiedTransaction and UserTransaction are unused and not accepted now.
+        matches!(self.kind, ConsensusTransactionKind::UserTransactionV2(_))
     }
 
     pub fn is_end_of_publish(&self) -> bool {

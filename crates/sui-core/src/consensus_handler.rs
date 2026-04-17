@@ -51,8 +51,8 @@ use sui_types::{
     },
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
     transaction::{
-        InputObjectKind, SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedCertificate,
-        VerifiedTransaction, WithAliases,
+        InputObjectKind, SenderSignedData, TransactionDataAPI, TransactionKey, VerifiedTransaction,
+        WithAliases,
     },
 };
 use tokio::task::JoinSet;
@@ -90,7 +90,7 @@ use crate::{
     execution_scheduler::{SettlementBatchInfo, SettlementScheduler},
     gasless_rate_limiter::ConsensusGaslessCounter,
     post_consensus_tx_reorder::PostConsensusTxReorder,
-    scoring_decision::update_low_scoring_authorities,
+    scoring_decision::update_low_scoring_authorities_metrics,
     traffic_controller::{TrafficController, policies::TrafficTally},
 };
 
@@ -1150,9 +1150,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transaction_index: 0_u64,
         };
 
-        // Return value (the map of low-scoring authorities) is unused in production —
-        // the call is kept for its per-authority score metrics and the count gauge side effects.
-        update_low_scoring_authorities(
+        update_low_scoring_authorities_metrics(
             self.epoch_store.committee(),
             &self.committee,
             consensus_commit.reputation_score_sorted_desc(),
@@ -2736,8 +2734,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // TODO(fastpath): Add metrics for rejected transactions.
                     if matches!(
                         parsed.transaction.kind,
-                        ConsensusTransactionKind::UserTransaction(_)
-                            | ConsensusTransactionKind::UserTransactionV2(_)
+                        ConsensusTransactionKind::UserTransactionV2(_)
                     ) {
                         self.epoch_store
                             .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
@@ -2758,9 +2755,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .observe(parsed.serialized_len as f64);
                 if matches!(
                     &parsed.transaction.kind,
-                    ConsensusTransactionKind::CertifiedTransaction(_)
-                        | ConsensusTransactionKind::UserTransaction(_)
-                        | ConsensusTransactionKind::UserTransactionV2(_)
+                    ConsensusTransactionKind::UserTransactionV2(_)
                 ) {
                     self.last_consensus_stats
                         .stats
@@ -2771,10 +2766,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     // (Note: we no longer need to worry about the previously deferred condition, since we are only
                     // processing newly-received transactions at this time).
                     match &parsed.transaction.kind {
-                        ConsensusTransactionKind::UserTransaction(_)
-                        | ConsensusTransactionKind::UserTransactionV2(_)
-                        | ConsensusTransactionKind::CertifiedTransaction(_)
+                        ConsensusTransactionKind::UserTransactionV2(_)
                         // deprecated and ignore later, but added for exhaustive match
+                        | ConsensusTransactionKind::UserTransaction(_)
+                        | ConsensusTransactionKind::CertifiedTransaction(_)
                         | ConsensusTransactionKind::CapabilityNotification(_)
                         | ConsensusTransactionKind::CapabilityNotificationV2(_)
                         | ConsensusTransactionKind::EndOfPublish(_)
@@ -2805,18 +2800,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
-                    &parsed.transaction.kind
-                    && certificate.epoch() != epoch
-                {
-                    debug!(
-                        "Certificate epoch ({:?}) doesn't match the current epoch ({:?})",
-                        certificate.epoch(),
-                        epoch
-                    );
-                    continue;
-                }
-
                 // Handle deprecated messages
                 match &parsed.transaction.kind {
                     ConsensusTransactionKind::CapabilityNotification(_)
@@ -2834,9 +2817,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 if matches!(
                     &parsed.transaction.kind,
-                    ConsensusTransactionKind::UserTransaction(_)
-                        | ConsensusTransactionKind::UserTransactionV2(_)
-                        | ConsensusTransactionKind::CertifiedTransaction(_)
+                    ConsensusTransactionKind::UserTransactionV2(_)
                 ) {
                     let author_name = self
                         .epoch_store
@@ -3066,28 +3047,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 SequencedConsensusTransactionKind::External(consensus_transaction) => {
                     match consensus_transaction.kind {
                         // === User transactions ===
-                        ConsensusTransactionKind::CertifiedTransaction(cert) => {
-                            // Safe because signatures are verified when consensus called into SuiTxValidator::validate_batch.
-                            let cert = VerifiedCertificate::new_unchecked(*cert);
-                            let transaction =
-                                VerifiedExecutableTransaction::new_from_certificate(cert);
-                            commit_handler_input.user_transactions.push(
-                                VerifiedExecutableTransactionWithAliases::no_aliases(transaction),
-                            );
-                        }
-                        ConsensusTransactionKind::UserTransaction(tx) => {
-                            // Safe because transactions are certified by consensus.
-                            let tx = VerifiedTransaction::new_unchecked(*tx);
-                            // TODO(fastpath): accept position in consensus, after plumbing consensus round, authority index, and transaction index here.
-                            let transaction =
-                                VerifiedExecutableTransaction::new_from_consensus(tx, epoch);
-                            commit_handler_input
-                                .user_transactions
-                                // Use of v1 UserTransaction implies commitment to no aliases.
-                                .push(VerifiedExecutableTransactionWithAliases::no_aliases(
-                                    transaction,
-                                ));
-                        }
                         ConsensusTransactionKind::UserTransactionV2(tx) => {
                             // Extract the aliases claim (required) from the claims
                             let used_alias_versions = if self
@@ -3185,9 +3144,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         }
 
                         // Deprecated messages, filtered earlier by filter_consensus_txns()
+                        // or rejected by SuiTxValidator. Kept for exhaustiveness.
                         ConsensusTransactionKind::CheckpointSignature(_)
                         | ConsensusTransactionKind::RandomnessStateUpdate(_, _)
-                        | ConsensusTransactionKind::CapabilityNotification(_) => {
+                        | ConsensusTransactionKind::CapabilityNotification(_)
+                        | ConsensusTransactionKind::CertifiedTransaction(_)
+                        | ConsensusTransactionKind::UserTransaction(_) => {
                             unreachable!("filtered earlier")
                         }
                     }
@@ -3339,13 +3301,8 @@ fn authenticator_state_update_transaction(
 
 pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
     match &transaction.kind {
-        ConsensusTransactionKind::CertifiedTransaction(certificate) => {
-            if certificate.is_consensus_tx() {
-                "shared_certificate"
-            } else {
-                "owned_certificate"
-            }
-        }
+        // Deprecated and rejected by SuiTxValidator; never classified in practice.
+        ConsensusTransactionKind::CertifiedTransaction(_) => "_deprecated_certificate",
         ConsensusTransactionKind::CheckpointSignature(_) => "checkpoint_signature",
         ConsensusTransactionKind::CheckpointSignatureV2(_) => "checkpoint_signature",
         ConsensusTransactionKind::EndOfPublish(_) => "end_of_publish",
@@ -3355,13 +3312,7 @@ pub(crate) fn classify(transaction: &ConsensusTransaction) -> &'static str {
         ConsensusTransactionKind::RandomnessStateUpdate(_, _) => "randomness_state_update",
         ConsensusTransactionKind::RandomnessDkgMessage(_, _) => "randomness_dkg_message",
         ConsensusTransactionKind::RandomnessDkgConfirmation(_, _) => "randomness_dkg_confirmation",
-        ConsensusTransactionKind::UserTransaction(tx) => {
-            if tx.is_consensus_tx() {
-                "shared_user_transaction"
-            } else {
-                "owned_user_transaction"
-            }
-        }
+        ConsensusTransactionKind::UserTransaction(_) => "_deprecated_user_transaction",
         ConsensusTransactionKind::UserTransactionV2(tx) => {
             if tx.tx().is_consensus_tx() {
                 "shared_user_transaction_v2"
@@ -3486,8 +3437,6 @@ impl SequencedConsensusTransactionKind {
     pub fn executable_transaction_digest(&self) -> Option<TransactionDigest> {
         match self {
             SequencedConsensusTransactionKind::External(ext) => match &ext.kind {
-                ConsensusTransactionKind::CertifiedTransaction(txn) => Some(*txn.digest()),
-                ConsensusTransactionKind::UserTransaction(txn) => Some(*txn.digest()),
                 ConsensusTransactionKind::UserTransactionV2(txn) => Some(*txn.tx().digest()),
                 _ => None,
             },
@@ -3549,14 +3498,6 @@ impl SequencedConsensusTransaction {
         }
         match &self.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CertifiedTransaction(cert),
-                ..
-            }) => cert.transaction_data().uses_randomness(),
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(txn),
-                ..
-            }) => txn.transaction_data().uses_randomness(),
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransactionV2(txn),
                 ..
             }) => txn.tx().transaction_data().uses_randomness(),
@@ -3566,14 +3507,6 @@ impl SequencedConsensusTransaction {
 
     pub fn as_consensus_txn(&self) -> Option<&SenderSignedData> {
         match &self.transaction {
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CertifiedTransaction(certificate),
-                ..
-            }) if certificate.is_consensus_tx() => Some(certificate.data()),
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::UserTransaction(txn),
-                ..
-            }) if txn.is_consensus_tx() => Some(txn.data()),
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransactionV2(txn),
                 ..

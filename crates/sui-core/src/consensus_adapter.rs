@@ -272,12 +272,10 @@ impl ConsensusAdapter {
         submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<JoinHandle<()>> {
         if transactions.len() > 1 {
-            // Soft bundles must contain only user transactions of the same kind,
-            // which keeps classification logic downstream simple.
+            // Soft bundles must contain only UserTransactionV2 transactions.
             let is_user_tx_batch = matches!(
                 transactions[0].kind,
-                ConsensusTransactionKind::UserTransaction(_)
-                    | ConsensusTransactionKind::UserTransactionV2(_)
+                ConsensusTransactionKind::UserTransactionV2(_)
             );
             if !is_user_tx_batch {
                 return Err(SuiErrorKind::InvalidTxKindInSoftBundle.into());
@@ -286,8 +284,7 @@ impl ConsensusAdapter {
                 fp_ensure!(
                     matches!(
                         transaction.kind,
-                        ConsensusTransactionKind::UserTransaction(_)
-                            | ConsensusTransactionKind::UserTransactionV2(_)
+                        ConsensusTransactionKind::UserTransactionV2(_)
                     ),
                     SuiErrorKind::InvalidTxKindInSoftBundle.into()
                 );
@@ -595,8 +592,7 @@ impl ConsensusAdapter {
         let is_user_tx = is_soft_bundle
             || matches!(
                 transactions[0].kind,
-                ConsensusTransactionKind::UserTransaction(_)
-                    | ConsensusTransactionKind::UserTransactionV2(_)
+                ConsensusTransactionKind::UserTransactionV2(_)
             );
         if is_user_tx && epoch_store.should_send_end_of_publish() {
             // sending message outside of any locks scope

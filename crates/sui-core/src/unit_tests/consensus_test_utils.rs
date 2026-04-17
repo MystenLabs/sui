@@ -17,7 +17,7 @@ use sui_types::messages_consensus::{
     AuthorityIndex, ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind,
 };
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
-use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
+use sui_types::transaction::VerifiedTransaction;
 
 use crate::authority::authority_per_epoch_store::{
     AuthorityPerEpochStore, ExecutionIndicesWithStatsV2,
@@ -175,23 +175,7 @@ pub fn make_consensus_adapter_for_test(
 
             // Simple processing - just mark transactions for checkpoint execution if needed
             for txn in transactions {
-                if let ConsensusTransactionKind::CertifiedTransaction(cert) = &txn.kind {
-                    let transaction_digest = cert.digest();
-                    if self.process_via_checkpoint.contains(transaction_digest) {
-                        epoch_store
-                            .insert_finalized_transactions(vec![*transaction_digest].as_slice(), 10)
-                            .expect("Should not fail");
-                        executed_via_checkpoint += 1;
-                    }
-                } else if let ConsensusTransactionKind::UserTransaction(tx) = &txn.kind {
-                    let transaction_digest = tx.digest();
-                    if self.process_via_checkpoint.contains(transaction_digest) {
-                        epoch_store
-                            .insert_finalized_transactions(vec![*transaction_digest].as_slice(), 10)
-                            .expect("Should not fail");
-                        executed_via_checkpoint += 1;
-                    }
-                } else if let ConsensusTransactionKind::UserTransactionV2(tx) = &txn.kind {
+                if let ConsensusTransactionKind::UserTransactionV2(tx) = &txn.kind {
                     let transaction_digest = tx.tx().digest();
                     if self.process_via_checkpoint.contains(transaction_digest) {
                         epoch_store
@@ -225,17 +209,6 @@ pub fn make_consensus_adapter_for_test(
                         // Extract executable transaction from consensus transaction
                         let executable_tx = match &tx.transaction {
                             SequencedConsensusTransactionKind::External(ext) => match &ext.kind {
-                                ConsensusTransactionKind::CertifiedTransaction(cert) => {
-                                    Some(VerifiedExecutableTransaction::new_from_certificate(
-                                        VerifiedCertificate::new_unchecked(*cert.clone()),
-                                    ))
-                                }
-                                ConsensusTransactionKind::UserTransaction(tx) => {
-                                    Some(VerifiedExecutableTransaction::new_from_consensus(
-                                        VerifiedTransaction::new_unchecked(*tx.clone()),
-                                        0,
-                                    ))
-                                }
                                 ConsensusTransactionKind::UserTransactionV2(tx) => {
                                     Some(VerifiedExecutableTransaction::new_from_consensus(
                                         VerifiedTransaction::new_unchecked(tx.tx().clone()),

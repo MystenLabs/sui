@@ -10,11 +10,12 @@ use tracing::debug;
 
 use crate::authority::AuthorityMetrics;
 
-/// Identify the authorities deemed to have low reputation scores by consensus — lagging behind,
+/// Identifies the authorities deemed to have low reputation scores by consensus — lagging behind,
 /// byzantine, or not reliably participating. Flags authorities with the lowest scores up to
 /// `consensus_bad_nodes_stake_threshold` (percent of total stake). Emits per-authority score
-/// metrics and a count gauge. The returned map is surfaced for tests.
-pub(crate) fn update_low_scoring_authorities(
+/// metrics and a count gauge.
+/// The list of lower-scoring authorities are returned for testing.
+pub(crate) fn update_low_scoring_authorities_metrics(
     sui_committee: &Committee,
     consensus_committee: &ConsensusCommittee,
     reputation_score_sorted_desc: Option<Vec<(AuthorityIndex, u64)>>,
@@ -83,11 +84,13 @@ mod tests {
     use prometheus::Registry;
     use sui_types::{committee::Committee, crypto::AuthorityPublicKeyBytes};
 
-    use crate::{authority::AuthorityMetrics, scoring_decision::update_low_scoring_authorities};
+    use crate::{
+        authority::AuthorityMetrics, scoring_decision::update_low_scoring_authorities_metrics,
+    };
 
     #[test]
     #[cfg_attr(msim, ignore)]
-    pub fn test_update_low_scoring_authorities() {
+    pub fn test_update_low_scoring_authorities_metrics() {
         // GIVEN
         // Total stake is 8 for this committee and every authority has equal stake = 1
         let (sui_committee, consensus_committee) = generate_committees(8);
@@ -109,7 +112,7 @@ mod tests {
         // WHEN
         let consensus_bad_nodes_stake_threshold = 33; // 33 * 8 / 100 = 2 low scoring validator
 
-        let low_scoring = update_low_scoring_authorities(
+        let low_scoring = update_low_scoring_authorities_metrics(
             &sui_committee,
             &consensus_committee,
             Some(authorities_by_score_desc.clone()),
@@ -136,7 +139,7 @@ mod tests {
 
         // WHEN setting the threshold to lower
         let consensus_bad_nodes_stake_threshold = 20; // 20 * 8 / 100 = 1 low scoring validator
-        let low_scoring = update_low_scoring_authorities(
+        let low_scoring = update_low_scoring_authorities_metrics(
             &sui_committee,
             &consensus_committee,
             Some(authorities_by_score_desc.clone()),
