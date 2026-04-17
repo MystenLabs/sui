@@ -32,3 +32,9 @@ draft: true
 5.24. Generics
 5.25. Type Reflection
 5.26. Testing
+
+:::caution Deprecation Notice
+`vector::empty` and `vector::singleton` are deprecated in MoveStdlib. Use vector literal syntax instead:
+- Replace `vector::empty<T>()` with `vector[]`
+- Replace `vector::singleton(x)` with `vector[x]`
+:::
