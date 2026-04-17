@@ -399,7 +399,7 @@ async fn test_wait_for_effects_expired() {
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let epoch_store = state_clone.epoch_store_for_testing();
-        let cache = epoch_store.consensus_tx_status_cache.as_ref().unwrap();
+        let cache = &epoch_store.consensus_tx_status_cache;
 
         // Initialize the last committed leader round.
         cache
@@ -537,7 +537,7 @@ async fn test_wait_for_effects_ping() {
             let epoch_store = state_clone.epoch_store_for_testing();
 
             tokio::time::sleep(Duration::from_millis(100)).await;
-            let consensus_tx_status_cache = epoch_store.consensus_tx_status_cache.as_ref().unwrap();
+            let consensus_tx_status_cache = &epoch_store.consensus_tx_status_cache;
             consensus_tx_status_cache
                 .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 10)
                 .await;

@@ -447,10 +447,10 @@ pub struct AuthorityPerEpochStore {
     // Saved at end of epoch for propagating observations to the next.
     pub(crate) end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
 
-    pub(crate) consensus_tx_status_cache: Option<ConsensusTxStatusCache>,
+    pub(crate) consensus_tx_status_cache: ConsensusTxStatusCache,
 
     /// A cache that maintains the reject vote reason for a transaction.
-    pub(crate) tx_reject_reason_cache: Option<TransactionRejectReasonCache>,
+    pub(crate) tx_reject_reason_cache: TransactionRejectReasonCache,
 
     /// A cache that tracks submitted transactions to prevent DoS through excessive resubmissions.
     pub(crate) submitted_transaction_cache: SubmittedTransactionCache,
@@ -1208,10 +1208,9 @@ impl AuthorityPerEpochStore {
             )),
         );
 
-        let consensus_tx_status_cache =
-            Some(ConsensusTxStatusCache::new(protocol_config.gc_depth()));
+        let consensus_tx_status_cache = ConsensusTxStatusCache::new(protocol_config.gc_depth());
 
-        let tx_reject_reason_cache = Some(TransactionRejectReasonCache::new(None, epoch_id));
+        let tx_reject_reason_cache = TransactionRejectReasonCache::new(None, epoch_id);
 
         let submitted_transaction_cache =
             SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);
@@ -3765,26 +3764,21 @@ impl AuthorityPerEpochStore {
         position: ConsensusPosition,
         status: ConsensusTxStatus,
     ) {
-        if let Some(cache) = self.consensus_tx_status_cache.as_ref() {
-            cache.set_transaction_status(position, status);
-        }
+        self.consensus_tx_status_cache
+            .set_transaction_status(position, status);
     }
 
     pub(crate) fn set_rejection_vote_reason(&self, position: ConsensusPosition, reason: &SuiError) {
-        if let Some(tx_reject_reason_cache) = self.tx_reject_reason_cache.as_ref() {
-            tx_reject_reason_cache.set_rejection_vote_reason(position, reason);
-        }
+        self.tx_reject_reason_cache
+            .set_rejection_vote_reason(position, reason);
     }
 
     pub(crate) fn get_rejection_vote_reason(
         &self,
         position: ConsensusPosition,
     ) -> Option<SuiError> {
-        if let Some(tx_reject_reason_cache) = self.tx_reject_reason_cache.as_ref() {
-            tx_reject_reason_cache.get_rejection_vote_reason(position)
-        } else {
-            None
-        }
+        self.tx_reject_reason_cache
+            .get_rejection_vote_reason(position)
     }
 
     /// Caches recent finalized transactions, to avoid revoting them.

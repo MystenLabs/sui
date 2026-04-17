@@ -1130,15 +1130,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
-        if let Some(consensus_tx_status_cache) = self.epoch_store.consensus_tx_status_cache.as_ref()
-        {
-            consensus_tx_status_cache
-                .update_last_committed_leader_round(last_committed_round as u32)
-                .await;
-        }
-        if let Some(tx_reject_reason_cache) = self.epoch_store.tx_reject_reason_cache.as_ref() {
-            tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
-        }
+        self.epoch_store
+            .consensus_tx_status_cache
+            .update_last_committed_leader_round(last_committed_round as u32)
+            .await;
+        self.epoch_store
+            .tx_reject_reason_cache
+            .set_last_committed_leader_round(last_committed_round as u32);
 
         let commit_info = self.additional_consensus_state.observe_commit(
             self.epoch_store.protocol_config(),
