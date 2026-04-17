@@ -23,8 +23,11 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_pg_db::DbArgs;
+use sui_pg_db::temp::TempDb;
 use sui_pg_db::temp::get_available_port;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use test_cluster::TestCluster;
+use test_cluster::TestClusterBuilder;
 use tokio_stream::StreamExt;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -33,33 +36,68 @@ use tokio_tungstenite::tungstenite::http::Request;
 const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct SubscriptionTestCluster {
+    pub validator: TestCluster,
+    #[allow(unused)]
+    pub db: TempDb,
     pub subscription_url: String,
     #[allow(unused)]
     service: Service,
+    #[allow(unused)]
+    indexer: Service,
+    #[allow(unused)]
+    ingestion_dir: tempfile::TempDir,
 }
 
 impl SubscriptionTestCluster {
-    pub async fn new(validator_cluster: &test_cluster::TestCluster) -> Self {
-        Self::new_impl(validator_cluster, None).await
-    }
+    /// Set up a full streaming subscription test environment:
+    /// validator + postgres DB + kv_packages indexer + GraphQL service.
+    /// Waits for kv_packages to index the genesis checkpoint so subscriptions are ready.
+    pub async fn new() -> Self {
+        let ingestion_dir = tempfile::tempdir().expect("Failed to create ingestion dir");
+        let validator = TestClusterBuilder::new()
+            .with_num_validators(1)
+            .with_data_ingestion_dir(ingestion_dir.path().to_owned())
+            .build()
+            .await;
 
-    pub async fn new_with_db(
-        validator_cluster: &test_cluster::TestCluster,
-        database_url: url::Url,
-    ) -> Self {
-        Self::new_impl(validator_cluster, Some(database_url)).await
-    }
+        let db = TempDb::new().expect("Failed to create TempDb");
+        let database_url = db.database().url().clone();
+        let writer = sui_pg_db::Db::for_write(database_url.clone(), DbArgs::default())
+            .await
+            .expect("Failed to connect writer");
+        writer
+            .run_migrations(None)
+            .await
+            .expect("Failed to run migrations");
 
-    async fn new_impl(
-        validator_cluster: &test_cluster::TestCluster,
-        database_url: Option<url::Url>,
-    ) -> Self {
+        let indexer = sui_indexer_alt::setup_indexer(
+            database_url.clone(),
+            DbArgs::default(),
+            sui_indexer_alt_framework::IndexerArgs::default(),
+            sui_indexer_alt_framework::ingestion::ClientArgs {
+                ingestion:
+                    sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
+                        local_ingestion_path: Some(ingestion_dir.path().to_owned()),
+                        ..Default::default()
+                    },
+                ..Default::default()
+            },
+            sui_indexer_alt::config::IndexerConfig::for_test(),
+            None,
+            &Registry::new(),
+        )
+        .await
+        .expect("Failed to create indexer");
+        let indexer = indexer.run().await.expect("Failed to start indexer");
+
+        wait_for_kv_packages(&db, 0).await;
+
         let graphql_port = get_available_port();
         let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
-        let rpc_url = validator_cluster.rpc_url();
+        let rpc_url = validator.rpc_url();
 
         let service = start_graphql(
-            database_url,
+            Some(database_url),
             FullnodeArgs::new(rpc_url.parse().unwrap()),
             DbArgs::default(),
             KvArgs::default(),
@@ -74,15 +112,19 @@ impl SubscriptionTestCluster {
             },
             "0.0.0",
             GraphQlConfig::default(),
-            vec![],
+            vec!["kv_packages".to_string()],
             &Registry::new(),
         )
         .await
         .expect("Failed to start GraphQL server");
 
         Self {
+            validator,
+            db,
             subscription_url: format!("ws://{}/graphql", graphql_listen_address),
             service,
+            indexer,
+            ingestion_dir,
         }
     }
 

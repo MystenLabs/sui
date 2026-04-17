@@ -9,7 +9,6 @@ use anyhow::Context as _;
 use futures::StreamExt;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
-use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_package_resolver::Package;
 use sui_rpc::field::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
@@ -41,6 +40,9 @@ use tracing::info;
 use crate::config::SubscriptionConfig;
 use crate::scope::ExecutionObjectMap;
 
+use super::EvictionQueue;
+use super::StreamingPackageStore;
+use super::SubscriptionReadiness;
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
 
@@ -99,14 +101,18 @@ pub(crate) struct CheckpointStreamTask {
     uri: Uri,
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
     broadcaster: CheckpointBroadcaster,
-    streaming_packages: Arc<super::StreamingPackageStore<PackageCache>>,
+    streaming_packages: Arc<StreamingPackageStore>,
+    eviction_queue: Arc<EvictionQueue>,
+    readiness: Arc<SubscriptionReadiness>,
 }
 
 impl CheckpointStreamTask {
     pub(crate) fn new(
         uri: Uri,
         config: &SubscriptionConfig,
-        streaming_packages: Arc<super::StreamingPackageStore<PackageCache>>,
+        streaming_packages: Arc<StreamingPackageStore>,
+        eviction_queue: Arc<EvictionQueue>,
+        readiness: Arc<SubscriptionReadiness>,
     ) -> Self {
         let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
         Self {
@@ -114,6 +120,8 @@ impl CheckpointStreamTask {
             sender,
             broadcaster,
             streaming_packages,
+            eviction_queue,
+            readiness,
         }
     }
 
@@ -150,10 +158,25 @@ impl CheckpointStreamTask {
             let mut stream = self.connect().await?;
             info!("Connected to checkpoint stream at {}", self.uri);
 
+            let mut first_checkpoint_recorded = false;
             while let Some(result) = stream.next().await {
                 let response = result.context("Checkpoint stream error")?;
                 if let Some(checkpoint) = response.checkpoint {
-                    cache_packages(&checkpoint, &self.streaming_packages);
+                    let sequence_number = checkpoint
+                        .sequence_number
+                        .context("Checkpoint without sequence_number")?;
+                    if !first_checkpoint_recorded {
+                        self.readiness.record_first_checkpoint(sequence_number);
+                        first_checkpoint_recorded = true;
+                    }
+                    let packages = extract_packages(&checkpoint);
+                    if !packages.is_empty() {
+                        self.streaming_packages
+                            .index_packages(sequence_number, &packages);
+                        let ids = packages.iter().map(|p| p.storage_id()).collect();
+                        self.eviction_queue
+                            .record_checkpoint_packages_mapping(sequence_number, ids);
+                    }
                     let processed = process_checkpoint(checkpoint)?;
                     // Ignore send errors — no active subscribers is a normal state
                     // (e.g., no clients have connected yet). The checkpoint is simply dropped.
@@ -299,21 +322,13 @@ fn process_transaction(
     })
 }
 
-/// Extract package objects from the checkpoint and insert them into the package cache.
-/// This allows type resolution (e.g. `contents.type.repr`) to work from streaming
-/// without database access for recently published or upgraded packages.
-///
-/// TODO(DVX-2051): On cache miss, the DB fallback may fail if kv_packages hasn't indexed
-/// the package yet (streaming ahead of indexer). Phase 2 should stall resolution until
-/// the kv_packages watermark catches up to the streamed checkpoint, rather than returning
-/// a partial error.
-fn cache_packages<S>(
-    checkpoint: &ProtoCheckpoint,
-    streaming_packages: &super::StreamingPackageStore<S>,
-) {
+/// Extract package objects from a streamed checkpoint. Returned packages will be
+/// inserted into the streaming index and queued for eventual eviction.
+fn extract_packages(checkpoint: &ProtoCheckpoint) -> Vec<Arc<Package>> {
     let Some(object_set) = &checkpoint.objects else {
-        return;
+        return Vec::new();
     };
+    let mut packages = Vec::new();
     for obj in &object_set.objects {
         let Some(bcs) = &obj.bcs else { continue };
         let Ok(native_obj) = bcs.deserialize::<NativeObject>() else {
@@ -325,8 +340,9 @@ fn cache_packages<S>(
         let Ok(package) = Package::read_from_package(move_package) else {
             continue;
         };
-        streaming_packages.insert(*move_package.id(), Arc::new(package));
+        packages.push(Arc::new(package));
     }
+    packages
 }
 
 /// Deserialize all objects from the checkpoint-level ObjectSet.

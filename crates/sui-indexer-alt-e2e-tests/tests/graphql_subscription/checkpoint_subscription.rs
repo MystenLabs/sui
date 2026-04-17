@@ -3,7 +3,6 @@
 
 use serde_json::json;
 use sui_macros::sim_test;
-use test_cluster::TestClusterBuilder;
 use tokio_stream::StreamExt;
 
 use crate::testing::SubscriptionTestCluster;
@@ -11,16 +10,11 @@ use crate::testing::checkpoint_tx_digests;
 use crate::testing::graphql_redactions;
 use crate::testing::object_wrapping_harness;
 use crate::testing::transfer_coins;
-use crate::testing::wait_for_kv_packages;
 use crate::testing::wait_for_matching_item;
 
 #[sim_test]
 async fn test_subscription_sequential() {
-    let validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
+    let cluster = SubscriptionTestCluster::new().await;
 
     let items: Vec<_> = cluster
         .subscribe("subscription { checkpoints { sequenceNumber } }")
@@ -34,11 +28,7 @@ async fn test_subscription_sequential() {
 
 #[sim_test]
 async fn test_subscription_fields() {
-    let validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
+    let cluster = SubscriptionTestCluster::new().await;
 
     let item = cluster
         .subscribe(
@@ -77,12 +67,8 @@ async fn test_subscription_fields() {
 
 #[sim_test]
 async fn test_subscription_transactions() {
-    let mut validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
-    let sender = validator_cluster.wallet.active_address().unwrap();
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
 
     let mut stream = cluster
         .subscribe_with_variables(
@@ -111,7 +97,9 @@ async fn test_subscription_transactions() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let digests = transfer_coins(&mut validator_cluster, &[1000]).await;
+    // Prime the stream so it's actively subscribed before mutations happen.
+    let _ = stream.next().await;
+    let digests = transfer_coins(&mut cluster.validator, &[1000]).await;
     let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
     graphql_redactions().bind(|| {
@@ -121,12 +109,8 @@ async fn test_subscription_transactions() {
 
 #[sim_test]
 async fn test_subscription_transactions_pagination_first() {
-    let mut validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
-    let sender = validator_cluster.wallet.active_address().unwrap();
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
 
     let mut stream = cluster
         .subscribe_with_variables(
@@ -154,7 +138,8 @@ async fn test_subscription_transactions_pagination_first() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let digests = transfer_coins(&mut validator_cluster, &[100, 100]).await;
+    let _ = stream.next().await;
+    let digests = transfer_coins(&mut cluster.validator, &[100, 100]).await;
     let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
     graphql_redactions().bind(|| {
@@ -164,12 +149,8 @@ async fn test_subscription_transactions_pagination_first() {
 
 #[sim_test]
 async fn test_subscription_transactions_pagination_last() {
-    let mut validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
-    let sender = validator_cluster.wallet.active_address().unwrap();
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
 
     let mut stream = cluster
         .subscribe_with_variables(
@@ -197,7 +178,8 @@ async fn test_subscription_transactions_pagination_last() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
-    let digests = transfer_coins(&mut validator_cluster, &[100, 100]).await;
+    let _ = stream.next().await;
+    let digests = transfer_coins(&mut cluster.validator, &[100, 100]).await;
     let item = wait_for_matching_item(&mut stream, &digests, checkpoint_tx_digests).await;
 
     graphql_redactions().bind(|| {
@@ -209,13 +191,9 @@ async fn test_subscription_transactions_pagination_last() {
 
 #[sim_test]
 async fn test_subscription_object_create() {
-    let mut validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
-    let sender = validator_cluster.wallet.active_address().unwrap();
-    let package_id = object_wrapping_harness::publish(&mut validator_cluster).await;
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let package_id = object_wrapping_harness::publish(&mut cluster.validator).await;
 
     let mut stream = cluster
         .subscribe_with_variables(
@@ -254,9 +232,10 @@ async fn test_subscription_object_create() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
+    let _ = stream.next().await;
 
     let (digest, _) =
-        object_wrapping_harness::create_item(&mut validator_cluster, package_id, 42).await;
+        object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
     let item = wait_for_matching_item(&mut stream, &[digest], checkpoint_tx_digests).await;
 
     graphql_redactions().bind(|| {
@@ -266,13 +245,9 @@ async fn test_subscription_object_create() {
 
 #[sim_test]
 async fn test_subscription_object_lifecycle() {
-    let mut validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .build()
-        .await;
-    let cluster = SubscriptionTestCluster::new(&validator_cluster).await;
-    let sender = validator_cluster.wallet.active_address().unwrap();
-    let package_id = object_wrapping_harness::publish(&mut validator_cluster).await;
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let package_id = object_wrapping_harness::publish(&mut cluster.validator).await;
 
     let mut stream = cluster
         .subscribe_with_variables(
@@ -311,21 +286,22 @@ async fn test_subscription_object_lifecycle() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
+    let _ = stream.next().await;
 
     let (d1, item) =
-        object_wrapping_harness::create_item(&mut validator_cluster, package_id, 42).await;
+        object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
     let cp1 = wait_for_matching_item(&mut stream, &[d1], checkpoint_tx_digests).await;
 
     let (d2, item) =
-        object_wrapping_harness::update_item(&mut validator_cluster, package_id, item, 100).await;
+        object_wrapping_harness::update_item(&mut cluster.validator, package_id, item, 100).await;
     let cp2 = wait_for_matching_item(&mut stream, &[d2], checkpoint_tx_digests).await;
 
     let (d3, wrapper) =
-        object_wrapping_harness::wrap_item(&mut validator_cluster, package_id, item).await;
+        object_wrapping_harness::wrap_item(&mut cluster.validator, package_id, item).await;
     let cp3 = wait_for_matching_item(&mut stream, &[d3], checkpoint_tx_digests).await;
 
     let (d4, _) =
-        object_wrapping_harness::unwrap_wrapper(&mut validator_cluster, package_id, wrapper).await;
+        object_wrapping_harness::unwrap_wrapper(&mut cluster.validator, package_id, wrapper).await;
     let cp4 = wait_for_matching_item(&mut stream, &[d4], checkpoint_tx_digests).await;
 
     graphql_redactions().bind(|| {
@@ -333,60 +309,14 @@ async fn test_subscription_object_lifecycle() {
     });
 }
 
-/// Tests that `contents.json` resolves for streamed objects when a database
-/// with indexed packages is available for type layout resolution.
+/// Tests that `contents.json` resolves for streamed objects using the indexer-backed
+/// package store for type layout resolution.
 /// Uses #[tokio::test] because sim_test intercepts TCP, preventing Postgres access.
 #[tokio::test]
 async fn test_subscription_object_json() {
-    use prometheus::Registry;
-    use sui_pg_db::DbArgs;
-
-    let ingestion_dir = tempfile::tempdir().unwrap();
-    let mut validator_cluster = TestClusterBuilder::new()
-        .with_num_validators(1)
-        .with_data_ingestion_dir(ingestion_dir.path().to_owned())
-        .build()
-        .await;
-
-    let db = sui_pg_db::temp::TempDb::new().expect("Failed to create TempDb");
-    let database_url = db.database().url().clone();
-    let writer = sui_pg_db::Db::for_write(database_url.clone(), DbArgs::default())
-        .await
-        .unwrap();
-    writer.run_migrations(None).await.unwrap();
-
-    // Index only checkpoint 0 (system packages) so that sui::SUI resolves from the DB.
-    // The test package published below will NOT be in the DB — its type resolution must
-    // come from the StreamingPackageStore (populated from the streamed checkpoint).
-    let indexer = sui_indexer_alt::setup_indexer(
-        database_url.clone(),
-        DbArgs::default(),
-        sui_indexer_alt_framework::IndexerArgs {
-            last_checkpoint: Some(0),
-            ..Default::default()
-        },
-        sui_indexer_alt_framework::ingestion::ClientArgs {
-            ingestion:
-                sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs {
-                    local_ingestion_path: Some(ingestion_dir.path().to_owned()),
-                    ..Default::default()
-                },
-            ..Default::default()
-        },
-        sui_indexer_alt::config::IndexerConfig::for_test(),
-        None,
-        &Registry::new(),
-    )
-    .await
-    .expect("Failed to create indexer");
-
-    let _indexer = indexer.run().await.expect("Failed to start indexer");
-    wait_for_kv_packages(&db, 0).await;
-
-    let cluster =
-        SubscriptionTestCluster::new_with_db(&validator_cluster, database_url.clone()).await;
-    let sender = validator_cluster.wallet.active_address().unwrap();
-    let package_id = object_wrapping_harness::publish(&mut validator_cluster).await;
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let sender = cluster.validator.wallet.active_address().unwrap();
+    let package_id = object_wrapping_harness::publish(&mut cluster.validator).await;
 
     let mut stream = cluster
         .subscribe_with_variables(
@@ -398,6 +328,14 @@ async fn test_subscription_object_json() {
                             effects {
                                 objectChanges {
                                     nodes {
+                                        inputState {
+                                            asMoveObject {
+                                                contents {
+                                                    type { repr }
+                                                    json
+                                                }
+                                            }
+                                        }
                                         outputState {
                                             asMoveObject {
                                                 contents {
@@ -416,15 +354,28 @@ async fn test_subscription_object_json() {
             Some(json!({ "sender": sender.to_string() })),
         )
         .await;
+    let _ = stream.next().await;
 
-    let (digest, _) =
-        object_wrapping_harness::create_item(&mut validator_cluster, package_id, 42).await;
-    let checkpoint = wait_for_matching_item(&mut stream, &[digest], checkpoint_tx_digests).await;
+    let (d1, item) =
+        object_wrapping_harness::create_item(&mut cluster.validator, package_id, 42).await;
+    let cp1 = wait_for_matching_item(&mut stream, &[d1], checkpoint_tx_digests).await;
+
+    let (d2, item) =
+        object_wrapping_harness::update_item(&mut cluster.validator, package_id, item, 100).await;
+    let cp2 = wait_for_matching_item(&mut stream, &[d2], checkpoint_tx_digests).await;
+
+    let (d3, wrapper) =
+        object_wrapping_harness::wrap_item(&mut cluster.validator, package_id, item).await;
+    let cp3 = wait_for_matching_item(&mut stream, &[d3], checkpoint_tx_digests).await;
+
+    let (d4, _) =
+        object_wrapping_harness::unwrap_wrapper(&mut cluster.validator, package_id, wrapper).await;
+    let cp4 = wait_for_matching_item(&mut stream, &[d4], checkpoint_tx_digests).await;
 
     let mut settings = graphql_redactions();
     settings.add_redaction(".**.json.id", "[id]");
-    settings.add_redaction(".**.json.balance", "[balance]");
+    settings.add_redaction(".**.json.item.id", "[id]");
     settings.bind(|| {
-        insta::assert_json_snapshot!("subscription_object_json", checkpoint);
+        insta::assert_json_snapshot!("subscription_object_json", [cp1, cp2, cp3, cp4]);
     });
 }

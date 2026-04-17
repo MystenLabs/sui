@@ -21,10 +21,9 @@ use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::object::Object as NativeObject;
 
-use crate::task::streaming::StreamingPackageStore;
-
 use crate::config::Limits;
 use crate::error::RpcError;
+use crate::task::streaming::StreamingPackageStore;
 use crate::task::watermark::Watermarks;
 
 /// A map of objects from an executed transaction, keyed by (ObjectID, SequenceNumber).
@@ -102,7 +101,7 @@ impl Scope {
     /// Create a scope for streamed checkpoint data. Sets `checkpoint_viewed_at` to `None`
     /// because streamed data is resolved from memory, not bounded by an indexed checkpoint.
     pub(crate) fn for_streamed_checkpoint(
-        package_store: Arc<StreamingPackageStore<PackageCache>>,
+        package_store: Arc<StreamingPackageStore>,
         resolver_limits: sui_package_resolver::Limits,
     ) -> Self {
         Self {

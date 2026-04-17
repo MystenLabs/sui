@@ -3,8 +3,8 @@
 
 use std::any::Any;
 use std::net::SocketAddr;
-use std::num::NonZeroUsize;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use api::types::address::IAddressable;
@@ -368,17 +368,28 @@ pub async fn start_rpc(
     );
 
     let streaming_setup = subscription_args.checkpoint_stream_url.map(|uri| {
-        let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
+        let lru = task::streaming::LruPackageStore::new(
             package_store.clone(),
-            NonZeroUsize::new(config.subscription.package_cache_capacity)
-                .expect("package_cache_capacity must be non-zero"),
-        ));
-        let task = task::streaming::CheckpointStreamTask::new(
+            config.subscription.package_lru_capacity,
+        );
+        let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(lru));
+        let eviction_queue = task::streaming::EvictionQueue::new();
+        let readiness =
+            task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_receiver());
+        let stream_task = task::streaming::CheckpointStreamTask::new(
             uri,
             &config.subscription,
             streaming_packages.clone(),
+            eviction_queue.clone(),
+            readiness.clone(),
         );
-        (task, streaming_packages)
+        let eviction_task = task::streaming::PackageEvictionTask::new(
+            streaming_packages.clone(),
+            eviction_queue,
+            watermark_task.watermarks(),
+            Duration::from_millis(config.subscription.eviction_interval_ms),
+        );
+        (stream_task, eviction_task, streaming_packages, readiness)
     });
 
     let mut rpc = rpc
@@ -410,10 +421,11 @@ pub async fn start_rpc(
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
 
-    if let Some((ref task, ref streaming_packages)) = streaming_setup {
+    if let Some((ref stream_task, _, ref streaming_packages, ref readiness)) = streaming_setup {
         rpc = rpc
-            .data(task.broadcaster())
-            .data(streaming_packages.clone());
+            .data(stream_task.broadcaster())
+            .data(streaming_packages.clone())
+            .data(readiness.clone());
     }
 
     let s_rpc = rpc.run().await?;
@@ -425,8 +437,10 @@ pub async fn start_rpc(
         .attach(s_system_package_task)
         .attach(s_watermark);
 
-    if let Some((task, _)) = streaming_setup {
-        service = service.attach(task.run());
+    if let Some((stream_task, eviction_task, _, _)) = streaming_setup {
+        service = service
+            .attach(stream_task.run())
+            .attach(eviction_task.run());
     }
 
     Ok(service)

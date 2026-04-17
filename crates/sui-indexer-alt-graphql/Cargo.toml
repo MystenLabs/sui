@@ -28,6 +28,7 @@ bcs.workspace = true
 chrono.workspace = true
 clap.workspace = true
 const-str.workspace = true
+dashmap.workspace = true
 diesel.workspace = true
 diesel-async.workspace = true
 fastcrypto.workspace = true
@@ -36,7 +37,7 @@ futures.workspace = true
 headers.workspace = true
 im.workspace = true
 itertools.workspace = true
-lru.workspace = true
+moka.workspace = true
 pin-project.workspace = true
 prometheus.workspace = true
 prost-types.workspace = true
@@ -48,6 +49,7 @@ telemetry-subscribers.workspace = true
 thiserror.workspace = true
 timeout-tracing.workspace = true
 tokio.workspace = true
+tokio-stream.workspace = true
 toml.workspace = true
 tonic.workspace = true
 tower-http.workspace = true
@@ -83,6 +85,7 @@ sui-types.workspace = true
 insta.workspace = true
 reqwest.workspace = true
 regex.workspace = true
+sui-package-resolver = { workspace = true, features = ["testing"] }
 
 [features]
 staging = []
