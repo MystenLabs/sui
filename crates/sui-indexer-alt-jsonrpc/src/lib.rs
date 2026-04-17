@@ -312,7 +312,6 @@ pub async fn start_rpc(
     rpc.add_module(Checkpoints(context.clone()))?;
     rpc.add_module(Coins(context.clone()))?;
     rpc.add_module(DynamicFields(context.clone()))?;
-    rpc.add_module(Governance::new(context.clone()))?;
     rpc.add_module(MoveUtils(context.clone()))?;
     rpc.add_module(NameService(context.clone()))?;
     rpc.add_module(Objects(context.clone()))?;
@@ -328,11 +327,10 @@ pub async fn start_rpc(
     }
 
     if let Some(fullnode_client) = fullnode_client {
-        rpc.add_module(Write::new(fullnode_client, context.clone()))?;
+        rpc.add_module(Governance::new(context.clone()))?;
+        rpc.add_module(Write::new(context.clone()))?;
     } else {
-        warn!(
-            "No fullnode grpc url provided, Write module will not be added, and `getStakes` and `getStakesByIds` will not be availble on Governance module."
-        );
+        warn!("No fullnode grpc url provided, Write and Governance modules will not be added.");
     }
 
     let s_rpc = rpc.run().await.context("Failed to start RPC service")?;

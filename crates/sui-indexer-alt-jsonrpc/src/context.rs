@@ -57,7 +57,10 @@ pub(crate) struct Context {
     /// database is configured.
     chain_identifier: Option<ChainIdentifier>,
 
-    /// Access to the fullnode for executing transactions.
+    /// Direct access to the fullnode client for executing transactions.
+    fullnode_client: Option<FullnodeClient>,
+
+    /// Access to the same `fullnode_client` through a `DataLoader` to batch requests.
     execution_loader: Option<Arc<DataLoader<FullnodeClient>>>,
 }
 
@@ -136,6 +139,7 @@ impl Context {
             metrics,
             config: Arc::new(config),
             chain_identifier,
+            fullnode_client: fullnode_client.clone(),
             execution_loader: fullnode_client.map(|client| Arc::new(client.as_data_loader())),
         })
     }
@@ -181,9 +185,15 @@ impl Context {
         self.chain_identifier
     }
 
+    pub(crate) fn fullnode_client(&self) -> anyhow::Result<&FullnodeClient> {
+        self.fullnode_client
+            .as_ref()
+            .context("Fullnode gRPC client is not configured")
+    }
+
     pub(crate) fn execution_loader(&self) -> anyhow::Result<&Arc<DataLoader<FullnodeClient>>> {
         self.execution_loader
             .as_ref()
-            .context("Execution loader not configured")
+            .context("Execution loader is not configured")
     }
 }
