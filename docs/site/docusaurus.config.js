@@ -18,7 +18,7 @@ const darkCodeTheme = require("prism-react-renderer").themes.nightOwl;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const SIDEBARS_PATH = fileURLToPath(new URL("./sidebars.js", import.meta.url));
+const SIDEBARS_PATH = fileURLToPath(new URL("../content/sidebars.js", import.meta.url));
 
 require("dotenv").config();
 
@@ -44,8 +44,8 @@ const config = {
   baseUrl: "/",
 
   onBrokenLinks: "throw",
-  onBrokenAnchors: "ignore",
-  onDuplicateRoutes: 'ignore',
+  onBrokenAnchors: "warn",
+  onDuplicateRoutes: 'throw',
 
   staticDirectories: ["static", "src/open-spec"],
   markdown: {
@@ -53,6 +53,7 @@ const config = {
     mermaid: true,
     hooks: {
     onBrokenMarkdownLinks: 'throw',
+    onBrokenMarkdownImages: 'throw',
   },
   },
   
@@ -271,7 +272,7 @@ const config = {
       image: "img/sui-doc-og.png",
       docs: {
         sidebar: {
-          autoCollapseCategories: false,
+          autoCollapseCategories: true,
         },
       },
 
@@ -283,20 +284,82 @@ const config = {
         },
         items: [
           {
-            label: "Guides",
-            to: "guides",
+            type: "dropdown",
+            label: "Getting Started",
+            to: "getting-started",
+            items: [
+              { type: "doc", docId: "getting-started/onboarding/index", label: "Hello, World!" },
+              { type: "doc", docId: "getting-started/tooling", label: "Developer Tools" },
+              { type: "doc", docId: "getting-started/dev-cheat-sheet", label: "Developer Cheat Sheet" },
+              { type: "doc", docId: "getting-started/sui-for-ethereum", label: "Ethereum -> Sui" },
+              { type: "doc", docId: "getting-started/sui-for-solana", label: "Solana -> Sui" },
+            ],
           },
           {
-            label: "Concepts",
-            to: "concepts",
+            type: "dropdown",
+            label: "Develop",
+            to: "develop",
+            items: [
+              { type: "doc", docId: "develop/sui-architecture/index", label: "Sui Architecture" },
+              { type: "doc", docId: "develop/objects/index", label: "Using Objects" },
+              { type: "doc", docId: "develop/write-move/index", label: "Writing Move Packages" },
+              { type: "doc", docId: "develop/publish-upgrade-packages/index", label: "Deploying and Upgrading Packages" },
+              { type: "doc", docId: "develop/manage-packages/index", label: "Managing Packages" },
+              { type: "doc", docId: "develop/testing-debugging/index", label: "Testing and Debugging" },
+              { type: "doc", docId: "develop/transactions/index", label: "Building Transactions" },
+              { type: "doc", docId: "develop/transaction-payment/index", label: "Paying for Transactions" },
+              { type: "doc", docId: "develop/accessing-data/index", label: "Accessing Data" },
+              { type: "doc", docId: "develop/cryptography/index", label: "Cryptography" },
+              { type: "doc", docId: "operators", label: "Node Operators" },
+            ],
           },
           {
-            label: "Standards",
-            to: "standards",
+            type: "dropdown",
+            label: "Onchain Finance",
+            to: "onchain-finance",
+            items: [
+              { type: "doc", docId: "onchain-finance/types-of-assets", label: "Types of Assets" },
+              { type: "doc", docId: "onchain-finance/asset-custody/index", label: "Asset Custody" },
+              { type: "doc", docId: "onchain-finance/fungible-tokens/index", label: "Fungible Tokens" },
+              { type: "doc", docId: "onchain-finance/tokenized-assets/index", label: "Tokenized Assets" },
+              { type: "doc", docId: "onchain-finance/examples-patterns/index", label: "Example Asset Patterns" },
+              { type: "doc", docId: "onchain-finance/closed-loop-token/index", label: "Closed Loop Token" },
+              { type: "doc", docId: "onchain-finance/pas/index", label: "Permissioned Asset Standard" },
+              { type: "doc", docId: "onchain-finance/deepbookv3/deepbook", label: "DeepBookV3" },
+              { type: "doc", docId: "onchain-finance/deepbook-margin/deepbook-margin", label: "DeepBook Margin" },
+              { type: "doc", docId: "onchain-finance/kiosk/index", label: "Kiosk" },
+              { type: "doc", docId: "onchain-finance/payment-kit", label: "Payment Kit" },
+            ],
           },
           {
+            type: "dropdown",
+            label: "Sui Stack",
+            to: "sui-stack",
+            items: [
+              { type: "doc", docId: "sui-stack/on-chain-primitives/randomness-onchain", label: "Onchain Randomness" },
+              { type: "doc", docId: "sui-stack/on-chain-primitives/access-time", label: "Onchain Time" },
+              { type: "doc", docId: "sui-stack/sagat", label: "Sagat" },
+              { type: "doc", docId: "sui-stack/indexer-walrus", label: "Walrus" },
+              { type: "doc", docId: "sui-stack/nautilus/index", label: "Nautilus" },
+              { type: "doc", docId: "sui-stack/zklogin-integration/index", label: "zkLogin" },
+              { type: "doc", docId: "sui-stack/suiplay0x1/index", label: "SuiPlay0X1" },
+            ],
+          },
+          {
+            type: "dropdown",
             label: "References",
             to: "references",
+            items: [
+              { type: "doc", docId: "references/sui-api", label: "Sui RPC" },
+              { type: "doc", docId: "references/cli", label: "Sui CLI" },
+              { type: "doc", docId: "references/ide/index", label: "IDE Support" },
+              { type: "doc", docId: "references/sui-sdks", label: "Sui SDKs" },             
+              { type: "doc", docId: "references/ptb-commands", label: "PTB Commands" },
+              { type: "doc", docId: "references/framework", label: "Move Framework" },
+              { type: "doc", docId: "references/object-display-syntax", label: "Object Display V2 Syntax" },
+              { type: "doc", docId: "references/release-notes", label: "Release Notes" },
+              { type: "doc", docId: "references/sui-glossary", label: "Glossary" },
+            ],
           },
         ],
       },

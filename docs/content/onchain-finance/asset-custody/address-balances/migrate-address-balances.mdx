@@ -1,0 +1,139 @@
+---
+title: Migrating from Coin to Address Balances
+sidebar_label: Migrating from Coin to Address Balances
+description: What changes with address balances on Sui and what action to take for existing integrations.
+keywords:
+  [
+    address balances,
+    migration,
+    coin objects,
+    balance queries,
+    checkpoint data,
+    backward compatibility,
+    SIP-58,
+  ]
+draft: true
+---
+
+Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This supplements the `Coin<T>` model with direct address-owned balances, which simplifies transaction construction and eliminates coin selection complexity.
+
+For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md). For implementation details on sending, withdrawing, and paying gas from address balances, see [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
+
+## Read this first
+
+This rollout initially has very limited impact:
+
+- Nothing is deprecated or removed. All transactions that are currently valid continue to be valid. Coin objects are not forcibly migrated to address balances.
+- No contracts need to be rewritten. Contracts can continue to accept `Coin<T>` and `&mut Coin<T>` as before.
+- Coins can still be sent through `transfer::public_transfer` or the `TransferObjects` command.
+
+### Impact for wallets, exchanges, and custody providers
+
+Anyone operating a wallet (custodial, non-custodial, or exchange wallets) might be impacted by this change. Users can now send funds to your address through `send_funds()` instead of transferring a coin object. If a wallet receives funds this way, but does not have proper support for address balances, the user will not be able to see or access the funds. The user might then believe the funds have been lost. The funds cannot actually be lost, but this can cause confusion for affected users.
+
+Initially, this should not happen often because most of the ecosystem will continue to transfer coin objects. However, because there is no way to prevent funds from arriving at any given wallet through an address balance transfer, wallet implementors should be prepared.
+
+User funds can also become split across both coins and address balances. Balance queries (through JSON-RPC, gRPC, or GraphQL) show the combined total. To send funds that include the address balance portion, you must either:
+
+- Use `coinWithBalance` from the TypeScript SDK (v2+), which automatically draws from both sources.
+- Implement manual withdrawal logic as described in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
+
+## Changes to balance queries
+
+Balance query responses now include address balance information alongside coin object totals.
+
+### JSON-RPC
+
+The `suix_getBalance` and `suix_getAllBalances` methods now return a `fundsInAddressBalance` field. The `totalBalance` field includes both coin objects and address balance funds:
+
+```json
+{
+	"coinType": "0x2::sui::SUI",
+	"coinObjectCount": 2,
+	"totalBalance": "99998990120",
+	"lockedBalance": {},
+	"fundsInAddressBalance": "5000000"
+}
+```
+
+To get only the coin-based balance, subtract `fundsInAddressBalance` from `totalBalance`.
+
+### gRPC
+
+The `GetBalance` and `ListBalances` methods from `StateService` now return separate fields for coin and address balances:
+
+- `coinBalance`: Total held in coin objects.
+- `addressBalance`: Amount held in address balance.
+- `balance`: Sum of the two.
+
+```json
+{
+	"balance": {
+		"coinType": "0x2::sui::SUI",
+		"balance": "99998990120",
+		"addressBalance": "5000000",
+		"coinBalance": "99993990120"
+	}
+}
+```
+
+### GraphQL
+
+The `balance` and `balances` fields on address types now include `addressBalance`, `coinBalance`, and `totalBalance` fields. See [GraphQL Reference - `IAddressable.balance`](/references/sui-api/sui-graphql/beta/reference/types/interfaces/iaddressable) for the full schema.
+
+## Changes to balance computation from checkpoint data
+
+Use the balance changes provided by JSON-RPC or gRPC when possible.
+
+If you compute balance changes from checkpoint data, you must now process accumulator events from `TransactionEffects` in addition to coin object diffs.
+
+The Sui framework provides a helper for this process:
+
+```rust
+use sui_types::balance_change::{derive_balance_changes, BalanceChange};
+
+let balance_changes: Vec<BalanceChange> = derive_balance_changes(
+    &effects,
+    &input_objects,
+    &output_objects,
+);
+```
+
+Each `BalanceChange` contains the address, coin type, and a signed amount (negative for spent, positive for received).
+
+See the [reference implementation](https://github.com/MystenLabs/sui/blob/e23cc4bb0215ec065785a19772f22eda8ada14ae/crates/sui-types/src/balance_change.rs#L86) for the full algorithm.
+
+### Accessing accumulator events
+
+Accumulator events are embedded in `TransactionEffects`. Access them through the `TransactionEffectsAPI` trait:
+
+```rust
+use sui_types::effects::TransactionEffectsAPI;
+
+let events = effects.accumulator_events();
+```
+
+Each event contains the target address, a balance type, an operation (`Split` for withdrawal, `Merge` for deposit), and the amount. See [sui-types/src/effects/mod.rs](https://github.com/MystenLabs/sui/blob/main/crates/sui-types/src/effects/mod.rs) for the full API.
+
+## Backward compatibility
+
+All existing contracts and clients continue to work. The following sections describe what changes and what remains the same.
+
+### Existing contracts
+
+Contracts that accept `Coin<T>` or `Balance<T>` remain callable without changes. The `redeem_funds` functions (in the `sui::coin` and `sui::balance` modules respectively) convert withdrawals to the expected types within the PTB. For example:
+
+```
+inputs: [withdrawal<0x2::sui::SUI>(100)]
+commands:
+0: 0x2::coin::redeem_funds(inputs(0))
+1: 0x2::transfer::public_transfer(result(0))
+```
+
+### Legacy clients
+
+A JSON-RPC compatibility layer presents synthetic coin objects representing address balance reservations. This preserves basic functionality for clients that cannot upgrade but should not be relied upon for new development.
+
+## Converting existing coins to address balances
+
+Migration is optional. The SDK automatically selects coins or address balances as needed. To consolidate existing coin objects into an address balance, see [Converting Existing Coins to Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#converting-existing-coins-to-address-balances) in the usage guide.

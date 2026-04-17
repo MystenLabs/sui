@@ -19,6 +19,7 @@ use sui_types::digests::CheckpointDigest;
 use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::error::SuiResult;
 use sui_types::messages_checkpoint::CheckpointContents;
@@ -179,6 +180,21 @@ impl DataStore {
     pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
         self.local.get_highest_checkpoint_sequence_number()
     }
+
+    /// Construct a `DataStore` for tests, backed by an explicit local root and a fake (unused)
+    /// GraphQL endpoint. The remote client is constructed but never called because tests should
+    /// pre-populate the local cache with the data they need.
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(root: std::path::PathBuf) -> Self {
+        let gql = GraphQLClient::new(Node::Custom("http://localhost:1".to_string()), "test")
+            .expect("graphql store with localhost url should construct");
+        let local = FilesystemStore::new_with_root(root);
+        Self {
+            forked_at_checkpoint: 0,
+            gql,
+            local,
+        }
+    }
 }
 
 // ============================================================================
@@ -223,7 +239,7 @@ impl ChildObjectResolver for DataStore {
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        let child_object = match <Self as ObjectStore>::get_object(self, child) {
+        let child_object = match self.get_object(child).ok().flatten() {
             None => return Ok(None),
             Some(obj) => obj,
         };
@@ -254,9 +270,8 @@ impl ChildObjectResolver for DataStore {
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        let recv_object = match <Self as ObjectStore>::get_object(self, receiving_object_id) {
-            None => return Ok(None),
-            Some(obj) => obj,
+        let Some(recv_object) = self.get_object(receiving_object_id).ok().flatten() else {
+            return Ok(None);
         };
         if recv_object.owner != sui_types::object::Owner::AddressOwner((*owner).into()) {
             return Ok(None);
@@ -299,16 +314,16 @@ impl SimulatorStore for DataStore {
         todo!("SimulatorStore::get_committee_by_epoch")
     }
 
-    fn get_transaction(&self, _digest: &TransactionDigest) -> Option<VerifiedTransaction> {
-        todo!("SimulatorStore::get_transaction")
+    fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
+        self.local.get_transaction(digest).ok().flatten()
     }
 
-    fn get_transaction_effects(&self, _digest: &TransactionDigest) -> Option<TransactionEffects> {
-        todo!("SimulatorStore::get_transaction_effects")
+    fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
+        self.local.get_transaction_effects(digest).ok().flatten()
     }
 
-    fn get_transaction_events(&self, _digest: &TransactionDigest) -> Option<TransactionEvents> {
-        todo!("SimulatorStore::get_transaction_events")
+    fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
+        self.local.get_transaction_events(digest).ok().flatten()
     }
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
@@ -326,7 +341,9 @@ impl SimulatorStore for DataStore {
     }
 
     fn get_clock(&self) -> Clock {
-        <Self as ObjectStore>::get_object(self, &sui_types::SUI_CLOCK_OBJECT_ID)
+        self.get_object(&sui_types::SUI_CLOCK_OBJECT_ID)
+            .ok()
+            .flatten()
             .expect("clock should exist")
             .to_rust()
             .expect("clock object should deserialize")
@@ -350,24 +367,37 @@ impl SimulatorStore for DataStore {
 
     fn insert_executed_transaction(
         &mut self,
-        _transaction: VerifiedTransaction,
-        _effects: TransactionEffects,
-        _events: TransactionEvents,
-        _written_objects: BTreeMap<ObjectID, Object>,
+        transaction: VerifiedTransaction,
+        effects: TransactionEffects,
+        events: TransactionEvents,
+        written_objects: BTreeMap<ObjectID, Object>,
     ) {
-        todo!("SimulatorStore::insert_executed_transaction")
+        let deleted_objects = effects.deleted();
+        let tx_digest = *effects.transaction_digest();
+        self.insert_transaction(transaction);
+        self.insert_transaction_effects(effects);
+        self.insert_events(&tx_digest, events);
+        self.update_objects(written_objects, deleted_objects);
     }
 
-    fn insert_transaction(&mut self, _transaction: VerifiedTransaction) {
-        todo!("SimulatorStore::insert_transaction")
+    fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
+        let digest = *transaction.digest();
+        self.local
+            .write_transaction(&digest, &transaction)
+            .expect("failed to persist transaction to disk");
     }
 
-    fn insert_transaction_effects(&mut self, _effects: TransactionEffects) {
-        todo!("SimulatorStore::insert_transaction_effects")
+    fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
+        let digest = *effects.transaction_digest();
+        self.local
+            .write_transaction_effects(&digest, &effects)
+            .expect("failed to persist transaction effects to disk");
     }
 
-    fn insert_events(&mut self, _tx_digest: &TransactionDigest, _events: TransactionEvents) {
-        todo!("SimulatorStore::insert_events")
+    fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
+        self.local
+            .write_transaction_events(tx_digest, &events)
+            .expect("failed to persist transaction events to disk");
     }
 
     fn update_objects(
@@ -384,5 +414,185 @@ impl SimulatorStore for DataStore {
 
     fn backing_store(&self) -> &dyn BackingStore {
         self
+    }
+}
+
+#[cfg(test)]
+mod execution_tests {
+    use std::num::NonZeroUsize;
+    use std::time::Duration;
+
+    use rand::rngs::OsRng;
+    use simulacrum::Simulacrum;
+    use simulacrum::store::in_mem_store::KeyStore;
+    use sui_swarm_config::network_config::NetworkConfig;
+    use sui_swarm_config::network_config_builder::ConfigBuilder;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::effects::TransactionEffectsAPI;
+    use sui_types::gas_coin::GasCoin;
+    use sui_types::object::Owner;
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+    use sui_types::transaction::{GasData, Transaction, TransactionData, TransactionKind};
+
+    use super::*;
+    use sui_types::crypto::KeypairTraits;
+
+    /// Build a `Simulacrum<OsRng, DataStore>` from a fresh genesis NetworkConfig. The DataStore's
+    /// local cache lives in the returned tempdir; its remote endpoint is fake and never called.
+    /// Genesis objects are populated directly via `update_objects` to avoid touching the
+    /// `init_with_genesis` checkpoint/committee paths (which are still `todo!()`).
+    ///
+    /// Returns the simulacrum, the underlying NetworkConfig (so tests can find genesis objects
+    /// and account keys), and the tempdir guarding the local cache.
+    fn test_simulacrum() -> (
+        Simulacrum<OsRng, DataStore>,
+        NetworkConfig,
+        tempfile::TempDir,
+    ) {
+        let temp = tempfile::tempdir().expect("failed to create tempdir");
+        let mut rng = OsRng;
+        let config = ConfigBuilder::new_with_temp_dir()
+            .rng(&mut rng)
+            .deterministic_committee_size(NonZeroUsize::MIN)
+            .build();
+
+        let mut data_store = DataStore::new_for_testing(temp.path().to_path_buf());
+        let written: BTreeMap<ObjectID, Object> = config
+            .genesis
+            .objects()
+            .iter()
+            .map(|o| (o.id(), o.clone()))
+            .collect();
+        data_store.update_objects(written, vec![]);
+
+        let keystore = KeyStore::from_network_config(&config);
+        let sim = Simulacrum::new_from_custom_state(
+            keystore,
+            config.genesis.checkpoint(),
+            config.genesis.sui_system_object(),
+            &config,
+            data_store,
+            rng,
+        );
+        (sim, config, temp)
+    }
+
+    /// Find the first gas coin in the genesis object set owned by `owner`.
+    fn find_gas_coin(config: &NetworkConfig, owner: SuiAddress) -> Object {
+        config
+            .genesis
+            .objects()
+            .iter()
+            .find(|obj| obj.owner == Owner::AddressOwner(owner) && obj.is_gas_coin())
+            .expect("owner should have a gas coin in genesis")
+            .clone()
+    }
+
+    #[test]
+    fn test_advance_clock_executes_and_persists() {
+        let (mut sim, _config, _temp) = test_simulacrum();
+        let initial_ts = sim.store().get_clock().timestamp_ms;
+
+        let effects = sim.advance_clock(Duration::from_secs(60));
+        assert!(
+            effects.status().is_ok(),
+            "execution failed: {:?}",
+            effects.status()
+        );
+
+        assert_eq!(sim.store().get_clock().timestamp_ms, initial_ts + 60_000,);
+
+        // The transaction was persisted to the filesystem cache.
+        let tx_digest = effects.transaction_digest();
+        let persisted = sim.store().get_transaction(tx_digest);
+        assert!(persisted.is_some(), "transaction not persisted on disk");
+
+        let persisted_effects = sim.store().get_transaction_effects(tx_digest);
+        assert_eq!(persisted_effects.unwrap(), effects);
+    }
+
+    #[test]
+    fn test_transfer_sui_executes_and_persists() {
+        let (mut sim, config, _temp) = test_simulacrum();
+
+        // Pick a sender from the genesis keystore and a gas coin owned by the sender.
+        let (sender, sender_key) = {
+            let (addr, key) = sim
+                .keystore()
+                .accounts()
+                .next()
+                .expect("at least one account");
+            (*addr, key.copy())
+        };
+        let gas_object = find_gas_coin(&config, sender);
+        let gas_coin = GasCoin::try_from(&gas_object).unwrap();
+        let initial_balance = gas_coin.value();
+        let transfer_amount = initial_balance / 2;
+
+        let recipient = SuiAddress::random_for_testing_only();
+
+        // Build a transfer-SUI programmable transaction.
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.transfer_sui(recipient, Some(transfer_amount));
+            builder.finish()
+        };
+        let tx_data = TransactionData::new_with_gas_data(
+            TransactionKind::ProgrammableTransaction(pt),
+            sender,
+            GasData {
+                payment: vec![gas_object.compute_object_reference()],
+                owner: sender,
+                price: sim.reference_gas_price(),
+                budget: 100_000_000,
+            },
+        );
+
+        // Sign with the real account key from the genesis keystore.
+        let tx = Transaction::from_data_and_signer(tx_data, vec![&sender_key]);
+
+        let (effects, exec_error) = sim.execute_transaction(tx).unwrap();
+        assert!(
+            effects.status().is_ok(),
+            "transfer failed: status={:?} exec_error={:?}",
+            effects.status(),
+            exec_error,
+        );
+
+        // The transaction is persisted on disk.
+        let tx_digest = effects.transaction_digest();
+        assert!(
+            sim.store().get_transaction(tx_digest).is_some(),
+            "transaction not persisted on disk",
+        );
+        assert_eq!(
+            sim.store().get_transaction_effects(tx_digest).unwrap(),
+            effects,
+        );
+
+        // The recipient now owns a gas coin holding exactly `transfer_amount`.
+        let recipient_coin = effects
+            .created()
+            .into_iter()
+            .find_map(|((id, _, _), owner)| (owner == Owner::AddressOwner(recipient)).then_some(id))
+            .expect("transfer should create a coin owned by the recipient");
+        let recipient_obj = sim
+            .store()
+            .get_object(&recipient_coin)
+            .expect("recipient coin lookup failed")
+            .expect("recipient coin should be readable from the store");
+        let recipient_gas = GasCoin::try_from(&recipient_obj).unwrap();
+        assert_eq!(recipient_gas.value(), transfer_amount);
+
+        // The sender's gas coin still exists, charged for gas, balance reduced by transfer_amount + net gas.
+        let updated_gas_obj = sim
+            .store()
+            .get_object(&gas_object.id())
+            .expect("sender gas coin lookup failed")
+            .expect("sender gas coin should still exist");
+        let updated_gas = GasCoin::try_from(&updated_gas_obj).unwrap();
+        let net_gas = effects.gas_cost_summary().net_gas_usage();
+        let expected = (initial_balance as i64 - transfer_amount as i64 - net_gas) as u64;
+        assert_eq!(updated_gas.value(), expected);
     }
 }

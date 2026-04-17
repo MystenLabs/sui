@@ -6,7 +6,7 @@ keywords: [ sui cli, sui client cli, sui client cli, sui client, sui cli help, s
 
 The Sui CLI `client` command provides command-level access to interact with the Sui network. Typical uses for `sui client` include publishing Move smart contracts, getting the information of an object, executing transactions, or managing addresses.
 
-<ImportContent source="cli-check-install.mdx" mode="snippet" />
+<ImportContent source="cli-check-install" mode="snippet" />
 
 ## Commands
 
@@ -14,7 +14,7 @@ The Sui CLI `client` command provides command-level access to interact with the 
 $ sui client --help
 ```
 
-<ImportContent source="console-output/sui-client-help.mdx" mode="snippet" />
+<ImportContent source="console-output/sui-client-help" mode="snippet" />
 
 ## JSON output
 
@@ -166,11 +166,11 @@ $ sui client dynamic-field 0x5
 
 ### Send SUI or objects
 
-In this example, let's see how to transfer SUI or transfer an object from one address to another. First of all, there two main commands for sending SUI or transferring objects: `pay` and `transfer`.
+In this example, you learn how to transfer SUI or transfer an object from one address to another. There are two main commands for sending SUI or transferring objects: `pay` and `transfer`.
 Both `pay` and `transfer` have a few sister commands: `pay-sui`, `pay-all-sui`, `transfer-sui`.
 
 The differences between these commands are:
-- commands that end in `-sui` deal with Sui's native coin, and they use the input coints to pay for gas and for transferring SUI or the object.
+- commands that end in `-sui` deal with Sui's native coin, and they use the input coins to pay for gas and for transferring SUI or the object.
 - `pay-` commands typically deal with coins and handle gas smashing for you, whereas `transfer` commands can handle the transfer of any object that has public transfer, meaning any object that has the `store` ability.
 - `pay` commands allow you to send coins to multiple recipients, whereas `transfer` commands only accept one recipient.
 - `pay-all-sui` is a special case of `pay-sui` that offers a way to transfer the entire balance after smashing.
@@ -204,9 +204,9 @@ $ sui client gas hungry-spodumene
 ╰────────────────────────────────────────────────────────────────────┴────────────────────┴──────────────────╯
 ```
 
-You want to send 0.5 SUI to `eloquent-amber`. Given that you have a few gas coins, you can use `pay`. If only one gas coin exists, then you need to use `transfer-sui` or `pay-sui`, or you would need to split the coin first to have another coin to use for paying gas. In this case, let's use the `pay-sui` command as you do not need to provide a separate gas coin to be used for the gas fees. In the command below, you set the recipient to be `eloquent-amber`, which coin to use to transfer SUI from, and the amount of SUI to transfer.
+You want to send 0.5 SUI to `eloquent-amber`. Given that you have a few gas coins, you can use `pay`. If only one gas coin exists, then you need to use `transfer-sui` or `pay-sui`, or you would need to split the coin first to have another coin to use for paying gas. In this case, use the `pay-sui` command because you do not need to provide a separate gas coin for the gas fees. In the command below, you set the recipient to be `eloquent-amber`, which coin to use to transfer SUI from, and the amount of SUI to transfer.
 
-<ImportContent source="info-gas-budget.mdx" mode="snippet" />
+<ImportContent source="info-gas-budget" mode="snippet" />
 
 ```sh
 $ sui client pay-sui --recipients eloquent-amber --input-coins 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amounts 500000000 --gas-budget 5000000
@@ -390,13 +390,13 @@ $ sui client gas eloquent-amber
 
 ### Replay a transaction
 
-Client commands to replay transactions have been deprecated in favor of the `sui replay` command. Learn about replaying a transaction and how it can be used for debugging or profiling in the [Transaction Replay](./replay.mdx), [Debugging Transactions](../ide/debugger.mdx), and [Transaction Trace Analysis](./trace-analysis.mdx) guides.
+Client commands to replay transactions have been deprecated in favor of the `sui replay` command. Learn about replaying a transaction and how it can be used for debugging or profiling in the [Transaction Replay](/references/cli/replay), [Debugging Transactions](/references/ide/debugger), and [Transaction Trace Analysis](/references/cli/trace-analysis) guides.
 
 ## Publish a Move package
 
 One of the main uses of the `sui client` command is to publish smart contracts on the Sui network. This example switches the current environment to Devnet, then builds, tests, and publishes one of the existing Move examples available in the Sui repository: [sui/examples/move](https://github.com/MystenLabs/sui/tree/main/examples/move)
 
-This example also makes use of `sui move` commands. To learn more about those commands, see [Sui Move CLI](./move.mdx).
+This example also makes use of `sui move` commands. To learn more about those commands, see [Sui Move CLI](/references/cli/move).
 
 1. Open a terminal or console to the root of your local Sui repository and navigate to the `move_tutorial` example.
     ```sh
@@ -406,7 +406,7 @@ This example also makes use of `sui move` commands. To learn more about those co
     ```sh
     $ sui client switch --env devnet
     ```
-1. Use `sui move build` to build the package. You must run this command at the same level as the package manifest file ([Move.toml](https://move-book.com/concepts/manifest.html)).
+1. Use `sui move build` to build the package. You must run this command at the same level as the package manifest file ([Move.toml](https://move-book.com/references/package-managers/manifest-reference)).
     ```sh
     $ sui move build
     ```
@@ -453,7 +453,7 @@ This example also makes use of `sui move` commands. To learn more about those co
     ```sh
     No gas coins are owned by this address
     ```
-1. If you need coins, use `sui client faucet` (not available for Mainnet). For more information on getting gas tokens, see [Get Sui Tokens](/guides/developer/getting-started/get-coins.mdx).
+1. If you need coins, use `sui client faucet` (not available for Mainnet). For more information on getting gas tokens, see [Get Sui Tokens](/getting-started/onboarding/get-coins).
     ```sh
     $ sui client faucet
     ```
@@ -625,4 +625,4 @@ Each command has its own help section. For example:
 $ sui client call --help
 ```
 
-<ImportContent source="console-output/sui-client-call-help.mdx" mode="snippet" />
+<ImportContent source="console-output/sui-client-call-help" mode="snippet" />

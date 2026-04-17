@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+pub use crate::compressed::annotated as compressed_layouts;
+
 use crate::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,

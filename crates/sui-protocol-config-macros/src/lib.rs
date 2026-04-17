@@ -39,7 +39,7 @@ use syn::{Data, DeriveInput, Fields, Type, parse_macro_input};
 ///     /// Returns a map of all features to values
 ///     pub fn feature_map(&self) -> std::collections::BTreeMap<String, bool>;
 /// ```
-#[proc_macro_derive(ProtocolConfigAccessors)]
+#[proc_macro_derive(ProtocolConfigAccessors, attributes(skip_accessor))]
 pub fn accessors_macro(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
@@ -54,6 +54,10 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
                 // Extract field name and type
                 let field_name = field.ident.as_ref().expect("Field must be named");
                 let field_type = &field.ty;
+                let skip_accessor = field.attrs.iter().any(|attr| attr.path.is_ident("skip_accessor"));
+                if skip_accessor {
+                    return None;
+                }
                 // Check if field is of type Option<T>
                 match field_type {
                     Type::Path(type_path)
@@ -77,14 +81,6 @@ pub fn accessors_macro(input: TokenStream) -> TokenStream {
                         } else {
                             panic!("Expected angle bracketed arguments.");
                         };
-
-                        // Skip vec types - write your own accessor
-                        let is_vec = matches!(&inner_type, Type::Path(tp)
-                            if tp.path.segments.last()
-                                .is_some_and(|s| s.ident == "Vec"));
-                        if is_vec {
-                            return None;
-                        }
 
                         let as_option_name = format!("{field_name}_as_option");
                         let as_option_name: proc_macro2::TokenStream =
@@ -289,7 +285,7 @@ pub fn protocol_config_override_macro(input: TokenStream) -> TokenStream {
     TokenStream::from(output)
 }
 
-#[proc_macro_derive(ProtocolConfigFeatureFlagsGetters)]
+#[proc_macro_derive(ProtocolConfigFeatureFlagsGetters, attributes(skip_accessor))]
 pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
@@ -303,6 +299,13 @@ pub fn feature_flag_getters_macro(input: TokenStream) -> TokenStream {
                 // Extract field name and type
                 let field_name = field.ident.as_ref().expect("Field must be named");
                 let field_type = &field.ty;
+                let skip_accessor = field
+                    .attrs
+                    .iter()
+                    .any(|attr| attr.path.is_ident("skip_accessor"));
+                if skip_accessor {
+                    return None;
+                }
                 // Check if field is of type bool
                 match field_type {
                     Type::Path(type_path)

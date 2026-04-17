@@ -1928,6 +1928,7 @@ pub struct ProtocolConfig {
     gasless_max_computation_units: Option<u64>,
 
     /// Allowed token types for gasless transactions, with minimum transfer sizes per token.
+    #[skip_accessor]
     gasless_allowed_token_types: Option<Vec<(String, u64)>>,
 
     /// Maximum number of unused Pure inputs allowed in a gasless transaction.

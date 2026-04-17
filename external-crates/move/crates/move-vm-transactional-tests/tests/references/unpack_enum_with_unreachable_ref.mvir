@@ -1,0 +1,27 @@
+// Enum variant unpack with an unreachable field reference due to control flow.
+
+//# run
+module 0x42.m {
+
+enum Wrapper has drop {
+    Val { x: u64 },
+}
+
+entry foo() {
+    let e: Self.Wrapper;
+    let e_ref: &Self.Wrapper;
+    let x_ref: &u64;
+    let val: u64;
+label b0:
+    e = Wrapper.Val { x: 42 };
+    jump_if_false (true) b_join;
+label b_ref:
+    e_ref = &e;
+    & Wrapper.Val { x: x_ref } = copy(e_ref);
+label b_join:
+    Wrapper.Val { x: val } = move(e);
+    assert(move(val) == 42, 1);
+    return;
+}
+
+}

@@ -32,10 +32,10 @@ use sui_types::transaction::{
 use crate::errors::Error;
 use crate::types::ConstructionMetadata;
 pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
-use consolidate_to_fungible::consolidate_to_fungible_pt;
+pub(crate) use consolidate_to_fungible::consolidate_to_fungible_pt;
 pub(crate) use consolidate_to_fungible::get_validator_pool_id;
 pub use merge_and_redeem::MergeAndRedeemFungibleStakedSui;
-use merge_and_redeem::merge_and_redeem_fss_pt;
+pub(crate) use merge_and_redeem::merge_and_redeem_fss_pt;
 pub use pay_coin::PayCoin;
 pub(crate) use pay_coin::pay_coin_pt;
 pub use pay_sui::PaySui;

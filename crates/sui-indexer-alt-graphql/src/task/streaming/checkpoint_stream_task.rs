@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,8 +15,11 @@ use sui_rpc::proto::sui::rpc::v2::Checkpoint as ProtoCheckpoint;
 use sui_rpc::proto::sui::rpc::v2::ExecutedTransaction as ProtoExecutedTransaction;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2::SubscribeCheckpointsResponse;
+use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
 use sui_rpc::proto::sui::rpc::v2::subscription_service_client::SubscriptionServiceClient;
 use sui_sdk_types::ValidatorAggregatedSignature;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
 use sui_types::crypto::ToFromBytes;
 use sui_types::effects::TransactionEffects;
@@ -23,6 +27,7 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
+use sui_types::object::Object as NativeObject;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tokio::sync::broadcast;
@@ -32,6 +37,7 @@ use tonic::transport::Uri;
 use tracing::info;
 
 use crate::config::SubscriptionConfig;
+use crate::scope::ExecutionObjectMap;
 
 use super::processed_checkpoint::ProcessedCheckpoint;
 use super::processed_checkpoint::ProcessedTransaction;
@@ -75,6 +81,13 @@ fn checkpoint_field_mask() -> FieldMask {
             .transactions()
             .balance_changes()
             .finish(),
+        // Checkpoint-level objects (deduplicated across transactions).
+        // Per-transaction `transactions.objects` is not populated in streamed checkpoints.
+        ProtoCheckpoint::path_builder()
+            .objects()
+            .objects()
+            .bcs()
+            .value(),
     ])
 }
 
@@ -176,12 +189,19 @@ fn process_checkpoint(checkpoint: ProtoCheckpoint) -> anyhow::Result<ProcessedCh
     let timestamp_ms = summary.timestamp_ms;
     let cp_sequence_number = sequence_number;
     let tx_lo = summary.network_total_transactions - checkpoint.transactions.len() as u64;
+    let checkpoint_objects = deserialize_checkpoint_objects(&checkpoint)?;
     let transactions = checkpoint
         .transactions
         .iter()
         .enumerate()
         .map(|(i, proto)| {
-            process_transaction(proto, timestamp_ms, cp_sequence_number, tx_lo + i as u64)
+            process_transaction(
+                proto,
+                &checkpoint_objects,
+                timestamp_ms,
+                cp_sequence_number,
+                tx_lo + i as u64,
+            )
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
@@ -196,6 +216,7 @@ fn process_checkpoint(checkpoint: ProtoCheckpoint) -> anyhow::Result<ProcessedCh
 
 fn process_transaction(
     proto: &ProtoExecutedTransaction,
+    checkpoint_objects: &BTreeMap<(ObjectID, SequenceNumber), NativeObject>,
     timestamp_ms: u64,
     cp_sequence_number: u64,
     tx_sequence_number: u64,
@@ -245,6 +266,8 @@ fn process_transaction(
 
     let digest = *effects.transaction_digest();
 
+    let execution_objects = build_execution_objects(checkpoint_objects, proto)?;
+
     let contents = NativeTransactionContents::ExecutedTransaction(
         sui_indexer_alt_reader::kv_loader::ExecutedTransactionData {
             effects: Box::new(effects),
@@ -263,5 +286,70 @@ fn process_transaction(
         tx_sequence_number,
         digest,
         contents,
+        execution_objects,
     })
+}
+
+/// Deserialize all objects from the checkpoint-level ObjectSet.
+fn deserialize_checkpoint_objects(
+    checkpoint: &ProtoCheckpoint,
+) -> anyhow::Result<BTreeMap<(ObjectID, SequenceNumber), NativeObject>> {
+    let mut map = BTreeMap::new();
+    if let Some(object_set) = &checkpoint.objects {
+        for obj in &object_set.objects {
+            if let Some(bcs) = &obj.bcs {
+                let native_obj: NativeObject = bcs
+                    .deserialize()
+                    .context("Failed to deserialize checkpoint object BCS")?;
+                map.insert((native_obj.id(), native_obj.version()), native_obj);
+            }
+        }
+    }
+    Ok(map)
+}
+
+/// Build an ExecutionObjectMap for a single transaction by filtering checkpoint-level objects
+/// using the transaction's `changed_objects` from effects.
+///
+/// Includes both input objects (previous version) and output objects (new version) so that
+/// both `inputState` and `outputState` can resolve from streaming.
+/// Objects with `DoesNotExist` output state become tombstones (None).
+fn build_execution_objects(
+    checkpoint_objects: &BTreeMap<(ObjectID, SequenceNumber), NativeObject>,
+    proto_tx: &ProtoExecutedTransaction,
+) -> anyhow::Result<ExecutionObjectMap> {
+    let mut map = BTreeMap::new();
+
+    if let Some(effects) = &proto_tx.effects {
+        let lamport_version = SequenceNumber::from_u64(
+            effects
+                .lamport_version
+                .context("Effects should have lamport_version")?,
+        );
+
+        for changed_obj in &effects.changed_objects {
+            let object_id: ObjectID = changed_obj
+                .object_id
+                .as_ref()
+                .and_then(|id| id.parse().ok())
+                .context("ChangedObject should have valid object_id")?;
+
+            // Input object (previous version, before the transaction).
+            if let Some(input_version) = changed_obj.input_version {
+                let input_version = SequenceNumber::from_u64(input_version);
+                if let Some(obj) = checkpoint_objects.get(&(object_id, input_version)) {
+                    map.insert((object_id, input_version), Some(obj.clone()));
+                }
+            }
+
+            // Output object (new version, after the transaction).
+            if changed_obj.output_state() == OutputObjectState::DoesNotExist {
+                map.insert((object_id, lamport_version), None);
+            } else if let Some(obj) = checkpoint_objects.get(&(object_id, lamport_version)) {
+                map.insert((object_id, lamport_version), Some(obj.clone()));
+            }
+        }
+    }
+
+    Ok(Arc::new(map))
 }

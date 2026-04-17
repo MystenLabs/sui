@@ -43,7 +43,7 @@ use crate::{
 };
 use crate::{
     authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher,
-    transaction_certifier::TransactionCertifier,
+    transaction_vote_tracker::TransactionVoteTracker,
 };
 
 /// The number of concurrent fetch blocks requests per authority
@@ -250,7 +250,7 @@ pub(crate) struct Synchronizer<
     fetch_own_last_block_task: JoinSet<()>,
     network_client: Arc<SynchronizerClient<VC, OC>>,
     block_verifier: Arc<V>,
-    transaction_certifier: TransactionCertifier,
+    transaction_vote_tracker: TransactionVoteTracker,
     round_tracker: Arc<RwLock<RoundTracker>>,
     inflight_blocks_map: Arc<InflightBlocksMap>,
     commands_sender: Sender<Command>,
@@ -273,7 +273,7 @@ where
         core_dispatcher: Arc<D>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         block_verifier: Arc<V>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         round_tracker: Arc<RwLock<RoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
         sync_last_known_own_block: bool,
@@ -295,7 +295,7 @@ where
                 index,
                 network_client.clone(),
                 block_verifier.clone(),
-                transaction_certifier.clone(),
+                transaction_vote_tracker.clone(),
                 commit_vote_monitor.clone(),
                 context.clone(),
                 core_dispatcher.clone(),
@@ -328,7 +328,7 @@ where
                 fetch_own_last_block_task: JoinSet::new(),
                 network_client,
                 block_verifier,
-                transaction_certifier,
+                transaction_vote_tracker,
                 inflight_blocks_map,
                 commands_sender: commands_sender_clone,
                 dag_state,
@@ -471,7 +471,7 @@ where
         peer_index: AuthorityIndex,
         network_client: Arc<SynchronizerClient<VC, OC>>,
         block_verifier: Arc<V>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
@@ -499,7 +499,7 @@ where
                                 blocks_guard,
                                 core_dispatcher.clone(),
                                 block_verifier.clone(),
-                                transaction_certifier.clone(),
+                                transaction_vote_tracker.clone(),
                                 commit_vote_monitor.clone(),
                                 context.clone(),
                                 commands_sender.clone(),
@@ -538,7 +538,7 @@ where
         requested_blocks_guard: BlocksGuard,
         core_dispatcher: Arc<D>,
         block_verifier: Arc<V>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         context: Arc<Context>,
         commands_sender: Sender<Command>,
@@ -561,7 +561,7 @@ where
                     Self::verify_blocks(
                         serialized_blocks,
                         block_verifier,
-                        transaction_certifier,
+                        transaction_vote_tracker,
                         &context,
                         peer_index,
                     )
@@ -658,7 +658,7 @@ where
     fn verify_blocks(
         serialized_blocks: Vec<Bytes>,
         block_verifier: Arc<V>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         context: &Context,
         peer_index: AuthorityIndex,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
@@ -710,7 +710,7 @@ where
         }
 
         if context.protocol_config.transaction_voting_enabled() {
-            transaction_certifier.add_voted_blocks(voted_blocks);
+            transaction_vote_tracker.add_voted_blocks(voted_blocks);
         }
 
         Ok(verified_blocks)
@@ -921,7 +921,7 @@ where
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let block_verifier = self.block_verifier.clone();
-        let transaction_certifier = self.transaction_certifier.clone();
+        let transaction_vote_tracker = self.transaction_vote_tracker.clone();
         let commit_vote_monitor = self.commit_vote_monitor.clone();
         let core_dispatcher = self.core_dispatcher.clone();
         let blocks_to_fetch = self.inflight_blocks_map.clone();
@@ -997,7 +997,7 @@ where
                         blocks_guard,
                         core_dispatcher.clone(),
                         block_verifier.clone(),
-                        transaction_certifier.clone(),
+                        transaction_vote_tracker.clone(),
                         commit_vote_monitor.clone(),
                         context.clone(),
                         commands_sender.clone(),
@@ -1383,7 +1383,7 @@ mod tests {
     };
     use crate::{
         authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
-        round_tracker::RoundTracker, transaction_certifier::TransactionCertifier,
+        round_tracker::RoundTracker, transaction_vote_tracker::TransactionVoteTracker,
     };
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
@@ -1653,8 +1653,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let network_client = Arc::new(SynchronizerClient::new(
@@ -1668,7 +1668,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state,
             false,
@@ -1711,8 +1711,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let network_client = Arc::new(SynchronizerClient::new(
@@ -1726,7 +1726,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state,
             false,
@@ -1780,8 +1780,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // Create some test blocks
@@ -1828,7 +1828,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state,
             false,
@@ -1860,8 +1860,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
@@ -1931,7 +1931,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state.clone(),
             false,
@@ -1989,8 +1989,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
@@ -2054,7 +2054,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state.clone(),
             false,
@@ -2147,8 +2147,8 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let our_index = AuthorityIndex::new_for_test(0);
 
@@ -2226,7 +2226,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state,
             true,
@@ -2272,8 +2272,8 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let (commands_sender, _commands_receiver) =
             monitored_mpsc::channel("consensus_synchronizer_commands", 1000);
@@ -2326,7 +2326,7 @@ mod tests {
             blocks_guard, // The guard is consumed here
             core_dispatcher.clone(),
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             commit_vote_monitor,
             context.clone(),
             commands_sender,

@@ -1547,7 +1547,7 @@ dynamic field for future borrows.
     ctx: &<b>mut</b> TxContext,
 ): (CoinMetadata&lt;T&gt;, <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a>&lt;T&gt;) {
     <b>assert</b>!(!currency.<a href="../sui/coin_registry.md#sui_coin_registry_is_migrated_from_legacy">is_migrated_from_legacy</a>(), <a href="../sui/coin_registry.md#sui_coin_registry_EBorrowLegacyMetadata">EBorrowLegacyMetadata</a>);
-    <b>if</b> (!df::exists_(&currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>())) {
+    <b>if</b> (!df::exists(&currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>())) {
         <b>let</b> legacy = currency.<a href="../sui/coin_registry.md#sui_coin_registry_to_legacy_metadata">to_legacy_metadata</a>(ctx);
         df::add(&<b>mut</b> currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>(), legacy);
     };
@@ -1590,7 +1590,7 @@ Note to self: Borrow requirement prevents deletion through this method.
     <a href="../sui/borrow.md#sui_borrow">borrow</a>: <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a>&lt;T&gt;,
     _ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(!df::exists_(&currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>()), <a href="../sui/coin_registry.md#sui_coin_registry_EDuplicateBorrow">EDuplicateBorrow</a>);
+    <b>assert</b>!(!df::exists(&currency.id, <a href="../sui/coin_registry.md#sui_coin_registry_LegacyMetadataKey">LegacyMetadataKey</a>()), <a href="../sui/coin_registry.md#sui_coin_registry_EDuplicateBorrow">EDuplicateBorrow</a>);
     <b>let</b> <a href="../sui/coin_registry.md#sui_coin_registry_Borrow">Borrow</a> {} = <a href="../sui/borrow.md#sui_borrow">borrow</a>;
     // Always store up to date value.
     legacy.update_coin_metadata(

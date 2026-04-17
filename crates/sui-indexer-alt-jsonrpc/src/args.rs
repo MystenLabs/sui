@@ -4,8 +4,8 @@
 use std::path::PathBuf;
 
 use sui_indexer_alt_metrics::MetricsArgs;
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use url::Url;
 
@@ -32,16 +32,11 @@ pub enum Command {
         )]
         database_url: Url,
 
-        /// Bigtable instance ID to make KV store requests to. If this is not provided, KV store
-        /// requests will be made to the database.
-        #[clap(long)]
-        bigtable_instance: Option<String>,
-
         #[command(flatten)]
         db_args: DbArgs,
 
         #[command(flatten)]
-        bigtable_args: BigtableArgs,
+        kv_args: KvArgs,
 
         #[command(flatten)]
         consistent_reader_args: ConsistentReaderArgs,

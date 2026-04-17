@@ -20,17 +20,17 @@ The following list itemizes all the available args for the `sui client ptb` comm
 $ sui client ptb --help
 ```
 
-<ImportContent source="console-output/sui-client-ptb-help.mdx" mode="snippet" />
+<ImportContent source="console-output/sui-client-ptb-help" mode="snippet" />
 
 ## Design philosophy and concepts
 
-The main philosophy behind the CLI PTB support is to enable a user to build and execute a PTB from the command line. Bash scripts can be used to construct and execute the PTB just as you would do from the command line, providing great flexibility when it comes to automating different tasks.
+The main philosophy behind the CLI PTB support is to enable you to build and execute a PTB from the command line. You can use bash scripts to construct and execute the PTB just as you would from the command line, providing great flexibility when it comes to automating different tasks.
 
-Besides using existing [traditional PTB](/guides/developer/transactions/ptbs/prog-txn-blocks/) related concepts, we introduce a few new and important concepts for this command.
+In addition to existing [traditional PTB](/develop/transactions/ptbs/prog-txn-blocks) related concepts, this command introduces a few new and important concepts.
 
 :::warning
 
-All the following examples were tested using a `bash` shell environment and your experience may vary depending on how your shell interprets the input values (e.g., zsh requires to pass values in brackets by adding quotes around it: "[]"; bash accepts them without quotes).
+All the following examples were tested using a `bash` shell environment and your experience might vary depending on how your shell interprets the input values (for example, zsh requires you to pass values in brackets by adding quotes around them: "[]"; bash accepts them without quotes).
 
 :::
 
@@ -55,7 +55,7 @@ To pass in multiple types, delimit them with a comma:
 
 ### Strings
 
-CLI PTBs support string literals as inputs, which will be encoded as pure values that can be used as inputs to `vector<u8>`, `std::ascii::String` and `std::string::String` parameters. The following example previews a transaction block that passes the string `"Hello, world"` to a function `m::f` in a package `$PKG` (its ID is held in an environment variable).
+CLI PTBs support string literals as inputs, which are encoded as pure values that can be used as inputs to `vector<u8>`, `std::ascii::String`, and `std::string::String` parameters. The following example previews a transaction block that passes the string `"Hello, world"` to a function `m::f` in a package `$PKG` (its ID is held in an environment variable).
 
 ```sh
 $ sui client ptb --move-call "$PKG::m::f" '"Hello, world"' --gas-budget 10000000 --preview
@@ -69,7 +69,7 @@ Double-quoted string literals tend to also be valid syntax for shells (like `bas
 
 ### Addresses and Object IDs
 
-<ImportContent source="address-prefix.mdx" mode="snippet" />
+<ImportContent source="address-prefix" mode="snippet" />
 
 Here are some examples for `transfer-objects` and `gas-coin`:
 
@@ -116,7 +116,7 @@ Use the `--assign` argument to bind values to variables. There are two ways you 
 - assign a value to a variable
 - assign a variable to the result of the previous command
 
-Let's look at the first case where you assign a value to a variable. You want to check if some variable's value is `none`. Call the `0x1::option::is_none` function from the Move standard library, and pass in the variable name:
+In the first case, you assign a value to a variable. You want to check if some variable's value is `none`. Call the `0x1::option::is_none` function from the Move standard library, and pass in the variable name:
 
 ```sh
 $ sui client ptb \
@@ -131,7 +131,7 @@ CLI PTB uses name resolution for common packages like `sui`, `std`, `deepbook`, 
 
 :::
 
-In the second case, if a previous command outputs some result, you can bound it to a variable for later access. Let's see an example where you want a new coin with 1000 MIST, which you can achieve by using the `split-coins` command. After you do that, you want to transfer the new coin to another address. Without the `--assign` argument, you couldn't instruct the CLI to transfer that new coin object as you would not have a way to refer to it.
+In the second case, if a previous command outputs some result, you can bind it to a variable for later access. Consider an example where you want a new coin with 1000 MIST, which you can achieve by using the `split-coins` command. After you do that, you want to transfer the new coin to another address. Without the `--assign` argument, you couldn't instruct the CLI to transfer that new coin object as you would not have a way to refer to it.
 
 ```sh
 $ sui client ptb \
@@ -174,7 +174,7 @@ To call a specific function from a specific package, you can use the following c
 
 ### Publish
 
-Publishing a package is one of the most important commands you need when working with Sui. While the CLI has a standalone `publish` command, PTBs also support publishing and upgrading packages. One main difference is that with `sui client ptb`, you must explicitly transfer the `UpgradeCap` object that is returned when creating a package, or destroy it with a call to [`make_immutable`](/guides/developer/packages/index.mdx). Here is an example on how to publish a Move project on chain using the `sui client ptb` command. It makes a call to the `sui::tx_context::sender` to acquire the sender and assigns the result of that call to the `sender` variable, and then calls the publish command. The result of `publish` is bounded to `upgrade_cap` variable, and then this object is transferred to the sender.
+Publishing a package is one of the most important commands you need when working with Sui. While the CLI has a standalone `publish` command, PTBs also support publishing and upgrading packages. One main difference is that with `sui client ptb`, you must explicitly transfer the `UpgradeCap` object that is returned when creating a package, or destroy it with a call to [`make_immutable`](/develop/publish-upgrade-packages). Here is an example on how to publish a Move project on chain using the `sui client ptb` command. It makes a call to the `sui::tx_context::sender` to acquire the sender and assigns the result of that call to the `sender` variable, and then calls the publish command. The result of `publish` is bound to the `upgrade_cap` variable, and then this object is transferred to the sender.
 
 ```sh
 $ sui client ptb \

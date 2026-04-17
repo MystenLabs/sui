@@ -3,9 +3,9 @@ title: Sui Replay CLI
 description: Use the Sui CLI to replay a given transaction to view its effects.
 ---
 
-Replay is a tool that allows you to replay a given transaction to check and analyze the transaction effects. In a nutshell, the replay tool will locally execute the transaction and compare its effects to the effects that exist on chain.
+Replay is a tool that allows you to replay a given transaction to check and analyze the transaction effects. The replay tool locally executes the transaction and compares its effects to the effects that exist on chain.
 
-Using the replay tool, you can pass the `--trace` flag to generate execution traces for a transaction that can be used with the Move debugger. For more information about the Move debugger, see the [Move Debugger](../ide/debugger.mdx) page. You can run different [analyses on the transaction traces](./trace-analysis.mdx) such as [gas profiling](./trace-analysis.mdx).
+Using the replay tool, you can pass the `--trace` flag to generate execution traces for a transaction that can be used with the Move debugger. For more information about the Move debugger, see the [Move Debugger](/references/ide/debugger) page. You can run different [analyses on the transaction traces](/references/cli/trace-analysis) such as [gas profiling](/references/cli/trace-analysis).
 
 ## Usage
 
@@ -128,11 +128,11 @@ Transaction Gas Report for 5sbk5UYpQv1i84zkSBSWmowAmPTxw71U7Bb1gbiW5w4y
 ````
 
 The response above provides the transaction effects information, gas report, and a more detailed list of the each object's size and cost. For more information about
-the gas cost, please refer to the [gas in sui](../../concepts/tokenomics/gas-in-sui.mdx) page.
+the gas cost, refer to the [gas in Sui](/develop/transaction-payment/gas-in-sui) page.
 
 You can replay multiple transactions at once by using the `--digests-path` flag to specify a location of a file containing multiple transaction digests, one per line. By default, the entire batch is replayed regardless of the success or failure of an individual transaction execution. You can use the `--terminate-early` flag to terminate batch execution if an error occurs when replaying one of the transactions.
 
-You can provide default values for the replay tool flags by specifying them in the `~/.sui/sui_config/replay.toml` file. You need to specify them in the `[flags]` section (the only section currently supported) using their "long" names with initial dashes (`--`) removed. For example, you can disable showing transaction effects with `show-effects = false` but not with `e = false`. Here is a complete example of a config file:
+You can provide default values for the replay tool flags by specifying them in the `~/.sui/sui_config/replay.toml` file. You need to specify them in the `[flags]` section (the only section currently supported) using their long names with initial dashes (`--`) removed. For example, you can disable showing transaction effects with `show-effects = false` but not with `e = false`. Here is a complete example of a config file:
 ```toml
 [flags]
 show-effects = false

@@ -92,18 +92,18 @@ public fun remove<Name: copy + drop + store, Value: store>(object: &mut UID, nam
 
 /// Returns true if and only if the `object` has a dynamic field with the name specified by
 /// `name: Name` but without specifying the `Value` type
-public fun exists_<Name: copy + drop + store>(object: &UID, name: Name): bool {
+public fun exists<Name: copy + drop + store>(object: &UID, name: Name): bool {
     let object_addr = object.to_address();
     let hash = hash_type_and_key(object_addr, name);
     has_child_object(object_addr, hash)
 }
 
-/// Removes the dynamic field if it exists. Returns the `some(Value)` if it exists or none otherwise.
-public fun remove_if_exists<Name: copy + drop + store, Value: store>(
+/// Removes the dynamic field if it exists. Returns `some(Value)` if it exists or `none` otherwise.
+public fun remove_opt<Name: copy + drop + store, Value: store>(
     object: &mut UID,
     name: Name,
 ): Option<Value> {
-    if (exists_<Name>(object, name)) {
+    if (exists<Name>(object, name)) {
         option::some(remove(object, name))
     } else {
         option::none()
@@ -132,7 +132,7 @@ public macro fun borrow_or_add<$Name: copy + drop + store, $Value: store>(
 ): &$Value {
     let o = $object;
     let name = $name;
-    if (!exists_<$Name>(o, name)) add(o, name, $default);
+    if (!exists<$Name>(o, name)) add(o, name, $default);
     borrow(o, name)
 }
 
@@ -145,7 +145,7 @@ public macro fun borrow_mut_or_add<$Name: copy + drop + store, $Value: store>(
 ): &mut $Value {
     let o = $object;
     let name = $name;
-    if (!exists_<$Name>(o, name)) add(o, name, $default);
+    if (!exists<$Name>(o, name)) add(o, name, $default);
     borrow_mut(o, name)
 }
 
@@ -199,6 +199,21 @@ public macro fun get_mut_fold<$Name: copy + drop + store, $Value: store, $R>(
     let o = $object;
     let name = $name;
     if (exists_with_type<$Name, $Value>(o, name)) $some(borrow_mut(o, name)) else $none
+}
+
+// === Deprecated ===
+
+#[deprecated(note = b"Renamed to `exists`")]
+public fun exists_<Name: copy + drop + store>(object: &UID, name: Name): bool {
+    exists(object, name)
+}
+
+#[deprecated(note = b"Renamed to `remove_opt`")]
+public fun remove_if_exists<Name: copy + drop + store, Value: store>(
+    object: &mut UID,
+    name: Name,
+): Option<Value> {
+    remove_opt(object, name)
 }
 
 public(package) fun field_info<Name: copy + drop + store>(

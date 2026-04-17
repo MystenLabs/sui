@@ -1,0 +1,91 @@
+---
+title: Security Best Practices
+sidebar_label: Best Practices
+description: Overview of security best practices on Sui.
+keywords: [ security, security best practices ]
+draft: true
+---
+
+This page describes a few recommended security best practices when developing applications on Sui. These recommendations are not comprehensive for all application types, use cases, or architectures. It is recommended that you do your own research and have production applications audited throughoughly. 
+
+## Smart contract security
+
+#### Audit your contracts
+
+Ensure transactions operate on smart contracts you trust and have audited. Sui smart contracts are defined as immutable objects to prevent modification. 
+
+#### Random calls must be last in a PTB
+
+This prevents `test-and-abort` attacks where an attacker inspects the result and aborts if unfavorable.
+
+#### Mark functions as entry
+
+This prevents other Move modules from calling randomness-consuming functions unexpectedly.
+
+#### Never accept `RandomGenerator` as a parameter
+
+Always create the generator internally to prevent manipulation.
+
+#### Balance gas across outcome paths
+
+Design functions so all outcomes consume similar gas, preventing attackers from setting a gas budget that only succeeds on favorable outcomes.
+
+#### Consider a two-transaction commit-reveal pattern for high-stakes applications.
+
+## Seal (Encryption and Access Control)
+
+Choose trusted key server operators and diversify across organizations, jurisdictions, and infrastructure providers.
+
+Use threshold encryption (for example, 2-of-3) to tolerate compromised servers while maintaining availability.
+
+Use envelope encryption for sensitive or large data: encrypt data with your own symmetric key, then use Seal to manage access to that key only.
+
+#### Ensure correct access policy
+
+The Move code in `seal_approve*` functions must accurately express your intended access rules. Upgradeable packages allow policy changes at any time. 
+
+## Nautilus
+
+#### Minimize enclave code
+
+Less code means a smaller attack surface.
+
+#### Audit dependencies
+
+Review all libraries used in the enclave.
+
+#### Use short timestamps
+
+Reduces the replay attack window.
+
+#### Monitor PCRs
+
+Alert on unexpected PCR values.
+
+#### Don't rely solely on TEE guarantees.
+
+## Coin and capability security
+
+#### Protect TreasuryCap
+
+It controls minting and burning permissions.
+
+#### Protect MetadataCap
+
+It controls coin branding.
+
+#### Protect DenyCapV2
+
+It can restrict coin usage.
+
+#### Set supply model early and understand the implications of fixed, burn-only, or flexible supply.
+
+## Key kanagement
+
+#### Keep your private signature key private. 
+
+No other party can operate on your owned assets without it. 
+
+#### Verify recipient addresses carefully.
+
+Sending objects to an incorrect address might have irrevocable effects.

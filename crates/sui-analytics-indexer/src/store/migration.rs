@@ -209,6 +209,10 @@ impl MigrationStore {
         &self.migration_id
     }
 
+    pub(crate) fn object_store(&self) -> &Arc<dyn ObjectStore> {
+        &self.object_store
+    }
+
     pub fn file_ranges(&self) -> &Arc<RwLock<HashMap<String, FileRangeIndex>>> {
         &self.file_ranges
     }

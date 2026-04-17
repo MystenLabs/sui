@@ -271,7 +271,7 @@ fun borrow_per_type_config(
 
 fun per_type_exists(deny_list: &DenyList, per_type_index: u64, per_type_key: vector<u8>): bool {
     let key = ConfigKey { per_type_index, per_type_key };
-    ofield::exists_(&deny_list.id, key)
+    ofield::exists(&deny_list.id, key)
 }
 
 macro fun per_type_config_entry(

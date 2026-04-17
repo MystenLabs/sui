@@ -1130,15 +1130,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
-        if let Some(consensus_tx_status_cache) = self.epoch_store.consensus_tx_status_cache.as_ref()
-        {
-            consensus_tx_status_cache
-                .update_last_committed_leader_round(last_committed_round as u32)
-                .await;
-        }
-        if let Some(tx_reject_reason_cache) = self.epoch_store.tx_reject_reason_cache.as_ref() {
-            tx_reject_reason_cache.set_last_committed_leader_round(last_committed_round as u32);
-        }
+        self.epoch_store
+            .consensus_tx_status_cache
+            .update_last_committed_leader_round(last_committed_round as u32);
+        self.epoch_store
+            .tx_reject_reason_cache
+            .set_last_committed_leader_round(last_committed_round as u32);
 
         let commit_info = self.additional_consensus_state.observe_commit(
             self.epoch_store.protocol_config(),
@@ -1201,7 +1198,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             &commit_info,
             &consensus_commit,
         );
-        // Buffer owned object locks for batch write when preconsensus locking is disabled
+        // Buffer owned object locks for batch write.
         if !owned_object_locks.is_empty() {
             state.output.set_owned_object_locks(owned_object_locks);
         }
@@ -2682,8 +2679,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     // Filters out rejected or deprecated transactions.
-    // Returns FilteredConsensusOutput containing transactions and owned_object_locks
-    // (collected when preconsensus locking is disabled).
+    // Returns FilteredConsensusOutput containing transactions and owned_object_locks.
     #[instrument(level = "trace", skip_all)]
     fn filter_consensus_txns(
         &mut self,
@@ -2716,9 +2712,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 // Transaction has appeared in consensus output, we can increment the submission count
                 // for this tx for DoS protection.
-                if self.epoch_store.protocol_config().mysticeti_fastpath()
-                    && let Some(tx) = parsed.transaction.kind.as_user_transaction()
-                {
+                if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
                     let digest = tx.digest();
                     if let Some((spam_weight, submitter_client_addrs)) = self
                         .epoch_store
@@ -2773,7 +2767,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .consensus_handler_transaction_sizes
                     .with_label_values(&[kind])
                     .observe(parsed.serialized_len as f64);
-                // UserTransaction exists only when mysticeti_fastpath is enabled in protocol config.
                 if matches!(
                     &parsed.transaction.kind,
                     ConsensusTransactionKind::CertifiedTransaction(_)
@@ -2821,16 +2814,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         | ConsensusTransactionKind::RandomnessDkgMessage(_, _) => continue,
                         _ => {}
                     }
-                }
-
-                if parsed.transaction.is_user_transaction()
-                    && !self.epoch_store.protocol_config().mysticeti_fastpath()
-                {
-                    debug!(
-                        "Ignoring MFP transaction {:?} because MFP is disabled",
-                        parsed.transaction.key()
-                    );
-                    continue;
                 }
 
                 if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
@@ -2887,9 +2870,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                // When preconsensus locking is disabled, perform post-consensus owned object
-                // conflict detection. If lock acquisition fails, the transaction has
-                // invalid/conflicting owned inputs and should be dropped.
+                // Perform post-consensus owned object conflict detection. If lock acquisition
+                // fails, the transaction has invalid/conflicting owned inputs and should be dropped.
                 // This must happen AFTER all filtering checks above to avoid acquiring locks
                 // for transactions that will be dropped (e.g., during epoch change).
                 // Only applies to UserTransactionV2 - other transaction types don't need lock acquisition.

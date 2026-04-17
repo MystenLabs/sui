@@ -18,12 +18,14 @@ clap.workspace = true
 diesel.workspace = true
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 futures.workspace = true
+http.workspace = true
 prost-types.workspace = true
 prometheus.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tonic = { workspace = true, features = ["tls-native-roots"] }
+tower.workspace = true
 tracing.workspace = true
 url.workspace = true
 

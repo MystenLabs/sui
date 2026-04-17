@@ -253,10 +253,11 @@ impl Transaction {
             filtered,
             |tx| JsonCursor::new(tx.tx_sequence_number),
             |tx| {
+                let tx_scope = scope.with_execution_objects(tx.execution_objects.clone());
                 Ok(Transaction {
                     digest: tx.digest,
                     contents: TransactionContents {
-                        scope: scope.clone(),
+                        scope: tx_scope,
                         contents: Some(Arc::new(tx.contents.clone())),
                     },
                 })

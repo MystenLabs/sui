@@ -12,10 +12,10 @@ use jsonrpsee::server::ServerBuilder;
 use prometheus::Registry;
 use serde_json::json;
 use sui_futures::service::Service;
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTask;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
@@ -235,6 +235,7 @@ impl Default for RpcArgs {
     }
 }
 
+/// Configuration for the fullnode RPC that this service will connect to.
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct NodeArgs {
     /// The URL of the fullnode JSON-RPC, used for delegation governance queries (getStakes,
@@ -265,9 +266,8 @@ pub struct NodeArgs {
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
     database_url: Option<Url>,
-    bigtable_instance: Option<String>,
     db_args: DbArgs,
-    bigtable_args: BigtableArgs,
+    kv_args: KvArgs,
     consistent_reader_args: ConsistentReaderArgs,
     rpc_args: RpcArgs,
     node_args: NodeArgs,
@@ -279,9 +279,8 @@ pub async fn start_rpc(
 
     let context = Context::new(
         database_url,
-        bigtable_instance,
         db_args,
-        bigtable_args,
+        kv_args,
         consistent_reader_args,
         rpc_config,
         rpc.metrics(),
@@ -313,19 +312,21 @@ pub async fn start_rpc(
         warn!("No fullnode rpc url provided, DelegationGovernance module will not be added.");
     }
 
-    if node_args.fullnode_grpc_url.is_some() {
-        let fullnode_client = FullnodeClient::new(
-            Some("jsonrpc_alt_fullnode"),
-            FullnodeArgs {
-                fullnode_rpc_url: node_args
-                    .fullnode_grpc_url
-                    .as_deref()
-                    .map(|u| Url::parse(u).expect("Invalid fullnode gRPC URL")),
-            },
-            registry,
-        )
-        .await
-        .context("Failed to create fullnode gRPC client")?;
+    let fullnode_args = node_args
+        .fullnode_grpc_url
+        .as_deref()
+        .map(Url::parse)
+        .transpose()
+        .context("Invalid fullnode gRPC URL")?
+        .map(FullnodeArgs::new)
+        .unwrap_or_default();
+
+    let fullnode_client =
+        FullnodeClient::new(Some("jsonrpc_alt_fullnode"), fullnode_args, registry)
+            .await
+            .context("Failed to create fullnode gRPC client")?;
+
+    if let Some(fullnode_client) = fullnode_client {
         rpc.add_module(Write::new(fullnode_client, context.clone()))?;
     } else {
         warn!("No fullnode grpc url provided, Write module will not be added.");

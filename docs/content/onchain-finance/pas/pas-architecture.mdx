@@ -1,0 +1,235 @@
+---
+title: What is Permissioned Asset Standard?
+description: Learn how the Permissioned Asset Standard (PAS) enforces restricted asset movement on Sui through Accounts, Policies, and programmable approval logic.
+keywords: [ PAS, Permissioned Asset Standard, Account, Policy, Request, approval, permissioned assets, closed-loop ]
+---
+
+:::caution
+
+Permissioned Asset Standard is currently available on Testnet. It is not yet live on Mainnet.
+
+:::
+
+On Sui, any object with the `store` ability can be freely transferred by its owner. `Balance` and `Coin` both have `store`, meaning if you hold them, you can send them anywhere on the network with no restrictions.
+
+This works well for general-purpose assets, but creates a problem for regulated assets that need transfer controls, compliance checks, or issuer oversight.
+
+The Permissioned Asset Standard (PAS) solves this by proxying asset ownership through **Accounts:** objects that hold assets and enforce a closed-loop system where every movement is gated by programmable approval logic.
+
+You can use PAS through the [TypeScript package](https://www.npmjs.com/package/@mysten/pas) or learn more in the [GitHub repo](https://github.com/MystenLabs/pas).
+
+## How it works
+
+For each wallet address (or object ID), PAS creates a one-to-one derived Account. An Account is a shared object that holds assets on behalf of that address. The owner can prove ownership through an `Auth` proof, but cannot freely transfer the assets. This creates a proxy of ownership where the assets follow the constraints of PAS modules, and sequentially, the rules that an issuer defines across one or more packages through approval witnesses.
+
+Every time funds move, they go through hot potato requests that must collect a predefined set of approval stamps (witness structs) before they can resolve within the transaction. Hot potato requests have no `drop` or `store` ability, so the transaction aborts if the request is not resolved.
+
+The following diagrams compare asset ownership with and without PAS:
+
+**Without PAS**
+
+![Unrestricted asset ownership without PAS](./images/unrestricted-ownership.svg)
+
+**With PAS**
+
+![Restricted asset ownership with PAS](./images/restricted-ownership.svg)
+
+Each asset type can have its own policy that defines which witnesses are required to approve each action. This means different assets can adhere to completely different rules. One asset might require a single compliance stamp, while another might need approvals from multiple independent contracts.
+
+The result is that assets are held in a closed system where every movement is gated by programmable, composable approval logic that the issuer defines at the policy level.
+
+There is no way to transfer a managed `Balance<C>` out of the system without going through a request that collects the required approvals.
+
+For currencies, this is enforced at the Move type level:
+
+- `Balance<C>` is stored inside Accounts using `balance::send_funds` and `balance::redeem_funds` (derived object storage).
+
+- The only way to move funds is through request hot potatoes that must be resolved in the same transaction.
+
+- Resolution requires matching the approval set defined in the `Policy<Balance<C>>`.
+
+## Object model
+
+The following diagram shows the PAS object hierarchy:
+
+```
+Namespace (shared, singleton)
+├── Account (@0xAlice)      ← derived from (namespace_id, AccountKey(alice_addr))
+├── Account (@0xBob)        ← derived from (namespace_id, AccountKey(bob_addr))
+├── Policy<Balance<C>>    ← derived from (namespace_id, PolicyKey<Balance<C>>)
+│   └── PolicyCap<Balance<C>>  ← derived from (policy_id, PolicyCapKey)
+└── Templates             ← derived from (namespace_id, TemplateKey)
+```
+
+All objects use derived addresses (`sui::derived_object`), making them deterministic and queryable without onchain lookups.
+
+### Namespace
+
+The Namespace is the root of the system. Its responsibilities include:
+
+- Deriving addresses for Accounts, policies, and templates
+
+- Holding the `Versioning` state for emergency version blocking
+
+- Keeping the `UpgradeCap` UID to gate admin operations (version blocking, setup)
+
+### Account
+
+Accounts are shared objects derived from the Namespace UID and the owner address.
+
+| **Property** | **Detail** |
+|---|---|
+| **Creation** | Permissionless. Anyone can create an Account for any address. |
+| **Ownership** | Wallet address (`ctx.sender()`) or object (`UID`). |
+| **Storage** | Holds `Balance<C>` as object balance, or `T` directly as objects on the Account UID. |
+| **Derivation** | `derived_object::claim(namespace_uid, AccountKey(owner))`. |
+
+### Policy
+
+A `Policy<T>` defines resolvable actions for a managed asset type `T`:
+
+- **Required approvals:** Per action type (`send_funds`, `unlock_funds`, `clawback_funds`).
+
+- **Clawback flag:** Whether issuer clawback is allowed.
+
+- **Versioning:** Synced from Namespace. Can block package versions.
+
+For currencies, you create a `Policy<Balance<C>>` through `policy::new_for_currency(&mut namespace, &mut treasury_cap, clawback_allowed)`. This requires `TreasuryCap<C>` as proof of currency ownership.
+
+### `PolicyCap`
+
+The capability to manage a policy. Derived one-to-one from the policy UID and `PolicyCapKey`. You use it to:
+
+- Set or update required approvals per action
+
+- Remove action approvals (makes requests for that action unresolvable)
+
+## The request pattern
+
+Every state-changing operation in PAS follows the request hot potato pattern:
+
+```mermaid
+flowchart LR
+    A["Create Request"] --> B["Approve (1..N)"] --> C["Resolve"]
+```
+
+1. **Create:** An Account method wraps data `T` into a `Request<Action<T>>`. The request starts with an empty approval set.
+
+2. **Approve:** Your package calls `request.approve(MyWitness())` to stamp the request with a type-level proof. You can collect multiple approvals from different packages.
+
+3. **Resolve:** A resolution function verifies that the collected approvals exactly match the required approvals in the policy, destroys the request object, and either executes an action or unwraps data.
+
+### Request types
+
+The following are the available request types:
+
+- `Request<SendFunds<T>>`: Transfer between accounts
+
+- `Request<ClawbackFunds<T>>`: Issuer funds withdrawal
+
+- `Request<UnlockFunds<T>>`: Withdraw from system as the owner of funds
+
+### Approval matching
+
+Approvals are matched by type identity using `TypeName`. The approval set must be exactly equal (same types, same count, same order through `VecSet` insertion) to the policy required approvals.
+
+:::info
+
+In the current version, each action supports only a single approval witness. Multi-approval support (requiring stamps from multiple independent contracts) is planned for a future release.
+
+:::
+
+For example, a `TransferApproval` witness struct defined in your contracts:
+
+```move
+// Policy requires: { TransferApproval }
+// Request has:     { TransferApproval }  ← resolves
+// Request has:     { TransferApproval, ExtraApproval }  ← aborts (count mismatch)
+// Request has:     { WrongApproval }  ← aborts (type mismatch)
+```
+
+## Balance tracking
+
+PAS uses Sui [Address Balances](/onchain-finance/asset-custody/address-balance-migration):
+
+### How balances are stored
+
+The following diagram shows how balances attach to an Account:
+
+```
+Account (shared object)
+  └── UID
+       └── Balance<MY_COIN> stored via balance::send_funds(balance, account_object_address)
+```
+
+Balances are not stored as fields on the `Account` struct. They are stored as object balance on the Account UID, using `balance::send_funds` to send funds to the Account object address and `balance::withdraw_funds_from_object` (through `UID.withdraw_funds_from_object`) to pull them out.
+
+### Balance flow
+
+The following diagram shows deposit and withdrawal paths:
+
+```mermaid
+flowchart LR
+    subgraph Deposit
+        B1["Balance‹C›"] -->|"balance::send_funds(balance, account_addr)"| A1["Account UID"]
+    end
+    subgraph Withdraw
+        A2["Account UID"] -->|"withdraw_funds_from_object(amount)"| B2["Balance‹C›"]
+    end
+```
+
+Deposits are permissionless (anyone can deposit into any Account). Withdrawals are internal (`public(package)`). Only PAS modules can withdraw, and only through requests.
+
+## Wallet ownership compared to object ownership
+
+Accounts can be owned by wallet addresses or objects.
+
+The following example shows both authentication methods:
+
+```move
+// Wallet-owned: proves ownership via transaction sender
+let auth = account::new_auth(ctx);
+
+// Object-owned: proves ownership via UID reference
+let auth = account::new_auth_as_object(&mut my_object_uid);
+```
+
+## Derived object addresses
+
+All PAS objects (Accounts, policies) use deterministic derived addresses. You can compute them offchain:
+
+```move
+// Get the account address for an owner
+let account_addr: address = namespace.account_address(@0xAlice);
+
+// Get the policy address for a type
+let policy_addr: address = namespace.policy_address<Balance<MY_COIN>>();
+```
+
+## Security model
+
+PAS guarantees the following:
+
+- **Closed loop:** Managed assets cannot leave the system without going through a request with matching approvals.
+
+- **Type-safe approvals:** Approval witnesses are checked by `TypeName`. You cannot forge an approval from a different package.
+
+- **Atomic resolution:** Requests are hot potatoes. They must be resolved in the same transaction or the transaction aborts.
+
+- **Deterministic addressing:** All objects use derived addresses. There is no hidden state and no non-deterministic object creation.
+
+PAS does not support or guarantee the following:
+
+- **Access control:** PAS does not decide who can transfer. That is your contract's job through approval witnesses.
+
+- **Compliance rules:** PAS does not enforce rules. Your contract implements those before calling `request.approve()`.
+
+### Trust boundaries
+
+| **Component** | **Trust level** |
+|---|---|
+| `PolicyCap<T>` holder | Can change approval requirements for `T`. |
+| `TreasuryCap<C>` holder | Can create a policy (one-time) for `Balance<C>`. |
+| Account owner (`Auth`) | Can initiate send or unlock from their Account. |
+| Anyone | Can create Accounts, deposit, sync versioning. |
+| Approval witness package | Controls who can approve requests. |

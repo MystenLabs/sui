@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 
 use consensus_core::{
     CommitFinalizer, CommittedSubDag, Context, DagBuilder, DagState, Linearizer, MemStore,
-    NoopBlockVerifier, TransactionCertifier,
+    NoopBlockVerifier, TransactionVoteTracker,
 };
 use criterion::{BatchSize, Criterion, Throughput, criterion_group, criterion_main};
 use mysten_metrics::monitored_mpsc;
@@ -18,7 +18,7 @@ struct BenchFixture {
     _commit_sender: monitored_mpsc::UnboundedSender<CommittedSubDag>,
     _commit_receiver: monitored_mpsc::UnboundedReceiver<CommittedSubDag>,
     linearizer: Linearizer,
-    transaction_certifier: TransactionCertifier,
+    transaction_vote_tracker: TransactionVoteTracker,
     commit_finalizer: CommitFinalizer,
 
     workload_commits: Vec<CommittedSubDag>,
@@ -33,7 +33,7 @@ impl BenchFixture {
             Arc::new(MemStore::new()),
         )));
         let linearizer = Linearizer::new(context.clone(), dag_state.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -43,14 +43,14 @@ impl BenchFixture {
         let commit_finalizer = CommitFinalizer::new(
             context.clone(),
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             commit_sender.clone(),
         );
         BenchFixture {
             context,
             dag_state,
             linearizer,
-            transaction_certifier,
+            transaction_vote_tracker,
             _commit_sender: commit_sender,
             _commit_receiver,
             commit_finalizer,
@@ -72,7 +72,7 @@ impl BenchFixture {
             .rejected_transactions_pct(rejected_transactions_pct, None)
             .build()
             .persist_layers(self.dag_state.clone());
-        self.transaction_certifier.add_voted_blocks(
+        self.transaction_vote_tracker.add_voted_blocks(
             dag_builder
                 .all_blocks()
                 .iter()

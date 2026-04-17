@@ -5,7 +5,7 @@
 module sui::dynamic_field_tests;
 
 use std::unit_test::assert_eq;
-use sui::dynamic_field::{Self, add, exists_with_type, borrow, borrow_mut, remove, exists_};
+use sui::dynamic_field::{Self, add, exists_with_type, borrow, borrow_mut, remove, exists};
 use sui::test_scenario;
 
 #[test]
@@ -164,7 +164,7 @@ fun borrow_or_add_existing() {
     let mut id = scenario.new_object();
     add(&mut id, 0u64, 42u64);
     assert!(exists_with_type<u64, u64>(&id, 0));
-    assert_eq!(*dynamic_field::borrow_or_add!(&mut id, 0u64, 99u64), 42);
+    assert_eq!(*dynamic_field::borrow_or_add!(&mut id, 0u64, { assert!(false); 99u64 }), 42);
     assert!(exists_with_type<u64, u64>(&id, 0));
     scenario.end();
     id.delete();
@@ -175,7 +175,7 @@ fun borrow_or_add_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    assert!(!exists_<u64>(&id, 0));
+    assert!(!exists<u64>(&id, 0));
     assert_eq!(*dynamic_field::borrow_or_add!(&mut id, 0u64, 99u64), 99);
     assert!(exists_with_type<u64, u64>(&id, 0));
     scenario.end();
@@ -189,7 +189,7 @@ fun borrow_mut_or_add_existing() {
     let mut id = scenario.new_object();
     add(&mut id, 0u64, 42u64);
     assert!(exists_with_type<u64, u64>(&id, 0));
-    *dynamic_field::borrow_mut_or_add!(&mut id, 0u64, 99u64) = 100;
+    *dynamic_field::borrow_mut_or_add!(&mut id, 0u64, { assert!(false); 99u64 }) = 100;
     assert_eq!(*borrow(&id, 0u64), 100u64);
     scenario.end();
     id.delete();
@@ -200,7 +200,7 @@ fun borrow_mut_or_add_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    assert!(!exists_<u64>(&id, 0));
+    assert!(!exists<u64>(&id, 0));
     *dynamic_field::borrow_mut_or_add!(&mut id, 0u64, 99u64) = 100;
     assert_eq!(*borrow(&id, 0u64), 100u64);
     scenario.end();
@@ -305,6 +305,42 @@ fun get_mut_fold_missing() {
     let mut id = scenario.new_object();
     let result: u64 = dynamic_field::get_mut_fold!(&mut id, 0u64, 0u64, |_: &mut u64| abort 0);
     assert_eq!(result, 0);
+    scenario.end();
+    id.delete();
+}
+
+// === Deprecated Tests ===
+
+#[test, allow(deprecated_usage)]
+fun deprecated_exists_() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    assert_eq!(dynamic_field::exists_<u64>(&id, 0), exists<u64>(&id, 0));
+    assert_eq!(exists<u64>(&id, 0), false);
+    add(&mut id, 0u64, 42u64);
+    assert_eq!(dynamic_field::exists_<u64>(&id, 0), exists<u64>(&id, 0));
+    assert_eq!(exists<u64>(&id, 0), true);
+    scenario.end();
+    id.delete();
+}
+
+#[test, allow(deprecated_usage)]
+fun deprecated_remove_if_exists() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    // missing — both should return none
+    let old: Option<u64> = dynamic_field::remove_if_exists(&mut id, 0u64);
+    assert_eq!(old, option::none());
+    // existing — both should return the value
+    add(&mut id, 0u64, 42u64);
+    let old: Option<u64> = dynamic_field::remove_if_exists(&mut id, 0u64);
+    assert_eq!(old, option::some(42));
+    // verify remove_opt behaves the same
+    add(&mut id, 0u64, 99u64);
+    let new: Option<u64> = dynamic_field::remove_opt(&mut id, 0u64);
+    assert_eq!(new, option::some(99));
     scenario.end();
     id.delete();
 }

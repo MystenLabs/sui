@@ -227,11 +227,10 @@ impl TestRunner {
         &mut self,
         executable: VerifiedExecutableTransaction,
     ) -> TransactionEffects {
-        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         assign_versions_and_schedule(&self.authority_state, &executable).await;
         let effects = self
             .authority_state
-            .wait_for_transaction_execution_for_testing(&executable, &epoch_store)
+            .wait_for_transaction_execution_for_testing(&executable)
             .await;
 
         if self.aggressive_pruning_enabled {

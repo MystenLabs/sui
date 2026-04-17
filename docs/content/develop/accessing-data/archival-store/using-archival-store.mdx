@@ -1,0 +1,49 @@
+---
+title: Querying Historical Data with Archival Service
+description: Query historical Sui network data through the Archival Service gRPC API.
+keywords: [ archival store, archival service, historical data, grpc, ledger service, bigtable, sui-kv-rpc ]
+---
+
+The Archival Service provides access to historical Sui network data through the same [`LedgerService`](/references/fullnode-protocol) gRPC API available on full nodes. Use it as a fallback when your full node has pruned the data you need, or as a dedicated source for historical queries.
+
+For core concepts, see the [Archival Store and Service concepts page](/develop/accessing-data/archival-store).
+
+:::info
+
+<ImportContent source="json-rpc-deprecation" mode="snippet" />
+
+:::
+
+## Public endpoints
+
+The Sui Foundation operates an Archival Service as a public good:
+
+- Testnet: `archive.testnet.sui.io`
+- Mainnet: `archive.mainnet.sui.io`
+
+These endpoints have strict rate limits.
+
+## Querying the service
+
+The Archival Service exposes the same [`LedgerService`](/references/fullnode-protocol) gRPC API as a Sui full node. Query it using any gRPC client by pointing at an Archival Service endpoint instead of a full node.
+
+See [Using gRPC](/develop/accessing-data/grpc/using-grpc) for detailed examples with `grpcurl`, Buf CLI, TypeScript, Go, and Python.
+
+For example, to fetch a historical transaction using `grpcurl`:
+
+```shell
+grpcurl -d '{
+  "digest": "BASE58_TX_DIGEST"
+}' archive.testnet.sui.io:443 sui.rpc.v2.LedgerService/GetTransaction
+```
+
+## Using the Archival Service as a fallback
+
+Apps can query the Archival Service when a full node returns retention-related errors. This provides a graceful fallback without requiring the full node to store historical data:
+
+1. Send your query to the full node.
+2. If the full node returns `NOT_FOUND` for data that should exist, retry against the Archival Service endpoint.
+
+## Running your own instance
+
+For production use or to avoid rate limits, you can run the full archival stack yourself. See the [Archival Stack Setup](/operators/data-management/archival-stack-setup) operator guide for instructions on setting up Bigtable, the indexer, and the gRPC service.

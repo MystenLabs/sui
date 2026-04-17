@@ -1489,13 +1489,19 @@ borrow_mut
 remove
 	public fun
 	0x2::dynamic_field
+exists
+	public fun
+	0x2::dynamic_field
+remove_opt
+	public fun
+	0x2::dynamic_field
+exists_with_type
+	public fun
+	0x2::dynamic_field
 exists_
 	public fun
 	0x2::dynamic_field
 remove_if_exists
-	public fun
-	0x2::dynamic_field
-exists_with_type
 	public fun
 	0x2::dynamic_field
 field_info
@@ -2320,13 +2326,19 @@ borrow_mut
 remove
 	public fun
 	0x2::dynamic_object_field
-exists_
+exists
 	public fun
 	0x2::dynamic_object_field
 exists_with_type
 	public fun
 	0x2::dynamic_object_field
 id
+	public fun
+	0x2::dynamic_object_field
+remove_opt
+	public fun
+	0x2::dynamic_object_field
+exists_
 	public fun
 	0x2::dynamic_object_field
 internal_add

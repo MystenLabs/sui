@@ -52,6 +52,7 @@ module test::m {
     //////////////////////////////////////////////////////////////
     // check
 
+    #[allow(deprecated_usage)]
     public fun check(grand: &Obj, v1: u64, v2: u64, v3: Option<u64>) {
         assert!(grand.value == v1, 0);
         let parent: &Obj = ofield::borrow(&grand.id, KEY);
