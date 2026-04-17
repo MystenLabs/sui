@@ -27,7 +27,9 @@ use serde_json::Value as Json;
 use shared_crypto::intent::{IntentMessage, PersonalMessage};
 use sui_display::v1::Format;
 use sui_json_rpc_types::ZkLoginIntentScope;
+use sui_package_resolver::SyncResolver;
 use sui_types::base_types::SuiAddress;
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::storage::ObjectKey;
@@ -1021,7 +1023,6 @@ impl ReadApiServer for ReadApi {
             let state = self.state.clone();
             let transaction_kv_store = self.transaction_kv_store.clone();
             async move {
-                let store = state.load_epoch_store_one_call_per_task();
                 let events = transaction_kv_store
                     .multi_get_events_by_tx_digests(&[transaction_digest])
                     .await
@@ -1037,11 +1038,7 @@ impl ReadApiServer for ReadApi {
                         .into_iter()
                         .enumerate()
                         .map(|(seq, e)| {
-                            let layout = store
-                                .executor()
-                                .type_layout_resolver(Box::new(
-                                    &state.get_backing_package_store().as_ref(),
-                                ))
+                            let layout = SyncResolver::new(state.get_backing_package_store().as_ref())
                                 .get_annotated_layout(&e.type_)?;
                             SuiEvent::try_from(e, transaction_digest, seq as u64, None, layout)
                         })
@@ -1293,16 +1290,13 @@ fn to_sui_transaction_events(
     tx_digest: TransactionDigest,
     events: TransactionEvents,
 ) -> Result<SuiTransactionBlockEvents, Error> {
-    let epoch_store = fullnode_api.state.load_epoch_store_one_call_per_task();
     let backing_package_store = fullnode_api.state.get_backing_package_store();
-    let mut layout_resolver = epoch_store
-        .executor()
-        .type_layout_resolver(Box::new(backing_package_store.as_ref()));
+    let mut layout_resolver = SyncResolver::new(backing_package_store.as_ref());
     Ok(SuiTransactionBlockEvents::try_from(
         events,
         tx_digest,
         None,
-        layout_resolver.as_mut(),
+        &mut layout_resolver,
     )?)
 }
 

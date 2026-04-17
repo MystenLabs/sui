@@ -70,6 +70,7 @@ use std::{
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_execution::Executor;
+use sui_package_resolver::SyncResolver;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::crypto::RandomnessRound;
@@ -2408,13 +2409,10 @@ impl AuthorityState {
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
 
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    &inner_temp_store,
-                    self.get_backing_package_store(),
-                )));
+        let mut layout_resolver = SyncResolver::new(PackageStoreWithFallback::new(
+            &inner_temp_store,
+            self.get_backing_package_store(),
+        ));
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let object_changes = Vec::new();
 
@@ -2469,7 +2467,7 @@ impl AuthorityState {
                     inner_temp_store.events.clone(),
                     tx_digest,
                     None,
-                    layout_resolver.as_mut(),
+                    &mut layout_resolver,
                 )?,
                 object_changes,
                 balance_changes,
@@ -2962,13 +2960,10 @@ impl AuthorityState {
             vec![]
         };
 
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    &inner_temp_store,
-                    self.get_backing_package_store(),
-                )));
+        let mut layout_resolver = SyncResolver::new(PackageStoreWithFallback::new(
+            &inner_temp_store,
+            self.get_backing_package_store(),
+        ));
 
         DevInspectResults::new(
             effects,
@@ -2976,7 +2971,7 @@ impl AuthorityState {
             execution_result,
             raw_txn_data,
             raw_effects,
-            layout_resolver.as_mut(),
+            &mut layout_resolver,
         )
     }
 
@@ -3006,10 +3001,9 @@ impl AuthorityState {
         tx_coins: Option<TxCoins>,
         written: &WrittenObjects,
         inner_temporary_store: &InnerTemporaryStore,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         acquire_locks: bool,
     ) -> SuiResult<(StagedBatch, IndexStoreCacheUpdatesWithLocks)> {
-        let changes = Self::process_object_index(backing_package_store, object_store, effects, written, inner_temporary_store, epoch_store)
+        let changes = Self::process_object_index(backing_package_store, object_store, effects, written, inner_temporary_store)
             .tap_err(|e| warn!(tx_digest=?digest, "Failed to process object index, index_tx is skipped: {e}"))?;
 
         indexes.index_tx(
@@ -3133,15 +3127,11 @@ impl AuthorityState {
         effects: &TransactionEffects,
         written: &WrittenObjects,
         inner_temporary_store: &InnerTemporaryStore,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<ObjectIndexChanges> {
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    inner_temporary_store,
-                    backing_package_store,
-                )));
+        let mut layout_resolver = SyncResolver::new(PackageStoreWithFallback::new(
+            inner_temporary_store,
+            backing_package_store,
+        ));
 
         let modified_at_version = effects
             .modified_at_versions()
@@ -3253,7 +3243,7 @@ impl AuthorityState {
                         object_store,
                         new_object,
                         written,
-                        layout_resolver.as_mut(),
+                        &mut layout_resolver,
                     )
                     .unwrap_or_else(|e| {
                         error!(
@@ -3540,7 +3530,6 @@ impl AuthorityState {
             tx_coins,
             written,
             inner_temporary_store,
-            epoch_store,
             acquire_locks,
         )
         .tap_ok(|_| metrics.post_processing_total_tx_indexed.inc())
@@ -3553,7 +3542,6 @@ impl AuthorityState {
             events.clone(),
             *tx_digest,
             timestamp_ms,
-            epoch_store,
             inner_temporary_store,
         )?;
         // Emit events
@@ -3579,21 +3567,17 @@ impl AuthorityState {
         transaction_events: TransactionEvents,
         digest: TransactionDigest,
         timestamp_ms: u64,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
         inner_temporary_store: &InnerTemporaryStore,
     ) -> SuiResult<SuiTransactionBlockEvents> {
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    inner_temporary_store,
-                    backing_package_store,
-                )));
+        let mut layout_resolver = SyncResolver::new(PackageStoreWithFallback::new(
+            inner_temporary_store,
+            backing_package_store,
+        ));
         SuiTransactionBlockEvents::try_from(
             transaction_events,
             digest,
             Some(timestamp_ms),
-            layout_resolver.as_mut(),
+            &mut layout_resolver,
         )
     }
 
@@ -3662,9 +3646,7 @@ impl AuthorityState {
             (request.generate_layout, object.data.try_as_move())
         {
             Some(into_struct_layout(
-                self.load_epoch_store_one_call_per_task()
-                    .executor()
-                    .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
+                SyncResolver::new(self.get_backing_package_store().as_ref())
                     .get_annotated_layout(&move_obj.type_().clone().into())?,
             )?)
         } else {
@@ -3898,7 +3880,7 @@ impl AuthorityState {
         ));
         // TODO: This doesn't belong to the constructor of AuthorityState.
         state
-            .create_owner_index_if_empty(genesis_objects, &epoch_store)
+            .create_owner_index_if_empty(genesis_objects)
             .expect("Error indexing genesis objects.");
 
         if epoch_store
@@ -4076,11 +4058,7 @@ impl AuthorityState {
         &self.execution_scheduler
     }
 
-    fn create_owner_index_if_empty(
-        &self,
-        genesis_objects: &[Object],
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult {
+    fn create_owner_index_if_empty(&self, genesis_objects: &[Object]) -> SuiResult {
         let Some(index_store) = &self.indexes else {
             return Ok(());
         };
@@ -4090,9 +4068,7 @@ impl AuthorityState {
 
         let mut new_owners = vec![];
         let mut new_dynamic_fields = vec![];
-        let mut layout_resolver = epoch_store
-            .executor()
-            .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()));
+        let mut layout_resolver = SyncResolver::new(self.get_backing_package_store().as_ref());
         for o in genesis_objects.iter() {
             match o.owner {
                 Owner::AddressOwner(addr) | Owner::ConsensusAddressOwner { owner: addr, .. } => {
@@ -4107,7 +4083,7 @@ impl AuthorityState {
                         self.get_object_store(),
                         o,
                         &BTreeMap::new(),
-                        layout_resolver.as_mut(),
+                        &mut layout_resolver,
                     )?
                     else {
                         continue;
@@ -4817,10 +4793,8 @@ impl AuthorityState {
             .try_as_move()
             .map(|object| {
                 into_struct_layout(
-                    self.load_epoch_store_one_call_per_task()
-                        .executor()
-                        // TODO(cache) - must read through cache
-                        .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
+                    // TODO(cache) - must read through cache
+                    SyncResolver::new(self.get_backing_package_store().as_ref())
                         .get_annotated_layout(&object.type_().clone().into())?,
                 )
             })
@@ -5433,11 +5407,8 @@ impl AuthorityState {
             )
             .collect::<Result<Vec<_>, _>>()?;
 
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-        let backing_store = self.get_backing_package_store().as_ref();
-        let mut layout_resolver = epoch_store
-            .executor()
-            .type_layout_resolver(Box::new(backing_store));
+        let backing_store = self.get_backing_package_store();
+        let mut layout_resolver = SyncResolver::new(backing_store.as_ref());
         let mut events = vec![];
         for (e, tx_digest, event_seq, timestamp) in stored_events.into_iter() {
             events.push(SuiEvent::try_from(

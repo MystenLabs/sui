@@ -31,6 +31,7 @@ use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
 use sui_macros::fail_point;
+use sui_package_resolver::SyncResolver;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
@@ -717,14 +718,12 @@ impl CheckpointExecutor {
             // Index the checkpoint. this is done out of order and is not written and committed to the
             // DB until later (committing must be done in-order)
             if let Some(rpc_index) = &self.state.rpc_index {
-                let mut layout_resolver = self.epoch_store.executor().type_layout_resolver(
-                    Box::new(PackageStoreWithFallback::new(
-                        self.state.get_backing_package_store(),
-                        &checkpoint_data,
-                    )),
-                );
+                let mut layout_resolver = SyncResolver::new(PackageStoreWithFallback::new(
+                    self.state.get_backing_package_store(),
+                    &checkpoint_data,
+                ));
 
-                rpc_index.index_checkpoint(&checkpoint_data, layout_resolver.as_mut());
+                rpc_index.index_checkpoint(&checkpoint_data, &mut layout_resolver);
             }
 
             if let Some(path) = &self.config.data_ingestion_dir {
