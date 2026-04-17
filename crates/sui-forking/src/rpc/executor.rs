@@ -10,24 +10,29 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use tracing::info;
 
+use simulacrum::SimulatorStore;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::{SuiError, SuiErrorKind};
+use sui_types::storage::get_transaction_input_objects;
+use sui_types::storage::get_transaction_output_objects;
 use sui_types::transaction::TransactionData;
-use sui_types::transaction_driver_types::{
-    EffectsFinalityInfo, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
-    FinalizedEffects, TransactionSubmissionError,
-};
-use sui_types::transaction_executor::{
-    SimulateTransactionResult, TransactionChecks, TransactionExecutor,
-};
+use sui_types::transaction_driver_types::EffectsFinalityInfo;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestV3;
+use sui_types::transaction_driver_types::ExecuteTransactionResponseV3;
+use sui_types::transaction_driver_types::FinalizedEffects;
+use sui_types::transaction_driver_types::TransactionSubmissionError;
+use sui_types::transaction_executor::SimulateTransactionResult;
+use sui_types::transaction_executor::TransactionChecks;
+use sui_types::transaction_executor::TransactionExecutor;
 
 use crate::context::Context;
-use crate::execution::execute_transaction;
 
 /// `TransactionExecutor` implementation that runs transactions against the
-/// forked network's Simulacrum. Signatures on inbound requests are discarded
-/// and every transaction is executed under impersonation — the forked network
-/// does not have access to the original account keys.
+/// forked network's Simulacrum. Inbound transactions must be signed by the
+/// sender (Simulacrum verifies user signatures during execution) and each
+/// successful execution is sealed into a fresh Simulacrum checkpoint.
 pub(crate) struct ForkedTransactionExecutor {
     context: Arc<Context>,
 }
@@ -45,30 +50,76 @@ impl TransactionExecutor for ForkedTransactionExecutor {
         request: ExecuteTransactionRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<ExecuteTransactionResponseV3, TransactionSubmissionError> {
-        let tx_data: TransactionData = request.transaction.data().transaction_data().clone();
+        // Execute under the simulacrum write lock, then seal the transaction
+        // into a fresh checkpoint so downstream reads see it as finalized.
+        // The lock is dropped before reading back events/objects so
+        // concurrent reads aren't blocked.
+        let (effects, exec_error, checkpoint_seq) = {
+            let mut sim = self.context.simulacrum().write().await;
+            let (effects, exec_error) =
+                sim.execute_transaction(request.transaction).map_err(|e| {
+                    TransactionSubmissionError::TransactionDriverInternalError(SuiError::from(
+                        format!("forked execution failed: {e}"),
+                    ))
+                })?;
+            let checkpoint = sim.create_checkpoint();
+            let checkpoint_seq = checkpoint.data().sequence_number;
+            (effects, exec_error, checkpoint_seq)
+        };
 
-        let result = execute_transaction(&self.context, tx_data)
-            .await
-            .map_err(|e| {
-                TransactionSubmissionError::TransactionDriverInternalError(SuiError::from(
-                    format!("forked execution failed: {e}"),
-                ))
-            })?;
+        let digest = *effects.transaction_digest();
+        if let Some(err) = &exec_error {
+            info!(%digest, checkpoint = checkpoint_seq, "forked transaction executed with error: {err:?}");
+        } else {
+            info!(%digest, checkpoint = checkpoint_seq, "forked transaction executed");
+        }
+
+        let events = if request.include_events && effects.events_digest().is_some() {
+            let sim = self.context.simulacrum().read().await;
+            sim.store().get_transaction_events(&digest)
+        } else {
+            None
+        };
+
+        // Input/output objects are resolved via the `DataStore`, which is
+        // the same `ObjectStore` the gRPC reader serves from — after
+        // execution it holds the pre-execution input versions (from the
+        // fork snapshot / filesystem cache) and the newly written output
+        // versions.
+        let object_store = self.context.data_store();
+        let input_objects = if request.include_input_objects {
+            Some(
+                get_transaction_input_objects(object_store, &effects).map_err(|e| {
+                    TransactionSubmissionError::TransactionDriverInternalError(SuiError::from(
+                        format!("failed to resolve input objects for {digest}: {e}"),
+                    ))
+                })?,
+            )
+        } else {
+            None
+        };
+        let output_objects = if request.include_output_objects {
+            Some(
+                get_transaction_output_objects(object_store, &effects).map_err(|e| {
+                    TransactionSubmissionError::TransactionDriverInternalError(SuiError::from(
+                        format!("failed to resolve output objects for {digest}: {e}"),
+                    ))
+                })?,
+            )
+        } else {
+            None
+        };
 
         Ok(ExecuteTransactionResponseV3 {
             effects: FinalizedEffects {
-                effects: result.effects,
-                // The forked network is single-node, so nothing is "finalized"
-                // in the quorum sense. The gRPC layer discards this field, but
-                // we fill it in to satisfy the type.
-                finality_info: EffectsFinalityInfo::QuorumExecuted(0),
+                effects: effects.clone(),
+                // The forked network is single-node with no consensus; we
+                // report the effects as executed within their embedded epoch.
+                finality_info: EffectsFinalityInfo::QuorumExecuted(effects.executed_epoch()),
             },
-            // Events / input / output objects require threading the
-            // `InnerTemporaryStore` out of Simulacrum, which `execute_transaction`
-            // currently drops. Left for a follow-up.
-            events: None,
-            input_objects: None,
-            output_objects: None,
+            events,
+            input_objects,
+            output_objects,
             auxiliary_data: None,
         })
     }

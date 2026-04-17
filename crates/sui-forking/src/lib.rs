@@ -6,7 +6,6 @@
 #![allow(unused)]
 
 pub(crate) mod context;
-mod execution;
 pub(crate) mod filesystem;
 mod gql;
 mod node;

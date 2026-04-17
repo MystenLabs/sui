@@ -5,3 +5,7 @@
 //! `sui-rpc-api` services.
 
 pub(crate) mod executor;
+
+#[cfg(test)]
+#[path = "../tests/rpc_executor.rs"]
+mod executor_tests;
