@@ -953,10 +953,10 @@ impl TestCluster {
         for result in submit_response.results {
             match result {
                 SubmitTxResult::Executed { details, .. } => {
-                    if let Some(data) = details {
-                        let events = data.events.unwrap_or_default();
-                        return Ok((data.effects, events));
-                    }
+                    let data =
+                        details.ok_or_else(|| anyhow::anyhow!("Expected execution details"))?;
+                    let events = data.events.unwrap_or_default();
+                    return Ok((data.effects, events));
                 }
                 SubmitTxResult::Rejected { error } => {
                     return Err(error.into());
