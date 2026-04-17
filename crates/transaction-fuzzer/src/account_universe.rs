@@ -9,6 +9,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 use once_cell::sync::Lazy;
 use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
+use sui_package_resolver::SyncResolver;
 use sui_types::{storage::ObjectStore, transaction::Transaction};
 
 mod account;

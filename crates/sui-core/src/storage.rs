@@ -19,6 +19,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::full_checkpoint_content::ObjectSet;
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;

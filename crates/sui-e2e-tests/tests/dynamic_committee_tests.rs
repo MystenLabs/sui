@@ -12,6 +12,7 @@ use std::{
 };
 use sui_core::authority::AuthorityState;
 use sui_macros::*;
+use sui_package_resolver::SyncResolver;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_types::{
     SUI_SYSTEM_PACKAGE_ID,
