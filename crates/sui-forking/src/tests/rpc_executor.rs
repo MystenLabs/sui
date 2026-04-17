@@ -33,7 +33,7 @@ use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::store::DataStore;
 
 #[tokio::test]
-async fn executor_execute_transaction_runs_against_forked_simulacrum() {
+async fn test_tx_execution() {
     let temp = tempfile::tempdir().expect("failed to create tempdir");
     let mut rng = OsRng;
     let config = ConfigBuilder::new_with_temp_dir()
@@ -114,5 +114,8 @@ async fn executor_execute_transaction_runs_against_forked_simulacrum() {
         "transfer failed: {:?}",
         response.effects.effects.status(),
     );
-    assert_eq!(*response.effects.effects.transaction_digest(), expected_digest);
+    assert_eq!(
+        *response.effects.effects.transaction_digest(),
+        expected_digest
+    );
 }

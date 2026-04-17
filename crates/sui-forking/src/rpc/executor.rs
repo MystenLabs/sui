@@ -69,9 +69,9 @@ impl TransactionExecutor for ForkedTransactionExecutor {
 
         let digest = *effects.transaction_digest();
         if let Some(err) = &exec_error {
-            info!(%digest, checkpoint = checkpoint_seq, "forked transaction executed with error: {err:?}");
+            info!(%digest, checkpoint_seq, "forked transaction executed with error: {err:?}");
         } else {
-            info!(%digest, checkpoint = checkpoint_seq, "forked transaction executed");
+            info!(%digest, checkpoint_seq, "forked transaction executed");
         }
 
         let events = if request.include_events && effects.events_digest().is_some() {
