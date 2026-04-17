@@ -495,22 +495,44 @@ impl Data {
 }
 
 /// A single permission that can be granted on a party-owned object.
+///
+/// Bit layout (u8):
+///
+/// ```text
+///  7  6  5  4  3  2  1  0
+///  _  W  P  T  D  M  U  I
+/// ```
+///
+/// - `I` Bit 0: [`Self::ImmutableUsage`] is required for immutable usage at signing
+/// - `U` Bit 1: [`Self::MutableUsage`] is required for mutable usage at signing
+///   - It is also required for any additional permissions below
+/// - `M` Bit 2: [`Self::Write`] allows for the value of the object to be changed
+/// - `D` Bit 3: [`Self::Delete`] allows for the object to be deleted
+/// - `T` Bit 4: [`Self::InternalTransfer`] allows for usage of the internal transfer functions
+/// - `P` Bit 5: [`Self::PublicTransfer`] allows for usage of public transfer functions
+/// - `W` Bit 6: [`Self::Wrap`] allows for the object to be wrapped
 #[repr(u8)]
 #[derive(Debug, Clone, Eq, Copy, Hash, Ord, PartialEq, PartialOrd)]
 pub enum ObjectPermission {
-    Read = 0b0001,
-    Write = 0b0010,
-    Delete = 0b0100,
-    Transfer = 0b1000,
+    ImmutableUsage = 1 << 0,
+    MutableUsage = 1 << 1,
+    Write = 1 << 2,
+    Delete = 1 << 3,
+    InternalTransfer = 1 << 4,
+    PublicTransfer = 1 << 5,
+    Wrap = 1 << 6,
 }
 
 impl ObjectPermission {
     pub const fn from_u64(bits: u64) -> Option<Self> {
         match bits {
-            0b0001 => Some(Self::Read),
-            0b0010 => Some(Self::Write),
-            0b0100 => Some(Self::Delete),
-            0b1000 => Some(Self::Transfer),
+            b if b == Self::Write as u64 => Some(Self::Write),
+            b if b == Self::Delete as u64 => Some(Self::Delete),
+            b if b == Self::InternalTransfer as u64 => Some(Self::InternalTransfer),
+            b if b == Self::PublicTransfer as u64 => Some(Self::PublicTransfer),
+            b if b == Self::Wrap as u64 => Some(Self::Wrap),
+            b if b == Self::MutableUsage as u64 => Some(Self::MutableUsage),
+            b if b == Self::ImmutableUsage as u64 => Some(Self::ImmutableUsage),
             _ => None,
         }
     }
@@ -519,10 +541,13 @@ impl ObjectPermission {
 impl Display for ObjectPermission {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Read => write!(f, "Read"),
             Self::Write => write!(f, "Write"),
             Self::Delete => write!(f, "Delete"),
-            Self::Transfer => write!(f, "Transfer"),
+            Self::InternalTransfer => write!(f, "InternalTransfer"),
+            Self::PublicTransfer => write!(f, "PublicTransfer"),
+            Self::Wrap => write!(f, "Wrap"),
+            Self::MutableUsage => write!(f, "MutableUsage"),
+            Self::ImmutableUsage => write!(f, "ImmutableUsage"),
         }
     }
 }
@@ -535,19 +560,62 @@ impl Display for ObjectPermission {
 pub struct ObjectPermissions(u64);
 
 impl ObjectPermissions {
+    /// Bitmask of the individual mutable permissions.
+    /// Each requires [`ObjectPermission::MutableUsage`] to also be set.
+    const MUTABLE_PERMISSION_BITS: u64 = (ObjectPermission::Write as u64)
+        | (ObjectPermission::Delete as u64)
+        | (ObjectPermission::InternalTransfer as u64)
+        | (ObjectPermission::PublicTransfer as u64)
+        | (ObjectPermission::Wrap as u64);
+
+    /// Bitmask of all known bits.
+    const ALL_BITS: u64 = Self::MUTABLE_PERMISSION_BITS
+        | (ObjectPermission::MutableUsage as u64)
+        | (ObjectPermission::ImmutableUsage as u64);
+
     pub const NONE: Self = Self(0);
-    pub const READ: Self = Self(ObjectPermission::Read as u64);
-    pub const WRITE: Self = Self(ObjectPermission::Write as u64);
-    pub const DELETE: Self = Self(ObjectPermission::Delete as u64);
-    pub const TRANSFER: Self = Self(ObjectPermission::Transfer as u64);
-    pub const ALL: Self = Self(Self::READ.0 | Self::WRITE.0 | Self::DELETE.0 | Self::TRANSFER.0);
+    pub const IMMUTABLE_USAGE: Self = Self::from_bits(ObjectPermission::ImmutableUsage as u64);
+    pub const MUTABLE_USAGE: Self = Self::from_bits(ObjectPermission::MutableUsage as u64);
+    pub const WRITE: Self =
+        Self::from_bits(ObjectPermission::Write as u64 | ObjectPermission::MutableUsage as u64);
+    pub const DELETE: Self =
+        Self::from_bits(ObjectPermission::Delete as u64 | ObjectPermission::MutableUsage as u64);
+    pub const INTERNAL_TRANSFER: Self = Self::from_bits(
+        ObjectPermission::InternalTransfer as u64 | ObjectPermission::MutableUsage as u64,
+    );
+    pub const PUBLIC_TRANSFER: Self = Self::from_bits(
+        ObjectPermission::PublicTransfer as u64 | ObjectPermission::MutableUsage as u64,
+    );
+    pub const WRAP: Self =
+        Self::from_bits(ObjectPermission::Wrap as u64 | ObjectPermission::MutableUsage as u64);
+    pub const ALL: Self = Self::from_bits(Self::ALL_BITS);
 
-    /// Requires _at least_ one of WRITE, DELETE, or TRANSFER
-    pub const AT_LEAST_ONE_REQUIRED_FOR_MUTABLE_AT_SIGNING: Self =
-        Self(Self::WRITE.0 | Self::DELETE.0 | Self::TRANSFER.0);
+    /// Private const constructor. Asserts that:
+    /// - no unknown bits are set
+    /// - if any individual mutable permission is set, `MutableUsage` is also set
+    const fn from_bits(bits: u64) -> Self {
+        assert!(bits & !Self::ALL_BITS == 0, "unknown permission bit");
+        let has_mutable_perm = bits & Self::MUTABLE_PERMISSION_BITS != 0;
+        let has_mutable_usage = bits & (ObjectPermission::MutableUsage as u64) != 0;
+        assert!(
+            !has_mutable_perm || has_mutable_usage,
+            "a mutable permission requires MutableUsage"
+        );
+        Self(bits)
+    }
 
-    pub const fn single(permission: ObjectPermission) -> Self {
-        Self(permission as u64)
+    /// Construct from raw bits. Returns `None` if any unknown bit is set, or
+    /// if any individual mutable permission is set without `MutableUsage`.
+    pub const fn new(bits: u64) -> Option<Self> {
+        if bits & !Self::ALL_BITS != 0 {
+            return None;
+        }
+        let has_mutable_perm = bits & Self::MUTABLE_PERMISSION_BITS != 0;
+        let has_mutable_usage = bits & (ObjectPermission::MutableUsage as u64) != 0;
+        if has_mutable_perm && !has_mutable_usage {
+            return None;
+        }
+        Some(Self(bits))
     }
 
     pub fn can(&self, permission: ObjectPermission) -> bool {
@@ -555,40 +623,41 @@ impl ObjectPermissions {
         (self.0 & p) == p
     }
 
-    pub fn can_read(&self) -> bool {
-        self.can(ObjectPermission::Read)
-    }
-
+    /// Can it change the Move value of the object?
     pub fn can_write(&self) -> bool {
         self.can(ObjectPermission::Write)
     }
 
+    /// Can the object's UID be deleted?
+    // TODO this might also gate derived object restoration
     pub fn can_delete(&self) -> bool {
         self.can(ObjectPermission::Delete)
     }
 
-    pub fn can_transfer(&self) -> bool {
-        self.can(ObjectPermission::Transfer)
+    /// Can the object be transferred using the internal transfer functions?
+    pub fn can_internal_transfer(&self) -> bool {
+        self.can(ObjectPermission::InternalTransfer)
     }
 
-    pub fn can_access_immutably_at_signing(&self) -> bool {
-        self.can_read()
+    /// Can the object be transferred using the public transfer functions?
+    pub fn can_public_transfer(&self) -> bool {
+        self.can(ObjectPermission::PublicTransfer)
     }
 
-    pub fn can_access_mutably_at_signing(&self) -> bool {
-        self.can_write() || self.can_delete() || self.can_transfer()
+    /// Can the object be wrapped?
+    pub fn can_wrap(&self) -> bool {
+        self.can(ObjectPermission::Wrap)
     }
 
-    pub const fn intersect(self, other: Self) -> Self {
-        Self(self.0 & other.0)
+    /// Can the object be used as a mutable input in a transaction?
+    /// Note that this is required for all mutable permissions
+    pub fn can_use_mutably(&self) -> bool {
+        self.can(ObjectPermission::MutableUsage)
     }
 
-    pub const fn union(self, other: Self) -> Self {
-        Self(self.0 | other.0)
-    }
-
-    pub const fn difference(self, other: Self) -> Self {
-        Self(self.0 & !other.0)
+    /// Can the object be used as an immutable input in a transaction?
+    pub fn can_use_immutably(&self) -> bool {
+        self.can(ObjectPermission::ImmutableUsage)
     }
 
     #[inline(always)]
@@ -599,44 +668,40 @@ impl ObjectPermissions {
     pub const fn is_subset(&self, other: Self) -> bool {
         Self::is_subset_bits(self.0, other.0)
     }
-
-    pub const fn from_u64(bits: u64) -> Option<Self> {
-        if Self::is_subset_bits(bits, Self::ALL.0) {
-            Some(Self(bits))
-        } else {
-            None
-        }
-    }
-}
-
-impl std::ops::BitOr<ObjectPermission> for ObjectPermissions {
-    type Output = Self;
-    fn bitor(self, rhs: ObjectPermission) -> Self {
-        ObjectPermissions(self.0 | (rhs as u64))
-    }
 }
 
 impl std::ops::BitOr<ObjectPermissions> for ObjectPermissions {
     type Output = Self;
     fn bitor(self, rhs: Self) -> Self {
-        ObjectPermissions(self.0 | rhs.0)
+        // Two valid sets union into a valid set: any mutable permission in
+        // either input was already paired with MutableUsage there.
+        Self(self.0 | rhs.0)
     }
 }
 
 pub struct ObjectPermissionsIterator {
     set: ObjectPermissions,
-    idx: u64,
+    idx: usize,
 }
 
 impl Iterator for ObjectPermissionsIterator {
     type Item = ObjectPermission;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while self.idx <= 0b1000 {
-            let next = ObjectPermission::from_u64(self.set.0 & self.idx);
-            self.idx <<= 1;
-            if next.is_some() {
-                return next;
+        const ORDER: &[ObjectPermission] = &[
+            ObjectPermission::Write,
+            ObjectPermission::Delete,
+            ObjectPermission::InternalTransfer,
+            ObjectPermission::PublicTransfer,
+            ObjectPermission::Wrap,
+            ObjectPermission::MutableUsage,
+            ObjectPermission::ImmutableUsage,
+        ];
+        while self.idx < ORDER.len() {
+            let p = ORDER[self.idx];
+            self.idx += 1;
+            if self.set.can(p) {
+                return Some(p);
             }
         }
         None
@@ -647,10 +712,7 @@ impl IntoIterator for ObjectPermissions {
     type Item = ObjectPermission;
     type IntoIter = ObjectPermissionsIterator;
     fn into_iter(self) -> Self::IntoIter {
-        ObjectPermissionsIterator {
-            idx: 0b0001,
-            set: self,
-        }
+        ObjectPermissionsIterator { idx: 0, set: self }
     }
 }
 

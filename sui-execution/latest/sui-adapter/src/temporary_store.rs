@@ -792,9 +792,8 @@ impl TemporaryStore<'_> {
                             .as_ref()
                             .map(|s| permissions.permissions_for(s))
                             .unwrap_or(ObjectPermissions::NONE);
-                        sender_permissions
-                            .union(sponsor_permissions)
-                            .can_access_mutably_at_signing()
+                        (sender_permissions | sponsor_permissions)
+                            .can_use_mutably()
                             .then_some(id)
                     }
                     Owner::ObjectOwner(_parent) => {

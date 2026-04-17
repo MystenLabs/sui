@@ -15,7 +15,7 @@ mod checked {
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
-    use sui_types::object::{ObjectPermission, ObjectPermissions};
+    use sui_types::object::ObjectPermission;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, SharedObjectMutability, TransactionData,
@@ -691,11 +691,11 @@ mod checked {
                             SharedObjectMutability::Immutable => {
                                 // TODO better error kind here
                                 fp_ensure!(
-                                    sender_permissions.can_access_immutably_at_signing(),
+                                    sender_permissions.can_use_immutably(),
                                     UserInputError::IncorrectUserSignature {
                                         error: format!(
                                             "Sender address {owner:?} does not have immutable access permissions for object {object_id:?} with party ownership. The required permission is {}, but the permissions for the sender for this object are {sender_permissions}",
-                                            ObjectPermission::Read,
+                                            ObjectPermission::ImmutableUsage,
                                         ),
                                     }
                                 )
@@ -703,11 +703,11 @@ mod checked {
                             SharedObjectMutability::Mutable => {
                                 // TODO better error kind here
                                 fp_ensure!(
-                                    sender_permissions.can_access_mutably_at_signing(),
+                                    sender_permissions.can_use_mutably(),
                                     UserInputError::IncorrectUserSignature {
                                         error: format!(
-                                            "Sender address {owner:?} does not have mutable access permissions for object {object_id:?} with party ownership. The required permissions are one of: {}, but the permissions for the sender for this object are {sender_permissions}",
-                                            ObjectPermissions::AT_LEAST_ONE_REQUIRED_FOR_MUTABLE_AT_SIGNING,
+                                            "Sender address {owner:?} does not have mutable access permissions for object {object_id:?} with party ownership. The required permission is {}, but the permissions for the sender for this object are {sender_permissions}",
+                                            ObjectPermission::MutableUsage,
                                         ),
                                     }
                                 )
