@@ -714,16 +714,16 @@ impl TestCluster {
                     return Err(error);
                 }
                 SubmitTxResult::Submitted { consensus_position } => {
-                    submitted_positions.push((index, digests[index], consensus_position));
+                    submitted_positions.push((index, consensus_position));
                 }
             }
         }
 
         let wait_futures: Vec<_> = submitted_positions
             .iter()
-            .map(|(_, digest, position)| {
+            .map(|(index, position)| {
                 let request = WaitForEffectsRequest {
-                    transaction_digest: Some(*digest),
+                    transaction_digest: Some(digests[*index]),
                     consensus_position: Some(*position),
                     include_details: true,
                     ping_type: None,
@@ -733,7 +733,7 @@ impl TestCluster {
             .collect();
 
         let wait_responses = join_all(wait_futures).await;
-        for ((index, digest, _), response) in submitted_positions
+        for ((index, _), response) in submitted_positions
             .into_iter()
             .zip_debug_eq(wait_responses.into_iter())
         {
@@ -742,7 +742,7 @@ impl TestCluster {
                     let data = details.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
                         error: "Expected execution details".to_string(),
                     })?;
-                    executed_results[index] = Some((digest, data.effects));
+                    executed_results[index] = Some((digests[index], data.effects));
                 }
                 WaitForEffectsResponse::Rejected { error } => {
                     return Err(error.unwrap_or_else(|| {
@@ -758,6 +758,9 @@ impl TestCluster {
             }
         }
 
+        // Effects were already obtained from the validator above; this call is a
+        // synchronization barrier so callers that query the fullnode (e.g. RPC)
+        // after this returns see the transactions' effects.
         self.fullnode_handle
             .sui_node
             .with_async(|node| {
@@ -766,7 +769,7 @@ impl TestCluster {
                     let state = node.state();
                     let transaction_cache_reader = state.get_transaction_cache_reader();
                     transaction_cache_reader
-                        .notify_read_executed_effects(
+                        .notify_read_executed_effects_digests(
                             "sign_and_execute_txns_in_soft_bundle",
                             &digests,
                         )
@@ -775,14 +778,17 @@ impl TestCluster {
             })
             .await;
 
-        Ok(executed_results
+        executed_results
             .into_iter()
             .map(|result| {
-                result.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
-                    error: "Missing execution result".to_string(),
+                result.ok_or_else(|| {
+                    SuiErrorKind::GenericAuthorityError {
+                        error: "Missing execution result".to_string(),
+                    }
+                    .into()
                 })
             })
-            .collect::<Result<Vec<_>, _>>()?)
+            .collect()
     }
 
     /// Execute signed transactions in a soft bundle and return results for each transaction.
