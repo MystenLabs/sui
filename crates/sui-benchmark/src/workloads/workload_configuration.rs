@@ -64,6 +64,7 @@ pub struct WorkloadConfig {
     pub duration: Interval,
     pub composite_config: Option<super::composite::CompositeWorkloadConfig>,
     pub deposit_target_addresses: Vec<SuiAddress>,
+    pub deposit_seed_sui: u64,
 }
 pub struct WorkloadConfiguration;
 
@@ -104,6 +105,7 @@ impl WorkloadConfiguration {
                 in_flight_ratio,
                 duration,
                 deposit_target_address,
+                deposit_seed_sui,
             } => {
                 info!(
                     "Number of benchmark groups to run: {}",
@@ -165,6 +167,7 @@ impl WorkloadConfiguration {
                                     .collect()
                             })
                             .unwrap_or_default(),
+                        deposit_seed_sui,
                     };
                     let builders =
                         Self::create_workload_builders(config, system_state_observer.clone()).await;
@@ -249,6 +252,7 @@ impl WorkloadConfiguration {
             duration,
             composite_config,
             deposit_target_addresses,
+            deposit_seed_sui,
         }: WorkloadConfig,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Option<WorkloadBuilderInfo>> {
@@ -269,7 +273,7 @@ impl WorkloadConfiguration {
             let config = AddrBalDepositConfig {
                 target_addresses: deposit_target_addresses,
                 deposit_amount: 1000,
-                seed_amount: 1_000_000 * sui_types::gas_coin::MIST_PER_SUI,
+                seed_amount: deposit_seed_sui * sui_types::gas_coin::MIST_PER_SUI,
                 metrics: None,
             };
             return vec![AddrBalDepositWorkloadBuilder::build_info(

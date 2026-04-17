@@ -1265,6 +1265,7 @@ mod test {
             duration,
             composite_config: config.composite_config,
             deposit_target_addresses: vec![],
+            deposit_seed_sui: 0,
         };
 
         let workloads_builders = WorkloadConfiguration::create_workload_builders(
