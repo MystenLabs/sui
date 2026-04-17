@@ -746,6 +746,10 @@ impl Diagnostic {
         self
     }
 
+    pub(crate) fn severity(&self) -> Severity {
+        self.info.severity()
+    }
+
     pub(crate) fn set_severity(mut self, severity: Severity) -> Self {
         self.info = self.info.set_severity(severity);
         self

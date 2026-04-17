@@ -440,6 +440,13 @@ impl FilterStack {
         known_filter_names: &BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     ) -> FilterResult {
         let key = diag.info().id();
+
+        // If this isn't a warning, then filtering doesn't apply: just emit it as-is. This also
+        // prevents us from accidentally adding `#[allow(...)]` hints to errors.
+        if diag.severity() != Severity::Warning {
+            return FilterResult::Emit(diag);
+        }
+
         let Some(resolved) = self.resolve(key) else {
             maybe_add_filter_hint(&mut diag, known_filter_names);
             return FilterResult::Emit(diag);
@@ -447,7 +454,6 @@ impl FilterStack {
         match resolved.kind {
             FilterKind::Allow => FilterResult::Filtered(diag),
             FilterKind::Deny => {
-                diag = diag.set_severity(Severity::NonblockingError);
                 if resolved.loc != Loc::invalid() {
                     diag.add_secondary_label((resolved.loc, "the lint level is defined here"));
                 }

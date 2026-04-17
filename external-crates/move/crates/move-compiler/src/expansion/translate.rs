@@ -1544,7 +1544,7 @@ fn module_warning_filter(
         context.env().package_config(pkg).is_dependency
     };
     if is_dep {
-        // For dependencyes, check attributes for errors, then drop everything.
+        // For dependencies, check attributes for errors, then drop everything.
         let _ = warning_filter_(context, attributes);
         dependency_drop_filter_scope()
     } else {
