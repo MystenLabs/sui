@@ -22,6 +22,7 @@ use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 
 use crate::Node;
 use crate::context::Context;
+use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::store::DataStore;
 
 /// Initialize a forked network by fetching state from the remote endpoint at
@@ -92,6 +93,7 @@ pub async fn run(context: Context, rpc_addr: SocketAddr, version: &'static str) 
     };
     let mut service = RpcService::new(reader);
     service.with_server_version(ServerVersion::new("sui-forking", version));
+    service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));
 
     info!("starting sui-rpc-api server on {rpc_addr}");
     let server_handle = tokio::spawn(async move { service.start_service(rpc_addr).await });

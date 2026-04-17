@@ -14828,6 +14828,7 @@ name = "sui-forking"
 version = "1.72.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "bin-version",
  "chrono",
