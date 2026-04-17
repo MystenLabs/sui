@@ -4127,6 +4127,45 @@
           "value": "public, max-age=0, must-revalidate"
         }
       ]
+    },
+    {
+      "source": "/.well-known/mcp/server-card.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, s-maxage=3600"
+        }
+      ]
+    },
+    {
+      "source": "/.well-known/api-catalog",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/linkset+json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, s-maxage=3600"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Link",
+          "value": "</.well-known/mcp/server-card.json>; rel=\"mcp-server-card\"; type=\"application/json\", </.well-known/api-catalog>; rel=\"api-catalog\", </llms.txt>; rel=\"service-doc\"; type=\"text/plain\"; title=\"LLM-optimized documentation\", </sitemap.xml>; rel=\"sitemap\"; type=\"application/xml\", </robots.txt>; rel=\"robots\"; type=\"text/plain\", </references/sui-api>; rel=\"service-doc\"; title=\"Sui API Reference\""
+        },
+        {
+          "key": "Vary",
+          "value": "Accept"
+        }
+      ]
     }
   ]
 }
