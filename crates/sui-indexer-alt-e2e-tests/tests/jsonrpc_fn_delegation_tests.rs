@@ -4,7 +4,6 @@
 use std::time::Duration;
 
 use anyhow::Context;
-use p256::elliptic_curve::ff::derive::bitvec::vec;
 use reqwest::Client;
 use serde_json::Value;
 use serde_json::json;
