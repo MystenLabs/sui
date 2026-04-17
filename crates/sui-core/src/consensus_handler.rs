@@ -2721,10 +2721,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 if parsed.rejected {
                     // TODO(fastpath): Add metrics for rejected transactions.
-                    if matches!(
-                        parsed.transaction.kind,
-                        ConsensusTransactionKind::UserTransactionV2(_)
-                    ) {
+                    if parsed.transaction.is_user_transaction() {
                         self.epoch_store
                             .set_consensus_tx_status(position, ConsensusTxStatus::Rejected);
                         num_rejected_user_transactions[author] += 1;
@@ -2742,10 +2739,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .consensus_handler_transaction_sizes
                     .with_label_values(&[kind])
                     .observe(parsed.serialized_len as f64);
-                if matches!(
-                    &parsed.transaction.kind,
-                    ConsensusTransactionKind::UserTransactionV2(_)
-                ) {
+                if parsed.transaction.is_user_transaction() {
                     self.last_consensus_stats
                         .stats
                         .inc_num_user_transactions(author);
@@ -2804,10 +2798,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     _ => {}
                 }
 
-                if matches!(
-                    &parsed.transaction.kind,
-                    ConsensusTransactionKind::UserTransactionV2(_)
-                ) {
+                if parsed.transaction.is_user_transaction() {
                     let author_name = self
                         .epoch_store
                         .committee()
