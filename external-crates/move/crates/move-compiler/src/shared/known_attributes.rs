@@ -779,66 +779,42 @@ impl AstDebug for ModeAttribute {
 
 impl AstDebug for DiagnosticAttribute {
     fn ast_debug(&self, w: &mut AstWriter) {
+        fn print_diag_list(
+            w: &mut AstWriter,
+            first: &mut bool,
+            deny_set: &BTreeSet<(Option<Spanned<Symbol>>, Spanned<Symbol>)>,
+        ) {
+            for (prefix, name) in deny_set {
+                if !*first {
+                    w.write(", ");
+                }
+                *first = false;
+                match prefix {
+                    Some(pref) => {
+                        w.write(pref.to_string());
+                        w.write("(");
+                        w.write(name.to_string());
+                        w.write(")");
+                    }
+                    None => {
+                        w.write(name.to_string());
+                    }
+                }
+            }
+        }
+
         w.write(self.name());
         w.write("(");
         let mut first = true;
         match self {
             DiagnosticAttribute::Allow { allow_set } => {
-                for (prefix, name) in allow_set {
-                    if !first {
-                        w.write(", ");
-                    }
-                    first = false;
-                    match prefix {
-                        Some(pref) => {
-                            w.write(pref.to_string());
-                            w.write("(");
-                            w.write(name.to_string());
-                            w.write(")");
-                        }
-                        None => {
-                            w.write(name.to_string());
-                        }
-                    }
-                }
+                print_diag_list(w, &mut first, allow_set);
             }
             DiagnosticAttribute::Deny { deny_set } => {
-                for (prefix, name) in deny_set {
-                    if !first {
-                        w.write(", ");
-                    }
-                    first = false;
-                    match prefix {
-                        Some(pref) => {
-                            w.write(pref.to_string());
-                            w.write("(");
-                            w.write(name.to_string());
-                            w.write(")");
-                        }
-                        None => {
-                            w.write(name.to_string());
-                        }
-                    }
-                }
+                print_diag_list(w, &mut first, deny_set);
             }
             DiagnosticAttribute::Expect { expect_set } => {
-                for (prefix, name) in expect_set {
-                    if !first {
-                        w.write(", ");
-                    }
-                    first = false;
-                    match prefix {
-                        Some(pref) => {
-                            w.write(pref.to_string());
-                            w.write("(");
-                            w.write(name.to_string());
-                            w.write(")");
-                        }
-                        None => {
-                            w.write(name.to_string());
-                        }
-                    }
-                }
+                print_diag_list(w, &mut first, expect_set);
             }
             DiagnosticAttribute::LintAllow { allow_set } => {
                 for name in allow_set {

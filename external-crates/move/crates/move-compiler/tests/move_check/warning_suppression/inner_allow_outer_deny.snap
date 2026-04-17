@@ -9,7 +9,7 @@ error[E09002]: unused variable
    ┌─ tests/move_check/warning_suppression/inner_allow_outer_deny.move:10:16
    │
  2 │ #[deny(unused_variable)]
-   │   --------------------- the lint level is defined here
+   │        --------------- the lint level is defined here
    ·
 10 │     fun denied(a: u64) {
    │                ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
@@ -18,7 +18,7 @@ error[E09002]: unused variable
    ┌─ tests/move_check/warning_suppression/inner_allow_outer_deny.move:11:13
    │
  2 │ #[deny(unused_variable)]
-   │   --------------------- the lint level is defined here
+   │        --------------- the lint level is defined here
    ·
 11 │         let y;
    │             ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'

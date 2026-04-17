@@ -121,6 +121,8 @@ pub struct FilterScopeData {
 #[derive(Clone, Copy, Debug)]
 pub struct FilterScope(pub(crate) &'static FilterScopeData);
 
+// Scopes are only reflexively equal, since otherwise they may vary by location information.
+// This is only relevant for adding them to ASTs which derive Eq.
 impl PartialEq for FilterScope {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.0, other.0)
@@ -388,11 +390,12 @@ impl FilterScope {
     }
 
     /// Emit diagnostics for every `#[expect(...)]` override that was never matched.
-    pub fn finalize(&self) -> Vec<Diagnostic> {
+    /// Consumes the scope since finalization should only be done once.
+    pub fn finalize(self) -> Vec<Diagnostic> {
         self.0
             .expects
             .iter()
-            .filter(|e| !e.fulfilled.load(Ordering::Relaxed))
+            .filter(|e| !e.fulfilled.load(Ordering::SeqCst))
             .map(|e| {
                 let mut d = crate::diag!(
                     Attributes::UnfulfilledExpectation,
@@ -422,7 +425,7 @@ impl FilterStack {
     }
 
     pub fn pop(&mut self) {
-        assert!(self.stack.pop().is_some(), "ICE: popped empty filter stack");
+        debug_assert!(self.stack.pop().is_some(), "ICE: popped empty filter stack");
     }
 
     /// Resolve a diagnostic against the active scope stack.
@@ -435,39 +438,24 @@ impl FilterStack {
         known_filter_names: &BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     ) -> FilterResult {
         let key = diag.info().id();
-        match self.resolve(key) {
-            Some(Resolved {
-                kind: FilterKind::Allow,
-                ..
-            }) => FilterResult::Filtered(diag),
-            Some(Resolved {
-                kind: FilterKind::Drop,
-                ..
-            }) => FilterResult::Discarded,
-            Some(Resolved {
-                kind: FilterKind::Expect,
-                scope,
-                filter,
-                ..
-            }) => {
-                mark_expect_fulfilled(scope, filter);
-                FilterResult::Discarded
-            }
-            Some(Resolved {
-                kind: FilterKind::Deny,
-                loc,
-                ..
-            }) => {
+        let Some(resolved) = self.resolve(key) else {
+            maybe_add_filter_hint(&mut diag, known_filter_names);
+            return FilterResult::Emit(diag);
+        };
+        match resolved.kind {
+            FilterKind::Allow => FilterResult::Filtered(diag),
+            FilterKind::Deny => {
                 diag = diag.set_severity(Severity::NonblockingError);
-                if loc != Loc::invalid() {
-                    diag.add_secondary_label((loc, "the lint level is defined here"));
+                if resolved.loc != Loc::invalid() {
+                    diag.add_secondary_label((resolved.loc, "the lint level is defined here"));
                 }
                 FilterResult::Emit(diag)
             }
-            None => {
-                maybe_add_filter_hint(&mut diag, known_filter_names);
-                FilterResult::Emit(diag)
+            FilterKind::Expect => {
+                mark_expect_fulfilled(resolved.scope, resolved.filter);
+                FilterResult::Discarded
             }
+            FilterKind::Drop => FilterResult::Discarded,
         }
     }
 

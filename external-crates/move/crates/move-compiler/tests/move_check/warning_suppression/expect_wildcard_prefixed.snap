@@ -9,4 +9,4 @@ warning[W10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/expect_wildcard_prefixed.move:2:15
   │
 2 │ #[expect(lint(all))]
-  │               ^^^ Unknown warning filter 'lint(all)'
+  │               ^^^ Unknown diagnostic filter 'lint(all)'

@@ -9,4 +9,4 @@ warning[W10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/deny_unknown.move:2:8
   │
 2 │ #[deny(who_am_i)]
-  │        ^^^^^^^^ Unknown warning filter 'who_am_i'
+  │        ^^^^^^^^ Unknown diagnostic filter 'who_am_i'

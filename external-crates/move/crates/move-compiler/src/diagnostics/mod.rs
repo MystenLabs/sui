@@ -422,10 +422,17 @@ impl<'env> DiagnosticReporter<'env> {
                 .unwrap()
                 .any_syntax_error_with_primary_loc(diag.primary_loc())
         {
+            // do not report multiple diags for the same location (unless they are blocking) to
+            // avoid noise that is likely to confuse the developer trying to localize the problem
+            //
+            // TODO: this check is O(n^2) for n diags - shouldn't be a huge problem but fix if it
+            // becomes one
             return;
         }
 
         let warnings_are_errors = self.flags.warnings_are_errors();
+        // Let the warning filter decide what to do with the diagnostic, and act accordingly.
+        // If the diagnostic is a warning and warnings are errors, set that, too.
         match self.filter_stack.filter(diag, self.known_filter_names) {
             FilterResult::Filtered(d) => self.diags.write().unwrap().add_source_filtered(d),
             FilterResult::Discarded => (),

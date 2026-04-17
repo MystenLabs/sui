@@ -1544,7 +1544,7 @@ fn module_warning_filter(
         context.env().package_config(pkg).is_dependency
     };
     if is_dep {
-        // Check attributes for errors, then drop everything for dependencies.
+        // For dependencyes, check attributes for errors, then drop everything.
         let _ = warning_filter_(context, attributes);
         dependency_drop_filter_scope()
     } else {
@@ -1561,13 +1561,13 @@ fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> F
     let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        add_overrides(
+        add_filter_overrides_(
             &mut overrides,
             Loc::invalid(),
             FilterKind::Allow,
             context.env().filter_from_str(none, FILTER_DEPRECATED),
         );
-        add_overrides(
+        add_filter_overrides_(
             &mut overrides,
             Loc::invalid(),
             FilterKind::Allow,
@@ -1583,7 +1583,7 @@ fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) ->
     let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        add_overrides(
+        add_filter_overrides_(
             &mut overrides,
             Loc::invalid(),
             FilterKind::Allow,
@@ -1597,38 +1597,43 @@ fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> FilterSc
     FilterScope::new(warning_filter_(context, attributes))
 }
 
-fn add_overrides(
-    overrides: &mut BTreeMap<DiagnosticsID, Override>,
-    loc: Loc,
-    kind: FilterKind,
-    ids: Vec<DiagnosticsID>,
-) {
-    for id in ids {
-        overrides.insert(id, sp(loc, Override_ { filter: id, kind }));
-    }
-}
-
 fn warning_filter_(
     context: &Context,
     attributes: &E::Attributes,
 ) -> BTreeMap<DiagnosticsID, Override> {
-    let mut overrides = BTreeMap::new();
-    if let Some(lint_allow) = attributes.get_(&known_attributes::AttributeKind_::LintAllow) {
-        let KnownAttribute::Diagnostic(DiagnosticAttribute::LintAllow { allow_set }) =
-            &lint_allow.value
-        else {
-            context.add_diag(ice!((
-                lint_allow.loc,
-                format!(
-                    "Expected diagnostics based on kind, but found {}",
-                    lint_allow.value.attribute_kind()
-                )
-            )));
-            return BTreeMap::new();
-        };
+    fn unexpected_attribute_ice(context: &Context<'_>, allow: &Spanned<KnownAttribute>) {
+        context.add_diag(ice!((
+            allow.loc,
+            format!(
+                "Expected diagnostics based on kind, but found {}",
+                allow.value.attribute_kind()
+            )
+        )));
+    }
 
+    macro_rules! resolve_attribute_or_ice_return {
+        (($attr_kind:ident, $variant:ident, $set_name:ident)) => {
+            match attributes.get_(&known_attributes::AttributeKind_::$attr_kind) {
+                Some(attr) => {
+                    if let KnownAttribute::Diagnostic(DiagnosticAttribute::$variant { $set_name }) =
+                        &attr.value
+                    {
+                        Some($set_name)
+                    } else {
+                        unexpected_attribute_ice(context, attr);
+                        None
+                    }
+                }
+                None => None,
+            }
+        };
+    }
+
+    let mut overrides = BTreeMap::new();
+
+    if let Some(lint_allow) = resolve_attribute_or_ice_return!((LintAllow, LintAllow, allow_set)) {
         let prefix = Some(DiagnosticAttribute::LINT_SYMBOL);
-        for name in allow_set {
+        for name in lint_allow {
             let filters = context.env().filter_from_str(prefix, name.value);
             if filters.is_empty() {
                 let msg = format!(
@@ -1639,110 +1644,73 @@ fn warning_filter_(
                 context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
                 continue;
             };
-            add_overrides(&mut overrides, Loc::invalid(), FilterKind::Allow, filters);
+            add_filter_overrides_(&mut overrides, Loc::invalid(), FilterKind::Allow, filters);
         }
-    };
+    }
 
-    if let Some(allow) = attributes.get_(&known_attributes::AttributeKind_::Allow) {
-        let KnownAttribute::Diagnostic(DiagnosticAttribute::Allow { allow_set }) = &allow.value
-        else {
-            context.add_diag(ice!((
-                allow.loc,
-                format!(
-                    "Expected diagnostics based on kind, but found {}",
-                    allow.value.attribute_kind()
-                )
-            )));
-            return BTreeMap::new();
-        };
+    if let Some(allow_set) = resolve_attribute_or_ice_return!((Allow, Allow, allow_set)) {
+        add_filter_overrides(context, &mut overrides, FilterKind::Allow, allow_set);
+    }
 
-        for (prefix, name) in allow_set {
+    if let Some(deny_set) = resolve_attribute_or_ice_return!((Deny, Deny, deny_set)) {
+        add_filter_overrides(context, &mut overrides, FilterKind::Deny, deny_set);
+    }
+
+    if let Some(expect_set) = resolve_attribute_or_ice_return!((Expect, Expect, expect_set)) {
+        let mut expect_set = expect_set.clone();
+        expect_set.retain(|(prefix, name)| {
             let prefix = prefix.map(|sym| sym.value);
-            let sp!(name_loc, name) = *name;
-            let filters = context.env().filter_from_str(prefix, name);
-            if filters.is_empty() {
-                let msg = format!(
-                    "Unknown warning filter '{}'",
-                    format_allow_attr(prefix, name)
-                );
-                context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
-                continue;
-            };
-            add_overrides(&mut overrides, Loc::invalid(), FilterKind::Allow, filters);
-        }
-    };
-
-    if let Some(deny) = attributes.get_(&known_attributes::AttributeKind_::Deny) {
-        let KnownAttribute::Diagnostic(DiagnosticAttribute::Deny { deny_set }) = &deny.value else {
-            context.add_diag(ice!((
-                deny.loc,
-                format!(
-                    "Expected diagnostics based on kind, but found {}",
-                    deny.value.attribute_kind()
-                )
-            )));
-            return BTreeMap::new();
-        };
-
-        let attr_loc = deny.loc;
-        for (prefix, name) in deny_set {
-            let prefix = prefix.map(|sym| sym.value);
-            let sp!(name_loc, name) = *name;
-            let filters = context.env().filter_from_str(prefix, name);
-            if filters.is_empty() {
-                let msg = format!(
-                    "Unknown warning filter '{}'",
-                    format_allow_attr(prefix, name)
-                );
-                context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
-                continue;
-            };
-            add_overrides(&mut overrides, attr_loc, FilterKind::Deny, filters);
-        }
-    };
-
-    if let Some(expect) = attributes.get_(&known_attributes::AttributeKind_::Expect) {
-        let KnownAttribute::Diagnostic(DiagnosticAttribute::Expect { expect_set }) = &expect.value
-        else {
-            context.add_diag(ice!((
-                expect.loc,
-                format!(
-                    "Expected diagnostics based on kind, but found {}",
-                    expect.value.attribute_kind()
-                )
-            )));
-            return BTreeMap::new();
-        };
-
-        let attr_loc = expect.loc;
-        for (prefix, name) in expect_set {
-            let prefix = prefix.map(|sym| sym.value);
-            let sp!(name_loc, name) = *name;
-            let filters = context.env().filter_from_str(prefix, name);
-            if filters.is_empty() {
-                let msg = format!(
-                    "Unknown warning filter '{}'",
-                    format_allow_attr(prefix, name)
-                );
-                context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
-                continue;
-            };
-            let has_wildcard = filters.iter().any(|id| {
+            let filters = context.env().filter_from_str(prefix, name.value);
+            let is_wildcard = filters.iter().any(|id| {
                 id.category == DIAGNOSTIC_FILTER_WILDCARD || id.code == DIAGNOSTIC_FILTER_WILDCARD
             });
-            if has_wildcard {
+            if is_wildcard {
                 let msg = format!(
                     "Wildcard filters are not allowed in '#[expect(...)]'. \
                      Use '#[allow({})]' instead",
-                    format_allow_attr(prefix, name)
+                    format_allow_attr(prefix, name.value)
                 );
-                context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
-                continue;
+                context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
             }
-            add_overrides(&mut overrides, attr_loc, FilterKind::Expect, filters);
-        }
-    };
+            !is_wildcard
+        });
+        add_filter_overrides(context, &mut overrides, FilterKind::Expect, &expect_set);
+    }
+
     overrides
+}
+
+fn add_filter_overrides(
+    context: &Context<'_>,
+    overrides: &mut BTreeMap<DiagnosticsID, Spanned<Override_>>,
+    filter_kind: FilterKind,
+    filter_set: &BTreeSet<(Option<Spanned<Symbol>>, Spanned<Symbol>)>,
+) {
+    for (prefix, name) in filter_set {
+        let prefix = prefix.map(|sym| sym.value);
+        let sp!(name_loc, name) = *name;
+        let filters = context.env().filter_from_str(prefix, name);
+        if filters.is_empty() {
+            let msg = format!(
+                "Unknown diagnostic filter '{}'",
+                format_allow_attr(prefix, name)
+            );
+            context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
+            continue;
+        };
+        add_filter_overrides_(overrides, name_loc, filter_kind, filters);
+    }
+}
+
+fn add_filter_overrides_(
+    overrides: &mut BTreeMap<DiagnosticsID, Override>,
+    loc: Loc,
+    kind: FilterKind,
+    ids: Vec<DiagnosticsID>,
+) {
+    for id in ids {
+        overrides.insert(id, sp(loc, Override_ { filter: id, kind }));
+    }
 }
 
 //**************************************************************************************************
