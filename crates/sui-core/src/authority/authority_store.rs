@@ -1006,7 +1006,7 @@ impl AuthorityStore {
                                     // get_total_sui includes storage rebate, however all storage rebate is
                                     // also stored in the storage fund, so we need to subtract it here.
                                     let object_contained_sui = match object
-                                        .get_total_sui(layout_resolver.as_mut())
+                                        .get_total_sui(&mut layout_resolver)
                                     {
                                         Ok(sui) => sui,
                                         Err(e)
@@ -1049,7 +1049,7 @@ impl AuthorityStore {
         for object in pending_objects {
             total_storage_rebate += object.storage_rebate;
             total_sui +=
-                object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
+                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
         }
         info!(
             "Scanned {} live objects, took {:?}",

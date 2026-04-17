@@ -22,6 +22,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::full_checkpoint_content::ObjectSet;
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -684,7 +685,7 @@ impl RpcStateReader for RestReadStore {
     ) -> Result<Option<move_core_types::annotated_value::MoveTypeLayout>> {
         let backing_store = self.state.get_backing_package_store();
         let overlay_store = OverlayBackingPackageStore::new(overlay, backing_store.as_ref());
-            // TODO(cache) - must read through cache
+        // TODO(cache) - must read through cache
         SyncResolver::new(overlay_store)
             .get_annotated_layout(struct_tag)
             .map(|layout| layout.into_layout())
