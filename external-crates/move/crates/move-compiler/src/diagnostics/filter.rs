@@ -391,6 +391,8 @@ impl FilterScope {
 
     /// Emit diagnostics for every `#[expect(...)]` override that was never matched.
     /// Consumes the scope since finalization should only be done once.
+    /// NB: `Copy` could ostensibly let you do this repeatedly times, but that would be a misuse of
+    /// the API and also hopefully deduped by the diagnostic framework.
     pub fn finalize(self) -> Vec<Diagnostic> {
         self.0
             .expects
@@ -508,7 +510,7 @@ fn maybe_add_filter_hint(
 fn mark_expect_fulfilled(scope: &FilterScope, filter: DiagnosticsID) {
     for e in &scope.0.expects {
         if e.filter == filter {
-            e.fulfilled.store(true, Ordering::Relaxed);
+            e.fulfilled.store(true, Ordering::SeqCst);
             return;
         }
     }
