@@ -247,8 +247,8 @@ impl DataStore {
     pub fn new(node: Node, version: &str) -> Result<Self, Error> {
         debug!("Start stores creation");
         let client = reqwest::Client::builder()
-            .connect_timeout(std::time::Duration::from_secs(3))
-            .timeout(std::time::Duration::from_secs(5))
+            .connect_timeout(std::time::Duration::from_secs(15))
+            .timeout(std::time::Duration::from_secs(60))
             .build()?;
         let url = node.gql_url();
         let rpc =
