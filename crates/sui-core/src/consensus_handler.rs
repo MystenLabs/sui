@@ -1256,7 +1256,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     user_transactions,
                 );
 
-            let (should_accept_tx, lock, final_round) = self.handle_eop(
+            let (should_accept_tx, lock, final_round) = self.handle_close_epoch(
                 &mut state,
                 self.epoch_store
                     .protocol_config()
@@ -1316,7 +1316,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 user_transactions,
             );
 
-            let (should_accept_tx, lock, final_round) = self.handle_eop(
+            let (should_accept_tx, lock, final_round) = self.handle_close_epoch(
                 &mut state,
                 self.epoch_store
                     .protocol_config()
@@ -1434,7 +1434,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.send_end_of_publish_if_needed().await;
     }
 
-    fn handle_eop(
+    fn handle_close_epoch(
         &self,
         state: &mut CommitHandlerState,
         timestamp_based_epoch_close: bool,
