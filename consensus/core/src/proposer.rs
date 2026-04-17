@@ -533,7 +533,8 @@ impl Proposer for ValidatorProposer {
                     .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
                     .collect()
             };
-            self.transaction_vote_tracker.get_own_votes(new_causal_history)
+            self.transaction_vote_tracker
+                .get_own_votes(new_causal_history)
         } else {
             vec![]
         };

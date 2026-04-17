@@ -4,8 +4,8 @@
 use std::{sync::Arc, time::Instant};
 
 use consensus_config::{
-    AuthorityIndex, ChainType, Committee, ConsensusProtocolConfig, NetworkKeyPair,
-    NetworkPublicKey, Parameters, ProtocolKeyPair,
+    ChainType, Committee, ConsensusProtocolConfig, NetworkKeyPair, NetworkPublicKey, Parameters,
+    ProtocolKeyPair,
 };
 use consensus_types::block::Round;
 use itertools::Itertools;
@@ -33,6 +33,7 @@ use crate::{
         CommitSyncerClient, NetworkManager, PeerId, SynchronizerClient, tonic_network::TonicManager,
     },
     observer_service::ObserverService,
+    observer_subscriber::ObserverSubscriber,
     round_prober::{RoundProber, RoundProberHandle},
     round_tracker::RoundTracker,
     storage::rocksdb_store::RocksDBStore,
