@@ -1208,17 +1208,10 @@ impl AuthorityPerEpochStore {
             )),
         );
 
-        let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
-            Some(ConsensusTxStatusCache::new(protocol_config.gc_depth()))
-        } else {
-            None
-        };
+        let consensus_tx_status_cache =
+            Some(ConsensusTxStatusCache::new(protocol_config.gc_depth()));
 
-        let tx_reject_reason_cache = if protocol_config.mysticeti_fastpath() {
-            Some(TransactionRejectReasonCache::new(None, epoch_id))
-        } else {
-            None
-        };
+        let tx_reject_reason_cache = Some(TransactionRejectReasonCache::new(None, epoch_id));
 
         let submitted_transaction_cache =
             SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);

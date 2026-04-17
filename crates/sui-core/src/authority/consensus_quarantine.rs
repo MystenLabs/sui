@@ -93,7 +93,7 @@ pub(crate) struct ConsensusCommitOutput {
         Vec<(ExecutionTimeObservationKey, Duration)>,
     )>,
 
-    // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
+    // Owned object locks acquired post-consensus.
     owned_object_locks: HashMap<ObjectRef, LockDetails>,
 
     // True when the checkpoint queue had no pending roots after this commit's flush.

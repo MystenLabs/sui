@@ -646,13 +646,6 @@ impl ValidatorService {
         submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<(RawSubmitTxResponse, Weight)> {
         let epoch_store = state.load_epoch_store_one_call_per_task();
-        if !epoch_store.protocol_config().mysticeti_fastpath() {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "Mysticeti fastpath".to_string(),
-            }
-            .into());
-        }
-
         let submit_type = SubmitTxType::try_from(request.submit_type).map_err(|e| {
             SuiErrorKind::GrpcMessageDeserializeError {
                 type_info: "RawSubmitTxRequest.submit_type".to_string(),

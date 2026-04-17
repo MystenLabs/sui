@@ -2716,9 +2716,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
                 // Transaction has appeared in consensus output, we can increment the submission count
                 // for this tx for DoS protection.
-                if self.epoch_store.protocol_config().mysticeti_fastpath()
-                    && let Some(tx) = parsed.transaction.kind.as_user_transaction()
-                {
+                if let Some(tx) = parsed.transaction.kind.as_user_transaction() {
                     let digest = tx.digest();
                     if let Some((spam_weight, submitter_client_addrs)) = self
                         .epoch_store
@@ -2821,16 +2819,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                         | ConsensusTransactionKind::RandomnessDkgMessage(_, _) => continue,
                         _ => {}
                     }
-                }
-
-                if parsed.transaction.is_user_transaction()
-                    && !self.epoch_store.protocol_config().mysticeti_fastpath()
-                {
-                    debug!(
-                        "Ignoring MFP transaction {:?} because MFP is disabled",
-                        parsed.transaction.key()
-                    );
-                    continue;
                 }
 
                 if let ConsensusTransactionKind::CertifiedTransaction(certificate) =

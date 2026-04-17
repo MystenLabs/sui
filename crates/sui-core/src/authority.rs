@@ -1423,36 +1423,15 @@ impl AuthorityState {
         })
     }
 
-    /// Wait for a transaction to be executed.
-    /// For consensus transactions, it needs to be sequenced by the consensus.
-    /// For owned object transactions, this function will enqueue the transaction for execution.
+    /// Wait for a transaction to be executed. Transactions need to be sequenced by consensus
+    /// before being enqueued for execution.
     ///
     /// Only use this in tests.
     #[instrument(level = "trace", skip_all)]
     pub async fn wait_for_transaction_execution_for_testing(
         &self,
         transaction: &VerifiedExecutableTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> TransactionEffects {
-        if !transaction.is_consensus_tx()
-            && !epoch_store.protocol_config().disable_preconsensus_locking()
-        {
-            // Shared object transactions need to be sequenced by the consensus before enqueueing
-            // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
-            //
-            // For owned object transactions, they can be enqueued for execution immediately
-            // ONLY when disable_preconsensus_locking is false (QD/original fastpath mode).
-            // When disable_preconsensus_locking is true (MFP mode), all transactions including
-            // owned object transactions must go through consensus before enqueuing for execution.
-            self.execution_scheduler.enqueue(
-                vec![(
-                    Schedulable::Transaction(transaction.clone()),
-                    ExecutionEnv::new(),
-                )],
-                epoch_store,
-            );
-        }
-
         self.notify_read_effects_for_testing(
             "AuthorityState::wait_for_transaction_execution_for_testing",
             *transaction.digest(),
