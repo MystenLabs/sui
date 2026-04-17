@@ -393,6 +393,7 @@ impl FilterScope {
     /// Consumes the scope since finalization should only be done once.
     /// NB: `Copy` could ostensibly let you do this repeatedly times, but that would be a misuse of
     /// the API and also hopefully deduped by the diagnostic framework.
+    /// TODO: decide if we want to finalize beyond `to_bytecode` in case compilation fails earlier.
     pub fn finalize(self) -> Vec<Diagnostic> {
         self.0
             .expects
@@ -423,7 +424,13 @@ impl FilterStack {
     }
 
     pub fn push(&mut self, scope: FilterScope) {
-        self.stack.push(scope);
+        if self.stack.contains(&DEPENDENCY_DROP_FILTER_SCOPE) {
+            // If the stack already contains the dependency-drop scope, all diagnostics should be
+            // dropped, so we push an empty scope to preserve that behavior.
+            self.stack.push(*EMPTY_FILTER_SCOPE);
+        } else {
+            self.stack.push(scope);
+        }
     }
 
     pub fn pop(&mut self) {
@@ -441,19 +448,22 @@ impl FilterStack {
     ) -> FilterResult {
         let key = diag.info().id();
 
-        // If this isn't a warning, then filtering doesn't apply: just emit it as-is. This also
-        // prevents us from accidentally adding `#[allow(...)]` hints to errors.
-        if diag.severity() != Severity::Warning {
-            return FilterResult::Emit(diag);
-        }
-
         let Some(resolved) = self.resolve(key) else {
             maybe_add_filter_hint(&mut diag, known_filter_names);
             return FilterResult::Emit(diag);
         };
+
         match resolved.kind {
+            // If we resolved to `Drop`, we discard the diagnostic immediately regardless, since
+            // the intent is to suppress it entirely even from filtered diagnostics tooling.
+            FilterKind::Drop => FilterResult::Discarded,
+            // For everything else, we only apply the filter if it's a warning or less, since it
+            // doesn't make sense to allow/expect/deny actual error/bug diagnostics.
+            _ if diag.severity() > Severity::Warning => FilterResult::Emit(diag),
             FilterKind::Allow => FilterResult::Filtered(diag),
             FilterKind::Deny => {
+                // Was warning, now a nonblocking error.
+                diag = diag.set_severity(Severity::NonblockingError);
                 if resolved.loc != Loc::invalid() {
                     diag.add_secondary_label((resolved.loc, "the lint level is defined here"));
                 }
@@ -463,7 +473,6 @@ impl FilterStack {
                 mark_expect_fulfilled(resolved.scope, resolved.filter);
                 FilterResult::Discarded
             }
-            FilterKind::Drop => FilterResult::Discarded,
         }
     }
 
