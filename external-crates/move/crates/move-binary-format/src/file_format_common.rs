@@ -367,7 +367,6 @@ pub enum Opcodes {
     MOVE_TO_GENERIC_DEPRECATED              = 0x3F,
 }
 
-
 /// Upper limit on the binary size
 pub const BINARY_SIZE_LIMIT: usize = usize::MAX;
 

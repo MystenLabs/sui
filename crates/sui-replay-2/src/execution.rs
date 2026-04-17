@@ -141,8 +141,7 @@ pub fn execute_transaction_to_effects(
     // Keeps the per-tx hooks paired even if the code below returns early
     // (e.g. the "created object not found" check) or panics inside the
     // executor.
-    let _profile_guard =
-        crate::profiling::ProfileGuard::enter(profile_mode, &profile_sink, digest);
+    let _profile_guard = crate::profiling::ProfileGuard::enter(profile_mode, &profile_sink, digest);
 
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor

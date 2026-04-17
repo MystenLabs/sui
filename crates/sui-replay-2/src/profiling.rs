@@ -198,7 +198,11 @@ impl Drop for ProfileGuard<'_> {
 fn dump_file_base() -> Option<&'static Path> {
     static CACHED: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
     CACHED
-        .get_or_init(|| std::env::var(MOVE_VM_DUMP_PROFILE_FILE_ENV).ok().map(PathBuf::from))
+        .get_or_init(|| {
+            std::env::var(MOVE_VM_DUMP_PROFILE_FILE_ENV)
+                .ok()
+                .map(PathBuf::from)
+        })
         .as_deref()
 }
 
@@ -283,10 +287,7 @@ mod tests {
         // No parent directory in the input — output is just a filename.
         let digest = TransactionDigest::ZERO;
         let result = per_tx_path(Path::new("profile.json"), &digest);
-        assert_eq!(
-            result.to_string_lossy(),
-            format!("profile.{}.json", digest)
-        );
+        assert_eq!(result.to_string_lossy(), format!("profile.{}.json", digest));
     }
 
     #[test]
@@ -378,12 +379,8 @@ mod tests {
         let digest = TransactionDigest::ZERO;
 
         // Helper that takes the guard, then early-returns.
-        fn maybe_fail(
-            exec: &RecordingSink,
-            digest: TransactionDigest,
-        ) -> Result<(), &'static str> {
-            let _g =
-                ProfileGuard::enter(BytecodeProfileMode::PerTransaction, exec, digest);
+        fn maybe_fail(exec: &RecordingSink, digest: TransactionDigest) -> Result<(), &'static str> {
+            let _g = ProfileGuard::enter(BytecodeProfileMode::PerTransaction, exec, digest);
             // Pretend the executor or post-checks errored.
             Err("simulated failure")
         }
