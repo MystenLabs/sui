@@ -6,7 +6,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use arc_swap::ArcSwap;
 use consensus_core::BlockStatus;
 use consensus_types::block::BlockRef;
 use parking_lot::Mutex;
@@ -362,7 +361,6 @@ where
         execution_scheduler_sender,
         consensus_adapter,
         authority.get_object_cache_reader().clone(),
-        Arc::new(ArcSwap::default()),
         consensus_committee,
         metrics,
         Arc::new(throughput_calculator),

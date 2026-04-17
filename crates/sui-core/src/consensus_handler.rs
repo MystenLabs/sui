@@ -9,7 +9,6 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CommitConsumerMonitor, CommitIndex, CommitRef};
 use consensus_types::block::TransactionIndex;
@@ -107,7 +106,6 @@ pub struct ConsensusHandlerInitializer {
     checkpoint_service: Arc<CheckpointService>,
     epoch_store: Arc<AuthorityPerEpochStore>,
     consensus_adapter: Arc<ConsensusAdapter>,
-    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     throughput_calculator: Arc<ConsensusThroughputCalculator>,
     backpressure_manager: Arc<BackpressureManager>,
     congestion_logger: Option<Arc<Mutex<CongestionCommitLogger>>>,
@@ -120,7 +118,6 @@ impl ConsensusHandlerInitializer {
         checkpoint_service: Arc<CheckpointService>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Arc<ConsensusAdapter>,
-        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
         backpressure_manager: Arc<BackpressureManager>,
         congestion_log_config: Option<CongestionLogConfig>,
@@ -139,7 +136,6 @@ impl ConsensusHandlerInitializer {
             checkpoint_service,
             epoch_store,
             consensus_adapter,
-            low_scoring_authorities,
             throughput_calculator,
             backpressure_manager,
             congestion_logger,
@@ -164,7 +160,6 @@ impl ConsensusHandlerInitializer {
             checkpoint_service,
             epoch_store: state.epoch_store_for_testing().clone(),
             consensus_adapter,
-            low_scoring_authorities: Arc::new(Default::default()),
             throughput_calculator: Arc::new(ConsensusThroughputCalculator::new(
                 None,
                 state.metrics.clone(),
@@ -189,7 +184,6 @@ impl ConsensusHandlerInitializer {
             settlement_scheduler,
             self.consensus_adapter.clone(),
             self.state.get_object_cache_reader().clone(),
-            self.low_scoring_authorities.clone(),
             consensus_committee,
             self.state.metrics.clone(),
             self.throughput_calculator.clone(),
@@ -801,8 +795,6 @@ pub struct ConsensusHandler<C> {
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
     cache_reader: Arc<dyn ObjectCacheRead>,
-    /// Reputation scores used by consensus adapter that we update, forwarded from consensus
-    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The consensus committee used to do stake computations for deciding set of low scoring authorities
     committee: ConsensusCommittee,
     // TODO: ConsensusHandler doesn't really share metrics with AuthorityState. We could define
@@ -840,7 +832,6 @@ impl<C> ConsensusHandler<C> {
         settlement_scheduler: SettlementScheduler,
         consensus_adapter: Arc<ConsensusAdapter>,
         cache_reader: Arc<dyn ObjectCacheRead>,
-        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
@@ -900,7 +891,6 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats,
             checkpoint_service,
             cache_reader,
-            low_scoring_authorities,
             committee,
             metrics,
             processed_cache: LruCache::new(
@@ -938,7 +928,6 @@ impl<C> ConsensusHandler<C> {
         execution_scheduler_sender: ExecutionSchedulerSender,
         consensus_adapter: Arc<ConsensusAdapter>,
         cache_reader: Arc<dyn ObjectCacheRead>,
-        low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
         throughput_calculator: Arc<ConsensusThroughputCalculator>,
@@ -963,7 +952,6 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats,
             checkpoint_service,
             cache_reader,
-            low_scoring_authorities,
             committee,
             metrics,
             processed_cache: LruCache::new(
@@ -1162,8 +1150,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transaction_index: 0_u64,
         };
 
+        // Return value (the map of low-scoring authorities) is unused in production —
+        // the call is kept for its per-authority score metrics and the count gauge side effects.
         update_low_scoring_authorities(
-            self.low_scoring_authorities.clone(),
             self.epoch_store.committee(),
             &self.committee,
             consensus_commit.reputation_score_sorted_desc(),
@@ -3745,7 +3734,6 @@ mod tests {
             settlement_scheduler,
             consensus_adapter,
             state.get_object_cache_reader().clone(),
-            Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,
             Arc::new(throughput_calculator),
@@ -4010,7 +3998,6 @@ mod tests {
             settlement_scheduler,
             consensus_adapter,
             state.get_object_cache_reader().clone(),
-            Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,
             Arc::new(throughput),
@@ -4136,7 +4123,6 @@ mod tests {
             settlement_scheduler,
             consensus_adapter,
             state.get_object_cache_reader().clone(),
-            Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,
             Arc::new(throughput),

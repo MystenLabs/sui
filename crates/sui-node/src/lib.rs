@@ -1356,9 +1356,6 @@ impl SuiNode {
             checkpoint_metrics.clone(),
         );
 
-        // Scoring map written by the consensus handler and consumed for scoring metrics only.
-        let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
-
         if epoch_store.randomness_state_enabled() {
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
@@ -1393,7 +1390,6 @@ impl SuiNode {
             checkpoint_service.clone(),
             epoch_store.clone(),
             consensus_adapter.clone(),
-            low_scoring_authorities,
             throughput_calculator,
             backpressure_manager,
             config.congestion_log.clone(),

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::{collections::HashMap, sync::Arc};
 
-use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
 use sui_types::{
     base_types::AuthorityName, committee::Committee, messages_consensus::AuthorityIndex,
@@ -11,39 +10,32 @@ use tracing::debug;
 
 use crate::authority::AuthorityMetrics;
 
-/// Updates list of authorities that are deemed to have low reputation scores by consensus
-/// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
-/// The algorithm is flagging as low scoring authorities all the validators that have the lowest scores
-/// up to the defined protocol_config.consensus_bad_nodes_stake_threshold. This is done to align the
-/// submission side with the consensus leader election schedule. Practically we don't want to submit
-/// transactions for sequencing to validators that have low scores and are not part of the leader
-/// schedule since the chances of getting them sequenced are lower.
+/// Identify the authorities deemed to have low reputation scores by consensus — lagging behind,
+/// byzantine, or not reliably participating. Flags authorities with the lowest scores up to
+/// `consensus_bad_nodes_stake_threshold` (percent of total stake). Emits per-authority score
+/// metrics and a count gauge. The returned map is surfaced for tests.
 pub(crate) fn update_low_scoring_authorities(
-    low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     sui_committee: &Committee,
     consensus_committee: &ConsensusCommittee,
     reputation_score_sorted_desc: Option<Vec<(AuthorityIndex, u64)>>,
     metrics: &Arc<AuthorityMetrics>,
     consensus_bad_nodes_stake_threshold: u64,
-) {
+) -> HashMap<AuthorityName, u64> {
     assert!(
         (0..=33).contains(&consensus_bad_nodes_stake_threshold),
         "The bad_nodes_stake_threshold should be in range [0 - 33], out of bounds parameter detected {}",
         consensus_bad_nodes_stake_threshold
     );
 
+    let mut final_low_scoring_map = HashMap::new();
     let Some(reputation_scores) = reputation_score_sorted_desc else {
-        return;
+        return final_low_scoring_map;
     };
 
-    // We order the authorities by score ascending order in the exact same way as the reputation
-    // scores do - so we keep complete alignment between implementations
-    let scores_per_authority_order_asc: Vec<_> = reputation_scores
-        .into_iter()
-        .rev() // we reverse so we get them in asc order
-        .collect();
+    // Iterate authorities by score ascending (reverse of the supplied descending order) so the
+    // stake budget fills starting from the worst-scoring validators.
+    let scores_per_authority_order_asc = reputation_scores.into_iter().rev();
 
-    let mut final_low_scoring_map = HashMap::new();
     let mut total_stake = 0;
     for (index, score) in scores_per_authority_order_asc {
         let authority_name = sui_committee.authority_by_index(index).unwrap();
@@ -76,19 +68,17 @@ pub(crate) fn update_low_scoring_authorities(
                 .set(score as i64);
         }
     }
-    // Report the actual flagged final low scoring authorities
     metrics
         .consensus_handler_num_low_scoring_authorities
         .set(final_low_scoring_map.len() as i64);
-    low_scoring_authorities.swap(Arc::new(final_low_scoring_map));
+    final_low_scoring_map
 }
 
 #[cfg(test)]
 mod tests {
     #![allow(clippy::mutable_key_type)]
-    use std::{collections::HashMap, sync::Arc};
+    use std::sync::Arc;
 
-    use arc_swap::ArcSwap;
     use consensus_config::{Committee as ConsensusCommittee, local_committee_and_keys};
     use prometheus::Registry;
     use sui_types::{committee::Committee, crypto::AuthorityPublicKeyBytes};
@@ -102,7 +92,6 @@ mod tests {
         // Total stake is 8 for this committee and every authority has equal stake = 1
         let (sui_committee, consensus_committee) = generate_committees(8);
 
-        let low_scoring = Arc::new(ArcSwap::from_pointee(HashMap::new()));
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
 
         // there is a low outlier in the non zero scores, exclude it as well as down nodes
@@ -120,8 +109,7 @@ mod tests {
         // WHEN
         let consensus_bad_nodes_stake_threshold = 33; // 33 * 8 / 100 = 2 low scoring validator
 
-        update_low_scoring_authorities(
-            low_scoring.clone(),
+        let low_scoring = update_low_scoring_authorities(
             &sui_committee,
             &consensus_committee,
             Some(authorities_by_score_desc.clone()),
@@ -130,10 +118,9 @@ mod tests {
         );
 
         // THEN
-        assert_eq!(low_scoring.load().len(), 2);
+        assert_eq!(low_scoring.len(), 2);
         assert_eq!(
             *low_scoring
-                .load()
                 // authority 2 is 2nd to the last in authorities_by_score_desc
                 .get(sui_committee.authority_by_index(2).unwrap())
                 .unwrap(),
@@ -141,7 +128,6 @@ mod tests {
         );
         assert_eq!(
             *low_scoring
-                .load()
                 // authority 4 is the last in authorities_by_score_desc
                 .get(sui_committee.authority_by_index(4).unwrap())
                 .unwrap(),
@@ -150,8 +136,7 @@ mod tests {
 
         // WHEN setting the threshold to lower
         let consensus_bad_nodes_stake_threshold = 20; // 20 * 8 / 100 = 1 low scoring validator
-        update_low_scoring_authorities(
-            low_scoring.clone(),
+        let low_scoring = update_low_scoring_authorities(
             &sui_committee,
             &consensus_committee,
             Some(authorities_by_score_desc.clone()),
@@ -160,10 +145,9 @@ mod tests {
         );
 
         // THEN
-        assert_eq!(low_scoring.load().len(), 1);
+        assert_eq!(low_scoring.len(), 1);
         assert_eq!(
             *low_scoring
-                .load()
                 .get(sui_committee.authority_by_index(4).unwrap())
                 .unwrap(),
             0
