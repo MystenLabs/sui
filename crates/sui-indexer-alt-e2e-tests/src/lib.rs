@@ -427,15 +427,6 @@ impl OffchainCluster {
             ..Default::default()
         };
 
-        let jsonrpc_kv_args = KvArgs {
-            ledger_grpc_url: Some(
-                format!("http://{kv_rpc_address}")
-                    .parse()
-                    .expect("Failed to parse kv-rpc URI"),
-            ),
-            ..Default::default()
-        };
-
         let jsonrpc = start_jsonrpc(
             Some(database_url.clone()),
             DbArgs::default(),
