@@ -577,8 +577,10 @@ impl ConsensusAdapter {
         }
         debug!("{transaction_keys:?} processed by consensus");
 
-        let is_user_tx = transactions[0].is_user_transaction();
-        if is_user_tx && epoch_store.should_send_end_of_publish() {
+        // After a user transaction or soft bundle submission,
+        // send EndOfPublish if the epoch is closing.
+        // EndOfPublish can also be sent during consensus commit handling, checkpoint execution and recovery.
+        if transactions[0].is_user_transaction() && epoch_store.should_send_end_of_publish() {
             // sending message outside of any locks scope
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),
