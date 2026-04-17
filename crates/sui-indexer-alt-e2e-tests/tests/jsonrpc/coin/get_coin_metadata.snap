@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 19 tasks
 
@@ -209,7 +208,7 @@ Response: {
     "symbol": "REAL",
     "description": "A coin that is real",
     "iconUrl": "https://real.com",
-    "id": "0x8274e4184f157dc1b89ac1d76e28b9baed9be8ee28fe76a34c3501031287d0e5"
+    "id": "0x2cef583566e8952f16b80a645bb90318aaebc683c79e9ff01733fe533f201b7d"
   }
 }
 
@@ -224,7 +223,7 @@ Response: {
     "symbol": "FAKE",
     "description": "A coin that is fake",
     "iconUrl": "https://fake.com",
-    "id": "0x6e8a3c64dec1d08ef6bb52234d477b4599bf77f6b113ee0830009be6c740adf9"
+    "id": "0x12d87dcf93977dc2aedf49c894dea2f55dadd2e91beb562f06eda007ecf79340"
   }
 }
 
@@ -268,7 +267,7 @@ Response: {
     "symbol": "REAL",
     "description": "A coin that is real",
     "iconUrl": "https://real.com",
-    "id": "0x8274e4184f157dc1b89ac1d76e28b9baed9be8ee28fe76a34c3501031287d0e5"
+    "id": "0x2cef583566e8952f16b80a645bb90318aaebc683c79e9ff01733fe533f201b7d"
   }
 }
 
@@ -292,7 +291,7 @@ Response: {
     "symbol": "REAL",
     "description": "A coin that is real",
     "iconUrl": "https://real.com",
-    "id": "0x8274e4184f157dc1b89ac1d76e28b9baed9be8ee28fe76a34c3501031287d0e5"
+    "id": "0x2cef583566e8952f16b80a645bb90318aaebc683c79e9ff01733fe533f201b7d"
   }
 }
 

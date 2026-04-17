@@ -40,7 +40,7 @@ task 7, lines 23-51:
 Response: {
   "data": {
     "nonAuthenticatorTransaction": {
-      "digest": "BPyhxFqZp8GeCwbDK7qh2piMzG5va5etCGuZYq8BUesW",
+      "digest": "DLiijQ4Jwm4yWE8X5pMCFi7NKUGdd36qXZKLXh5fSyqg",
       "kind": {
         "__typename": "ProgrammableTransaction"
       }

@@ -48,7 +48,7 @@ Response: {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::bag::Bag"
               },
               "json": {
-                "id": "0x59885da24318a178c15897bd2e1086b49c473c3aa61436a8c2197e50882c9d1b",
+                "id": "0xb17a6f21d9b349dc43cc731bb1e268926e0cd9d95c95540bd81694a9f8a4122a",
                 "size": "1"
               }
             }
@@ -70,7 +70,7 @@ Response: {
                 "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
               },
               "json": {
-                "id": "0xf616814098fb7a3be3ad67179e37e6b071cfe72ad70dcd44ae79456daddb9833",
+                "id": "0xb8896b0b4f69f4d8beb78c26918743199ba8c847d381a0ae26a46ea647578101",
                 "balance": "1"
               }
             }
@@ -88,7 +88,7 @@ Response: {
     "node": {
       "id": "AQAAAAAAAAAA",
       "sequenceNumber": 0,
-      "digest": "6cronpZMrLFsLQY6vJ2JmmzXivRwaNN8C9wCXZWhgdGN"
+      "digest": "CKjFRsvNLMhfTKYRc67g1tY5KjYkzrTRo9yu4rhW9nr1"
     }
   }
 }
@@ -98,7 +98,7 @@ task 7, lines 48-62:
 Response: {
   "data": {
     "node": {
-      "id": "Ajn1BRegnrr/hOib/L1MwExb2diCFyRjA/Woplbe6hHA",
+      "id": "AobaTNgsXsZ7et/Zt0r1K9ZglWMIsusAqgPnSn8F7kwC",
       "name": {
         "type": {
           "repr": "u64"
@@ -213,8 +213,8 @@ task 12, lines 130-141:
 Response: {
   "data": {
     "node": {
-      "id": "CiBNG/lNa9WSFOsqoYrPKbkuLQpggIhinAB+iVyzNNldng==",
-      "digest": "6C18iBWhDB6yN1HkrKPhfJUFphinX3YfEAHANX8JksQy",
+      "id": "CiB5N6eerCfhgmAdi4CiK46J6H8M/77weZ4aCNfaJcY/UA==",
+      "digest": "9ABZ4a3uTspziirMPscrkYw99KhLjEKzFE5E6UXVUDCj",
       "effects": {
         "status": "SUCCESS"
       }
