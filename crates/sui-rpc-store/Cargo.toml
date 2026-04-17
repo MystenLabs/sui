@@ -23,11 +23,10 @@ roaring.workspace = true
 rocksdb = { version = "0.22.0", default-features = false, features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"] }
 serde.workspace = true
 sui-consistent-store.workspace = true
-sui-execution.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
 sui-inverted-index.workspace = true
-sui-protocol-config.workspace = true
+sui-package-resolver.workspace = true
 sui-types.workspace = true
 tokio = { workspace = true, features = ["time", "rt"] }
 tracing.workspace = true
