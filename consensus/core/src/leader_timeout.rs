@@ -110,6 +110,13 @@ impl<D: CoreThreadDispatcher> LeaderTimeoutTask<D> {
                     max_leader_timeout
                     .as_mut()
                     .reset(now + self.leader_timeout);
+
+                    // In the simulator's single-threaded cooperative runtime, the
+                    // tight leader-timeout → new-block → new-round → reset cycle can
+                    // starve other tasks (e.g. network message delivery). Yield to
+                    // allow the runtime to process them between consensus rounds.
+                    #[cfg(msim)]
+                    tokio::task::yield_now().await;
                 },
                 _ = &mut self.stop => {
                     debug!("Stop signal has been received, now shutting down");
