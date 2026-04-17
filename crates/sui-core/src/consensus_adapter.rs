@@ -44,7 +44,6 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_handler::{SequencedConsensusTransactionKey, classify};
 use crate::epoch::reconfiguration::{ReconfigState, ReconfigurationInitiator};
-use crate::metrics::LatencyObserver;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -198,7 +197,6 @@ pub struct ConsensusAdapter {
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to consensus
     submit_semaphore: Arc<Semaphore>,
-    latency_observer: LatencyObserver,
 }
 
 impl ConsensusAdapter {
@@ -220,7 +218,6 @@ impl ConsensusAdapter {
             num_inflight_transactions,
             metrics,
             submit_semaphore: Arc::new(Semaphore::new(max_pending_local_submissions)),
-            latency_observer: LatencyObserver::new(),
         }
     }
 
@@ -877,17 +874,6 @@ impl Drop for InflightDropGuard<'_> {
             .sequencing_certificate_latency
             .with_label_values(&[submitted, self.tx_type, processed_method])
             .observe(latency.as_secs_f64());
-
-        // Sample consensus latency for tx types that require a healthy quorum, and only
-        // when this validator actually submitted and observed sequencing (avoids
-        // distortion from start-of-epoch waits and checkpoint state sync).
-        let sampled = matches!(
-            self.tx_type,
-            "shared_certificate" | "owned_certificate" | "checkpoint_signature" | "soft_bundle"
-        );
-        if self.submitted && sampled && self.processed_method == ProcessedMethod::Consensus {
-            self.adapter.latency_observer.report(latency);
-        }
     }
 }
 
