@@ -113,6 +113,28 @@ The value that is returned can be interacted with just like any other value. For
 
 A transaction that attempts to remove a non-existent field, or a field with a different `Value` type, fails.
 
+### Checking field existence and optional removal
+
+To check whether a dynamic field exists before accessing it, use `sui::dynamic_field::exists`:
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="exists" noComments />
+
+To remove a field that may or may not be present (returning an `Option`), use `sui::dynamic_field::remove_opt`:
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="remove_opt" noComments />
+
+`sui::dynamic_object_field` provides equivalent `exists` and `remove_opt` functions for object fields.
+
+:::warning
+
+`sui::dynamic_field::exists_` is deprecated; use `sui::dynamic_field::exists` instead.
+
+`sui::dynamic_field::remove_if_exists` is deprecated; use `sui::dynamic_field::remove_opt` instead.
+
+The same applies to the equivalent `sui::dynamic_object_field` functions: `exists_` is deprecated in favor of `exists`, and `remove_opt` has been added as the preferred way to optionally remove an object field.
+
+:::
+
 ## Deleting an object with dynamic fields
 
 It is possible to delete an object that has (potentially non-`drop`) dynamic fields still defined on it. Because field values can be accessed only through the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for onchain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
