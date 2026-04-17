@@ -208,6 +208,7 @@ impl FullnodeClient {
         resp.command_outputs
             .iter()
             .map(|output| {
+                // At success, expect every command to guarantee a u64 returned
                 let bcs_rewards = output
                     .return_values
                     .first()
@@ -274,6 +275,8 @@ impl FullnodeClient {
         resp.command_outputs
             .iter()
             .map(|output| {
+                // Both active and inactive validators are checked, so on success expect every
+                // command to have a return address
                 let bcs_address = output
                     .return_values
                     .first()
@@ -284,6 +287,15 @@ impl FullnodeClient {
                     .map_err(|e| Error::Internal(anyhow!("Failed to deserialize address: {e}")))
             })
             .collect()
+    }
+}
+
+impl From<Error> for crate::error::Error {
+    fn from(e: Error) -> Self {
+        match e {
+            Error::Internal(err) => err.into(),
+            Error::GrpcExecutionError(status) => status.into(),
+        }
     }
 }
 

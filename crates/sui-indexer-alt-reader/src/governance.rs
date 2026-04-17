@@ -23,10 +23,7 @@ impl Loader<RewardsKey> for FullnodeClient {
 
     async fn load(&self, keys: &[RewardsKey]) -> Result<HashMap<RewardsKey, u64>, Self::Error> {
         let ids: Vec<Address> = keys.iter().map(|k| k.0).collect();
-        let results = self
-            .calculate_rewards(&ids)
-            .await
-            .map_err(fullnode_loader_error)?;
+        let results = self.calculate_rewards(&ids).await?;
         Ok(keys
             .iter()
             .zip(results)
@@ -45,25 +42,11 @@ impl Loader<ValidatorAddressKey> for FullnodeClient {
         keys: &[ValidatorAddressKey],
     ) -> Result<HashMap<ValidatorAddressKey, Address>, Self::Error> {
         let ids: Vec<Address> = keys.iter().map(|k| k.0).collect();
-        let results = self
-            .get_validator_address_by_pool_id(&ids)
-            .await
-            .map_err(fullnode_loader_error)?;
+        let results = self.get_validator_address_by_pool_id(&ids).await?;
         Ok(keys
             .iter()
             .zip(results)
             .map(|(k, addr)| (k.clone(), addr))
             .collect())
-    }
-}
-
-fn fullnode_loader_error(e: crate::fullnode_client::Error) -> Error {
-    use crate::fullnode_client::Error as FCError;
-    match e {
-        FCError::NotConfigured => {
-            anyhow!("Fullnode client not configured for governance queries").into()
-        }
-        FCError::GrpcExecutionError(status) => status.into(),
-        FCError::Internal(err) => err.into(),
     }
 }
