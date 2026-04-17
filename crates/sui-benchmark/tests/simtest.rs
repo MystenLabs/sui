@@ -1744,12 +1744,14 @@ mod test {
             return;
         }
 
-        let target = SuiAddress::random_for_testing_only();
+        let targets: Vec<SuiAddress> = (0..4)
+            .map(|_| SuiAddress::random_for_testing_only())
+            .collect();
         let metrics = Arc::new(Mutex::new(
             sui_benchmark::workloads::addr_bal_deposit::AddrBalDepositMetrics::default(),
         ));
         let config = sui_benchmark::workloads::addr_bal_deposit::AddrBalDepositConfig {
-            target_addresses: vec![target],
+            target_addresses: targets.clone(),
             deposit_amount: 1000,
             seed_amount: 100_000 * sui_types::gas_coin::MIST_PER_SUI,
             metrics: Some(metrics.clone()),
@@ -1837,17 +1839,18 @@ mod test {
             tracing::info!("end of test {:?}", benchmark_stats);
             assert!(benchmark_stats.num_error_txes < 100);
 
-            // Verify the target address actually received deposits by querying
-            // its address balance.
-            let target_balance = query_proxy
-                .get_sui_address_balance(target)
-                .await
-                .unwrap_or(0);
-            tracing::info!("target address balance: {} MIST", target_balance,);
-            assert!(
-                target_balance > 0,
-                "target address should have received deposits, but balance is 0",
-            );
+            // Verify all target addresses received deposits.
+            for (i, target) in targets.iter().enumerate() {
+                let target_balance = query_proxy
+                    .get_sui_address_balance(*target)
+                    .await
+                    .unwrap_or(0);
+                tracing::info!("target address {i} balance: {target_balance} MIST",);
+                assert!(
+                    target_balance > 0,
+                    "target address {i} should have received deposits, but balance is 0",
+                );
+            }
         });
 
         bench_task.await.unwrap();
