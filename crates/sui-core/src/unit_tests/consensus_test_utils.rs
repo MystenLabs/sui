@@ -27,8 +27,7 @@ use crate::authority::backpressure::BackpressureManager;
 use crate::authority::shared_object_version_manager::Schedulable;
 use crate::authority::{AuthorityMetrics, AuthorityState, ExecutionEnv};
 use crate::consensus_adapter::{
-    BlockStatusReceiver, ConnectionMonitorStatusForTests, ConsensusAdapter,
-    ConsensusAdapterMetrics, ConsensusClient,
+    BlockStatusReceiver, ConsensusAdapter, ConsensusAdapterMetrics, ConsensusClient,
 };
 use crate::consensus_handler::{
     ConsensusHandler, ExecutionSchedulerSender, SequencedConsensusTransaction,
@@ -304,7 +303,6 @@ pub fn make_consensus_adapter_for_test(
             ))
         }
     }
-    let epoch_store = state.epoch_store_for_testing();
     // Make a new consensus adapter instance.
     Arc::new(ConsensusAdapter::new(
         Arc::new(SubmitDirectly {
@@ -315,13 +313,9 @@ pub fn make_consensus_adapter_for_test(
         }),
         state.checkpoint_store.clone(),
         state.name,
-        Arc::new(ConnectionMonitorStatusForTests {}),
         100_000,
         100_000,
-        None,
-        None,
         metrics,
-        epoch_store.protocol_config().clone(),
     ))
 }
 

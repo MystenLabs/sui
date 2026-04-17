@@ -619,23 +619,6 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn new_mysticeti_certificate(
-        round: u64,
-        offset: u64,
-        certificate: CertifiedTransaction,
-    ) -> Self {
-        let mut hasher = DefaultHasher::new();
-        let tx_digest = certificate.digest();
-        tx_digest.hash(&mut hasher);
-        round.hash(&mut hasher);
-        offset.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
-        }
-    }
-
     pub fn new_jwk_fetched(authority: AuthorityName, id: JwkId, jwk: JWK) -> Self {
         let mut hasher = DefaultHasher::new();
         id.hash(&mut hasher);

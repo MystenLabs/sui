@@ -64,7 +64,6 @@ use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, info, instrument};
 
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
@@ -141,13 +140,9 @@ impl AuthorityServer {
             Arc::new(LazyMysticetiClient::new()),
             CheckpointStore::new_for_tests(),
             state.name,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            state.epoch_store_for_testing().protocol_config().clone(),
         ));
         Self::new_for_test_with_consensus_adapter(state, consensus_adapter)
     }
