@@ -497,12 +497,12 @@ impl<S: PackageStore> Resolver<S> {
                 // This error is unexpected because a `StructTag` should always resolve to either a
                 // struct or enum layout, and if it doesn't, it likely means there is a bug in the
                 // resolver logic.
-                return Err(Error::UnexpectedError(Arc::new(partial_vm_error!(
+                Err(Error::UnexpectedError(Arc::new(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "StructTag {:#?} did not resolve to a struct or enum layout: {:#?}",
                     struct_tag,
                     layout
-                ))));
+                ))))
             }
         }
     }
@@ -772,12 +772,12 @@ impl<S: SyncPackageStore> SyncResolver<S> {
                 // This error is unexpected because a `StructTag` should always resolve to either a
                 // struct or enum layout, and if it doesn't, it likely means there is a bug in the
                 // resolver logic.
-                return Err(Error::UnexpectedError(Arc::new(partial_vm_error!(
+                Err(Error::UnexpectedError(Arc::new(partial_vm_error!(
                     UNKNOWN_INVARIANT_VIOLATION_ERROR,
                     "StructTag {:#?} did not resolve to a struct or enum layout: {:#?}",
                     struct_tag,
                     layout
-                ))));
+                ))))
             }
         }
     }
