@@ -49,6 +49,7 @@ sui-framework.workspace = true
 sui-node = { workspace = true, features = ["testing"] }
 sui-macros.workspace = true
 sui-network.workspace = true
+sui-package-resolver.workspace = true
 sui-simulator.workspace = true
 sui-storage.workspace = true
 mysten-metrics.workspace = true
