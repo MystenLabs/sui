@@ -1198,7 +1198,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             &commit_info,
             &consensus_commit,
         );
-        // Buffer owned object locks for batch write when preconsensus locking is disabled
+        // Buffer owned object locks for batch write.
         if !owned_object_locks.is_empty() {
             state.output.set_owned_object_locks(owned_object_locks);
         }
@@ -2679,8 +2679,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     // Filters out rejected or deprecated transactions.
-    // Returns FilteredConsensusOutput containing transactions and owned_object_locks
-    // (collected when preconsensus locking is disabled).
+    // Returns FilteredConsensusOutput containing transactions and owned_object_locks.
     #[instrument(level = "trace", skip_all)]
     fn filter_consensus_txns(
         &mut self,
@@ -2768,7 +2767,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .consensus_handler_transaction_sizes
                     .with_label_values(&[kind])
                     .observe(parsed.serialized_len as f64);
-                // UserTransaction exists only when mysticeti_fastpath is enabled in protocol config.
                 if matches!(
                     &parsed.transaction.kind,
                     ConsensusTransactionKind::CertifiedTransaction(_)
@@ -2872,9 +2870,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     }
                 }
 
-                // When preconsensus locking is disabled, perform post-consensus owned object
-                // conflict detection. If lock acquisition fails, the transaction has
-                // invalid/conflicting owned inputs and should be dropped.
+                // Perform post-consensus owned object conflict detection. If lock acquisition
+                // fails, the transaction has invalid/conflicting owned inputs and should be dropped.
                 // This must happen AFTER all filtering checks above to avoid acquiring locks
                 // for transactions that will be dropped (e.g., during epoch change).
                 // Only applies to UserTransactionV2 - other transaction types don't need lock acquisition.

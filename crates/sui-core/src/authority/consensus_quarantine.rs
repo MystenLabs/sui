@@ -893,7 +893,6 @@ impl ConsensusOutputQuarantine {
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
-    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
     /// After crash recovery, quarantine is empty so we naturally fall back to DB.
     pub(super) fn get_owned_object_locks(
         &self,

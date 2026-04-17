@@ -2085,7 +2085,6 @@ impl AuthorityPerEpochStore {
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
-    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
     /// After crash recovery, quarantine is empty so we naturally fall back to DB.
     pub fn get_owned_object_locks(
         &self,
@@ -2098,7 +2097,6 @@ impl AuthorityPerEpochStore {
     }
 
     /// Attempts to acquire owned object locks for a transaction post-consensus.
-    /// This is used when preconsensus locking is disabled.
     ///
     /// Checks whether the object versions are already locked by searching:
     /// 1. The current commit
