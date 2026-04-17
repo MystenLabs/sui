@@ -14,7 +14,11 @@ Walrus is a decentralized storage and data availability protocol built specifica
 
 ### Blob storage
 
-Walrus stores data as blobs, which are arbitrary binary objects. All blobs stored on Walrus are public and discoverable by anyone. You must not use Walrus to store secrets or private data without additional measures to protect confidentiality. For securing data before upload, see [Data encryption](#data-encryption).
+Walrus stores data as blobs, which are arbitrary binary objects. All blobs stored on Walrus are public and discoverable by anyone.
+
+:::caution
+Do not use Walrus to store secrets or private data without additional measures to protect confidentiality. See [Data encryption](#data-encryption) for how to encrypt content before upload.
+:::
 
 Walrus uses [erasure coding](https://docs.wal.app/docs/system-overview) to distribute encoded parts of each blob across all [storage nodes](https://docs.wal.app/docs/operator-guide/storage-nodes), maintaining storage costs at approximately 5 times the size of the original blob. This is significantly more cost-efficient than full replication and more resilient than partial replication.
 
@@ -39,7 +43,7 @@ The [upload relay](https://docs.wal.app/operator-guide/upload-relay.html) is a s
 
 ### Publisher
 
-A [publisher](https://docs.wal.app/docs/operator-guide/aggregator) is an HTTP server that accepts blob data over a REST API and handles the entire Walrus write flow on your behalf. Publishers are the most direct way to integrate uploads in server-side applications without using the TS SDK.
+A [publisher](https://docs.wal.app/docs/operator-guide/aggregator) is an HTTP server that accepts blob data over a REST API and handles the entire Walrus write flow on your behalf. Publishers are the most direct way to integrate uploads in server-side applications without using the TypeScript SDK (TS SDK).
 
 For production environments, use the `send-object-to` parameter when uploading through a publisher. This instructs the publisher to transfer the resulting blob object to a specified Sui address after upload, so you retain ownership of blobs stored through a shared publisher.
 
@@ -62,7 +66,7 @@ For most apps, publishers and aggregators are the recommended integration path b
 
 ## Tooling
 
-Two tools cover most Walrus integration scenarios.
+2 tools cover most Walrus integration scenarios.
 
 ### CLI
 
@@ -98,6 +102,10 @@ const client = new SuiGrpcClient({
 
 The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the single source of truth for all SDK patterns, options, and examples.
 
+:::info
+Some code examples in this guide use `SuiClient` from `@mysten/sui/client` rather than `SuiGrpcClient` from `@mysten/sui/grpc`. `SuiGrpcClient` is the recommended transport for new integrations. All Walrus SDK and transaction APIs are identical regardless of which client you use. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
+:::
+
 For React apps, wrap your component tree with a context provider that initializes the client once and makes it available throughout the app. The `WalrusProvider` from [quack-intelligence](https://github.com/StefPler/quack-intelligence) shows this pattern using `SuiGrpcClient`:
 
 <ImportContent
@@ -112,9 +120,9 @@ For React apps, wrap your component tree with a context provider that initialize
 
 There are 2 primary ways to upload data to Walrus: using the CLI directly, or using the TS SDK programmatically. The TS SDK offers 2 upload APIs: `writeBlob` for raw blobs, and the `WalrusFile` API which stores files efficiently by grouping them together.
 
-### Using the TS SDK with a Signer
+### Using the TS SDK with a `Signer`
 
-Use `writeBlob` with a `Signer` instance for server-side uploads where a backend script or job controls the wallet. The Walrus Onboarding Module 07 provides two clean examples: a direct upload and an upload through the relay. Both use the `$extend(walrus())` pattern:
+Use `writeBlob` with a `Signer` instance for server-side uploads where a backend script or job controls the wallet. The Walrus Onboarding Module 07 provides 2 clean examples: a direct upload and an upload through the relay. Both use the `$extend(walrus())` pattern:
 
 <ImportContent
   source="07-Walrus-SDK-upload-relay/hands-on-source-code/src/examples/basic-upload-example.ts"
@@ -125,7 +133,7 @@ Use `writeBlob` with a `Signer` instance for server-side uploads where a backend
   fun="uploadBlob"
 />
 
-To reduce the number of requests from ~2,200 to a single relay request, configure the upload relay when extending the client:
+To reduce the number of requests from approximately 2,200 to a single relay request, configure the upload relay when extending the client:
 
 <ImportContent
   source="07-Walrus-SDK-upload-relay/hands-on-source-code/src/examples/basic-upload-example.ts"
@@ -135,10 +143,6 @@ To reduce the number of requests from ~2,200 to a single relay request, configur
   language="ts"
   fun="uploadWithRelay"
 />
-
-:::info
-These examples use `SuiClient` from `@mysten/sui/client`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The Walrus SDK setup and `writeBlob` API are identical regardless of which client you use. The same note applies to the `downloadWithErrorHandling` example later in this guide, which is from the same module. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
-:::
 
 In OnlyFins, the signer pattern appears in the post registration step. After uploading images with the CLI and recording the blob IDs, `createPosts.ts` uses a `Keypair` signer to build and execute a [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) that registers each post onchain with its blob ID. The signer setup in `config.ts` shows the pattern for loading `Ed25519Keypair` instances from environment variables:
 
@@ -162,10 +166,6 @@ With signers configured, `createPosts.ts` builds a PTB that calls `posts::create
   fun="main"
 />
 
-:::info
-`createPosts.ts` uses `SuiClient` from `@mysten/sui/client`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The `Transaction` building and `signAndExecuteTransaction` patterns are identical regardless of which client you use. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
-:::
-
 ### Using the TS SDK with user wallets
 
 When uploads are signed by a user wallet in a browser, wallets use popups that browsers block if they are not opened in direct response to a user interaction. The `writeFilesFlow` method breaks the upload into discrete steps, each triggered by a separate user action.
@@ -178,7 +178,7 @@ The flow has 5 steps:
 4. `certify`: Return a transaction that certifies the blob onchain.
 5. `listFiles`: Return the list of created files.
 
-There is currently no example of this pattern in OnlyFins. Two external references cover it: [relay.wal.app](https://relay.wal.app/) is a deployed demo with an open-sourced repository that shows a complete production-ready browser upload flow. The [`write-from-wallet`](https://github.com/MystenLabs/ts-sdks/tree/main/packages/walrus/examples/write-from-wallet) example in the TS SDK repo is a more concise undeployed version. Both use `writeFilesFlow` with `@mysten/dapp-kit-react`.
+There is currently no example of this pattern in OnlyFins. 2 external references cover it: [relay.wal.app](https://relay.wal.app/) is a deployed demo with an open-sourced repository that shows a complete production-ready browser upload flow. The [`write-from-wallet`](https://github.com/MystenLabs/ts-sdks/tree/main/packages/walrus/examples/write-from-wallet) example in the TS SDK repo is a more concise undeployed version. Both use `writeFilesFlow` with `@mysten/dapp-kit-react`.
 
 The `walrus.service.ts` in [quack-intelligence](https://github.com/StefPler/quack-intelligence) shows both a single-blob browser upload flow and a batch browser upload flow using `writeBlobFlow` and `writeFilesFlow` from a standalone `WalrusClient`:
 
@@ -212,17 +212,13 @@ When uploading multiple files together, use `writeFiles` with `WalrusFile.from()
   language="ts"
 />
 
-:::info
-This example uses `SuiClient` from `@mysten/sui/client`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The `writeFiles` API and `WalrusFile.from()` patterns are identical regardless of which client you use. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
-:::
-
 ## Reading data
 
 Reading assumes you know the ID of the data you want to retrieve. In OnlyFins, blob IDs are stored as fields on `Post` Sui objects and discovered by querying the blockchain. For how to discover blobs you own dynamically, see [Querying blobs](#querying-blobs).
 
 ### Finding the blobs you want to read
 
-In OnlyFins, the `Feed` component fetches a known set of post object IDs from Sui using `useSuiClientQuery` with `multiGetObjects`. This is the same pattern you would use to fetch any Sui object by ID:
+In OnlyFins, the `Feed` component fetches a known set of post object IDs from Sui using `useSuiClientQuery` with `multiGetObjects`. This is the same pattern you use to fetch any Sui object by ID:
 
 <ImportContent
   source="frontend/src/components/Feed.tsx"
@@ -258,9 +254,9 @@ The `attributes.ts` example in the TS SDK shows all three operations in one scri
   language="ts"
 />
 
-### Using the WalrusFile API
+### Using the `WalrusFile` API
 
-The `WalrusFile` API is the recommended way to read Walrus data with the TS SDK. The `getFiles` method accepts both individual blob IDs and IDs of batches stored together, and returns `WalrusFile` instances that work like `Response` objects from the `fetch` API. Reading files in batches is more efficient when loading multiple files that were stored together because the client can optimize requests.
+The `WalrusFile` API is the recommended way to read Walrus data with the TS SDK. The `getFiles` method accepts both individual blob IDs and IDs of batches stored together, and returns `WalrusFile` instances that work like `Response` objects from the `fetch` API. Reading files in batches is more efficient when loading multiple files that are stored together because the client can optimize requests.
 
 The Walrus Onboarding Module 11 shows how to retrieve files by identifier:
 
@@ -271,10 +267,6 @@ The Walrus Onboarding Module 11 shows how to retrieve files by identifier:
   repo="Walrus-Onboarding"
   language="ts"
 />
-
-:::info
-This example uses `SuiClient` from `@mysten/sui/client`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The `getBlob` and `blob.files()` patterns are identical regardless of which client you use. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
-:::
 
 The `quack-intelligence` service layer shows how to read a single file including its content-type tag and identifier:
 
@@ -325,7 +317,7 @@ Because blobs are Sui objects, you manage them using the same tools and patterns
 
 Blobs can be owned by individual wallet addresses or wrapped in other Sui objects. Querying personally owned blobs is done exactly like querying any owned Sui object type, using `getOwnedObjects` with a `StructType` filter on the Walrus blob type.
 
-OnlyFins queries a fixed hardcoded list of post objects rather than dynamically discovering blobs by owner. Adding a view that displays all blobs owned by the connected wallet can be done by deploying a version of [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit)'s `react-client-dapp` starter with an object type filter added to the owned-objects query. The result would look like this:
+OnlyFins queries a fixed hardcoded list of post objects rather than dynamically discovering blobs by owner. Adding a view that displays all blobs owned by the connected wallet can be done by deploying a version of [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit)'s `react-client-dapp` starter with an object type filter added to the owned-objects query. The result looks like this:
 
 ```ts
 const { data } = useSuiClientQuery('getOwnedObjects', {
