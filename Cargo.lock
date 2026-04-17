@@ -1062,6 +1062,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7992085ec035cfe96992dd31bfd495a2ebd31969bb95f624471cb6c0b349e571"
 
 [[package]]
+name = "ar_archive_writer"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7eb93bbb63b9c227414f6eb3a0adfddca591a8ce1e9b60661bb08969b87e340b"
+dependencies = [
+ "object 0.37.3",
+]
+
+[[package]]
 name = "arbitrary"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2563,7 +2572,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide 0.7.1",
- "object",
+ "object 0.32.2",
  "rustc-demangle",
 ]
 
@@ -8522,7 +8531,6 @@ dependencies = [
  "codespan-reporting",
  "crossbeam",
  "dunce",
- "futures",
  "im",
  "itertools 0.10.5",
  "json_comments",
@@ -8541,8 +8549,6 @@ dependencies = [
  "strum 0.27.1",
  "strum_macros 0.27.1",
  "sysinfo",
- "tempfile",
- "tokio",
  "url",
  "vfs",
 ]
@@ -8702,7 +8708,6 @@ dependencies = [
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-utils",
- "move-bytecode-verifier",
  "move-bytecode-viewer",
  "move-command-line-common",
  "move-compiler",
@@ -8732,7 +8737,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "treeline",
  "walkdir",
 ]
 
@@ -8796,7 +8800,6 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "bcs",
- "enum-compat-util",
  "ethnum",
  "hex",
  "indexmap 2.8.0",
@@ -8809,7 +8812,6 @@ dependencies = [
  "rand 0.8.5",
  "ref-cast",
  "serde",
- "serde_bytes",
  "serde_with",
  "thiserror 1.0.69",
  "uint 0.9.5",
@@ -8845,23 +8847,15 @@ name = "move-decompiler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bcs",
- "clap",
  "indexmap 2.8.0",
- "move-abstract-interpreter",
  "move-binary-format",
  "move-command-line-common",
  "move-core-types",
- "move-disassembler",
- "move-ir-types",
- "move-model",
  "move-model-2",
  "move-package-alt",
  "move-package-alt-compilation",
- "move-stackless-bytecode",
  "move-stackless-bytecode-2",
  "move-symbol-pool",
- "move-vm-runtime",
  "petgraph 0.8.1",
  "pretty_simple",
  "tempfile",
@@ -8872,7 +8866,6 @@ name = "move-disassembler"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bcs",
  "clap",
  "hex",
  "inline_colorization",
@@ -8894,16 +8887,13 @@ dependencies = [
  "anyhow",
  "clap",
  "codespan",
- "codespan-reporting",
  "itertools 0.10.5",
- "log",
  "move-binary-format",
  "move-compiler",
  "move-core-types",
  "move-ir-types",
  "move-model-2",
  "move-symbol-pool",
- "num",
  "regex",
  "serde",
 ]
@@ -8983,7 +8973,6 @@ dependencies = [
  "move-ir-types",
  "move-symbol-pool",
  "num",
- "regex",
  "serde",
 ]
 
@@ -8992,22 +8981,15 @@ name = "move-model-2"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bcs",
- "codespan",
- "codespan-reporting",
  "indexmap 2.8.0",
  "move-binary-format",
  "move-bytecode-source-map",
- "move-command-line-common",
  "move-compiler",
  "move-core-types",
- "move-disassembler",
  "move-ir-types",
  "move-symbol-pool",
- "num",
  "pretty_simple",
  "serde",
- "vfs",
 ]
 
 [[package]]
@@ -9031,8 +9013,6 @@ dependencies = [
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
- "move-symbol-pool",
- "named-lock",
  "path-clean",
  "petgraph 0.8.1",
  "pretty_assertions",
@@ -9049,7 +9029,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "walkdir",
- "whoami",
 ]
 
 [[package]]
@@ -9071,7 +9050,6 @@ dependencies = [
  "move-model-2",
  "move-package-alt",
  "move-symbol-pool",
- "petgraph 0.8.1",
  "serde",
  "serde_yaml 0.8.26",
  "toml_edit 0.22.24",
@@ -9093,12 +9071,9 @@ name = "move-regex-borrow-graph"
 version = "0.0.1"
 dependencies = [
  "indexmap 2.8.0",
- "insta",
- "itertools 0.10.5",
  "move-binary-format",
  "move-command-line-common",
  "move-core-types",
- "petgraph 0.8.1",
  "proptest",
 ]
 
@@ -9127,23 +9102,16 @@ name = "move-stackless-bytecode-2"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bcs",
- "clap",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-command-line-common",
  "move-core-types",
- "move-disassembler",
- "move-ir-types",
- "move-model",
  "move-model-2",
  "move-package-alt",
  "move-package-alt-compilation",
  "move-stackless-bytecode",
  "move-symbol-pool",
- "move-vm-runtime",
  "tempfile",
- "tokio",
 ]
 
 [[package]]
@@ -9152,15 +9120,11 @@ version = "0.1.1"
 dependencies = [
  "anyhow",
  "hex",
- "log",
- "move-binary-format",
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
  "move-package-alt",
  "move-package-alt-compilation",
- "move-vm-runtime",
- "sha2 0.9.9",
  "tokio",
  "walkdir",
 ]
@@ -9257,13 +9221,11 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-compiler",
- "move-ir-types",
  "move-regex-borrow-graph",
  "move-stdlib",
  "move-symbol-pool",
  "move-vm-config",
  "move-vm-runtime",
- "rayon",
  "regex",
  "serde_json",
  "tempfile",
@@ -9276,20 +9238,14 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "better_any",
  "clap",
- "codespan-reporting",
  "colored",
- "itertools 0.10.5",
  "move-binary-format",
- "move-bytecode-utils",
  "move-command-line-common",
  "move-compiler",
  "move-core-types",
  "move-ir-types",
- "move-model",
  "move-stdlib",
- "move-symbol-pool",
  "move-trace-format",
  "move-vm-config",
  "move-vm-runtime",
@@ -9337,9 +9293,7 @@ dependencies = [
  "move-core-types",
  "move-trace-format",
  "move-vm-config",
- "move-vm-profiler",
  "parking_lot 0.11.2",
- "petgraph 0.8.1",
  "quick_cache",
  "serde",
  "sha2 0.9.9",
@@ -9456,7 +9410,6 @@ dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
- "move-vm-profiler",
  "serde",
  "smallvec",
 ]
@@ -9674,20 +9627,6 @@ name = "naive-timer"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "034a0ad7deebf0c2abcf2435950a6666c3c15ea9d8fad0c0f48efa8a7f843fed"
-
-[[package]]
-name = "named-lock"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40a3eb6b7c682b65d1f631ec3176829d72ab450b3aacdd3f719bf220822e59ac"
-dependencies = [
- "libc",
- "once_cell",
- "parking_lot 0.12.3",
- "thiserror 1.0.69",
- "widestring",
- "winapi",
-]
 
 [[package]]
 name = "neptune"
@@ -10164,6 +10103,15 @@ name = "object"
 version = "0.32.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6a622008b6e321afc04970976f62ee297fdbaa6f95318ca343e3eebb9648441"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "object"
+version = "0.37.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
 dependencies = [
  "memchr",
 ]
@@ -11497,10 +11445,11 @@ dependencies = [
 
 [[package]]
 name = "psm"
-version = "0.1.21"
+version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5787f7cda34e3033a72192c018bc5883100330f362ef279a8cbccfce8bb4e874"
+checksum = "3852766467df634d74f0b2d7819bf8dc483a0eb2e3b0f50f756f9cfe8b0d18d8"
 dependencies = [
+ "ar_archive_writer",
  "cc",
 ]
 
@@ -12964,15 +12913,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_bytes"
-version = "0.11.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "416bda436f9aab92e02c8e10d49a15ddd339cea90b6e340fe51ed97abb548294"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde_core"
 version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13581,15 +13521,15 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "stacker"
-version = "0.1.15"
+version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c886bd4480155fd3ef527d45e9ac8dd7118a898a46530b7b94c3e21866259fce"
+checksum = "08d74a23609d509411d10e2176dc2a4346e3b4aea2e7b1869f19fdedbc71c013"
 dependencies = [
  "cc",
  "cfg-if",
  "libc",
  "psm",
- "winapi",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -18804,12 +18744,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "treeline"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7f741b240f1a48843f9b8e0444fb55fb2a4ff67293b50a9179dfd5ea67f8d41"
-
-[[package]]
 name = "triomphe"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19666,12 +19600,6 @@ dependencies = [
  "wasite",
  "web-sys",
 ]
-
-[[package]]
-name = "widestring"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17882f045410753661207383517a6f62ec3dbeb6a4ed2acce01f0728238d1983"
 
 [[package]]
 name = "winapi"

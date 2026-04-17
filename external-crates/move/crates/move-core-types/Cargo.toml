@@ -17,13 +17,11 @@ proptest-derive = { workspace = true, optional = true }
 rand.workspace = true
 ref-cast.workspace = true
 serde.workspace = true
-serde_bytes.workspace = true
 primitive-types.workspace = true
 uint.workspace = true
 num.workspace = true
 ethnum.workspace = true
 arbitrary = { workspace = true, optional = true }
-enum-compat-util.workspace = true
 move-proc-macros.workspace = true
 bcs.workspace = true
 leb128.workspace = true
@@ -32,6 +30,7 @@ serde_with.workspace = true
 indexmap.workspace = true
 
 [dev-dependencies]
+enum-compat-util.workspace = true
 proptest.workspace = true
 proptest-derive.workspace = true
 regex.workspace = true

@@ -15,10 +15,7 @@ move-ir-types.workspace = true
 move-symbol-pool.workspace = true
 
 codespan.workspace = true
-codespan-reporting.workspace = true
 itertools.workspace = true
-log.workspace = true
-num.workspace = true
 regex.workspace = true
 anyhow.workspace = true
 serde.workspace = true
