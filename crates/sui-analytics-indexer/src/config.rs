@@ -115,6 +115,7 @@ pub struct SequentialLayer {
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
     pub processor_channel_size: Option<usize>,
+    pub pipeline_depth: Option<usize>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -183,6 +184,7 @@ impl SequentialLayer {
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
+            pipeline_depth: self.pipeline_depth.or(base.pipeline_depth),
         }
     }
 }

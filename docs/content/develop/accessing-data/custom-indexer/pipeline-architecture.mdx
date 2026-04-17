@@ -214,32 +214,29 @@ Sequential pipelines provide a more straightforward yet powerful architecture fo
 
 ### Architecture overview
 
-The sequential pipeline consists of only two main components, making it significantly less complex than the concurrent pipeline's six-component architecture.
+The sequential pipeline is significantly simpler than the concurrent pipeline's six-component architecture: it has a `Processor`, a `Collector`, and a `Committer`.
 
 ![Sequential pipeline diagram](../images/sequential.png)
 
 The `Broadcaster` and `Processor` components use identical backpressure mechanisms, adaptive parallel processing, and `processor()` implementations to the concurrent pipeline. The `Processor` component is described in detail in the [Common pipeline components](#processor) section.
 
-The key difference is the dramatically simplified pipeline core with just a single `Committer` component that handles ordering, batching, and database commits. Concurrent pipelines, in contrast, have five separate components in addition to the `Processor`: `Collector`, `Committer`, `CommitterWatermark`, `ReaderWatermark`, and `Pruner`.
+The `Collector` orders out-of-order checkpoints, assembles them into batches via your `batch()` logic, and hands those batches to the `Committer`, which writes them to the database in strict checkpoint order via your `commit()` logic. The two stages run as independent tasks connected by a bounded channel (`pipeline_depth`), so the `Collector` can prepare the next batch while the `Committer` flushes the current one. Concurrent pipelines share the same `Collector` + `Committer` split but additionally have `CommitterWatermark`, `ReaderWatermark`, and `Pruner` components — none of which are required in the sequential pipeline because commits and watermark updates happen in a single transaction and there is no pruning.
 
 ### Sequential pipeline components {#sequential-components}
 
-Sequential pipelines have one pipeline-specific component in addition to the shared [Processor](#processor), the [`Committer`](#seq-committer).
+Sequential pipelines have two pipeline-specific components in addition to the shared [Processor](#processor): the [`Collector`](#seq-collector) and the [`Committer`](#seq-committer).
 
-#### `Committer` {#seq-committer}
+#### `Collector` {#seq-collector}
 
-The sequential `Committer` is the main component of the pipeline and your main customization point. At a high level, the `Committer` performs the following actions:
-
-1. **Receives** out-of-order processed data from the processor.
-1. **Orders** the data by checkpoint sequence.
-1. **Batches** multiple checkpoints together using your logic.
-1. **Commits** the batch to the database atomically.
-
-To customize, your code uses two key functions that the committer calls:
+The sequential `Collector` receives out-of-order processed data from the `Processor`, orders it by checkpoint sequence, and assembles batches using your `batch()` logic. A batch is dispatched when either `collect_interval_ms` elapses or `MIN_EAGER_ROWS` have accumulated and the next expected checkpoint has arrived. The `Collector` is also responsible for bounding how many checkpoints contribute to a single batch (`MAX_BATCH_CHECKPOINTS`).
 
 `batch()`: Data merging logic.
 
 <ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs" mode="code" fun="batch" noComments />
+
+#### `Committer` {#seq-committer}
+
+The sequential `Committer` receives fully-assembled batches from the `Collector` and writes them to the database one at a time (strict ordering is required so that watermarks advance monotonically). Each commit runs inside a single transaction that includes both the row updates and the watermark update, so commits and watermark advances are atomic. On commit failure, the `Committer` retries the same batch under exponential backoff.
 
 `commit()`: Database write logic.
 
@@ -256,9 +253,10 @@ Sequential pipelines use two layers of backpressure to prevent memory overflow a
 Sequential pipelines use the same bounded-channel backpressure model as concurrent pipelines:
 
 - **Broadcaster → Processor:** bounded channel with `subscriber_channel_size` slots. Send blocks when full, and the broadcaster's adaptive controller reads the channel's `len / capacity` and cuts ingest concurrency as the subscriber falls behind.
-- **Processor → Committer:** `processor_channel_size` slots (defaults to `num_cpus / 2`). Drives the processor's adaptive `fanout` controller.
+- **Processor → Collector:** `processor_channel_size` slots (defaults to `num_cpus / 2`). Drives the processor's adaptive `fanout` controller.
+- **Collector → Committer:** `pipeline_depth` slots (defaults to `max(num_cpus / 2, 4)`). Lets the collector stage the next batch while the committer flushes the current one. When full, the collector blocks on send.
 
-Downstream pressure propagates backward: the committer slows, the processor-to-committer channel fills and collapses `fanout` to the minimum, the broadcaster-to-processor channel then fills and the broadcaster cuts `ingest_concurrency`. The committer itself holds an unbounded in-memory buffer of pending checkpoints so that out-of-order arrivals can still form a contiguous prefix to commit.
+Downstream pressure propagates backward: the committer slows, the collector-to-committer channel fills, the collector stops draining its reorder buffer, the processor-to-collector channel fills and collapses `fanout` to the minimum, and finally the broadcaster-to-processor channel fills and the broadcaster cuts `ingest_concurrency`. The collector itself holds an unbounded in-memory buffer of pending checkpoints so that out-of-order arrivals can still form a contiguous prefix to commit.
 
 ### Performance tuning
 
@@ -290,6 +288,7 @@ let config = SequentialConfig {
     min_eager_rows: None,
     max_batch_checkpoints: None,
     processor_channel_size: None, // defaults to num_cpus / 2
+    pipeline_depth: None,         // defaults to max(num_cpus / 2, 4)
 
     // Per-pipeline overrides for the ingestion layer's defaults.
     ingestion: pipeline::IngestionConfig {
@@ -301,9 +300,10 @@ let config = SequentialConfig {
 
 - `collect_interval_ms`: Higher values allow more checkpoints per batch, improving efficiency.
 - `write_concurrency`: Not applicable to sequential pipelines (always single-threaded writes).
-- `fanout`: By default, processor concurrency is adaptive: it starts at 1 and scales up to the number of CPUs based on downstream channel pressure. The controller monitors the fill fraction of the processor-to-committer channel and adjusts concurrency using a dead band between 60% and 85% fill. You can override this with fixed concurrency (`ConcurrencyConfig::Fixed`) or customize the adaptive bounds (`ConcurrencyConfig::Adaptive`). The default max of `num_cpus` assumes your processor is CPU-bound. If your processor performs IO (for example, fetching data from an external service), you might want a higher max. The adaptive controller also exposes a `dead_band` parameter to override the fill-fraction thresholds, but the defaults should work well for most workloads.
+- `fanout`: By default, processor concurrency is adaptive: it starts at 1 and scales up to the number of CPUs based on downstream channel pressure. The controller monitors the fill fraction of the processor-to-collector channel and adjusts concurrency using a dead band between 60% and 85% fill. You can override this with fixed concurrency (`ConcurrencyConfig::Fixed`) or customize the adaptive bounds (`ConcurrencyConfig::Adaptive`). The default max of `num_cpus` assumes your processor is CPU-bound. If your processor performs IO (for example, fetching data from an external service), you might want a higher max. The adaptive controller also exposes a `dead_band` parameter to override the fill-fraction thresholds, but the defaults should work well for most workloads.
 - `ingestion.subscriber_channel_size`: Capacity of the bounded broadcaster-to-processor channel. Defaults to `max(num_cpus / 2, 4)` when `None`. A pipeline that occasionally sees bursts can raise its own capacity, but note that a larger value makes this pipeline appear "less full" to the shared controller, so it triggers throttling later than its peers.
-- `processor_channel_size`: Controls the size of the channel between the processor and the committer. Defaults to `num_cpus / 2`. This channel is also the signal that drives the adaptive concurrency controller.
+- `processor_channel_size`: Controls the size of the channel between the processor and the collector. Defaults to `num_cpus / 2`. This channel is also the signal that drives the adaptive concurrency controller.
+- `pipeline_depth`: Controls the size of the channel between the collector and the committer. Defaults to `max(num_cpus / 2, 4)`. Larger values let the collector stay further ahead of a slow committer (absorbing bursts); `1` means one batch can be staged while another is committing.
 
 ## Concurrent pipeline architecture {#concurrent-pipeline-architecture}
 
