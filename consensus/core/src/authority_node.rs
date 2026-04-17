@@ -274,7 +274,6 @@ where
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -615,7 +614,6 @@ mod tests {
                         );
                     }
                 }
-                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
                 if expected_transactions.is_empty() {
                     break;
                 }
@@ -715,7 +713,6 @@ mod tests {
                         );
                     }
                 }
-                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
                 if expected_transactions.is_empty() {
                     break;
                 }

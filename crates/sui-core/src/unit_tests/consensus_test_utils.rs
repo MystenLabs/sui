@@ -85,10 +85,6 @@ impl ConsensusCommitAPI for TestConsensusCommit {
         consensus_core::CommitRef::default()
     }
 
-    fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-        None
-    }
-
     fn leader_round(&self) -> u64 {
         self.round
     }

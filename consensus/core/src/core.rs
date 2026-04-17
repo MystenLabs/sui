@@ -1488,7 +1488,6 @@ impl CoreTextFixture {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -1611,7 +1610,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -1745,7 +1743,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -1856,7 +1853,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -2079,7 +2075,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -2238,7 +2233,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -2331,7 +2325,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -2685,7 +2678,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -2981,7 +2973,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -3074,7 +3065,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 
@@ -3519,7 +3509,6 @@ mod test {
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
 

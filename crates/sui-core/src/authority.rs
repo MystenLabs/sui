@@ -327,8 +327,6 @@ pub struct AuthorityMetrics {
     /// Consensus commit and transaction handler metrics
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_transaction_sizes: HistogramVec,
-    pub consensus_handler_num_low_scoring_authorities: IntGauge,
-    pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
@@ -651,17 +649,6 @@ impl AuthorityMetrics {
                 &["class"],
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry
-            ).unwrap(),
-            consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
-                "consensus_handler_num_low_scoring_authorities",
-                "Number of low scoring authorities based on reputation scores from consensus",
-                registry
-            ).unwrap(),
-            consensus_handler_scores: register_int_gauge_vec_with_registry!(
-                "consensus_handler_scores",
-                "scores from consensus for each authority",
-                &["authority"],
-                registry,
             ).unwrap(),
             consensus_handler_deferred_transactions: register_int_counter_with_registry!(
                 "consensus_handler_deferred_transactions",

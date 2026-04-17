@@ -90,7 +90,6 @@ use crate::{
     execution_scheduler::{SettlementBatchInfo, SettlementScheduler},
     gasless_rate_limiter::ConsensusGaslessCounter,
     post_consensus_tx_reorder::PostConsensusTxReorder,
-    scoring_decision::update_low_scoring_authorities_metrics,
     traffic_controller::{TrafficController, policies::TrafficTally},
 };
 
@@ -1149,16 +1148,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             sub_dag_index: commit_sub_dag_index,
             transaction_index: 0_u64,
         };
-
-        update_low_scoring_authorities_metrics(
-            self.epoch_store.committee(),
-            &self.committee,
-            consensus_commit.reputation_score_sorted_desc(),
-            &self.metrics,
-            self.epoch_store
-                .protocol_config()
-                .consensus_bad_nodes_stake_threshold(),
-        );
 
         self.metrics
             .consensus_committed_subdags
