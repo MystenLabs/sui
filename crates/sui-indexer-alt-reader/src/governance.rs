@@ -3,8 +3,8 @@
 
 use std::collections::HashMap;
 
-use anyhow::anyhow;
 use async_graphql::dataloader::Loader;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_sdk_types::Address;
 
 use crate::error::Error;
@@ -26,7 +26,7 @@ impl Loader<RewardsKey> for FullnodeClient {
         let results = self.calculate_rewards(&ids).await?;
         Ok(keys
             .iter()
-            .zip(results)
+            .zip_debug_eq(results)
             .map(|(k, reward)| (k.clone(), reward))
             .collect())
     }
@@ -45,7 +45,7 @@ impl Loader<ValidatorAddressKey> for FullnodeClient {
         let results = self.get_validator_address_by_pool_id(&ids).await?;
         Ok(keys
             .iter()
-            .zip(results)
+            .zip_debug_eq(results)
             .map(|(k, addr)| (k.clone(), addr))
             .collect())
     }
