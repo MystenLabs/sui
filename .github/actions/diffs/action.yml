@@ -49,6 +49,14 @@ runs:
           - '.github/workflows/cargo-llvm-cov.yml'
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
+          # Build-environment workflows: changes here affect how Rust code is
+          # compiled/linked (mold, sccache keys, RUSTFLAGS). Including them
+          # ensures a build-env change triggers the Rust test suite so we
+          # catch binary-level regressions (e.g. linker-induced SIGSEGV)
+          # pre-merge rather than post-merge.
+          - '.github/workflows/sccache-warmup.yml'
+          - '.github/workflows/release.yml'
+          - '.github/actions/setup-sccache/**'
           - 'Cargo.lock'
           - 'Cargo.toml'
           - 'deny.toml'
