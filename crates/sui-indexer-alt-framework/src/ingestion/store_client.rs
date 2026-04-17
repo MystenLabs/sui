@@ -54,7 +54,10 @@ impl StoreIngestionClient {
     /// Fetch and decode checkpoint data by sequence number.
     pub async fn checkpoint(&self, checkpoint: u64) -> anyhow::Result<Checkpoint> {
         let bytes = self.checkpoint_bytes(checkpoint).await?;
-        Ok(decode::checkpoint(&bytes)?)
+        let decoded = tokio::task::spawn_blocking(move || decode::checkpoint(&bytes))
+            .await
+            .context("decode task panicked")??;
+        Ok(decoded)
     }
 
     async fn checkpoint_bytes(&self, checkpoint: u64) -> object_store::Result<Bytes> {
@@ -109,7 +112,10 @@ impl IngestionClientTrait for StoreIngestionClient {
         if let Some(counter) = &self.total_ingested_bytes {
             counter.inc_by(bytes.len() as u64);
         }
-        decode::checkpoint(&bytes).map_err(CheckpointError::Decode)
+        tokio::task::spawn_blocking(move || decode::checkpoint(&bytes))
+            .await
+            .map_err(|e| CheckpointError::Fetch(anyhow::anyhow!("decode task panicked: {e}")))?
+            .map_err(CheckpointError::Decode)
     }
 
     async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {

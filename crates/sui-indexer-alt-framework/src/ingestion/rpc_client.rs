@@ -56,8 +56,12 @@ impl IngestionClientTrait for RpcClient {
         // `ByteCountMakeCallbackHandler` request layer attached in
         // `IngestionClient::with_grpc`, so it does not need to be tracked here.
         let response = response.into_inner();
-        Checkpoint::try_from(response.checkpoint())
-            .map_err(|e| CheckpointError::Decode(ProtoConversion(e)))
+        tokio::task::spawn_blocking(move || {
+            Checkpoint::try_from(response.checkpoint())
+                .map_err(|e| CheckpointError::Decode(ProtoConversion(e)))
+        })
+        .await
+        .map_err(|e| CheckpointError::Fetch(anyhow!("decode task panicked: {e}")))?
     }
 
     async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
