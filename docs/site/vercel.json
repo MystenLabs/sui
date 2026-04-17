@@ -2581,6 +2581,21 @@
       "permanent": true
     },
     {
+      "source": "/concepts/transactions/prog-txn-blocks",
+      "destination": "/develop/transactions/ptbs/prog-txn-blocks",
+      "permanent": true
+    },
+    {
+      "source": "/concepts/cryptography/zklogin",
+      "destination": "/sui-stack/zklogin-integration/zklogin",
+      "permanent": true
+    },
+    {
+      "source": "/onchain-finance/deepbook",
+      "destination": "/onchain-finance/deepbookv3/deepbook",
+      "permanent": true
+    },
+    {
       "source": "/concepts/data-access/indexer-runtime-perf",
       "destination": "/develop/accessing-data/custom-indexer/indexer-runtime-perf",
       "permanent": true
