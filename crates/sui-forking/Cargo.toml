@@ -32,7 +32,6 @@ sui-swarm-config.workspace = true
 sui-types.workspace = true
 
 [dev-dependencies]
-axum.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 wiremock.workspace = true

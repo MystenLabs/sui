@@ -15108,7 +15108,6 @@ name = "sui-forking"
 version = "1.71.0"
 dependencies = [
  "anyhow",
- "axum 0.8.3",
  "bcs",
  "bin-version",
  "chrono",

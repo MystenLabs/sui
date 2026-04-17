@@ -383,10 +383,19 @@ impl DataStore {
             .write_transaction_checkpoint(digest, info.checkpoint)?;
 
         // Fetch and persist events separately — they require paginated queries.
-        let events = self
-            .gql
-            .get_transaction_events(&digest.base58_encode())?
-            .unwrap_or_default();
+        // Best-effort: if the events fetch fails we still want the transaction
+        // and effects cached, so log the error and fall back to empty events.
+        let events = match self.gql.get_transaction_events(&digest.base58_encode()) {
+            Ok(Some(events)) => events,
+            Ok(None) => TransactionEvents::default(),
+            Err(err) => {
+                tracing::warn!(
+                    %digest,
+                    "failed to fetch transaction events, storing empty: {err:#}",
+                );
+                TransactionEvents::default()
+            }
+        };
         self.local.write_transaction_events(digest, &events)?;
 
         Ok(Some(info))
