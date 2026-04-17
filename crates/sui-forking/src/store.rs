@@ -178,8 +178,12 @@ impl DataStore {
         let Some((checkpoint, contents)) = self.gql.get_verified_checkpoint(Some(sequence))? else {
             return Ok(None);
         };
-        self.local.write_checkpoint_summary(&checkpoint)?;
+        // Write contents first: they're content-addressed (idempotent), so
+        // if the summary write fails afterward the contents are harmless
+        // orphans and the next request retries cleanly. The reverse order
+        // would leave a summary on disk pointing to missing contents.
         self.local.write_checkpoint_contents(&contents)?;
+        self.local.write_checkpoint_summary(&checkpoint)?;
         Ok(Some((checkpoint, contents)))
     }
 
