@@ -9,11 +9,11 @@ on:
       - 'mainnet'
       - 'releases/sui-*-release'
   pull_request:
-    types: [ opened, synchronize, reopened, ready_for_review ]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
     inputs:
       sui_repo_ref:
-        description: "Branch / commit to test"
+        description: 'Branch / commit to test'
         type: string
         required: false
         default: ''
@@ -51,10 +51,13 @@ env:
 
 jobs:
   diff:
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
+      isSolidity: ${{ steps.diff.outputs.isSolidity }}
+      isConsensusOrCore: ${{ steps.diff.outputs.isConsensusOrCore }}
+      isExecutionLayerCut: ${{ steps.diff.outputs.isExecutionLayerCut }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -65,7 +68,7 @@ jobs:
 
   license-check:
     name: license-check
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -88,7 +91,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
+          - [ubuntu-ghcloud]
       fail-fast: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
@@ -137,7 +140,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
+          - [ubuntu-ghcloud]
       fail-fast: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
@@ -181,7 +184,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
+          - [ubuntu-ghcloud]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
@@ -199,7 +202,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
+          - [ubuntu-ghcloud]
       fail-fast: false
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
@@ -263,9 +266,11 @@ jobs:
   benchmark-smoke:
     name: benchmark (smoke)
     needs: [diff, rustfmt, clippy]
-    if: needs.diff.outputs.isRust == 'true'
+    # Only run on changes that could affect perf-sensitive or consensus code.
+    # SDK/indexer/CLI-only PRs don't exercise sui-benchmark and can skip this.
+    if: needs.diff.outputs.isConsensusOrCore == 'true'
     timeout-minutes: 45
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -323,7 +328,7 @@ jobs:
     needs: [diff, rustfmt, clippy, snapshot-check]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ windows-ghcloud-128 ]
+    runs-on: [windows-ghcloud-128]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -345,7 +350,7 @@ jobs:
     needs: [diff]
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ windows-ghcloud-128 ]
+    runs-on: [windows-ghcloud-128]
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
@@ -371,9 +376,12 @@ jobs:
 
   simtest:
     needs: [diff, rustfmt, clippy, snapshot-check]
-    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
+    # Simtest exercises consensus + protocol + core execution paths. SDK,
+    # indexer, CLI, and framework-only PRs don't need it. Solidity changes
+    # still trigger it because bridge logic is covered here too.
+    if: needs.diff.outputs.isConsensusOrCore == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
     steps:
@@ -404,11 +412,24 @@ jobs:
         run: |
           scripts/simtest/stress-new-tests.sh
 
+  # Placeholder so the "simtest" required status check is satisfied on PRs that
+  # don't exercise consensus/core/solidity and correctly skip the real simtest
+  # job above. Branch protection matches on the job `name:`, which is "simtest"
+  # in both cases.
+  simtest-placeholder:
+    name: simtest
+    needs: diff
+    if: needs.diff.outputs.isConsensusOrCore == 'false' && needs.diff.outputs.isSolidity == 'false'
+    runs-on: [ubuntu-latest]
+    steps:
+      - run: echo "simtest skipped — no consensus / core / solidity changes"
+
   simtest-mainnet:
     needs: [diff, rustfmt, clippy, snapshot-check]
-    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
+    # Same scoping as simtest — see isConsensusOrCore filter definition.
+    if: needs.diff.outputs.isConsensusOrCore == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 300000
       SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE: mainnet
@@ -447,7 +468,7 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'false' && needs.diff.outputs.isMove == 'true'
     timeout-minutes: 10
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -514,8 +535,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
-          - [ windows-ghcloud ]
+          - [ubuntu-ghcloud]
+          - [windows-ghcloud]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
@@ -534,8 +555,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
-          - [ windows-ghcloud ]
+          - [ubuntu-ghcloud]
+          - [windows-ghcloud]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
@@ -543,7 +564,7 @@ jobs:
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -568,7 +589,7 @@ jobs:
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -579,7 +600,7 @@ jobs:
   snapshot-check:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -600,7 +621,7 @@ jobs:
     name: cargo-deny (bans, licenses, sources)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -612,7 +633,7 @@ jobs:
     name: cargo-deny (advisories)
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-latest ]
+    runs-on: [ubuntu-latest]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:
@@ -623,8 +644,10 @@ jobs:
   sui-excution-cut:
     name: cutting a new execution layer
     needs: [diff, rustfmt, clippy, snapshot-check]
-    if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ ubuntu-ghcloud ]
+    # Only exercises the execution-layer cut script (./scripts/execution_layer.py)
+    # against sui-execution/. PRs outside those paths can safely skip.
+    if: needs.diff.outputs.isExecutionLayerCut == 'true'
+    runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
         with:

@@ -3,90 +3,121 @@ description: Defines variables indicating the parts of the code that changed
 outputs:
   isDoc:
     description: True when changes happened to some documentation
-    value: "${{ steps.diff.outputs.isDoc }}"
+    value: '${{ steps.diff.outputs.isDoc }}'
   isOldDoc:
     description: True when changes happened to old doc folder
-    value: "${{ steps.diff.outputs.isOldDoc }}"    
+    value: '${{ steps.diff.outputs.isOldDoc }}'
   isRust:
     description: True when changes happened to the Rust code
-    value: "${{ steps.diff.outputs.isRust }}"
+    value: '${{ steps.diff.outputs.isRust }}'
   isMove:
     description: True when changes happened to the Move code
-    value: "${{ steps.diff.outputs.isMove }}"
+    value: '${{ steps.diff.outputs.isMove }}'
   isSolidity:
     description: True when changes happened to the Solidity code
-    value: "${{ steps.diff.outputs.isSolidity }}"
+    value: '${{ steps.diff.outputs.isSolidity }}'
   isReleaseNotesEligible:
     description: True when changes happened in Release Notes eligible paths
-    value: "${{ steps.diff.outputs.isReleaseNotesEligible }}"
+    value: '${{ steps.diff.outputs.isReleaseNotesEligible }}'
   isMoveAutoFormatter:
     description: True when changes happened in MoveAutoFormatter code
-    value: "${{ steps.diff.outputs.isMoveAutoFormatter }}"
+    value: '${{ steps.diff.outputs.isMoveAutoFormatter }}'
   isMoveAnalyzerTraceAdapter:
     description: True when changes happened in Trace Adapter
-    value: "${{ steps.diff.outputs.isMoveAnalyzerTraceAdapter }}"
+    value: '${{ steps.diff.outputs.isMoveAnalyzerTraceAdapter }}'
   isExamples:
     description: True when changes happened in examples/ directory
-    value: "${{ steps.diff.outputs.isExamples }}"
+    value: '${{ steps.diff.outputs.isExamples }}'
   isReleaseNotesScript:
     description: True when changes happened to release notes scripts
-    value: "${{ steps.diff.outputs.isReleaseNotesScript }}"
+    value: '${{ steps.diff.outputs.isReleaseNotesScript }}'
+  isConsensusOrCore:
+    description: True when changes happened to consensus, protocol, or core execution crates (used to gate simtest + benchmark-smoke)
+    value: '${{ steps.diff.outputs.isConsensusOrCore }}'
+  isExecutionLayerCut:
+    description: True when changes happened to files exercised by the sui-excution-cut job (sui-execution/ or the cut script)
+    value: '${{ steps.diff.outputs.isExecutionLayerCut }}'
 
 runs:
   using: composite
   steps:
-  - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
-  - name: Detect Changes
-    uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # pin@v3.0.2
-    id: diff
-    with:
-      filters: |
-        isRust:
-          - 'consensus/**'
-          - 'crates/**'
-          - 'external-crates/**'
-          - 'sui-execution/**'
-          - '.github/workflows/cargo-llvm-cov.yml'
-          - '.github/workflows/rust.yml'
-          - '.github/workflows/external.yml'
-          - 'Cargo.lock'
-          - 'Cargo.toml'
-          - 'deny.toml'
-          - 'rust-toolchain.toml'
-          - 'rustfmt.toml'
-        isDoc:
-          - 'docs/content/**'
-          - '*.mdx'
-          - '.github/workflows/docs.yml'
-        isOldDoc:
-          - 'doc/**'
-          - '*.md'  
-        isMove:
-          - 'crates/sui-framework/**'
-          - 'crates/sui-framework-build/**'
-          - 'crates/sui-framework-tests/**'
-          - 'crates/sui_move/**'
-          - 'Cargo.toml'
-          - 'examples/**'
-          - 'sui_programmability/**'
-        isSolidity:
-          - 'bridge/evm/**'
-        isReleaseNotesEligible:
-          - 'consensus/**'
-          - 'crates/**'
-          - 'dashboards/**'
-          - 'doc/**'
-          - 'docker/**'
-          - 'external-crates/**'
-          - 'kiosk/**'
-          - 'nre/**'
-          - 'sui-execution/**'
-        isMoveAutoFormatter:
-          - 'external-crates/move/crates/move-analyzer/prettier-plugin/**'
-        isMoveAnalyzerTraceAdapter:
-          - 'external-crates/move/crates/move-analyzer/trace-adapter/**'
-        isExamples:
-          - 'examples/**'
-        isReleaseNotesScript:
-          - 'scripts/release_notes.py'
-          - 'scripts/release_notes_test.py'
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # pin@v6.0.2
+    - name: Detect Changes
+      uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # pin@v3.0.2
+      id: diff
+      with:
+        filters: |
+          isRust:
+            - 'consensus/**'
+            - 'crates/**'
+            - 'external-crates/**'
+            - 'sui-execution/**'
+            - '.github/workflows/cargo-llvm-cov.yml'
+            - '.github/workflows/rust.yml'
+            - '.github/workflows/external.yml'
+            - 'Cargo.lock'
+            - 'Cargo.toml'
+            - 'deny.toml'
+            - 'rust-toolchain.toml'
+            - 'rustfmt.toml'
+          isDoc:
+            - 'docs/content/**'
+            - '*.mdx'
+            - '.github/workflows/docs.yml'
+          isOldDoc:
+            - 'doc/**'
+            - '*.md'  
+          isMove:
+            - 'crates/sui-framework/**'
+            - 'crates/sui-framework-build/**'
+            - 'crates/sui-framework-tests/**'
+            - 'crates/sui_move/**'
+            - 'Cargo.toml'
+            - 'examples/**'
+            - 'sui_programmability/**'
+          isSolidity:
+            - 'bridge/evm/**'
+          isReleaseNotesEligible:
+            - 'consensus/**'
+            - 'crates/**'
+            - 'dashboards/**'
+            - 'doc/**'
+            - 'docker/**'
+            - 'external-crates/**'
+            - 'kiosk/**'
+            - 'nre/**'
+            - 'sui-execution/**'
+          isMoveAutoFormatter:
+            - 'external-crates/move/crates/move-analyzer/prettier-plugin/**'
+          isMoveAnalyzerTraceAdapter:
+            - 'external-crates/move/crates/move-analyzer/trace-adapter/**'
+          isExamples:
+            - 'examples/**'
+          isReleaseNotesScript:
+            - 'scripts/release_notes.py'
+            - 'scripts/release_notes_test.py'
+          # Consensus, protocol, and core-execution surface — changes that could
+          # plausibly affect consensus behaviour, protocol semantics, or the core
+          # execution pipeline. Used to gate the most expensive rust.yml jobs
+          # (simtest, simtest-mainnet, benchmark-smoke) so they don't run on
+          # SDK/indexer/CLI-only PRs.
+          isConsensusOrCore:
+            - 'consensus/**'
+            - 'crates/sui-core/**'
+            - 'crates/sui-types/**'
+            - 'crates/sui-protocol-config/**'
+            - 'crates/sui-config/**'
+            - 'crates/sui-network/**'
+            - 'crates/sui-benchmark/**'
+            - 'sui-execution/**'
+            - 'Cargo.lock'
+            - '.github/workflows/rust.yml'
+            - '.github/actions/diffs/action.yml'
+          # Files exercised by the `sui-excution-cut` job. The job only runs
+          # `./scripts/execution_layer.py cut for_ci_test` against sui-execution,
+          # so anything outside that scope can safely skip it.
+          isExecutionLayerCut:
+            - 'sui-execution/**'
+            - 'scripts/execution_layer.py'
+            - '.github/workflows/rust.yml'
+            - '.github/actions/diffs/action.yml'
