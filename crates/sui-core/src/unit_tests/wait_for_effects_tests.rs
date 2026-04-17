@@ -402,14 +402,12 @@ async fn test_wait_for_effects_expired() {
         let cache = &epoch_store.consensus_tx_status_cache;
 
         // Initialize the last committed leader round.
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + block_round)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + block_round);
 
         // Update that will actually trigger expiration using the leader round.
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + block_round + 1)
-            .await;
+        cache.update_last_committed_leader_round(
+            CONSENSUS_STATUS_RETENTION_ROUNDS + block_round + 1,
+        );
     });
 
     let response = test_context
@@ -539,11 +537,9 @@ async fn test_wait_for_effects_ping() {
             tokio::time::sleep(Duration::from_millis(100)).await;
             let consensus_tx_status_cache = &epoch_store.consensus_tx_status_cache;
             consensus_tx_status_cache
-                .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 10)
-                .await;
+                .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 10);
             consensus_tx_status_cache
-                .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 11)
-                .await;
+                .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 11);
         });
 
         let response = test_context

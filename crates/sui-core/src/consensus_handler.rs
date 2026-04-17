@@ -1132,8 +1132,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         self.epoch_store
             .consensus_tx_status_cache
-            .update_last_committed_leader_round(last_committed_round as u32)
-            .await;
+            .update_last_committed_leader_round(last_committed_round as u32);
         self.epoch_store
             .tx_reject_reason_cache
             .set_last_committed_leader_round(last_committed_round as u32);
