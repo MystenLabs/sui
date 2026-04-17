@@ -53,6 +53,7 @@ pub struct AddrBalDepositMetrics {
 pub struct AddrBalDepositWorkloadBuilder {
     config: AddrBalDepositConfig,
     num_payloads: u64,
+    num_workers: u64,
 }
 
 impl std::fmt::Debug for AddrBalDepositWorkloadBuilder {
@@ -92,6 +93,7 @@ impl AddrBalDepositWorkloadBuilder {
             AddrBalDepositWorkloadBuilder {
                 config,
                 num_payloads: max_ops,
+                num_workers,
             },
         ));
 
@@ -110,7 +112,7 @@ impl WorkloadBuilder<dyn Payload> for AddrBalDepositWorkloadBuilder {
 
     async fn generate_coin_config_for_payloads(&self) -> Vec<GasCoinConfig> {
         let amount = self.config.seed_amount + GAS_BUDGET + ESTIMATED_COMPUTATION_COST;
-        (0..self.num_payloads)
+        (0..self.num_workers)
             .map(|_| {
                 let (address, keypair) = get_key_pair::<AccountKeyPair>();
                 GasCoinConfig {
@@ -229,10 +231,18 @@ impl Workload<dyn Payload> for AddrBalDepositWorkload {
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Box<dyn Payload>> {
         let chain_id = self.chain_identifier.unwrap();
+        let num_senders = self.payload_gas.len();
+
+        // Create one shared nonce counter per sender so payloads sharing
+        // a sender produce unique address-balance-gas nonces.
+        let nonce_counters: Vec<Arc<AtomicU32>> = (0..num_senders)
+            .map(|_| Arc::new(AtomicU32::new(0)))
+            .collect();
 
         let mut payloads: Vec<Box<dyn Payload>> = vec![];
         for i in 0..self.num_payloads {
-            let (_, sender, ref keypair) = self.payload_gas[i as usize];
+            let sender_idx = i as usize % num_senders;
+            let (_, sender, ref keypair) = self.payload_gas[sender_idx];
             payloads.push(Box::new(AddrBalDepositPayload {
                 target_addresses: self.config.target_addresses.clone(),
                 deposit_amount: self.config.deposit_amount,
@@ -240,12 +250,16 @@ impl Workload<dyn Payload> for AddrBalDepositWorkload {
                 keypair: keypair.clone(),
                 chain_identifier: chain_id,
                 system_state_observer: system_state_observer.clone(),
-                nonce_counter: AtomicU32::new(0),
+                nonce_counter: nonce_counters[sender_idx].clone(),
                 metrics: self.metrics.clone(),
             }));
         }
 
-        info!("Created {} addr_bal_deposit payloads", payloads.len());
+        info!(
+            "Created {} addr_bal_deposit payloads across {} senders",
+            payloads.len(),
+            num_senders,
+        );
         payloads
     }
 
@@ -261,7 +275,7 @@ pub struct AddrBalDepositPayload {
     keypair: Arc<AccountKeyPair>,
     chain_identifier: ChainIdentifier,
     system_state_observer: Arc<SystemStateObserver>,
-    nonce_counter: AtomicU32,
+    nonce_counter: Arc<AtomicU32>,
     metrics: Arc<Mutex<AddrBalDepositMetrics>>,
 }
 
