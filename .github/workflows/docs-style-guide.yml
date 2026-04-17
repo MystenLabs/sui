@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   style-check:
@@ -656,69 +655,65 @@ jobs:
 
             if (uniqueComments.length === 0) {
               console.log('No style guide violations found.');
+              // Write success to job summary
+              await core.summary
+                .addHeading('Docs style guide — all clear', 2)
+                .addRaw('No violations found in changed docs files.')
+                .write();
               return;
             }
 
-            // Cap at 50 suggestions to avoid rate limits
-            const capped = uniqueComments.slice(0, 50);
-            const overflow = uniqueComments.length - capped.length;
-            console.log(`Found ${uniqueComments.length} style guide suggestions (showing ${capped.length}).`);
+            console.log(`Found ${uniqueComments.length} style guide suggestions.`);
 
-            // Try submitting as a PR review with inline suggestions
-            let reviewPosted = false;
-            try {
-              await github.rest.pulls.createReview({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: context.issue.number,
-                commit_id: context.sha,
-                event: 'REQUEST_CHANGES',
-                body: `Found **${uniqueComments.length}** style guide issue(s).${overflow > 0 ? ` Showing first ${capped.length}; fix these and re-push to see the rest.` : ''}\n\n> Based on the [Sui Documentation Style Guide](docs/content/references/contribute/style-guide.mdx)`,
-                comments: capped,
+            // Write violations to the GitHub Actions job summary (always writable,
+            // no special permissions needed). This renders as a rich markdown page
+            // in the Actions check details.
+            const byFile = new Map();
+            for (const c of uniqueComments) {
+              if (!byFile.has(c.path)) byFile.set(c.path, []);
+              byFile.get(c.path).push(c);
+            }
+
+            let summary = core.summary
+              .addHeading(`Docs style guide — ${uniqueComments.length} issues found`, 2)
+              .addRaw(`Based on the [Sui Documentation Style Guide](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/docs/content/references/contribute/style-guide.mdx)\n\n`);
+
+            for (const [file, fileComments] of byFile) {
+              summary.addHeading(file, 3);
+              const rows = fileComments.map(c => {
+                // Clean up suggestion blocks for table display
+                const clean = c.body
+                  .replace(/\n\n```suggestion\n([\s\S]*?)```/g, ' → `$1`')
+                  .replace(/\n/g, ' ')
+                  .trim();
+                return [`${c.line}`, clean];
               });
-              reviewPosted = true;
-            } catch (e) {
-              console.log(`Review API failed: ${e.message}`);
+              summary.addTable([
+                [{data: 'Line', header: true}, {data: 'Issue', header: true}],
+                ...rows,
+              ]);
             }
 
-            // Fallback: post a single PR comment with all issues grouped by file
-            if (!reviewPosted) {
-              const marker = '<!-- docs-style-check -->';
-              const byFile = new Map();
-              for (const c of capped) {
-                if (!byFile.has(c.path)) byFile.set(c.path, []);
-                byFile.get(c.path).push(c);
-              }
-              let body = `${marker}\n## 📝 Docs style guide — ${uniqueComments.length} issues found\n\n`;
-              body += `> Review API unavailable for this PR. Issues listed below instead of inline.\n\n`;
-              for (const [file, fileComments] of byFile) {
-                body += `### \`${file}\`\n`;
-                for (const c of fileComments) {
-                  // Strip suggestion blocks for the comment format
-                  const cleanBody = c.body.replace(/\n\n```suggestion\n[\s\S]*?```/g, '');
-                  body += `- **Line ${c.line}:** ${cleanBody}\n`;
-                }
-                body += '\n';
-              }
-              if (overflow > 0) {
-                body += `\n*...and ${overflow} more issues. Fix these and re-push to see the rest.*\n`;
-              }
+            summary.addRaw('\n\n<details><summary>Quick reference</summary>\n\n');
+            summary.addTable([
+              [{data: 'Instead of', header: true}, {data: 'Use', header: true}],
+              ['e.g., i.e., etc.', '"for example", "that is", "and so on"'],
+              ['via', 'through'],
+              ['simple/simply', 'basic (or rewrite)'],
+              ['dApp', 'app'],
+              ['may', 'might'],
+              ['since (causal)', 'because'],
+              ['& (in prose)', 'and'],
+              ['em dash (—)', 'comma, parentheses, or split sentence'],
+              ['mainnet/testnet', 'Mainnet/Testnet'],
+              ['Note that / Please note', '(remove or rewrite)'],
+              ['we/our/let\'s', 'you (second person)'],
+              ['will (future)', 'present tense'],
+              ['on-chain / off-chain', 'onchain / offchain'],
+            ]);
+            summary.addRaw('\n</details>\n');
 
-              // Upsert the comment
-              const comments_list = await github.paginate(
-                github.rest.issues.listComments,
-                { owner: context.repo.owner, repo: context.repo.repo, issue_number: context.issue.number, per_page: 100 }
-              );
-              const existing = comments_list.find(c => c.body?.includes(marker));
-              if (existing) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner, repo: context.repo.repo,
-                  comment_id: existing.id, body,
-                });
-              } else {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner, repo: context.repo.repo,
-                  issue_number: context.issue.number, body,
-                });
-              }
-            }
+            await summary.write();
+
+            // Fail the check so the PR author sees the violations
+            core.setFailed(`Found ${uniqueComments.length} style guide violations. See the job summary for details.`);
