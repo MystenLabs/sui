@@ -57,6 +57,11 @@ runs:
           - '.github/workflows/sccache-warmup.yml'
           - '.github/workflows/release.yml'
           - '.github/actions/setup-sccache/**'
+          # Simtest wrapper: shells out cargo with specific rustflags / cfg /
+          # patch args. Mis-edits silently break simtest semantics (flags
+          # lost, wrong profile, etc.). Any change here should trigger the
+          # full Rust + simtest suite.
+          - 'scripts/simtest/**'
           - 'Cargo.lock'
           - 'Cargo.toml'
           - 'deny.toml'
