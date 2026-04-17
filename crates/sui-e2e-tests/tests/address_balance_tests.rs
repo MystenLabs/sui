@@ -1331,7 +1331,17 @@ async fn test_transaction_expired_too_late() {
         test_env.chain_id,
     );
 
+    tracing::info!(
+        ?sender,
+        ?gas_coin,
+        past_epoch,
+        "exec_tx_debug: test about to call exec_tx_directly for expired tx"
+    );
     let result = test_env.exec_tx_directly(tx).await;
+    tracing::info!(
+        ok = result.is_ok(),
+        "exec_tx_debug: test exec_tx_directly returned"
+    );
 
     match result {
         Err(err) => {

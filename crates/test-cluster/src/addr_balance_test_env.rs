@@ -209,11 +209,17 @@ impl TestEnv {
         &mut self,
         tx: TransactionData,
     ) -> SuiResult<(TransactionDigest, TransactionEffects)> {
+        tracing::info!("exec_tx_debug: exec_tx_directly entered");
         let res = self
             .cluster
             .sign_and_execute_transaction_directly(&tx)
             .await;
+        tracing::info!(
+            ok = res.is_ok(),
+            "exec_tx_debug: sign_and_execute_transaction_directly returned"
+        );
         self.update_all_gas().await;
+        tracing::info!("exec_tx_debug: update_all_gas returned");
         res
     }
 
