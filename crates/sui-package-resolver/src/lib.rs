@@ -29,6 +29,7 @@ use move_command_line_common::display::RenderResult;
 use move_command_line_common::display::try_render_constant;
 use move_command_line_common::error_bitset::ErrorBitset;
 use move_core_types::account_address::AccountAddress;
+use move_core_types::annotated_value as A;
 use move_core_types::annotated_value::MoveEnumLayout;
 use move_core_types::annotated_value::MoveFieldLayout;
 use move_core_types::annotated_value::MoveStructLayout;
@@ -482,6 +483,29 @@ impl<S: PackageStore> Resolver<S> {
             .map_or(usize::MAX, |l| l.max_move_value_depth);
 
         Ok(context.resolve_type_layout(&tag, max_depth)?.0)
+    }
+
+    /// Return the datatype layout (struct or enum) corresponding to the given struct tag. This is
+    /// a convenience wrapper around [`Self::type_layout`] that mirrors the signature of the legacy
+    /// `LayoutResolver::get_annotated_layout` method for easier migration.
+    pub async fn datatype_layout(&self, struct_tag: &StructTag) -> Result<A::MoveDatatypeLayout> {
+        let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
+        let layout = self.type_layout(type_tag).await?;
+        match layout {
+            MoveTypeLayout::Struct(s) => Ok(A::MoveDatatypeLayout::Struct(s)),
+            MoveTypeLayout::Enum(e) => Ok(A::MoveDatatypeLayout::Enum(e)),
+            layout => {
+                // This error is unexpected because a `StructTag` should always resolve to either a
+                // struct or enum layout, and if it doesn't, it likely means there is a bug in the
+                // resolver logic.
+                return Err(Error::UnexpectedError(Arc::new(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "StructTag {:#?} did not resolve to a struct or enum layout: {:#?}",
+                    struct_tag,
+                    layout
+                ))));
+            }
+        }
     }
 
     /// Return the abilities of a concrete type, based on the abilities in its type definition, and
