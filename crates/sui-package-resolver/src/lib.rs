@@ -42,6 +42,8 @@ use sui_types::Identifier;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::is_primitive_type_tag;
+use sui_types::error::{SuiError, SuiErrorKind};
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::move_package::MovePackage;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
@@ -951,6 +953,20 @@ impl<S: SyncPackageStore> SyncResolver<S> {
         let _bitset = ErrorBitset::from_u64(abort_code)?;
         let package = self.package_store.fetch(*module_id.address()).ok()?;
         package.resolve_clever_error(module_id.name().as_str(), abort_code)
+    }
+}
+
+impl<S: SyncPackageStore> LayoutResolver for SyncResolver<S> {
+    fn get_annotated_layout(
+        &mut self,
+        struct_tag: &StructTag,
+    ) -> std::result::Result<A::MoveDatatypeLayout, SuiError> {
+        self.datatype_layout(struct_tag).map_err(|e| {
+            SuiErrorKind::FailObjectLayout {
+                st: format!("Failed to generate object layout for {struct_tag}: {e}"),
+            }
+            .into()
+        })
     }
 }
 
