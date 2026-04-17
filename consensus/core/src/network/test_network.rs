@@ -16,7 +16,7 @@ use crate::{
     error::ConsensusResult,
     network::{
         BlockStream, NodeId, ObserverBlockStream, ObserverBlockStreamItem, ObserverNetworkService,
-        ValidatorNetworkService,
+        PeerId, ValidatorNetworkService,
         observer::{StartBlockStream, block_stream_request::Command},
     },
 };
@@ -126,6 +126,14 @@ impl ValidatorNetworkService for Mutex<TestService> {
 
 #[async_trait]
 impl ObserverNetworkService for Mutex<TestService> {
+    async fn handle_block(
+        &self,
+        _peer: PeerId,
+        _block: ObserverBlockStreamItem,
+    ) -> ConsensusResult<()> {
+        unimplemented!("ObserverNetworkService handle_block not implemented for TestService")
+    }
+
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,

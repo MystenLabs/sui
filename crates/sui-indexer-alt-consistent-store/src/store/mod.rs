@@ -177,13 +177,17 @@ impl<S: Send + Sync> store::Connection for Connection<'_, S> {
             .await
     }
 
+    /// Stores the `chain_id` for `pipeline_task` on first call, and on subsequent calls verifies
+    /// that the provided `chain_id` matches the stored value.
+    ///
+    /// This guards against pointing the indexer at a database that was previously populated with
+    /// data from a different chain.
     async fn accepts_chain_id(
         &mut self,
-        _pipeline_task: &str,
-        _chain_id: [u8; 32],
+        pipeline_task: &str,
+        chain_id: [u8; 32],
     ) -> anyhow::Result<bool> {
-        // TODO: Implement storing chain_id
-        Ok(true)
+        Ok(self.store.0.db.accepts_chain_id(pipeline_task, chain_id)?)
     }
 
     async fn committer_watermark(
@@ -250,6 +254,33 @@ mod tests {
         }
     }
 
+    struct TestDb(tempfile::TempDir);
+
+    impl TestDb {
+        fn new() -> Self {
+            Self(tempfile::tempdir().unwrap())
+        }
+
+        fn store(&self) -> Store<TestSchema> {
+            Store::open(self.0.path().join("db"), DbConfig::default(), 4, None).unwrap()
+        }
+
+        fn db(&self) -> (Arc<Db>, TestSchema) {
+            let db_options: rocksdb::Options = DbConfig::default().into();
+            let db = Arc::new(
+                Db::open(
+                    self.0.path().join("db"),
+                    db_options.clone(),
+                    4,
+                    TestSchema::cfs(&db_options),
+                )
+                .unwrap(),
+            );
+            let schema = TestSchema::open(&db).unwrap();
+            (db, schema)
+        }
+    }
+
     async fn wait_until<F, R>(f: F) -> Result<(), Elapsed>
     where
         F: Fn() -> R,
@@ -298,16 +329,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_open() {
-        let d = tempfile::tempdir().unwrap();
-        let _store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let _db = TestDb::new();
     }
 
     #[tokio::test]
     async fn test_no_queue() {
-        let d = tempfile::tempdir().unwrap();
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let db = TestDb::new();
+        let store = db.store();
 
         // If the store is not associated with a synchronizer, all writes will fail.
         let err = write(&store, "test", 0, |s, b| {
@@ -324,9 +352,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_single_pipeline() {
-        let d = tempfile::tempdir().unwrap();
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let db = TestDb::new();
+        let store = db.store();
 
         let stride = 1;
         let buffer_size = 10;
@@ -355,9 +382,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_pipelines() {
-        let d = tempfile::tempdir().unwrap();
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let db = TestDb::new();
+        let store = db.store();
 
         let stride = 1;
         let buffer_size = 10;
@@ -399,23 +425,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_single_pipeline_existing() {
-        let d = tempfile::tempdir().unwrap();
-        let snapshots = 4;
+        let test_db = TestDb::new();
 
         {
             // Initialize the database with some data for the pipeline
-            let db_options: rocksdb::Options = DbConfig::default().into();
-            let db = Arc::new(
-                Db::open(
-                    d.path().join("db"),
-                    db_options.clone(),
-                    snapshots as usize,
-                    TestSchema::cfs(&db_options),
-                )
-                .unwrap(),
-            );
-
-            let schema = TestSchema::open(&db).unwrap();
+            let (db, schema) = test_db.db();
 
             let mut batch = rocksdb::WriteBatch::default();
             schema.b.insert(42, "x".to_owned(), &mut batch).unwrap();
@@ -423,8 +437,7 @@ mod tests {
                 .unwrap();
         }
 
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), snapshots, None).unwrap();
+        let store = test_db.store();
 
         let stride = 1;
         let buffer_size = 10;
@@ -443,23 +456,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_pipeline_existing() {
-        let d = tempfile::tempdir().unwrap();
-        let snapshots: u64 = 4;
+        let test_db = TestDb::new();
 
         {
             // Initialize the database with some data for both pipelines
-            let db_options: rocksdb::Options = DbConfig::default().into();
-            let db = Arc::new(
-                Db::open(
-                    d.path().join("db"),
-                    db_options.clone(),
-                    snapshots as usize,
-                    TestSchema::cfs(&db_options),
-                )
-                .unwrap(),
-            );
-
-            let schema = TestSchema::open(&db).unwrap();
+            let (db, schema) = test_db.db();
 
             let mut batch = rocksdb::WriteBatch::default();
             schema.a.insert("x".to_owned(), 42, &mut batch).unwrap();
@@ -472,8 +473,7 @@ mod tests {
                 .unwrap();
         }
 
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), snapshots, None).unwrap();
+        let store = test_db.store();
 
         let stride = 1;
         let buffer_size = 10;
@@ -493,23 +493,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_pipeline_catchup() {
-        let d = tempfile::tempdir().unwrap();
-        let snapshots = 4;
+        let test_db = TestDb::new();
 
         {
             // Initialize the database with some data for one of the pipelines.
-            let db_options: rocksdb::Options = DbConfig::default().into();
-            let db = Arc::new(
-                Db::open(
-                    d.path().join("db"),
-                    db_options.clone(),
-                    snapshots,
-                    TestSchema::cfs(&db_options),
-                )
-                .unwrap(),
-            );
-
-            let schema = TestSchema::open(&db).unwrap();
+            let (db, schema) = test_db.db();
 
             let mut batch = rocksdb::WriteBatch::default();
             schema.b.insert(42, "x".to_owned(), &mut batch).unwrap();
@@ -517,8 +505,7 @@ mod tests {
                 .unwrap();
         }
 
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let store = test_db.store();
 
         let stride = 1;
         let buffer_size = 10;
@@ -578,10 +565,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_missing_pipeline() {
-        let d = tempfile::tempdir().unwrap();
-
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let db = TestDb::new();
+        let store = db.store();
 
         let stride = 1;
         let buffer_size = 10;
@@ -604,10 +589,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_pipelines() {
-        let d = tempfile::tempdir().unwrap();
-
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let db = TestDb::new();
+        let store = db.store();
 
         let stride = 1;
         let buffer_size = 10;
@@ -624,10 +607,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_first_checkpoint() {
-        let d = tempfile::tempdir().unwrap();
-
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let db = TestDb::new();
+        let store = db.store();
 
         let stride = 1;
         let buffer_size = 10;
@@ -658,10 +639,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_stride() {
-        let d = tempfile::tempdir().unwrap();
-
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let db = TestDb::new();
+        let store = db.store();
 
         let stride = 3;
         let buffer_size = 10;
@@ -714,11 +693,78 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_no_watermark() {
-        let d = tempfile::tempdir().unwrap();
+    async fn test_accepts_chain_id_first_call_writes_and_accepts() {
+        let db = TestDb::new();
+        let store = db.store();
 
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let mut conn = store.connect().await.unwrap();
+        assert!(conn.accepts_chain_id("test", [1u8; 32]).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_matching_accepts() {
+        let db = TestDb::new();
+        let store = db.store();
+
+        let mut conn = store.connect().await.unwrap();
+        let chain_id = [1u8; 32];
+        assert!(conn.accepts_chain_id("test", chain_id).await.unwrap());
+        // Second call with the same chain_id should also accept.
+        assert!(conn.accepts_chain_id("test", chain_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_mismatching_rejects() {
+        let db = TestDb::new();
+        let store = db.store();
+
+        let mut conn = store.connect().await.unwrap();
+        let chain_id_a = [1u8; 32];
+        let chain_id_b = [2u8; 32];
+        assert!(conn.accepts_chain_id("test", chain_id_a).await.unwrap());
+        assert!(!conn.accepts_chain_id("test", chain_id_b).await.unwrap());
+
+        // The originally stored chain_id is still accepted.
+        assert!(conn.accepts_chain_id("test", chain_id_a).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_distinct_pipelines() {
+        let db = TestDb::new();
+        let store = db.store();
+
+        let mut conn = store.connect().await.unwrap();
+        let chain_id_a = [1u8; 32];
+        let chain_id_b = [2u8; 32];
+        // Different pipelines are tracked independently.
+        assert!(conn.accepts_chain_id("a", chain_id_a).await.unwrap());
+        assert!(conn.accepts_chain_id("b", chain_id_b).await.unwrap());
+        assert!(conn.accepts_chain_id("a", chain_id_a).await.unwrap());
+        assert!(conn.accepts_chain_id("b", chain_id_b).await.unwrap());
+        assert!(!conn.accepts_chain_id("a", chain_id_b).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_persists_across_reopen() {
+        let db = TestDb::new();
+        let chain_id = [7u8; 32];
+
+        {
+            let store = db.store();
+            let mut conn = store.connect().await.unwrap();
+            assert!(conn.accepts_chain_id("test", chain_id).await.unwrap());
+        }
+
+        let store = db.store();
+        let mut conn = store.connect().await.unwrap();
+        assert!(conn.accepts_chain_id("test", chain_id).await.unwrap());
+        assert!(!conn.accepts_chain_id("test", [0u8; 32]).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_no_watermark() {
+        let db = TestDb::new();
+        let store = db.store();
 
         let stride = 1;
         let buffer_size = 10;
@@ -749,10 +795,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_out_of_order_batch() {
-        let d = tempfile::tempdir().unwrap();
-
-        let store: Store<TestSchema> =
-            Store::open(d.path().join("db"), DbConfig::default(), 4, None).unwrap();
+        let db = TestDb::new();
+        let store = db.store();
 
         let stride = 1;
         let buffer_size = 10;

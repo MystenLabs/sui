@@ -73,7 +73,7 @@ module sui_system::genesis {
     ) {
         assert!(tx_context::epoch(ctx) == 0, 0);
 
-        let mut validators = vector::empty();
+        let mut validators = vector[];
         let count = vector::length(&genesis_validators);
         let mut i = 0;
         while (i < count) {

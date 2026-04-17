@@ -387,7 +387,7 @@ mod test {
         round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
-        transaction_certifier::TransactionCertifier,
+        transaction_vote_tracker::TransactionVoteTracker,
     };
 
     #[tokio::test]
@@ -400,7 +400,7 @@ mod test {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -416,7 +416,7 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -429,7 +429,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier,
+            transaction_vote_tracker,
             block_manager,
             commit_observer,
             signals,

@@ -1,12 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use anyhow::Context;
 use prometheus::Registry;
 use prost_types::FieldMask;
-use sui_rpc::field::FieldMaskUtil;
 use sui_rpc::proto::sui::rpc::v2 as proto;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_types::signature::GenericSignature;
@@ -14,23 +11,25 @@ use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
+use tower::Layer;
 use tracing::instrument;
 use url::Url;
 
-use crate::metrics::FullnodeClientMetrics;
+use crate::metrics::GrpcMetricsLayer;
+use crate::metrics::GrpcMetricsService;
 
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct FullnodeArgs {
     /// gRPC URL for full node operations such as executeTransaction and simulateTransaction.
+    /// `Option` so the flag stays optional when flattened into a parent args struct.
     #[clap(long)]
-    pub fullnode_rpc_url: Option<Url>,
+    pub(crate) fullnode_rpc_url: Option<Url>,
 }
 
 /// A client for executing and simulating transactions via the full node gRPC service.
 #[derive(Clone)]
 pub struct FullnodeClient {
-    execution_client: Option<TransactionExecutionServiceClient<Channel>>,
-    metrics: Arc<FullnodeClientMetrics>,
+    execution_client: TransactionExecutionServiceClient<GrpcMetricsService<Channel>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -38,11 +37,16 @@ pub enum Error {
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 
-    #[error("Full node client not configured")]
-    NotConfigured,
-
     #[error(transparent)]
     GrpcExecutionError(#[from] tonic::Status),
+}
+
+impl FullnodeArgs {
+    pub fn new(url: Url) -> Self {
+        Self {
+            fullnode_rpc_url: Some(url),
+        }
+    }
 }
 
 impl FullnodeClient {
@@ -50,37 +54,36 @@ impl FullnodeClient {
         prefix: Option<&str>,
         args: FullnodeArgs,
         registry: &Registry,
-    ) -> Result<Self, Error> {
-        let execution_client = if let Some(url) = &args.fullnode_rpc_url {
-            let mut endpoint = Channel::from_shared(url.to_string())
-                .context("Failed to create channel for gRPC endpoint")?;
-
-            if url.scheme() == "https" {
-                endpoint = endpoint
-                    .tls_config(ClientTlsConfig::new().with_native_roots())
-                    .context("Failed to configure TLS for gRPC endpoint")?;
-            }
-
-            let channel = endpoint.connect_lazy();
-            Some(TransactionExecutionServiceClient::new(channel))
-        } else {
-            None
+    ) -> Result<Option<Self>, Error> {
+        let Some(url) = args.fullnode_rpc_url else {
+            return Ok(None);
         };
 
-        let metrics = FullnodeClientMetrics::new(prefix, registry);
+        let mut endpoint = Channel::from_shared(url.to_string())
+            .context("Failed to create channel for gRPC endpoint")?;
 
-        Ok(Self {
-            execution_client,
-            metrics,
-        })
+        if url.scheme() == "https" {
+            endpoint = endpoint
+                .tls_config(ClientTlsConfig::new().with_native_roots())
+                .context("Failed to configure TLS for gRPC endpoint")?;
+        }
+
+        let channel = endpoint.connect_lazy();
+
+        let layered = GrpcMetricsLayer::new(prefix.unwrap_or("fullnode"), registry).layer(channel);
+
+        let execution_client = TransactionExecutionServiceClient::new(layered);
+
+        Ok(Some(Self { execution_client }))
     }
 
     /// Execute a transaction on the Sui network via gRPC.
-    #[instrument(skip(self, transaction_data, signatures), level = "debug")]
+    #[instrument(skip(self, transaction_data, signatures, read_mask), level = "debug")]
     pub async fn execute_transaction(
         &self,
         transaction_data: TransactionData,
         signatures: Vec<GenericSignature>,
+        read_mask: FieldMask,
     ) -> Result<proto::ExecuteTransactionResponse, Error> {
         let transaction = Transaction::from_generic_sig_data(transaction_data, signatures);
 
@@ -104,33 +107,28 @@ impl FullnodeClient {
             tx
         })
         .with_signatures(signatures)
-        .with_read_mask(FieldMask::from_paths([
-            "effects",
-            "transaction",
-            "events.bcs",
-            "balance_changes",
-            "objects.objects.bcs",
-        ]));
+        .with_read_mask(read_mask);
 
-        self.request(
-            "execute_transaction",
-            self.execution_client.clone(),
-            |mut client| async move { client.execute_transaction(request).await },
-        )
-        .await
+        self.execution_client
+            .clone()
+            .execute_transaction(request)
+            .await
+            .map(|r| r.into_inner())
+            .map_err(Into::into)
     }
 
     /// Simulate a transaction on the Sui network via gRPC.
     /// Note: Simulation does not require signatures since the transaction is not committed to the blockchain.
     ///
-    /// - `checks_enabled`: If true, enables transaction validation checks during simulation. Defaults to true.
-    /// - `do_gas_selection`: If true, enables automatic gas coin selection and budget estimation. Defaults to false.
-    #[instrument(skip(self, transaction), level = "debug")]
+    /// - `checks_enabled`: If true, enables transaction validation checks during simulation.
+    /// - `do_gas_selection`: If true, enables automatic gas coin selection and budget estimation.
+    #[instrument(skip(self, transaction, read_mask), level = "debug")]
     pub async fn simulate_transaction(
         &self,
         transaction: proto::Transaction,
         checks_enabled: bool,
         do_gas_selection: bool,
+        read_mask: FieldMask,
     ) -> Result<proto::SimulateTransactionResponse, Error> {
         use proto::simulate_transaction_request::TransactionChecks;
 
@@ -141,69 +139,16 @@ impl FullnodeClient {
         };
 
         let request = proto::SimulateTransactionRequest::new(transaction)
-            .with_read_mask(FieldMask::from_paths([
-                "transaction.effects",
-                "transaction.transaction",
-                "transaction.events.bcs",
-                "transaction.balance_changes",
-                "transaction.objects.objects.bcs",
-                "transaction.transaction.bcs",
-                "command_outputs",
-            ]))
+            .with_read_mask(read_mask)
             .with_checks(checks)
             .with_do_gas_selection(do_gas_selection);
 
-        self.request(
-            "simulate_transaction",
-            self.execution_client.clone(),
-            |mut client| async move { client.simulate_transaction(request).await },
-        )
-        .await
-    }
-
-    async fn request<C, F, Fut, R>(
-        &self,
-        method: &str,
-        client: Option<C>,
-        response: F,
-    ) -> Result<R, Error>
-    where
-        F: FnOnce(C) -> Fut,
-        Fut: std::future::Future<Output = Result<tonic::Response<R>, tonic::Status>>,
-    {
-        let Some(client) = client else {
-            return Err(Error::NotConfigured);
-        };
-
-        self.metrics
-            .requests_received
-            .with_label_values(&[method])
-            .inc();
-
-        let _timer = self
-            .metrics
-            .latency
-            .with_label_values(&[method])
-            .start_timer();
-
-        let response = response(client)
+        self.execution_client
+            .clone()
+            .simulate_transaction(request)
             .await
             .map(|r| r.into_inner())
-            .map_err(Into::into);
-
-        if response.is_ok() {
-            self.metrics
-                .requests_succeeded
-                .with_label_values(&[method])
-                .inc();
-        } else {
-            self.metrics
-                .requests_failed
-                .with_label_values(&[method])
-                .inc();
-        }
-
-        response
+            .map_err(Into::into)
     }
 }
 
@@ -211,18 +156,18 @@ impl FullnodeClient {
 mod tests {
     use super::*;
 
-    async fn fn_client(url: Option<&str>) -> Result<FullnodeClient, Error> {
+    async fn fn_client(url: Option<&str>) -> Result<Option<FullnodeClient>, Error> {
+        let registry = Registry::new();
         let args = FullnodeArgs {
             fullnode_rpc_url: url.map(|u| Url::parse(u).unwrap()),
         };
-        let registry = Registry::new();
         FullnodeClient::new(None, args, &registry).await
     }
 
     #[tokio::test]
     async fn no_url_means_not_configured() {
         let client = fn_client(None).await.unwrap();
-        assert!(client.execution_client.is_none());
+        assert!(client.is_none());
     }
 
     #[tokio::test]
@@ -231,7 +176,6 @@ mod tests {
             fn_client(Some("http://localhost:9000"))
                 .await
                 .unwrap()
-                .execution_client
                 .is_some()
         );
     }
@@ -242,7 +186,6 @@ mod tests {
             fn_client(Some("https://fn.example.com"))
                 .await
                 .unwrap()
-                .execution_client
                 .is_some()
         );
     }

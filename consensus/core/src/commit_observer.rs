@@ -18,7 +18,7 @@ use crate::{
     leader_schedule::LeaderSchedule,
     linearizer::Linearizer,
     storage::Store,
-    transaction_certifier::TransactionCertifier,
+    transaction_vote_tracker::TransactionVoteTracker,
 };
 
 /// Role of CommitObserver
@@ -38,7 +38,7 @@ pub(crate) struct CommitObserver {
     dag_state: Arc<RwLock<DagState>>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
-    transaction_certifier: TransactionCertifier,
+    transaction_vote_tracker: TransactionVoteTracker,
     leader_schedule: Arc<LeaderSchedule>,
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
@@ -51,7 +51,7 @@ impl CommitObserver {
         context: Arc<Context>,
         commit_consumer: CommitConsumerArgs,
         dag_state: Arc<RwLock<DagState>>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         leader_schedule: Arc<LeaderSchedule>,
     ) -> Self {
         let store = dag_state.read().store();
@@ -59,7 +59,7 @@ impl CommitObserver {
         let commit_finalizer_handle = CommitFinalizer::start(
             context.clone(),
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             commit_consumer.commit_sender.clone(),
         );
 
@@ -67,7 +67,7 @@ impl CommitObserver {
             context,
             dag_state,
             store,
-            transaction_certifier,
+            transaction_vote_tracker,
             leader_schedule,
             commit_interpreter,
             commit_finalizer_handle,
@@ -79,10 +79,10 @@ impl CommitObserver {
         // They will just be ignored.
         tokio::runtime::Handle::current()
             .spawn_blocking({
-                let transaction_certifier = observer.transaction_certifier.clone();
+                let transaction_vote_tracker = observer.transaction_vote_tracker.clone();
                 let gc_round = observer.dag_state.read().gc_round();
                 move || {
-                    transaction_certifier.recover_blocks_after_round(gc_round);
+                    transaction_vote_tracker.recover_blocks_after_round(gc_round);
                 }
             })
             .await
@@ -263,7 +263,7 @@ impl CommitObserver {
                     assert!(!committed_sub_dag.decided_with_local_blocks);
                     // All unfinalized commits need to be processed by the CommitFinalizer, making it necessary to
                     // recover and vote on the blocks in this commit.
-                    self.transaction_certifier
+                    self.transaction_vote_tracker
                         .recover_and_vote_on_blocks(committed_sub_dag.blocks.clone());
                 }
 
@@ -369,7 +369,7 @@ mod tests {
         let last_processed_commit_index = 0;
         let (commit_consumer, mut commit_receiver) =
             CommitConsumerArgs::new(0, last_processed_commit_index);
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -384,7 +384,7 @@ mod tests {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -396,7 +396,7 @@ mod tests {
             .layers(1..=num_rounds)
             .build()
             .persist_layers(dag_state.clone());
-        transaction_certifier.add_voted_blocks(
+        transaction_vote_tracker.add_voted_blocks(
             builder
                 .all_blocks()
                 .iter()
@@ -516,7 +516,7 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -533,7 +533,7 @@ mod tests {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             leader_schedule.clone(),
         )
         .await;
@@ -545,7 +545,7 @@ mod tests {
             .layers(1..=num_rounds)
             .build()
             .persist_layers(dag_state.clone());
-        transaction_certifier.add_voted_blocks(
+        transaction_vote_tracker.add_voted_blocks(
             builder
                 .all_blocks()
                 .iter()
@@ -634,7 +634,7 @@ mod tests {
                 context.clone(),
                 commit_consumer,
                 dag_state.clone(),
-                transaction_certifier.clone(),
+                transaction_vote_tracker.clone(),
                 leader_schedule.clone(),
             )
             .await;
@@ -681,7 +681,7 @@ mod tests {
                 context.clone(),
                 commit_consumer,
                 dag_state.clone(),
-                transaction_certifier.clone(),
+                transaction_vote_tracker.clone(),
                 leader_schedule.clone(),
             )
             .await;
@@ -707,7 +707,7 @@ mod tests {
                 context.clone(),
                 commit_consumer,
                 dag_state.clone(),
-                transaction_certifier.clone(),
+                transaction_vote_tracker.clone(),
                 leader_schedule.clone(),
             )
             .await;
@@ -753,7 +753,7 @@ mod tests {
                 context.clone(),
                 commit_consumer,
                 dag_state.clone(),
-                transaction_certifier.clone(),
+                transaction_vote_tracker.clone(),
                 leader_schedule.clone(),
             )
             .await;

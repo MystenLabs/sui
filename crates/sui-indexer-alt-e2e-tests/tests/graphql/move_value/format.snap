@@ -29,11 +29,11 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 4164800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 76-77:
-//# programmable --sender A --inputs object(3,1)
+//# programmable --sender A --inputs object(3,0)
 //> 0: test::mod::upgrade(Input(0))
 created: object(4,0)
-mutated: object(0,0), object(3,1)
-deleted: object(3,0)
+mutated: object(0,0), object(3,0)
+deleted: object(3,1)
 gas summary: computation_cost: 1000000, storage_cost: 4172400,  storage_rebate: 4123152, non_refundable_storage_fee: 41648
 
 task 5, lines 79-80:
@@ -85,7 +85,7 @@ Response: {
           "alt": "default!",
           "df": "100",
           "dof": {
-            "id": "0x4716ecbc082b4d37d08417272998c2145ef026e62d2c1e2f9887aea419078e5e",
+            "id": "0xe376465c63a20d50634250aae8c46f81164e21863db401c08c180c1f3c23cf13",
             "map": {
               "contents": [
                 {

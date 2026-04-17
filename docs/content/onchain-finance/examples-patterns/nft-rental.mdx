@@ -1,0 +1,64 @@
+---
+title: NFT Rentals
+description: An example that enables users to rent NFTs according to the rules of a provided policy instead of owning them outright.
+keywords: [ERC-721, NFT]
+---
+
+Renting non-fungible tokens (NFTs) is a mechanism that allows individuals to temporarily use the benefits of an NFT without ownership or possession. This implementation uses the [Kiosk Apps standard](/onchain-finance/kiosk/kiosk-apps) to establish an infrastructure for rental transactions. This approach aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
+
+NFT rentals apply to several real-world scenarios:
+
+- **Gaming:** Players can rent in-game items, characters, skins, or accessories. NFTs provide transparent ownership records, so rented items return to the owner after the rental period expires. Rented NFTs can also work across multiple games when platforms support interoperability.
+- **Ticketing:** NFTs enable secure and traceable ticket resale or rental, reducing the risk of counterfeit tickets in secondary markets.
+- **Temporary assets and subscriptions:** Rental NFTs provide time-limited access to digital experiences or asset pools on a subscription basis. Holders can rent out unused subscriptions, and temporary holders can try the service without a long-term commitment.
+
+## NFT rental workflow
+
+To create NFTs that can be rented, use the following workflows:
+
+- **New rentable type:** Call `setup_renting` and create a `TransferPolicy` with an optional lock rule.
+- **First-time borrower:** Create a kiosk if one does not exist for the user, then install the extension in the kiosk.
+- **First-time lender:** Create a kiosk if one does not exist for the user, then install the extension in the kiosk.
+
+## Example
+
+This NFT rental example uses a single module, [`nft_rental.move`](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-rental/sources/nft_rental.move).
+
+<details>
+<summary>`nft_rental.move`</summary>
+
+<ImportContent source="examples/move/nft-rental/sources/nft_rental.move" mode="code" />
+
+</details>
+
+The `nft_rental` module provides an API that facilitates lending and borrowing through the following operations:
+
+- List for renting
+- Delist from renting
+- Rent
+- Borrow by reference and borrow by value
+- Reclaim for the lender
+
+The module enables the following behaviors:
+
+- A lender can offer assets for renting for a specified period of time.
+- A lender can define the rental duration. The borrower must comply with the renting period.
+- A borrower can gain mutable or immutable access to the NFT. Immutable access is read-only. For mutable access, the lender should consider downgrade and upgrade operations and include them in the renting fee.
+- After the renting period finishes, the item can be sold normally.
+- Creator-defined royalties are respected by encompassing [transfer policy rules](/develop/objects/transfers/custom-rules).
+
+The rental smart contract uses the [Kiosk Apps](/onchain-finance/kiosk/kiosk-apps) standard. Both the lender and borrower must install a kiosk extension to take part. The creator of the borrowed asset type must create a rental policy and `ProtectedTP` object to allow the extension to manage rentals while enforcing royalties.
+
+:::caution
+
+Transferring kiosks might result in unexpected behaviors while an asset is being rented. If you want to disallow kiosk transferring altogether, consider using personal kiosks.
+
+:::
+
+:::tip
+
+This implementation charges a rental fee based on days. You can update the logic to support charging per hour or per second.
+
+:::
+
+[View the full example on GitHub](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-rental/sources/nft_rental.move).

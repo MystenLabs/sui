@@ -37,5 +37,5 @@ module b::m {
 //> 1: a::m::new();
 //> TransferObjects([Result(0), Result(1)], Input(0));
 
-//# programmable --sender A --inputs object(3,0) object(3,1)
+//# programmable --sender A --inputs object(3,1) object(3,3)
 //> a::m::assert_same_digest(Input(0), Input(1));

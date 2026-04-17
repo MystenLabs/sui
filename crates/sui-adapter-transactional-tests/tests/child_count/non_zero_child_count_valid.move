@@ -46,7 +46,7 @@ module test::m {
 
 //# run test::m::mint_and_share --sender A
 
-//# view-object 2,1
+//# view-object 2,0
 
 //
 // Test transfer allows non-zero child count
@@ -54,9 +54,9 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# run test::m::transfer --sender A --args object(4,1) @B
+//# run test::m::transfer --sender A --args object(4,0) @B
 
-//# view-object 4,1
+//# view-object 4,0
 
 //
 // Test TransferObject allows non-zero child count
@@ -64,6 +64,6 @@ module test::m {
 
 //# run test::m::mint --sender A
 
-//# transfer-object 7,2 --sender A --recipient B
+//# transfer-object 7,0 --sender A --recipient B
 
-//# view-object 7,2
+//# view-object 7,0

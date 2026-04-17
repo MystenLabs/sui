@@ -57,7 +57,7 @@ mod checked {
         event::Event,
         execution::ExecutionResultsV2,
         execution_status::ExecutionErrorKind,
-        metrics::LimitsMetrics,
+        metrics::ExecutionMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::BackingPackageStore,
@@ -71,7 +71,7 @@ mod checked {
         /// The protocol config
         pub protocol_config: &'a ProtocolConfig,
         /// Metrics for reporting exceeded limits
-        pub metrics: Arc<LimitsMetrics>,
+        pub metrics: Arc<ExecutionMetrics>,
         /// The MoveVM
         pub vm: &'vm MoveVM,
         /// The LinkageView for this session
@@ -120,7 +120,7 @@ mod checked {
         #[instrument(name = "ExecutionContext::new", level = "trace", skip_all)]
         pub fn new(
             protocol_config: &'a ProtocolConfig,
-            metrics: Arc<LimitsMetrics>,
+            metrics: Arc<ExecutionMetrics>,
             vm: &'vm MoveVM,
             state_view: &'state dyn ExecutionState,
             tx_context: &'a mut TxContext,

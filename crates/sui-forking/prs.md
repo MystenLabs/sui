@@ -9,23 +9,20 @@
 - poc.md
 - prs.md
 
-## Forking PR2 -> update forking-data-store
-- rework the forking-data-store's traits and APIs
-- implement APIs for FileSystemStore and GraphQLStore for Checkpoint data
+## Forking PR2 -> implement fetching checkpoint data from graphql
+- cleanup and refactor the code in forking-data-store. Remove most of the things that are too early to be used/needed.
+- implement fetching verified checkpoint data from graphql
 - set up some testing infrastructure for it
 
-## Forking PR3 -> add gRPC for checkpoint data
-- gRPC server implementation for Checkpoint data
+## Forking PR3 -> implement store in sui-forking crate with support for checkpoint and object data
+- implement a store in sui-forking crate that has APIs for fetching data from RPC, and local data through a filesystem API.
+- migrate forking-data-store into sui-forking crate, and remove the old crate
 
-## Forking PR4 -> fetch system state at checkpoint
-- before we can initialize simulacrum, we need to be able to fetch system state at a checkpoint
-- implement the get object APIs
+## Forking PR4 -> forked network startup
+- instantiate the store and wire it up to simulacrum
+- start up the forked network service
 
-## Forking PR5 -> instantiate simulacrum with forking-data-store store
-- use the forking-data-store for the simulacrum instantiation
-- implement the checkpoint related APIs to initialize the forked network
-
-## Forking PR6 -> implement transaction execution
+## Forking PR5 -> implement transaction execution
 - implement transaction execution logic in sui-forking & related gRPC APIs
 
 Future PRs: TBD (probably a PR per line below)

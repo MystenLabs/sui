@@ -13,7 +13,7 @@ module 0x2::bench {
     }
 
     public fun bench_call_empty_function(): u64 {
-        let mut i = 0;
+        let mut i: u64 = 0;
         while (i < COUNT) {
             i = i + empty_function();
         };
@@ -21,7 +21,7 @@ module 0x2::bench {
     }
 
     public fun bench_call() {
-        let mut i = 0;
+        let mut i: u64 = 0;
         // 3000 is the number of loops to make the benchmark run for a couple of minutes,
         // which is an eternity.
         // Adjust according to your needs, it's just a reference
@@ -72,7 +72,7 @@ module 0x2::bench_xmodule_call {
     }
 
     public fun bench_call() {
-        let mut i = 0;
+        let mut i: u64 = 0;
         // 3000 is the number of loops to make the benchmark run for a couple of minutes,
         // which is an eternity.
         // Adjust according to your needs, it's just a reference

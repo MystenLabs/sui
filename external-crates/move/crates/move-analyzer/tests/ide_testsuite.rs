@@ -65,6 +65,10 @@ enum TestSuite {
         project: String,
         file_tests: BTreeMap<String, Vec<ReferencesTest>>,
     },
+    Rename {
+        project: String,
+        file_tests: BTreeMap<String, Vec<RenameTest>>,
+    },
 }
 
 #[derive(Serialize, Deserialize)]
@@ -109,6 +113,13 @@ struct AccessChainQuickFixTest {
 struct ReferencesTest {
     use_line: u32,
     use_ndx: usize,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RenameTest {
+    use_line: u32,
+    use_ndx: usize,
+    new_name: String,
 }
 
 //**************************************************************************************************
@@ -441,6 +452,111 @@ impl ReferencesTest {
                 "UNKNOWN FILE CONTENT".to_string()
             };
             writeln!(output, "  '{ident}' at {file_name}:{line}:{col}")?;
+        }
+        Ok(())
+    }
+}
+
+impl RenameTest {
+    fn test(
+        &self,
+        test_idx: usize,
+        mod_symbols: &UseDefMap,
+        symbols: &Symbols,
+        output: &mut dyn std::io::Write,
+        use_file: &str,
+        use_file_path: &Path,
+    ) -> anyhow::Result<()> {
+        let RenameTest {
+            use_ndx,
+            use_line,
+            new_name,
+        } = self;
+        writeln!(output, "-- test {test_idx} -------------------")?;
+        writeln!(
+            output,
+            "use line: {use_line}, use_ndx: {use_ndx}, new_name: \"{new_name}\""
+        )?;
+        let lsp_use_line = use_line - 1; // 0th-based
+        let Some(uses) = mod_symbols.get(lsp_use_line) else {
+            writeln!(
+                output,
+                "ERROR: No use_line {use_line} in mod_symbols for file {use_file}"
+            )?;
+            return Ok(());
+        };
+        let Some(use_def) = uses.iter().nth(*use_ndx) else {
+            writeln!(
+                output,
+                "ERROR: No symbol at index {use_ndx} in line {use_line} for file {use_file}"
+            )?;
+            return Ok(());
+        };
+        let Some(ref_locs) = symbols.references.get(&use_def.def_loc()) else {
+            writeln!(output, "No references found")?;
+            return Ok(());
+        };
+
+        // Get the identifier at cursor from source text
+        let cursor_ident = {
+            let fhash = symbols
+                .file_hash(use_file_path)
+                .expect("file hash not found");
+            let (_, content) = symbols.files.get(&fhash).expect("file content not found");
+            let src_line = content.lines().nth(lsp_use_line as usize).unwrap();
+            let (start, _) = src_line
+                .char_indices()
+                .nth(use_def.col_start() as usize)
+                .unwrap();
+            let (end, _) = src_line
+                .char_indices()
+                .nth(use_def.col_end() as usize)
+                .unwrap();
+            src_line[start..end].to_string()
+        };
+
+        writeln!(output, "Rename '{cursor_ident}' to '{new_name}':")?;
+
+        for ref_loc in ref_locs {
+            // Extract identifier text from source content
+            let ident = if let Some((_, content)) = symbols.files.get(&ref_loc.fhash) {
+                if let Some(src_line) = content.lines().nth(ref_loc.start.line as usize)
+                    && let Some((start, _)) = src_line
+                        .char_indices()
+                        .nth(ref_loc.start.character as usize)
+                {
+                    // col_end is one-past-the-last-character; when the identifier
+                    // ends at the end of a line there is no character at that index,
+                    // so fall back to the byte length of the line.
+                    let end = src_line
+                        .char_indices()
+                        .nth(ref_loc.col_end as usize)
+                        .map(|(i, _)| i)
+                        .unwrap_or(src_line.len());
+                    src_line[start..end].to_string()
+                } else {
+                    "INVALID IDENT".to_string()
+                }
+            } else {
+                "UNKNOWN FILE CONTENT".to_string()
+            };
+
+            // Only include references whose source text matches the cursor identifier
+            if ident != cursor_ident {
+                continue;
+            }
+
+            let file_path = symbols.files.file_path(&ref_loc.fhash);
+            let file_name = file_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "UNKNOWN".to_string());
+            let line = ref_loc.start.line + 1;
+            let col = ref_loc.start.character + 1;
+            writeln!(
+                output,
+                "  '{ident}' at {file_name}:{line}:{col} -> '{new_name}'"
+            )?;
         }
         Ok(())
     }
@@ -938,6 +1054,52 @@ fn references_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
+fn rename_test_suite<F: MoveFlavor>(
+    project: String,
+    file_tests: BTreeMap<String, Vec<RenameTest>>,
+) -> datatest_stable::Result<String> {
+    let base_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut project_path = base_path.clone();
+    project_path.push(project);
+
+    let packages_info = Arc::new(Mutex::new(CachedPackages::new()));
+    let ide_files_root: VfsPath = MemoryFS::new().into();
+
+    let (_, symbols) = test_symbols_with_optional_modifications::<F>(
+        packages_info.clone(),
+        ide_files_root.clone(),
+        project_path.clone(),
+        None,
+    )?;
+
+    let mut output: BufWriter<_> = BufWriter::new(Vec::new());
+    let writer: &mut dyn io::Write = output.get_mut();
+
+    for (file, tests) in file_tests {
+        writeln!(
+            writer,
+            "== {file} ========================================================"
+        )?;
+
+        let mut fpath = project_path.clone();
+        fpath.push(format!("sources/{file}"));
+        let cpath = canonicalize_path(fpath.clone());
+
+        let mod_symbols = symbols
+            .file_use_defs
+            .get(&cpath)
+            .ok_or(format!("NO SYMBOLS FOR {}", cpath.to_str().unwrap()))?;
+
+        for (idx, test) in tests.iter().enumerate() {
+            test.test(idx, mod_symbols, &symbols, writer, &file, &cpath)?;
+            writeln!(writer)?;
+        }
+    }
+
+    let result: String = String::from_utf8(output.into_inner().unwrap()).unwrap();
+    Ok(result)
+}
+
 fn move_ide_testsuite<F: MoveFlavor>(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
@@ -972,6 +1134,10 @@ fn move_ide_testsuite<F: MoveFlavor>(test_path: &Path) -> datatest_stable::Resul
             project,
             file_tests,
         } => references_test_suite::<F>(project, file_tests),
+        TestSuite::Rename {
+            project,
+            file_tests,
+        } => rename_test_suite::<F>(project, file_tests),
     }?;
 
     insta_assert! {

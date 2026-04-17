@@ -42,7 +42,7 @@ Response: {
                 "0x0000000000000000000000000000000000000000000000000000000000000001",
                 "0x0000000000000000000000000000000000000000000000000000000000000002"
               ],
-              "currentPackage": "0x3c98a3e2098baf816d455aaf74d9391fbb54c3c05a25f557f1f0de2009115356",
+              "currentPackage": "0x73a3f5dcf6bb0a21b73b6689550fcce1ad86d6071c2e0ce070d9ceff7b9a7327",
               "upgradeTicket": {
                 "__typename": "TxResult",
                 "cmd": 0,

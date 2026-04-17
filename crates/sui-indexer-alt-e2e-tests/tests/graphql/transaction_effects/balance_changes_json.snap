@@ -81,7 +81,7 @@ task 6, lines 34-42:
 Response: {
   "data": {
     "transaction": {
-      "digest": "BughqoZMWav42egoT6v23S5QaTmZzofbAYXkWCg5PtXe",
+      "digest": "8p5YLTzxCKZTmXfMUcrY4ffkwsrC6cW5fwFiuyLZnDcD",
       "effects": {
         "balanceChangesJson": [
           {

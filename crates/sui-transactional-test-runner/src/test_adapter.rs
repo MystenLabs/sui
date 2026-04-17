@@ -168,6 +168,8 @@ pub struct SuiTestAdapter {
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
     /// Mapping from task ID to a transaction digest, for use in named variable substitution.
     digest_enumeration: BTreeMap<u64, TransactionDigest>,
+    /// Tracks the global creation order of each object across all transactions.
+    creation_order: BTreeMap<ObjectID, u64>,
     next_fake: (u64, u64),
     gas_price: u64,
     pub(crate) staged_modules: BTreeMap<Symbol, StagedPackage>,
@@ -523,6 +525,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             default_syntax,
             object_enumeration: BiBTreeMap::new(),
             digest_enumeration: BTreeMap::new(),
+            creation_order: BTreeMap::new(),
             next_fake: (0, 0),
             // TODO: make this configurable
             gas_price: default_gas_price.unwrap_or(DEFAULT_GAS_PRICE),
@@ -1632,10 +1635,6 @@ impl SuiTestAdapter {
         &*self.executor
     }
 
-    pub fn into_executor(self) -> Box<dyn TransactionalAdapter> {
-        self.executor
-    }
-
     fn get_chain_identifier(&self) -> ChainIdentifier {
         self.get_checkpoint_by_sequence_number(0)
             .map(|cp| ChainIdentifier::from(*cp.digest()))
@@ -2055,6 +2054,8 @@ impl SuiTestAdapter {
 
         let gas_summary = effects.gas_cost_summary();
 
+        self.record_creation_order(digest, &created_ids);
+
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
@@ -2227,6 +2228,8 @@ impl SuiTestAdapter {
 
         let gas_summary = effects.gas_cost_summary();
 
+        self.record_creation_order(effects.transaction_digest(), &created_ids);
+
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
@@ -2300,8 +2303,35 @@ impl SuiTestAdapter {
 
     // stable way of sorting objects by type. Does not however, produce a stable sorting
     // between objects of the same type
-    fn get_object_sorting_key(&self, id: &ObjectID) -> String {
-        match &self.get_object(id, None).unwrap().data {
+    fn record_creation_order(&mut self, digest: &TransactionDigest, created_ids: &[ObjectID]) {
+        if created_ids.is_empty() {
+            return;
+        }
+        let mut remaining: HashSet<ObjectID> = created_ids.iter().copied().collect();
+        let mut n = 0u64;
+        // We probe derive_id(digest, n) for increasing n until all created IDs are found.
+        // Internal Move operations may consume derive_id slots that don't appear in effects
+        // (e.g., objects created and deleted in the same transaction), so the number of slots
+        // can exceed the number of objects in effects. Use a generous hard cap; the warning
+        // in object_summary_output will flag if this is ever insufficient.
+        let max_probes = 2048u64;
+        while !remaining.is_empty() && n < max_probes {
+            let candidate = ObjectID::derive_id(*digest, n);
+            if remaining.remove(&candidate) {
+                self.creation_order
+                    .insert(candidate, self.creation_order.len() as u64);
+            }
+            n += 1;
+        }
+    }
+
+    // Sort objects by creation order, with ties broken by type. This is used to assign fake IDs in
+    // a stable way, so that test outputs are stable. Objects that have not been seen before (and
+    // thus have no creation order) will be sorted at the end, and among them the ones of the same
+    // type will be sorted together.
+    fn get_object_sorting_key(&self, id: &ObjectID) -> (u64, String, ObjectID) {
+        let creation_id = self.creation_order.get(id).copied().unwrap_or(u64::MAX);
+        let type_key = match &self.get_object(id, None).unwrap().data {
             object::Data::Move(obj) => self.stabilize_str(format!("{}", obj.type_())),
             object::Data::Package(pkg) => pkg
                 .serialized_module_map()
@@ -2309,7 +2339,10 @@ impl SuiTestAdapter {
                 .map(|s| s.as_str())
                 .collect::<Vec<_>>()
                 .join(","),
-        }
+        };
+        // ObjectID as final tiebreaker for objects with the same creation order and type
+        // (e.g., dynamic field objects whose IDs are derived from parent+key, not fresh_id).
+        (creation_id, type_key, *id)
     }
 
     pub(crate) fn fake_to_real_object_id(&self, fake_id: FakeID) -> Option<ObjectID> {

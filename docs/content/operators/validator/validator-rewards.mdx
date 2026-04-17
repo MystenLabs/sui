@@ -1,0 +1,112 @@
+---
+title: Validator Node Rewards
+description: Learn how Sui calculates and distributes validator and staker rewards.
+keywords: [ manage staking, manage gas price reference, tally rules, validator tally rules, validator staking, validator consensus, validator voting power, user staking and rewards, slashing, tallying ]
+sidebar_label: Rewards
+---
+
+Sui uses a delegated proof-of-stake (DPoS) system, where validators receive voting power from SUI token holders who delegate their stake. At the end of each epoch, validators receive rewards based on their performance and commission rate. Rewards auto-compound because validator staking pools receive new delegated stakes.
+
+The total voting power on Sui is always 10,000, regardless of the amount staked. Therefore, the quorum threshold is 6,667. There is no limit to the amount of SUI users can stake with a validator. Each validator has consensus voting power proportional to SUI in its staking pool, with one exception: the network caps the voting power of an individual validator at 1,000 (10% of the total). If a validator accumulates more than 10% of total stake, the validator's voting power remains fixed at 10%, and the network spreads the remaining voting power across the rest of the validator set.
+
+## Staking on Sui compared to other blockchains
+
+The Sui staking mechanism includes features that differ from other blockchains:
+
+- Staking is self-custodial. You keep your staked SUI tokens in an owned object.
+- Staking rewards auto-compound because of the liquidity-pool-inspired design.
+- A new stake begins contributing to a validator's voting power starting the epoch after you create it. Similarly, a withdrawn stake stops contributing starting the epoch after withdrawal.
+
+<ImportContent source="staking-pool-reqs" mode="snippet" />
+
+## User staking and rewards
+
+When you stake SUI tokens, the tokens are wrapped into `StakedSUI` objects. Your share of the staking pool is calculated using the timestamp of your `StakedSUI` object, which records when the deposit occurred, along with the change in exchange rates between the deposit epoch and the withdrawal epoch.
+
+Each staking pool maintains a time series of its exchange rates. The system uses this data to determine the correct withdrawal amount for any staker in the pool.
+
+### Find the exchange rate 
+
+Each epoch change emits a `0x2::validator_set::ValidatorEpochInfo` event per validator with the exchange rate information. Use the Events API to query these events.
+
+### Reward distribution 
+
+A stake deposit request goes into a pending state immediately in the staking pool. Wallets like [Slush] reflect any pending stake deposit requests for your account.
+
+At the end of each epoch, the network distributes collected gas fees and stake subsidies among validators and stakers as staking rewards. The rewards a validator receives depend on:
+
+- **Performance:** If a validator does not operate performantly, other validators can report them through the tallying rule. The network then slashes the reported validator's staking rewards for that epoch.
+
+- **Commission rate:** The commission rate determines the portion of staking rewards the validator keeps. For example, if a validator has a 10% commission rate, then 10% of the staking rewards of their stakers go to the validator each epoch as new stake objects owned by the validator.
+
+### Rewards withdrawal
+
+The network distributes validator rewards as regular stake objects, so withdrawal works the same for validators and stakers. A validator can call the [`request_withdraw_stake` function](https://github.com/MystenLabs/sui/blob/6234ae2cc8137f3a2a34cd0aa1ac4fd5f31260e2/crates/sui-framework/packages/sui-system/sources/sui_system.move#L272) in the `sui_system` module to withdraw stake and receive rewards.
+
+Stake withdrawals process immediately using the previous epoch's exchange rate. Withdrawals do not have to wait for the current epoch to close. Withdrawals include both the original stake you deposited and all the stake rewards accumulated up to the previous epoch. You do not earn the rewards accruing to your stake during the epoch at which you withdraw. Because there is no way to know how many stake rewards accumulate during the current epoch until the epoch closes, the withdrawal cannot include them. You can withdraw your stake immediately and receive:
+
+$$
+SUI withdrawn at E' = ( SUI deposited at E ) * ( Exchange Rate at E'-1 / Exchange Rate at E )
+$$
+
+You cannot withdraw a portion of your active stake. You must withdraw all staked SUI at the same time. You can, however, stake using multiple `StakedSui` objects by splitting your SUI into multiple coins. You can then perform a partial withdrawal from a validator by un-staking only some of the `StakedSUI` objects.
+
+## Staker rewards 
+
+Within a given validator staking pool, all stakers receive the same proportion of rewards through the pool's exchange rate appreciation. Because validators earn commissions on the stake they manage, they receive additional `StakedSUI` objects at the end of each epoch in proportion to the amount of commissions their staking pool earns.
+
+Transaction gas fees collected during the current epoch and stake subsidies released at the end of the epoch fund staking rewards.
+
+$$
+StakeRewards = StakeSubsidies + GasFees
+$$
+
+Stake subsidies subsidize the network during its early phases and a 10% allocation of SUI tokens funds them. After this allocation depletes, gas fees collected through regular network operations make up the entirety of stake rewards.
+
+Stake rewards consist of gas fees and stake subsidies. The total amount distributed throughout each epoch is determined as follows:
+
+- **Stake subsidies:** The predefined schedule determines the amount distributed in each epoch before the epoch begins.
+- **Gas fees:** Each epoch's amount depends on the total gas fees collected throughout the epoch. Each Sui transaction pays gas fees depending on two variables, the amount of executed gas units and the gas price:
+
+$$
+_GasFee = GasPrice _ GasUnits
+$$
+
+The total gas fees correspond to the sum of gas fees across all transactions the network processes in the epoch. During regular market conditions, the vast majority of transactions should have a `GasPrice` equal to the `ReferenceGasPrice`.
+
+## Reference gas price 
+
+Sui provides stable and predictable gas prices during regular network operations. Validators set the network's reference gas price at the beginning of each epoch.
+
+Operationally, a gas price survey determines this value as follows:
+
+- During each epoch E, each validator submits what they think the optimal reference gas price should be for the next epoch E+1.
+- At the epoch boundary, when Sui transitions from epoch E to epoch E+1, the network observes the gas price quotes across the validator set and sets the 2/3 percentile weighted by stake as the epoch's reference gas price. The reference gas price is constant throughout each epoch and only updates when the epoch changes.
+
+For example, assume that there are 7 validators with equal stake, and the price quotes they submit are `{15, 1, 4, 2, 8, 3, 23}`. The protocol sets the reference gas price at 8.
+
+In practice, the process for submitting a gas price quote for the Gas Price Survey is a straightforward one. Each validator owns an object that contains their quote for the reference gas price. To change their response, they must update the value in that object.
+
+For example, to set the price quote for the next epoch to 42, run:
+
+<ImportContent source="info-gas-budget" mode="snippet" />
+
+```sh
+$ sui client call --package <PACKAGE-ID> --module sui_system --function request_set_gas_price --args 0x5 \"42\" --gas-budget <GAS-AMOUNT>
+```
+
+The gas object's value persists across epochs so that a validator who does not update and submit a new quote uses the same quote from the previous epoch. If you seek to optimize your validator operations, update your quote every epoch in response to changes in network operations and market conditions.
+
+## Validator slashing and tallying rule 
+
+Sui encourages and enforces community monitoring of the validator set through the tallying rule. Each validator monitors and scores every other validator to ensure that everyone operates efficiently and in the network's best interest. Validators that receive a low score can have their stake rewards slashed.
+
+The protocol only computes the global tallying rule score at the epoch boundary and relies on validators actively monitoring and changing their individual scores whenever they detect changes in other validator behavior. In general, the tallying rule default option should always be a score of one for all validators and should only change to zero when you determine bad operations. In practice, the tallying rule consists of a set of objects each validator owns that default to scores of one. A validator is generally passive and only updates the object corresponding to another validator's score when needed.
+
+For example, to report a validator whose Sui address is `0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446` as bad or non-performant, run:
+
+```sh
+$ sui client call --package <PACKAGE-ID> --module sui_system --function report_validator --args 0x5 0x44840a79dd5cf1f5efeff1379f5eece04c72db13512a2e31e8750f5176285446 --gas-budget <GAS-AMOUNT>
+```
+
+The tallying rule operates through a social equilibrium. The validator set should actively monitor itself, and if one validator is clearly non-performant, then the other validators should score that validator with a 0 and slash its rewards. Community members can launch public dashboards tracking validator performance, and you can use these dashboards as further signal into a validator's operations. There is no limit on the number of validators that can receive a 0 tallying score in an epoch.

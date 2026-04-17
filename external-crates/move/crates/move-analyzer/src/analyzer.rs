@@ -7,7 +7,7 @@ use lsp_server::{Connection, Message, Notification, Request, RequestId, Response
 use lsp_types::{
     CodeActionKind, CodeActionOptions, CodeActionProviderCapability, CompletionOptions,
     HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, NumberOrString, OneOf,
-    ProgressParams, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
+    ProgressParams, RenameOptions, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
     TextDocumentSyncOptions, TypeDefinitionProviderCapability, WorkDoneProgress,
     WorkDoneProgressBegin, WorkDoneProgressEnd, WorkDoneProgressOptions,
     notification::Notification as _,
@@ -28,7 +28,7 @@ use crate::{
         compilation::CachedPackages,
         requests::{
             on_document_symbol_request, on_go_to_def_request, on_go_to_type_def_request,
-            on_hover_request, on_references_request,
+            on_hover_request, on_prepare_rename_request, on_references_request, on_rename_request,
         },
         runner::{SymbolicatorMessage, SymbolicatorRunner},
     },
@@ -128,6 +128,12 @@ pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
                 work_done_progress: None,
             },
             resolve_provider: None,
+        })),
+        rename_provider: Some(OneOf::Right(RenameOptions {
+            prepare_provider: Some(true),
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: None,
+            },
         })),
         ..Default::default()
     })
@@ -441,6 +447,12 @@ fn on_request<F: MoveFlavor>(
                 pkg_dependencies,
                 flavor,
             );
+        }
+        lsp_types::request::PrepareRenameRequest::METHOD => {
+            on_prepare_rename_request(context, request);
+        }
+        lsp_types::request::Rename::METHOD => {
+            on_rename_request(context, request);
         }
         lsp_types::request::Shutdown::METHOD => {
             eprintln!("Shutdown request received");

@@ -47,7 +47,7 @@ else
   echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED from the environment"
 fi
 
-rust_flags=( '"--cfg"' '"msim"' )
+msim_rustflags='--cfg msim'
 
 if [[ -n "$LOCAL_MSIM_PATH" ]]; then
   cargo_patch_args=(
@@ -69,10 +69,7 @@ fi
 # as blst samples from the PRNG when not mocked.
 if [[ -n "$USE_MOCK_CRYPTO" ]]; then
   echo "Using mocked crypto crates - no cryptographic verification will occur"
-  rust_flags+=(
-    '"--cfg"'
-    '"use_mock_crypto"'
-  )
+  msim_rustflags="$msim_rustflags --cfg use_mock_crypto"
   cargo_patch_args+=(
     --config 'patch.crates-io.blst.git = "https://github.com/MystenLabs/mock-blst.git"'
     --config 'patch.crates-io.blst.rev = "630ca4d55de8e199e62c5b6a695c702d95fe6498"'
@@ -104,7 +101,15 @@ export TMPDIR
 root_dir=$(git rev-parse --show-toplevel)
 export SIMTEST_STATIC_INIT_MOVE=$root_dir"/examples/move/basics"
 
+# Apply msim cfg flags via RUSTFLAGS env var rather than `--config build.rustflags`.
+# Cargo's RUSTFLAGS env var has *higher* priority than `--config build.rustflags`,
+# so when CI has already exported RUSTFLAGS (e.g. via .github/actions/setup-sccache
+# which exports -C link-arg=-fuse-ld=mold + baseline flags), a `--config` would be
+# silently ignored and `--cfg msim` wouldn't reach rustc. Appending to the existing
+# RUSTFLAGS env ensures both CI-supplied flags and the msim cfg end up on the
+# rustc command line together.
+export RUSTFLAGS="${RUSTFLAGS:-} $msim_rustflags"
+
 cargo "${cargo_command[@]}" \
-  --config "build.rustflags = [$(IFS=, ; echo "${rust_flags[*]}")]" \
   "${cargo_patch_args[@]}" \
   "$@"

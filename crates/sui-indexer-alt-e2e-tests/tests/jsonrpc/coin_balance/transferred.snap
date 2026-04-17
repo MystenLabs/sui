@@ -23,7 +23,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
+    "coinType": "0xd71ccf48c179400b9fe838de0c8656a6bca99889aa82ece8e5c3d035d486c3a7::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "300",
     "lockedBalance": {},
@@ -32,8 +32,8 @@ Response: {
 }
 
 task 4, line 48:
-//# transfer-object 1,1 --sender A --recipient B
-mutated: object(0,0), object(1,1)
+//# transfer-object 1,3 --sender A --recipient B
+mutated: object(0,0), object(1,3)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
@@ -47,7 +47,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
+    "coinType": "0xd71ccf48c179400b9fe838de0c8656a6bca99889aa82ece8e5c3d035d486c3a7::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "200",
     "lockedBalance": {},
@@ -61,7 +61,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 2,
   "result": {
-    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
+    "coinType": "0xd71ccf48c179400b9fe838de0c8656a6bca99889aa82ece8e5c3d035d486c3a7::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "100",
     "lockedBalance": {},
@@ -70,14 +70,14 @@ Response: {
 }
 
 task 8, line 65:
-//# transfer-object 1,2 --sender A --recipient B
-mutated: object(0,0), object(1,2)
+//# transfer-object 1,4 --sender A --recipient B
+mutated: object(0,0), object(1,4)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
 task 9, line 67:
-//# transfer-object 1,3 --sender A --recipient B
-mutated: object(0,0), object(1,3)
+//# transfer-object 1,5 --sender A --recipient B
+mutated: object(0,0), object(1,5)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
@@ -91,7 +91,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 3,
   "result": {
-    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
+    "coinType": "0xd71ccf48c179400b9fe838de0c8656a6bca99889aa82ece8e5c3d035d486c3a7::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "0",
     "lockedBalance": {},
@@ -105,7 +105,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 4,
   "result": {
-    "coinType": "0x76c6e54741c82bea99dd316e74679d4d832d474a893a2c0a20f08a525cb07c79::fake::FAKE",
+    "coinType": "0xd71ccf48c179400b9fe838de0c8656a6bca99889aa82ece8e5c3d035d486c3a7::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "300",
     "lockedBalance": {},

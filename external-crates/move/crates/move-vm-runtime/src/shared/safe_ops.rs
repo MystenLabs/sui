@@ -67,7 +67,7 @@ macro_rules! impl_safe_add_for_int {
                     self.checked_sub(rhs).ok_or_else(|| {
                         move_binary_format::partial_vm_error!(
                             UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            "Integer subtraction overflow for type {}: {} + {}",
+                            "Integer subtraction overflow for type {}: {} - {}",
                             stringify!($t),
                             self,
                             rhs
@@ -78,7 +78,7 @@ macro_rules! impl_safe_add_for_int {
                     self.checked_mul(rhs).ok_or_else(|| {
                         move_binary_format::partial_vm_error!(
                             UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                            "Integer multiplication error for type {}: {} + {}",
+                            "Integer multiplication error for type {}: {} * {}",
                             stringify!($t),
                             self,
                             rhs

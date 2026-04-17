@@ -49,6 +49,17 @@ impl ObserverService {
 
 #[async_trait]
 impl ObserverNetworkService for ObserverService {
+    async fn handle_block(
+        &self,
+        _peer: PeerId,
+        _item: ObserverBlockStreamItem,
+    ) -> ConsensusResult<()> {
+        // TODO: implement block processing for observers.
+        // This should validate and add blocks to DagState, similar to how validators
+        // handle blocks in AuthorityService::handle_send_block.
+        Ok(())
+    }
+
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,

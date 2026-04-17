@@ -10,22 +10,25 @@ use api::types::address::IAddressable;
 use api::types::move_datatype::IMoveDatatype;
 use api::types::move_object::IMoveObject;
 use api::types::object::IObject;
-use async_graphql::EmptySubscription;
 use async_graphql::ObjectType;
 use async_graphql::Schema;
 use async_graphql::SchemaBuilder;
 use async_graphql::SubscriptionType;
 use async_graphql::extensions::ExtensionFactory;
 use async_graphql::extensions::Tracing;
+use async_graphql::http::ALL_WEBSOCKET_PROTOCOLS;
 use async_graphql::http::GraphiQLSource;
+use async_graphql_axum::GraphQLProtocol;
 use async_graphql_axum::GraphQLRequest;
 use async_graphql_axum::GraphQLResponse;
+use async_graphql_axum::GraphQLWebSocket;
 use axum::Extension;
 use axum::Router;
 use axum::extract::ConnectInfo;
-use axum::extract::MatchedPath;
+use axum::extract::WebSocketUpgrade;
 use axum::http::Method;
 use axum::response::Html;
+use axum::response::IntoResponse;
 use axum::routing::MethodRouter;
 use axum::routing::get;
 use axum::routing::post;
@@ -39,13 +42,12 @@ use headers::ContentLength;
 use health::DbProbe;
 use prometheus::Registry;
 use sui_futures::service::Service;
-use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
-use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
 use sui_indexer_alt_reader::pg_reader::PgReader;
@@ -64,11 +66,18 @@ use url::Url;
 
 use crate::api::mutation::Mutation;
 use crate::api::query::Query;
+#[cfg(feature = "staging")]
+use crate::api::subscription::Subscription;
 use crate::error::PanicHandler;
 use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
+#[cfg(not(feature = "staging"))]
+use async_graphql::EmptySubscription as Subscription;
+
+const GRAPHQL_PATH: &str = "/graphql";
+const HEALTH_PATH: &str = "/graphql/health";
 
 mod api;
 pub mod args;
@@ -202,13 +211,13 @@ where
         } = self;
 
         if with_ide {
-            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
-            router = router.route("/graphql", get(graphiql));
+            info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}{GRAPHQL_PATH}'");
         } else {
             info!("Skipping GraphiQL IDE setup");
         }
 
         router = router
+            .layer(Extension(IdeEnabled(with_ide)))
             .layer(Extension(schema.finish()))
             .layer(axum::middleware::from_fn_with_state(
                 Version(version),
@@ -259,13 +268,21 @@ impl Default for RpcArgs {
 }
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
-pub fn schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
-    Schema::build(Query::default(), Mutation, EmptySubscription)
+pub fn schema() -> SchemaBuilder<Query, Mutation, Subscription> {
+    Schema::build(Query::default(), Mutation, Subscription)
         .register_output_type::<IAddressable>()
         .register_output_type::<IMoveDatatype>()
         .register_output_type::<IMoveObject>()
         .register_output_type::<IObject>()
 }
+
+/// Whether the GraphiQL IDE is enabled on this instance.
+#[derive(Clone, Copy)]
+struct IdeEnabled(bool);
+
+/// Whether subscriptions are enabled on this instance (i.e., `--checkpoint-stream-url` was set).
+#[derive(Clone, Copy)]
+struct SubscriptionsEnabled(bool);
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line).
@@ -284,10 +301,11 @@ pub async fn start_rpc(
     database_url: Option<Url>,
     fullnode_args: FullnodeArgs,
     db_args: DbArgs,
-    kv_args: args::KvArgs,
+    kv_args: KvArgs,
     consistent_reader_args: ConsistentReaderArgs,
     args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
+    subscription_args: args::SubscriptionArgs,
     version: &'static str,
     config: RpcConfig,
     pg_pipelines: Vec<String>,
@@ -296,52 +314,33 @@ pub async fn start_rpc(
     let rpc = RpcService::new(args, version, schema(), registry);
     let metrics = rpc.metrics();
 
-    // Create gRPC full node client wrapper
-    let fullnode_client =
-        FullnodeClient::new(Some("graphql_fullnode"), fullnode_args, registry).await?;
-
-    let pg_reader =
-        PgReader::new(Some("graphql_db"), database_url.clone(), db_args, registry).await?;
-
-    let bigtable_reader = if let Some(instance_id) = kv_args.bigtable_instance.as_ref() {
-        let reader = BigtableReader::new(
-            instance_id.clone(),
-            "indexer-alt-graphql".to_owned(),
-            kv_args.bigtable_args(),
-            registry,
-        )
-        .await?;
-
-        Some(reader)
-    } else {
-        None
-    };
-
-    let ledger_grpc_reader = if let Some(ledger_grpc_url) = kv_args.ledger_grpc_url.as_ref() {
-        let reader = LedgerGrpcReader::new(
-            ledger_grpc_url.clone(),
-            kv_args.ledger_grpc_args(),
-            Some("graphql_ledger_grpc"),
-            registry,
-        )
+    // Create gRPC full node client wrapper. If left unconfigured, the client will not be stored in
+    // the schema data, and resolvers that depend on it return `FeatureUnavailable`.
+    let fullnode_client = FullnodeClient::new(Some("graphql_fullnode"), fullnode_args, registry)
         .await
-        .context("Failed to create Ledger gRPC reader")?;
-        Some(reader)
-    } else {
-        None
-    };
+        .context("Failed to create fullnode gRPC client")?;
 
     let consistent_reader =
         ConsistentReader::new(Some("graphql_consistent"), consistent_reader_args, registry).await?;
 
+    let bigtable_reader = kv_args
+        .bigtable_reader("indexer-alt-graphql".to_owned(), registry)
+        .await?;
+
+    let ledger_grpc_reader = kv_args
+        .ledger_grpc_reader(Some("graphql_ledger_grpc"), registry)
+        .await?;
+
+    let pg_reader =
+        PgReader::new(Some("graphql_db"), database_url.clone(), db_args, registry).await?;
+
     let pg_loader = Arc::new(pg_reader.as_data_loader());
-    let kv_loader = if let Some(reader) = bigtable_reader.as_ref() {
-        KvLoader::new_with_bigtable(Arc::new(reader.as_data_loader()))
-    } else if let Some(reader) = ledger_grpc_reader.as_ref() {
-        KvLoader::new_with_ledger_grpc(Arc::new(reader.as_data_loader()))
-    } else {
-        KvLoader::new_with_pg(pg_loader.clone())
-    };
+
+    let kv_loader = KvLoader::from_kv_sources(
+        bigtable_reader.clone(),
+        ledger_grpc_reader.clone(),
+        pg_loader.clone(),
+    );
 
     let package_store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
 
@@ -367,9 +366,13 @@ pub async fn start_rpc(
         metrics.clone(),
     );
 
-    let rpc = rpc
-        .route("/graphql", post(graphql))
-        .route("/graphql/health", get(health::check))
+    let streaming_task = subscription_args
+        .checkpoint_stream_url
+        .map(|uri| task::streaming::CheckpointStreamTask::new(uri, &config.subscription));
+
+    let mut rpc = rpc
+        .route(GRAPHQL_PATH, post(graphql).get(graphql_get))
+        .route(HEALTH_PATH, get(health::check))
         .layer(watermark_task.watermarks())
         .layer(config.health)
         .layer(DbProbe(database_url))
@@ -387,23 +390,39 @@ pub async fn start_rpc(
         .data(consistent_reader)
         .data(pg_loader)
         .data(kv_loader)
-        .data(package_store)
-        .data(fullnode_client);
+        .data(package_store);
+
+    if let Some(fullnode_client) = fullnode_client {
+        rpc = rpc.data(fullnode_client);
+    }
+
+    let subscriptions_enabled = streaming_task.is_some();
+    rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
+
+    if let Some(ref task) = streaming_task {
+        rpc = rpc.data(task.broadcaster());
+    }
 
     let s_rpc = rpc.run().await?;
     let s_system_package_task = system_package_task.run();
     let s_watermark = watermark_task.run();
 
-    Ok(s_rpc
+    let mut service = s_rpc
         .attach(s_chain_id)
         .attach(s_system_package_task)
-        .attach(s_watermark))
+        .attach(s_watermark);
+
+    if let Some(task) = streaming_task {
+        service = service.attach(task.run());
+    }
+
+    Ok(service)
 }
 
 /// Handler for RPC requests (POST requests making GraphQL queries).
 async fn graphql(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(schema): Extension<Schema<Query, Mutation, EmptySubscription>>,
+    Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
     Extension(watermark): Extension<WatermarksLock>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
@@ -423,10 +442,56 @@ async fn graphql(
     schema.execute(request).await.into()
 }
 
-/// Handler for GET requests for the online IDE. GraphQL requests are forwarded to the POST handler
-/// at the same path.
-async fn graphiql(path: MatchedPath) -> Html<String> {
-    Html(GraphiQLSource::build().endpoint(path.as_str()).finish())
+/// Handler for GET requests on the GraphQL path. WebSocket upgrade requests are handled as
+/// subscription connections; regular GET requests serve the GraphiQL IDE (if enabled).
+async fn graphql_get(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Extension(schema): Extension<Schema<Query, Mutation, Subscription>>,
+    Extension(SubscriptionsEnabled(subscriptions_enabled)): Extension<SubscriptionsEnabled>,
+    Extension(IdeEnabled(ide_enabled)): Extension<IdeEnabled>,
+    ws: Option<WebSocketUpgrade>,
+    protocol: Option<GraphQLProtocol>,
+) -> impl IntoResponse {
+    match (ws, protocol) {
+        (Some(ws), Some(protocol)) => {
+            handle_ws(ws, protocol, schema, addr, subscriptions_enabled).into_response()
+        }
+        _ if ide_enabled => graphiql().into_response(),
+        _ => axum::http::StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+fn graphiql() -> Html<String> {
+    Html(
+        GraphiQLSource::build()
+            .endpoint(GRAPHQL_PATH)
+            .subscription_endpoint(GRAPHQL_PATH)
+            .finish(),
+    )
+}
+
+fn handle_ws(
+    ws: WebSocketUpgrade,
+    protocol: GraphQLProtocol,
+    schema: Schema<Query, Mutation, Subscription>,
+    addr: SocketAddr,
+    subscriptions_enabled: bool,
+) -> impl IntoResponse {
+    ws.protocols(ALL_WEBSOCKET_PROTOCOLS)
+        .on_upgrade(move |stream| {
+            let mut data = async_graphql::Data::default();
+            data.insert(Session::new(addr));
+
+            GraphQLWebSocket::new(stream, schema, protocol)
+                .with_data(data)
+                .on_connection_init(move |_| async move {
+                    if !subscriptions_enabled {
+                        return Err("Subscriptions are not enabled on this instance.".into());
+                    }
+                    Ok(async_graphql::Data::default())
+                })
+                .serve()
+        })
 }
 
 #[cfg(test)]

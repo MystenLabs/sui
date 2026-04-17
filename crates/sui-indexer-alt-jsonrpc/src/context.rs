@@ -7,10 +7,9 @@ use anyhow::Context as _;
 use async_graphql::dataloader::DataLoader;
 use diesel::QueryDsl;
 use prometheus::Registry;
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
-use sui_indexer_alt_reader::bigtable_reader::BigtableReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
 use sui_indexer_alt_reader::package_resolver::PackageCache;
@@ -59,15 +58,18 @@ pub(crate) struct Context {
 }
 
 impl Context {
-    /// Set-up access to the stores through all the interfaces available in the context. If
-    /// `bigtable_instance` is set, KV lookups will be sent to it, otherwise they will be sent to
-    /// the `database. If `database_url` is `None`, the interfaces will be set-up but will fail to
+    /// Set-up access to the stores through all the interfaces available in the context.
+    ///
+    /// KV lookups are routed based on `kv_args`: if a Bigtable instance is configured, lookups go
+    /// directly to Bigtable; if a Ledger gRPC URL is configured, lookups go through kv-rpc;
+    /// otherwise they fall back to Postgres.
+    ///
+    /// If `database_url` is `None`, the Postgres-backed interfaces will be set-up but will fail to
     /// accept any connections.
     pub(crate) async fn new(
         database_url: Option<Url>,
-        bigtable_instance: Option<String>,
         db_args: DbArgs,
-        bigtable_args: BigtableArgs,
+        kv_args: KvArgs,
         consistent_reader_args: ConsistentReaderArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
@@ -77,19 +79,15 @@ impl Context {
         let pg_reader = PgReader::new(None, database_url, db_args, registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
-        let kv_loader = if let Some(instance_id) = bigtable_instance {
-            let bigtable_reader = BigtableReader::new(
-                instance_id,
-                "indexer-alt-jsonrpc".to_owned(),
-                bigtable_args,
-                registry,
-            )
-            .await?;
-
-            KvLoader::new_with_bigtable(Arc::new(bigtable_reader.as_data_loader()))
-        } else {
-            KvLoader::new_with_pg(pg_loader.clone())
-        };
+        let kv_loader = KvLoader::from_kv_sources(
+            kv_args
+                .bigtable_reader("indexer-alt-jsonrpc".to_owned(), registry)
+                .await?,
+            kv_args
+                .ledger_grpc_reader(Some("jsonrpc_ledger_grpc"), registry)
+                .await?,
+            pg_loader.clone(),
+        );
 
         let store = Arc::new(PackageCache::new(DbPackageStore::new(pg_loader.clone())));
         let package_resolver = Arc::new(Resolver::new_with_limits(

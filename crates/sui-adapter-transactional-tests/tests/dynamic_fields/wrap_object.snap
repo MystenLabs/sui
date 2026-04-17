@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 12 tasks
 
@@ -76,7 +77,7 @@ gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 
 
 task 9, line 57:
 //# view-object 8,2
-Owner: Object ID: ( fake(8,1) )
+Owner: Object ID: ( fake(8,0) )
 Version: 6
 Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
     id: sui::object::UID {
@@ -88,12 +89,12 @@ Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui
         name: 0u64,
     },
     value: sui::object::ID {
-        bytes: fake(8,0),
+        bytes: fake(8,1),
     },
 }
 
 task 10, line 59:
-//# run a::m::take_and_take --sender A --args object(8,1)
+//# run a::m::take_and_take --sender A --args object(8,0)
 mutated: object(0,0), object(8,0), object(8,1)
 deleted: object(8,2)
 gas summary: computation_cost: 1000000, storage_cost: 3435200,  storage_rebate: 5831100, non_refundable_storage_fee: 58900

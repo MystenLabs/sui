@@ -78,7 +78,7 @@ use sui_types::{
     event::Event,
     execution::{ExecutionResults, ExecutionResultsV2},
     execution_status::{CommandArgumentError, ExecutionErrorKind, PackageUpgradeError},
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     move_package::{
         MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt, UpgradeTicket,
         normalize_deserialized_modules,
@@ -251,7 +251,7 @@ enum ResolvedLocation<'a> {
 pub struct Context<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension> {
     pub env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
     /// Metrics for reporting exceeded limits
-    pub metrics: Arc<LimitsMetrics>,
+    pub metrics: Arc<ExecutionMetrics>,
     pub native_extensions: NativeExtensions<'env>,
     /// A shared transaction context, contains transaction digest information and manages the
     /// creation of new object IDs
@@ -319,7 +319,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
     #[instrument(name = "Context::new", level = "trace", skip_all)]
     pub fn new(
         env: &'env Env<'pc, 'vm, 'state, 'linkage, 'extension>,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &'gas mut GasCharger,
         payment_location: Option<GasPayment>,

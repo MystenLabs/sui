@@ -1,0 +1,9 @@
+[package]
+name = "RenameAlias"
+edition = "2024.alpha"
+
+[dependencies]
+MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
+
+[addresses]
+RenameAlias = "0x0"

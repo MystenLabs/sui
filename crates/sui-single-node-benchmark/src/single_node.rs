@@ -174,7 +174,7 @@ impl SingleValidator {
                     &self.epoch_store,
                 );
                 self.get_validator()
-                    .wait_for_transaction_execution_for_testing(&executable, &self.epoch_store)
+                    .wait_for_transaction_execution_for_testing(&executable)
                     .await
             }
             Component::ValidatorWithoutConsensus | Component::ValidatorWithFakeConsensus => {
@@ -225,7 +225,7 @@ impl SingleValidator {
             self.epoch_store.executor().execute_transaction_to_effects(
                 &store,
                 self.epoch_store.protocol_config(),
-                self.get_validator().metrics.limits_metrics.clone(),
+                self.get_validator().metrics.execution_metrics.clone(),
                 false,
                 ExecutionOrEarlyError::Ok(()),
                 &self.epoch_store.epoch(),

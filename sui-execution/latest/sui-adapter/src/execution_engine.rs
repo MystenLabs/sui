@@ -25,7 +25,7 @@ mod checked {
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas_coin::GAS;
     use sui_types::messages_checkpoint::CheckpointTimestamp;
-    use sui_types::metrics::LimitsMetrics;
+    use sui_types::metrics::ExecutionMetrics;
     use sui_types::object::OBJECT_START_VERSION;
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
     use sui_types::randomness_state::{
@@ -138,7 +138,7 @@ mod checked {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -213,7 +213,7 @@ mod checked {
             tx_ctx,
             move_vm,
             protocol_config,
-            metrics,
+            metrics.clone(),
             enable_expensive_checks,
             execution_params,
             trace_builder_opt,
@@ -298,6 +298,63 @@ mod checked {
             *epoch_id,
         );
 
+        metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
+            let t = move_vm.get_telemetry_report();
+            vm_metrics
+                .move_vm_package_cache_count
+                .set(t.package_cache_count as i64);
+            vm_metrics
+                .move_vm_total_arena_size_bytes
+                .set(t.total_arena_size as i64);
+            vm_metrics.move_vm_module_count.set(t.module_count as i64);
+            vm_metrics
+                .move_vm_function_count
+                .set(t.function_count as i64);
+            vm_metrics.move_vm_type_count.set(t.type_count as i64);
+            vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
+            vm_metrics
+                .move_vm_vtable_cache_count
+                .set(t.vtable_cache_count as i64);
+            vm_metrics
+                .move_vm_vtable_cache_hits
+                .set(t.vtable_cache_hits as i64);
+            vm_metrics
+                .move_vm_vtable_cache_misses
+                .set(t.vtable_cache_misses as i64);
+            vm_metrics
+                .move_vm_load_time_ms
+                .set(t.total_load_time as i64);
+            vm_metrics.move_vm_load_count.set(t.load_count as i64);
+            vm_metrics
+                .move_vm_validation_time_ms
+                .set(t.total_validation_time as i64);
+            vm_metrics
+                .move_vm_validation_count
+                .set(t.validation_count as i64);
+            vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
+            vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
+            vm_metrics
+                .move_vm_execution_time_ms
+                .set(t.total_execution_time as i64);
+            vm_metrics
+                .move_vm_execution_count
+                .set(t.execution_count as i64);
+            vm_metrics
+                .move_vm_interpreter_time_ms
+                .set(t.total_interpreter_time as i64);
+            vm_metrics
+                .move_vm_interpreter_count
+                .set(t.interpreter_count as i64);
+            vm_metrics
+                .move_vm_max_callstack_size
+                .set(t.max_callstack_size as i64);
+            vm_metrics
+                .move_vm_max_valuestack_size
+                .set(t.max_valuestack_size as i64);
+            vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
+            vm_metrics.move_vm_total_count.set(t.total_count as i64);
+        });
+
         (
             inner,
             gas_charger.into_gas_status(),
@@ -310,7 +367,7 @@ mod checked {
     pub fn execute_genesis_state_update(
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         move_vm: &Arc<MoveRuntime>,
         tx_context: Rc<RefCell<TxContext>>,
         input_objects: CheckedInputObjects,
@@ -353,7 +410,7 @@ mod checked {
         tx_ctx: Rc<RefCell<TxContext>>,
         move_vm: &Arc<MoveRuntime>,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -548,7 +605,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Result<(), Mode::Error> {
         let effects_estimated_size = temporary_store.estimate_effects_size_upperbound();
 
@@ -560,7 +617,7 @@ mod checked {
             effects_estimated_size,
             protocol_config.max_serialized_tx_effects_size_bytes(),
             protocol_config.max_serialized_tx_effects_size_bytes_system_tx(),
-            metrics.excessive_estimated_effects_size
+            metrics.limits_metrics.excessive_estimated_effects_size
         ) {
             LimitThresholdCrossed::None => Ok(()),
             LimitThresholdCrossed::Soft(_, limit) => {
@@ -587,7 +644,7 @@ mod checked {
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Result<(), Mode::Error> {
         if let (Some(normal_lim), Some(system_lim)) = (
             protocol_config.max_size_written_objects_as_option(),
@@ -600,7 +657,7 @@ mod checked {
                 written_objects_size,
                 normal_lim,
                 system_lim,
-                metrics.excessive_written_objects_size
+                metrics.limits_metrics.excessive_written_objects_size
             ) {
                 LimitThresholdCrossed::None => (),
                 LimitThresholdCrossed::Soft(_, limit) => {
@@ -636,7 +693,7 @@ mod checked {
         move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
         let result = match transaction_kind {
@@ -1042,7 +1099,7 @@ mod checked {
         move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), Mode::Error> {
         let params = AdvanceEpochParams {
@@ -1115,7 +1172,7 @@ mod checked {
         move_vm: &MoveRuntime,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) {
         let digest = tx_ctx.borrow().digest();
@@ -1189,7 +1246,7 @@ mod checked {
         move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), Mode::Error> {
         let pt = {
@@ -1334,7 +1391,7 @@ mod checked {
         move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), Mode::Error> {
         let pt = {
@@ -1406,7 +1463,7 @@ mod checked {
         move_vm: &Arc<MoveRuntime>,
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), Mode::Error> {
         let pt = {

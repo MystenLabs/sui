@@ -100,6 +100,11 @@ pub struct Opts {
     /// built at the same commit as the validators.
     #[clap(long, global = true)]
     pub protocol_version: Option<u64>,
+
+    /// If set, the stress binary will exit with a non-zero status code if the
+    /// achieved TPS is below this threshold.
+    #[clap(long, global = true)]
+    pub min_tps: Option<f64>,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]

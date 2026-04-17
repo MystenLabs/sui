@@ -677,9 +677,9 @@ mod checked {
         Ok(())
     }
 
-    /// Verify that all Move object inputs in a gasless transaction are Coin<T>
-    /// where T is in the allowlist.
-    fn check_gasless_object_inputs(
+    /// Verify that all Move object inputs in a gasless transaction are `Coin<T>`
+    /// where `T` is in the allowlist.
+    pub fn check_gasless_object_inputs(
         input_objects: &InputObjects,
         protocol_config: &ProtocolConfig,
     ) -> UserInputResult<()> {

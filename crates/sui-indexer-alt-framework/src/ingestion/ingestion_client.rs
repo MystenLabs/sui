@@ -54,6 +54,8 @@ pub(crate) trait IngestionClientTrait: Send + Sync {
     async fn chain_id(&self) -> anyhow::Result<ChainIdentifier>;
 
     async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult;
+
+    async fn latest_checkpoint_number(&self) -> anyhow::Result<u64>;
 }
 
 #[derive(clap::Args, Clone, Debug)]
@@ -393,10 +395,14 @@ impl IngestionClient {
             chain_id: *chain_id,
         })
     }
+
+    pub async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+        self.client.latest_checkpoint_number().await
+    }
 }
 
 /// Keep backing off until we are waiting for the max interval, but don't give up.
-fn transient_backoff() -> ExponentialBackoff {
+pub(crate) fn transient_backoff() -> ExponentialBackoff {
     ExponentialBackoff {
         max_interval: MAX_TRANSIENT_RETRY_INTERVAL,
         max_elapsed_time: None,
@@ -406,7 +412,7 @@ fn transient_backoff() -> ExponentialBackoff {
 
 /// Retry a fallible async operation with exponential backoff and slow-operation monitoring.
 /// Records the total time (including retries) in the provided latency histogram.
-async fn retry_transient_with_slow_monitor<F, Fut, T>(
+pub(crate) async fn retry_transient_with_slow_monitor<F, Fut, T>(
     operation: &str,
     make_future: F,
     latency: &Histogram,
@@ -535,6 +541,10 @@ mod tests {
                 .as_deref()
                 .cloned()
                 .ok_or(CheckpointError::NotFound)
+        }
+
+        async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
+            Ok(0)
         }
     }
 

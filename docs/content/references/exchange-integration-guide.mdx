@@ -196,7 +196,7 @@ nextCursor : {"txDigest": "GZQN9pE3Zr9ZfLzBK1BfVCXtbjx5xKMxPSEKaHDvL3E2","eventS
 
 Sui is a DAG-based blockchain and uses checkpoints for node synchronization and global transaction ordering. Checkpoints differ from blocks in the following ways:
 
-- Sui creates checkpoints and adds finalized transactions. Note that transactions are finalized even before they are included in a checkpoint
+- Sui creates checkpoints and adds finalized transactions. Transactions are finalized even before they are included in a checkpoint
 - Checkpoints do not fork, roll back, or reorganize.
 - Sui creates about four checkpoints every second. Find the most up-to-date statistic on the [Sui public dashboard](https://metrics.sui.io/public-dashboards/4ceb11cc210d4025b122294586961169).
 
@@ -235,7 +235,7 @@ Sui supports the following API operations related to transferring SUI between ad
 
   The operation merges all of the tokens provided into one token object and settles the gas fees. It then splits the token according to the amounts in the amounts array and sends the first token to the first recipient, the second token to the second recipient, and so on. Any remaining SUI on the token stays in the source address.
 
-  The benefits of this method include: no gas fees for merging or splitting tokens, and the abstracted token merge and split. The `sui_paySui` operation is a native function, so the merge and split operations are not considered Sui transactions. The gas fees for them match typical transactions on Sui.You can use this operation to split coins in your own address by setting the recipient as your own address. Note that the total value of the input coins must be greater than the total value of the amounts to send.
+  The benefits of this method include: no gas fees for merging or splitting tokens, and the abstracted token merge and split. The `sui_paySui` operation is a native function, so the merge and split operations are not considered Sui transactions. The gas fees for them match typical transactions on Sui. You can use this operation to split coins in your own address by setting the recipient as your own address. The total value of the input coins must be greater than the total value of the amounts to send.
 
 - [sui_pay](/sui-api-ref#sui_pay)
   This method is similar to sui_paySui, but it accepts any kind of coin or token instead of only SUI. You must include a gas token, and all of the coins or tokens must be the same type.
@@ -245,7 +245,7 @@ Sui supports the following API operations related to transferring SUI between ad
 
 ## Signing Transactions {#signing-transactions}
 
-Please refer to Sui Signatures for more details on signature validity requirements.
+Refer to Sui Signatures for more details on signature validity requirements.
 
 ## SUI Staking {#sui-staking}
 

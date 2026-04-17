@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 7 tasks
 
@@ -19,22 +20,10 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 7402400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 33:
-//# view-object 2,0
-Owner: Account Address ( A )
-Version: 2
-Contents: a::m::Derived {
-    id: sui::object::UID {
-        id: sui::object::ID {
-            bytes: fake(2,0),
-        },
-    },
-}
-
-task 4, line 35:
 //# view-object 2,1
 Owner: Account Address ( A )
 Version: 2
-Contents: a::m::Parent {
+Contents: a::m::Derived {
     id: sui::object::UID {
         id: sui::object::ID {
             bytes: fake(2,1),
@@ -42,9 +31,21 @@ Contents: a::m::Parent {
     },
 }
 
+task 4, line 35:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: a::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
 task 5, line 37:
 //# view-object 2,2
-Owner: Object ID: ( fake(2,1) )
+Owner: Object ID: ( fake(2,0) )
 Version: 2
 Contents: sui::dynamic_field::Field<sui::derived_object::Claimed, sui::derived_object::ClaimedStatus> {
     id: sui::object::UID {
@@ -54,7 +55,7 @@ Contents: sui::dynamic_field::Field<sui::derived_object::Claimed, sui::derived_o
     },
     name: sui::derived_object::Claimed {
         pos0: sui::object::ID {
-            bytes: fake(2,0),
+            bytes: fake(2,1),
         },
     },
     value: sui::derived_object::ClaimedStatus::Reserved{},
@@ -62,7 +63,7 @@ Contents: sui::dynamic_field::Field<sui::derived_object::Claimed, sui::derived_o
 
 task 6, line 39:
 //# view-object 2,3
-Owner: Object ID: ( fake(2,0) )
+Owner: Object ID: ( fake(2,1) )
 Version: 2
 Contents: sui::dynamic_field::Field<u64, vector<u8>> {
     id: sui::object::UID {

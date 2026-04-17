@@ -31,7 +31,7 @@ mod checked {
         base_types::*,
         error::{ExecutionError, SuiError},
         execution_status::ExecutionErrorKind,
-        metrics::LimitsMetrics,
+        metrics::ExecutionMetrics,
         storage::ChildObjectResolver,
     };
     use sui_verifier::verifier::sui_verify_module_metered_check_timeout_only;
@@ -75,7 +75,7 @@ mod checked {
         input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> NativeContextExtensions<'r> {
         let mut extensions = NativeContextExtensions::default();
         extensions.add(ObjectRuntime::new(

@@ -41,7 +41,7 @@ module T::test {
 
 //# create-checkpoint
 
-//# programmable --sender A --inputs object(1,0) @B
+//# programmable --sender A --inputs object(1,6) @B
 //> TransferObjects([Input(0)], Input(1))
 
 //# programmable --sender A --inputs object(3,0) @B

@@ -1,0 +1,22 @@
+// WriteRef with an unreachable frozen reference due to control flow.
+
+//# run
+module 0x42.m {
+
+entry foo() {
+    let x: u64;
+    let r: &u64;
+    let w: &mut u64;
+label b0:
+    x = 42;
+    w = &mut x;
+    jump_if_false (true) b_join;
+label b_ref:
+    r = freeze(copy(w));
+label b_join:
+    *move(w) = 100;
+    assert(move(x) == 100, 1);
+    return;
+}
+
+}

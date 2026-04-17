@@ -16,7 +16,7 @@ use sui_types::{
     execution_params::ExecutionOrEarlyError,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    metrics::{BytecodeVerifierMetrics, LimitsMetrics},
+    metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     sui_system_state::{
         SuiSystemState, SuiSystemStateTrait,
         epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
@@ -30,7 +30,7 @@ pub struct EpochState {
     epoch_start_state: EpochStartSystemState,
     committee: Committee,
     protocol_config: ProtocolConfig,
-    limits_metrics: Arc<LimitsMetrics>,
+    execution_metrics: Arc<ExecutionMetrics>,
     bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
     executor: Arc<dyn Executor + Send + Sync>,
     chain_identifier: ChainIdentifier,
@@ -54,7 +54,7 @@ impl EpochState {
         let epoch_start_state = system_state.into_epoch_start_state();
         let committee = epoch_start_state.get_sui_committee();
         let registry = prometheus::Registry::new();
-        let limits_metrics = Arc::new(LimitsMetrics::new(&registry));
+        let execution_metrics = Arc::new(ExecutionMetrics::new(&registry));
         let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(&registry));
         let executor = sui_execution::executor(&protocol_config, true).unwrap();
 
@@ -62,7 +62,7 @@ impl EpochState {
             epoch_start_state,
             committee,
             protocol_config,
-            limits_metrics,
+            execution_metrics,
             bytecode_verifier_metrics,
             executor,
             chain_identifier,
@@ -155,7 +155,7 @@ impl EpochState {
             .execute_transaction_to_effects_and_execution_error(
                 store.backing_store(),
                 &self.protocol_config,
-                self.limits_metrics.clone(),
+                self.execution_metrics.clone(),
                 false, // enable_expensive_checks
                 // TODO: Integrate with early execution error
                 ExecutionOrEarlyError::Ok(()),

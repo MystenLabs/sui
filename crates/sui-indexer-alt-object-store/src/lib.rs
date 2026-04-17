@@ -229,11 +229,10 @@ impl Connection for ObjectStoreConnection {
 
     async fn accepts_chain_id(
         &mut self,
-        _pipeline_task: &str,
-        _chain_id: [u8; 32],
+        pipeline_task: &str,
+        chain_id: [u8; 32],
     ) -> anyhow::Result<bool> {
-        // TODO: Implement storing chain_id
-        Ok(true)
+        crate::accepts_chain_id(self.object_store.as_ref(), pipeline_task, chain_id).await
     }
 
     async fn committer_watermark(
@@ -353,6 +352,46 @@ fn watermark_path(pipeline: &str) -> ObjectPath {
     ObjectPath::from(format!("_metadata/watermarks/{}.json", pipeline))
 }
 
+fn chain_id_path(pipeline_task: &str) -> ObjectPath {
+    ObjectPath::from(format!("_metadata/chain_id/{pipeline_task}"))
+}
+
+/// Reusable implementation of [`Connection::accepts_chain_id`] for object-store-backed
+/// connections. Stores `chain_id` at `_metadata/chain_id/{pipeline_task}` on first call
+/// via a conditional create; on subsequent calls reads and compares.
+pub async fn accepts_chain_id(
+    object_store: &dyn object_store::ObjectStore,
+    pipeline_task: &str,
+    chain_id: [u8; 32],
+) -> anyhow::Result<bool> {
+    let path = chain_id_path(pipeline_task);
+    match object_store
+        .put_opts(
+            &path,
+            chain_id.to_vec().into(),
+            object_store::PutOptions {
+                mode: PutMode::Create,
+                ..Default::default()
+            },
+        )
+        .await
+    {
+        Ok(_) => Ok(true),
+        Err(ObjectStoreError::AlreadyExists { .. }) => {
+            let bytes = object_store.get(&path).await?.bytes().await?;
+            let stored: [u8; 32] = bytes.as_ref().try_into().ok().with_context(|| {
+                format!(
+                    "stored chain_id at {} has wrong length: {}",
+                    path,
+                    bytes.len()
+                )
+            })?;
+            Ok(stored == chain_id)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use object_store::memory::InMemory;
@@ -378,6 +417,17 @@ mod tests {
     async fn store_conn() -> ObjectStoreConnection {
         let store = ObjectStore::new(Arc::new(InMemory::new()));
         store.connect().await.unwrap()
+    }
+
+    async fn read_stored_chain_id(conn: &ObjectStoreConnection, pipeline_task: &str) -> Vec<u8> {
+        conn.object_store
+            .get(&chain_id_path(pipeline_task))
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap()
+            .to_vec()
     }
 
     #[tokio::test]
@@ -788,5 +838,37 @@ mod tests {
         let mut conn = conn;
         let result = conn.pruner_watermark(PIPELINE, Duration::ZERO).await;
         assert!(result.is_err(), "expected overflow error, got {result:?}");
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_first_call_writes_and_accepts() {
+        let mut conn = store_conn().await;
+
+        let chain_id = [1u8; 32];
+        assert!(conn.accepts_chain_id(PIPELINE, chain_id).await.unwrap());
+        assert_eq!(read_stored_chain_id(&conn, PIPELINE).await, chain_id);
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_matching_accepts() {
+        let mut conn = store_conn().await;
+
+        let chain_id = [1u8; 32];
+        assert!(conn.accepts_chain_id(PIPELINE, chain_id).await.unwrap());
+        // Second call with the same chain_id should also accept
+        assert!(conn.accepts_chain_id(PIPELINE, chain_id).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_accepts_chain_id_mismatching_rejects() {
+        let mut conn = store_conn().await;
+
+        let chain_id_a = [1u8; 32];
+        let chain_id_b = [2u8; 32];
+        assert!(conn.accepts_chain_id(PIPELINE, chain_id_a).await.unwrap());
+        assert!(!conn.accepts_chain_id(PIPELINE, chain_id_b).await.unwrap());
+
+        // Stored bytes are unchanged (still chain_id_a)
+        assert_eq!(read_stored_chain_id(&conn, PIPELINE).await, chain_id_a);
     }
 }

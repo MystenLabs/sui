@@ -234,7 +234,6 @@ impl AuthorityPerpetualTables {
 
         let mut objects_config = KeySpaceConfig::new()
             .with_max_dirty_keys(4096)
-            .with_unloaded_iterator(true)
             .with_value_cache_size(value_cache_size);
         if matches!(db_options_override, Some(options) if options.is_validator) {
             objects_config = objects_config.with_compactor(Box::new(objects_compactor));

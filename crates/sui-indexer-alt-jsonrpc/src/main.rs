@@ -42,9 +42,8 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         Command::Rpc {
             database_url,
-            bigtable_instance,
             db_args,
-            bigtable_args,
+            kv_args,
             consistent_reader_args,
             rpc_args,
             system_package_task_args,
@@ -75,9 +74,8 @@ async fn main() -> anyhow::Result<()> {
 
             let s_rpc = start_rpc(
                 Some(database_url),
-                bigtable_instance,
                 db_args,
-                bigtable_args,
+                kv_args,
                 consistent_reader_args,
                 rpc_args,
                 node_args,

@@ -90,7 +90,7 @@ public fun process_payment(
         vec_set::contains(&register.authorized_individuals, &sender) || sender == register.register_owner,
         ENotAuthorized,
     );
-    assert!(dynamic_field::exists_(&register.id, payment_id), EInvalidPaymentID);
+    assert!(dynamic_field::exists(&register.id, payment_id), EInvalidPaymentID);
     let payment: IdentifiedPayment = dynamic_field::remove(&mut register.id, payment_id);
     let (_, coin) = identified_payment::unpack(payment);
     coin

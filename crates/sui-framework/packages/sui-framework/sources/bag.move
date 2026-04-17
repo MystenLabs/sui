@@ -84,7 +84,7 @@ public fun remove<K: copy + drop + store, V: store>(bag: &mut Bag, k: K): V {
 
 /// Returns true iff there is an value associated with the key `k: K` in the bag `bag: &Bag`
 public fun contains<K: copy + drop + store>(bag: &Bag, k: K): bool {
-    field::exists_<K>(&bag.id, k)
+    field::exists<K>(&bag.id, k)
 }
 
 /// Returns true iff there is an value associated with the key `k: K` in the bag `bag: &Bag`

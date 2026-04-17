@@ -46,7 +46,7 @@ mod checked {
         event::Event,
         execution::{ExecutionResults, ExecutionResultsV1},
         execution_status::ExecutionErrorKind,
-        metrics::LimitsMetrics,
+        metrics::ExecutionMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::{
@@ -61,7 +61,7 @@ mod checked {
         /// The protocol config
         pub protocol_config: &'a ProtocolConfig,
         /// Metrics for reporting exceeded limits
-        pub metrics: Arc<LimitsMetrics>,
+        pub metrics: Arc<ExecutionMetrics>,
         /// The MoveVM
         pub vm: &'vm MoveVM,
         /// The global state, used for resolving packages
@@ -108,7 +108,7 @@ mod checked {
     impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
         pub fn new(
             protocol_config: &'a ProtocolConfig,
-            metrics: Arc<LimitsMetrics>,
+            metrics: Arc<ExecutionMetrics>,
             vm: &'vm MoveVM,
             state_view: &'state dyn ExecutionState,
             tx_context: &'a mut TxContext,
@@ -942,7 +942,7 @@ mod checked {
         input_objects: BTreeMap<ObjectID, object_runtime::InputObject>,
         is_metered: bool,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
     ) -> Session<'state, 'vm, LinkageView<'state>> {
         vm.new_session_with_extensions(
             linkage,

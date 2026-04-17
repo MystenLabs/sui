@@ -447,10 +447,10 @@ pub struct AuthorityPerEpochStore {
     // Saved at end of epoch for propagating observations to the next.
     pub(crate) end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
 
-    pub(crate) consensus_tx_status_cache: Option<ConsensusTxStatusCache>,
+    pub(crate) consensus_tx_status_cache: ConsensusTxStatusCache,
 
     /// A cache that maintains the reject vote reason for a transaction.
-    pub(crate) tx_reject_reason_cache: Option<TransactionRejectReasonCache>,
+    pub(crate) tx_reject_reason_cache: TransactionRejectReasonCache,
 
     /// A cache that tracks submitted transactions to prevent DoS through excessive resubmissions.
     pub(crate) submitted_transaction_cache: SubmittedTransactionCache,
@@ -1208,17 +1208,9 @@ impl AuthorityPerEpochStore {
             )),
         );
 
-        let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
-            Some(ConsensusTxStatusCache::new(protocol_config.gc_depth()))
-        } else {
-            None
-        };
+        let consensus_tx_status_cache = ConsensusTxStatusCache::new(protocol_config.gc_depth());
 
-        let tx_reject_reason_cache = if protocol_config.mysticeti_fastpath() {
-            Some(TransactionRejectReasonCache::new(None, epoch_id))
-        } else {
-            None
-        };
+        let tx_reject_reason_cache = TransactionRejectReasonCache::new(None, epoch_id);
 
         let submitted_transaction_cache =
             SubmittedTransactionCache::new(None, submitted_transaction_cache_metrics);
@@ -2093,7 +2085,6 @@ impl AuthorityPerEpochStore {
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
-    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
     /// After crash recovery, quarantine is empty so we naturally fall back to DB.
     pub fn get_owned_object_locks(
         &self,
@@ -2106,7 +2097,6 @@ impl AuthorityPerEpochStore {
     }
 
     /// Attempts to acquire owned object locks for a transaction post-consensus.
-    /// This is used when preconsensus locking is disabled.
     ///
     /// Checks whether the object versions are already locked by searching:
     /// 1. The current commit
@@ -3772,26 +3762,21 @@ impl AuthorityPerEpochStore {
         position: ConsensusPosition,
         status: ConsensusTxStatus,
     ) {
-        if let Some(cache) = self.consensus_tx_status_cache.as_ref() {
-            cache.set_transaction_status(position, status);
-        }
+        self.consensus_tx_status_cache
+            .set_transaction_status(position, status);
     }
 
     pub(crate) fn set_rejection_vote_reason(&self, position: ConsensusPosition, reason: &SuiError) {
-        if let Some(tx_reject_reason_cache) = self.tx_reject_reason_cache.as_ref() {
-            tx_reject_reason_cache.set_rejection_vote_reason(position, reason);
-        }
+        self.tx_reject_reason_cache
+            .set_rejection_vote_reason(position, reason);
     }
 
     pub(crate) fn get_rejection_vote_reason(
         &self,
         position: ConsensusPosition,
     ) -> Option<SuiError> {
-        if let Some(tx_reject_reason_cache) = self.tx_reject_reason_cache.as_ref() {
-            tx_reject_reason_cache.get_rejection_vote_reason(position)
-        } else {
-            None
-        }
+        self.tx_reject_reason_cache
+            .get_rejection_vote_reason(position)
     }
 
     /// Caches recent finalized transactions, to avoid revoting them.

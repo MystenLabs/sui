@@ -23,7 +23,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "coinType": "0x311a2ade9bff9e5eb87d329c7e7d312f05737f5a690a9b60feae11e7bf5344a7::fake::FAKE",
+    "coinType": "0x0ea261156a22e35d6550b8ca55bd526eaea58049440fe838f16d66bda5c6a442::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "12102",
     "lockedBalance": {},
@@ -59,7 +59,7 @@ Response: {
       "fundsInAddressBalance": "0"
     },
     {
-      "coinType": "0x311a2ade9bff9e5eb87d329c7e7d312f05737f5a690a9b60feae11e7bf5344a7::fake::FAKE",
+      "coinType": "0x0ea261156a22e35d6550b8ca55bd526eaea58049440fe838f16d66bda5c6a442::fake::FAKE",
       "coinObjectCount": 1,
       "totalBalance": "12102",
       "lockedBalance": {},

@@ -2166,7 +2166,7 @@ and they should correspond to the order IDs one by one.
     account_cap: &AccountCap
 ): vector&lt;<a href="../deepbook/clob_v2.md#deepbook_clob_v2_Order">Order</a>&gt; {
     <b>let</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_owner">owner</a> = account_owner(account_cap);
-    <b>let</b> <b>mut</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_open_orders">open_orders</a> = vector::empty&lt;<a href="../deepbook/clob_v2.md#deepbook_clob_v2_Order">Order</a>&gt;();
+    <b>let</b> <b>mut</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_open_orders">open_orders</a> = vector[];
     <b>if</b> (!<a href="../deepbook/clob_v2.md#deepbook_clob_v2_usr_open_orders_exist">usr_open_orders_exist</a>(pool, <a href="../deepbook/clob_v2.md#deepbook_clob_v2_owner">owner</a>)) {
         <b>return</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_open_orders">open_orders</a>
     };
@@ -2296,8 +2296,8 @@ The latter is the corresponding depth list
     <b>mut</b> price_high: u64,
     clock: &Clock
 ): (vector&lt;u64&gt;, vector&lt;u64&gt;) {
-    <b>let</b> <b>mut</b> price_vec = vector::empty&lt;u64&gt;();
-    <b>let</b> <b>mut</b> depth_vec = vector::empty&lt;u64&gt;();
+    <b>let</b> <b>mut</b> price_vec = vector[];
+    <b>let</b> <b>mut</b> depth_vec = vector[];
     <b>if</b> (<a href="../deepbook/critbit.md#deepbook_critbit_is_empty">critbit::is_empty</a>(&pool.<a href="../deepbook/clob_v2.md#deepbook_clob_v2_bids">bids</a>)) { <b>return</b> (price_vec, depth_vec) };
     <b>let</b> (price_low_, _) = <a href="../deepbook/critbit.md#deepbook_critbit_min_leaf">critbit::min_leaf</a>(&pool.<a href="../deepbook/clob_v2.md#deepbook_clob_v2_bids">bids</a>);
     <b>let</b> (price_high_, _) = <a href="../deepbook/critbit.md#deepbook_critbit_max_leaf">critbit::max_leaf</a>(&pool.<a href="../deepbook/clob_v2.md#deepbook_clob_v2_bids">bids</a>);
@@ -2356,8 +2356,8 @@ The latter is the corresponding depth list
     <b>mut</b> price_high: u64,
     clock: &Clock
 ): (vector&lt;u64&gt;, vector&lt;u64&gt;) {
-    <b>let</b> <b>mut</b> price_vec = vector::empty&lt;u64&gt;();
-    <b>let</b> <b>mut</b> depth_vec = vector::empty&lt;u64&gt;();
+    <b>let</b> <b>mut</b> price_vec = vector[];
+    <b>let</b> <b>mut</b> depth_vec = vector[];
     <b>if</b> (<a href="../deepbook/critbit.md#deepbook_critbit_is_empty">critbit::is_empty</a>(&pool.<a href="../deepbook/clob_v2.md#deepbook_clob_v2_asks">asks</a>)) { <b>return</b> (price_vec, depth_vec) };
     <b>let</b> (price_low_, _) = <a href="../deepbook/critbit.md#deepbook_critbit_min_leaf">critbit::min_leaf</a>(&pool.<a href="../deepbook/clob_v2.md#deepbook_clob_v2_asks">asks</a>);
     // Price_high is less than the lowest leaf in the tree then we <b>return</b> an empty array

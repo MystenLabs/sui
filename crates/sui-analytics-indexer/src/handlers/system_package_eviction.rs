@@ -16,6 +16,8 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::store::AnalyticsStore;
 
+pub const SYSTEM_PACKAGE_EVICTION_PIPELINE: &str = "SystemPackageEviction";
+
 pub struct SystemPackageEviction {
     package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>,
     last_epoch: AtomicU64,
@@ -32,7 +34,7 @@ impl SystemPackageEviction {
 
 #[async_trait]
 impl Processor for SystemPackageEviction {
-    const NAME: &'static str = "SystemPackageEviction";
+    const NAME: &'static str = SYSTEM_PACKAGE_EVICTION_PIPELINE;
     type Value = ();
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> Result<Vec<()>> {

@@ -772,7 +772,7 @@ meaningless to add them to the deny list.
 
 <pre><code><b>fun</b> <a href="../sui/deny_list.md#sui_deny_list_per_type_exists">per_type_exists</a>(<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>: &<a href="../sui/deny_list.md#sui_deny_list_DenyList">DenyList</a>, per_type_index: u64, per_type_key: vector&lt;u8&gt;): bool {
     <b>let</b> key = <a href="../sui/deny_list.md#sui_deny_list_ConfigKey">ConfigKey</a> { per_type_index, per_type_key };
-    ofield::exists_(&<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.id, key)
+    ofield::exists(&<a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.id, key)
 }
 </code></pre>
 

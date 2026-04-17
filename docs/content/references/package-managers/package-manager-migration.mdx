@@ -6,7 +6,7 @@ keywords: [ move, move reference, package management, package manager, migrate, 
 pagination_prev: null
 ---
 
-Version 1.63 of the Sui CLI introduced a major overhaul of the package management system. This document describes the changes between the old and new systems and gives guidance on migrating your packages. See [the package management user guide](/guides/developer/packages/move-package-management.mdx) for full details on the new system.
+Version 1.63 of the Sui CLI introduced a major overhaul of the package management system. This document describes the changes between the old and new systems and gives guidance on migrating your packages. See [the package management user guide](/develop/manage-packages/move-package-management) for full details on the new system.
 
 The new system provides several benefits:
 
@@ -24,7 +24,7 @@ Although the new package system will continue to work with existing packages, it
 1. Replace the `name` field in `Move.toml` with the name that your Move code uses for your package ([more info](#package-section)).
 2. Replace your dependency names in `Move.toml` to match the names your Move code uses to refer to them ([more info](#dependencies-section)).
 3. Remove the `[addresses]` and `[dev-addresses]` sections of `Move.toml` ([more info](#no-addresses-section)).
-4. If necessary, replace `[dev-dependencies]` with [moded dependencies](/guides/developer/packages/move-package-management.mdx#advanced-dependency-configuration).
+4. If necessary, replace `[dev-dependencies]` with [moded dependencies](/develop/manage-packages/move-package-management#advanced-dependency-configuration).
 
 For example, if your old `Move.toml` was
 
@@ -53,13 +53,13 @@ dep = { ... }
 
 Publication workflows on Mainnet and Testnet should not change with the new package system. However, publishing on ephemeral networks like `localnet` or `devnet` should use the `sui client test-publish` command to avoid polluting the `Published.toml` file with local addresses.
 
-Instead of writing to `Published.toml`, the `test-publish` command writes the addresses to an ephemeral publication file (e.g. `Pub.localnet.toml`). You can select the file to use with the `--pubfile-path` option. If you want to publish multiple packages, you should use the same ephemeral publication file for all of the packages, so that the dependency addresses will be set correctly. You can also automate this with the `--publish-unpublished-deps` [flag](/guides/developer/packages/move-package-management.mdx#ephemerally-publishing-dependencies).
+Instead of writing to `Published.toml`, the `test-publish` command writes the addresses to an ephemeral publication file (for example, `Pub.localnet.toml`). You can select the file to use with the `--pubfile-path` option. If you want to publish multiple packages, you should use the same ephemeral publication file for all of the packages, so that the dependency addresses will be set correctly. You can also automate this with the `--publish-unpublished-deps` [flag](/develop/manage-packages/move-package-management#ephemerally-publishing-dependencies).
 
 :::caution
 If you were using `--with-unpublished-deps`, you should almost certainly use `--publish-unpublished-deps` instead.
 :::
 
-The `test-publish` command requires a "build environment" (Testnet or Mainnet by default, although you can [define your own](/guides/developer/packages/move-package-management.mdx#environments)) to determine which dependencies to use for the ephemeral publication. Specify the build environment by passing the `--build-env <env>` flag.
+The `test-publish` command requires a build environment (Testnet or Mainnet by default, although you can [define your own](/develop/manage-packages/move-package-management#environments)) to determine which dependencies to use for the ephemeral publication. Specify the build environment by passing the `--build-env <env>` flag.
 
 ## Changes to the `Move.toml` file
 
@@ -161,4 +161,4 @@ With the new package system, the `Move.lock` file format has changed. You should
 
 The new package system no longer writes published addresses into the `Move.lock` file; instead they are written to a new file called `Published.toml`. You should check this file into source control.
 
-For [ephemeral publication](/guides/developer/packages/move-package-management.mdx#environments), the package system will use ephemeral files (often named `Pub.<env>.toml`); these files should not be committed to source control. We recommend adding `Pub.*.toml` to your `.gitignore` file.
+For [ephemeral publication](/develop/manage-packages/move-package-management#environments), the package system will use ephemeral files (often named `Pub.<env>.toml`); these files should not be committed to source control. Add `Pub.*.toml` to your `.gitignore` file.

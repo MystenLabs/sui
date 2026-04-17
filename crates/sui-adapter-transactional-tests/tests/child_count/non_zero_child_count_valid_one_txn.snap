@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 926
 ---
 processed 4 tasks
 
@@ -19,13 +20,13 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 39:
-//# view-object 2,2
+//# view-object 2,0
 Owner: Shared( 2 )
 Version: 2
 Contents: test::m::S {
     id: sui::object::UID {
         id: sui::object::ID {
-            bytes: fake(2,2),
+            bytes: fake(2,0),
         },
     },
 }

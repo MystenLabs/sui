@@ -51,6 +51,12 @@ struct FullCluster {
 
 impl FullCluster {
     async fn new() -> anyhow::Result<Self> {
+        Self::new_with_coin_reservations_enabled(true).await
+    }
+
+    async fn new_with_coin_reservations_enabled(
+        coin_reservations_enabled: bool,
+    ) -> anyhow::Result<Self> {
         let temp_dir = TempDir::new()?;
         let ingestion_dir = temp_dir.path().to_path_buf();
 
@@ -59,9 +65,15 @@ impl FullCluster {
                 let dir = ingestion_dir.clone();
                 move |builder| builder.with_data_ingestion_dir(dir.clone())
             }))
-            .with_proto_override_cb(Box::new(|_, mut cfg| {
+            .with_proto_override_cb(Box::new(move |_, mut cfg| {
                 cfg.enable_address_balance_gas_payments_for_testing();
-                cfg.enable_coin_reservation_for_testing();
+
+                if coin_reservations_enabled {
+                    cfg.enable_coin_reservation_for_testing();
+                } else {
+                    cfg.disable_coin_reservation_for_testing();
+                }
+
                 cfg
             }))
             .build()
@@ -94,6 +106,10 @@ impl FullCluster {
             offchain,
             _temp_dir: temp_dir,
         })
+    }
+
+    async fn new_without_coin_reservations() -> anyhow::Result<Self> {
+        Self::new_with_coin_reservations_enabled(false).await
     }
 
     /// Wait for the off-chain stack to catch up with the latest on-chain checkpoint.
@@ -292,6 +308,69 @@ async fn test_multi_get_objects_resolves_address_balance_coins() {
         "Expected error for non-existent object"
     );
     assert!(responses[2].data.is_some(), "Expected data for gas object");
+}
+
+/// Fund an address balance and verify that masked AB coin IDs remain unresolved when coin
+/// reservations are disabled, even though address balances are enabled.
+#[tokio::test]
+async fn test_masked_address_balance_coin_ids_do_not_resolve_when_coin_reservations_disabled() {
+    let mut cluster = FullCluster::new_without_coin_reservations().await.unwrap();
+    let gas_type = GAS::type_().to_canonical_string(true);
+    let sender = cluster.test_env.get_sender(0);
+    let recipient = SuiAddress::random_for_testing_only();
+
+    let (_, gas) = cluster.test_env.get_sender_and_gas(0);
+    let tx = cluster
+        .test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(FundSource::coin(gas), vec![(42, recipient)])
+        .build();
+
+    let (digest, fx) = cluster.test_env.exec_tx_directly(tx).await.unwrap();
+    assert!(fx.status().is_ok(), "send_funds transaction failed");
+    cluster
+        .test_env
+        .cluster
+        .wait_for_tx_settlement(&[digest])
+        .await;
+    cluster.sync().await;
+
+    let masked_id = cluster
+        .test_env
+        .encode_coin_reservation(recipient, 0, 42)
+        .0
+        .to_string();
+
+    let CoinsResponse {
+        result: Page { data: coins, .. },
+    } = cluster.get_coins(recipient, &gas_type, None, 10).await;
+    assert!(
+        coins.is_empty(),
+        "Expected no synthetic coins when coin reservations are disabled"
+    );
+
+    let ObjectResponse {
+        result: obj_response,
+    } = cluster.get_object(&masked_id).await;
+    assert!(
+        obj_response.data.is_none(),
+        "Expected masked object ID to remain unresolved when coin reservations are disabled"
+    );
+    assert!(
+        obj_response.error.is_some(),
+        "Expected NotExists error for masked object ID when coin reservations are disabled"
+    );
+
+    let MultiObjectResponse { result: responses } = cluster.multi_get_objects(&[&masked_id]).await;
+    assert_eq!(responses.len(), 1);
+    assert!(
+        responses[0].data.is_none(),
+        "Expected no object data for masked ID when coin reservations are disabled"
+    );
+    assert!(
+        responses[0].error.is_some(),
+        "Expected NotExists error for masked ID in multiGetObjects when coin reservations are disabled"
+    );
 }
 
 /// Test pagination where the AB coin is on the first page and fetching the next page via cursor
