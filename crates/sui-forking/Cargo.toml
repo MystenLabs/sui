@@ -19,7 +19,6 @@ reqwest = { workspace = true, features = ["json"] }
 roaring.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

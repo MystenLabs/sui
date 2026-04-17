@@ -24,7 +24,6 @@ thiserror.workspace = true
 toml.workspace = true
 tracing.workspace = true
 ureq.workspace = true
-tonic.workspace = true
 
 mysten-common.workspace = true
 sui-move-build.workspace = true

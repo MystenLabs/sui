@@ -35,7 +35,6 @@ tokio.workspace = true
 url.workspace = true
 zstd.workspace = true
 
-mysten-common.workspace = true
 simulacrum.workspace = true
 sui-futures.workspace = true
 sui-indexer-alt.workspace = true
@@ -51,7 +50,6 @@ sui-indexer-alt-schema.workspace = true
 sui-pg-db.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc.workspace = true
-sui-storage.workspace = true
 sui-types.workspace = true
 move-core-types.workspace = true
 sui-move-build.workspace = true

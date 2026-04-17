@@ -6,18 +6,14 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-mime = "0.3.17"
 anyhow.workspace = true
 axum = { workspace = true, features = ["matched-path"] }
 bcs.workspace = true
 rand.workspace = true
-url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_with.workspace = true
 sui-config.workspace = true
 tap.workspace = true
-thiserror.workspace = true
 tokio.workspace = true
 async-trait.workspace = true
 itertools.workspace = true
@@ -28,9 +24,7 @@ prometheus.workspace = true
 http.workspace = true
 tower.workspace = true
 tracing.workspace = true
-tokio-stream.workspace = true
 async-stream.workspace = true
-base64.workspace = true
 futures.workspace = true
 
 sui-name-service.workspace = true
@@ -48,7 +42,6 @@ sui-transaction-checks.workspace = true
 sui-display.workspace = true
 
 # dependencies for the protobuf definitions
-roaring.workspace = true
 tonic.workspace = true
 tonic-prost.workspace = true
 prost.workspace = true

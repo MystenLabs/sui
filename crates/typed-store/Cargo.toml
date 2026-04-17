@@ -16,7 +16,6 @@ anyhow.workspace = true
 backoff.workspace = true
 bcs.workspace = true
 bincode.workspace = true
-collectable.workspace = true
 eyre.workspace = true
 fastcrypto.workspace = true
 fdlimit.workspace = true
@@ -31,11 +30,7 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 tracing.workspace = true
 typed-store-error.workspace = true
 typed-store-derive = { path = "../typed-store-derive" }
-typed-store-workspace-hack = { path = "../typed-store-workspace-hack" }
 sui-macros.workspace = true
-rand.workspace = true
-async-trait.workspace = true
-itertools.workspace = true
 mysten-common.workspace = true
 mysten-metrics.workspace = true
 [target.'cfg(not(windows))'.dependencies]
@@ -48,7 +43,6 @@ rocksdb = { version = "0.22.0", default-features = false, features = ["jemalloc"
 tempfile.workspace = true
 once_cell.workspace = true
 rstest.workspace = true
-rand.workspace = true
 uint.workspace = true
 
 # Most packages should depend on sui-simulator instead of directly on msim, but for typed-store

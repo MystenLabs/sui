@@ -11,7 +11,6 @@ anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 backoff.workspace = true
-bb8 = "0.8.5"
 bytes.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["env"] }
@@ -42,9 +41,6 @@ sui-futures.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-rpc.workspace = true
-sui-sdk-types.workspace = true
-sui-rpc-api.workspace = true
-sui-storage.workspace = true
 sui-types.workspace = true
 prost.workspace = true
 prost-types.workspace = true

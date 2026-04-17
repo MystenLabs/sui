@@ -14,7 +14,6 @@ name = "sui-checkpoint-blob-indexer"
 path = "src/main.rs"
 
 [dependencies]
-sui-config.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-object-store.workspace = true
@@ -37,7 +36,6 @@ object_store.workspace = true
 serde_json.workspace = true
 zstd.workspace = true
 humantime.workspace = true
-num_cpus.workspace = true
 toml.workspace = true
 telemetry-subscribers.workspace = true
 
