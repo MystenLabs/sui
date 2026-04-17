@@ -207,7 +207,7 @@ pub enum RunSpec {
         // Each payload sender gets a gas coin of this size, half of which is
         // deposited into the sender's address balance during init.
         // Total primary gas needed = this value * target_qps * in_flight_ratio.
-        #[clap(long, default_value = "1000")]
+        #[clap(long, default_value = "100000")]
         deposit_seed_sui: u64,
 
         // --- workload-specific options --- (TODO: use subcommands or similar)
