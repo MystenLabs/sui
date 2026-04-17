@@ -326,8 +326,8 @@ pub async fn start_rpc(
         warn!("No fullnode rpc url provided, DelegationGovernance module will not be added.");
     }
 
-    if let Some(fullnode_client) = fullnode_client {
-        rpc.add_module(Governance::new(context.clone()))?;
+    if let Some(_fullnode_client) = fullnode_client {
+        rpc.add_module(Governance(context.clone()))?;
         rpc.add_module(Write::new(context.clone()))?;
     } else {
         warn!("No fullnode grpc url provided, Write and Governance modules will not be added.");

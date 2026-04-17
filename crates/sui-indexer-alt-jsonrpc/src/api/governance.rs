@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 use std::convert::Infallible;
-use std::sync::Arc;
 
 use anyhow::Context as _;
 use diesel::ExpressionMethods;
@@ -15,9 +14,7 @@ use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use move_core_types::language_storage::StructTag;
 
-use async_graphql::dataloader::DataLoader;
 use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
-use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::governance::RewardsKey;
 use sui_indexer_alt_reader::governance::ValidatorAddressKey;
 use sui_indexer_alt_schema::schema::kv_epoch_starts;
@@ -44,6 +41,7 @@ use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV1;
 use sui_types::sui_system_state::sui_system_state_inner_v2::SuiSystemStateInnerV2;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+use tokio::try_join;
 
 use crate::api::rpc_module::RpcModule;
 use crate::context::Context;
@@ -113,7 +111,8 @@ impl GovernanceApiServer for Governance {
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
-        let config = &self.0.config().objects;
+        let Self(ctx) = self;
+        let config = &ctx.config().objects;
 
         let tag = StructTag {
             address: SUI_SYSTEM_ADDRESS,
@@ -126,8 +125,7 @@ impl GovernanceApiServer for Governance {
         let mut after_cursor = None;
 
         loop {
-            let page = self
-                .0
+            let page = ctx
                 .consistent_reader()
                 .list_owned_objects(
                     None,
@@ -261,8 +259,7 @@ async fn delegated_stakes_response(
         .flatten()
         .map(|object| {
             let move_object = object.data.try_as_move().context("Not a Move object")?;
-            bcs::from_bytes::<StakedSui>(move_object.contents())
-                .context("Failed to deserialize StakedSui")
+            bcs::from_bytes(move_object.contents()).context("Failed to deserialize StakedSui")
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
@@ -275,18 +272,27 @@ async fn delegated_stakes_response(
         .map(|s| ValidatorAddressKey(s.pool_id().into()))
         .collect();
 
-    let rewards = execution_loader
-        .load_many(reward_keys)
-        .await
-        .context("Failed to dry run rewards calculation")?;
-    let validator_addresses = execution_loader
-        .load_many(validator_keys)
-        .await
-        .context("Failed to dry run validator address lookup")?;
-    let current_epoch = latest_epoch(ctx).await?;
+    let (rewards, validator_addresses, current_epoch) = try_join!(
+        async {
+            execution_loader
+                .load_many(reward_keys)
+                .await
+                .context("Failed to dry run rewards calculation")
+        },
+        async {
+            execution_loader
+                .load_many(validator_keys)
+                .await
+                .context("Failed to dry run validator address lookup")
+        },
+        latest_epoch(ctx),
+    )?;
 
     let mut grouped: BTreeMap<(SuiAddress, ObjectID), Vec<Stake>> = BTreeMap::new();
 
+    // Clients can at most control which stake ids to query. Only live stakes are loaded. Valid
+    // stakes should return a reward (could be 0 for pending stakes) and validator (pools are looked
+    // up against active and inactive validators.)
     for staked_sui in &staked_suis {
         let reward_key = RewardsKey(staked_sui.id().into());
         let validator_key = ValidatorAddressKey(staked_sui.pool_id().into());

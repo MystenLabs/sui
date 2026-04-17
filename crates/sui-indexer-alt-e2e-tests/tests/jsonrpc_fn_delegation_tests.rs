@@ -4,6 +4,7 @@
 use std::time::Duration;
 
 use anyhow::Context;
+use p256::elliptic_curve::ff::derive::bitvec::vec;
 use reqwest::Client;
 use serde_json::Value;
 use serde_json::json;
@@ -17,6 +18,9 @@ use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_test_transaction_builder::make_staking_transaction;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::object::Owner;
 use sui_types::transaction::TransactionDataAPI;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -142,6 +146,41 @@ impl FnDelegationTestCluster {
     }
 }
 
+/// Pulls the single sender-owned object created by a staking tx — the newly minted StakedSui.
+fn staked_sui_id_from_effects(effects: &TransactionEffects, owner: SuiAddress) -> ObjectID {
+    let mut created = effects.created().into_iter().filter_map(|((id, _, _), o)| {
+        matches!(o, Owner::AddressOwner(addr) if addr == owner).then_some(id)
+    });
+    let id = created
+        .next()
+        .expect("staking tx should create a StakedSui owned by the sender");
+    assert!(
+        created.next().is_none(),
+        "unexpected additional sender-owned objects created by staking tx"
+    );
+    id
+}
+
+/// Projects a `getStakes`/`getStakesByIds` response to `(validatorAddress, [stakedSuiId])` so
+/// comparisons are insensitive to reward values (which can shift between back-to-back dry runs).
+fn stake_id_projection(result: &Value) -> Vec<(String, Vec<String>)> {
+    result
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| {
+            let validator = entry["validatorAddress"].as_str().unwrap().to_string();
+            let ids = entry["stakes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|s| s["stakedSuiId"].as_str().unwrap().to_string())
+                .collect();
+            (validator, ids)
+        })
+        .collect()
+}
+
 #[sim_test]
 async fn test_get_stakes_and_by_ids() {
     let test_cluster = FnDelegationTestCluster::new()
@@ -235,7 +274,7 @@ async fn test_get_stakes_invalid_params() {
 }
 
 #[sim_test]
-async fn test_grpc_get_stakes() {
+async fn test_stakes_correct_ordering() {
     let test_cluster = FnDelegationTestCluster::new()
         .await
         .expect("Failed to create test cluster");
@@ -249,18 +288,20 @@ async fn test_grpc_get_stakes() {
     // Stake once to validator A.
     let tx_a = make_staking_transaction(wallet, validator_a).await;
     let stake_owner_address = tx_a.data().transaction_data().sender();
-    wallet.execute_transaction_must_succeed(tx_a).await;
+    let effects_a = wallet.execute_transaction_must_succeed(tx_a).await.effects;
+    let stake_a = staked_sui_id_from_effects(&effects_a, stake_owner_address);
 
     // Stake twice to validator B (from the same owner).
     let tx_b1 = make_staking_transaction(wallet, validator_b).await;
-    wallet.execute_transaction_must_succeed(tx_b1).await;
+    let effects_b1 = wallet.execute_transaction_must_succeed(tx_b1).await.effects;
+    let stake_b1 = staked_sui_id_from_effects(&effects_b1, stake_owner_address);
     let tx_b2 = make_staking_transaction(wallet, validator_b).await;
-    wallet.execute_transaction_must_succeed(tx_b2).await;
+    let effects_b2 = wallet.execute_transaction_must_succeed(tx_b2).await.effects;
+    let stake_b2 = staked_sui_id_from_effects(&effects_b2, stake_owner_address);
 
     test_cluster.wait_for_indexing().await;
 
-    // Query via the gRPC-backed endpoint.
-    let grpc_response = test_cluster
+    let response = test_cluster
         .execute_jsonrpc(
             "suix_getStakes".to_string(),
             json!({ "owner": stake_owner_address }),
@@ -268,48 +309,51 @@ async fn test_grpc_get_stakes() {
         .await
         .unwrap();
 
-    let grpc_result = &grpc_response["result"];
+    let result = &response["result"];
 
     // Should have 2 DelegatedStake entries (one per validator).
-    assert_eq!(grpc_result.as_array().unwrap().len(), 2);
+    assert_eq!(result.as_array().unwrap().len(), 2);
 
-    // Find the entry for each validator.
-    let entry_a = grpc_result
+    // Validator A: exactly the stake from tx_a.
+    let entry_a = result
         .as_array()
         .unwrap()
         .iter()
         .find(|d| d["validatorAddress"] == validator_a.to_string().as_str())
         .expect("missing DelegatedStake for validator A");
-    let entry_b = grpc_result
+    let entry_a_ids: Vec<&str> = entry_a["stakes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["stakedSuiId"].as_str().unwrap())
+        .collect();
+    assert_eq!(entry_a_ids, vec![stake_a.to_string().as_str()]);
+
+    // Validator B: the two stakes from tx_b1 and tx_b2 (order is `list_owned_objects`-driven,
+    // so compare as a set).
+    let entry_b = result
         .as_array()
         .unwrap()
         .iter()
         .find(|d| d["validatorAddress"] == validator_b.to_string().as_str())
         .expect("missing DelegatedStake for validator B");
-
-    // Validator A: 1 stake entry.
-    assert_eq!(entry_a["stakes"].as_array().unwrap().len(), 1);
-    // Validator B: 2 stake entries (staked twice).
-    assert_eq!(entry_b["stakes"].as_array().unwrap().len(), 2);
+    let entry_b_ids: std::collections::HashSet<String> = entry_b["stakes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["stakedSuiId"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        entry_b_ids,
+        std::collections::HashSet::from([stake_b1.to_string(), stake_b2.to_string()])
+    );
 
     // All stakes should be Pending (epoch 0, no rewards yet).
-    for entry in grpc_result.as_array().unwrap() {
+    for entry in result.as_array().unwrap() {
         for stake in entry["stakes"].as_array().unwrap() {
-            assert!(stake["stakedSuiId"].is_string());
             assert_eq!(stake["status"], "Pending");
         }
     }
-
-    // Compare with the JSON-RPC proxy response — they should match.
-    let jsonrpc_response = test_cluster
-        .execute_jsonrpc(
-            "suix_getStakes".to_string(),
-            json!({ "owner": stake_owner_address }),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(grpc_result, &jsonrpc_response["result"]);
 
     // Advance one epoch so the stakes reach their activation epoch. Stakes requested in epoch 0
     // have activation_epoch = 1, so after one reconfiguration current_epoch >= activation_epoch.
@@ -317,20 +361,17 @@ async fn test_grpc_get_stakes() {
 
     test_cluster.wait_for_indexing().await;
 
-    let grpc_response = test_cluster
+    let response = test_cluster
         .execute_jsonrpc(
             "suix_getStakes".to_string(),
             json!({ "owner": stake_owner_address }),
         )
         .await
         .unwrap();
-    let grpc_result = &grpc_response["result"];
+    let result = &response["result"];
 
-    // All stakes should now be Active — the network has reached their activation epoch. We don't
-    // assert on `estimatedReward` value because test clusters do not reliably produce non-zero
-    // rewards, but the field must be present (and parseable as a BigInt) to show the reward
-    // computation pipeline ran.
-    for entry in grpc_result.as_array().unwrap() {
+    // All stakes should now be Active
+    for entry in result.as_array().unwrap() {
         for stake in entry["stakes"].as_array().unwrap() {
             assert_eq!(stake["status"], "Active", "stake not active: {stake}");
             let _reward: u64 = stake["estimatedReward"]
@@ -341,16 +382,42 @@ async fn test_grpc_get_stakes() {
         }
     }
 
-    // Active-state response should also match the JSON-RPC proxy.
-    let jsonrpc_response = test_cluster
+    // Query just validator B's two stakes by ID. Inner stake ordering follows caller-provided
+    // ID order, so feeding [b1, b2] should return them in that order.
+    let forward_response = test_cluster
         .execute_jsonrpc(
-            "suix_getStakes".to_string(),
-            json!({ "owner": stake_owner_address }),
+            "suix_getStakesByIds".to_string(),
+            json!({ "staked_sui_ids": [stake_b1, stake_b2] }),
         )
         .await
         .unwrap();
 
-    assert_eq!(grpc_result, &jsonrpc_response["result"]);
+    let forward_b_ids: Vec<String> = stake_id_projection(&forward_response["result"])
+        .into_iter()
+        .flat_map(|(_, ids)| ids)
+        .collect();
+    assert_eq!(
+        forward_b_ids,
+        vec![stake_b1.to_string(), stake_b2.to_string()]
+    );
+
+    // Reversing the input IDs flips the inner ordering.
+    let reversed_response = test_cluster
+        .execute_jsonrpc(
+            "suix_getStakesByIds".to_string(),
+            json!({ "staked_sui_ids": [stake_b2, stake_b1] }),
+        )
+        .await
+        .unwrap();
+
+    let reversed_b_ids: Vec<String> = stake_id_projection(&reversed_response["result"])
+        .into_iter()
+        .flat_map(|(_, ids)| ids)
+        .collect();
+    assert_eq!(
+        reversed_b_ids,
+        vec![stake_b2.to_string(), stake_b1.to_string()]
+    );
 }
 
 #[sim_test]
@@ -378,7 +445,7 @@ async fn test_get_validators_apy() {
 /// our documented divergence from legacy `sui-json-rpc`, which returned Unstaked for the
 /// withdrawn one.
 #[sim_test]
-async fn test_grpc_get_stakes_by_ids_omits_withdrawn() {
+async fn test_get_stakes_by_ids_omits_withdrawn() {
     let test_cluster = FnDelegationTestCluster::new()
         .await
         .expect("Failed to create test cluster");

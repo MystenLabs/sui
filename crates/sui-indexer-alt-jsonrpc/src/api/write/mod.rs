@@ -8,7 +8,6 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use prost_types::FieldMask;
-use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_json_rpc_types::DryRunTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
