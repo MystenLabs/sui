@@ -72,6 +72,7 @@ pub struct SequentialLayer {
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
     pub processor_channel_size: Option<usize>,
+    pub pipeline_depth: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -234,6 +235,7 @@ impl SequentialLayer {
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
+            pipeline_depth: self.pipeline_depth.or(base.pipeline_depth),
         })
     }
 }
@@ -375,6 +377,7 @@ impl Merge for SequentialLayer {
             min_eager_rows: other.min_eager_rows.or(self.min_eager_rows),
             max_batch_checkpoints: other.max_batch_checkpoints.or(self.max_batch_checkpoints),
             processor_channel_size: other.processor_channel_size.or(self.processor_channel_size),
+            pipeline_depth: other.pipeline_depth.or(self.pipeline_depth),
         })
     }
 }
@@ -497,6 +500,7 @@ impl From<SequentialConfig> for SequentialLayer {
             min_eager_rows: config.min_eager_rows,
             max_batch_checkpoints: config.max_batch_checkpoints,
             processor_channel_size: config.processor_channel_size,
+            pipeline_depth: config.pipeline_depth,
         }
     }
 }
