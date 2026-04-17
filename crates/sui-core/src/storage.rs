@@ -8,6 +8,7 @@ use crate::execution_cache::ExecutionCacheTraitPointers;
 use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use sui_package_resolver::SyncResolver;
 use sui_rpc_store::RpcStoreReader;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -642,11 +643,8 @@ impl RpcStateReader for RestReadStore {
     ) -> Result<Option<move_core_types::annotated_value::MoveTypeLayout>> {
         let backing_store = self.state.get_backing_package_store();
         let overlay_store = OverlayBackingPackageStore::new(overlay, backing_store.as_ref());
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        epoch_store
-            .executor()
-            // TODO(cache) - must read through cache
-            .type_layout_resolver(epoch_store.protocol_config(), Box::new(overlay_store))
+        // TODO(cache) - must read through cache
+        SyncResolver::new(overlay_store)
             .get_annotated_layout(struct_tag)
             .map(|layout| layout.into_layout())
             .map(Some)
@@ -932,10 +930,7 @@ impl RpcStateReader for RpcStoreReadStore {
         // the current protocol config.
         let backing_store = self.state.get_backing_package_store();
         let overlay_store = OverlayBackingPackageStore::new(overlay, backing_store.as_ref());
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        epoch_store
-            .executor()
-            .type_layout_resolver(epoch_store.protocol_config(), Box::new(overlay_store))
+        SyncResolver::new(overlay_store)
             .get_annotated_layout(struct_tag)
             .map(|layout| layout.into_layout())
             .map(Some)

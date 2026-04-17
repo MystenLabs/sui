@@ -2507,14 +2507,8 @@ impl AuthorityState {
         let layout = if let (LayoutGenerationOption::Generate, Some(move_obj)) =
             (request.generate_layout, object.data.try_as_move())
         {
-            let epoch_store = self.load_epoch_store_one_call_per_task();
             Some(into_struct_layout(
-                epoch_store
-                    .executor()
-                    .type_layout_resolver(
-                        epoch_store.protocol_config(),
-                        Box::new(self.get_backing_package_store().as_ref()),
-                    )
+                SyncResolver::new(self.get_backing_package_store().as_ref())
                     .get_annotated_layout(&move_obj.type_().clone().into())?,
             )?)
         } else {
@@ -3542,15 +3536,9 @@ impl AuthorityState {
             .data
             .try_as_move()
             .map(|object| {
-                let epoch_store = self.load_epoch_store_one_call_per_task();
+                // TODO(cache) - must read through cache
                 into_struct_layout(
-                    epoch_store
-                        .executor()
-                        // TODO(cache) - must read through cache
-                        .type_layout_resolver(
-                            epoch_store.protocol_config(),
-                            Box::new(self.get_backing_package_store().as_ref()),
-                        )
+                    SyncResolver::new(self.get_backing_package_store().as_ref())
                         .get_annotated_layout(&object.type_().clone().into())?,
                 )
             })
