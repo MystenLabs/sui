@@ -8,7 +8,7 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    diagnostics::{DiagnosticReporter, Diagnostics, filter::FilterEngine},
+    diagnostics::{DiagnosticReporter, Diagnostics, filter::FilterStack},
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::{
         ast::{self as H, Value_, Var, Visibility},
@@ -166,7 +166,7 @@ fn pre_compiled_decls(
         let empty_known_filter_names = BTreeMap::new();
         let empty_diags = Arc::new(RwLock::new(Diagnostics::new()));
         let empty_ide_info = Arc::new(RwLock::new(IDEInfo::new()));
-        let empty_warning_filters_scope = FilterEngine::new();
+        let empty_warning_filters_scope = FilterStack::new();
         // create an empty reporter to collect all diagnostics,
         // and report ICE if any exist as in here there shouldn't be any
         // (we are effectively re-doing part of an earlier pass here that
@@ -321,7 +321,8 @@ fn module(
     let structs = struct_defs(&mut context, reporter, &ident, gstructs);
     let enums = enum_defs(&mut context, reporter, &ident, genums);
     let constants = constants(&mut context, reporter, &ident, gconstants);
-    let (collected_function_infos, functions) = functions(&mut context, reporter, &ident, gfunctions);
+    let (collected_function_infos, functions) =
+        functions(&mut context, reporter, &ident, gfunctions);
 
     let friends = gfriends
         .into_iter()
@@ -505,7 +506,10 @@ fn struct_def(
         type_parameters: tys,
         fields,
     } = sdef;
-    warning_filter.finalize().into_iter().for_each(|d| reporter.add_diag(d));
+    warning_filter
+        .finalize()
+        .into_iter()
+        .for_each(|d| reporter.add_diag(d));
     let loc = s.loc();
     let name = context.struct_definition_name(m, s);
     let abilities = abilities(&abs);
@@ -582,7 +586,10 @@ fn enum_def(
         type_parameters: tys,
         variants,
     } = edef;
-    warning_filter.finalize().into_iter().for_each(|d| reporter.add_diag(d));
+    warning_filter
+        .finalize()
+        .into_iter()
+        .for_each(|d| reporter.add_diag(d));
     let loc = e.loc();
     let name = context.enum_definition_name(m, e);
     let abilities = abilities(&abs);
@@ -656,7 +663,10 @@ fn constant(
         signature,
         value,
     } = c;
-    warning_filter.finalize().into_iter().for_each(|d| reporter.add_diag(d));
+    warning_filter
+        .finalize()
+        .into_iter()
+        .for_each(|d| reporter.add_diag(d));
     let is_error_constant = attributes.contains_key_(&AttributeKind_::Error);
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, signature);
@@ -713,7 +723,10 @@ fn function(
         signature,
         body,
     } = fdef;
-    warning_filter.finalize().into_iter().for_each(|d| reporter.add_diag(d));
+    warning_filter
+        .finalize()
+        .into_iter()
+        .for_each(|d| reporter.add_diag(d));
     let v = visibility(context, v);
     let parameters = signature.parameters.clone();
     let signature = function_signature(context, signature);

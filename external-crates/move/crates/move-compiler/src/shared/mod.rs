@@ -10,10 +10,9 @@ use crate::{
     command_line as cli, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics, DiagnosticsFormat,
-        codes::{self, DiagnosticsID, Severity},
+        codes::{DIAGNOSTIC_FILTER_WILDCARD, DiagnosticsID, Severity},
         filter::{
-            self,
-            COMPILER_KNOWN_FILTERS, FilterEngine, FilterName, FilterPrefix, FilterScope,
+            self, COMPILER_KNOWN_FILTERS, FilterName, FilterPrefix, FilterScope, FilterStack,
             IDE_KNOWN_FILTERS,
         },
     },
@@ -296,7 +295,9 @@ impl CompilationEnv {
             .flat_map(|(attr, all_filters)| {
                 all_filters.iter().flat_map(|(name, filters)| {
                     filters.iter().filter_map(|f| {
-                        if f.category != codes::ANY && f.code != codes::ANY {
+                        if f.category != DIAGNOSTIC_FILTER_WILDCARD
+                            && f.code != DIAGNOSTIC_FILTER_WILDCARD
+                        {
                             Some((*f, (*attr, *name)))
                         } else {
                             None
@@ -307,9 +308,9 @@ impl CompilationEnv {
             .collect();
 
         let root_scope = if flags.silence_warnings() {
-            filter::ALL_FILTER_SCOPE.clone()
+            filter::all_filter_scope()
         } else {
-            root_scope.unwrap_or_else(|| filter::EMPTY_FILTER_SCOPE.clone())
+            root_scope.unwrap_or_else(filter::empty_filter_scope)
         };
 
         let mut diags = Diagnostics::new();
@@ -374,7 +375,7 @@ impl CompilationEnv {
             &self.known_filter_names,
             Arc::clone(&self.diags),
             Arc::clone(&self.ide_information),
-            FilterEngine::root(self.root_scope.clone()),
+            FilterStack::root(self.root_scope),
         )
     }
 
@@ -382,7 +383,7 @@ impl CompilationEnv {
         DiagnosticReporter::dummy_reporter(
             &self.flags,
             &self.known_filter_names,
-            FilterEngine::root(self.root_scope.clone()),
+            FilterStack::root(self.root_scope),
         )
     }
 
@@ -458,7 +459,8 @@ impl CompilationEnv {
         let filter_attr = self.known_filters.entry(attr_name).or_default();
         for (name, ids) in filters {
             for f in &ids {
-                if f.category != codes::ANY && f.code != codes::ANY {
+                if f.category != DIAGNOSTIC_FILTER_WILDCARD && f.code != DIAGNOSTIC_FILTER_WILDCARD
+                {
                     self.known_filter_names.insert(*f, (attr_name, name));
                 }
             }
@@ -899,7 +901,7 @@ impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             is_dependency: false,
-            warning_filter: filter::EMPTY_FILTER_SCOPE.clone(),
+            warning_filter: filter::empty_filter_scope(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }
@@ -942,7 +944,7 @@ fn check<T: Send + Sync>() {}
 fn check_all() {
     check::<Visitors>();
     check::<&Visitors>();
-    check::<&FilterEngine>();
+    check::<&FilterStack>();
     check::<&FilterScope>();
     check::<&CompilationEnv>();
 }

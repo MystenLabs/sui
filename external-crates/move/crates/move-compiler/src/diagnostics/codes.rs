@@ -19,8 +19,10 @@ pub enum Severity {
 /// multiple externally provided ones).
 pub type ExternalPrefix = Option<&'static str>;
 
-/// Wildcard sentinel for category/code fields in a [`DiagnosticsID`] used as a filter key.
-pub const ANY: u8 = u8::MAX;
+/// Wildcard sentinel for category/code fields in a [`DiagnosticsID`] filter key.
+/// When used as the category, matches all categories; when used as the code, matches all codes
+/// within a category.
+pub const DIAGNOSTIC_FILTER_WILDCARD: u8 = u8::MAX;
 
 /// The ID for a diagnostic, consisting of an optional prefix, a category, and a code.
 /// Also used as a filter key with [`ANY`] wildcards for category/code.
@@ -44,15 +46,15 @@ impl DiagnosticsID {
         Self {
             prefix,
             category,
-            code: ANY,
+            code: DIAGNOSTIC_FILTER_WILDCARD,
         }
     }
 
     pub const fn all(prefix: ExternalPrefix) -> Self {
         Self {
             prefix,
-            category: ANY,
-            code: ANY,
+            category: DIAGNOSTIC_FILTER_WILDCARD,
+            code: DIAGNOSTIC_FILTER_WILDCARD,
         }
     }
 }

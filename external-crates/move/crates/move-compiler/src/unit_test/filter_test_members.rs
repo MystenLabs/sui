@@ -196,6 +196,7 @@ fn test_attribute_kinds(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::At
             | P::Attribute_::Mode { .. }
             | P::Attribute_::Syntax { .. }
             | P::Attribute_::Allow { .. }
+            | P::Attribute_::Deny { .. }
             | P::Attribute_::Expect { .. }
             | P::Attribute_::LintAllow { .. } => None,
             // -- testing attributes

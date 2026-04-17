@@ -17,7 +17,7 @@ use move_command_line_common::{
 use move_compiler::{
     Compiler, PASS_PARSER,
     command_line::compiler::move_check_for_errors,
-    diagnostics::filter::{self, EMPTY_FILTER_SCOPE, UNUSED_FOR_TEST_FILTER_SCOPE},
+    diagnostics::filter::{empty_filter_scope, unused_for_test_filter_scope},
     diagnostics::*,
     editions::{Edition, Flavor},
     linters::{self, LintLevel},
@@ -161,9 +161,9 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
     };
     // config
     let warning_filter = if matches!(test_kind, TestKind::Unused | TestKind::IDE) {
-        *EMPTY_FILTER_SCOPE
+        empty_filter_scope()
     } else {
-        *UNUSED_FOR_TEST_FILTER_SCOPE
+        unused_for_test_filter_scope()
     };
     let config = PackageConfig {
         flavor,

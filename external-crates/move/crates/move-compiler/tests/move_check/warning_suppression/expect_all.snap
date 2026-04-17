@@ -1,0 +1,74 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/warning_suppression/expect_all.move:4:10
+  │
+4 │ #[expect(all)]
+  │          ^^^ Wildcard filters are not allowed in '#[expect(...)]'. Use '#[allow(all)]' instead
+
+warning[W02014]: invalid non-phantom type parameter usage
+  ┌─ tests/move_check/warning_suppression/expect_all.move:7:14
+  │
+7 │     struct S<T1, T2> { f: B<T1> }
+  │              ^^ The parameter 'T1' is only used as an argument to phantom parameters. Consider adding a phantom declaration here
+  │
+  = This warning can be suppressed with '#[allow(missing_phantom)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09006]: unused struct type parameter
+  ┌─ tests/move_check/warning_suppression/expect_all.move:7:18
+  │
+7 │     struct S<T1, T2> { f: B<T1> }
+  │                  ^^ Unused type parameter 'T2'. Consider declaring it as phantom
+  │
+  = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+  ┌─ tests/move_check/warning_suppression/expect_all.move:9:15
+  │
+9 │     use 0x42::x;
+  │               ^ Unused 'use' of alias 'x'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/warning_suppression/expect_all.move:10:13
+   │
+10 │     fun var(a: u64) {
+   │             ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/warning_suppression/expect_all.move:11:13
+   │
+11 │         let x;
+   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_check/warning_suppression/expect_all.move:16:10
+   │
+16 │ #[expect(unused)]
+   │          ^^^^^^ Wildcard filters are not allowed in '#[expect(...)]'. Use '#[allow(unused)]' instead
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/warning_suppression/expect_all.move:18:13
+   │
+18 │     fun foo(a: u64) {
+   │             ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/warning_suppression/expect_all.move:19:13
+   │
+19 │         let x;
+   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

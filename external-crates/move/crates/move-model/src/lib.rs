@@ -214,9 +214,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
 
     // Step 3: selective compilation.
     let expansion_ast = {
-        let E::Program {
-            modules,
-        } = expansion_ast;
+        let E::Program { modules } = expansion_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
                 mdef.target_kind = TargetKind::Source {
@@ -225,15 +223,10 @@ pub fn run_model_builder_with_options_and_compilation_flags<
                 mdef
             })
         });
-        E::Program {
-            modules,
-        }
+        E::Program { modules }
     };
     let typing_ast = {
-        let T::Program {
-            info,
-            modules,
-        } = typing_ast;
+        let T::Program { info, modules } = typing_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
                 mdef.target_kind = TargetKind::Source {
@@ -242,10 +235,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
                 mdef
             })
         });
-        T::Program {
-            info,
-            modules,
-        }
+        T::Program { info, modules }
     };
 
     // Run the compiler fully to the compiled units

@@ -6,10 +6,10 @@ use crate::{
     PreCompiledProgramInfo, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics,
-        codes::DiagnosticsID,
+        codes::{DIAGNOSTIC_FILTER_WILDCARD, DiagnosticsID},
         filter::{
-            DEPENDENCY_DROP_FILTER_SCOPE, FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD,
-            FilterKind, FilterScope, Override_,
+            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, FilterKind, FilterScope, Override,
+            Override_, dependency_drop_filter_scope,
         },
     },
     editions::{self, Edition, FeatureGate, Flavor},
@@ -1546,11 +1546,13 @@ fn module_warning_filter(
     if is_dep {
         // Check attributes for errors, then drop everything for dependencies.
         let _ = warning_filter_(context, attributes);
-        *DEPENDENCY_DROP_FILTER_SCOPE
+        dependency_drop_filter_scope()
     } else {
         let mut overrides = warning_filter_(context, attributes);
         let config = context.env().package_config(package);
-        overrides.extend(config.warning_filter.overrides().iter().cloned());
+        for (id, o) in config.warning_filter.overrides() {
+            overrides.entry(*id).or_insert(*o);
+        }
         FilterScope::new(overrides)
     }
 }
@@ -1559,12 +1561,16 @@ fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> F
     let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        add_allow_overrides(
+        add_overrides(
             &mut overrides,
+            Loc::invalid(),
+            FilterKind::Allow,
             context.env().filter_from_str(none, FILTER_DEPRECATED),
         );
-        add_allow_overrides(
+        add_overrides(
             &mut overrides,
+            Loc::invalid(),
+            FilterKind::Allow,
             context
                 .env()
                 .filter_from_str(none, FILTER_UNUSED_STRUCT_FIELD),
@@ -1577,8 +1583,10 @@ fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) ->
     let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        add_allow_overrides(
+        add_overrides(
             &mut overrides,
+            Loc::invalid(),
+            FilterKind::Allow,
             context.env().filter_from_str(none, FILTER_DEPRECATED),
         );
     }
@@ -1589,32 +1597,22 @@ fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> FilterSc
     FilterScope::new(warning_filter_(context, attributes))
 }
 
-fn add_allow_overrides(overrides: &mut Vec<(Loc, Override_)>, ids: Vec<DiagnosticsID>) {
+fn add_overrides(
+    overrides: &mut BTreeMap<DiagnosticsID, Override>,
+    loc: Loc,
+    kind: FilterKind,
+    ids: Vec<DiagnosticsID>,
+) {
     for id in ids {
-        overrides.push((
-            Loc::invalid(),
-            Override_ {
-                filter: id,
-                kind: FilterKind::Allow,
-            },
-        ));
+        overrides.insert(id, sp(loc, Override_ { filter: id, kind }));
     }
 }
 
-fn add_expect_overrides(overrides: &mut Vec<(Loc, Override_)>, loc: Loc, ids: Vec<DiagnosticsID>) {
-    for id in ids {
-        overrides.push((
-            loc,
-            Override_ {
-                filter: id,
-                kind: FilterKind::Expect,
-            },
-        ));
-    }
-}
-
-fn warning_filter_(context: &Context, attributes: &E::Attributes) -> Vec<(Loc, Override_)> {
-    let mut overrides = vec![];
+fn warning_filter_(
+    context: &Context,
+    attributes: &E::Attributes,
+) -> BTreeMap<DiagnosticsID, Override> {
+    let mut overrides = BTreeMap::new();
     if let Some(lint_allow) = attributes.get_(&known_attributes::AttributeKind_::LintAllow) {
         let KnownAttribute::Diagnostic(DiagnosticAttribute::LintAllow { allow_set }) =
             &lint_allow.value
@@ -1626,7 +1624,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> Vec<(Loc, O
                     lint_allow.value.attribute_kind()
                 )
             )));
-            return vec![];
+            return BTreeMap::new();
         };
 
         let prefix = Some(DiagnosticAttribute::LINT_SYMBOL);
@@ -1641,7 +1639,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> Vec<(Loc, O
                 context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
                 continue;
             };
-            add_allow_overrides(&mut overrides, filters);
+            add_overrides(&mut overrides, Loc::invalid(), FilterKind::Allow, filters);
         }
     };
 
@@ -1655,7 +1653,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> Vec<(Loc, O
                     allow.value.attribute_kind()
                 )
             )));
-            return vec![];
+            return BTreeMap::new();
         };
 
         for (prefix, name) in allow_set {
@@ -1670,7 +1668,36 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> Vec<(Loc, O
                 context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
                 continue;
             };
-            add_allow_overrides(&mut overrides, filters);
+            add_overrides(&mut overrides, Loc::invalid(), FilterKind::Allow, filters);
+        }
+    };
+
+    if let Some(deny) = attributes.get_(&known_attributes::AttributeKind_::Deny) {
+        let KnownAttribute::Diagnostic(DiagnosticAttribute::Deny { deny_set }) = &deny.value else {
+            context.add_diag(ice!((
+                deny.loc,
+                format!(
+                    "Expected diagnostics based on kind, but found {}",
+                    deny.value.attribute_kind()
+                )
+            )));
+            return BTreeMap::new();
+        };
+
+        let attr_loc = deny.loc;
+        for (prefix, name) in deny_set {
+            let prefix = prefix.map(|sym| sym.value);
+            let sp!(name_loc, name) = *name;
+            let filters = context.env().filter_from_str(prefix, name);
+            if filters.is_empty() {
+                let msg = format!(
+                    "Unknown warning filter '{}'",
+                    format_allow_attr(prefix, name)
+                );
+                context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
+                continue;
+            };
+            add_overrides(&mut overrides, attr_loc, FilterKind::Deny, filters);
         }
     };
 
@@ -1684,7 +1711,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> Vec<(Loc, O
                     expect.value.attribute_kind()
                 )
             )));
-            return vec![];
+            return BTreeMap::new();
         };
 
         let attr_loc = expect.loc;
@@ -1700,7 +1727,19 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> Vec<(Loc, O
                 context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
                 continue;
             };
-            add_expect_overrides(&mut overrides, attr_loc, filters);
+            let has_wildcard = filters.iter().any(|id| {
+                id.category == DIAGNOSTIC_FILTER_WILDCARD || id.code == DIAGNOSTIC_FILTER_WILDCARD
+            });
+            if has_wildcard {
+                let msg = format!(
+                    "Wildcard filters are not allowed in '#[expect(...)]'. \
+                     Use '#[allow({})]' instead",
+                    format_allow_attr(prefix, name)
+                );
+                context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
+                continue;
+            }
+            add_overrides(&mut overrides, attr_loc, FilterKind::Expect, filters);
         }
     };
     overrides

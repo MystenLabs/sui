@@ -5,7 +5,7 @@
 use anyhow::anyhow;
 use codespan_reporting::{diagnostic::Severity, term::termcolor::Buffer};
 use move_command_line_common::insta_assert;
-use move_compiler::{diagnostics::warning_filters::WarningFiltersBuilder, shared::PackagePaths};
+use move_compiler::{diagnostics::filter::unused_for_test_filter_scope, shared::PackagePaths};
 use move_model::{model::GlobalEnv, options::ModelBuilderOptions, run_model_builder_with_options};
 use move_stackless_bytecode::{
     borrow_analysis::BorrowAnalysisProcessor,
@@ -135,7 +135,7 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
         }],
         vec![],
         ModelBuilderOptions::default(),
-        Some(WarningFiltersBuilder::unused_warnings_filter_for_test()),
+        Some(unused_for_test_filter_scope()),
     )?;
     let out = if env.has_errors() {
         let mut error_writer = Buffer::no_color();

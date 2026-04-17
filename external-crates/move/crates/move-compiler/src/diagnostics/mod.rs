@@ -4,14 +4,13 @@
 
 pub mod codes;
 pub mod filter;
-pub mod warning_filters;
 
 use crate::{
     Flags,
     command_line::COLOR_MODE_ENV_VAR,
     diagnostics::{
         codes::{Category, DiagnosticCode, DiagnosticInfo, DiagnosticsID, Severity},
-        filter::{FilterEngine, FilterName, FilterPrefix, FilterScope},
+        filter::{FilterName, FilterPrefix, FilterResult, FilterScope, FilterStack},
     },
     shared::{
         files::{ByteSpan, FileByteSpan, FileId, MappedFiles},
@@ -48,7 +47,7 @@ pub struct DiagnosticReporter<'env> {
     known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     diags: Arc<RwLock<Diagnostics>>,
     ide_information: Arc<RwLock<IDEInfo>>,
-    engine: FilterEngine,
+    filter_stack: FilterStack,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
@@ -380,14 +379,14 @@ impl<'env> DiagnosticReporter<'env> {
         known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
         diags: Arc<RwLock<Diagnostics>>,
         ide_information: Arc<RwLock<IDEInfo>>,
-        engine: FilterEngine,
+        filter_stack: FilterStack,
     ) -> Self {
         Self {
             flags,
             known_filter_names,
             diags,
             ide_information,
-            engine,
+            filter_stack,
         }
     }
 
@@ -396,23 +395,23 @@ impl<'env> DiagnosticReporter<'env> {
     pub fn dummy_reporter(
         flags: &'env Flags,
         known_filter_names: &'env BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
-        engine: FilterEngine,
+        filter_stack: FilterStack,
     ) -> Self {
         Self {
             flags,
             known_filter_names,
             diags: Arc::new(RwLock::new(Diagnostics::new())),
             ide_information: Arc::new(RwLock::new(IDEInfo::new())),
-            engine,
+            filter_stack,
         }
     }
 
     pub fn push_warning_filter_scope(&mut self, scope: FilterScope) {
-        self.engine.push(scope)
+        self.filter_stack.push(scope)
     }
 
     pub fn pop_warning_filter_scope(&mut self) {
-        self.engine.pop()
+        self.filter_stack.pop()
     }
 
     pub fn add_diag(&self, diag: Diagnostic) {
@@ -427,23 +426,18 @@ impl<'env> DiagnosticReporter<'env> {
         }
 
         let warnings_are_errors = self.flags.warnings_are_errors();
-        let result = self.engine.to_filtered(diag, self.known_filter_names);
-        let mut diags = self.diags.write().unwrap();
-        result
-            .filtered
-            .into_iter()
-            .for_each(|d| diags.add_source_filtered(d));
-        result
-            .new
-            .into_iter()
-            .map(|d| {
-                if d.info().severity() == Severity::Warning && warnings_are_errors {
+        match self.filter_stack.filter(diag, self.known_filter_names) {
+            FilterResult::Filtered(d) => self.diags.write().unwrap().add_source_filtered(d),
+            FilterResult::Discarded => (),
+            FilterResult::Emit(d) => {
+                let d = if d.info().severity() == Severity::Warning && warnings_are_errors {
                     d.set_severity(Severity::NonblockingError)
                 } else {
                     d
-                }
-            })
-            .for_each(|d| diags.add(d));
+                };
+                self.diags.write().unwrap().add(d)
+            }
+        }
     }
 
     pub fn add_diags(&self, diags: Diagnostics) {

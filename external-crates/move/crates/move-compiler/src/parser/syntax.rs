@@ -12,7 +12,7 @@ use crate::{
     diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics, codes::Category,
-        filter::DEPENDENCY_DROP_FILTER_SCOPE,
+        filter::dependency_drop_filter_scope,
     },
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, attributes::to_known_attributes, format_one_of, lexer::*, token_set::*},
@@ -4859,7 +4859,7 @@ fn parse_file(context: &mut Context) -> Vec<Definition> {
     if config.is_dependency {
         context
             .reporter
-            .push_warning_filter_scope(*DEPENDENCY_DROP_FILTER_SCOPE);
+            .push_warning_filter_scope(dependency_drop_filter_scope());
     }
 
     let mut defs = vec![];

@@ -38,6 +38,7 @@ pub enum AttributeKind_ {
     Allow,
     BytecodeInstruction,
     DefinesPrimitive,
+    Deny,
     Deprecation,
     Error,
     Expect,
@@ -75,6 +76,9 @@ pub struct DeprecationAttribute {
 pub enum DiagnosticAttribute {
     Allow {
         allow_set: BTreeSet<(Option<Name>, Name)>,
+    },
+    Deny {
+        deny_set: BTreeSet<(Option<Name>, Name)>,
     },
     Expect {
         expect_set: BTreeSet<(Option<Name>, Name)>,
@@ -202,6 +206,7 @@ impl AttributeKind_ {
             }
             AttributeKind_::Allow => DiagnosticAttribute::ALLOW,
             AttributeKind_::DefinesPrimitive => DefinesPrimitiveAttribute::DEFINES_PRIM,
+            AttributeKind_::Deny => DiagnosticAttribute::DENY,
             AttributeKind_::Deprecation => DeprecationAttribute::DEPRECATED,
             AttributeKind_::Error => ErrorAttribute::ERROR,
             AttributeKind_::Expect => DiagnosticAttribute::EXPECT,
@@ -330,6 +335,7 @@ pub static DEPRECATED_EXPECTED_KEYS: LazyLock<BTreeSet<String>> = LazyLock::new(
 
 impl DiagnosticAttribute {
     pub const ALLOW: &'static str = "allow";
+    pub const DENY: &'static str = "deny";
     pub const EXPECT: &'static str = "expect";
     pub const LINT_ALLOW: &'static str = "lint_allow";
     pub const LINT: &'static str = "lint";
@@ -338,6 +344,7 @@ impl DiagnosticAttribute {
     pub const fn name(&self) -> &str {
         match self {
             DiagnosticAttribute::Allow { .. } => Self::ALLOW,
+            DiagnosticAttribute::Deny { .. } => Self::DENY,
             DiagnosticAttribute::Expect { .. } => Self::EXPECT,
             DiagnosticAttribute::LintAllow { .. } => Self::LINT_ALLOW,
         }
@@ -360,6 +367,7 @@ impl DiagnosticAttribute {
     pub fn attribute_kind(&self) -> AttributeKind_ {
         match self {
             DiagnosticAttribute::Allow { .. } => AttributeKind_::Allow,
+            DiagnosticAttribute::Deny { .. } => AttributeKind_::Deny,
             DiagnosticAttribute::Expect { .. } => AttributeKind_::Expect,
             DiagnosticAttribute::LintAllow { .. } => AttributeKind_::LintAllow,
         }
@@ -777,6 +785,25 @@ impl AstDebug for DiagnosticAttribute {
         match self {
             DiagnosticAttribute::Allow { allow_set } => {
                 for (prefix, name) in allow_set {
+                    if !first {
+                        w.write(", ");
+                    }
+                    first = false;
+                    match prefix {
+                        Some(pref) => {
+                            w.write(pref.to_string());
+                            w.write("(");
+                            w.write(name.to_string());
+                            w.write(")");
+                        }
+                        None => {
+                            w.write(name.to_string());
+                        }
+                    }
+                }
+            }
+            DiagnosticAttribute::Deny { deny_set } => {
+                for (prefix, name) in deny_set {
                     if !first {
                         w.write(", ");
                     }
