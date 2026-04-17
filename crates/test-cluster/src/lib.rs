@@ -1074,8 +1074,6 @@ pub struct TestClusterBuilder {
     fullnode_policy_config: Option<PolicyConfig>,
     fullnode_fw_config: Option<RemoteFirewallConfig>,
 
-    max_submit_position: Option<usize>,
-    submit_delay_step_override_millis: Option<u64>,
     validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
     validator_funds_withdraw_scheduler_type_config: FundsWithdrawSchedulerTypeConfig,
 
@@ -1117,8 +1115,6 @@ impl TestClusterBuilder {
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
             fullnode_fw_config: None,
-            max_submit_position: None,
-            submit_delay_step_override_millis: None,
             validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(
                 true,
             ),
@@ -1351,19 +1347,6 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
-        self.max_submit_position = Some(max_submit_position);
-        self
-    }
-
-    pub fn with_submit_delay_step_override_millis(
-        mut self,
-        submit_delay_step_override_millis: u64,
-    ) -> Self {
-        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
-        self
-    }
-
     pub fn with_rpc_config(mut self, config: sui_config::RpcConfig) -> Self {
         self.rpc_config = Some(config);
         self
@@ -1518,15 +1501,6 @@ impl TestClusterBuilder {
 
         if let Some(data_ingestion_dir) = self.data_ingestion_dir.take() {
             builder = builder.with_data_ingestion_dir(data_ingestion_dir);
-        }
-
-        if let Some(max_submit_position) = self.max_submit_position {
-            builder = builder.with_max_submit_position(max_submit_position);
-        }
-
-        if let Some(submit_delay_step_override_millis) = self.submit_delay_step_override_millis {
-            builder =
-                builder.with_submit_delay_step_override_millis(submit_delay_step_override_millis);
         }
 
         if let Some(state_sync_config) = self.state_sync_config.clone() {

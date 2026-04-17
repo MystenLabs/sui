@@ -130,7 +130,6 @@ mod test {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
             .build()
@@ -154,7 +153,6 @@ mod test {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_submit_delay_step_override_millis(3000)
             .with_global_state_hash_v2_enabled_callback(Arc::new(|idx| idx % 2 == 0))
             .build()
             .await
@@ -976,7 +974,6 @@ mod test {
                 ..Default::default()
             })
             .with_execution_cache_config(cache_config)
-            .with_submit_delay_step_override_millis(3000)
             .build()
             .await
             .into();
@@ -1017,7 +1014,6 @@ mod test {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(default_num_of_unpruned_validators)
             .build()
             .await
@@ -1930,7 +1926,6 @@ mod test {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_protocol_version(ProtocolVersion::new(target_version))
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
