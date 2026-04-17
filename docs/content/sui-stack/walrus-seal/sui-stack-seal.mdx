@@ -2,12 +2,11 @@
 title: Encryption with Seal
 description: Learn how to encrypt Walrus blobs and enforce onchain access control using Seal, by walking through OnlyFins.
 keywords: [seal, encryption, access control, walrus, OnlyFins, Sui Stack, threshold encryption, SealClient]
-draft: true
 ---
 
-This guide continues from [Data Storage Using Walrus](../walrus/data-storage.mdx) and builds on the same [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) app. The Walrus guide covered how OnlyFins stores and reads images. This guide covers how it protects them: encrypting images before upload and enforcing onchain access control so only users who have paid can decrypt them.
+This guide continues from [Data Storage Using Walrus](/sui-stack/walrus-seal/sui-stack-walrus) and builds on the same [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) app. The Walrus guide covered how OnlyFins stores and reads images. This guide covers how it protects them: encrypting images before upload and enforcing onchain access control so only authorized users can decrypt them.
 
-By the end of this guide you will understand how to design a Seal access control policy in Move, how to encrypt data before uploading it to Walrus, and how to implement the full client-side decryption flow in a browser app.
+By the end of this guide you will understand how to design a [Seal](https://seal-docs.wal.app/) access control policy in [Move](/develop/write-move/sui-move-concepts), how to encrypt data before uploading it to [Walrus](https://docs.wal.app/), and how to implement the full client-side decryption flow in a browser app.
 
 :::caution
 Seal should not be used to protect highly sensitive data such as wallet keys, personal health information, or government-level secrets. Review the [Seal Terms of Service](https://seal-docs.wal.app/TermsOfService) and [security best practices](https://seal-docs.wal.app/) before deploying to production.
@@ -19,11 +18,11 @@ Seal is a decentralized secrets management (DSM) service that uses access contro
 
 Seal has 3 core components:
 
-- **Onchain access policies:** Move functions you write that define who is allowed to decrypt. When a user requests decryption key shares, key servers evaluate your policy by running a `dry_run_transaction_block` on Sui. If the policy approves, the key shares are returned.
-- **Key servers:** Off-chain services that hold IBE (identity-based encryption) master secret keys. Each server returns derived decryption key shares only when the associated onchain policy approves the request. You configure a threshold, so decryption requires at least `t` out of `n` servers to agree.
+- **Onchain access policies:** Move functions you write that define who is allowed to decrypt. When a user requests decryption key shares, [key servers](https://seal-docs.wal.app/ServerOverview) evaluate your policy by running a `dry_run_transaction_block` on Sui. If the policy approves, the key shares are returned.
+- **Key servers:** Off-chain services that hold [IBE (identity-based encryption)](https://seal-docs.wal.app/Design) master secret keys. Each server returns derived decryption key shares only when the associated onchain policy approves the request. You configure a threshold, so decryption requires at least `t` out of `n` servers to agree.
 - **Client-side encryption:** Data is encrypted and decrypted locally in the user's environment. Key servers never see plaintext.
 
-In OnlyFins, the access policy is: the user must own a `ViewerToken` object for the specific post they want to unlock. A `ViewerToken` is a Sui object the user receives after paying for a post onchain. Seal key servers check this ownership before issuing key shares.
+In OnlyFins, the access policy is: the user must own a `ViewerToken` object for the specific post they want to unlock. A `ViewerToken` is a [Sui object](/develop/sui-architecture/object-model) the user receives after requesting access onchain. Seal key servers check this ownership before issuing key shares.
 
 ### How Seal fits with Walrus
 
@@ -58,7 +57,7 @@ $ npm install --save @mysten/seal @mysten/sui
 The `@mysten/seal` package exports two primary classes:
 
 - **`SealClient`:** Handles encryption, key fetching, and decryption. Can be instantiated standalone or as a Sui client extension.
-- **`SessionKey`:** Represents a user-approved session that allows a browser app to fetch decryption keys without triggering a wallet popup on every request. A session has a TTL and is scoped to a specific package ID.
+- **`SessionKey`:** Represents a user-approved session that allows a browser app to fetch decryption keys without triggering a wallet popup on every request. A session has a time-to-live (TTL) and is scoped to a specific package ID.
 
 OnlyFins uses `SealClient` in standalone mode. The `createSealClient` factory in `seal-client.ts` initializes it with the testnet key server object IDs:
 
@@ -71,7 +70,7 @@ OnlyFins uses `SealClient` in standalone mode. The `createSealClient` factory in
 />
 
 :::info
-OnlyFins uses `SuiClient` from `@mysten/sui/client` to back `SealClient`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The `SealClient` constructor and all encryption and decryption APIs are identical regardless of which client you pass in. This also applies to `encryptImages.ts` in the backend, which constructs its own `SuiClient` the same way.
+OnlyFins uses `SuiClient` from `@mysten/sui/client` to back `SealClient`. `SuiGrpcClient` from `@mysten/sui/grpc` is the recommended transport for new integrations. The `SealClient` constructor and all encryption and decryption APIs are identical regardless of which client you pass in. This also applies to `encryptImages.ts` in the backend, which constructs its own `SuiClient` the same way. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
 :::
 
 The key server object IDs come from `constants.ts`. These IDs point to onchain `KeyServer` objects that always hold the latest URL as the source of truth. See the [Seal documentation](https://seal-docs.wal.app/Pricing) for the full list of verified key servers and their modes (open vs. permissioned).
@@ -96,7 +95,7 @@ A `seal_approve` function must follow these rules:
 - It must be an `entry fun`, not a public function.
 - Its first parameter must always be `id: vector<u8>`. This is the inner identity. Seal automatically prepends the package ID to form the full namespaced identity.
 - It should abort with a meaningful error code if the caller does not satisfy the access condition.
-- It must not be called from other PTB commands during Seal evaluation. Only `seal_approve*` functions are invoked directly.
+- It must not be called from other [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) commands during Seal evaluation. Only `seal_approve*` functions are invoked directly.
 
 The identity tied to each encrypted object is the value passed as `id` at encryption time. The same `id` must be used in the `seal_approve` PTB at decryption time.
 
@@ -119,7 +118,7 @@ This function receives the Seal ID, the `Post` object, and the user's `ViewerTok
 
 ### Acquiring a ViewerToken
 
-A `ViewerToken` is minted onchain when a user pays for a post. The `usePayForContent` hook builds and executes this transaction:
+A `ViewerToken` is minted onchain when a user requests access to a post. The `usePayForContent` hook builds and executes this transaction:
 
 <ImportContent
   source="frontend/src/hooks/usePayForContent.ts"
@@ -137,7 +136,7 @@ OnlyFins uses a purchase-gated pattern, but Seal's `seal_approve` mechanism is f
 
 #### Owner-only access
 
-The most basic policy: only the wallet address encoded in the identity can decrypt. The entire `seal_approve` function is a single assertion comparing the BCS-encoded caller address to the `id` bytes:
+The most basic policy: only the wallet address encoded in the identity can decrypt. The entire `seal_approve` function is a single assertion comparing the [Binary Canonical Serialization (BCS)](https://sdk.mystenlabs.com/sui/bcs)-encoded caller address to the `id` bytes:
 
 <ImportContent
   source="K5/seal-demo/move/sources/private_seal.move"
@@ -149,7 +148,7 @@ The most basic policy: only the wallet address encoded in the identity can decry
 
 #### Time-lock access
 
-Data can only be decrypted after a specific timestamp has passed. The `id` encodes a `u64` unlock time in milliseconds. The `seal_approve` function peeks the timestamp from the identity bytes and checks it against the Sui `Clock` object:
+Data can only be decrypted after a specific timestamp has passed. The `id` encodes a `u64` unlock time in milliseconds. The `seal_approve` function peeks the timestamp from the identity bytes and checks it against the Sui [`Clock`](/sui-stack/on-chain-primitives/access-time) object:
 
 <ImportContent
   source="K5/seal-demo/move/sources/timelock_seal.move"
@@ -161,7 +160,7 @@ Data can only be decrypted after a specific timestamp has passed. The `id` encod
 
 #### Allowlist access
 
-A shared `Allowlist` object holds a list of authorized addresses managed by an admin. The `seal_approve` function checks that the caller is a member. Because the allowlist is a shared object, the admin can add or remove members at any time without re-encrypting the content:
+A shared `Allowlist` object holds a list of authorized addresses managed by an admin. The `seal_approve` function checks that the caller is a member. Because the allowlist is a [shared object](/develop/objects/object-ownership/shared), the admin can add or remove members at any time without re-encrypting the content:
 
 <ImportContent
   source="K5/seal-demo/move/sources/allowlist_seal.move"
@@ -221,12 +220,12 @@ The seal-demo includes a Node.js script that shows the complete Seal workflow in
 />
 
 :::info
-This script uses `SuiJsonRpcClient` and `getJsonRpcFullnodeUrl` from `@mysten/sui/jsonRpc`. The JSON RPC transport is deprecated. For new integrations use `SuiGrpcClient` from `@mysten/sui/grpc` instead. The Seal `SealClient` setup and the encrypt/decrypt flow are identical regardless of which transport you use.
+This script uses `SuiJsonRpcClient` and `getJsonRpcFullnodeUrl` from `@mysten/sui/jsonRpc`. The JSON RPC transport is deprecated. For new integrations use `SuiGrpcClient` from `@mysten/sui/grpc` instead. The Seal `SealClient` setup and the encrypt/decrypt flow are identical regardless of which transport you use. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
 :::
 
 ## Decrypting
 
-Decryption in OnlyFins is entirely client-side. The browser fetches the encrypted blob from the Walrus aggregator, requests key shares from Seal key servers, derives the decryption key, and decrypts the image locally. Key servers never see the ciphertext or the plaintext.
+Decryption in OnlyFins is entirely client-side. The browser fetches the encrypted blob from the Walrus [aggregator](https://docs.wal.app/docs/operator-guide/aggregators/operating-aggregator), requests key shares from Seal key servers, derives the decryption key, and decrypts the image locally. Key servers never see the ciphertext or the plaintext.
 
 ### Session keys
 

@@ -339,7 +339,7 @@ const config = {
               { type: "doc", docId: "sui-stack/on-chain-primitives/randomness-onchain", label: "Onchain Randomness" },
               { type: "doc", docId: "sui-stack/on-chain-primitives/access-time", label: "Onchain Time" },
               { type: "doc", docId: "sui-stack/sagat", label: "Sagat" },
-              { type: "doc", docId: "sui-stack/indexer-walrus", label: "Walrus" },
+              { type: "doc", docId: "sui-stack/walrus-seal/index", label: "Walrus and Seal" },
               { type: "doc", docId: "sui-stack/nautilus/index", label: "Nautilus" },
               { type: "doc", docId: "sui-stack/zklogin-integration/index", label: "zkLogin" },
               { type: "doc", docId: "sui-stack/suiplay0x1/index", label: "SuiPlay0X1" },
