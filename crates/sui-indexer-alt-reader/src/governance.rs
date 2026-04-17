@@ -27,9 +27,10 @@ impl Loader<RewardsKey> for FullnodeClient {
             .calculate_rewards(&ids)
             .await
             .map_err(fullnode_loader_error)?;
-        Ok(results
-            .into_iter()
-            .map(|(id, reward)| (RewardsKey(id), reward))
+        Ok(keys
+            .iter()
+            .zip(results)
+            .map(|(k, reward)| (k.clone(), reward))
             .collect())
     }
 }
@@ -48,9 +49,10 @@ impl Loader<ValidatorAddressKey> for FullnodeClient {
             .get_validator_address_by_pool_id(&ids)
             .await
             .map_err(fullnode_loader_error)?;
-        Ok(results
-            .into_iter()
-            .map(|(id, addr)| (ValidatorAddressKey(id), addr))
+        Ok(keys
+            .iter()
+            .zip(results)
+            .map(|(k, addr)| (k.clone(), addr))
             .collect())
     }
 }

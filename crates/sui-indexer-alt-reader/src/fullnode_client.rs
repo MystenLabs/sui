@@ -4,7 +4,6 @@
 use anyhow::Context;
 use anyhow::anyhow;
 use async_graphql::dataloader::DataLoader;
-use mysten_common::ZipDebugEqIteratorExt;
 use prometheus::Registry;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskUtil;
@@ -161,10 +160,8 @@ impl FullnodeClient {
     }
 
     /// Construct and dry run a PTB to calculate the rewards for a list of staked SUI objects.
-    pub async fn calculate_rewards(
-        &self,
-        staked_sui_ids: &[Address],
-    ) -> Result<Vec<(Address, u64)>, Error> {
+    /// Returns a list of u64 guaranteed to match the order of the input staked SUI ids.
+    pub async fn calculate_rewards(&self, staked_sui_ids: &[Address]) -> Result<Vec<u64>, Error> {
         let mut ptb = proto::ProgrammableTransaction::default()
             .with_inputs(vec![proto::Input::default().with_object_id("0x5")]);
         let system_object = proto::Argument::new_input(0);
@@ -208,32 +205,28 @@ impl FullnodeClient {
             )));
         }
 
-        let mut rewards = Vec::with_capacity(staked_sui_ids.len());
-        for (id, output) in staked_sui_ids.iter().zip_debug_eq(resp.command_outputs) {
-            let bcs_rewards = output
-                .return_values
-                .first()
-                .and_then(|o| o.value_opt())
-                .ok_or_else(|| Error::Internal(anyhow!("missing bcs")))?;
+        resp.command_outputs
+            .iter()
+            .map(|output| {
+                let bcs_rewards = output
+                    .return_values
+                    .first()
+                    .and_then(|o| o.value_opt())
+                    .ok_or_else(|| Error::Internal(anyhow!("missing rewards bcs")))?;
 
-            let reward =
-                if bcs_rewards.name() == "u64" && bcs_rewards.value().len() == size_of::<u64>() {
-                    u64::from_le_bytes(bcs_rewards.value().try_into().unwrap())
-                } else {
-                    return Err(Error::Internal(anyhow!("missing rewards")));
-                };
-            rewards.push((*id, reward));
-        }
-
-        Ok(rewards)
+                bcs::from_bytes::<u64>(bcs_rewards.value())
+                    .map_err(|e| Error::Internal(anyhow!("Failed to deserialize rewards: {e}")))
+            })
+            .collect()
     }
 
     /// Construct and dry run a PTB to get the corresponding validator addresses for a list of
-    /// staking pool ids.
+    /// staking pool ids. Returns a list of validator addresses guaranteed to match the order of the
+    /// input pool ids.
     pub async fn get_validator_address_by_pool_id(
         &self,
         pool_ids: &[Address],
-    ) -> Result<Vec<(Address, Address)>, Error> {
+    ) -> Result<Vec<Address>, Error> {
         let mut ptb = proto::ProgrammableTransaction::default()
             .with_inputs(vec![proto::Input::default().with_object_id("0x5")]);
         let system_object = proto::Argument::new_input(0);
@@ -278,26 +271,19 @@ impl FullnodeClient {
             )));
         }
 
-        let mut addresses = Vec::with_capacity(pool_ids.len());
-        for (id, output) in pool_ids.iter().zip_debug_eq(resp.command_outputs) {
-            let validator_address = output
-                .return_values
-                .first()
-                .and_then(|o| o.value_opt())
-                .ok_or_else(|| Error::Internal(anyhow!("missing bcs")))?;
+        resp.command_outputs
+            .iter()
+            .map(|output| {
+                let bcs_address = output
+                    .return_values
+                    .first()
+                    .and_then(|o| o.value_opt())
+                    .ok_or_else(|| Error::Internal(anyhow!("missing address bcs")))?;
 
-            let address = if validator_address.name() == "address"
-                && validator_address.value().len() == Address::LENGTH
-            {
-                Address::from_bytes(validator_address.value())
-                    .map_err(|e| Error::Internal(anyhow!(e)))?
-            } else {
-                return Err(Error::Internal(anyhow!("missing address")));
-            };
-            addresses.push((*id, address));
-        }
-
-        Ok(addresses)
+                Address::from_bytes(bcs_address.value())
+                    .map_err(|e| Error::Internal(anyhow!("Failed to deserialize address: {e}")))
+            })
+            .collect()
     }
 }
 
