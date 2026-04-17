@@ -90,6 +90,7 @@ sui-genesis-builder.workspace = true
 sui-indexer-alt-framework = { workspace = true, default-features = false }
 sui-macros.workspace = true
 sui-network.workspace = true
+sui-package-resolver.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc-store.workspace = true
 sui-transaction-checks.workspace = true
