@@ -162,25 +162,81 @@ jobs:
           sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
           df -h /
 
-      - name: Setup sccache
-        if: ${{ env.s3_existing_archive == '' }}
+      # sccache on Windows/macOS only. Linux release builds run inside a
+      # rust:1.92-bullseye container (see the "Cargo build (Linux...)" step below)
+      # to pin the glibc floor at 2.31 — matching the convention used by every
+      # Dockerfile in this repo. Host-installed sccache isn't available inside
+      # that container, and warmup doesn't populate bullseye-container-keyed
+      # entries, so sccache is skipped on Linux for release builds.
+      - name: Setup sccache (non-Linux)
+        if: ${{ runner.os != 'Linux' && env.s3_existing_archive == '' }}
         id: sccache
         continue-on-error: true
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
 
-      - name: Enable sccache
-        if: steps.sccache.outcome == 'success'
+      - name: Enable sccache (non-Linux)
+        if: ${{ runner.os != 'Linux' && steps.sccache.outcome == 'success' }}
         shell: bash
         run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
 
       - name: Register cargo problem matcher
         run: echo "::add-matcher::.github/matchers/cargo.json"
 
-      - name: Cargo build for ${{ matrix.os }} platform
-        if: ${{ env.s3_existing_archive == '' }}
+      # Build Linux release binaries inside rust:1.92-bullseye so the resulting
+      # binaries require only glibc >= 2.31. This matches the bullseye convention
+      # used by every Dockerfile in this repo, and decouples the binary's ABI
+      # floor from whatever glibc the runner host happens to ship (currently
+      # Ubuntu 24.04 / glibc 2.39, which would produce binaries unrunnable on
+      # older validator hosts).
+      - name: Cargo build (Linux, in rust:1.92-bullseye for glibc 2.31 floor)
+        if: ${{ runner.os == 'Linux' && env.s3_existing_archive == '' }}
         shell: bash
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/work" \
+            -w /work \
+            -e CARGO_TERM_COLOR -e CARGO_INCREMENTAL -e CARGO_NET_RETRY -e RUSTUP_MAX_RETRIES -e RUST_BACKTRACE \
+            -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            rust:1.92-bullseye \
+            bash -c '
+              set -euo pipefail
+              apt-get update
+              apt-get install -y --no-install-recommends pkg-config libpq-dev cmake protobuf-compiler
+              cargo build --release
+              cargo build --release --features tracing --bin sui
+              cargo build --profile=dev --bin sui --features tracing
+              # Return artifact ownership to the runner user so later host-side
+              # steps (Rename, tar, upload) can touch target/ without sudo.
+              chown -R "${HOST_UID}:${HOST_GID}" target
+            '
+
+      - name: Cargo build (non-Linux, on runner host)
+        if: ${{ runner.os != 'Linux' && env.s3_existing_archive == '' }}
+        shell: bash
+        run: |
+          [ -f ~/.cargo/env ] && source ~/.cargo/env
+          cargo build --release
+          cargo build --release --features tracing --bin sui
+          cargo build --profile=dev --bin sui --features tracing
+
+      - name: Verify glibc floor on Linux binaries
+        if: ${{ runner.os == 'Linux' && env.s3_existing_archive == '' }}
+        shell: bash
+        run: |
+          # Fail the job if any built binary references a glibc symbol version
+          # higher than 2.31. Catches accidental host-linkage regressions.
+          max_required=$(objdump -T target/release/sui 2>/dev/null \
+            | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -V | tail -1 || echo "GLIBC_2.31")
+          echo "Highest GLIBC symbol version required: $max_required"
+          case "$max_required" in
+            GLIBC_2.[0-9]|GLIBC_2.[12][0-9]|GLIBC_2.3[01])
+              echo "OK: within glibc 2.31 floor"
+              ;;
+            *)
+              echo "ERROR: binary requires $max_required which exceeds the 2.31 floor"
+              exit 1
+              ;;
+          esac
 
       - name: Rename binaries for ${{ matrix.os }}
         if: ${{ env.s3_existing_archive == '' }}
