@@ -37,11 +37,13 @@ use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use sui_types::Identifier;
+use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::is_primitive_type_tag;
 use sui_types::move_package::MovePackage;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
+use sui_types::storage::BackingPackageStore;
 use sui_types::transaction::Argument;
 use sui_types::transaction::CallArg;
 use sui_types::transaction::Command;
@@ -64,6 +66,17 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug)]
 pub struct Resolver<S> {
     package_store: S,
+    limits: Option<Limits>,
+}
+
+/// Synchronous sibling of [`Resolver`], driven by a [`SyncPackageStore`]. Intended for hot-path
+/// callers (validator/authority execution) where the underlying storage is synchronous and
+/// async machinery would just add overhead.
+#[derive(Debug)]
+pub struct SyncResolver<S> {
+    package_store: S,
+    // Read by the sync resolution methods added in a later commit.
+    #[allow(dead_code)]
     limits: Option<Limits>,
 }
 
@@ -305,10 +318,16 @@ struct ResolutionContext<'l> {
 /// Interface to abstract over access to a store of live packages.  Used to override the default
 /// store during testing.
 #[async_trait]
-pub trait PackageStore: Send + Sync + 'static {
+pub trait PackageStore: Send + Sync {
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>>;
+}
+
+/// Synchronous analogue of [`PackageStore`], driving [`SyncResolver`]. Has no
+/// `Send`/`Sync`/`'static` bounds so implementations can borrow freely.
+pub trait SyncPackageStore {
+    fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>>;
 }
 
 macro_rules! as_ref_impl {
@@ -332,6 +351,23 @@ impl<S: PackageStore> PackageStore for Arc<S> {
     }
 }
 
+/// Every [`BackingPackageStore`] implementation is usable as a [`SyncPackageStore`]. The blanket
+/// also covers `&B`, `Arc<B>`, `Box<B>` for any `B: BackingPackageStore` via
+/// [`BackingPackageStore`]'s own forwarding impls.
+impl<S: BackingPackageStore> SyncPackageStore for S {
+    fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
+        let object_id = ObjectID::from(id);
+        let package_obj = self
+            .get_package_object(&object_id)
+            .map_err(|e| Error::Store {
+                store: "BackingPackageStore",
+                error: e.to_string(),
+            })?
+            .ok_or(Error::PackageNotFound(id))?;
+        Ok(Arc::new(Package::read_from_object(package_obj.object())?))
+    }
+}
+
 /// Check $value does not exceed $limit in config, if the limit config exists, returning an error
 /// containing the max value and actual value otherwise.
 macro_rules! check_max_limit {
@@ -347,6 +383,30 @@ macro_rules! check_max_limit {
 }
 
 impl<S> Resolver<S> {
+    pub fn new(package_store: S) -> Self {
+        Self {
+            package_store,
+            limits: None,
+        }
+    }
+
+    pub fn new_with_limits(package_store: S, limits: Limits) -> Self {
+        Self {
+            package_store,
+            limits: Some(limits),
+        }
+    }
+
+    pub fn package_store(&self) -> &S {
+        &self.package_store
+    }
+
+    pub fn package_store_mut(&mut self) -> &mut S {
+        &mut self.package_store
+    }
+}
+
+impl<S> SyncResolver<S> {
     pub fn new(package_store: S) -> Self {
         Self {
             package_store,
