@@ -117,12 +117,16 @@ All alerts are important, but the following alerts and warnings can be addressed
 | **Summary**  | Less than 80% of stake is sequencing tx certs with acceptable latency |
 | **Duration** | `1m`                                                         |
 
+:::caution
+The `tx_type` label values `shared_certificate` and `owned_certificate` are deprecated. The `ConsensusAdapter` metric classifier no longer emits these labels. They have been replaced by `_deprecated_certificate`. If you have copied this query into your own monitoring system, update the `tx_type` filter accordingly.
+:::
+
 ```sh
 sum(
   sum by (host) (current_voting_right{network="$network"})
   and
   histogram_quantile(0.95, sum by (le, host) (
-    rate(sequencing_certificate_latency_bucket{network="$network", position="0", tx_type=~"shared_certificate|owned_certificate|soft_bundle"}[2m])
+    rate(sequencing_certificate_latency_bucket{network="$network", position="0", tx_type=~"_deprecated_certificate|soft_bundle"}[2m])
   )) < 2
 ) < 5000
 ```
