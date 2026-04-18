@@ -2,26 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::convert::Infallible;
 
 use anyhow::Context as _;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use futures::future;
-
 use jsonrpsee::core::RpcResult;
-use jsonrpsee::http_client::HttpClient;
 use jsonrpsee::proc_macros::rpc;
 use move_core_types::language_storage::StructTag;
-
 use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
 use sui_indexer_alt_reader::governance::RewardsKey;
 use sui_indexer_alt_reader::governance::ValidatorAddressKey;
+use sui_indexer_alt_schema::epochs::StoredEpochStart;
 use sui_indexer_alt_schema::schema::kv_epoch_starts;
-use sui_json_rpc_api::GovernanceReadApiClient;
 use sui_json_rpc_types::DelegatedStake;
 use sui_json_rpc_types::Stake;
 use sui_json_rpc_types::StakeStatus;
+use sui_json_rpc_types::ValidatorApy;
 use sui_json_rpc_types::ValidatorApys;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
@@ -36,6 +35,8 @@ use sui_types::governance::STAKED_SUI_STRUCT_NAME;
 use sui_types::governance::STAKING_POOL_MODULE_NAME;
 use sui_types::governance::StakedSui;
 use sui_types::sui_serde::BigInt;
+use sui_types::sui_system_state::PoolTokenExchangeRate;
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateWrapper;
 use sui_types::sui_system_state::sui_system_state_inner_v1::SuiSystemStateInnerV1;
@@ -49,8 +50,11 @@ use crate::data::latest_epoch;
 use crate::data::load_live;
 use crate::data::load_live_deserialized;
 use crate::error::RpcError;
-use crate::error::client_error_to_error_object;
 use crate::error::rpc_bail;
+
+/// Number of most recent epochs to load from `kv_epoch_starts` when computing validator APYs.
+/// Matches the upper bound on adjacent-epoch samples used by `compute_apy`.
+const APY_EPOCH_WINDOW: i64 = 31;
 
 #[open_rpc(namespace = "suix", tag = "Governance API")]
 #[rpc(server, namespace = "suix")]
@@ -73,25 +77,13 @@ trait GovernanceApi {
     /// Return all [DelegatedStake].
     #[method(name = "getStakes")]
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>>;
-}
 
-#[open_rpc(namespace = "suix", tag = "Delegation Governance API")]
-#[rpc(server, namespace = "suix")]
-trait DelegationGovernanceApi {
     /// Return the validator APY
     #[method(name = "getValidatorsApy")]
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys>;
 }
 
 pub(crate) struct Governance(pub Context);
-
-pub(crate) struct DelegationGovernance(HttpClient);
-
-impl DelegationGovernance {
-    pub(crate) fn new(client: HttpClient) -> Self {
-        Self(client)
-    }
-}
 
 #[async_trait::async_trait]
 impl GovernanceApiServer for Governance {
@@ -152,33 +144,15 @@ impl GovernanceApiServer for Governance {
 
         Ok(delegated_stakes_response(&self.0, all_stake_ids).await?)
     }
-}
 
-#[async_trait::async_trait]
-impl DelegationGovernanceApiServer for DelegationGovernance {
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
-        let Self(client) = self;
-
-        client
-            .get_validators_apy()
-            .await
-            .map_err(client_error_to_error_object)
+        Ok(validators_apy_response(&self.0).await?)
     }
 }
 
 impl RpcModule for Governance {
     fn schema(&self) -> Module {
         GovernanceApiOpenRpc::module_doc()
-    }
-
-    fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
-        self.into_rpc()
-    }
-}
-
-impl RpcModule for DelegationGovernance {
-    fn schema(&self) -> Module {
-        DelegationGovernanceApiOpenRpc::module_doc()
     }
 
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
@@ -338,4 +312,103 @@ async fn delegated_stakes_response(
             },
         )
         .collect())
+}
+
+/// Load data and generate response for `getValidatorsApy`.
+///
+/// Rates are derived from `staking_pool_sui_balance` and `pool_token_balance` of each active
+/// validator in the latest `APY_EPOCH_WINDOW` rows of `kv_epoch_starts`. These are the same
+/// numbers that `advance_epoch` writes into each staking pool's `exchange_rates` table, so the
+/// adjacent-epoch APY math produces the same output as the legacy implementation, without any
+/// RocksDB dynamic-field scans.
+///
+/// Safe-mode epochs don't run `advance_epoch`, so validator balances carry over unchanged — the
+/// resulting 0-APY adjacent pair is dropped by `compute_apy`'s outlier filter, mirroring the
+/// legacy `backfill_rates` behavior.
+async fn validators_apy_response(ctx: &Context) -> Result<ValidatorApys, RpcError> {
+    use kv_epoch_starts::dsl as e;
+
+    let mut conn = ctx
+        .pg_reader()
+        .connect()
+        .await
+        .context("Failed to connect to the database")?;
+
+    let rows: Vec<StoredEpochStart> = conn
+        .results(
+            e::kv_epoch_starts
+                .order(e::epoch.desc())
+                .limit(APY_EPOCH_WINDOW),
+        )
+        .await
+        .context("Failed to fetch epoch starts for APY calculation")?;
+
+    let latest = rows
+        .first()
+        .context("No epoch start rows available for APY calculation")?;
+
+    let latest_summary = decode_summary(&latest.system_state)?;
+    let current_epoch = latest_summary.epoch;
+    let stake_subsidy_start_epoch = latest_summary.stake_subsidy_start_epoch;
+
+    let mut by_pool: HashMap<ObjectID, Vec<PoolTokenExchangeRate>> = HashMap::new();
+    for row in &rows {
+        if (row.epoch as u64) < stake_subsidy_start_epoch {
+            continue;
+        }
+        let summary = decode_summary(&row.system_state)?;
+        for v in summary.active_validators {
+            by_pool
+                .entry(v.staking_pool_id)
+                .or_default()
+                .push(PoolTokenExchangeRate::new(
+                    v.staking_pool_sui_balance,
+                    v.pool_token_balance,
+                ));
+        }
+    }
+
+    let empty_rates: Vec<PoolTokenExchangeRate> = Vec::new();
+    let apys = latest_summary
+        .active_validators
+        .into_iter()
+        .map(|v| {
+            let rates = by_pool.get(&v.staking_pool_id).unwrap_or(&empty_rates);
+            ValidatorApy {
+                address: v.sui_address,
+                apy: compute_apy(rates),
+            }
+        })
+        .collect();
+
+    Ok(ValidatorApys {
+        apys,
+        epoch: current_epoch,
+    })
+}
+
+fn decode_summary(bytes: &[u8]) -> Result<SuiSystemStateSummary, RpcError> {
+    Ok(bcs::from_bytes::<SuiSystemState>(bytes)
+        .context("Failed to deserialize SuiSystemState from kv_epoch_starts")?
+        .into_sui_system_state_summary())
+}
+
+/// Compute the average APY from a descending-epoch list of exchange rates.
+///
+/// Iterates adjacent pairs (newer, older), converts each pair into an annualized return
+/// `(older / newer) ^ 365 - 1`, discards outliers outside `(0.0, 0.1)`, and averages up to 30 of
+/// the remaining samples. This mirrors the legacy `calculate_apys` logic.
+fn compute_apy(rates: &[PoolTokenExchangeRate]) -> f64 {
+    let samples: Vec<f64> = rates
+        .windows(2)
+        .map(|w| (w[1].rate() / w[0].rate()).powf(365.0) - 1.0)
+        .filter(|apy| *apy > 0.0 && *apy < 0.1)
+        .take(30)
+        .collect();
+
+    if samples.is_empty() {
+        0.0
+    } else {
+        samples.iter().sum::<f64>() / samples.len() as f64
+    }
 }
