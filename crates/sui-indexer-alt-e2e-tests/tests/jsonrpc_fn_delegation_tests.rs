@@ -11,7 +11,6 @@ use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_e2e_tests::OffchainClusterConfig;
 use sui_indexer_alt_e2e_tests::local_ingestion_client_args;
 use sui_indexer_alt_jsonrpc::NodeArgs as JsonRpcNodeArgs;
-use sui_macros::sim_test;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_test_transaction_builder::make_staking_transaction;
