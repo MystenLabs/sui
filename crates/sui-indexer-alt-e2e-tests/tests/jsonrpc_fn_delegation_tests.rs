@@ -180,7 +180,7 @@ fn stake_id_projection(result: &Value) -> Vec<(String, Vec<String>)> {
         .collect()
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_get_stakes_and_by_ids() {
     let test_cluster = FnDelegationTestCluster::new()
         .await
@@ -230,7 +230,7 @@ async fn test_get_stakes_and_by_ids() {
     assert_eq!(get_stakes_response, get_stakes_by_ids_response);
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_get_stakes_invalid_params() {
     let test_cluster = FnDelegationTestCluster::new()
         .await
@@ -272,7 +272,7 @@ async fn test_get_stakes_invalid_params() {
     );
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_stakes_correct_ordering() {
     let test_cluster = FnDelegationTestCluster::new()
         .await
@@ -419,7 +419,7 @@ async fn test_stakes_correct_ordering() {
     );
 }
 
-#[sim_test]
+#[tokio::test]
 async fn test_get_validators_apy() {
     let test_cluster = FnDelegationTestCluster::new()
         .await
@@ -443,7 +443,7 @@ async fn test_get_validators_apy() {
 /// `getStakesByIds` response covering both. The remaining stake must still come back. This is
 /// our documented divergence from legacy `sui-json-rpc`, which returned Unstaked for the
 /// withdrawn one.
-#[sim_test]
+#[tokio::test]
 async fn test_get_stakes_by_ids_omits_withdrawn() {
     let test_cluster = FnDelegationTestCluster::new()
         .await
