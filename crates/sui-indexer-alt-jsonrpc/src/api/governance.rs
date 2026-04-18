@@ -53,7 +53,6 @@ use crate::error::RpcError;
 use crate::error::rpc_bail;
 
 /// Number of most recent epochs to load from `kv_epoch_starts` when computing validator APYs.
-/// Matches the upper bound on adjacent-epoch samples used by `compute_apy`.
 const APY_EPOCH_WINDOW: i64 = 31;
 
 #[open_rpc(namespace = "suix", tag = "Governance API")]
