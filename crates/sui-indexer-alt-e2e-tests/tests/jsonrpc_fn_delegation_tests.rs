@@ -59,7 +59,6 @@ impl FnDelegationTestCluster {
             client_args,
             OffchainClusterConfig {
                 jsonrpc_node_args: JsonRpcNodeArgs {
-                    fullnode_rpc_url: Some(fullnode_rpc_url.clone()),
                     fullnode_grpc_url: Some(fullnode_rpc_url.to_string()),
                 },
                 ..Default::default()

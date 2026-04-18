@@ -29,7 +29,6 @@ use url::Url;
 use crate::api::checkpoints::Checkpoints;
 use crate::api::coin::Coins;
 use crate::api::dynamic_fields::DynamicFields;
-use crate::api::governance::DelegationGovernance;
 use crate::api::governance::Governance;
 use crate::api::move_utils::MoveUtils;
 use crate::api::name_service::NameService;
@@ -238,11 +237,6 @@ impl Default for RpcArgs {
 /// Configuration for the fullnode RPC that this service will connect to.
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct NodeArgs {
-    /// The URL of the fullnode JSON-RPC, used for delegation governance queries (getStakes,
-    /// getStakesByIds, getValidatorsApy).
-    #[arg(long)]
-    pub fullnode_rpc_url: Option<url::Url>,
-
     /// The URL of the fullnode gRPC service, used for transaction execution and dry-running.
     #[arg(long)]
     pub fullnode_grpc_url: Option<String>,
@@ -252,8 +246,7 @@ pub struct NodeArgs {
 /// command-line).
 ///
 /// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not
-/// work. The only exception is the `DelegationGovernance` module, which is controlled by
-/// `node_args.fullnode_rpc_url`, which can be omitted to disable reads from this RPC.
+/// work.
 ///
 /// KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is provided.
 /// Otherwise these requests are served by the database. If a `bigtable_instance` is provided, the
@@ -318,13 +311,6 @@ pub async fn start_rpc(
     rpc.add_module(QueryObjects(context.clone()))?;
     rpc.add_module(QueryTransactions(context.clone()))?;
     rpc.add_module(Transactions(context.clone()))?;
-
-    if let Some(fullnode_rpc_url) = node_args.fullnode_rpc_url {
-        let client = context.config().node.client(fullnode_rpc_url)?;
-        rpc.add_module(DelegationGovernance::new(client))?;
-    } else {
-        warn!("No fullnode rpc url provided, DelegationGovernance module will not be added.");
-    }
 
     if let Some(_fullnode_client) = fullnode_client {
         rpc.add_module(Governance(context.clone()))?;

@@ -153,7 +153,6 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
                 // TODO: dummy value until simulacrum exposes grpc
                 jsonrpc_node_args: NodeArgs {
                     fullnode_grpc_url: Some("http://127.0.0.1:1".into()),
-                    fullnode_rpc_url: None,
                 },
                 ..Default::default()
             },
