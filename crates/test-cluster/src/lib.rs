@@ -20,6 +20,7 @@ use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_json_rpc_types::{SuiTransactionBlockEffectsAPI, TransactionFilter};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_network::api::ValidatorClient;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_rpc_api::Client;
@@ -50,8 +51,8 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::messages_grpc::{
-    RawSubmitTxRequest, SubmitTxRequest, SubmitTxResult, SubmitTxType, WaitForEffectsRequest,
-    WaitForEffectsResponse,
+    RawSubmitTxRequest, RawSubmitTxResponse, SubmitTxRequest, SubmitTxResult, SubmitTxType,
+    WaitForEffectsRequest, WaitForEffectsResponse,
 };
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemState;
@@ -64,6 +65,7 @@ use tokio::sync::broadcast;
 use tokio::time::{Instant, timeout};
 use tokio::{task::JoinHandle, time::sleep};
 use tonic::IntoRequest;
+use tonic::transport::Channel;
 use tracing::{error, info};
 
 pub mod addr_balance_test_env;
@@ -696,10 +698,9 @@ impl TestCluster {
             .get_client_for_testing()
             .unwrap();
 
-        let result = validator_client
-            .submit_transaction(request.into_request())
-            .await
-            .map(tonic::Response::into_inner)?;
+        let result =
+            submit_soft_bundle_with_timeout_and_retries(&mut validator_client, request, &digests)
+                .await?;
         assert_eq!(result.results.len(), signed_txs.len());
 
         for raw_result in result.results.iter() {
@@ -764,10 +765,9 @@ impl TestCluster {
             .get_client_for_testing()
             .unwrap();
 
-        let result = validator_client
-            .submit_transaction(request.into_request())
-            .await
-            .map(tonic::Response::into_inner)?;
+        let result =
+            submit_soft_bundle_with_timeout_and_retries(&mut validator_client, request, &digests)
+                .await?;
         assert_eq!(result.results.len(), signed_txs.len());
 
         // Extract consensus positions from submission results
@@ -843,7 +843,7 @@ impl TestCluster {
     /// This function is recommended for transaction execution since it most resembles the
     /// production path.
     pub async fn execute_transaction(&self, tx: Transaction) -> ExecutedTransaction {
-        self.wallet.execute_transaction_must_succeed(tx).await
+        execute_transaction_must_succeed_with_timeout_and_retries(&self.wallet, tx).await
     }
 
     /// Different from `execute_transaction` which returns RPC effects types, this function
@@ -950,7 +950,7 @@ impl TestCluster {
                     .build(),
             )
             .await;
-        context.execute_transaction_must_succeed(tx).await;
+        execute_transaction_must_succeed_with_timeout_and_retries(context, tx).await;
 
         context
             .get_one_gas_object_owned_by_address(funding_address)
@@ -979,6 +979,48 @@ impl TestCluster {
     pub fn set_safe_mode_expected(&self, value: bool) {
         for n in self.all_node_handles() {
             n.with(|node| node.set_safe_mode_expected(value));
+        }
+    }
+}
+
+async fn submit_soft_bundle_with_timeout_and_retries(
+    validator_client: &mut ValidatorClient<Channel>,
+    request: RawSubmitTxRequest,
+    digests: &[TransactionDigest],
+) -> Result<RawSubmitTxResponse, tonic::Status> {
+    loop {
+        match tokio::time::timeout(
+            Duration::from_secs(30),
+            validator_client.submit_transaction(request.clone().into_request()),
+        )
+        .await
+        {
+            Ok(res) => return res.map(tonic::Response::into_inner),
+            Err(_) => {
+                tracing::warn!(?digests, "submit_transaction timed out after 30s, retrying");
+            }
+        }
+    }
+}
+
+async fn execute_transaction_must_succeed_with_timeout_and_retries(
+    wallet: &WalletContext,
+    tx: Transaction,
+) -> ExecutedTransaction {
+    loop {
+        match tokio::time::timeout(
+            Duration::from_secs(30),
+            wallet.execute_transaction_must_succeed(tx.clone()),
+        )
+        .await
+        {
+            Ok(res) => return res,
+            Err(_) => {
+                tracing::warn!(
+                    tx_digest = ?tx.digest(),
+                    "execute_transaction_must_succeed timed out after 30s, retrying"
+                );
+            }
         }
     }
 }
