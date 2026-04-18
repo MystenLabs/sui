@@ -690,7 +690,10 @@ impl TestCluster {
         signed_txs: &[Transaction],
     ) -> SuiResult<Vec<(TransactionDigest, TransactionEffects)>> {
         let digests: Vec<_> = signed_txs.iter().map(|tx| *tx.digest()).collect();
-        tracing::info!(?digests, "exec_tx_debug: execute_signed_txns_in_soft_bundle entered");
+        tracing::info!(
+            ?digests,
+            "exec_tx_debug: execute_signed_txns_in_soft_bundle entered"
+        );
 
         let request = RawSubmitTxRequest {
             transactions: signed_txs

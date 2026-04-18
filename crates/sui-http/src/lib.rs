@@ -258,12 +258,14 @@ where
                     break;
                 },
                 (io, remote_addr) = self.listener.accept() => {
+                    tracing::info!("exec_tx_debug: listener.accept returned");
                     self.handle_incomming(io, remote_addr);
                 },
                 Some(maybe_connection) = self.pending_connections.join_next() => {
                     // If a task panics, just propagate it
                     let (io, remote_addr) = match maybe_connection.unwrap() {
                         Ok((io, remote_addr)) => {
+                            tracing::info!("exec_tx_debug: pending TLS accept completed");
                             (io, remote_addr)
                         }
                         Err(e) => {
@@ -276,6 +278,7 @@ where
                     self.handle_connection(io, remote_addr);
                 },
                 Some(connection_handler_output) = self.connection_handlers.join_next() => {
+                    tracing::info!("exec_tx_debug: connection handler finished");
                     // If a task panics, just propagate it
                     let _: () = connection_handler_output.unwrap();
                 },
@@ -310,6 +313,7 @@ where
                 Ok((ServerIo::new_tls_io(io), remote_addr))
             });
         } else {
+            tracing::info!("exec_tx_debug: handle_incomming without TLS");
             self.handle_connection(ServerIo::new_io(io), remote_addr);
         }
     }
@@ -340,6 +344,10 @@ where
             },
         ));
 
+        tracing::info!(
+            ?connection_id,
+            "exec_tx_debug: handle_connection spawning connection handler"
+        );
         self.connections
             .write()
             .unwrap()

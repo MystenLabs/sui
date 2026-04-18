@@ -121,6 +121,11 @@ impl MyEndpoint {
             disable_caching_resolver
         });
 
+        info!(
+            disable_caching_resolver,
+            "exec_tx_debug: MyEndpoint::connect_lazy building lazy channel"
+        );
+
         if disable_caching_resolver {
             let mut http = HttpConnector::new();
             http.enforce_http(false);
@@ -233,6 +238,7 @@ impl Service<Name> for CachingResolver {
     }
 
     fn call(&mut self, name: Name) -> Self::Future {
+        info!(host = %name.as_str(), "exec_tx_debug: CachingResolver::call");
         let blocking = {
             let cache = self.cache.clone();
             tokio::task::spawn_blocking(move || {
@@ -288,17 +294,26 @@ impl Future for CachingFuture {
     type Output = Result<SocketAddrs, io::Error>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> Poll<Self::Output> {
-        Pin::new(&mut self.inner).poll(cx).map(|res| match res {
-            Ok(Ok(addrs)) => Ok(addrs),
-            Ok(Err(err)) => Err(err),
-            Err(join_err) => {
+        match Pin::new(&mut self.inner).poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Ok(Ok(addrs))) => {
+                info!("exec_tx_debug: CachingFuture::poll resolved host");
+                Poll::Ready(Ok(addrs))
+            }
+            Poll::Ready(Ok(Err(err))) => {
+                info!(error = %err, "exec_tx_debug: CachingFuture::poll resolver error");
+                Poll::Ready(Err(err))
+            }
+            Poll::Ready(Err(join_err)) => {
                 if join_err.is_cancelled() {
-                    Err(io::Error::new(io::ErrorKind::Interrupted, join_err))
+                    let err = io::Error::new(io::ErrorKind::Interrupted, join_err);
+                    info!(error = %err, "exec_tx_debug: CachingFuture::poll join cancelled");
+                    Poll::Ready(Err(err))
                 } else {
                     panic!("background task failed: {:?}", join_err)
                 }
             }
-        })
+        }
     }
 }
 
