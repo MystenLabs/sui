@@ -1063,6 +1063,7 @@ async fn run_bench_worker(
                         let num_txs = txs.len();
                         let start = Arc::new(Instant::now());
                         let metrics_clone = Arc::clone(&metrics);
+                        let num_in_flight_metric = metrics.num_in_flight.with_label_values(&[&payload.to_string()]);
                         let proxy = worker.execution_proxy.clone_new();
 
                         let max_bundle_size = payload.max_soft_bundle_size().get();
@@ -1123,7 +1124,7 @@ async fn run_bench_worker(
                             let latency = start.elapsed();
 
                             process_bundle_results(num_txs, payload, latency, &metrics_clone, bundle_results)
-                        };
+                        }.count_in_flight(num_in_flight_metric);
                         futures.push(Box::pin(res));
                     } else {
                         let tx = payload.make_transaction();
