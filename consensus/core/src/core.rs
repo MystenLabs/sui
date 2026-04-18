@@ -1,19 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    iter,
-    sync::Arc,
-    time::Duration,
-    vec,
-};
+use std::{collections::BTreeSet, iter, sync::Arc, time::Duration, vec};
 
 use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 #[cfg(test)]
 use consensus_config::{Stake, local_committee_and_keys};
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round};
 use itertools::Itertools as _;
+use mysten_common::ZipDebugEqIteratorExt as _;
 #[cfg(test)]
 use mysten_metrics::monitored_mpsc::UnboundedReceiver;
 use mysten_metrics::monitored_scope;
@@ -37,10 +32,7 @@ use crate::{
         VerifiedBlock,
     },
     block_manager::BlockManager,
-    commit::{
-        CertifiedCommit, CertifiedCommits, CommitAPI, CommitIndex, CommittedSubDag, DecidedLeader,
-        Decision,
-    },
+    commit::{CertifiedCommit, CertifiedCommits, CommitAPI, CommitIndex, CommittedSubDag},
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
@@ -206,7 +198,7 @@ impl Core {
             .start_timer();
 
         // Try to commit and propose, since they may not have run after the last storage write.
-        self.try_commit(vec![]).unwrap();
+        self.try_commit().unwrap();
 
         let last_proposed_block = if let Some(last_proposed_block) = self.try_propose(true).unwrap()
         {
@@ -309,7 +301,7 @@ impl Core {
             );
 
             // Try to commit the new blocks if possible.
-            self.try_commit(vec![])?;
+            self.try_commit()?;
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
@@ -330,10 +322,11 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    // Adds the certified commits that have been synced via the commit syncer. We are using the commit info in order to skip running the decision
-    // rule and immediately commit the corresponding leaders and sub dags. Pay attention that no block acceptance is happening here, but rather
-    // internally in the `try_commit` method which ensures that everytime only the blocks corresponding to the certified commits that are about to
-    // be committed are accepted.
+    // Adds certified commits synced from peers via the commit syncer. Local commit rule is
+    // skipped and the corresponding leaders and sub dags are committed directly. Blocks of
+    // the certified commits themselves are accepted inside `process_certified_commits`, and
+    // only for commits it is about to linearize — this avoids flushing blocks for commits
+    // that may never be linearized.
     #[tracing::instrument(skip_all)]
     pub(crate) fn add_certified_commits(
         &mut self,
@@ -351,8 +344,10 @@ impl Core {
         // commits when helping peers sync commits.
         let (_, missing_block_refs) = self.accept_blocks(votes);
 
-        // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-        self.try_commit(commits)?;
+        // Commit the certified commits first, then run the local decision rule
+        // on the newly accepted blocks/votes.
+        self.process_certified_commits(commits)?;
+        self.try_commit()?;
 
         // Try to propose now since there are new blocks accepted.
         self.try_propose(false)?;
@@ -457,6 +452,12 @@ impl Core {
                 if commit.index() > last_commit_index {
                     true
                 } else {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .core_certified_commits_processed
+                        .with_label_values(&["skipped"])
+                        .inc();
                     tracing::debug!(
                         "Skip commit for index {} as it is already committed with last commit index {}",
                         commit.index(),
@@ -494,7 +495,7 @@ impl Core {
             fail_point!("consensus-after-propose");
 
             // The new block may help commit.
-            self.try_commit(vec![])?;
+            self.try_commit()?;
             return Ok(Some(extended_block.block));
         }
         Ok(None)
@@ -766,12 +767,145 @@ impl Core {
         Some(extended_block)
     }
 
-    /// Runs commit rule to attempt to commit additional blocks from the DAG. If any `certified_commits` are provided, then
-    /// it will attempt to commit those first before trying to commit any further leaders.
-    fn try_commit(
+    // Refreshes the leader schedule if a change is triggered by the current
+    // commit index, and returns the number of commits allowed before the next
+    // schedule update. Post-condition: the returned value is > 0.
+    fn refresh_leader_schedule(&mut self) -> usize {
+        // LeaderSchedule has a limit to how many sequenced leaders can be committed
+        // before a change is triggered. Calling into leader schedule will get you
+        // how many commits till next leader change. Callers should loop back and
+        // recalculate any discarded leaders with the new schedule.
+        let mut commits_until_update = self
+            .leader_schedule
+            .commits_until_leader_schedule_update(self.dag_state.clone());
+
+        if commits_until_update == 0 {
+            let last_commit_index = self.dag_state.read().last_commit_index();
+
+            tracing::info!("Leader schedule change triggered at commit index {last_commit_index}");
+
+            self.leader_schedule
+                .update_leader_schedule_v2(&self.dag_state);
+
+            let propagation_scores = self
+                .leader_schedule
+                .leader_swap_table
+                .read()
+                .reputation_scores
+                .clone();
+            self.ancestor_state_manager
+                .set_propagation_scores(propagation_scores);
+
+            commits_until_update = self
+                .leader_schedule
+                .commits_until_leader_schedule_update(self.dag_state.clone());
+
+            fail_point!("consensus-after-leader-schedule-change");
+        }
+        assert!(commits_until_update > 0);
+        commits_until_update
+    }
+
+    // Processes certified commits that have been synced from peers. Each commit
+    // is already quorum-certified, so the decision rule is skipped and the
+    // corresponding leaders and sub dags are committed directly. Blocks for the
+    // decided certified commits are accepted inside this function to avoid
+    // flushing blocks that belong to certified commits which end up not being
+    // linearized (see the comment on `accept_committed_blocks` below).
+    fn process_certified_commits(
         &mut self,
-        mut certified_commits: Vec<CertifiedCommit>,
+        certified_commits: Vec<CertifiedCommit>,
     ) -> ConsensusResult<Vec<CommittedSubDag>> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::process_certified_commits"])
+            .start_timer();
+
+        if certified_commits.is_empty() {
+            return Ok(vec![]);
+        }
+        info!(
+            "Processing synced commits: {:?}",
+            certified_commits
+                .iter()
+                .map(|c| (c.index(), c.leader()))
+                .collect::<Vec<_>>()
+        );
+
+        let certified_leaders = certified_commits
+            .iter()
+            .map(|commit| {
+                let leader = commit.blocks().last().expect("Certified commit should have at least one block");
+                assert_eq!(leader.reference(), commit.leader(), "Last block of the committed sub dag should have the same digest as the leader of the commit");
+                leader.clone()
+            })
+            .collect::<Vec<_>>();
+        self.last_decided_leader = certified_leaders.last().unwrap().slot();
+        self.context
+            .metrics
+            .node_metrics
+            .last_decided_leader_round
+            .set(self.last_decided_leader.round as i64);
+
+        // Only accept blocks for the certified commits that we are certain to sequence.
+        // This ensures that only blocks corresponding to committed certified commits are flushed to disk.
+        // Blocks from non-committed certified commits will not be flushed, preventing issues during crash-recovery.
+        // This avoids scenarios where accepting and flushing blocks of non-committed certified commits could lead to
+        // premature commit rule execution. Due to GC, this could cause a panic if the commit rule tries to access
+        // missing causal history from blocks of certified commits.
+        let blocks = certified_commits
+            .iter()
+            .flat_map(|c| c.blocks())
+            .cloned()
+            .collect::<Vec<_>>();
+        self.accept_committed_blocks(blocks);
+
+        tracing::info!(
+            "Committing {} certified leaders: {}",
+            certified_leaders.len(),
+            certified_leaders
+                .iter()
+                .map(|b| b.reference().to_string())
+                .join(","),
+        );
+
+        let committed_sub_dags = self
+            .commit_observer
+            .handle_commit(certified_leaders, false)?;
+
+        fail_point!("consensus-after-handle-commit");
+
+        // Sanity check: for commits that have been linearized using the certified commits, ensure that the same sub dag has been committed.
+        for (sub_dag, commit) in committed_sub_dags
+            .iter()
+            .zip_debug_eq(certified_commits.iter())
+        {
+            assert_eq!(
+                sub_dag.commit_ref,
+                commit.reference(),
+                "Certified commit has different reference than the committed sub dag"
+            );
+        }
+
+        self.context
+            .metrics
+            .node_metrics
+            .core_certified_commits_processed
+            .with_label_values(&["committed"])
+            .inc_by(certified_commits.len() as u64);
+
+        self.post_commit(&committed_sub_dags);
+
+        Ok(committed_sub_dags)
+    }
+
+    // Runs the local commit decision rule on the current DAG and linearizes any
+    // newly-decided sub dags. Does not process certified commits — see
+    // `Self::process_certified_commits` for that path.
+    fn try_commit(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
         let _s = self
             .context
             .metrics
@@ -780,94 +914,17 @@ impl Core {
             .with_label_values(&["Core::try_commit"])
             .start_timer();
 
-        let mut certified_commits_map = BTreeMap::new();
-        for c in &certified_commits {
-            certified_commits_map.insert(c.index(), c.reference());
-        }
-
-        if !certified_commits.is_empty() {
-            info!(
-                "Processing synced commits: {:?}",
-                certified_commits
-                    .iter()
-                    .map(|c| (c.index(), c.leader()))
-                    .collect::<Vec<_>>()
-            );
-        }
-
         let mut committed_sub_dags = Vec::new();
         // TODO: Add optimization to abort early without quorum for a round.
         loop {
-            // LeaderSchedule has a limit to how many sequenced leaders can be committed
-            // before a change is triggered. Calling into leader schedule will get you
-            // how many commits till next leader change. We will loop back and recalculate
-            // any discarded leaders with the new schedule.
-            let mut commits_until_update = self
-                .leader_schedule
-                .commits_until_leader_schedule_update(self.dag_state.clone());
+            let commits_until_update = self.refresh_leader_schedule();
 
-            if commits_until_update == 0 {
-                let last_commit_index = self.dag_state.read().last_commit_index();
-
-                tracing::info!(
-                    "Leader schedule change triggered at commit index {last_commit_index}"
-                );
-
-                self.leader_schedule
-                    .update_leader_schedule_v2(&self.dag_state);
-
-                let propagation_scores = self
-                    .leader_schedule
-                    .leader_swap_table
-                    .read()
-                    .reputation_scores
-                    .clone();
-                self.ancestor_state_manager
-                    .set_propagation_scores(propagation_scores);
-
-                commits_until_update = self
-                    .leader_schedule
-                    .commits_until_leader_schedule_update(self.dag_state.clone());
-
-                fail_point!("consensus-after-leader-schedule-change");
+            // TODO: limit commits by commits_until_update for efficiency, which may be needed when leader schedule length is reduced.
+            let mut decided_leaders = self.committer.try_decide(self.last_decided_leader);
+            // Truncate the decided leaders to fit the commit schedule limit.
+            if decided_leaders.len() >= commits_until_update {
+                let _ = decided_leaders.split_off(commits_until_update);
             }
-            assert!(commits_until_update > 0);
-
-            // If there are certified commits to process, find out which leaders and commits from them
-            // are decided and use them as the next commits.
-            let (certified_leaders, decided_certified_commits): (
-                Vec<DecidedLeader>,
-                Vec<CertifiedCommit>,
-            ) = self
-                .try_select_certified_leaders(&mut certified_commits, commits_until_update)
-                .into_iter()
-                .unzip();
-
-            // Only accept blocks for the certified commits that we are certain to sequence.
-            // This ensures that only blocks corresponding to committed certified commits are flushed to disk.
-            // Blocks from non-committed certified commits will not be flushed, preventing issues during crash-recovery.
-            // This avoids scenarios where accepting and flushing blocks of non-committed certified commits could lead to
-            // premature commit rule execution. Due to GC, this could cause a panic if the commit rule tries to access
-            // missing causal history from blocks of certified commits.
-            let blocks = decided_certified_commits
-                .iter()
-                .flat_map(|c| c.blocks())
-                .cloned()
-                .collect::<Vec<_>>();
-            self.accept_committed_blocks(blocks);
-
-            // If there is no certified commit to process, run the decision rule.
-            let (decided_leaders, local) = if certified_leaders.is_empty() {
-                // TODO: limit commits by commits_until_update for efficiency, which may be needed when leader schedule length is reduced.
-                let mut decided_leaders = self.committer.try_decide(self.last_decided_leader);
-                // Truncate the decided leaders to fit the commit schedule limit.
-                if decided_leaders.len() >= commits_until_update {
-                    let _ = decided_leaders.split_off(commits_until_update);
-                }
-                (decided_leaders, true)
-            } else {
-                (certified_leaders, false)
-            };
 
             // If the decided leaders list is empty then just break the loop.
             let Some(last_decided) = decided_leaders.last().cloned() else {
@@ -903,28 +960,28 @@ impl Core {
             // TODO: refcount subdags
             let subdags = self
                 .commit_observer
-                .handle_commit(sequenced_leaders, local)?;
-
-            // Try to unsuspend blocks if gc_round has advanced.
-            self.block_manager
-                .try_unsuspend_blocks_for_latest_gc_round();
+                .handle_commit(sequenced_leaders, true)?;
 
             committed_sub_dags.extend(subdags);
 
             fail_point!("consensus-after-handle-commit");
         }
 
-        // Sanity check: for commits that have been linearized using the certified commits, ensure that the same sub dag has been committed.
-        for sub_dag in &committed_sub_dags {
-            if let Some(commit_ref) = certified_commits_map.remove(&sub_dag.commit_ref.index) {
-                assert_eq!(
-                    commit_ref, sub_dag.commit_ref,
-                    "Certified commit has different reference than the committed sub dag"
-                );
-            }
-        }
+        self.post_commit(&committed_sub_dags);
 
-        // Notify about our own committed blocks
+        Ok(committed_sub_dags)
+    }
+
+    // Post-processing shared by both commit paths: unsuspends any blocks that
+    // became eligible as gc_round advanced, and notifies the transaction
+    // consumer of any blocks authored by this node that were just committed.
+    fn post_commit(&mut self, committed_sub_dags: &[CommittedSubDag]) {
+        // It is good enough to try to unsuspend blocks once per try_commit() or process_certified_commits() call.
+        // Because unsuspended blocks do not get accepted until next Core::add_blocks() call.
+        self.block_manager
+            .try_unsuspend_blocks_for_latest_gc_round();
+
+        // Notify local transaction submitters about own blocks committed.
         let committed_block_refs = committed_sub_dags
             .iter()
             .flat_map(|sub_dag| sub_dag.blocks.iter())
@@ -934,8 +991,6 @@ impl Core {
             .collect::<Vec<_>>();
         self.transaction_consumer
             .notify_own_blocks_status(committed_block_refs, self.dag_state.read().gc_round());
-
-        Ok(committed_sub_dags)
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
@@ -1006,49 +1061,6 @@ impl Core {
         }
 
         true
-    }
-
-    // Tries to select a prefix of certified commits to be committed next respecting the `limit`.
-    // If provided `limit` is zero, it will panic.
-    // The function returns a list of certified leaders and certified commits. If empty vector is returned, it means that
-    // there are no certified commits to be committed, as input `certified_commits` is either empty or all of the certified
-    // commits have been already committed.
-    #[tracing::instrument(skip_all)]
-    fn try_select_certified_leaders(
-        &mut self,
-        certified_commits: &mut Vec<CertifiedCommit>,
-        limit: usize,
-    ) -> Vec<(DecidedLeader, CertifiedCommit)> {
-        assert!(limit > 0, "limit should be greater than 0");
-        if certified_commits.is_empty() {
-            return vec![];
-        }
-
-        let to_commit = if certified_commits.len() >= limit {
-            // We keep only the number of leaders as dictated by the `limit`
-            certified_commits.drain(..limit).collect::<Vec<_>>()
-        } else {
-            // Otherwise just take all of them and leave the `synced_commits` empty.
-            std::mem::take(certified_commits)
-        };
-
-        tracing::debug!(
-            "Selected {} certified leaders: {}",
-            to_commit.len(),
-            to_commit.iter().map(|c| c.leader().to_string()).join(",")
-        );
-
-        to_commit
-            .into_iter()
-            .map(|commit| {
-                let leader = commit.blocks().last().expect("Certified commit should have at least one block");
-                assert_eq!(leader.reference(), commit.leader(), "Last block of the committed sub dag should have the same digest as the leader of the commit");
-                // There is no knowledge of direct commit with certified commits, so assuming indirect commit.
-                let leader = DecidedLeader::Commit(leader.clone(), /* direct */ false);
-                UniversalCommitter::update_metrics(&self.context, &leader, Decision::Certified);
-                (leader, commit)
-            })
-            .collect::<Vec<_>>()
     }
 
     /// Retrieves the next ancestors to propose to form a block at `clock_round` round.
@@ -1799,7 +1811,7 @@ mod test {
         }
 
         // Run commit rule.
-        core.try_commit(vec![]).ok();
+        core.try_commit().ok();
 
         // Flush the DAG state to storage.
         core.dag_state.write().flush();
@@ -3316,7 +3328,7 @@ mod test {
         let sub_dags_and_commits = dag_builder.get_sub_dag_and_certified_commits(1..=10);
 
         // Now try to commit up to the latest leader (round = 4). Do not provide any certified commits.
-        let committed_sub_dags = core.try_commit(vec![]).unwrap();
+        let committed_sub_dags = core.try_commit().unwrap();
 
         // We should have committed up to round 4
         assert_eq!(committed_sub_dags.len(), 4);
@@ -3419,7 +3431,7 @@ mod test {
         let sub_dags_and_commits = dag_builder.get_sub_dag_and_certified_commits(1..=10);
 
         // Now try to commit up to the latest leader (round = 4). Do not provide any certified commits.
-        let committed_sub_dags = core.try_commit(vec![]).unwrap();
+        let committed_sub_dags = core.try_commit().unwrap();
 
         // We should have committed up to round 4
         assert_eq!(committed_sub_dags.len(), 4);
@@ -3577,7 +3589,8 @@ mod test {
 
         // Now try to commit up to the latest leader (round = 5) with the provided certified commits. Not that we have not accepted any
         // blocks. That should happen during the commit process.
-        let committed_sub_dags = core.try_commit(certified_commits).unwrap();
+        let mut committed_sub_dags = core.process_certified_commits(certified_commits).unwrap();
+        committed_sub_dags.extend(core.try_commit().unwrap());
 
         // We should have committed up to round 4
         assert_eq!(committed_sub_dags.len(), 4);
@@ -3960,43 +3973,6 @@ mod test {
             .scan_commits((0..=CommitIndex::MAX).into())
             .unwrap();
         assert_eq!(all_stored_commits.len(), 6);
-    }
-
-    #[tokio::test]
-    async fn try_select_certified_leaders() {
-        // GIVEN
-        telemetry_subscribers::init_for_testing();
-
-        let (context, _) = Context::new_for_test(4);
-
-        let authority_index = AuthorityIndex::new_for_test(0);
-        let core =
-            CoreTextFixture::new(context.clone(), vec![1, 1, 1, 1], authority_index, true).await;
-        let mut core = core.core;
-
-        let mut dag_builder = DagBuilder::new(Arc::new(context.clone()));
-        dag_builder.layers(1..=12).build();
-
-        let limit = 2;
-
-        let blocks = dag_builder.blocks(1..=12);
-
-        for block in blocks {
-            core.dag_state.write().accept_block(block);
-        }
-
-        // WHEN
-        let sub_dags_and_commits = dag_builder.get_sub_dag_and_certified_commits(1..=4);
-        let mut certified_commits = sub_dags_and_commits
-            .into_iter()
-            .map(|(_, commit)| commit)
-            .collect::<Vec<_>>();
-
-        let leaders = core.try_select_certified_leaders(&mut certified_commits, limit);
-
-        // THEN
-        assert_eq!(leaders.len(), 2);
-        assert_eq!(certified_commits.len(), 2);
     }
 
     pub(crate) async fn receive<T: Copy>(timeout: Duration, mut receiver: watch::Receiver<T>) -> T {
