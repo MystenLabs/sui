@@ -317,14 +317,13 @@ async fn delegated_stakes_response(
 /// Load data and generate response for `getValidatorsApy`.
 ///
 /// Rates are derived from `staking_pool_sui_balance` and `pool_token_balance` of each active
-/// validator in the latest `APY_EPOCH_WINDOW` rows of `kv_epoch_starts`. These are the same
-/// numbers that `advance_epoch` writes into each staking pool's `exchange_rates` table, so the
-/// adjacent-epoch APY math produces the same output as the legacy implementation, without any
-/// RocksDB dynamic-field scans.
+/// validator in the latest `APY_EPOCH_WINDOW` rows of `kv_epoch_starts`. These are the same numbers
+/// that `advance_epoch` writes into each staking pool's `exchange_rates` table. Rates from adjacent
+/// epochs are converted into annualized returns, outliers are filtered out, and the rest are
+/// averaged over the sample window to produce each validator's APY.
 ///
-/// Safe-mode epochs don't run `advance_epoch`, so validator balances carry over unchanged — the
-/// resulting 0-APY adjacent pair is dropped by `compute_apy`'s outlier filter, mirroring the
-/// legacy `backfill_rates` behavior.
+/// In safe mode, a pool's sui and token balance carry over unchanged, which produces 0% APY and
+/// gets filtered out, matching the legacy fullnode jsonrpc's `backfill_rates`.
 async fn validators_apy_response(ctx: &Context) -> Result<ValidatorApys, RpcError> {
     use kv_epoch_starts::dsl as e;
 
