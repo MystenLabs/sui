@@ -633,9 +633,11 @@ impl TestCluster {
         &self,
         tx_data: &TransactionData,
     ) -> SuiResult<(TransactionDigest, TransactionEffects)> {
+        tracing::info!("exec_tx_debug: sign_and_execute_transaction_directly entered");
         let mut res = self
             .sign_and_execute_txns_in_soft_bundle(std::slice::from_ref(tx_data))
             .await?;
+        tracing::info!("exec_tx_debug: sign_and_execute_txns_in_soft_bundle returned Ok");
         assert_eq!(res.len(), 1);
         Ok(res.pop().unwrap())
     }
@@ -664,11 +666,25 @@ impl TestCluster {
         &self,
         txns: &[TransactionData],
     ) -> SuiResult<Vec<(TransactionDigest, TransactionEffects)>> {
+        tracing::info!(
+            count = txns.len(),
+            "exec_tx_debug: sign_and_execute_txns_in_soft_bundle: signing txns"
+        );
         // Sign all transactions
         let signed_txs: Vec<Transaction> =
             futures::future::join_all(txns.iter().map(|tx| self.wallet.sign_transaction(tx))).await;
+        let signed_digests: Vec<_> = signed_txs.iter().map(|t| *t.digest()).collect();
+        tracing::info!(
+            digests = ?signed_digests,
+            "exec_tx_debug: sign_and_execute_txns_in_soft_bundle: signed, calling execute_signed_txns_in_soft_bundle"
+        );
 
-        self.execute_signed_txns_in_soft_bundle(&signed_txs).await
+        let res = self.execute_signed_txns_in_soft_bundle(&signed_txs).await;
+        tracing::info!(
+            ok = res.is_ok(),
+            "exec_tx_debug: sign_and_execute_txns_in_soft_bundle: execute_signed_txns_in_soft_bundle returned"
+        );
+        res
     }
 
     pub async fn execute_signed_txns_in_soft_bundle(
@@ -676,6 +692,10 @@ impl TestCluster {
         signed_txs: &[Transaction],
     ) -> SuiResult<Vec<(TransactionDigest, TransactionEffects)>> {
         let digests: Vec<_> = signed_txs.iter().map(|tx| *tx.digest()).collect();
+        tracing::info!(
+            ?digests,
+            "exec_tx_debug: execute_signed_txns_in_soft_bundle entered"
+        );
 
         let request = RawSubmitTxRequest {
             transactions: signed_txs
@@ -687,6 +707,10 @@ impl TestCluster {
 
         let agg = self.authority_aggregator();
         let clients = &agg.authority_clients;
+        tracing::info!(
+            num_validators = clients.len(),
+            "exec_tx_debug: got authority_aggregator"
+        );
         // Use seeded RNG for deterministic but varying validator selection in simtests
         let index = rand::thread_rng().gen_range(0..clients.len());
         let mut validator_client = clients
@@ -697,20 +721,38 @@ impl TestCluster {
             .authority_client()
             .get_client_for_testing()
             .unwrap();
+        tracing::info!(
+            index,
+            ?digests,
+            "exec_tx_debug: got validator_client, calling submit_soft_bundle_with_timeout_and_retries"
+        );
 
         let result =
             submit_soft_bundle_with_timeout_and_retries(&mut validator_client, request, &digests)
                 .await?;
+        tracing::info!(
+            ?digests,
+            "exec_tx_debug: submit_soft_bundle_with_timeout_and_retries returned"
+        );
         assert_eq!(result.results.len(), signed_txs.len());
 
         for raw_result in result.results.iter() {
             let submit_result: sui_types::messages_grpc::SubmitTxResult =
                 raw_result.clone().try_into()?;
             if let sui_types::messages_grpc::SubmitTxResult::Rejected { error } = submit_result {
+                tracing::info!(
+                    ?digests,
+                    ?error,
+                    "exec_tx_debug: submit_transaction rejected"
+                );
                 return Err(error);
             }
         }
 
+        tracing::info!(
+            ?digests,
+            "exec_tx_debug: waiting for notify_read_executed_effects"
+        );
         let effects = self
             .fullnode_handle
             .sui_node
@@ -728,6 +770,10 @@ impl TestCluster {
                 }
             })
             .await;
+        tracing::info!(
+            ?digests,
+            "exec_tx_debug: notify_read_executed_effects returned"
+        );
 
         Ok(digests
             .into_iter()

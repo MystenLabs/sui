@@ -28,6 +28,10 @@ pub async fn serve_connection<IO, S, B, C>(
 {
     let mut sig = pin!(Fuse::new(graceful_shutdown_token.cancelled_owned()));
 
+    tracing::info!(
+        ?max_connection_age,
+        "exec_tx_debug: serve_connection entered"
+    );
     let mut conn = pin!(builder.serve_connection_with_upgrades(hyper_io, hyper_svc));
 
     let sleep = sleep_or_pending(max_connection_age);
@@ -36,21 +40,28 @@ pub async fn serve_connection<IO, S, B, C>(
     loop {
         tokio::select! {
             _ = &mut sig => {
+                tracing::info!("exec_tx_debug: serve_connection got shutdown signal");
                 conn.as_mut().graceful_shutdown();
             }
             rv = &mut conn => {
-                if let Err(err) = rv {
-                    debug!("failed serving connection: {:#}", err);
+                match rv {
+                    Ok(()) => tracing::info!("exec_tx_debug: serve_connection completed ok"),
+                    Err(err) => {
+                        tracing::info!("exec_tx_debug: serve_connection returned error: {:#}", err);
+                        debug!("failed serving connection: {:#}", err);
+                    }
                 }
                 break;
             },
             _ = &mut sleep  => {
+                tracing::info!("exec_tx_debug: serve_connection max_connection_age elapsed");
                 conn.as_mut().graceful_shutdown();
                 sleep.set(sleep_or_pending(None));
             },
         }
     }
 
+    tracing::info!("exec_tx_debug: serve_connection connection closed");
     trace!("connection closed");
     drop(on_connection_close);
 }

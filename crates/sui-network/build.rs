@@ -115,6 +115,7 @@ fn main() -> Result<()> {
     Builder::new()
         .out_dir(&out_dir)
         .compile(&[validator_service]);
+    inject_submit_transaction_debug(&out_dir)?;
 
     let route_names: Vec<&str> = methods.iter().map(|m| m.route_name).collect();
     generate_paths_constant(&out_dir, package, service_name, &route_names)?;
@@ -124,6 +125,137 @@ fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=DUMP_GENERATED_GRPC");
 
+    Ok(())
+}
+
+fn inject_submit_transaction_debug(out_dir: &Path) -> Result<()> {
+    let path = out_dir.join("sui.validator.Validator.rs");
+    let contents = std::fs::read_to_string(&path)?;
+    let old = r#"        pub async fn submit_transaction(
+            &mut self,
+            request: impl tonic::IntoRequest<
+                sui_types::messages_grpc::RawSubmitTxRequest,
+            >,
+        ) -> std::result::Result<
+            tonic::Response<sui_types::messages_grpc::RawSubmitTxResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.validator.Validator/SubmitTransaction",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("sui.validator.Validator", "SubmitTransaction"));
+            self.inner.unary(req, path, codec).await
+        }
+"#;
+    let new = r#"        pub async fn submit_transaction(
+            &mut self,
+            request: impl tonic::IntoRequest<
+                sui_types::messages_grpc::RawSubmitTxRequest,
+            >,
+        ) -> std::result::Result<
+            tonic::Response<sui_types::messages_grpc::RawSubmitTxResponse>,
+            tonic::Status,
+        > {
+            use tokio_stream::StreamExt as _;
+
+            tracing::info!("exec_tx_debug: ValidatorClient::submit_transaction before ready");
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    let status = tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    );
+                    tracing::info!(
+                        error = %status,
+                        "exec_tx_debug: ValidatorClient::submit_transaction ready returned error"
+                    );
+                    status
+                })?;
+            tracing::info!("exec_tx_debug: ValidatorClient::submit_transaction after ready");
+
+            let codec = tonic_prost::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/sui.validator.Validator/SubmitTransaction",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("sui.validator.Validator", "SubmitTransaction"));
+
+            let request = req.map(|m| tokio_stream::once(m));
+            tracing::info!("exec_tx_debug: ValidatorClient::submit_transaction before streaming");
+            let response = self.inner.streaming(request, path, codec).await;
+            let (parts, body, extensions) = match response {
+                Ok(response) => {
+                    tracing::info!(
+                        "exec_tx_debug: ValidatorClient::submit_transaction after streaming"
+                    );
+                    response.into_parts()
+                }
+                Err(status) => {
+                    tracing::info!(
+                        error = %status,
+                        "exec_tx_debug: ValidatorClient::submit_transaction streaming returned error"
+                    );
+                    return Err(status);
+                }
+            };
+
+            let mut body = std::pin::pin!(body);
+            tracing::info!("exec_tx_debug: ValidatorClient::submit_transaction before try_next");
+            let message = body
+                .try_next()
+                .await
+                .map_err(|status| {
+                    tracing::info!(
+                        error = %status,
+                        "exec_tx_debug: ValidatorClient::submit_transaction try_next returned error"
+                    );
+                    status
+                })?
+                .ok_or_else(|| {
+                    let status = tonic::Status::internal("Missing response message.");
+                    tracing::info!(
+                        error = %status,
+                        "exec_tx_debug: ValidatorClient::submit_transaction try_next missing response"
+                    );
+                    status
+                })?;
+            tracing::info!("exec_tx_debug: ValidatorClient::submit_transaction after try_next");
+
+            tracing::info!("exec_tx_debug: ValidatorClient::submit_transaction before trailers");
+            let _trailers = body.trailers().await.map_err(|status| {
+                tracing::info!(
+                    error = %status,
+                    "exec_tx_debug: ValidatorClient::submit_transaction trailers returned error"
+                );
+                status
+            })?;
+            tracing::info!("exec_tx_debug: ValidatorClient::submit_transaction after trailers");
+
+            Ok(tonic::Response::from_parts(parts, message, extensions))
+        }
+"#;
+
+    if contents.contains(new) {
+        return Ok(());
+    }
+    if !contents.contains(old) {
+        return Err(format!("failed to find submit_transaction body in {}", path.display()).into());
+    }
+
+    std::fs::write(path, contents.replacen(old, new, 1))?;
     Ok(())
 }
 
