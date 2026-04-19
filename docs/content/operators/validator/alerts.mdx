@@ -117,14 +117,24 @@ All alerts are important, but the following alerts and warnings can be addressed
 | **Summary**  | Less than 80% of stake is sequencing tx certs with acceptable latency |
 | **Duration** | `1m`                                                         |
 
+:::caution
+The `tx_type` metric labels `shared_certificate` and `owned_certificate` are deprecated. They are replaced by `_deprecated_certificate`. New data no longer emits the old label values. If you have custom alerts built on `shared_certificate` or `owned_certificate`, update them to use `_deprecated_certificate`. During a transition window where your data may contain both old and new label values, include all values in the regex filter as shown in the query below.
+:::
+
 ```sh
 sum(
   sum by (host) (current_voting_right{network="$network"})
   and
   histogram_quantile(0.95, sum by (le, host) (
-    rate(sequencing_certificate_latency_bucket{network="$network", position="0", tx_type=~"shared_certificate|owned_certificate|soft_bundle"}[2m])
+    rate(sequencing_certificate_latency_bucket{network="$network", position="0", tx_type=~"shared_certificate|owned_certificate|_deprecated_certificate|soft_bundle"}[2m])
   )) < 2
 ) < 5000
+```
+
+Once your metrics retention window no longer contains data with the old labels, simplify the filter to:
+
+```sh
+tx_type=~"_deprecated_certificate|soft_bundle"
 ```
 
 ### System invariant violations
