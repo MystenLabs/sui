@@ -28,7 +28,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 122;
+const MAX_PROTOCOL_VERSION: u64 = 123;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -1284,6 +1284,10 @@ pub struct ProtocolConfig {
     // TODO: Option<increase to 500 KB. currently, publishing a package > 500 KB exceeds the max computation gas cost
     /// Maximum size of a Move package object, in bytes. Enforced by the Sui adapter at the end of a publish transaction.
     max_move_package_size: Option<u64>,
+
+    /// Maximum size of a Move package with its transitive dependencies, in bytes. Enforced by
+    /// `MovePackage::new_initial` / `new_upgraded` at publish / upgrade time.
+    max_total_linkage_size: Option<u64>,
 
     /// Max number of publish or upgrade commands allowed in a programmable transaction block.
     max_publish_or_upgrade_per_ptb: Option<u64>,
@@ -2911,6 +2915,7 @@ impl ProtocolConfig {
             binary_variant_instantiation_handles: None,
             max_move_object_size: Some(250 * 1024),
             max_move_package_size: Some(100 * 1024),
+            max_total_linkage_size: None,
             max_publish_or_upgrade_per_ptb: None,
             max_tx_gas: Some(10_000_000_000),
             max_gas_price: Some(100_000),
@@ -4801,6 +4806,15 @@ impl ProtocolConfig {
                         .early_return_receive_object_mismatched_type = true;
                 }
                 122 => {}
+                123 => {
+                    // Raise per-package and per-dependency caps, but add a total-linkage
+                    // cap so the on-disk footprint of a package plus its transitive deps
+                    // can't grow as the product of the two previous limits.
+                    cfg.max_package_dependencies = Some(100);
+                    cfg.max_move_package_size = Some(1024 * 1024);
+                    // Product of previous package and dependency limits.
+                    cfg.max_total_linkage_size = Some(32 * 100 * 1024);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

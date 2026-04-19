@@ -413,19 +413,36 @@ impl MovePackage {
         }
 
         immediate_dependencies.remove(&self_id);
-        let linkage_table = build_linkage_table(
+        let (linkage_table, total_deps_size) = build_linkage_table(
             immediate_dependencies,
             transitive_dependencies,
             protocol_config,
         )?;
-        Self::new(
+
+        let pkg = Self::new(
             storage_id,
             version,
             module_map,
             protocol_config.max_move_package_size(),
             type_origin_table,
             linkage_table,
-        )
+        )?;
+
+        // Gated by protocol version: bound the on-disk footprint of this package plus
+        // all of its transitive dependencies, so the effective linkage size can't be
+        // max_move_package_size * max_package_dependencies.
+        if let Some(max_total_linkage_size) = protocol_config.max_total_linkage_size_as_option() {
+            let total_linkage_size = pkg.size() as u64 + total_deps_size;
+            if total_linkage_size > max_total_linkage_size {
+                return Err(ExecutionErrorKind::MovePackageTooBig {
+                    object_size: total_linkage_size,
+                    max_object_size: max_total_linkage_size,
+                }
+                .into());
+            }
+        }
+
+        Ok(pkg)
     }
 
     // Retrieve the module with `ModuleId` in the given package.
@@ -741,9 +758,10 @@ fn build_linkage_table<'p>(
     mut immediate_dependencies: BTreeSet<ObjectID>,
     transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     protocol_config: &ProtocolConfig,
-) -> Result<BTreeMap<ObjectID, UpgradeInfo>, ExecutionError> {
+) -> Result<(BTreeMap<ObjectID, UpgradeInfo>, u64), ExecutionError> {
     let mut linkage_table = BTreeMap::new();
     let mut dep_linkage_tables = vec![];
+    let mut total_deps_size = 0u64;
 
     for transitive_dep in transitive_dependencies.into_iter() {
         // original_package_id will deserialize a module but only for the purpose of obtaining
@@ -780,6 +798,8 @@ fn build_linkage_table<'p>(
                 },
             );
         }
+
+        total_deps_size += transitive_dep.size() as u64;
     }
     // (1) Every dependency is represented in the transitive dependencies
     if !immediate_dependencies.is_empty() {
@@ -799,7 +819,7 @@ fn build_linkage_table<'p>(
         }
     }
 
-    Ok(linkage_table)
+    Ok((linkage_table, total_deps_size))
 }
 
 fn build_initial_type_origin_table(modules: &[CompiledModule]) -> Vec<TypeOrigin> {
@@ -888,5 +908,256 @@ fn build_upgraded_type_origin_table(
         }
     } else {
         Ok(new_table)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_binary_format::file_format::{
+        Bytecode, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
+        IdentifierIndex, ModuleHandleIndex, Signature, SignatureIndex, Visibility, empty_module,
+    };
+    use move_core_types::identifier::Identifier;
+    use sui_protocol_config::{Chain, ProtocolVersion};
+
+    fn create_test_module(
+        name: &str,
+        address: AccountAddress,
+        num_functions: usize,
+    ) -> CompiledModule {
+        let mut module = empty_module();
+        module.version = VERSION_6;
+
+        module.address_identifiers.push(address);
+        module.identifiers.push(Identifier::new(name).unwrap());
+
+        module.module_handles[0] = move_binary_format::file_format::ModuleHandle {
+            address: move_binary_format::file_format::AddressIdentifierIndex(0),
+            name: IdentifierIndex(0),
+        };
+
+        for i in 0..num_functions {
+            let func_name = format!("func_{}", i);
+            module.identifiers.push(Identifier::new(func_name).unwrap());
+
+            let sig_idx = module.signatures.len();
+            module.signatures.push(Signature(vec![]));
+
+            module.function_handles.push(FunctionHandle {
+                module: ModuleHandleIndex(0),
+                name: IdentifierIndex((module.identifiers.len() - 1) as u16),
+                parameters: SignatureIndex(sig_idx as u16),
+                return_: SignatureIndex(sig_idx as u16),
+                type_parameters: vec![],
+            });
+
+            module.function_defs.push(FunctionDefinition {
+                function: FunctionHandleIndex(module.function_handles.len() as u16 - 1),
+                visibility: Visibility::Public,
+                is_entry: false,
+                acquires_global_resources: vec![],
+                code: Some(CodeUnit {
+                    locals: SignatureIndex(sig_idx as u16),
+                    code: vec![Bytecode::Ret],
+                    jump_tables: vec![],
+                }),
+            });
+        }
+
+        module
+    }
+
+    fn serialize_module(module: &CompiledModule) -> Vec<u8> {
+        let mut bytes = vec![];
+        module
+            .serialize_with_version(VERSION_6, &mut bytes)
+            .unwrap();
+        bytes
+    }
+
+    fn make_dep_package(name: &str, num_functions: usize) -> (AccountAddress, MovePackage) {
+        let addr = AccountAddress::random();
+        let module = create_test_module(name, addr, num_functions);
+        let pkg = MovePackage::new(
+            ObjectID::from(addr),
+            OBJECT_START_VERSION,
+            BTreeMap::from([(name.to_string(), serialize_module(&module))]),
+            u64::MAX,
+            vec![],
+            BTreeMap::new(),
+        )
+        .unwrap();
+        (addr, pkg)
+    }
+
+    // Build a protocol config at the version that introduced max_total_linkage_size, then
+    // override the relevant limits to keep the test modules small.
+    fn test_protocol_config(max_total_linkage_size: Option<u64>) -> ProtocolConfig {
+        let mut cfg = ProtocolConfig::get_for_version(ProtocolVersion::new(123), Chain::Unknown);
+        cfg.set_max_move_package_size_for_testing(u64::MAX);
+        match max_total_linkage_size {
+            Some(v) => cfg.set_max_total_linkage_size_for_testing(v),
+            None => cfg.disable_max_total_linkage_size_for_testing(),
+        }
+        cfg
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_check_passes() {
+        let (_, dep_package) = make_dep_package("dependency", 5);
+        let main_module = create_test_module("main", AccountAddress::random(), 5);
+        let protocol_config = test_protocol_config(Some(1024 * 1024));
+
+        let result = MovePackage::new_initial(&[main_module], &protocol_config, vec![&dep_package]);
+
+        assert!(
+            result.is_ok(),
+            "Package creation should succeed when under size limit: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_disabled_allows_oversize() {
+        let (_, dep_package) = make_dep_package("dependency", 5);
+        let main_module = create_test_module("main", AccountAddress::random(), 5);
+        // No total linkage cap => check is skipped entirely.
+        let protocol_config = test_protocol_config(None);
+
+        let result = MovePackage::new_initial(&[main_module], &protocol_config, vec![&dep_package]);
+        assert!(result.is_ok(), "Check must be disabled when config is None");
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_fails_on_many_small_deps() {
+        // A small package with many small deps that individually fit under
+        // `max_move_package_size` but collectively exceed the total linkage cap.
+        let deps: Vec<_> = (0..20)
+            .map(|i| make_dep_package(&format!("dep_{}", i), 10).1)
+            .collect();
+        let main_module = create_test_module("main", AccountAddress::random(), 10);
+
+        let per_dep = deps[0].size() as u64;
+        // Cap sized so a handful of deps fit, but not all 20.
+        let max = per_dep * 5;
+        let protocol_config = test_protocol_config(Some(max));
+
+        let result = MovePackage::new_initial(
+            &[main_module],
+            &protocol_config,
+            deps.iter().collect::<Vec<_>>(),
+        );
+
+        let err = result.expect_err("many small deps should exceed the total linkage cap");
+        match err.kind() {
+            ExecutionErrorKind::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => {
+                assert_eq!(*max_object_size, max);
+                // 20 deps × per_dep + main pkg — comfortably above the cap.
+                assert!(*object_size > per_dep * 20);
+            }
+            k => panic!("Expected MovePackageTooBig, got: {:?}", k),
+        }
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_fails_on_single_huge_dep() {
+        // A single dependency whose own size exceeds the total linkage cap, even
+        // though it is under the per-package cap (which is u64::MAX in this test).
+        let (_, huge_dep) = make_dep_package("huge_dep", 500);
+        let main_module = create_test_module("main", AccountAddress::random(), 5);
+
+        let huge_size = huge_dep.size() as u64;
+        let max = huge_size - 1; // dep alone is already over.
+        let protocol_config = test_protocol_config(Some(max));
+
+        let result = MovePackage::new_initial(&[main_module], &protocol_config, vec![&huge_dep]);
+
+        let err = result.expect_err("single huge dep should exceed the total linkage cap");
+        match err.kind() {
+            ExecutionErrorKind::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => {
+                assert_eq!(*max_object_size, max);
+                assert!(*object_size > huge_size);
+            }
+            k => panic!("Expected MovePackageTooBig, got: {:?}", k),
+        }
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_enforced_on_upgrade() {
+        // The check must also fire on the upgrade path (`new_upgraded`), not just
+        // `new_initial`.
+        let (_, dep_package) = make_dep_package("dep", 50);
+        let original_module = create_test_module("upgraded", AccountAddress::random(), 5);
+
+        // First publish the original under a permissive cap so we have a package
+        // to upgrade.
+        let permissive = test_protocol_config(Some(u64::MAX));
+        let original = MovePackage::new_initial(
+            std::slice::from_ref(&original_module),
+            &permissive,
+            vec![&dep_package],
+        )
+        .expect("original publish should succeed under permissive cap");
+
+        // Now upgrade with the same modules, but tighten the cap so
+        // original.size() + dep.size() exceeds it.
+        let tight_max = dep_package.size() as u64;
+        let strict = test_protocol_config(Some(tight_max));
+
+        let result = original.new_upgraded(
+            original.id(),
+            &[original_module],
+            &strict,
+            vec![&dep_package],
+        );
+
+        let err = result.expect_err("upgrade should be rejected when total linkage exceeds cap");
+        match err.kind() {
+            ExecutionErrorKind::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => {
+                assert_eq!(*max_object_size, tight_max);
+                assert!(*object_size > tight_max);
+            }
+            k => panic!("Expected MovePackageTooBig on upgrade, got: {:?}", k),
+        }
+    }
+
+    #[test]
+    fn test_max_total_linkage_size_check_fails() {
+        let (_, dep_package) = make_dep_package("large_dependency", 200);
+        let main_module = create_test_module("large_main", AccountAddress::random(), 200);
+
+        // Cap the total just below what dep + main would sum to.
+        let dep_size = dep_package.size() as u64;
+        let max = dep_size; // main package alone will push us over.
+        let protocol_config = test_protocol_config(Some(max));
+
+        let result = MovePackage::new_initial(&[main_module], &protocol_config, vec![&dep_package]);
+
+        let err = result.expect_err("Expected error for package exceeding max_total_linkage_size");
+        match err.kind() {
+            ExecutionErrorKind::MovePackageTooBig {
+                object_size,
+                max_object_size,
+            } => {
+                assert!(
+                    *object_size > *max_object_size,
+                    "reported object_size {} should exceed max {}",
+                    object_size,
+                    max_object_size,
+                );
+                assert_eq!(*max_object_size, max);
+            }
+            k => panic!("Expected MovePackageTooBig error, got: {:?}", k),
+        }
     }
 }
