@@ -117,12 +117,18 @@ All alerts are important, but the following alerts and warnings can be addressed
 | **Summary**  | Less than 80% of stake is sequencing tx certs with acceptable latency |
 | **Duration** | `1m`                                                         |
 
+:::caution
+
+The `classify()` metric no longer emits `shared_certificate` or `owned_certificate` as `tx_type` label values. These have been collapsed into `_deprecated_certificate`. Similarly, `UserTransaction` (v1) now emits `_deprecated_user_transaction`. If you have existing alert rules deployed in your monitoring system that use `tx_type=~"shared_certificate|owned_certificate"`, those rules will silently stop matching active data and will no longer fire. Update your deployed alert rules to use the new label names shown in the query below.
+
+:::
+
 ```sh
 sum(
   sum by (host) (current_voting_right{network="$network"})
   and
   histogram_quantile(0.95, sum by (le, host) (
-    rate(sequencing_certificate_latency_bucket{network="$network", position="0", tx_type=~"shared_certificate|owned_certificate|soft_bundle"}[2m])
+    rate(sequencing_certificate_latency_bucket{network="$network", position="0", tx_type=~"_deprecated_certificate|soft_bundle"}[2m])
   )) < 2
 ) < 5000
 ```
