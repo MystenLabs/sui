@@ -404,7 +404,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         >,
     ) -> Option<String> {
         match &task.command {
-            TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..)) => {
+            TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..))
+            | TaskCommand::Subcommand(SuiSubcommand::BenchProgrammable(..)) => {
                 let data_str = std::fs::read_to_string(task.data.as_ref()?)
                     .ok()?
                     .trim()
@@ -752,6 +753,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             }};
             ($fake_id:ident) => {{ get_obj!($fake_id, None) }};
         }
+        let bench_programmable = matches!(&command, SuiSubcommand::BenchProgrammable(_));
         match command {
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
@@ -1113,7 +1115,22 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 dry_run,
                 expiration,
                 inputs,
+            })
+            | SuiSubcommand::BenchProgrammable(ProgrammableTransactionCommand {
+                sender,
+                sponsor,
+                gas_budget,
+                address_balance_gas,
+                gas_price,
+                gas_payment,
+                dev_inspect,
+                dry_run,
+                expiration,
+                inputs,
             }) => {
+                if bench_programmable && (dev_inspect || dry_run) {
+                    bail!("bench ptb does not support dev-inspect or dry-run");
+                }
                 if dev_inspect && self.is_simulator() {
                     bail!("Dev inspect is not supported on simulator mode");
                 }
@@ -1201,6 +1218,27 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             tx_data
                         },
                     );
+                    if bench_programmable {
+                        let assigned_versions = AssignedVersions::default();
+                        let objects = self
+                            .executor
+                            .read_input_objects(transaction.clone(), assigned_versions)
+                            .await?;
+                        // only run benchmarks in release mode
+                        if !cfg!(debug_assertions) {
+                            let mut c = Criterion::default();
+                            let bench_name = format!("benchmark_tx_task_{number}");
+                            c.bench_function(&bench_name, |b| {
+                                let tx = transaction.clone();
+                                let objects = objects.clone();
+                                b.iter(|| {
+                                    self.executor
+                                        .prepare_txn(tx.clone(), objects.clone())
+                                        .unwrap();
+                                })
+                            });
+                        }
+                    }
                     self.execute_txn(transaction).await?
                 } else if dry_run {
                     let gas_price = gas_price.unwrap_or(self.gas_price);
@@ -1535,7 +1573,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 if !cfg!(debug_assertions) {
                     let mut c = Criterion::default();
 
-                    c.bench_function("benchmark_tx", |b| {
+                    let bench_name = format!("benchmark_tx_task_{number}");
+                    c.bench_function(&bench_name, |b| {
                         let tx = tx.clone();
                         let objects = objects.clone();
                         b.iter(|| {

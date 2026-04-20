@@ -1,0 +1,55 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
+---
+processed 8 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2), D: object(0,3), E: object(0,4)
+
+task 1, lines 10-13:
+//# programmable --sender A --inputs 20000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 20000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 15-18:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 19-24:
+//# bench ptb --sender A --address-balance-gas --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(100) @B
+//> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
+//> 1: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(1));
+// Benchmark: withdraw 400 from A's address balance and send it to B, C, D, and E
+// with gas paid from the address balance.
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 1000100), (object(3,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, lines 25-33:
+//# bench ptb --sender A --address-balance-gas --inputs withdraw<sui::balance::Balance<sui::sui::SUI>>(100) withdraw<sui::balance::Balance<sui::sui::SUI>>(100) withdraw<sui::balance::Balance<sui::sui::SUI>>(100) withdraw<sui::balance::Balance<sui::sui::SUI>>(100) @B @C @D @E
+//> 0: sui::balance::redeem_funds<sui::sui::SUI>(Input(0));
+//> 1: sui::balance::redeem_funds<sui::sui::SUI>(Input(1));
+//> 2: sui::balance::redeem_funds<sui::sui::SUI>(Input(2));
+//> 3: sui::balance::redeem_funds<sui::sui::SUI>(Input(3));
+//> 4: sui::balance::send_funds<sui::sui::SUI>(Result(0), Input(4));
+//> 5: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(5));
+//> 6: sui::balance::send_funds<sui::sui::SUI>(Result(2), Input(6));
+//> 7: sui::balance::send_funds<sui::sui::SUI>(Result(3), Input(7));
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Split, 1000400), (object(3,0), B, sui::balance::Balance<sui::sui::SUI>, Merge, 100), (object(4,0), C, sui::balance::Balance<sui::sui::SUI>, Merge, 100), (object(4,1), D, sui::balance::Balance<sui::sui::SUI>, Merge, 100), (object(4,2), E, sui::balance::Balance<sui::sui::SUI>, Merge, 100)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5, line 35:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, line 37:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+19997999500
+
+task 7, line 39:
+//# view-funds sui::balance::Balance<sui::sui::SUI> B
+200
