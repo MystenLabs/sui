@@ -554,8 +554,11 @@ mod checked {
                     .and_then(|()| {
                         if enable_expensive_checks {
                             // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-                            let mut layout_resolver =
-                                TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
+                            let mut layout_resolver = TypeLayoutResolver::new(
+                                move_vm,
+                                temporary_store.protocol_config(),
+                                Box::new(&*temporary_store),
+                            );
                             temporary_store.check_sui_conserved_expensive(
                                 cost_summary,
                                 advance_epoch_gas_summary,
@@ -579,8 +582,11 @@ mod checked {
                         .and_then(|()| {
                             if enable_expensive_checks {
                                 // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-                                let mut layout_resolver =
-                                    TypeLayoutResolver::new(move_vm, Box::new(&*temporary_store));
+                                let mut layout_resolver = TypeLayoutResolver::new(
+                                    move_vm,
+                                    temporary_store.protocol_config(),
+                                    Box::new(&*temporary_store),
+                                );
                                 temporary_store.check_sui_conserved_expensive(
                                     cost_summary,
                                     advance_epoch_gas_summary,

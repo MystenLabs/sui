@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeSet,
-    sync::atomic::{AtomicBool, Ordering},
+    collections::{BTreeMap, BTreeSet},
+    sync::{
+        Arc, LazyLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 #[cfg(msim)]
@@ -17,6 +20,7 @@ use move_binary_format::{
     binary_config::{BinaryConfig, TableConfig},
     file_format_common::VERSION_1,
 };
+use move_core_types::account_address::AccountAddress;
 use move_vm_config::verifier::VerifierConfig;
 use mysten_common::in_integration_test;
 use serde::{Deserialize, Serialize};
@@ -1953,6 +1957,10 @@ pub struct ProtocolConfig {
 
     /// Max tps for gasless transactions. Unlimited when unset, zero when set to zero.
     gasless_max_tps: Option<u64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[skip_accessor]
+    include_special_package_amendments: Option<Arc<Amendments>>,
 }
 
 /// An aliased address.
@@ -2769,6 +2777,10 @@ impl ProtocolConfig {
         self.feature_flags
             .early_return_receive_object_mismatched_type
     }
+
+    pub fn include_special_package_amendments_as_option(&self) -> &Option<Arc<Amendments>> {
+        &self.include_special_package_amendments
+    }
 }
 
 #[cfg(not(msim))]
@@ -3358,6 +3370,7 @@ impl ProtocolConfig {
             gasless_max_unused_inputs: None,
             gasless_max_pure_input_bytes: None,
             gasless_max_tps: None,
+            include_special_package_amendments: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4830,6 +4843,11 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
                     }
                     cfg.feature_flags.gasless_verify_remaining_balance = true;
+                    cfg.include_special_package_amendments = match chain {
+                        Chain::Mainnet => Some(MAINNET_LINKAGE_AMENDMENTS.clone()),
+                        Chain::Testnet => Some(TESTNET_LINKAGE_AMENDMENTS.clone()),
+                        Chain::Unknown => None,
+                    };
                 }
                 // Use this template when making changes:
                 //
@@ -5422,6 +5440,52 @@ macro_rules! check_limit_by_meter {
         result
     }};
 }
+
+// Amendments tables
+
+pub type Amendments = BTreeMap<AccountAddress, BTreeMap<AccountAddress, AccountAddress>>;
+
+static MAINNET_LINKAGE_AMENDMENTS: LazyLock<Arc<Amendments>> =
+    LazyLock::new(|| parse_amendments(include_str!("mainnet_amendments.json")));
+
+static TESTNET_LINKAGE_AMENDMENTS: LazyLock<Arc<Amendments>> =
+    LazyLock::new(|| parse_amendments(include_str!("testnet_amendments.json")));
+
+fn parse_amendments(json: &str) -> Arc<Amendments> {
+    #[derive(serde::Deserialize)]
+    struct AmendmentEntry {
+        root: String,
+        deps: Vec<DepEntry>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct DepEntry {
+        original_id: String,
+        version_id: String,
+    }
+
+    let entries: Vec<AmendmentEntry> =
+        serde_json::from_str(json).expect("Failed to parse amendments JSON");
+    let mut amendments = BTreeMap::new();
+    for entry in entries {
+        let root_id = AccountAddress::from_hex_literal(&entry.root).unwrap();
+        let mut dep_ids = BTreeMap::new();
+        for dep in entry.deps {
+            let orig_id = AccountAddress::from_hex_literal(&dep.original_id).unwrap();
+            let upgraded_id = AccountAddress::from_hex_literal(&dep.version_id).unwrap();
+            assert!(
+                dep_ids.insert(orig_id, upgraded_id).is_none(),
+                "Duplicate original ID in amendments table"
+            );
+        }
+        assert!(
+            amendments.insert(root_id, dep_ids).is_none(),
+            "Duplicate root ID in amendments table"
+        );
+    }
+    Arc::new(amendments)
+}
+
 #[cfg(all(test, not(msim)))]
 mod test {
     use insta::assert_yaml_snapshot;
@@ -5634,5 +5698,13 @@ mod test {
             check_limit!(2550000u64, high),
             LimitThresholdCrossed::Hard(2550000, 10000)
         ));
+    }
+
+    #[test]
+    fn linkage_amendments_load() {
+        let mainnet = LazyLock::force(&MAINNET_LINKAGE_AMENDMENTS);
+        let testnet = LazyLock::force(&TESTNET_LINKAGE_AMENDMENTS);
+        assert!(!mainnet.is_empty(), "mainnet amendments must not be empty");
+        assert!(!testnet.is_empty(), "testnet amendments must not be empty");
     }
 }

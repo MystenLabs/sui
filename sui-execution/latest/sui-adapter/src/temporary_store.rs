@@ -719,6 +719,10 @@ impl<'backing> TemporaryStore<'backing> {
             None
         }
     }
+
+    pub fn protocol_config(&self) -> &'backing ProtocolConfig {
+        self.protocol_config
+    }
 }
 
 impl TemporaryStore<'_> {

@@ -1039,9 +1039,11 @@ impl ReadApiServer for ReadApi {
                         .map(|(seq, e)| {
                             let layout = store
                                 .executor()
-                                .type_layout_resolver(Box::new(
-                                    &state.get_backing_package_store().as_ref(),
-                                ))
+                                .type_layout_resolver(
+                                    store.protocol_config(),
+                                    Box::new(
+                                        &state.get_backing_package_store().as_ref(),
+                                    ))
                                 .get_annotated_layout(&e.type_)?;
                             SuiEvent::try_from(e, transaction_digest, seq as u64, None, layout)
                         })
@@ -1295,9 +1297,10 @@ fn to_sui_transaction_events(
 ) -> Result<SuiTransactionBlockEvents, Error> {
     let epoch_store = fullnode_api.state.load_epoch_store_one_call_per_task();
     let backing_package_store = fullnode_api.state.get_backing_package_store();
-    let mut layout_resolver = epoch_store
-        .executor()
-        .type_layout_resolver(Box::new(backing_package_store.as_ref()));
+    let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+        epoch_store.protocol_config(),
+        Box::new(backing_package_store.as_ref()),
+    );
     Ok(SuiTransactionBlockEvents::try_from(
         events,
         tx_digest,

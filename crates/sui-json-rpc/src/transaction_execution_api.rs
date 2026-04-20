@@ -187,9 +187,10 @@ impl TransactionExecutionApi {
                 self.state.get_backing_package_store().clone(),
                 &response.output_objects,
             );
-            let mut layout_resolver = epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(backing_package_store));
+            let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+                epoch_store.protocol_config(),
+                Box::new(backing_package_store),
+            );
             Some(SuiTransactionBlockEvents::try_from(
                 response.events.unwrap_or_default(),
                 digest,

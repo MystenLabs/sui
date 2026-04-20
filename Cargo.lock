@@ -16589,6 +16589,7 @@ dependencies = [
  "schemars 0.8.21",
  "serde",
  "serde-env",
+ "serde_json",
  "serde_with",
  "sui-protocol-config-macros",
  "tracing",
