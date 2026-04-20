@@ -317,12 +317,12 @@ async fn delegated_stakes_response(
 ///
 /// Rates are derived from `staking_pool_sui_balance` and `pool_token_balance` of each active
 /// validator in the latest `APY_EPOCH_WINDOW` rows of `kv_epoch_starts`. These are the same numbers
-/// that `advance_epoch` writes into each staking pool's `exchange_rates` table. Rates from adjacent
-/// epochs are converted into annualized returns, outliers are filtered out, and the rest are
-/// averaged over the sample window to produce each validator's APY.
+/// that `advance_epoch` writes into each staking pool's `exchange_rates` table. APYs are calculated
+/// from adjacent pairs of rates, and then filtered and averaged to produce each validator's APY.
+/// This mirrors the legacy fullnode jsonrpc's `backfill_rates` implementation.
 ///
 /// In safe mode, a pool's sui and token balance carry over unchanged, which produces 0% APY and
-/// gets filtered out, matching the legacy fullnode jsonrpc's `backfill_rates`.
+/// also gets filtered out.
 async fn validators_apy_response(ctx: &Context) -> Result<ValidatorApys, RpcError> {
     use kv_epoch_starts::dsl as e;
 
@@ -349,6 +349,7 @@ async fn validators_apy_response(ctx: &Context) -> Result<ValidatorApys, RpcErro
     let current_epoch = latest_summary.epoch;
     let stake_subsidy_start_epoch = latest_summary.stake_subsidy_start_epoch;
 
+    // Map pool to exchange rates history (newest to oldest)
     let mut by_pool: HashMap<ObjectID, Vec<PoolTokenExchangeRate>> = HashMap::new();
     for row in &rows {
         if (row.epoch as u64) < stake_subsidy_start_epoch {
@@ -366,16 +367,14 @@ async fn validators_apy_response(ctx: &Context) -> Result<ValidatorApys, RpcErro
         }
     }
 
-    let empty_rates: Vec<PoolTokenExchangeRate> = Vec::new();
     let apys = latest_summary
         .active_validators
         .into_iter()
-        .map(|v| {
-            let rates = by_pool.get(&v.staking_pool_id).unwrap_or(&empty_rates);
-            ValidatorApy {
-                address: v.sui_address,
-                apy: compute_apy(rates),
-            }
+        .map(|v| ValidatorApy {
+            address: v.sui_address,
+            apy: by_pool
+                .get(&v.staking_pool_id)
+                .map_or(0.0, |rates| compute_apy(rates)),
         })
         .collect();
 
