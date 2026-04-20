@@ -660,7 +660,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-serde",
  "alloy-sol-types",
- "itertools 0.14.0",
+ "itertools 0.13.0",
  "serde",
  "serde_json",
  "serde_with",
@@ -3743,7 +3743,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util 0.7.18",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-build",
  "tonic-prost",
  "tonic-rustls",
@@ -6135,7 +6135,7 @@ dependencies = [
  "time",
  "tokio",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-build",
  "tonic-prost",
  "tonic-prost-build",
@@ -7887,7 +7887,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc2f4eb4bc735547cfed7c0a4922cbd04a4655978c09b54f1f7b228750664c34"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.0",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -9725,7 +9725,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-health",
  "tower 0.5.3",
  "tower-http 0.5.2",
@@ -11469,7 +11469,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6c3320f9abac597dcbc668774ef006702672474aad53c6d596b62e487b40b1"
 dependencies = [
  "heck 0.5.0",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "log",
  "multimap",
  "once_cell",
@@ -11491,7 +11491,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -11504,7 +11504,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -14469,7 +14469,7 @@ dependencies = [
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tower 0.5.3",
  "tracing",
  "typed-store",
@@ -14987,7 +14987,7 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
  "url",
 ]
@@ -15080,7 +15080,7 @@ dependencies = [
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tower 0.5.3",
  "tower-http 0.5.2",
  "tracing",
@@ -15127,7 +15127,7 @@ dependencies = [
  "sui-types",
  "tempfile",
  "tokio",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
  "tracing-subscriber",
  "wiremock",
@@ -15305,7 +15305,7 @@ dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
  "protox",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-prost",
  "tonic-prost-build",
  "walkdir",
@@ -15354,7 +15354,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "toml 0.7.4",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-health",
  "tonic-reflection",
  "tower 0.5.3",
@@ -15427,7 +15427,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-tungstenite 0.26.2",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
  "url",
  "zstd 0.12.3+zstd.1.5.2",
@@ -15477,7 +15477,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -15554,7 +15554,7 @@ dependencies = [
  "timeout-tracing",
  "tokio",
  "toml 0.7.4",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tower-http 0.5.2",
  "tracing",
  "tracing-error",
@@ -15617,7 +15617,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml 0.7.4",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tower 0.4.13",
  "tower-http 0.5.2",
  "tower-layer",
@@ -15687,7 +15687,7 @@ dependencies = [
  "sui-types",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tower 0.5.3",
  "tracing",
  "url",
@@ -15937,7 +15937,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tokio",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-reflection",
  "tracing",
 ]
@@ -15979,7 +15979,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "toml 0.7.4",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-prost",
  "tracing",
  "url",
@@ -16020,7 +16020,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
  "url",
 ]
@@ -16326,7 +16326,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-rustls",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-build",
  "tonic-health",
  "tonic-prost",
@@ -16793,7 +16793,7 @@ dependencies = [
  "test-cluster",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
 ]
 
@@ -16815,7 +16815,7 @@ dependencies = [
  "sui-sdk-types",
  "tap",
  "tokio",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-prost",
  "tower 0.5.3",
 ]
@@ -16865,7 +16865,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-health",
  "tonic-prost",
  "tonic-prost-build",
@@ -16925,7 +16925,7 @@ dependencies = [
  "sui-types",
  "telemetry-subscribers",
  "tokio",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
 ]
 
@@ -17164,7 +17164,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml 0.7.4",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
  "ureq",
 ]
@@ -17595,7 +17595,7 @@ dependencies = [
  "tap",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
  "typed-store-error",
  "url",
@@ -18082,7 +18082,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-util 0.7.18",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tracing",
 ]
 
@@ -18692,9 +18692,8 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a286e33f82f8a1ee2df63f4fa35c0becf4a85a0cb03091a15fd7bf0b402dc94a"
+version = "0.14.5"
+source = "git+https://github.com/hyperium/tonic.git?rev=d6ce69b0d93e1de21b0769e942ace00b48f52e17#d6ce69b0d93e1de21b0769e942ace00b48f52e17"
 dependencies = [
  "async-trait",
  "axum 0.8.3",
@@ -18745,19 +18744,18 @@ dependencies = [
  "prost 0.14.1",
  "tokio",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-prost",
 ]
 
 [[package]]
 name = "tonic-prost"
-version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66bd50ad6ce1252d87ef024b3d64fe4c3cf54a86fb9ef4c631fdd0ded7aeaa67"
+version = "0.14.5"
+source = "git+https://github.com/hyperium/tonic.git?rev=d6ce69b0d93e1de21b0769e942ace00b48f52e17#d6ce69b0d93e1de21b0769e942ace00b48f52e17"
 dependencies = [
  "bytes",
  "prost 0.14.1",
- "tonic 0.14.3",
+ "tonic 0.14.5",
 ]
 
 [[package]]
@@ -18778,15 +18776,14 @@ dependencies = [
 
 [[package]]
 name = "tonic-reflection"
-version = "0.14.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34da53e8387581d66db16ff01f98a70b426b091fdf76856e289d5c1bd386ed7b"
+version = "0.14.5"
+source = "git+https://github.com/hyperium/tonic.git?rev=d6ce69b0d93e1de21b0769e942ace00b48f52e17#d6ce69b0d93e1de21b0769e942ace00b48f52e17"
 dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
  "tokio",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tonic-prost",
 ]
 
@@ -18810,7 +18807,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tower 0.5.3",
  "tower-layer",
  "tower-service",
@@ -18829,7 +18826,7 @@ dependencies = [
  "http-body 1.0.1",
  "pin-project",
  "tokio-stream",
- "tonic 0.14.3",
+ "tonic 0.14.5",
  "tower-layer",
  "tower-service",
  "tracing",

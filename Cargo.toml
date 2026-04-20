@@ -793,6 +793,12 @@ sui-execution = { path = "sui-execution" }
 # move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
 
 [patch.crates-io]
+# Go back to using a crates.io release once a release is made that includes
+# this fix: https://github.com/hyperium/tonic/pull/2596
+tonic = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce69b0d93e1de21b0769e942ace00b48f52e17" }
+tonic-prost = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce69b0d93e1de21b0769e942ace00b48f52e17" }
+tonic-reflection = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce69b0d93e1de21b0769e942ace00b48f52e17" }
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
+
