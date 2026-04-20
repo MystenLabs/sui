@@ -179,8 +179,10 @@ impl ObserverNetworkService for ObserverService {
 
         // The block is verified and current, so record own votes on the block
         // before sending the block to Core.
-        self.transaction_vote_tracker
-            .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
+        if self.context.protocol_config.transaction_voting_enabled() {
+            self.transaction_vote_tracker
+                .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
+        }
 
         // Send the block to Core to try accepting it into the DAG.
         let missing_ancestors = self
