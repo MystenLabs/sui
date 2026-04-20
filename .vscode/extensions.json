@@ -1,10 +1,28 @@
 {
-    "recommendations": [
-        "mysten.move",
-        "damirka.move-syntax",
-        "rust-lang.rust-analyzer",
-        "esbenp.prettier-vscode",
-        "ms-playwright.playwright",
-        "dbaeumer.vscode-eslint"
-    ]
+  "recommendations": [
+    // Blockchain Specific: Move & Sui Ecosystem
+    "mysten.move",
+    "damirka.move-syntax",
+    "move-language.move-analyzer",
+
+    // Systems Programming: Rust Core
+    "rust-lang.rust-analyzer",
+    "tamasfe.even-better-toml", // Essential for Cargo.toml management
+
+    // Code Quality & Formating
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "stylelint.vscode-stylelint",
+
+    // Testing & Automation
+    "ms-playwright.playwright",
+    "ms-vscode.test-adapter-converter",
+
+    // Developer Experience (DX) & Security
+    "usernamehw.errorlens", // Instant visual feedback on compiler errors
+    "eamodio.gitlens",      // Deep audit trail for every line of code
+    "pflannery.vscode-versionlens", // Keeps Rust/Move dependencies up to date
+    "christian-kohler.path-intellisense",
+    "snyk-security.snyk-vscode" // Security vulnerability scanning
+  ]
 }
