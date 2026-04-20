@@ -665,7 +665,7 @@ impl AuthorityEpochTables {
             .disable_unload()
             .with_value_cache_size(default_value_cache_size());
         let object_ref_indexing = KeyIndexing::Hash;
-        let tx_digest_indexing = KeyIndexing::key_reduction(32, 0..16);
+        let tx_digest_indexing = KeyIndexing::fixed(32);
         let uniform_key = KeyType::uniform(default_cells_per_mutex());
         let sequence_key = KeyType::from_prefix_bits(6 * 8 + 4);
         let configs = vec![

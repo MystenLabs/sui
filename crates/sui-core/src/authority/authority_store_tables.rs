@@ -229,8 +229,7 @@ impl AuthorityPerpetualTables {
         let object_indexing = KeyIndexing::fixed(32 + 8); //  KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
         // todo can figure way to scramble off 8 bytes in the middle
         let obj_ref_size = 32 + 8 + 32 + 8;
-        let owned_object_transaction_locks_indexing =
-            KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
+        let owned_object_transaction_locks_indexing = KeyIndexing::fixed(obj_ref_size);
 
         let mut objects_config = KeySpaceConfig::new()
             .with_max_dirty_keys(4096)
@@ -261,7 +260,7 @@ impl AuthorityPerpetualTables {
             (
                 "transactions".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
-                    KeyIndexing::key_reduction(32, 0..16),
+                    KeyIndexing::fixed(32),
                     transaction_mutexes,
                     uniform_key,
                     KeySpaceConfig::new()
@@ -273,7 +272,7 @@ impl AuthorityPerpetualTables {
             (
                 "effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
-                    KeyIndexing::key_reduction(32, 0..16),
+                    KeyIndexing::fixed(32),
                     transaction_mutexes,
                     uniform_key,
                     apply_relocation_filter(
@@ -288,7 +287,7 @@ impl AuthorityPerpetualTables {
             (
                 "executed_effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
-                    KeyIndexing::key_reduction(32, 0..16),
+                    KeyIndexing::fixed(32),
                     transaction_mutexes,
                     uniform_key,
                     bloom_config
