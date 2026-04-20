@@ -97,7 +97,8 @@ impl ObserverNetworkService for ObserverService {
         };
 
         // Reject blocks failing parsing and validations.
-        let (verified_block, reject_txn_votes) = self
+        // Of Observer nodes we don't care about the transaction votes.
+        let (verified_block, _reject_txn_votes) = self
             .block_verifier
             .verify_and_vote(signed_block, item.block)
             .tap_err(|e| {
@@ -177,11 +178,10 @@ impl ObserverNetworkService for ObserverService {
             });
         }
 
-        // The block is verified and current, so record own votes on the block
-        // before sending the block to Core.
+        // Add the block to the transaction vote tracker. No "own" votes are recorded for observer nodes.
         if self.context.protocol_config.transaction_voting_enabled() {
             self.transaction_vote_tracker
-                .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
+                .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
         }
 
         // Send the block to Core to try accepting it into the DAG.
