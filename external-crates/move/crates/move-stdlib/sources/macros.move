@@ -137,6 +137,51 @@ public macro fun try_as_u128($x: _): Option<u128> {
     if (x > 0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF) option::none() else option::some(x as u128)
 }
 
+public macro fun signed_num_to_string($x: _): String {
+    let x = $x;
+    if (x == 0) return b"0".to_string();
+    let neg = x < 0;
+    let mut buffer = vector[];
+    // Work with negative values to avoid overflow on MIN (since -MIN overflows).
+    let mut x = if (neg) x else -x;
+    while (x != 0) {
+        // x % 10 is non-positive for negative x, so 48 - (x % 10) gives the ASCII digit.
+        buffer.push_back(((48 - (x % 10)) as u8));
+        x = x / 10;
+    };
+    if (neg) buffer.push_back(45); // '-'
+    buffer.reverse();
+    buffer.to_string()
+}
+
+public macro fun try_as_i8($x: _): Option<i8> {
+    let x = $x;
+    if (x > 127 || x < -128) option::none() else option::some(x as i8)
+}
+
+public macro fun try_as_i16($x: _): Option<i16> {
+    let x = $x;
+    if (x > 32767 || x < -32768) option::none() else option::some(x as i16)
+}
+
+public macro fun try_as_i32($x: _): Option<i32> {
+    let x = $x;
+    if (x > 2147483647 || x < -2147483648) option::none() else option::some(x as i32)
+}
+
+public macro fun try_as_i64($x: _): Option<i64> {
+    let x = $x;
+    if (x > 9223372036854775807 || x < -9223372036854775808) option::none()
+    else option::some(x as i64)
+}
+
+public macro fun try_as_i128($x: _): Option<i128> {
+    let x = $x;
+    if (x > 170141183460469231731687303715884105727
+        || x < -170141183460469231731687303715884105728) option::none()
+    else option::some(x as i128)
+}
+
 /// Creates a fixed-point value from a quotient specified by its numerator and denominator.
 /// `$T` is the underlying integer type for the fixed-point value, where `$T` has `$t_bits` bits.
 /// `$U` is the type used for intermediate calculations, where `$U` is the next larger integer type.
