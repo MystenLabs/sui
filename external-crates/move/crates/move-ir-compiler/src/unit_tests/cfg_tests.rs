@@ -10,7 +10,7 @@ use move_bytecode_verifier::absint::VMControlFlowGraph;
 #[test]
 fn cfg_compile_script_ret() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
         label b0:
             return;
         } }
@@ -26,7 +26,7 @@ fn cfg_compile_script_ret() {
 #[test]
 fn cfg_compile_script_let() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
             let x: u64;
             let y: u64;
             let z: u64;
@@ -47,7 +47,7 @@ fn cfg_compile_script_let() {
 #[test]
 fn cfg_compile_if() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
             let x: u64;
         label b0:
             x = 0;
@@ -71,7 +71,7 @@ fn cfg_compile_if() {
 #[test]
 fn cfg_compile_if_else() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
             let x: u64;
             let y: u64;
         label b0:
@@ -98,7 +98,7 @@ fn cfg_compile_if_else() {
 #[test]
 fn cfg_compile_if_else_with_else_return() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
             let x: u64;
         label b0:
             jump_if (42 > 0) b2;
@@ -121,7 +121,7 @@ fn cfg_compile_if_else_with_else_return() {
 #[test]
 fn cfg_compile_nested_if() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
             let x: u64;
         label entry:
             jump_if (42 > 0) if_0_then;
@@ -152,7 +152,7 @@ fn cfg_compile_nested_if() {
 #[test]
 fn cfg_compile_if_else_with_if_return() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
             let x: u64;
         label b0:
             jump_if (42 > 0) b2;
@@ -177,7 +177,7 @@ fn cfg_compile_if_else_with_if_return() {
 #[test]
 fn cfg_compile_if_else_with_two_returns() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
         label b0:
             jump_if (42 > 0) b2;
         label b1:
@@ -201,7 +201,7 @@ fn cfg_compile_if_else_with_two_returns() {
 #[test]
 fn cfg_compile_if_else_with_else_abort() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
             let x: u64;
         label b0:
             jump_if (42 > 0) b2;
@@ -225,7 +225,7 @@ fn cfg_compile_if_else_with_else_abort() {
 #[test]
 fn cfg_compile_if_else_with_if_abort() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
             let x: u64;
         label b0:
             jump_if (42 > 0) b2;
@@ -251,7 +251,7 @@ fn cfg_compile_if_else_with_if_abort() {
 #[test]
 fn cfg_compile_if_else_with_two_aborts() {
     let text = "
-        module 0x42.m { entry foo() {
+        module 0x42::m { entry foo() {
         label b0:
             jump_if (42 > 0) b2;
         label b1:
@@ -276,10 +276,10 @@ fn cfg_compile_if_else_with_two_aborts() {
 #[test]
 fn cfg_compile_variant_switch_simple() {
     let text = "
-        module 0x42.m {
+        module 0x42::m {
             enum X has drop { V1 { x: u64 }, V2 { } }
 
-            entry foo(x: Self.X) {
+            entry foo(x: Self::X) {
                 let y: u64;
             label bv:
                 variant_switch X (&x) {
@@ -303,10 +303,10 @@ fn cfg_compile_variant_switch_simple() {
 #[test]
 fn cfg_compile_variant_switch_simple_unconditional_jump() {
     let text = "
-        module 0x42.m {
+        module 0x42::m {
             enum X has drop { V1 { x: u64 }, V2 { } }
 
-            entry foo(x: Self.X) {
+            entry foo(x: Self::X) {
                 let y: u64;
             label bv:
                 variant_switch X (&x) {
@@ -333,10 +333,10 @@ fn cfg_compile_variant_switch_simple_unconditional_jump() {
 #[test]
 fn cfg_compile_variant_switch() {
     let text = "
-        module 0x42.m {
+        module 0x42::m {
             enum X { V1 { x: u64 }, V2 { } }
 
-            entry foo(x: Self.X) {
+            entry foo(x: Self::X) {
                 let y: u64;
             label bv:
                 variant_switch X (&x) {
@@ -344,7 +344,7 @@ fn cfg_compile_variant_switch() {
                     V2 : b4,
                 };
             label b0:
-                X.V1 { x: y } = move(x);
+                X::V1 { x: y } = move(x);
                 jump_if (move(y) > 42) b2;
             label b1:
                 jump b3;
@@ -354,7 +354,7 @@ fn cfg_compile_variant_switch() {
             label b3:
                 return;
             label b4:
-                X.V2 {} = move(x);
+                X::V2 {} = move(x);
                 jump b3;
             }
         }
@@ -369,10 +369,10 @@ fn cfg_compile_variant_switch() {
 #[test]
 fn cfg_compile_variant_switch_with_two_aborts() {
     let text = "
-        module 0x42.m {
+        module 0x42::m {
             enum X { V1 { x: u64 }, V2 { } }
 
-            entry foo(x: Self.X) {
+            entry foo(x: Self::X) {
                 let y: u64;
             label bv:
                 variant_switch X (&x) {
@@ -380,7 +380,7 @@ fn cfg_compile_variant_switch_with_two_aborts() {
                     V2 : b4,
                 };
             label b0:
-                X.V1 { x: y } = move(x);
+                X::V1 { x: y } = move(x);
                 jump_if (move(y) > 42) b3;
             label b1:
                 jump b3;
@@ -390,7 +390,7 @@ fn cfg_compile_variant_switch_with_two_aborts() {
             label b3:
                 return;
             label b4:
-                X.V2 {} = move(x);
+                X::V2 {} = move(x);
                 abort 0;
             }
         }
@@ -405,10 +405,10 @@ fn cfg_compile_variant_switch_with_two_aborts() {
 #[test]
 fn cfg_compile_variant_switch_with_return() {
     let text = "
-        module 0x42.m {
+        module 0x42::m {
             enum X { V1 { x: u64 }, V2 { } }
 
-            entry foo(x: Self.X) {
+            entry foo(x: Self::X) {
                 let y: u64;
             label bv:
                 variant_switch X (&x) {
@@ -422,7 +422,7 @@ fn cfg_compile_variant_switch_with_return() {
             label fallthrough:
                 return;
             label b0:
-                X.V1 { x: y } = move(x);
+                X::V1 { x: y } = move(x);
                 jump_if (move(y) > 42) b3;
             label b1:
                 return;
@@ -432,7 +432,7 @@ fn cfg_compile_variant_switch_with_return() {
             label b3:
                 return;
             label b4:
-                X.V2 {} = move(x);
+                X::V2 {} = move(x);
                 abort 0;
             }
         }
