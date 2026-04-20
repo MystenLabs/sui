@@ -52,7 +52,7 @@ pub trait AccountFundsRead: Send + Sync {
     }
 
     /// For gasless transactions, checks that withdrawing the requested amounts does not leave
-    /// dust in the sender's balance. For each withdrawal, the remaining balance
+    /// a balance below the minimum in the sender's account. For each withdrawal, the remaining balance
     /// (actual - requested) must be either 0 or >= the minimum transfer amount for that
     /// token type.
     fn check_remaining_amounts_after_withdrawal(
@@ -75,9 +75,10 @@ pub trait AccountFundsRead: Send + Sync {
                 return Err(SuiErrorKind::UserInputError {
                     error: UserInputError::InvalidWithdrawReservation {
                         error: format!(
-                            "Gasless withdrawal from {} leaves {remaining} which is \
-                             below minimum {min_amount} for token type {coin_type}",
-                            object_id,
+                            "Invalid gasless withdrawal from {object_id}. \
+                             Gasless transactions must either use the entire balance, \
+                             or leave at least {min_amount} for token type {coin_type}. \
+                             Remaining amount is {remaining}",
                         ),
                     },
                 }

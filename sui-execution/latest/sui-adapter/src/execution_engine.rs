@@ -701,22 +701,23 @@ mod checked {
         let sender = tx_ctx.sender();
         let mut reservations = BTreeMap::<(SuiAddress, TypeTag), u64>::new();
         for input in &pt.inputs {
-            if let CallArg::FundsWithdrawal(fw) = input
-                && let Some(coin_type) = fw.type_arg.get_balance_type_param()
-            {
-                let owner = match fw.withdraw_from {
-                    WithdrawFrom::Sender => sender,
-                    WithdrawFrom::Sponsor => {
-                        debug_fatal!(
-                            "WithdrawFrom::Sponsor is not allowed in gasless transactions"
-                        );
-                        return None;
-                    }
-                };
-                let Reservation::MaxAmountU64(amount) = fw.reservation;
-                let entry = reservations.entry((owner, coin_type)).or_default();
-                *entry = entry.saturating_add(amount);
-            }
+            let CallArg::FundsWithdrawal(fw) = input else {
+                continue;
+            };
+            let Some(coin_type) = fw.type_arg.get_balance_type_param() else {
+                debug_fatal!("expected Balance type for withdrawal");
+                continue;
+            };
+            let owner = match fw.withdraw_from {
+                WithdrawFrom::Sender => sender,
+                WithdrawFrom::Sponsor => {
+                    debug_fatal!("WithdrawFrom::Sponsor is not expected in gasless transactions");
+                    tx_ctx.sponsor().unwrap_or(sender)
+                }
+            };
+            let Reservation::MaxAmountU64(amount) = fw.reservation;
+            let entry = reservations.entry((owner, coin_type)).or_insert(0);
+            *entry = entry.saturating_add(amount);
         }
         Some(reservations)
     }

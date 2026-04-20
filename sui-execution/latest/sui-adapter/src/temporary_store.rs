@@ -630,13 +630,13 @@ impl<'backing> TemporaryStore<'backing> {
                     .unwrap_or(0);
                 let remaining = (reserved as i128).saturating_add(net);
                 if remaining > 0
-                    && let Some(&min_amount) = allowed_types.get(token_type)
-                    && min_amount > 0
-                    && remaining < min_amount as i128
+                    && let Some(&min_balance_remaining) = allowed_types.get(token_type)
+                    && min_balance_remaining > 0
+                    && remaining < min_balance_remaining as i128
                 {
                     return Err(format!(
                         "Gasless withdrawal leaves {remaining} unused for {owner}, \
-                         below minimum {min_amount} for token type {token_type}"
+                         below minimum {min_balance_remaining} for token type {token_type}"
                     ));
                 }
             }
