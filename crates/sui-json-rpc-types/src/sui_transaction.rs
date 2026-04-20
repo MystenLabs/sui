@@ -1924,7 +1924,10 @@ impl SuiProgrammableTransactionBlock {
         value: ProgrammableTransaction,
         package_resolver: &Resolver<impl PackageStore>,
     ) -> Result<Self, anyhow::Error> {
-        let input_types = package_resolver.pure_input_layouts(&value).await?;
+        let input_types = match package_resolver.pure_input_layouts(&value).await {
+            Ok(input_types) => input_types,
+            Err(_) => vec![None; value.inputs.len()],
+        };
         let ProgrammableTransaction { inputs, commands } = value;
         Ok(SuiProgrammableTransactionBlock {
             inputs: inputs
@@ -2625,5 +2628,57 @@ impl Filter<EffectsWithInput> for TransactionFilter {
             TransactionFilter::Checkpoint(_) => false,
             TransactionFilter::FromOrToAddress { addr: _ } => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use async_trait::async_trait;
+    use move_core_types::account_address::AccountAddress;
+    use move_core_types::ident_str;
+    use sui_package_resolver::{Package, error::Error as PackageResolverError};
+    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+
+    use super::*;
+
+    #[derive(Clone)]
+    struct EmptyPackageStore;
+
+    #[async_trait]
+    impl PackageStore for EmptyPackageStore {
+        async fn fetch(&self, id: AccountAddress) -> sui_package_resolver::Result<Arc<Package>> {
+            Err(PackageResolverError::PackageNotFound(id))
+        }
+    }
+
+    #[tokio::test]
+    async fn programmable_transaction_falls_back_when_layout_resolution_fails() {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let recipient = builder.pure(SuiAddress::ZERO).unwrap();
+        builder.programmable_move_call(
+            ObjectID::ZERO,
+            ident_str!("pay").to_owned(),
+            ident_str!("pay_all_sui").to_owned(),
+            vec![],
+            vec![recipient],
+        );
+
+        let resolver = Resolver::new(EmptyPackageStore);
+        let transaction = SuiProgrammableTransactionBlock::try_from_with_package_resolver(
+            builder.finish(),
+            &resolver,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(transaction.commands.len(), 1);
+        assert_eq!(transaction.inputs.len(), 1);
+
+        let SuiCallArg::Pure(input) = &transaction.inputs[0] else {
+            panic!("expected pure input");
+        };
+        assert_eq!(input.value_type(), None);
     }
 }
