@@ -375,7 +375,7 @@ impl CompilationEnv {
             &self.known_filter_names,
             Arc::clone(&self.diags),
             Arc::clone(&self.ide_information),
-            FilterStack::root(self.root_scope),
+            FilterStack::root(self.root_scope.clone()),
         )
     }
 
@@ -383,7 +383,7 @@ impl CompilationEnv {
         DiagnosticReporter::dummy_reporter(
             &self.flags,
             &self.known_filter_names,
-            FilterStack::root(self.root_scope),
+            FilterStack::root(self.root_scope.clone()),
         )
     }
 

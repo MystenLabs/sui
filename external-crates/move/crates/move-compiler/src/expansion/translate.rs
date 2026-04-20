@@ -8,8 +8,8 @@ use crate::{
         Diagnostic, DiagnosticReporter, Diagnostics,
         codes::{DIAGNOSTIC_FILTER_WILDCARD, DiagnosticsID},
         filter::{
-            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, FilterKind, FilterScope, Override,
-            Override_, dependency_drop_filter_scope,
+            FILTER_DEPRECATED, FILTER_UNUSED_STRUCT_FIELD, FilterKind, FilterScope,
+            dependency_drop_filter_scope,
         },
     },
     editions::{self, Edition, FeatureGate, Flavor},
@@ -1229,7 +1229,7 @@ fn module_(
     }
     let attributes = expand_attributes(context, AttributePosition::Module, attributes);
     let warning_filter = module_warning_filter(context, package_name, &attributes);
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     assert!(context.address.is_none());
     assert!(address.is_none());
     set_module_address(context, &name, module_address);
@@ -1550,8 +1550,8 @@ fn module_warning_filter(
     } else {
         let mut overrides = warning_filter_(context, attributes);
         let config = context.env().package_config(package);
-        for (id, o) in config.warning_filter.overrides() {
-            overrides.entry(*id).or_insert(*o);
+        for (id, o) in config.warning_filter.filter_entries() {
+            overrides.entry(id).or_insert(o);
         }
         FilterScope::new(overrides)
     }
@@ -1561,13 +1561,13 @@ fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> F
     let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        add_filter_overrides_(
+        add_filter_entries_(
             &mut overrides,
             Loc::invalid(),
             FilterKind::Allow,
             context.env().filter_from_str(none, FILTER_DEPRECATED),
         );
-        add_filter_overrides_(
+        add_filter_entries_(
             &mut overrides,
             Loc::invalid(),
             FilterKind::Allow,
@@ -1583,7 +1583,7 @@ fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) ->
     let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        add_filter_overrides_(
+        add_filter_entries_(
             &mut overrides,
             Loc::invalid(),
             FilterKind::Allow,
@@ -1600,7 +1600,7 @@ fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> FilterSc
 fn warning_filter_(
     context: &Context,
     attributes: &E::Attributes,
-) -> BTreeMap<DiagnosticsID, Override> {
+) -> BTreeMap<DiagnosticsID, Spanned<FilterKind>> {
     fn unexpected_attribute_ice(context: &Context<'_>, allow: &Spanned<KnownAttribute>) {
         context.add_diag(ice!((
             allow.loc,
@@ -1629,7 +1629,7 @@ fn warning_filter_(
         };
     }
 
-    let mut overrides = BTreeMap::new();
+    let mut filter_entries = BTreeMap::new();
 
     if let Some(lint_allow) = resolve_attribute_or_ice_return!((LintAllow, LintAllow, allow_set)) {
         let prefix = Some(DiagnosticAttribute::LINT_SYMBOL);
@@ -1644,16 +1644,21 @@ fn warning_filter_(
                 context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
                 continue;
             };
-            add_filter_overrides_(&mut overrides, Loc::invalid(), FilterKind::Allow, filters);
+            add_filter_entries_(
+                &mut filter_entries,
+                Loc::invalid(),
+                FilterKind::Allow,
+                filters,
+            );
         }
     }
 
     if let Some(allow_set) = resolve_attribute_or_ice_return!((Allow, Allow, allow_set)) {
-        add_filter_overrides(context, &mut overrides, FilterKind::Allow, allow_set);
+        add_filter_entries(context, &mut filter_entries, FilterKind::Allow, allow_set);
     }
 
     if let Some(deny_set) = resolve_attribute_or_ice_return!((Deny, Deny, deny_set)) {
-        add_filter_overrides(context, &mut overrides, FilterKind::Deny, deny_set);
+        add_filter_entries(context, &mut filter_entries, FilterKind::Deny, deny_set);
     }
 
     if let Some(expect_set) = resolve_attribute_or_ice_return!((Expect, Expect, expect_set)) {
@@ -1674,15 +1679,20 @@ fn warning_filter_(
             }
             !is_wildcard
         });
-        add_filter_overrides(context, &mut overrides, FilterKind::Expect, &expect_set);
+        add_filter_entries(
+            context,
+            &mut filter_entries,
+            FilterKind::Expect,
+            &expect_set,
+        );
     }
 
-    overrides
+    filter_entries
 }
 
-fn add_filter_overrides(
+fn add_filter_entries(
     context: &Context<'_>,
-    overrides: &mut BTreeMap<DiagnosticsID, Spanned<Override_>>,
+    filter_entries: &mut BTreeMap<DiagnosticsID, Spanned<FilterKind>>,
     filter_kind: FilterKind,
     filter_set: &BTreeSet<(Option<Spanned<Symbol>>, Spanned<Symbol>)>,
 ) {
@@ -1698,18 +1708,18 @@ fn add_filter_overrides(
             context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
             continue;
         };
-        add_filter_overrides_(overrides, name_loc, filter_kind, filters);
+        add_filter_entries_(filter_entries, name_loc, filter_kind, filters);
     }
 }
 
-fn add_filter_overrides_(
-    overrides: &mut BTreeMap<DiagnosticsID, Override>,
+fn add_filter_entries_(
+    filter_entries: &mut BTreeMap<DiagnosticsID, Spanned<FilterKind>>,
     loc: Loc,
     kind: FilterKind,
     ids: Vec<DiagnosticsID>,
 ) {
     for id in ids {
-        overrides.insert(id, sp(loc, Override_ { filter: id, kind }));
+        filter_entries.insert(id, sp(loc, kind));
     }
 }
 
@@ -2322,7 +2332,7 @@ fn struct_def_(
     } = pstruct;
     let attributes = expand_attributes(context, AttributePosition::Struct, attributes);
     let warning_filter = struct_warning_filter(context, &attributes);
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let type_parameters = datatype_type_parameters(context, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|tp| &tp.name));
     let abilities = ability_set(context, "modifier", abilities_vec);
@@ -2409,7 +2419,7 @@ fn enum_def_(
     } = penum;
     let attributes = expand_attributes(context, AttributePosition::Enum, attributes);
     let warning_filter = warning_filter(context, &attributes);
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let type_parameters = datatype_type_parameters(context, pty_params);
     context.push_type_parameters(type_parameters.iter().map(|tp| &tp.name));
     let abilities = ability_set(context, "modifier", abilities_vec);
@@ -2598,7 +2608,7 @@ fn constant_(
     } = pconstant;
     let attributes = expand_attributes(context, AttributePosition::Constant, pattributes);
     let warning_filter = warning_filter(context, &attributes);
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let signature = type_(context, psignature);
     let value = *exp(context, Box::new(pvalue));
     let constant = E::Constant {
@@ -2649,7 +2659,7 @@ fn function_(
     } = pfunction;
     let attributes = expand_attributes(context, AttributePosition::Function, pattributes);
     let warning_filter = function_warning_filter(context, &attributes);
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     if let (Some(entry_loc), Some(macro_loc)) = (entry, macro_) {
         let e_msg = format!(
             "Invalid function declaration. \

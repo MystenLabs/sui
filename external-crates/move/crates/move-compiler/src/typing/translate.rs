@@ -352,7 +352,7 @@ fn module<'env>(
 
     context.current_module = Some(ident);
     context.current_package = package_name;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     context.add_use_funs_scope(use_funs);
     context.add_stdlib_definitions(stdlib_definitions);
 
@@ -461,7 +461,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
         mut signature,
         body: n_body,
     } = f;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     assert!(context.constraints.is_empty());
     context.current_function = Some(name);
     context.in_macro_function = macro_.is_some();
@@ -560,7 +560,7 @@ fn constant(context: &mut Context, _name: ConstantName, nconstant: N::Constant) 
         signature,
         value: nvalue,
     } = nconstant;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
 
     process_attributes(context, &attributes);
 
@@ -866,7 +866,7 @@ mod check_valid_constant {
 
 fn struct_def(context: &mut Context, _sloc: Loc, s: &mut N::StructDefinition) {
     assert!(context.constraints.is_empty());
-    context.push_warning_filter_scope(s.warning_filter);
+    context.push_warning_filter_scope(s.warning_filter.clone());
 
     let field_map = match &mut s.fields {
         N::StructFields::Native(_) => return,
@@ -918,7 +918,7 @@ fn struct_def(context: &mut Context, _sloc: Loc, s: &mut N::StructDefinition) {
 fn enum_def(context: &mut Context, enum_: &mut N::EnumDefinition) {
     assert!(context.constraints.is_empty());
 
-    context.push_warning_filter_scope(enum_.warning_filter);
+    context.push_warning_filter_scope(enum_.warning_filter.clone());
 
     let enum_abilities = &enum_.abilities;
     let enum_type_params = &enum_.type_parameters;
@@ -5059,10 +5059,10 @@ fn unused_module_members(
 
     let mut reporter = env.diagnostic_reporter_at_top_level();
     let is_sui_mode = env.package_config(mdef.package_name).flavor == Flavor::Sui;
-    reporter.push_warning_filter_scope(mdef.warning_filter);
+    reporter.push_warning_filter_scope(mdef.warning_filter.clone());
 
     for (loc, name, c) in &mdef.constants {
-        reporter.push_warning_filter_scope(c.warning_filter);
+        reporter.push_warning_filter_scope(c.warning_filter.clone());
 
         let members = used_module_members.get(mident);
         if members.is_none() || !members.unwrap().contains(name) {
@@ -5084,7 +5084,7 @@ fn unused_module_members(
             // a Sui-specific filter to avoid signaling that the init function is unused
             continue;
         }
-        reporter.push_warning_filter_scope(fun.warning_filter);
+        reporter.push_warning_filter_scope(fun.warning_filter.clone());
 
         let members = used_module_members.get(mident);
         if fun.entry.is_none()

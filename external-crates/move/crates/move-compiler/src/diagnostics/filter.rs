@@ -3,30 +3,27 @@
 
 //! Scope-based diagnostic filtering.
 //!
-//! A [`FilterStack`] holds a stack of [`FilterScope`]s. Each scope carries a sorted list of
-//! overrides that match diagnostics by [`DiagnosticsID`] triples (with
-//! [`DIAGNOSTIC_FILTER_WILDCARD`] wildcards) and associate a [`FilterKind`].
+//! A [`FilterStack`] holds a stack of [`FilterScope`]s. Each scope carries a set of filter entries
+//! keyed by [`FilterTarget`] (which encodes specificity) and associated with a [`FilterKind`].
 //!
-//! Resolution walks the stack innermost-first; within a scope, the most specific match
-//! wins (exact code > category wildcard > prefix wildcard).
+//! Resolution walks the stack innermost-first; within a scope, the most specific match wins
+//! (exact diagnostic > category > prefix > all-for-dependency).
 //!
-//! `#[expect]` fulfillment lives on the scope itself (one `AtomicBool` per expect
-//! override), so the same [`FilterScope`] re-pushed across compilation passes shares state.
-//! Pops are pure structural pops; [`FilterScope::finalize`] is called at end-of-pipeline on
-//! each scope to emit diagnostics for unfulfilled `#[expect(...)]` overrides.
+//! `#[expect]` fulfillment lives on the scope itself (one `AtomicBool` per expect entry),
+//! so the same [`FilterScope`] re-pushed across compilation passes shares state.
 //!
 //! ## Allocation strategy
 //!
-//! Each [`FilterScope`] is a leaked `&'static FilterScopeData` behind a `Copy` handle.
-//! The compiler is run-once-and-exit, so the leak is harmless. Unlike the old
-//! `WarningFiltersTable` interning approach, scopes are *not* deduplicated: each item gets
-//! its own allocation even when filters are identical. This preserves per-item source
-//! locations on overrides (needed for `#[deny]` secondary labels and `#[expect]` unfulfilled
-//! diagnostics) and avoids the complexity of an interning table.
+//! Each [`FilterScope`] wraps an `Arc<FilterScopeData>`. Singletons (empty, all, test,
+//! dependency-drop) are shared via `LazyLock`; per-item scopes are allocated individually.
+//! Scopes are *not* deduplicated: each item gets its own `Arc` even when filters are
+//! identical. This preserves per-item source locations on filter entries (needed for
+//! `#[deny]` secondary labels and `#[expect]` unfulfilled diagnostics) and avoids the
+//! complexity of an interning table.
 
 use std::collections::BTreeMap;
 use std::sync::{
-    LazyLock,
+    Arc, LazyLock,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -35,7 +32,9 @@ use move_symbol_pool::Symbol;
 
 use crate::diagnostics::{
     Diagnostic,
-    codes::{Category, Declarations, DiagnosticsID, Severity, TypeSafety, UnusedItem},
+    codes::{
+        Category, Declarations, DiagnosticsID, ExternalPrefix, Severity, TypeSafety, UnusedItem,
+    },
 };
 use crate::shared::{format_allow_attr, known_attributes};
 
@@ -74,58 +73,81 @@ pub const FILTER_LITERAL_ENFORCEMENT: &str = "untyped_literal";
 // Types
 //**************************************************************************************************
 
-/// The action a matching override takes on a diagnostic.
+/// The action a matching filter entries takes on a diagnostic.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub enum FilterKind {
     /// Suppress the diagnostic but retain it in `filtered_source_diagnostics`.
     Allow,
     /// Upgrade the diagnostic's severity to `NonblockingError`.
     Deny,
-    /// Suppress the diagnostic and mark this override as fulfilled. Unfulfilled `Expect`
-    /// overrides emit an "unfulfilled expect" diagnostic at [`FilterScope::finalize`] time.
+    /// Suppress the diagnostic and mark this filter entry as fulfilled. Unfulfilled `Expect`
+    /// entries emit an "unfulfilled expect" diagnostic at [`FilterScope::finalize`] time.
     Expect,
     /// Suppress the diagnostic and discard it entirely. Used by dependency compilation.
     Drop,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-pub struct Override_ {
-    pub filter: DiagnosticsID,
-    pub kind: FilterKind,
-}
-
-pub type Override = Spanned<Override_>;
-
-/// Fulfillment record for a single `#[expect(...)]` override. Interior-mutable so state
-/// persists across passes that push the same [`FilterScope`].
+/// What a filter entry matches against. Variants are ordered by decreasing specificity;
+/// during resolution the most specific match wins within a scope.
 ///
-/// Uses `AtomicBool` rather than `Cell<bool>` because `FilterScopeData` is stored behind
-/// a `&'static` reference (via `Box::leak`), which requires `Sync`.
-#[derive(Debug)]
-pub struct ExpectState {
-    pub loc: Loc,
-    pub filter: DiagnosticsID,
-    pub fulfilled: AtomicBool,
+/// This type is internal to the filter module. External code uses [`DiagnosticsID`] (with
+/// wildcard sentinels); conversion happens via `From<DiagnosticsID>` at the filter boundary.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+enum FilterTarget {
+    /// Matches a single diagnostic by its exact code ID.
+    Diagnostic(DiagnosticsID),
+    /// Matches all diagnostics in a category, scoped to a prefix.
+    Category(ExternalPrefix, u8),
+    /// Matches all diagnostics with the given prefix. `None` matches unprefixed diagnostics
+    /// only — this is what user-facing `#[allow(all)]` maps to.
+    Prefix(ExternalPrefix),
+    /// Matches every diagnostic regardless of prefix. Used for dependency compilation.
+    AllForDependency,
 }
 
-/// An immutable set of overrides plus expect-fulfillment side-car.
+impl From<DiagnosticsID> for FilterTarget {
+    fn from(id: DiagnosticsID) -> Self {
+        use crate::diagnostics::codes::DIAGNOSTIC_FILTER_WILDCARD;
+        match (id.category, id.code) {
+            (DIAGNOSTIC_FILTER_WILDCARD, _) => FilterTarget::Prefix(id.prefix),
+            (_, DIAGNOSTIC_FILTER_WILDCARD) => FilterTarget::Category(id.prefix, id.category),
+            _ => FilterTarget::Diagnostic(id),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
+struct FilterEntry_ {
+    target: FilterTarget,
+    kind: FilterKind,
+}
+
+type FilterEntry = Spanned<FilterEntry_>;
+
+/// Fulfillment record for a single `#[expect(...)]` entry.
+#[derive(Debug)]
+struct ExpectState {
+    loc: Loc,
+    target: FilterTarget,
+    fulfilled: AtomicBool,
+}
+
+/// An immutable set of entries plus expect-fulfillment side-car.
 #[derive(Debug)]
 pub struct FilterScopeData {
-    overrides: BTreeMap<DiagnosticsID, Override>,
+    filter_entries: BTreeMap<FilterTarget, FilterEntry>,
     expects: Vec<ExpectState>,
 }
 
 /// Opaque handle to a filter scope.
-// Leaked `&'static` makes this `Copy`. The compiler is run-once-and-exit.
-// `PartialEq`/`Eq` use pointer identity: same leaked allocation = same scope.
-#[derive(Clone, Copy, Debug)]
-pub struct FilterScope(pub(crate) &'static FilterScopeData);
+#[derive(Clone, Debug)]
+pub struct FilterScope(Arc<FilterScopeData>);
 
 // Scopes are only reflexively equal, since otherwise they may vary by location information.
 // This is only relevant for adding them to ASTs which derive Eq.
 impl PartialEq for FilterScope {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.0, other.0)
+        Arc::ptr_eq(&self.0, &other.0)
     }
 }
 
@@ -151,7 +173,7 @@ struct Resolved<'a> {
     loc: Loc,
     scope: &'a FilterScope,
     kind: FilterKind,
-    filter: DiagnosticsID,
+    target: FilterTarget,
 }
 
 //**************************************************************************************************
@@ -159,22 +181,22 @@ struct Resolved<'a> {
 //**************************************************************************************************
 
 static EMPTY_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
-    FilterScope(Box::leak(Box::new(FilterScopeData {
-        overrides: BTreeMap::new(),
+    FilterScope(Arc::new(FilterScopeData {
+        filter_entries: BTreeMap::new(),
         expects: vec![],
-    })))
+    }))
 });
 
 static ALL_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
-    let filter = DiagnosticsID::all(None);
-    let o = Override_ {
-        filter,
+    let target = FilterTarget::Prefix(None);
+    let o = FilterEntry_ {
+        target,
         kind: FilterKind::Allow,
     };
-    FilterScope(Box::leak(Box::new(FilterScopeData {
-        overrides: BTreeMap::from([(filter, sp(Loc::invalid(), o))]),
+    FilterScope(Arc::new(FilterScopeData {
+        filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), o))]),
         expects: vec![],
-    })))
+    }))
 });
 
 static UNUSED_FOR_TEST_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
@@ -187,53 +209,53 @@ static UNUSED_FOR_TEST_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
         UnusedItem::MutReference,
         UnusedItem::MutParam,
     ];
-    let overrides = codes
+    let filter_entries = codes
         .into_iter()
         .map(|c| {
-            let filter = DiagnosticsID::exact(None, cat, c as u8);
-            let o = Override_ {
-                filter,
+            let target = FilterTarget::Diagnostic(DiagnosticsID::exact(None, cat, c as u8));
+            let o = FilterEntry_ {
+                target,
                 kind: FilterKind::Allow,
             };
-            (filter, sp(Loc::invalid(), o))
+            (target, sp(Loc::invalid(), o))
         })
         .collect();
-    FilterScope(Box::leak(Box::new(FilterScopeData {
-        overrides,
+    FilterScope(Arc::new(FilterScopeData {
+        filter_entries,
         expects: vec![],
-    })))
+    }))
 });
 
 static DEPENDENCY_DROP_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
-    let filter = DiagnosticsID::all(None);
-    let o = Override_ {
-        filter,
+    let target = FilterTarget::AllForDependency;
+    let o = FilterEntry_ {
+        target,
         kind: FilterKind::Drop,
     };
-    FilterScope(Box::leak(Box::new(FilterScopeData {
-        overrides: BTreeMap::from([(filter, sp(Loc::invalid(), o))]),
+    FilterScope(Arc::new(FilterScopeData {
+        filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), o))]),
         expects: vec![],
-    })))
+    }))
 });
 
-/// Scope with no overrides: the common case for any item without lint attributes.
+/// Scope with no filter entries: the common case for any item without lint attributes.
 pub fn empty_filter_scope() -> FilterScope {
-    *EMPTY_FILTER_SCOPE
+    EMPTY_FILTER_SCOPE.clone()
 }
 
-/// Scope that allows every diagnostic and records them as filtered.
+/// Scope that allows all unprefixed diagnostics (used for `--silence-warnings`).
 pub fn all_filter_scope() -> FilterScope {
-    *ALL_FILTER_SCOPE
+    ALL_FILTER_SCOPE.clone()
 }
 
 /// Scope that suppresses unused-item warnings commonly noisy in test contexts.
 pub fn unused_for_test_filter_scope() -> FilterScope {
-    *UNUSED_FOR_TEST_FILTER_SCOPE
+    UNUSED_FOR_TEST_FILTER_SCOPE.clone()
 }
 
-/// Scope that drops every diagnostic entirely. Use for dependency compilation.
+/// Scope that drops every diagnostic entirely. Used for dependency compilation.
 pub fn dependency_drop_filter_scope() -> FilterScope {
-    *DEPENDENCY_DROP_FILTER_SCOPE
+    DEPENDENCY_DROP_FILTER_SCOPE.clone()
 }
 
 //**************************************************************************************************
@@ -241,7 +263,8 @@ pub fn dependency_drop_filter_scope() -> FilterScope {
 //**************************************************************************************************
 
 /// Expansion of a known filter name into the set of [`DiagnosticsID`] triples it covers.
-/// Kind is supplied at attribute-resolution time, not stored here.
+/// Wildcard sentinels in the IDs are converted to [`FilterTarget`] variants at the filter
+/// boundary. Kind is supplied at attribute-resolution time, not stored here.
 pub type KnownFilterExpansion = &'static [DiagnosticsID];
 
 /// Built-in filter names recognized by `#[allow(...)]` etc. in source code.
@@ -363,36 +386,54 @@ pub static IDE_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpansion)>
 //**************************************************************************************************
 
 impl FilterScope {
-    /// Build a scope from the given overrides. Duplicates (by `DiagnosticsID`) are merged,
-    /// keeping the last entry. Empty input returns the shared [`EMPTY_FILTER_SCOPE`] singleton.
-    pub fn new(overrides: BTreeMap<DiagnosticsID, Override>) -> Self {
-        if overrides.is_empty() {
-            return *EMPTY_FILTER_SCOPE;
+    /// Build a scope from the given filter entries. [`DiagnosticsID`] keys (with wildcard
+    /// sentinels) are translated into internal [`FilterTarget`] variants. Empty input returns the
+    /// shared
+    /// [`EMPTY_FILTER_SCOPE`] singleton.
+    pub fn new(input: BTreeMap<DiagnosticsID, Spanned<FilterKind>>) -> Self {
+        if input.is_empty() {
+            return EMPTY_FILTER_SCOPE.clone();
         }
-        let expects = overrides
-            .values()
-            .filter(|sp!(_, o)| o.kind == FilterKind::Expect)
-            .map(|sp!(loc, o)| ExpectState {
+        let filter_entries: BTreeMap<FilterTarget, FilterEntry> = input
+            .into_iter()
+            .map(|(id, sp!(loc, kind))| {
+                let target = FilterTarget::from(id);
+                (target, sp(loc, FilterEntry_ { target, kind }))
+            })
+            .collect();
+        let expects = filter_entries
+            .iter()
+            .filter(|(_, sp!(_, o))| o.kind == FilterKind::Expect)
+            .map(|(target, sp!(loc, _))| ExpectState {
                 loc: *loc,
-                filter: o.filter,
+                target: *target,
                 fulfilled: AtomicBool::new(false),
             })
             .collect();
-        FilterScope(Box::leak(Box::new(FilterScopeData { overrides, expects })))
+        FilterScope(Arc::new(FilterScopeData {
+            filter_entries,
+            expects,
+        }))
     }
 
-    pub fn overrides(&self) -> &BTreeMap<DiagnosticsID, Override> {
-        &self.0.overrides
+    /// Iterate over the scope's filter entries as the external format, with loc information.
+    pub fn filter_entries(
+        &self,
+    ) -> impl Iterator<Item = (DiagnosticsID, Spanned<FilterKind>)> + '_ {
+        self.0.filter_entries.values().map(|sp!(loc, o)| {
+            let id = match o.target {
+                FilterTarget::Diagnostic(id) => id,
+                FilterTarget::Category(prefix, cat) => DiagnosticsID::category(prefix, cat),
+                FilterTarget::Prefix(prefix) => DiagnosticsID::all(prefix),
+                FilterTarget::AllForDependency => DiagnosticsID::all(None),
+            };
+            (id, sp(*loc, o.kind))
+        })
     }
 
-    pub fn expects(&self) -> &[ExpectState] {
-        &self.0.expects
-    }
-
-    /// Emit diagnostics for every `#[expect(...)]` override that was never matched.
-    /// Consumes the scope since finalization should only be done once.
-    /// NB: `Copy` could ostensibly let you do this repeatedly times, but that would be a misuse of
-    /// the API and also hopefully deduped by the diagnostic framework.
+    /// Emit diagnostics for every `#[expect(...)]` entry that was never matched.
+    /// NB: `Copy` could ostensibly let you call this multiple times, but that would be a misuse
+    /// of the API and also hopefully deduped by the diagnostic framework.
     /// TODO: decide if we want to finalize beyond `to_bytecode` in case compilation fails earlier.
     pub fn finalize(self) -> Vec<Diagnostic> {
         self.0
@@ -424,10 +465,13 @@ impl FilterStack {
     }
 
     pub fn push(&mut self, scope: FilterScope) {
-        if self.stack.contains(&DEPENDENCY_DROP_FILTER_SCOPE) {
-            // If the stack already contains the dependency-drop scope, all diagnostics should be
-            // dropped, so we push an empty scope to preserve that behavior.
-            self.stack.push(*EMPTY_FILTER_SCOPE);
+        if self.stack.iter().any(|s| {
+            s.0.filter_entries
+                .contains_key(&FilterTarget::AllForDependency)
+        }) {
+            // If the stack already contains a dependency-drop scope, push empty to avoid
+            // spurious expect-fulfillment tracking in dependency code.
+            self.stack.push(EMPTY_FILTER_SCOPE.clone());
         } else {
             self.stack.push(scope);
         }
@@ -454,15 +498,10 @@ impl FilterStack {
         };
 
         match resolved.kind {
-            // If we resolved to `Drop`, we discard the diagnostic immediately regardless, since
-            // the intent is to suppress it entirely even from filtered diagnostics tooling.
             FilterKind::Drop => FilterResult::Discarded,
-            // For everything else, we only apply the filter if it's a warning or less, since it
-            // doesn't make sense to allow/expect/deny actual error/bug diagnostics.
             _ if diag.severity() > Severity::Warning => FilterResult::Emit(diag),
             FilterKind::Allow => FilterResult::Filtered(diag),
             FilterKind::Deny => {
-                // Was warning, now a nonblocking error.
                 diag = diag.set_severity(Severity::NonblockingError);
                 if resolved.loc != Loc::invalid() {
                     diag.add_secondary_label((resolved.loc, "the lint level is defined here"));
@@ -470,7 +509,7 @@ impl FilterStack {
                 FilterResult::Emit(diag)
             }
             FilterKind::Expect => {
-                mark_expect_fulfilled(resolved.scope, resolved.filter);
+                mark_expect_fulfilled(resolved.scope, resolved.target);
                 FilterResult::Discarded
             }
         }
@@ -478,14 +517,15 @@ impl FilterStack {
 
     fn resolve(&self, key: DiagnosticsID) -> Option<Resolved<'_>> {
         let candidates = [
-            key,
-            DiagnosticsID::category(key.prefix, key.category),
-            DiagnosticsID::all(key.prefix),
+            FilterTarget::Diagnostic(key),
+            FilterTarget::Category(key.prefix, key.category),
+            FilterTarget::Prefix(key.prefix),
+            FilterTarget::AllForDependency,
         ];
         for scope in self.stack.iter().rev() {
-            let mut best: Option<(usize, &Override)> = None;
+            let mut best: Option<(usize, &FilterEntry)> = None;
             for (specificity, candidate) in candidates.iter().enumerate() {
-                if let Some(entry) = scope.0.overrides.get(candidate)
+                if let Some(entry) = scope.0.filter_entries.get(candidate)
                     && best.is_none_or(|(s, _)| specificity < s)
                 {
                     best = Some((specificity, entry));
@@ -496,7 +536,7 @@ impl FilterStack {
                     loc: *loc,
                     scope,
                     kind: o.kind,
-                    filter: o.filter,
+                    target: o.target,
                 });
             }
         }
@@ -522,9 +562,11 @@ fn maybe_add_filter_hint(
     }
 }
 
-fn mark_expect_fulfilled(scope: &FilterScope, filter: DiagnosticsID) {
+// NB: We never allow wildcard expects, so equality by target is sufficient to find the matching
+// expect to mark fulfilled.
+fn mark_expect_fulfilled(scope: &FilterScope, target: FilterTarget) {
     for e in &scope.0.expects {
-        if e.filter == filter {
+        if e.target == target {
             e.fulfilled.store(true, Ordering::SeqCst);
             return;
         }
@@ -533,11 +575,11 @@ fn mark_expect_fulfilled(scope: &FilterScope, filter: DiagnosticsID) {
 
 impl crate::shared::AstDebug for FilterScope {
     fn ast_debug(&self, w: &mut crate::shared::ast_debug::AstWriter) {
-        let n = self.0.overrides.len();
+        let n = self.0.filter_entries.len();
         if n == 0 {
             w.write("(no filters)");
         } else {
-            w.write(format!("({n} filter overrides)"));
+            w.write(format!("({n} filter entries)"));
         }
     }
 }

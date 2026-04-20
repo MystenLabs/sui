@@ -1903,7 +1903,7 @@ fn module(
         constants: econstants,
     } = mdef;
     let context = &mut Context::new(env, outer, package_name, ident);
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let mut use_funs = use_funs(context, euse_funs);
     let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
@@ -2334,7 +2334,7 @@ fn function(
     assert!(context.nominal_block_id == 0);
     assert!(context.used_fun_tparams.is_empty());
     assert!(context.used_locals.is_empty());
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     context.local_scopes = vec![BTreeMap::new()];
     context.local_count = BTreeMap::new();
     context.translating_fun = true;
@@ -2465,7 +2465,7 @@ fn struct_def(
         type_parameters,
         fields,
     } = sdef;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let type_parameters = datatype_type_parameters(context, type_parameters);
     let fields = struct_fields(context, fields);
     context.pop_warning_filter_scope();
@@ -2527,7 +2527,7 @@ fn enum_def(
         type_parameters,
         variants,
     } = edef;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let type_parameters = datatype_type_parameters(context, type_parameters);
     let variants = enum_variants(context, variants);
     context.pop_warning_filter_scope();
@@ -2609,7 +2609,7 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
     assert!(context.local_scopes.is_empty());
     assert!(context.local_count.is_empty());
     assert!(context.used_locals.is_empty());
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     context.local_scopes = vec![BTreeMap::new()];
     let signature = type_(context, TypeAnnotation::ConstantSignature, esignature);
     let value = *exp(context, Box::new(evalue));

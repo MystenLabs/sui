@@ -355,7 +355,7 @@ fn module(
         constants: tconstants,
     } = mdef;
     context.current_package = package_name;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
     let enums = tenums.map(|name, s| enum_def(context, name, s));
 
@@ -410,7 +410,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         body,
     } = f;
     assert!(macro_.is_none(), "ICE macros filtered above");
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let signature = function_signature(context, signature);
     let body = function_body(context, &signature, _name, body);
     context.pop_warning_filter_scope();
@@ -520,7 +520,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         signature: tsignature,
         value: tvalue,
     } = cdef;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let signature = base_type(&context.reporter, &tsignature);
     let eloc = tvalue.exp.loc;
     let tseq = {
@@ -564,7 +564,7 @@ fn struct_def(
         type_parameters,
         fields,
     } = sdef;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let fields = struct_fields(context, fields);
     context.pop_warning_filter_scope();
     H::StructDefinition {
@@ -609,7 +609,7 @@ fn enum_def(
         type_parameters,
         variants,
     } = edef;
-    context.push_warning_filter_scope(warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     let variants = variants.map(|_, defn| H::VariantDefinition {
         index: defn.index,
         loc: defn.loc,
@@ -3026,7 +3026,7 @@ fn gen_unused_warnings(
     let is_sui_mode = context.env.package_config(context.current_package).flavor == Flavor::Sui;
 
     for (_, sname, sdef) in structs {
-        context.push_warning_filter_scope(sdef.warning_filter);
+        context.push_warning_filter_scope(sdef.warning_filter.clone());
 
         let has_key = sdef.abilities.has_ability_(Ability_::Key);
 
