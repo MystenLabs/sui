@@ -1377,7 +1377,20 @@ fn compute_renumbered_bytecode(
             | input::Bytecode::UnpackVariantGeneric(..)
             | input::Bytecode::UnpackVariantGenericImmRef(..)
             | input::Bytecode::UnpackVariantGenericMutRef(..)
-            | input::Bytecode::VariantSwitch(..)) => Ok(instr),
+            | input::Bytecode::VariantSwitch(..)
+            | input::Bytecode::LdI8(_)
+            | input::Bytecode::LdI16(_)
+            | input::Bytecode::LdI32(_)
+            | input::Bytecode::LdI64(_)
+            | input::Bytecode::LdI128(..)
+            | input::Bytecode::LdI256(..)
+            | input::Bytecode::CastI8
+            | input::Bytecode::CastI16
+            | input::Bytecode::CastI32
+            | input::Bytecode::CastI64
+            | input::Bytecode::CastI128
+            | input::Bytecode::CastI256
+            | input::Bytecode::Neg) => Ok(instr),
         }
     }
 
@@ -1521,6 +1534,20 @@ fn bytecode(
         input::Bytecode::CastU64 => Bytecode::CastU64,
         input::Bytecode::CastU8 => Bytecode::CastU8,
 
+        input::Bytecode::LdI8(n) => Bytecode::LdI8(n),
+        input::Bytecode::LdI16(n) => Bytecode::LdI16(n),
+        input::Bytecode::LdI32(n) => Bytecode::LdI32(n),
+        input::Bytecode::LdI64(n) => Bytecode::LdI64(n),
+        input::Bytecode::LdI128(n) => Bytecode::LdI128(context.package_context.arena_box(*n)?),
+        input::Bytecode::LdI256(n) => Bytecode::LdI256(context.package_context.arena_box(*n)?),
+        input::Bytecode::CastI8 => Bytecode::CastI8,
+        input::Bytecode::CastI16 => Bytecode::CastI16,
+        input::Bytecode::CastI32 => Bytecode::CastI32,
+        input::Bytecode::CastI64 => Bytecode::CastI64,
+        input::Bytecode::CastI128 => Bytecode::CastI128,
+        input::Bytecode::CastI256 => Bytecode::CastI256,
+        input::Bytecode::Neg => Bytecode::Neg,
+
         // Vectors
         input::Bytecode::VecPack(si, size) => {
             let ty_ptr = context.get_vec_type(&si)?;
@@ -1656,6 +1683,12 @@ fn make_arena_type(
         SignatureToken::U256 => ArenaType::U256,
         SignatureToken::Address => ArenaType::Address,
         SignatureToken::Signer => ArenaType::Signer,
+        SignatureToken::I8 => ArenaType::I8,
+        SignatureToken::I16 => ArenaType::I16,
+        SignatureToken::I32 => ArenaType::I32,
+        SignatureToken::I64 => ArenaType::I64,
+        SignatureToken::I128 => ArenaType::I128,
+        SignatureToken::I256 => ArenaType::I256,
         SignatureToken::TypeParameter(idx) => ArenaType::TyParam(*idx),
         SignatureToken::Vector(inner_tok) => {
             ArenaType::Vector(context.arena_box(make_arena_type(context, module, inner_tok)?)?)
@@ -1699,17 +1732,6 @@ fn make_arena_type(
             let cache_idx =
                 VirtualTableKey::from_parts(*original_address, module_name, datatype_name);
             ArenaType::DatatypeInstantiation(context.arena_box((cache_idx, type_parameters))?)
-        }
-        SignatureToken::I8
-        | SignatureToken::I16
-        | SignatureToken::I32
-        | SignatureToken::I64
-        | SignatureToken::I128
-        | SignatureToken::I256 => {
-            return Err(partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Signed integer types are not yet supported in the VM runtime"
-            ));
         }
     };
     Ok(res)
