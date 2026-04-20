@@ -129,6 +129,7 @@ impl UniversalCommitter {
         let decision_str = match decision {
             Decision::Direct => "direct",
             Decision::Indirect => "indirect",
+            Decision::Certified => "certified",
         };
         let status = match decided_leader {
             DecidedLeader::Commit(..) => format!("{decision_str}-commit"),
