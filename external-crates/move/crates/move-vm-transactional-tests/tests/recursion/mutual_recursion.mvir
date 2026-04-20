@@ -1,5 +1,5 @@
 //# publish
-module 0x42.Math {
+module 0x42::Math {
 
     public even(n: u64): bool {
         let is_pred_odd: bool;
@@ -8,7 +8,7 @@ module 0x42.Math {
     label b1:
         return true;
     label b2:
-        is_pred_odd = Self.odd(move(n) - 1);
+        is_pred_odd = Self::odd(move(n) - 1);
         return move(is_pred_odd);
     }
 
@@ -19,14 +19,14 @@ module 0x42.Math {
     label b1:
         return false;
     label b2:
-        is_pred_even = Self.even(move(n) - 1);
+        is_pred_even = Self::even(move(n) - 1);
         return move(is_pred_even);
     }
 }
 
 //# run
-module 0x43.m {
-import 0x42.Math;
+module 0x43::m {
+import 0x42::Math;
 
 entry foo() {
     let zero_even: bool;
@@ -34,16 +34,16 @@ entry foo() {
     let ten_even: bool;
     let ten_odd: bool;
 label b0:
-    zero_even = Math.even(0);
+    zero_even = Math::even(0);
     assert(move(zero_even), 50);
 
-    zero_odd = Math.odd(0);
+    zero_odd = Math::odd(0);
     assert(!move(zero_odd), 51);
 
-    ten_even = Math.even(10);
+    ten_even = Math::even(10);
     assert(move(ten_even), 52);
 
-    ten_odd = Math.odd(10);
+    ten_odd = Math::odd(10);
     assert(!move(ten_odd), 53);
 
     return;

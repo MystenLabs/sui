@@ -1,7 +1,7 @@
 // StLoc with an unreachable reference to the local due to control flow.
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
     let x: u64;

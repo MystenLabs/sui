@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x6.MonomorphicEnums {
+module 0x6::MonomorphicEnums {
     enum EnumWithOneVariant {
         One { }
     }
@@ -15,25 +15,25 @@ module 0x6.MonomorphicEnums {
     }
 
     public f(): u64 {
-        let x: Self.EnumWithTwoVariants;
+        let x: Self::EnumWithTwoVariants;
         let y: u64;
         label b0:
-            x = EnumWithTwoVariants.Two { x: 42 };
+            x = EnumWithTwoVariants::Two { x: 42 };
             variant_switch EnumWithTwoVariants (&x) {
                 One : b1,
                 Two : b2,
             };
         label b1:
-            EnumWithTwoVariants.One { } = move(x);
+            EnumWithTwoVariants::One { } = move(x);
             return 0;
         label b2:
-            EnumWithTwoVariants.Two { x: y } = move(x);
+            EnumWithTwoVariants::Two { x: y } = move(x);
             return move(y);
     }
 }
 
 //# publish
-module 0x6.MonomorphicEnums {
+module 0x6::MonomorphicEnums {
     enum EnumWithOneVariant {
         One { }
     }
@@ -49,30 +49,30 @@ module 0x6.MonomorphicEnums {
     }
 
     public f(): u64 {
-        let x: Self.EnumWithTwoVariants;
+        let x: Self::EnumWithTwoVariants;
         let y: u64;
         label b0:
-            x = EnumWithTwoVariants.Two { x: 42 };
+            x = EnumWithTwoVariants::Two { x: 42 };
             variant_switch EnumWithTwoVariants (&x) {
                 One : b1,
                 Two : b2,
             };
         label b1:
-            EnumWithTwoVariants.One { } = move(x);
+            EnumWithTwoVariants::One { } = move(x);
             return 0;
         label b2:
-            EnumWithTwoVariants.Two { x: y } = move(x);
+            EnumWithTwoVariants::Two { x: y } = move(x);
             return move(y);
     }
 }
 
 //# run
-module 0x7.m {
-import 0x6.MonomorphicEnums;
+module 0x7::m {
+import 0x6::MonomorphicEnums;
 entry foo() {
     let x: u64;
     label b0:
-        x = MonomorphicEnums.f();
+        x = MonomorphicEnums::f();
         assert(move(x) == 42, 100);
         return;
 }

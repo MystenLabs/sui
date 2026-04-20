@@ -4,25 +4,25 @@
 //# init --accounts A B --addresses test=0x0
 
 //# publish --sender A
-module 0x0.m {
-    import 0x2.random;
+module 0x0::m {
+    import 0x2::random;
 
-    entry entry_random_mut(c: &mut random.Random) {
+    entry entry_random_mut(c: &mut random::Random) {
         label l0:
         abort 0;
     }
 
-    entry entry_random_owned(c: random.Random) {
+    entry entry_random_owned(c: random::Random) {
         label l0:
         abort 0;
     }
 
-    public public_random_mut(c: &mut random.Random) {
+    public public_random_mut(c: &mut random::Random) {
         label l0:
         abort 0;
     }
 
-    public public_random_owned(c: random.Random) {
+    public public_random_owned(c: random::Random) {
         label l0:
         abort 0;
     }

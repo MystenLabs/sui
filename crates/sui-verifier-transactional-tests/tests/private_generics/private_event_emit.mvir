@@ -6,71 +6,71 @@
 //# init --addresses test=0x0 test2=0x0
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
-    import 0x2.coin;
+module 0x0::m {
+    import 0x2::event;
+    import 0x2::coin;
 
-    t(s: coin.CurrencyCreated<u64>) {
+    t(s: coin::CurrencyCreated<u64>) {
         label l0:
-        event.emit<coin.CurrencyCreated<u64>>(move(s));
+        event::emit<coin::CurrencyCreated<u64>>(move(s));
         return;
     }
 }
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
+module 0x0::m {
+    import 0x2::event;
 
     t<T: copy + drop>(x: T) {
         label l0:
-        event.emit<T>(move(x));
+        event::emit<T>(move(x));
         return;
     }
 }
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
+module 0x0::m {
+    import 0x2::event;
 
     t(x: u64) {
         label l0:
-        event.emit<u64>(move(x));
+        event::emit<u64>(move(x));
         return;
     }
 }
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
+module 0x0::m {
+    import 0x2::event;
 
     struct X has copy, drop {
         dummy: bool,
     }
 
-    t(x: vector<Self.X>) {
+    t(x: vector<Self::X>) {
         label l0:
-        event.emit<vector<Self.X>>(move(x));
+        event::emit<vector<Self::X>>(move(x));
         return;
     }
 }
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
+module 0x0::m {
+    import 0x2::event;
 
     enum X has copy, drop {
         V { }
     }
 
-    t(x: vector<Self.X>) {
+    t(x: vector<Self::X>) {
         label l0:
-        event.emit<vector<Self.X>>(move(x));
+        event::emit<vector<Self::X>>(move(x));
         return;
     }
 }
 
 //# publish
-module test.m {
+module test::m {
     struct Y has copy, drop {
         dummy: bool,
     }
@@ -83,113 +83,113 @@ module test.m {
 //# set-address test object(6,0)
 
 //# publish --dependencies test
-module 0x0.t {
-    import test.m;
-    import 0x2.event;
+module 0x0::t {
+    import test::m;
+    import 0x2::event;
 
-    t(x: m.X) {
+    t(x: m::X) {
         label l0:
-        event.emit<m.X>(move(x));
+        event::emit<m::X>(move(x));
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.t {
-    import test.m;
-    import 0x2.event;
+module 0x0::t {
+    import test::m;
+    import 0x2::event;
 
-    t(x: m.Y) {
+    t(x: m::Y) {
         label l0:
-        event.emit<m.Y>(move(x));
+        event::emit<m::Y>(move(x));
         return;
     }
 }
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
-    import 0x2.coin;
+module 0x0::m {
+    import 0x2::event;
+    import 0x2::coin;
 
-    t(s: coin.CurrencyCreated<u64>) {
+    t(s: coin::CurrencyCreated<u64>) {
         label l0:
-        event.emit_authenticated<coin.CurrencyCreated<u64>>(move(s));
+        event::emit_authenticated<coin::CurrencyCreated<u64>>(move(s));
         return;
     }
 }
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
+module 0x0::m {
+    import 0x2::event;
 
     t<T: copy + drop>(x: T) {
         label l0:
-        event.emit_authenticated<T>(move(x));
+        event::emit_authenticated<T>(move(x));
         return;
     }
 }
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
+module 0x0::m {
+    import 0x2::event;
 
     t(x: u64) {
         label l0:
-        event.emit_authenticated<u64>(move(x));
+        event::emit_authenticated<u64>(move(x));
         return;
     }
 }
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
+module 0x0::m {
+    import 0x2::event;
 
     struct X has copy, drop {
         dummy: bool,
     }
 
-    t(x: vector<Self.X>) {
+    t(x: vector<Self::X>) {
         label l0:
-        event.emit_authenticated<vector<Self.X>>(move(x));
+        event::emit_authenticated<vector<Self::X>>(move(x));
         return;
     }
 }
 
 //# publish
-module 0x0.m {
-    import 0x2.event;
+module 0x0::m {
+    import 0x2::event;
 
     enum X has copy, drop {
         V { }
     }
 
-    t(x: vector<Self.X>) {
+    t(x: vector<Self::X>) {
         label l0:
-        event.emit_authenticated<vector<Self.X>>(move(x));
+        event::emit_authenticated<vector<Self::X>>(move(x));
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.t {
-    import test.m;
-    import 0x2.event;
+module 0x0::t {
+    import test::m;
+    import 0x2::event;
 
-    t(x: m.X) {
+    t(x: m::X) {
         label l0:
-        event.emit_authenticated<m.X>(move(x));
+        event::emit_authenticated<m::X>(move(x));
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.t {
-    import test.m;
-    import 0x2.event;
+module 0x0::t {
+    import test::m;
+    import 0x2::event;
 
-    t(x: m.Y) {
+    t(x: m::Y) {
         label l0:
-        event.emit_authenticated<m.Y>(move(x));
+        event::emit_authenticated<m::Y>(move(x));
         return;
     }
 }

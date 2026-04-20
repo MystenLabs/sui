@@ -1,22 +1,22 @@
 //# publish
-module 0x1.M1 {
+module 0x1::M1 {
     struct NoAbilities { a: bool }
     struct HasAbilities<phantom T1, T2> has drop, copy, store, key { a: bool }
 }
 
 //# publish
-module 0x2.M2 {
-    import 0x1.M1;
+module 0x2::M2 {
+    import 0x1::M1;
 
     struct S1<T: drop + copy + store + key> { a: bool }
     struct S2 {
-        a: Self.S1<M1.HasAbilities<M1.NoAbilities, M1.NoAbilities>>,
+        a: Self::S1<M1::HasAbilities<M1::NoAbilities, M1::NoAbilities>>,
     }
 }
 
 //# publish
-module 0x3.M3 {
-    import 0x1.M1;
+module 0x3::M3 {
+    import 0x1::M1;
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
     struct HasCopy<phantom T1, T2> has copy { a: bool }
@@ -25,30 +25,30 @@ module 0x3.M3 {
 
     struct S1<T1: drop, T2: copy, T3: store, T4: key> { a: bool }
     struct S2 {
-        a: Self.S1< Self.HasDrop<M1.NoAbilities, M1.NoAbilities>,
-                    Self.HasCopy<M1.NoAbilities, M1.NoAbilities>,
-                    Self.HasStore<M1.NoAbilities, M1.NoAbilities>,
-                    Self.HasKey<M1.NoAbilities, M1.NoAbilities>
+        a: Self::S1< Self::HasDrop<M1::NoAbilities, M1::NoAbilities>,
+                    Self::HasCopy<M1::NoAbilities, M1::NoAbilities>,
+                    Self::HasStore<M1::NoAbilities, M1::NoAbilities>,
+                    Self::HasKey<M1::NoAbilities, M1::NoAbilities>
                   >
     }
 }
 
 //# publish
-module 0x4.M4 {
-    import 0x1.M1;
+module 0x4::M4 {
+    import 0x1::M1;
 
     f1<T: drop + copy + store + key>() { label b0: return; }
     f2() {
     label b0:
-        Self.f1<M1.HasAbilities<M1.NoAbilities, M1.NoAbilities>>();
+        Self::f1<M1::HasAbilities<M1::NoAbilities, M1::NoAbilities>>();
         return;
     }
 }
 
 
 //# publish
-module 0x5.M3Valid {
-    import 0x1.M1;
+module 0x5::M3Valid {
+    import 0x1::M1;
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
     struct HasCopy<phantom T1, T2> has copy { a: bool }
@@ -58,41 +58,41 @@ module 0x5.M3Valid {
 }
 
 //# publish
-module 0x6.M5 {
-    import 0x1.M1;
-    import 0x5.M3Valid;
+module 0x6::M5 {
+    import 0x1::M1;
+    import 0x5::M3Valid;
 
     f1<T1: drop, T2: copy, T3: store, T4: key>() { label b0: return; }
     f2() {
     label b0:
-        Self.f1< M3Valid.HasDrop<M1.NoAbilities, M1.NoAbilities>,
-                 M3Valid.HasCopy<M1.NoAbilities, M1.NoAbilities>,
-                 M3Valid.HasStore<M1.NoAbilities, M1.NoAbilities>,
-                 M3Valid.HasKey<M1.NoAbilities, M1.NoAbilities>
+        Self::f1< M3Valid::HasDrop<M1::NoAbilities, M1::NoAbilities>,
+                 M3Valid::HasCopy<M1::NoAbilities, M1::NoAbilities>,
+                 M3Valid::HasStore<M1::NoAbilities, M1::NoAbilities>,
+                 M3Valid::HasKey<M1::NoAbilities, M1::NoAbilities>
                >();
         return;
     }
 }
 
 //# publish
-module 0x7.M1 {
+module 0x7::M1 {
     enum NoAbilities { V{ a: bool } }
     enum HasAbilities<phantom T1, T2> has drop, copy, store, key { V{ a: bool } }
 }
 
 //# publish
-module 0x8.M2 {
-    import 0x7.M1;
+module 0x8::M2 {
+    import 0x7::M1;
 
     enum S1<T: drop + copy + store + key> { V{ a: bool }}
     enum S2 {
-        V { a: Self.S1<M1.HasAbilities<M1.NoAbilities, M1.NoAbilities>> } 
+        V { a: Self::S1<M1::HasAbilities<M1::NoAbilities, M1::NoAbilities>> } 
     }
 }
 
 //# publish
-module 0x9.M3 {
-    import 0x7.M1;
+module 0x9::M3 {
+    import 0x7::M1;
 
     enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
     enum HasCopy<phantom T1, T2> has copy { V{ a: bool }}
@@ -102,31 +102,31 @@ module 0x9.M3 {
     enum S1<T1: drop, T2: copy, T3: store, T4: key> { V{ a: bool }}
     enum S2 {
         V { 
-            a: Self.S1< Self.HasDrop<M1.NoAbilities, M1.NoAbilities>,
-                    Self.HasCopy<M1.NoAbilities, M1.NoAbilities>,
-                    Self.HasStore<M1.NoAbilities, M1.NoAbilities>,
-                    Self.HasKey<M1.NoAbilities, M1.NoAbilities>
+            a: Self::S1< Self::HasDrop<M1::NoAbilities, M1::NoAbilities>,
+                    Self::HasCopy<M1::NoAbilities, M1::NoAbilities>,
+                    Self::HasStore<M1::NoAbilities, M1::NoAbilities>,
+                    Self::HasKey<M1::NoAbilities, M1::NoAbilities>
                   >
         }
     }
 }
 
 //# publish
-module 0x10.M4 {
-    import 0x7.M1;
+module 0x10::M4 {
+    import 0x7::M1;
 
     f1<T: drop + copy + store + key>() { label b0: return; }
     f2() {
     label b0:
-        Self.f1<M1.HasAbilities<M1.NoAbilities, M1.NoAbilities>>();
+        Self::f1<M1::HasAbilities<M1::NoAbilities, M1::NoAbilities>>();
         return;
     }
 }
 
 
 //# publish
-module 0x11.M3Valid {
-    import 0x7.M1;
+module 0x11::M3Valid {
+    import 0x7::M1;
 
     enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
     enum HasCopy<phantom T1, T2> has copy { V{ a: bool }}
@@ -136,17 +136,17 @@ module 0x11.M3Valid {
 }
 
 //# publish
-module 0x12.M5 {
-    import 0x7.M1;
-    import 0x5.M3Valid;
+module 0x12::M5 {
+    import 0x7::M1;
+    import 0x5::M3Valid;
 
     f1<T1: drop, T2: copy, T3: store, T4: key>() { label b0: return; }
     f2() {
     label b0:
-        Self.f1< M3Valid.HasDrop<M1.NoAbilities, M1.NoAbilities>,
-                 M3Valid.HasCopy<M1.NoAbilities, M1.NoAbilities>,
-                 M3Valid.HasStore<M1.NoAbilities, M1.NoAbilities>,
-                 M3Valid.HasKey<M1.NoAbilities, M1.NoAbilities>
+        Self::f1< M3Valid::HasDrop<M1::NoAbilities, M1::NoAbilities>,
+                 M3Valid::HasCopy<M1::NoAbilities, M1::NoAbilities>,
+                 M3Valid::HasStore<M1::NoAbilities, M1::NoAbilities>,
+                 M3Valid::HasKey<M1::NoAbilities, M1::NoAbilities>
                >();
         return;
     }

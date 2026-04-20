@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Tester {
+module 0x1::Tester {
     t() {
         let x: u64;
         let y: u64;
@@ -7,7 +7,7 @@ module 0x1.Tester {
     label b0:
         x = 0;
         y = 0;
-        r1 = Self.foo(&mut x, &mut y);
+        r1 = Self::foo(&mut x, &mut y);
         // cannot copy, data is "owned" by r1. Would violate ref trans
         _ = copy(x);
         return;

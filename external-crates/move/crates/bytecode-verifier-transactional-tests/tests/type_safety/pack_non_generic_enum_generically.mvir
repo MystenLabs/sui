@@ -1,11 +1,11 @@
 //# publish
-module 0x2.O {
+module 0x2::O {
     enum Foo { V { x: u64 } }
 
-    foo(x: u64): Self.Foo {
-        let y: Self.Foo;
+    foo(x: u64): Self::Foo {
+        let y: Self::Foo;
     label b0:
-        y = Foo.V<u64> { x: move(x) };
+        y = Foo::V<u64> { x: move(x) };
         return move(y);
     }
 }

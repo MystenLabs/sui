@@ -6,10 +6,10 @@
 //# init --protocol-version 106
 
 //# publish
-module 0x0.m {
-    import 0x2.tx_context;
+module 0x0::m {
+    import 0x2::tx_context;
 
-    public entry no<T:key>(s: &mut vector<T>, ctx: &mut tx_context.TxContext) {
+    public entry no<T:key>(s: &mut vector<T>, ctx: &mut tx_context::TxContext) {
         label l0:
         abort 0;
     }

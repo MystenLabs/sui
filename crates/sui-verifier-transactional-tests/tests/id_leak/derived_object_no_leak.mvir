@@ -4,19 +4,19 @@
 // valid because we can use `derived_object::claim` without triggering id leak
 
 //# publish
-module 0x0.m {
-    import 0x2.object;
-    import 0x2.derived_object;
-    import 0x2.tx_context;
+module 0x0::m {
+    import 0x2::object;
+    import 0x2::derived_object;
+    import 0x2::tx_context;
 
     struct A has key {
-        id: object.UID
+        id: object::UID
     }
 
-    no_leak(parent: &mut object.UID, ctx: &mut tx_context.TxContext) {
-        let id: object.UID;
+    no_leak(parent: &mut object::UID, ctx: &mut tx_context::TxContext) {
+        let id: object::UID;
         label l0:
-        id = derived_object.claim<u64>(move(parent), 0u64);
+        id = derived_object::claim<u64>(move(parent), 0u64);
         abort 0;
     }
 }

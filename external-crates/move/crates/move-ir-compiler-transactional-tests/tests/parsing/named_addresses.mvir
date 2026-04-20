@@ -1,7 +1,7 @@
 //# init --addresses A=0x1 
 
 //# publish
-module A.T {
+module A::T {
     f() {
         label l0:
         return;
@@ -14,23 +14,23 @@ module A.T {
 }
 
 //# print-bytecode 
-module A.M {
-    import A.T;
+module A::M {
+    import A::T;
     f(): address {
         label l0:
-            T.f();
+            T::f();
             return @A;
     }
 
     h(): address {
         label l0:
-            return T.g(@A);
+            return T::g(@A);
     }
 
     l(): address {
         let t: address;
         label l0:
             t = @A;
-            return T.g(move(t));
+            return T::g(move(t));
     }
 }

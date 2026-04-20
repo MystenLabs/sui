@@ -1,14 +1,14 @@
 //# init --protocol-version 30 --file-format 6
 
 //# publish
-module 0x0.m2 {
-    import 0x2.transfer;
-    import 0x2.object;
+module 0x0::m2 {
+    import 0x2::transfer;
+    import 0x2::object;
 
-    receive_bad<T>(m: &mut object.UID, r: transfer.Receiving<T>): T {
+    receive_bad<T>(m: &mut object::UID, r: transfer::Receiving<T>): T {
         let x: T;
         label l0:
-        x = transfer.receive<T>(move(m), move(r));
+        x = transfer::receive<T>(move(m), move(r));
         return move(x);
     }
 }
@@ -17,14 +17,14 @@ module 0x0.m2 {
 // restriction that `receive` with `key` only constraint can only be called to
 // receive a type defined in the module that defined the type.
 //# publish
-module 0x0.m2 {
-    import 0x2.transfer;
-    import 0x2.object;
+module 0x0::m2 {
+    import 0x2::transfer;
+    import 0x2::object;
 
-    receive_good<T: key>(m: &mut object.UID, r: transfer.Receiving<T>): T {
+    receive_good<T: key>(m: &mut object::UID, r: transfer::Receiving<T>): T {
         let x: T;
         label l0:
-        x = transfer.receive<T>(move(m), move(r));
+        x = transfer::receive<T>(move(m), move(r));
         return move(x);
     }
 }

@@ -4,11 +4,11 @@
 //# init --addresses test=0x0 --protocol-version 48
 
 //# publish
-module 0x0.f {
-    import 0x2.object;
+module 0x0::f {
+    import 0x2::object;
 
     enum X has key {
-        A { id: object.UID } 
+        A { id: object::UID } 
     }
 }
 

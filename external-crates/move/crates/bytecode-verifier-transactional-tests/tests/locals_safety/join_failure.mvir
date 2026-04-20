@@ -1,8 +1,8 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct R { f:bool }
     t0() {
-        let r: Self.R;
+        let r: Self::R;
         let f: bool;
     label b0:
         r = R{ f: false };
@@ -20,10 +20,10 @@ module 0x1.M {
 }
 
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct R { f:bool }
     t0() {
-        let r: Self.R;
+        let r: Self::R;
         let f: bool;
     label b0:
         r = R{ f: false };
@@ -40,10 +40,10 @@ module 0x1.M {
 }
 
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct R { f:bool }
     t0() {
-        let r: Self.R;
+        let r: Self::R;
         let f: bool;
     label b0:
         r = R{ f: false };
@@ -61,10 +61,10 @@ module 0x1.M {
 }
 
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct R has copy, drop { f:bool }
     t0() {
-        let r: Self.R;
+        let r: Self::R;
         let f: bool;
     label b0:
         r = R{ f: false };
@@ -82,11 +82,11 @@ module 0x1.M {
 }
 
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct R { f:bool }
     t0() {
-        let r: Self.R;
-        let ref: &Self.R;
+        let r: Self::R;
+        let ref: &Self::R;
         let f: bool;
     label b0:
         r = R{ f: false };

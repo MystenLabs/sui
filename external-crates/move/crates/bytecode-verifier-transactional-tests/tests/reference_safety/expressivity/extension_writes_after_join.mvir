@@ -2,13 +2,13 @@
 
 //# publish
 
-module 0x2.extension_after_join {
+module 0x2::extension_after_join {
 
 struct S has copy, drop, store { f: u64 }
 
-t(cond: bool, a: &mut Self.S, b: &mut Self.S): &mut Self.S {
-    let x: &mut Self.S;
-    let y: &mut Self.S;
+t(cond: bool, a: &mut Self::S, b: &mut Self::S): &mut Self::S {
+    let x: &mut Self::S;
+    let y: &mut Self::S;
     let f: &mut u64;
 label l0:
     jump_if (move(cond)) l2;

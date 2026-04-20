@@ -1,8 +1,8 @@
 //# publish
-module 0x42.Test {
+module 0x42::Test {
     struct T{fint: u64}
 
-    public t1(): Self.T {
+    public t1(): Self::T {
     label b0:
         // arg type mismatch
         return T{fint: false};
@@ -10,12 +10,12 @@ module 0x42.Test {
 }
 
 //# publish
-module 0x43.Test {
+module 0x43::Test {
     enum T{V {fint: u64} }
 
-    public t1(): Self.T {
+    public t1(): Self::T {
     label b0:
         // arg type mismatch
-        return T.V{fint: false};
+        return T::V{fint: false};
     }
 }

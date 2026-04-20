@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x6.m {
+module 0x6::m {
 // Borrowing a local produces a reference type.
 entry foo() {
     let x: u64;
@@ -13,7 +13,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x7.m {
+module 0x7::m {
 // Borrowing a local reference produces a reference type.
 entry foo() {
     let x: u64;
@@ -28,12 +28,12 @@ label b0:
 }
 
 //# print-bytecode
-module 0x1d4.M {
+module 0x1d4::M {
     struct T { u: u64 }
 
     // An immutable borrow, of a field on an immutable reference to a struct,
     // produces an immutable reference type.
-    f(t: &Self.T) {
+    f(t: &Self::T) {
         let r: &u64;
     label b0:
         r = &move(t).T::u;
@@ -43,7 +43,7 @@ module 0x1d4.M {
 
     // An immutable borrow, of a field on a mutable reference to a struct,
     // produces an immutable reference type.
-    g(t: &mut Self.T) {
+    g(t: &mut Self::T) {
         let r: &u64;
     label b0:
         r = &move(t).T::u;
@@ -53,7 +53,7 @@ module 0x1d4.M {
 
     // A mutable borrow, of a field on a mutable reference to a struct,
     // produces an mutable reference type.
-    public h(t: &mut Self.T) {
+    public h(t: &mut Self::T) {
         let r: &mut u64;
     label b0:
         r = &mut move(t).T::u;
@@ -63,10 +63,10 @@ module 0x1d4.M {
 }
 
 //# print-bytecode
-module 0x2d4.M {
+module 0x2d4::M {
     struct T<U> { u: U }
 
-    f(t: &Self.T<u64>) {
+    f(t: &Self::T<u64>) {
         let r: &u64;
     label b0:
         r = &move(t).T<u64>::u;
@@ -74,7 +74,7 @@ module 0x2d4.M {
         return;
     }
 
-    g(t: &mut Self.T<u128>) {
+    g(t: &mut Self::T<u128>) {
         let r: &u128;
     label b0:
         r = &move(t).T<u128>::u;
@@ -84,10 +84,10 @@ module 0x2d4.M {
 }
 
 //# publish
-module 0x3d4.M {
+module 0x3d4::M {
     struct T has key { b: bool }
 
-    public new(): Self.T {
+    public new(): Self::T {
     label b0:
         return T { b: true };
     }
@@ -97,28 +97,28 @@ module 0x3d4.M {
 //# print-bytecode
 // Attempting an immutable borrow of the field of a struct type defined in a
 // separate module is invalid.
-module 0x3d4.N {
-    import 0x1.signer;
-    import 0x3d4.M;
+module 0x3d4::N {
+    import 0x1::signer;
+    import 0x3d4::M;
 
     f(account: signer) {
-        let t: M.T;
+        let t: M::T;
         let r: &bool;
     label b0:
-        t = M.new();
+        t = M::new();
         _ = &(&mut t).T::b;
         return;
     }
 }
 
 //# print-bytecode
-module 0x8.m {
-import 0x3d4.M;
+module 0x8::m {
+import 0x3d4::M;
 entry foo(account: signer) {
-    let t: M.T;
+    let t: M::T;
     let r: &bool;
 label b0:
-    t = M.new();
+    t = M::new();
     _ = &(&mut t).T::b;
     return;
 }
@@ -127,27 +127,27 @@ label b0:
 //# print-bytecode
 // Attempting a mutable borrow of the field of a struct type defined in a
 // separate module is invalid.
-module 0x3d4.O {
-    import 0x1.signer;
-    import 0x3d4.M;
+module 0x3d4::O {
+    import 0x1::signer;
+    import 0x3d4::M;
 
     f(account: signer) {
-        let t: M.T;
+        let t: M::T;
         let r: &bool;
     label b0:
-        t = M.new();
+        t = M::new();
         _ = &mut (&mut t).T::b;
         return;
     }
 }
 
 //# print-bytecode
-module 0x9.m {
+module 0x9::m {
 entry foo(account: signer) {
-    let t: M.T;
+    let t: M::T;
     let r: &bool;
 label b0:
-    t = M.new();
+    t = M::new();
     _ = &mut (&mut t).T::b;
     return;
 }

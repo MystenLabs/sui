@@ -4,14 +4,14 @@
 // Incorrect -- using an enum
 
 //# publish
-module 0x0.m {
-    import 0x2.tx_context;
+module 0x0::m {
+    import 0x2::tx_context;
 
     enum OTHER has drop { 
         V { }
     }
 
-    init(_otw: Self.OTHER, _ctx: &mut tx_context.TxContext) {
+    init(_otw: Self::OTHER, _ctx: &mut tx_context::TxContext) {
         label l0:
         return;
     }

@@ -1,6 +1,6 @@
 //# publish
 
-module 0x2.vector_ops_mixed_borrow {
+module 0x2::vector_ops_mixed_borrow {
 
 foo(m: &mut u8) { label  l0: return; }
 
@@ -10,7 +10,7 @@ public test(v: &mut vector<u8>) {
 label l0:
     m = vec_mut_borrow<u8>(copy(v), 0);
     i = vec_imm_borrow<u8>(move(v), 0);
-    Self.foo(move(m));
+    Self::foo(move(m));
     _ = *move(i);
     return;
 

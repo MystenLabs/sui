@@ -3,31 +3,31 @@
 
 //# publish
 // allowed, even though a bit pointless
-module 0x0.m {
-    import 0x2.object;
-    import 0x2.tx_context;
-    import 0x2.transfer;
+module 0x0::m {
+    import 0x2::object;
+    import 0x2::tx_context;
+    import 0x2::transfer;
 
     struct Obj has key {
-        id: object.UID,
+        id: object::UID,
     }
 
-    public entry transmute(ctx: &mut tx_context.TxContext) {
-        let id: object.UID;
-        let obj: Self.Obj;
+    public entry transmute(ctx: &mut tx_context::TxContext) {
+        let id: object::UID;
+        let obj: Self::Obj;
         let i: u64;
         label l0:
         i = 0;
-        id = object.new(copy(ctx));
+        id = object::new(copy(ctx));
         label loop_start:
             jump_if (copy(i) > 10) loop_end;
-            object.delete(move(id));
-            id = object.new(copy(ctx));
+            object::delete(move(id));
+            id = object::new(copy(ctx));
             i = move(i) + 1;
             jump loop_start;
         label loop_end:
         obj = Obj { id: move(id) };
-        transfer.transfer<Self.Obj>(move(obj), tx_context.sender(freeze(copy(ctx))));
+        transfer::transfer<Self::Obj>(move(obj), tx_context::sender(freeze(copy(ctx))));
         return;
     }
 

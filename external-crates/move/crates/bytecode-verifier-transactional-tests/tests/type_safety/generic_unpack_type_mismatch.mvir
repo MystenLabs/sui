@@ -1,5 +1,5 @@
 //# publish
-module 0x1.O {
+module 0x1::O {
     struct Foo<T1: copy + drop, T2> { x: T1, y: T2 }
 
     foo() {
@@ -13,7 +13,7 @@ module 0x1.O {
 }
 
 //# publish
-module 0x2.O {
+module 0x2::O {
     enum Foo<T1: copy + drop, T2> { V { x: T1, y: T2 } }
 
     foo() {
@@ -21,7 +21,7 @@ module 0x2.O {
         let y: bool;
     label b0:
         // invalid
-        Foo.V<bool, bool> { x: x, y: y }  = Foo.V<u64, bool> { x: 42, y: true };
+        Foo::V<bool, bool> { x: x, y: y }  = Foo::V<u64, bool> { x: 42, y: true };
         return;
     }
 }

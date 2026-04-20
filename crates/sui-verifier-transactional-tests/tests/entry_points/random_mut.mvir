@@ -4,10 +4,10 @@
 // invalid, Random by mutable reference
 
 //# publish
-module 0x0.m {
-    import 0x2.random;
+module 0x0::m {
+    import 0x2::random;
 
-    public entry no_random_mut(l0: &mut random.Random) {
+    public entry no_random_mut(l0: &mut random::Random) {
         label l0:
         abort 0;
     }
