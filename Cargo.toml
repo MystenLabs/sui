@@ -299,7 +299,6 @@ async-stream = "0.3.6"
 async-trait = "0.1.61"
 atomic_float = "0.1"
 aws-config = { version = "1.8", features = ["behavior-version-latest"] }
-aws-sdk-dynamodb = "1.101"
 aws-sdk-kms = { version = "1.97", default-features = false, features = ["rt-tokio"] }
 axum = { version = "0.8", default-features = false, features = [
   "macros",
@@ -324,7 +323,6 @@ backoff = { version = "0.4.0", features = [
   "tokio",
   "tokio_1",
 ] }
-backon = "1.4.0"
 base64 = "0.21.2"
 base64-url = "2"
 bcs = "0.1.4"
@@ -340,8 +338,6 @@ cfg-if = "1.0.0"
 chrono = { version = "0.4.44", features = ["clock", "serde"] }
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
 clap_complete = "4.4"
-codespan-reporting = "0.11.1"
-collectable = "0.0.2"
 colored = "2.0.0"
 comfy-table = "6.1.3"
 console-subscriber = "0.4.1"
@@ -360,7 +356,6 @@ dashmap = "5.5.3"
 # datatest-stable = "0.1.2"
 datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f" }
 derive-syn-parse = "0.1.5"
-derive_builder = "0.12.0"
 derive_more = "1.0.0"
 diesel = "2.2"
 diesel_migrations = "2.2"
@@ -370,7 +365,6 @@ duration-str = "0.5.0"
 ed25519 = { version = "2", features = ["pkcs8", "alloc", "zeroize"] }
 ed25519-consensus = { version = "2.0.1", features = ["serde"] }
 either = "1.8.0"
-petgraph = "0.5.1"
 enum_dispatch = "^0.3"
 expect-test = "1.4.0"
 eyre = "0.6.8"
@@ -380,14 +374,11 @@ fs_extra = "1.3.0"
 futures = "0.3.28"
 futures-core = "0.3.21"
 git-version = "0.3.5"
-glob = "0.3.1"
 governor = "0.6.0"
 gcp_auth = "0.12.6"
-hashbrown = "0.12"
 hdrhistogram = "7.5.1"
 headers = "0.4.0"
 hex = "0.4.3"
-hex-literal = "0.3.4"
 http = "1"
 http-body = "1"
 humantime = "2.1.0"
@@ -401,7 +392,6 @@ hyper-rustls = { version = "0.27", default-features = false, features = [
   "tls12",
 ] }
 im = "15"
-impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "2.8.0", features = ["serde"] }
 indoc = "2.0.6"
 indicatif = "0.18.3"
@@ -409,7 +399,6 @@ inquire = "0.6.0"
 insta = { version = "1.46.2", features = ["redactions", "yaml", "json"] }
 insta-cmd = "0.6.0"
 integer-encoding = "3.0.1"
-ipnetwork = "0.20.0"
 iso8601 = "0.6.3"
 itertools = "0.13.0"
 tikv-jemalloc-ctl = "^0.5"
@@ -427,7 +416,6 @@ jsonrpsee = { version = "0.24.9", features = [
 json_to_table = { git = "https://github.com/zhiburt/tabled/", rev = "e449317a1c02eb6b29e409ad6617e5d9eb7b3bd4" }
 leb128 = "0.2.5"
 lru = "0.10"
-match_opt = "0.1.2"
 miette = { version = "7", features = ["fancy"] }
 mime = "0.3"
 mockall = "0.11.4"
@@ -444,7 +432,6 @@ nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce5
 nonempty = { version = "0.9.0", features = ["serialize"] }
 nonzero_ext = "0.3.0"
 notify = "6.1.1"
-ntest = "0.9.0"
 num-bigint = "0.4.4"
 num_cpus = "1.15.0"
 num_enum = "0.6.1"
@@ -489,16 +476,12 @@ reqwest = { version = "0.12", default-features = false, features = [
 roaring = "0.10.6"
 ron = "0.8.0"
 rstest = "0.16.0"
-rust-version = "1.56.1"
 rustls = { version = "0.23", default-features = false, features = [
   "std",
   "tls12",
   "ring",
 ] }
 rustls-pki-types = "1.11"
-rustversion = "1.0.9"
-rustyline = "9.1.2"
-rustyline-derive = "0.7.0"
 schemars = { version = "0.8.21", features = ["either"] }
 scoped-futures = "0.1.3"
 scopeguard = "1.1"
@@ -508,12 +491,9 @@ serde-name = "0.2.1"
 serde-reflection = "0.5"
 serde_json = { version = "1.0.95", features = ["preserve_order"] }
 serde_repr = "0.1"
-serde_spanned = "0.6.8"
-serde_test = "1.0.147"
 serde_with = "3.8"
 # serde_yaml = "0.9.21"
 serde_yaml = "0.8.26"
-shell-words = "1.1.0"
 shellexpand = "3.1.0"
 signature = "1.6.0"
 similar = "2.4.0"
@@ -528,7 +508,6 @@ strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
 syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
 # syn = { version = "2", features = ["full", "fold", "extra-traits"] }
-synstructure = "0.12"
 sysinfo = "0.35.2"
 tabled = { version = "0.12" }
 tap = "1.0.1"
@@ -539,7 +518,6 @@ thiserror = "1.0.40"
 timeout-tracing = "0.1.2"
 tiny-bip39 = "1.0.0"
 tokio = "=1.49.0"
-tokio-retry = "0.3"
 tokio-rustls = { version = "0.26", default-features = false, features = [
   "tls12",
   "ring",
@@ -590,7 +568,6 @@ tracing-subscriber = { version = "0.3.22", default-features = false, features = 
   "registry",
   "env-filter",
 ] }
-ttl_cache = "0.5.1"
 uint = "0.10.0"
 unescape = "0.1.0"
 ureq = "2.9.1"
@@ -606,9 +583,7 @@ winnow = "0.7"
 wiremock = "0.5"
 x509-parser = { version = "0.17.0", features = ["verify"] }
 zstd = "0.12.3"
-zeroize = "1.6.0"
 versions = "4.1.0"
-linked-hash-map = "0.5.6"
 shlex = "1.3.0"
 starlark = "0.13.0"
 
@@ -622,7 +597,6 @@ move-cli = { path = "external-crates/move/crates/move-cli" }
 move-compiler = { path = "external-crates/move/crates/move-compiler" }
 move-core-types = { path = "external-crates/move/crates/move-core-types" }
 move-disassembler = { path = "external-crates/move/crates/move-disassembler" }
-move-package = { path = "external-crates/move/crates/move-package" }
 move-package-alt = { path = "external-crates/move/crates/move-package-alt" }
 move-package-alt-compilation = { path = "external-crates/move/crates/move-package-alt-compilation" }
 move-unit-test = { path = "external-crates/move/crates/move-unit-test" }
@@ -631,10 +605,7 @@ move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
 move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
-move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
-move-stackless-bytecode-2 = { path = "external-crates/move/crates/move-stackless-bytecode-2" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
-move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
@@ -670,7 +641,6 @@ sui-crypto = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "e4
 sui-rpc = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "e494a36a76a0aab8c5d66d5557995faee5c1fb09" }
 
 ### Workspace Members ###
-anemo-benchmark = { path = "crates/anemo-benchmark" }
 bin-version = { path = "crates/bin-version" }
 mysten-common = { path = "crates/mysten-common" }
 mysten-metrics = { path = "crates/mysten-metrics" }
@@ -679,23 +649,15 @@ mysten-service = { path = "crates/mysten-service" }
 prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
 shared-crypto = { path = "crates/shared-crypto" }
 simulacrum = { path = "crates/simulacrum" }
-sui = { path = "crates/sui" }
-sui-adapter-transactional-tests = { path = "crates/sui-adapter-transactional-tests" }
-sui-analytics-indexer = { path = "crates/sui-analytics-indexer" }
 sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
 sui-authority-aggregation = { path = "crates/sui-authority-aggregation" }
-sui-benchmark = { path = "crates/sui-benchmark" }
 sui-bridge = { path = "crates/sui-bridge" }
 sui-bridge-schema = { path = "crates/sui-bridge-schema" }
-sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
-sui-cost = { path = "crates/sui-cost" }
-sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-data-store = { path = "crates/sui-data-store" }
 sui-default-config = { path = "crates/sui-default-config" }
 sui-display = { path = "crates/sui-display" }
-sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
 sui-field-count = { path = "crates/sui-field-count" }
@@ -703,7 +665,6 @@ sui-field-count-derive = { path = "crates/sui-field-count-derive" }
 sui-futures = { path = "crates/sui-futures" }
 sui-framework = { path = "crates/sui-framework" }
 sui-framework-snapshot = { path = "crates/sui-framework-snapshot" }
-sui-framework-tests = { path = "crates/sui-framework-tests" }
 sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-http = { path = "crates/sui-http" }
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
@@ -726,11 +687,9 @@ sui-kvstore = { path = "crates/sui-kvstore" }
 sui-kv-rpc = { path = "crates/sui-kv-rpc" }
 sui-light-client = { path = "crates/sui-light-client" }
 sui-macros = { path = "crates/sui-macros" }
-sui-metric-checker = { path = "crates/sui-metric-checker" }
 sui-metrics-push-client = { path = "crates/sui-metrics-push-client" }
 sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
-sui-move-lsp = { path = "crates/sui-move-lsp" }
 sui-name-service = { path = "crates/sui-name-service" }
 sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
@@ -744,11 +703,8 @@ sui-pg-db = { path = "crates/sui-pg-db" }
 sui-proc-macros = { path = "crates/sui-proc-macros" }
 sui-protocol-config = { path = "crates/sui-protocol-config" }
 sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }
-sui-proxy = { path = "crates/sui-proxy" }
 sui-replay = { path = "crates/sui-replay" }
 sui-replay-2 = { path = "crates/sui-replay-2" }
-sui-rosetta = { path = "crates/sui-rosetta" }
-sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
 sui-sdk = { path = "crates/sui-sdk" }
 sui-simulator = { path = "crates/sui-simulator" }
 sui-snapshot = { path = "crates/sui-snapshot" }
@@ -761,7 +717,6 @@ sui-swarm-config = { path = "crates/sui-swarm-config" }
 sui-synthetic-ingestion = { path = "crates/sui-synthetic-ingestion" }
 sui-telemetry = { path = "crates/sui-telemetry" }
 sui-test-transaction-builder = { path = "crates/sui-test-transaction-builder" }
-sui-test-validator = { path = "crates/sui-test-validator" }
 sui-tls = { path = "crates/sui-tls" }
 sui-rpc-api = { path = "crates/sui-rpc-api" }
 sui-rpc-resolver = { path = "crates/sui-rpc-resolver" }
@@ -770,19 +725,14 @@ sui-transaction-builder = { path = "crates/sui-transaction-builder" }
 sui-transaction-checks = { path = "crates/sui-transaction-checks" }
 sui-transactional-test-runner = { path = "crates/sui-transactional-test-runner" }
 sui-types = { path = "crates/sui-types" }
-sui-upgrade-compatibility-transactional-tests = { path = "crates/sui-upgrade-compatibility-transactional-tests" }
-sui-verifier-transactional-tests = { path = "crates/sui-verifier-transactional-tests" }
 telemetry-subscribers = { path = "crates/telemetry-subscribers" }
 test-cluster = { path = "crates/test-cluster" }
-transaction-fuzzer = { path = "crates/transaction-fuzzer" }
 typed-store = { path = "crates/typed-store" }
 typed-store-error = { path = "crates/typed-store-error" }
-x = { path = "crates/x" }
 
 consensus-config = { path = "consensus/config" }
 consensus-core = { path = "consensus/core" }
 consensus-types = { path = "consensus/types" }
-consensus-simtests = { path = "consensus/simtests" }
 
 sui-execution = { path = "sui-execution" }
 # sui-move-natives = { path = "sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
