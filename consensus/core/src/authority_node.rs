@@ -392,7 +392,7 @@ where
                 synchronizer.clone(),
                 core_dispatcher.clone(),
                 signals_receivers.block_broadcast_receiver(),
-                transaction_vote_tracker,
+                transaction_vote_tracker.clone(),
                 dag_state.clone(),
                 store.clone(),
             ));

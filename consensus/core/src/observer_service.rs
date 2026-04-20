@@ -318,11 +318,8 @@ mod tests {
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let block_verifier = Arc::new(NoopBlockVerifier);
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let transaction_vote_tracker = TransactionVoteTracker::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-        );
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
 
         let observer_service = ObserverService::new(
             context.clone(),
@@ -391,11 +388,8 @@ mod tests {
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
         let block_verifier = Arc::new(NoopBlockVerifier);
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
-        let transaction_vote_tracker = TransactionVoteTracker::new(
-            context.clone(),
-            block_verifier.clone(),
-            dag_state.clone(),
-        );
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
 
         let observer_service = ObserverService::new(
             context.clone(),
