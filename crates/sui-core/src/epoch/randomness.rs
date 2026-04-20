@@ -822,10 +822,7 @@ mod tests {
             test_authority_builder::TestAuthorityBuilder,
         },
         checkpoints::CheckpointStore,
-        consensus_adapter::{
-            ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
-            MockConsensusClient,
-        },
+        consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, MockConsensusClient},
         epoch::randomness::*,
         mock_consensus::with_block_status,
     };
@@ -885,13 +882,9 @@ mod tests {
                 Arc::new(mock_consensus_client),
                 CheckpointStore::new_for_tests(),
                 state.name,
-                Arc::new(ConnectionMonitorStatusForTests {}),
                 100_000,
                 100_000,
-                None,
-                None,
                 ConsensusAdapterMetrics::new_test(),
-                state.epoch_store_for_testing().protocol_config().clone(),
             ));
             let epoch_store = state.epoch_store_for_testing();
             let randomness_manager = RandomnessManager::try_new(
@@ -1037,13 +1030,9 @@ mod tests {
                 Arc::new(mock_consensus_client),
                 CheckpointStore::new_for_tests(),
                 state.name,
-                Arc::new(ConnectionMonitorStatusForTests {}),
                 100_000,
                 100_000,
-                None,
-                None,
                 ConsensusAdapterMetrics::new_test(),
-                state.epoch_store_for_testing().protocol_config().clone(),
             ));
             let epoch_store = state.epoch_store_for_testing();
             let randomness_manager = RandomnessManager::try_new(

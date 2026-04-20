@@ -44,6 +44,7 @@ sui-package-resolver.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 sui-transaction-builder.workspace = true
+sui-transaction-checks.workspace = true
 sui-display.workspace = true
 
 # dependencies for the protobuf definitions

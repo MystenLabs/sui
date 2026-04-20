@@ -1,0 +1,62 @@
+---
+title: Object Versioning
+sidebar_label: Versioning
+description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty.
+keywords: ['object versioning', 'Lamport timestamps', 'fastpath', 'consensus objects', 'object ownership', 'dynamic fields', 'wrapped objects', 'Sui objects']
+---
+
+Every object stored onchain is referenced by an ID and version. When a transaction modifies an object, it writes the new contents to an onchain reference with the same ID but a new version. Despite appearing multiple times in the store, only the latest version of an object is available to transactions. Only one transaction can modify an object at a given version, guaranteeing a linear history.
+
+```
+(I, v0) => ...
+(I, v1) => ...  # v0 < v1
+(I, v2) => ...  # v1 < v2
+```
+
+Versions are strictly increasing and (`ID`, `version`) pairs are never re-used. This allows [node operators](/operators) to prune old object versions from their stores, though they might also retain them to serve historical requests or help other nodes catch up.
+
+## Object versioning paths
+
+Objects on Sui are versioned either through the [fastpath](#fastpath-objects) or through [consensus](/develop/sui-architecture/consensus). The choice affects object ownership options and has performance trade-offs.
+
+Sui uses [Lamport timestamps](https://en.wikipedia.org/wiki/Lamport_timestamp) in its versioning algorithm. This guarantees versions are never re-used: a transaction sets the new version for all objects it touches to `1 + max(version of all input objects)`. For example, a transaction transferring object `O` at version 5 using gas object `G` at version 3 updates both to version `1 + max(5, 3) = 6`.
+
+## Fastpath objects
+
+:::tip
+
+It is recommended to use [party objects](/develop/objects/object-ownership/party) rather than fastpath objects.
+
+:::
+
+Fastpath objects can only be [address-owned](/develop/objects/object-ownership/address-owned) or [immutable](/develop/objects/object-ownership/immutable). Transactions using fastpath benefit from low latency and fast finality because they bypass consensus.
+
+Every fastpath transaction must lock the object's current version as input and use the output version as the reference for the next transaction. If a fastpath object is frequently used by multiple senders, there is a risk of equivocating or locking the object until the end of the epoch, so you must coordinate offchain access carefully.
+
+:::info
+
+Only an object's owner can equivocate it. You can avoid equivocation by never attempting to execute two different transactions that use the same object. If you don't receive a definite success or failure from the network for a transaction, assume it might have gone through and do not re-use any of its objects for different transactions. All locks reset at the end of the epoch, freeing equivocated objects again.
+
+:::
+
+You must reference fastpath transaction inputs at a specific ID and version. When a validator signs a transaction with an address-owned input at a specific version, that version is locked to that transaction. Validators reject other transactions requiring the same input. [Immutable](/develop/objects/object-ownership/immutable) objects are also referenced at a specific version, but do not need to be locked because their contents never change. Their version identifies the point at which they became immutable.
+
+Fastpath is a good fit for applications that are extremely sensitive to latency or gas costs, do not need complex multi-party transactions, or already rely on an offchain coordination service.
+
+## Consensus objects
+
+Consensus objects can be [address-owned](/develop/objects/object-ownership/address-owned), owned by a [party](/develop/objects/object-ownership/party), or [shared](/develop/objects/object-ownership/shared). Transactions that access one or more consensus objects require consensus to sequence reads and writes, which means higher gas cost and latency compared to fastpath, but version management is simpler, especially for frequently accessed or multi-party objects.
+
+Transactions accessing multiple consensus objects or particularly popular objects might see increased latency due to contention. The trade-off is flexibility: multiple addresses can access the same object in a coordinated way without offchain coordination.
+
+You reference [shared](/develop/objects/object-ownership/shared) transaction inputs by ID, the version the object was shared at, and a flag indicating whether it is accessed mutably. You don't specify the precise access version because consensus determines that during scheduling, one transaction's output version becomes the next transaction's input version. Immutably referenced shared objects participate in scheduling but don't increment the object's version.
+
+Consensus is a good fit for applications that require coordination between multiple parties.
+
+## Wrapped and dynamic field objects
+
+[Wrapped](/develop/objects/object-ownership/wrapped) objects are not accessible by their ID in the object store, you must access them through the object that wraps them. You do not need to supply a wrapped object's ID or version as transaction input. Validators refuse to sign transactions that specify wrapped objects directly as inputs.
+
+Wrapped objects can be unwrapped, after which they are accessible by their ID again. An object retains its ID across all wrap and unwrap events. Lamport timestamp versioning ensures the version at unwrap is always greater than the version at wrap.
+
+[Dynamic fields](/develop/objects/dynamic-fields) behave similarly: they are only accessible through their parent object and do not need to be supplied as transaction inputs. However, unlike wrapped objects, if a transaction modifies a dynamic object field, its version is incremented in that transaction. Lamport versioning also ensures that when a field is removed and re-added with the same name, the new `Field` object's version is strictly greater than the deleted one's, so (`ID`, `version`) pairs are never reused.

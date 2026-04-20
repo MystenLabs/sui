@@ -10,6 +10,11 @@
 //!      - checkpoints/
 //!          - latest (contains the latest checkpoint sequence number)
 //!          - {checkpoint} (contains the checkpoint data in BCS format)
+//!      - transactions/
+//!          - {tx_digest}/
+//!              - data    (BCS-encoded Transaction envelope)
+//!              - effects (BCS-encoded TransactionEffects)
+//!              - events  (BCS-encoded TransactionEvents)
 
 use std::fs;
 use std::path::Path;
@@ -21,8 +26,13 @@ use anyhow::anyhow;
 use anyhow::bail;
 
 use sui_types::base_types::ObjectID;
+use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffects;
+use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::VerifiedTransaction;
 
 use crate::Node;
 
@@ -32,6 +42,14 @@ const DATA_STORE_DIR: &str = ".forking_data_store";
 const OBJECTS_DIR: &str = "objects";
 /// Per-chain checkpoint storage directory.
 const CHECKPOINTS_DIR: &str = "checkpoints";
+/// Per-chain transaction storage directory.
+const TRANSACTIONS_DIR: &str = "transactions";
+/// Filename for the BCS-encoded transaction data within a transaction directory.
+const TX_DATA_FILE: &str = "data";
+/// Filename for the BCS-encoded transaction effects within a transaction directory.
+const TX_EFFECTS_FILE: &str = "effects";
+/// Filename for the BCS-encoded transaction events within a transaction directory.
+const TX_EVENTS_FILE: &str = "events";
 /// Marker file for the latest checkpoint sequence known to the store.
 const LATEST_FILE: &str = "latest";
 
@@ -81,6 +99,84 @@ impl FilesystemStore {
     /// Return the directory path for storing checkpoint data.
     fn checkpoints_dir(&self) -> PathBuf {
         self.root.join(CHECKPOINTS_DIR)
+    }
+
+    /// Return the directory path for storing transaction data.
+    fn transactions_dir(&self) -> PathBuf {
+        self.root.join(TRANSACTIONS_DIR)
+    }
+
+    /// Return the directory for a specific transaction.
+    fn transaction_dir(&self, digest: &TransactionDigest) -> PathBuf {
+        self.transactions_dir().join(digest.to_string())
+    }
+
+    /// Persist a verified transaction to disk under `transactions/{digest}/data`. The underlying
+    /// `Transaction` envelope is what gets serialized; the verified marker is reapplied on read.
+    pub(crate) fn write_transaction(
+        &self,
+        digest: &TransactionDigest,
+        transaction: &VerifiedTransaction,
+    ) -> Result<(), Error> {
+        let path = self.transaction_dir(digest).join(TX_DATA_FILE);
+        self.write_bcs_file(&path, transaction.inner())
+    }
+
+    /// Persist transaction effects to disk under `transactions/{digest}/effects`.
+    pub(crate) fn write_transaction_effects(
+        &self,
+        digest: &TransactionDigest,
+        effects: &TransactionEffects,
+    ) -> Result<(), Error> {
+        let path = self.transaction_dir(digest).join(TX_EFFECTS_FILE);
+        self.write_bcs_file(&path, effects)
+    }
+
+    /// Persist transaction events to disk under `transactions/{digest}/events`.
+    pub(crate) fn write_transaction_events(
+        &self,
+        digest: &TransactionDigest,
+        events: &TransactionEvents,
+    ) -> Result<(), Error> {
+        let path = self.transaction_dir(digest).join(TX_EVENTS_FILE);
+        self.write_bcs_file(&path, events)
+    }
+
+    /// Read a previously persisted transaction. Returns `None` if the transaction is not on disk.
+    pub(crate) fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<VerifiedTransaction>, Error> {
+        let path = self.transaction_dir(digest).join(TX_DATA_FILE);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let inner: Transaction = self.read_bcs_file(&path)?;
+        Ok(Some(VerifiedTransaction::new_unchecked(inner)))
+    }
+
+    /// Read previously persisted transaction effects. Returns `None` if not on disk.
+    pub(crate) fn get_transaction_effects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEffects>, Error> {
+        let path = self.transaction_dir(digest).join(TX_EFFECTS_FILE);
+        if !path.exists() {
+            return Ok(None);
+        }
+        self.read_bcs_file(&path).map(Some)
+    }
+
+    /// Read previously persisted transaction events. Returns `None` if not on disk.
+    pub(crate) fn get_transaction_events(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEvents>, Error> {
+        let path = self.transaction_dir(digest).join(TX_EVENTS_FILE);
+        if !path.exists() {
+            return Ok(None);
+        }
+        self.read_bcs_file(&path).map(Some)
     }
 
     /// Get the latest object version available on disk for the given object ID.
@@ -186,6 +282,8 @@ mod tests {
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SequenceNumber;
     use sui_types::digests::TransactionDigest;
+    use sui_types::effects::TransactionEffects;
+    use sui_types::effects::TransactionEvents;
     use sui_types::object::MoveObject;
     use sui_types::object::Object;
     use sui_types::object::ObjectInner;
@@ -282,5 +380,37 @@ mod tests {
         fs::create_dir_all(store.checkpoints_dir()).unwrap();
         let err = store.get_highest_checkpoint_sequence_number().unwrap_err();
         assert!(err.to_string().contains("Latest file not found"));
+    }
+
+    #[test]
+    fn test_write_and_read_transaction_effects() {
+        let (_dir, store) = test_store();
+        let digest = TransactionDigest::random();
+        let effects = TransactionEffects::default();
+
+        store.write_transaction_effects(&digest, &effects).unwrap();
+        let loaded = store.get_transaction_effects(&digest).unwrap();
+        assert_eq!(loaded.unwrap(), effects);
+    }
+
+    #[test]
+    fn test_write_and_read_transaction_events() {
+        let (_dir, store) = test_store();
+        let digest = TransactionDigest::random();
+        let events = TransactionEvents { data: vec![] };
+
+        store.write_transaction_events(&digest, &events).unwrap();
+        let loaded = store.get_transaction_events(&digest).unwrap();
+        assert_eq!(loaded.unwrap(), events);
+    }
+
+    #[test]
+    fn test_get_transaction_returns_none_for_unknown_digest() {
+        let (_dir, store) = test_store();
+        let digest = TransactionDigest::random();
+
+        assert!(store.get_transaction(&digest).unwrap().is_none());
+        assert!(store.get_transaction_effects(&digest).unwrap().is_none());
+        assert!(store.get_transaction_events(&digest).unwrap().is_none());
     }
 }

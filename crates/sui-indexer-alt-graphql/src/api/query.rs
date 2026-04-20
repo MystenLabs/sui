@@ -70,6 +70,7 @@ use crate::api::types::zklogin::ZkLoginIntentScope;
 use crate::api::types::zklogin::ZkLoginVerifyResult;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
+use crate::error::feature_unavailable;
 use crate::error::upcast;
 use crate::pagination::Page;
 use crate::pagination::PaginationConfig;
@@ -757,7 +758,9 @@ impl Query {
         checks_enabled: Option<bool>,
         do_gas_selection: Option<bool>,
     ) -> Result<SimulationResult, RpcError<TransactionInputError>> {
-        let fullnode_client: &FullnodeClient = ctx.data()?;
+        let Some(fullnode_client) = ctx.data_opt::<FullnodeClient>() else {
+            return Err(feature_unavailable("simulating transactions"));
+        };
 
         // Convert Json to serde_json::Value and parse as proto::Transaction
         let json_value: serde_json::Value = transaction

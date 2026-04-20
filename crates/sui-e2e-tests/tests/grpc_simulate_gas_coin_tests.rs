@@ -77,7 +77,6 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
     let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg
         }))
@@ -617,7 +616,6 @@ async fn test_combined_ab_and_coins_needed() {
     let test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg
         }))

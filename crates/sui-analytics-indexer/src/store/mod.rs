@@ -23,13 +23,8 @@ use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::Context;
 use async_trait::async_trait;
-use object_store::Error as ObjectStoreError;
 use object_store::ObjectStore;
-use object_store::ObjectStoreExt as _;
-use object_store::PutMode;
-use object_store::PutOptions;
 use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
 use scoped_futures::ScopedBoxFuture;
@@ -49,6 +44,7 @@ use tracing::warn;
 use crate::config::FileFormat;
 use crate::config::IndexerConfig;
 use crate::handlers::CheckpointRows;
+use crate::handlers::system_package_eviction::SYSTEM_PACKAGE_EVICTION_PIPELINE;
 use crate::metrics::Metrics;
 use crate::schema::RowSchema;
 
@@ -154,6 +150,12 @@ pub struct AnalyticsStore {
     config: IndexerConfig,
     /// Schema for each pipeline, registered during pipeline setup.
     schemas_by_pipeline: Arc<RwLock<HashMap<String, &'static [&'static str]>>>,
+    /// Committer watermarks for pipelines whose `committer_watermark` has already been
+    /// invoked during framework registration, keyed by pipeline name. Populated as a
+    /// side effect of each call. `SystemPackageEviction` (registered last in
+    /// `build_analytics_indexer`) reads from this map to derive its own watermark as the
+    /// max across other pipelines — so the cache doubles as the set of enabled pipelines.
+    initial_watermarks: Arc<tokio::sync::Mutex<HashMap<String, Option<CommitterWatermark>>>>,
 }
 
 /// Connection to the analytics store.
@@ -283,6 +285,7 @@ impl AnalyticsStore {
             worker_handles: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             config,
             schemas_by_pipeline: Arc::new(RwLock::new(HashMap::new())),
+            initial_watermarks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -657,54 +660,60 @@ impl Connection for AnalyticsConnection<'_> {
         pipeline_task: &str,
         chain_id: [u8; 32],
     ) -> anyhow::Result<bool> {
-        let object_store = self.store.mode.object_store();
-        let path = chain_id_path(pipeline_task);
-
-        // Try to claim the path with a conditional create first. If it doesn't exist,
-        // we win the race and accept. If it already exists, fall back to read + compare.
-        match object_store
-            .put_opts(
-                &path,
-                chain_id.to_vec().into(),
-                PutOptions {
-                    mode: PutMode::Create,
-                    ..Default::default()
-                },
-            )
-            .await
-        {
-            Ok(_) => Ok(true),
-            Err(ObjectStoreError::AlreadyExists { .. }) => {
-                let bytes = object_store.get(&path).await?.bytes().await?;
-                let stored: [u8; 32] = bytes.as_ref().try_into().ok().with_context(|| {
-                    format!(
-                        "stored chain_id at {} has wrong length: {}",
-                        path,
-                        bytes.len()
-                    )
-                })?;
-                Ok(stored == chain_id)
-            }
-            Err(e) => Err(e.into()),
-        }
+        sui_indexer_alt_object_store::accepts_chain_id(
+            self.store.mode.object_store().as_ref(),
+            pipeline_task,
+            chain_id,
+        )
+        .await
     }
 
     /// Determine the watermark.
     ///
     /// In live mode: scans file names in the object store.
     /// In migration mode: reads from watermark metadata file.
+    ///
+    /// `SystemPackageEviction` is a pseudohandler that never writes files, so its
+    /// watermark cannot be derived from its own `output_prefix`. It is always registered
+    /// last in `build_analytics_indexer`, so by the time this fires for it, each other
+    /// pipeline's watermark has already been computed and cached in `initial_watermarks`.
+    /// Return the max across those pipelines. The cache only matters at tip — it starts
+    /// empty on restart and only needs invalidation to clear entries staled by a live
+    /// epoch transition. Starting at the farthest-along pipeline means eviction sits idle
+    /// while slower pipelines backfill, then wakes up at tip where invalidation matters.
     async fn committer_watermark(
         &mut self,
         pipeline: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
+        if pipeline == SYSTEM_PACKAGE_EVICTION_PIPELINE {
+            let watermarks = self.store.initial_watermarks.lock().await;
+            let max = watermarks
+                .values()
+                .filter_map(|w| *w)
+                .max_by_key(|w| w.checkpoint_hi_inclusive);
+            if max.is_none() {
+                warn!(
+                    pipeline = SYSTEM_PACKAGE_EVICTION_PIPELINE,
+                    "No other pipelines have durable progress; falling back to framework default start checkpoint"
+                );
+            }
+            return Ok(max);
+        }
+
         let Some(config) = self.store.config.get_pipeline_config(pipeline) else {
             return Ok(None);
         };
         let output_prefix = config.output_prefix().to_string();
-        match &self.store.mode {
-            StoreMode::Live(store) => store.committer_watermark(&output_prefix).await,
-            StoreMode::Migration(store) => store.committer_watermark(&output_prefix).await,
-        }
+        let watermark = match &self.store.mode {
+            StoreMode::Live(store) => store.committer_watermark(&output_prefix).await?,
+            StoreMode::Migration(store) => store.committer_watermark(&output_prefix).await?,
+        };
+        self.store
+            .initial_watermarks
+            .lock()
+            .await
+            .insert(pipeline.to_string(), watermark);
+        Ok(watermark)
     }
 
     /// Store the watermark for use in commit_batch.
@@ -724,12 +733,6 @@ impl Connection for AnalyticsConnection<'_> {
 
 #[async_trait]
 impl SequentialConnection for AnalyticsConnection<'_> {}
-
-/// Construct the object store path for a chain_id file.
-/// Path format: `_metadata/chain_id/{pipeline_task}`
-pub(crate) fn chain_id_path(pipeline_task: &str) -> ObjectPath {
-    ObjectPath::from(format!("_metadata/chain_id/{}", pipeline_task))
-}
 
 /// Construct the object store path for an analytics file.
 /// Path format: {pipeline}/epoch_{epoch}/{start}_{end}.{ext}

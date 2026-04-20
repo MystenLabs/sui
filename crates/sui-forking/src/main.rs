@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
         node_str, checkpoint,
     );
 
-    let handle = tokio::spawn(startup::run(context));
+    let handle = tokio::spawn(sui_forking::startup::run(context));
     handle.await??;
 
     Ok(())

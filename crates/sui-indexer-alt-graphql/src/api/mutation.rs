@@ -21,6 +21,7 @@ use crate::api::types::execution_result::ExecutionResult;
 use crate::api::types::transaction_effects::TransactionEffects;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
+use crate::error::feature_unavailable;
 use crate::error::upcast;
 use crate::scope::Scope;
 
@@ -60,8 +61,11 @@ impl Mutation {
         transaction_data_bcs: Base64,
         signatures: Vec<Base64>,
     ) -> Result<ExecutionResult, RpcError<TransactionInputError>> {
-        // Get the gRPC client from context
-        let fullnode_client: &FullnodeClient = ctx.data()?;
+        // Get the gRPC client from context. If the service was started without a fullnode URL
+        // there is no client to dispatch the transaction to.
+        let Some(fullnode_client) = ctx.data_opt::<FullnodeClient>() else {
+            return Err(feature_unavailable("executing transactions"));
+        };
 
         // Parse transaction data from BCS
         let tx_data: TransactionData = {

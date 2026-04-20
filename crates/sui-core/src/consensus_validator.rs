@@ -27,7 +27,6 @@ use sui_types::{
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::{
         CertifiedTransaction, InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI,
-        TransactionWithClaims,
     },
 };
 use tap::TapFallible;
@@ -216,16 +215,9 @@ impl SuiTxValidator {
         txs: Vec<ConsensusTransactionKind>,
     ) -> Vec<TransactionIndex> {
         let epoch_store = &self.epoch_store;
-        if !epoch_store.protocol_config().mysticeti_fastpath() {
-            return vec![];
-        }
-
         let mut reject_txn_votes = Vec::new();
         for (i, tx) in txs.into_iter().enumerate() {
             let tx: PlainTransactionWithClaims = match tx {
-                ConsensusTransactionKind::UserTransaction(tx) => {
-                    TransactionWithClaims::no_aliases(*tx)
-                }
                 ConsensusTransactionKind::UserTransactionV2(tx) => *tx,
                 _ => continue,
             };

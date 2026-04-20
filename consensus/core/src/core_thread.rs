@@ -387,7 +387,7 @@ mod test {
         round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
-        transaction_certifier::TransactionCertifier,
+        transaction_vote_tracker::TransactionVoteTracker,
     };
 
     #[tokio::test]
@@ -400,7 +400,7 @@ mod test {
         let block_manager = BlockManager::new(context.clone(), dag_state.clone());
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
@@ -408,16 +408,11 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();
         let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
-        let leader_schedule = Arc::new(LeaderSchedule::from_store(
-            context.clone(),
-            dag_state.clone(),
-        ));
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
-            leader_schedule.clone(),
+            transaction_vote_tracker.clone(),
         )
         .await;
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
@@ -429,7 +424,7 @@ mod test {
             context.clone(),
             leader_schedule,
             transaction_consumer,
-            transaction_certifier,
+            transaction_vote_tracker,
             block_manager,
             commit_observer,
             signals,

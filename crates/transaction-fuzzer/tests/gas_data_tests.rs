@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use proptest::arbitrary::*;
+use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, dbg_addr};
 use sui_types::crypto::{AccountKeyPair, KeypairTraits, get_key_pair};
@@ -248,21 +249,142 @@ fn test_gas_data_dev_inspect_no_skip_fuzz() {
 }
 
 // ---------------------------------------------------------------------------
-// Deterministic edge case tests
+// Scenario helpers — each returns a GasDataWithObjects for a specific scenario.
+// Used by both deterministic tests (for error assertions) and proptests (for
+// panic-freedom coverage via prop_oneof!).
+// ---------------------------------------------------------------------------
+
+fn make_valid_gas_data(rgp: u64) -> GasDataWithObjects {
+    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
+    let budget = rgp * 200_000;
+    let gas_obj = make_gas_coin(sender, budget);
+    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp, budget);
+    GasDataWithObjects {
+        gas_data,
+        objects: vec![gas_obj],
+        sender_key,
+    }
+}
+
+fn make_gas_data_price_zero() -> GasDataWithObjects {
+    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
+    let budget = 100_000_000;
+    let gas_obj = make_gas_coin(sender, budget);
+    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), 0, budget);
+    GasDataWithObjects {
+        gas_data,
+        objects: vec![gas_obj],
+        sender_key,
+    }
+}
+
+fn make_gas_data_price_below_rgp(rgp: u64) -> GasDataWithObjects {
+    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
+    let budget = 100_000_000;
+    let gas_obj = make_gas_coin(sender, budget);
+    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp - 1, budget);
+    GasDataWithObjects {
+        gas_data,
+        objects: vec![gas_obj],
+        sender_key,
+    }
+}
+
+fn make_gas_data_budget_zero(rgp: u64) -> GasDataWithObjects {
+    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
+    let gas_obj = make_gas_coin(sender, 1_000_000_000);
+    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp, 0);
+    GasDataWithObjects {
+        gas_data,
+        objects: vec![gas_obj],
+        sender_key,
+    }
+}
+
+fn make_gas_data_budget_exceeds_max(rgp: u64, max_budget: u64) -> GasDataWithObjects {
+    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
+    let over_budget = max_budget + 1;
+    let gas_obj = make_gas_coin(sender, over_budget);
+    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp, over_budget);
+    GasDataWithObjects {
+        gas_data,
+        objects: vec![gas_obj],
+        sender_key,
+    }
+}
+
+fn make_gas_data_balance_insufficient(rgp: u64) -> GasDataWithObjects {
+    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
+    let budget = rgp * 200_000;
+    let gas_obj = make_gas_coin(sender, 1);
+    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp, budget);
+    GasDataWithObjects {
+        gas_data,
+        objects: vec![gas_obj],
+        sender_key,
+    }
+}
+
+/// Strategy that mixes specific edge cases with random gas data via prop_oneof!,
+/// ensuring edge cases are always exercised alongside random exploration.
+fn gen_gas_data_with_edge_cases() -> BoxedStrategy<GasDataWithObjects> {
+    let rgp = Executor::new().get_reference_gas_price();
+    let max_budget = sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
+
+    prop_oneof![
+        1 => Just(()).prop_map(move |_| make_valid_gas_data(rgp)),
+        1 => Just(()).prop_map(move |_| make_gas_data_price_zero()),
+        1 => Just(()).prop_map(move |_| make_gas_data_price_below_rgp(rgp)),
+        1 => Just(()).prop_map(move |_| make_gas_data_budget_zero(rgp)),
+        1 => Just(()).prop_map(move |_| make_gas_data_budget_exceeds_max(rgp, max_budget)),
+        1 => Just(()).prop_map(move |_| make_gas_data_balance_insufficient(rgp)),
+        6 => any_with::<GasDataWithObjects>(GasDataGenConfig::owned_by_sender_or_immut()),
+    ]
+    .boxed()
+}
+
+// ---------------------------------------------------------------------------
+// Proptest with edge cases mixed in
+// ---------------------------------------------------------------------------
+
+#[test]
+#[cfg_attr(msim, ignore)]
+fn test_gas_data_edge_cases_fuzz() {
+    let strategy = gen_gas_data_with_edge_cases();
+    run_proptest(500, strategy, |gas_data_test, mut executor| {
+        test_with_random_gas_data(gas_data_test, &mut executor)
+    });
+}
+
+#[test]
+#[cfg_attr(msim, ignore)]
+fn test_gas_data_edge_cases_dry_run_fuzz() {
+    let strategy = gen_gas_data_with_edge_cases();
+    run_proptest_with_fullnode(500, strategy, |gas_data_test, mut executor| {
+        test_with_random_gas_data_dry_run(gas_data_test, &mut executor)
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic edge case tests (assert specific error messages)
 // ---------------------------------------------------------------------------
 
 /// Valid gas data succeeds in all execution modes.
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_valid_gas_data_all_modes() {
-    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
-    let budget = rgp * 200_000; // well above min_transaction_cost
-    let gas_obj = make_gas_coin(sender, budget);
-    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp, budget);
+    let case = make_valid_gas_data(rgp);
+    let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &sender_key, gas_data, &[gas_obj]);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert!(results.normal.is_ok(), "normal: {:?}", results.normal);
     assert!(results.dry_run.is_ok(), "dry_run: {:?}", results.dry_run);
@@ -282,13 +404,17 @@ fn test_valid_gas_data_all_modes() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_gas_price_zero() {
-    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let mut executor = Executor::new();
-    let budget = 100_000_000;
-    let gas_obj = make_gas_coin(sender, budget);
-    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), 0, budget);
+    let case = make_gas_data_price_zero();
+    let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &sender_key, gas_data, &[gas_obj]);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasPriceUnderRGP", "normal");
     assert_err_contains(&results.dry_run, "GasPriceUnderRGP", "dry_run");
@@ -308,14 +434,18 @@ fn test_gas_price_zero() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_gas_price_below_rgp() {
-    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
-    let budget = 100_000_000;
-    let gas_obj = make_gas_coin(sender, budget);
-    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp - 1, budget);
+    let case = make_gas_data_price_below_rgp(rgp);
+    let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &sender_key, gas_data, &[gas_obj]);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasPriceUnderRGP", "normal");
     assert_err_contains(&results.dry_run, "GasPriceUnderRGP", "dry_run");
@@ -335,13 +465,18 @@ fn test_gas_price_below_rgp() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_gas_budget_zero() {
-    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
-    let gas_obj = make_gas_coin(sender, 1_000_000_000);
-    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp, 0);
+    let case = make_gas_data_budget_zero(rgp);
+    let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &sender_key, gas_data, &[gas_obj]);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasBudgetTooLow", "normal");
     assert_err_contains(&results.dry_run, "GasBudgetTooLow", "dry_run");
@@ -361,15 +496,19 @@ fn test_gas_budget_zero() {
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_gas_budget_exceeds_max() {
-    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
     let max_budget = sui_protocol_config::ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
-    let over_budget = max_budget + 1;
-    let gas_obj = make_gas_coin(sender, over_budget);
-    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp, over_budget);
+    let case = make_gas_data_budget_exceeds_max(rgp, max_budget);
+    let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &sender_key, gas_data, &[gas_obj]);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasBudgetTooHigh", "normal");
     assert_err_contains(&results.dry_run, "GasBudgetTooHigh", "dry_run");
@@ -385,19 +524,48 @@ fn test_gas_budget_exceeds_max() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// Address balance gas payment fuzz tests
+// ---------------------------------------------------------------------------
+
+#[test]
+#[cfg_attr(msim, ignore)]
+fn test_gas_data_address_balance_fuzz() {
+    let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::with_address_balance());
+    run_proptest(1000, strategy, |gas_data_test, mut executor| {
+        test_with_random_gas_data(gas_data_test, &mut executor)
+    });
+}
+
+#[test]
+#[cfg_attr(msim, ignore)]
+fn test_gas_data_address_balance_dry_run_fuzz() {
+    let strategy = any_with::<GasDataWithObjects>(GasDataGenConfig::with_address_balance());
+    run_proptest_with_fullnode(1000, strategy, |gas_data_test, mut executor| {
+        test_with_random_gas_data_dry_run(gas_data_test, &mut executor)
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic edge case tests
+// ---------------------------------------------------------------------------
+
 /// Gas coin balance < budget fails in all modes.
 #[test]
 #[cfg_attr(msim, ignore)]
 fn test_gas_balance_insufficient() {
-    let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let mut executor = Executor::new();
     let rgp = executor.get_reference_gas_price();
-    let budget = rgp * 200_000;
-    // Gas coin has only 1 MIST -- far below budget
-    let gas_obj = make_gas_coin(sender, 1);
-    let gas_data = make_gas_data(sender, std::slice::from_ref(&gas_obj), rgp, budget);
+    let case = make_gas_data_balance_insufficient(rgp);
+    let sender = case.sender_key.public().into();
 
-    let results = run_all_modes(&mut executor, sender, &sender_key, gas_data, &[gas_obj]);
+    let results = run_all_modes(
+        &mut executor,
+        sender,
+        &case.sender_key,
+        case.gas_data,
+        &case.objects,
+    );
 
     assert_err_contains(&results.normal, "GasBalanceTooLow", "normal");
     assert_err_contains(&results.dry_run, "GasBalanceTooLow", "dry_run");

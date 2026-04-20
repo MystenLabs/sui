@@ -8,34 +8,34 @@ edition = "2024"
 
 [dependencies]
 anyhow.workspace = true
+bcs.workspace = true
 chrono.workspace = true
 cynic.workspace = true
 fastcrypto.workspace = true
 itertools.workspace = true
+prometheus.workspace = true
+rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 roaring.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-url.workspace = true
 
-bcs.workspace = true
 bin-version.workspace = true
-rand.workspace = true
-simulacrum = { path = "../simulacrum" }
-sui-config.workspace = true
+simulacrum.workspace = true
 sui-protocol-config.workspace = true
 sui-swarm-config.workspace = true
 sui-types.workspace = true
-
-[build-dependencies]
-cynic-codegen.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true
 tempfile.workspace = true
 wiremock.workspace = true
+
+[build-dependencies]
+cynic-codegen.workspace = true
 
 [lints]
 workspace = true

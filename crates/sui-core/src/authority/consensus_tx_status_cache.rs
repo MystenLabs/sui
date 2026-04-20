@@ -135,10 +135,7 @@ impl ConsensusTxStatusCache {
         }
     }
 
-    pub(crate) async fn update_last_committed_leader_round(
-        &self,
-        last_committed_leader_round: u32,
-    ) {
+    pub(crate) fn update_last_committed_leader_round(&self, last_committed_leader_round: u32) {
         debug!(
             "Updating last committed leader round: {}",
             last_committed_leader_round
@@ -259,15 +256,11 @@ mod tests {
         cache.set_transaction_status(tx_pos, ConsensusTxStatus::Finalized);
 
         // Set initial leader round which doesn't GC anything.
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 1)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 1);
 
         // Update with round that will trigger GC using previous round (CONSENSUS_STATUS_RETENTION_ROUNDS + 1)
         // This will expire transactions up to and including round 1
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2);
 
         // Try to read status - should be expired
         let result = cache.notify_read_transaction_status(tx_pos).await;
@@ -288,9 +281,7 @@ mod tests {
         }
 
         // Set initial leader round which doesn't GC anything.
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 2);
 
         // No rounds should be cleaned up yet since this was the initial update
         {
@@ -305,9 +296,7 @@ mod tests {
 
         // Update that triggers GC using previous round (CONSENSUS_STATUS_RETENTION_ROUNDS + 2)
         // This will expire transactions up to and including round 2
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 3)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 3);
 
         // Verify rounds 1-2 are cleaned up, 3-5 remain
         {
@@ -322,9 +311,7 @@ mod tests {
 
         // Another update using previous round (CONSENSUS_STATUS_RETENTION_ROUNDS + 3) for GC
         // This will expire transactions up to and including round 3
-        cache
-            .update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 4)
-            .await;
+        cache.update_last_committed_leader_round(CONSENSUS_STATUS_RETENTION_ROUNDS + 4);
 
         // Verify rounds 1-3 are cleaned up, 4-5 remain
         {

@@ -1,0 +1,105 @@
+# https://www.rfc-editor.org/rfc/rfc9309
+# robots.txt for docs.sui.io
+#
+# Policy: documentation is public and intended for broad consumption,
+# including by AI systems. All crawlers are allowed with the exception
+# of search-results and error pages.
+
+# Default: allow everything except ephemeral/internal pages
+User-agent: *
+Allow: /
+Disallow: /search
+Disallow: /search?
+Disallow: /404
+
+# ── OpenAI ──
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+# ── Anthropic ──
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+# ── Google ──
+User-agent: Google-Extended
+Allow: /
+
+User-agent: GoogleOther
+Allow: /
+
+User-agent: GoogleOther-Image
+Disallow: /
+
+User-agent: GoogleOther-Video
+Disallow: /
+
+# ── Meta ──
+User-agent: FacebookBot
+Allow: /
+
+User-agent: meta-externalagent
+Allow: /
+
+# ── Microsoft / Bing ──
+User-agent: Bingbot
+Allow: /
+
+# ── Amazon ──
+User-agent: Amazonbot
+Allow: /
+
+# ── Perplexity ──
+User-agent: PerplexityBot
+Allow: /
+
+# ── Cohere ──
+User-agent: cohere-ai
+Allow: /
+
+# ── Apple ──
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+# ── Common AI research crawlers ──
+User-agent: CCBot
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: Diffbot
+Allow: /
+
+User-agent: YouBot
+Allow: /
+
+User-agent: Timpibot
+Allow: /
+
+# ── Content Signals (draft-romm-aipref-contentsignals) ──
+# https://contentsignals.org/
+#
+# search=yes    — content may appear in search results
+# ai-train=yes  — content may be used for AI model training
+# ai-input=yes  — content may be used as context for AI responses
+#
+# Sui documentation is open source (Apache 2.0) and explicitly intended
+# for use by AI systems, agents, and LLMs.
+Content-Signal: ai-train=yes, search=yes, ai-input=yes
+
+Sitemap: https://docs.sui.io/sitemap.xml

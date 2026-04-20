@@ -27,7 +27,8 @@ use crate::task::watermark::Watermarks;
 
 /// A map of objects from an executed transaction, keyed by (ObjectID, SequenceNumber).
 /// None values indicate tombstones for deleted/wrapped objects.
-type ExecutionObjectMap = Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>;
+pub(crate) type ExecutionObjectMap =
+    Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>;
 
 /// Root object bound for consistent dynamic field reads.
 ///
@@ -108,6 +109,18 @@ impl Scope {
             execution_objects: Arc::new(BTreeMap::new()),
             package_store,
             resolver_limits,
+        }
+    }
+
+    /// Create a nested scope with pre-built execution objects. Used by streaming to attach
+    /// per-transaction objects that were deserialized from checkpoint-level data.
+    pub(crate) fn with_execution_objects(&self, execution_objects: ExecutionObjectMap) -> Self {
+        Self {
+            checkpoint_viewed_at: None,
+            root_bound: self.root_bound,
+            execution_objects,
+            package_store: self.package_store.clone(),
+            resolver_limits: self.resolver_limits.clone(),
         }
     }
 

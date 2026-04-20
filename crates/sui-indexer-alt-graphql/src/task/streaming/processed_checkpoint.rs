@@ -7,6 +7,8 @@ use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
 
+use crate::scope::ExecutionObjectMap;
+
 /// A checkpoint received from gRPC with pre-deserialized data for subscriber consumption.
 pub(crate) struct ProcessedCheckpoint {
     pub(crate) sequence_number: u64,
@@ -21,4 +23,6 @@ pub(crate) struct ProcessedTransaction {
     pub(crate) tx_sequence_number: u64,
     pub(crate) digest: TransactionDigest,
     pub(crate) contents: TransactionContents,
+    /// Pre-built execution objects for this transaction, extracted from checkpoint-level objects.
+    pub(crate) execution_objects: ExecutionObjectMap,
 }

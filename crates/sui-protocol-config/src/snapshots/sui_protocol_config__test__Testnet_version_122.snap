@@ -409,6 +409,8 @@ group_ops_ristretto_scalar_mul_cost: 11
 group_ops_ristretto_point_mul_cost: 1200
 group_ops_ristretto_scalar_div_cost: 151
 group_ops_ristretto_point_div_cost: 2500
+verify_bulletproofs_ristretto255_base_cost: 30000
+verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: 6500
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2

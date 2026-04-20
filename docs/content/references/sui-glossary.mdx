@@ -9,11 +9,11 @@ Find terms used in Sui defined below.
 
 ### Archival Service {#archival-service}
 
-A gRPC API layer that exposes access to this store, enabling point lookups of historical data, ex., LedgerService
+A gRPC API layer that exposes access to this store, enabling point lookups of historical data (for example, LedgerService).
 
 ### Archival Store {#archival-store}
 
-A long-term storage system that holds checkpoint-indexed Sui data, i.e., Bigtable.
+A long-term storage system that holds checkpoint-indexed Sui data, that is, Bigtable.
 
 ### Causal history {#causal-history}
 
@@ -34,7 +34,7 @@ A token that can be used only for a specific service, by an authorized account, 
 
 #### DeepBook {#deepbook}
 
-A decentralized central limit order book (CLOB) built on Sui. The Sui documentation refers to the DeepBook standard as "DeepBookV3" to avoid confusion with the recently deprecated version of DeepBook (DeepBookV2).
+A decentralized central limit order book (CLOB) built on Sui. The Sui documentation refers to the DeepBook standard as DeepBookV3 to avoid confusion with the recently deprecated version of DeepBook (DeepBookV2).
 
 #### Devnet {#devnet}
 
@@ -109,7 +109,7 @@ Allows a validator to authorize another account to perform certain actions on it
 
 ### Single-writer objects {#single-writer-objects}
 
-Single-writer objects are owned by one address. In Sui, transactions affecting only single-writer objects owned by the same address may proceed with only a verification of the sender's address, greatly speeding transaction times. These are _simple transactions_. See Single-Writer Apps for example applications of this simple transaction model.
+Single-writer objects are owned by one address. In Sui, transactions affecting only single-writer objects owned by the same address might proceed with only a verification of the sender's address, greatly speeding transaction times. These are basic transactions. See Single-Writer Apps for example applications of this basic transaction model.
 
 ### Smart contract {#smart-contract}
 
@@ -153,13 +153,13 @@ A development network. Data deployed to Testnet persists through the regular upd
 
 ### Transaction {#transaction}
 
-A transaction in Sui is a change to the blockchain. This may be a simple transaction affecting only single-writer, single-address objects, such as minting an NFT or transferring an NFT or another token. These transactions may bypass the consensus protocol in Sui.
+A transaction in Sui is a change to the blockchain. This might be a basic transaction affecting only single-writer, single-address objects, such as minting an NFT or transferring an NFT or another token. These transactions might bypass the consensus protocol in Sui.
 
 More complex transactions affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, do go through consensus.
 
 ### Transfer {#transfer}
 
-A transfer is switching the owner address of a token to a new one via command in Sui. This is accomplished via the Sui CLI client command line interface. It is one of the more common of many commands available in the CLI client.
+A transfer is switching the owner address of a token to a new one through a command in Sui. This is accomplished through the Sui CLI client command line interface. It is one of the more common of many commands available in the CLI client.
 
 ### Validator {#validator}
 

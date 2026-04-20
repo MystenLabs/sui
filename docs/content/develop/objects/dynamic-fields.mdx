@@ -1,0 +1,285 @@
+---
+title: Dynamic Fields
+description: Dynamic fields and dynamic object fields on Sui are added and removed dynamically, affect gas only when accessed, and store heterogeneous values.
+keywords: [ dynamic fields, dynamic object fields, adding dynamic fields, field names, adding dynamic object fields, accessing dynamic fields, accessing dynamic object fields, deleting an object with dynamic fields ]
+---
+
+There are various ways to use object fields to store primitive data and other objects, such as wrapping, but there are a few limitations to these:
+
+1. Objects have a finite set of fields keyed by identifiers that are fixed when you publish its module, limited to the fields in the `struct` declaration.
+
+1. An object can become very large if it wraps several other objects and there is an upper bound on object size. Larger objects can lead to higher gas fees in transactions.
+
+1. There are use cases where you need to store a collection of objects of heterogeneous types. Because the Move `vector` type must be instantiated with 1 single type `<T>`, it is not suitable for this.
+
+Fortunately, Sui provides dynamic fields with arbitrary names, not just identifiers, that are added and removed on-the-fly, which only affect gas when they are accessed. Dynamic fields can store heterogeneous values. 
+
+## Fields and object fields
+
+There are 2 types of dynamic field: fields and object fields, which differ based on how you store their values:
+
+| Type | Description | Module |
+| --- | --- | --- |
+| Fields | Can store any value that has `store`, however an object stored in this kind of field is considered wrapped and is not accessible through its ID by external tools (explorers, wallets, and so on).| [`dynamic_field`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/dynamic_field.move) |
+| Object field | Values must be objects (have the `key` ability, and `id: UID` as the first field), but are still accessible at their ID to external tools.| [`dynamic_object_field`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move) |
+
+## Field names
+
+Unlike an object's regular fields where names must be Move identifiers, dynamic field names can be any value that has `copy`, `drop`, and `store`. This includes all Move primitives (integers, Booleans, byte strings), and structs whose contents all have `copy`, `drop`, and `store`.
+
+## Adding dynamic fields
+
+Use the `add` function from the relevant Sui framework module to add dynamic fields:
+
+**Dynamic field**
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="add" noComments />
+
+**Dynamic object field**
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_object_field.move" mode="code" fun="add" noComments />
+
+These functions add a field with name `name` and value `value` to `object`. To see it in action, consider these code snippets:
+
+First, define 2 object types for the parent and the child:
+
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" struct="Parent" noComments />
+
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" struct="Child" noComments />
+
+Next, define an API to add a `Child` object as a dynamic field of a `Parent` object:
+
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" fun="add_child" />
+
+This function takes the `Child` object by value and makes it a dynamic field of `parent` with name `b"child"` (a byte string of type `vector<u8>`). This call results in the following ownership relationship:
+
+1. Sender address owns the `Parent` object.
+
+1. The `Parent` object owns the `Child` object, and can refer to it by the name `b"child"`.
+
+A transaction that attempts to add a field with the same `<Name>` type and value as one that is already defined fails. You can modify fields in-place by borrowing them mutably and you can overwrite them safely by removing the old value first.
+
+## Accessing dynamic fields
+
+You can reference dynamic fields using the following APIs:
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="borrow" noComments />
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="borrow_mut" noComments />
+
+`object` is the UID of the object the field is defined on and `name` is the field's name.
+
+:::info
+
+`sui::dynamic_object_field` has equivalent functions for object fields, but with the added constraint `Value: key + store`.
+
+:::
+
+To use these APIs with the `Parent` and `Child` types defined previously:
+
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" fun="mutate_child" noComments />
+
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" fun="mutate_child_via_parent" noComments />
+
+The first function accepts a mutable reference to the `Child` object directly, and you can call it with `Child` objects that haven't been added as fields to `Parent` objects.
+
+The second function accepts a mutable reference to the `Parent` object and accesses its dynamic field using `borrow_mut` to pass to `mutate_child`. This can only be called on `Parent` objects that have a `b"child"` field defined. A `Child` object that has been added to a `Parent` must be accessed through its dynamic field, so it can only be mutated using `mutate_child_via_parent`, not `mutate_child`, even if its ID is known.
+
+:::tip
+
+A transaction fails if it attempts to borrow a field that does not exist.
+
+:::
+
+The `<Value>` type passed to `borrow` and `borrow_mut` must match the type of the stored field, or the transaction aborts.
+
+You must access dynamic object field values through these APIs. A transaction that attempts to use those objects as inputs (by value or by reference), is rejected for having invalid inputs.
+
+## Removing a dynamic field
+
+Similar to unwrapping an object held in a regular field, you can remove a dynamic field, exposing its value:
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="remove" noComments />
+
+This function takes a mutable reference to the ID of the `object` the field is defined on and the field's `name`. If a field with a `value: Value` is defined on `object` at `name`, it is removed and `value` returned, otherwise it aborts. Future attempts to access this field on `object` fail.
+
+`sui::dynamic_object_field` has an equivalent function for object fields.
+
+The value that is returned can be interacted with just like any other value. For example, removed dynamic object field values can then be deleted or transferred back to the sender:
+
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" fun="delete_child" noComments />
+
+<ImportContent source="examples/move/dynamic_fields/sources/example.move" mode="code" fun="reclaim_child" noComments />
+
+A transaction that attempts to remove a non-existent field, or a field with a different `Value` type, fails.
+
+## Deleting an object with dynamic fields
+
+It is possible to delete an object that has (potentially non-`drop`) dynamic fields still defined on it. Because field values can be accessed only through the dynamic field's associated object and field name, deleting an object that has dynamic fields still defined on it renders them all inaccessible to future transactions. This is true regardless of whether the field's value has the `drop` ability. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for onchain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
+
+## `Table` and `Bag`
+
+Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty. 
+
+The types and functions discussed in this section are built into the Sui framework in modules [`table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/table.move) and [`bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/bag.move). As with dynamic fields, there is also an `object_` variant of both: `ObjectTable` in [`object_table`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_table.move) and `ObjectBag` in [`object_bag`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/object_bag.move). The relationship between `Table` and `ObjectTable`, and `Bag` and `ObjectBag` is the same as between a field and an object field: the former can hold any `store` type as a value, but objects stored as values are hidden when viewed from external storage. The latter can only store objects as values, but keeps those objects visible at their ID in external storage.
+
+### Tables
+
+`Table<K, V>` is a homogeneous map, meaning that all its keys have the same type as each other (`K`), and all its values have the same type as each other as well (`V`). It is created with `sui::table::new`, which requires access to a `&mut TxContext` because `Table`s are objects themselves, which can be transferred, shared, wrapped, or unwrapped, just like any other object.
+
+See `sui::object_table::ObjectTable` for the object-preserving version of `Table`.
+
+```move
+module sui::table;
+
+public struct Table<K: copy + drop + store, V: store> has key, store { /* ... */ }
+
+public fun new<K: copy + drop + store, V: store>(
+    ctx: &mut TxContext,
+): Table<K, V>;
+```
+
+### Bags
+
+`Bag` is a heterogeneous map, so it can hold key-value pairs of arbitrary types, they do not need to match each other. The `Bag` type does not have any type parameters for this reason. Like `Table`, `Bag` is also an object, so creating one with `sui::bag::new` requires supplying a `&mut TxContext` to generate an ID.
+
+See `sui::bag::ObjectBag` for the object-preserving version of `Bag`.
+
+```move
+module sui::bag;
+
+public struct Bag has key, store { /* ... */ }
+
+public fun new(ctx: &mut TxContext): Bag;
+```
+
+### Interacting with collections
+
+All collection types come with the following functions, defined in their respective modules:
+
+```move
+module sui::table;
+
+public fun add<K: copy + drop + store, V: store>(
+    table: &mut Table<K, V>,
+    k: K,
+    v: V,
+);
+
+public fun borrow<K: copy + drop + store, V: store>(
+    table: &Table<K, V>,
+    k: K
+): &V;
+
+public fun borrow_mut<K: copy + drop + store, V: store>(
+    table: &mut Table<K, V>,
+    k: K
+): &mut V;
+
+public fun remove<K: copy + drop + store, V: store>(
+    table: &mut Table<K, V>,
+    k: K,
+): V;
+```
+
+The functions add, read, write, and remove entries from the collection, respectively, and all accept keys by value. `Table` has type parameters for `K` and `V` so it is not possible to call these functions with different instantiations of `K` and `V` on the same instance of `Table`.`Bag` however does not have these type parameters, and so it permits calls with different instantiations on the same instance.
+
+:::info
+
+Like with dynamic fields, it is an error to attempt to overwrite an existing key, or access and remove a non-existent key.
+
+:::
+
+The extra flexibility of `Bag`'s heterogeneity means the type system does not statically prevent attempts to add a value with one type, and then borrow or remove it at another type. This pattern fails at runtime, similar to the behavior for dynamic fields.
+
+### Querying length
+
+It is possible to query all collection types for their length and check whether they are empty using the following family of functions:
+
+```move
+module sui::table;
+
+public fun length<K: copy + drop + store, V: store>(
+    table: &Table<K, V>,
+): u64;
+
+public fun is_empty<K: copy + drop + store, V: store>(
+    table: &Table<K, V>
+): bool;
+```
+
+`Bag` has these functions, but they are not generic on `K` and `V` because `Bag` does not have these type parameters.
+
+### Querying for containment
+
+Tables can be queried for key containment with:
+
+```move
+module sui::table;
+
+public fun contains<K: copy + drop + store, V: store>(
+    table: &Table<K, V>
+    k: K
+): bool;
+```
+
+The equivalent functions for `Bag` are:
+
+```move
+module sui::bag;
+
+public fun contains<K: copy + drop + store>(bag: &Bag, k: K): bool;
+
+public fun contains_with_type<K: copy + drop + store, V: store>(
+    bag: &Bag,
+    k: K
+): bool;
+```
+
+The first function tests whether `bag` contains a key-value pair with key `k: K`, and the second function tests whether its value has type `V`.
+
+### Clean-up
+
+Collection types protect against accidental deletion when they might not be empty. This protection comes from the fact that they do not have `drop`, so they must be explicitly deleted using this API:
+
+```move
+module sui::table;
+
+public fun destroy_empty<K: copy + drop + store, V: store>(
+    table: Table<K, V>,
+);
+```
+
+This function takes the collection by value. If it contains no entries, it is deleted, otherwise the call fails. `sui::table::Table` also has a convenience function:
+
+```move
+module sui::table;
+
+public fun drop<K: copy + drop + store, V: drop + store>(
+    table: Table<K, V>,
+);
+```
+
+You can call the convenience function only for tables where the value type also has the `drop` ability, which allows it to delete tables whether they are empty or not.
+
+The `drop` function is not called implicitly on eligible tables before they go out of scope. It must be called explicitly, but it is guaranteed to succeed at runtime.
+
+`Bag` and `ObjectBag` cannot support `drop` because they could be holding a variety of types, some of which might have `drop` and some which might not.
+
+`ObjectTable` does not support `drop` because its values must be objects, which cannot be dropped, as they must contain an `id: UID` field and `UID` does not have `drop`.
+
+### Equality
+
+Equality on collections is based on identity, for example, an instance of a collection type is only considered equal to itself and not to all collections that hold the same entries:
+
+```move
+use sui::table;
+
+let t1 = table::new<u64, u64>(ctx);
+let t2 = table::new<u64, u64>(ctx);
+
+assert!(&t1 == &t1, 0);
+assert!(&t1 != &t2, 1);
+```
+
+This is unlikely to be the definition of equality that you want.

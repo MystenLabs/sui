@@ -4,6 +4,7 @@
 use std::num::NonZeroUsize;
 
 use anyhow::{Result, anyhow};
+use prometheus::Registry;
 use rand::rngs::OsRng;
 use tracing::info;
 
@@ -77,10 +78,9 @@ pub async fn initialize(
     Ok(Context::new(simulacrum, chain_identifier))
 }
 
-/// Run the forked network until a shutdown signal (Ctrl+C) is received. The Context is held
-/// alive for the duration so that the Simulacrum and DataStore are not dropped. Once gRPC
-/// services exist, they will be hosted from inside this function.
-pub async fn run(_context: Context) -> Result<()> {
+/// Run the forked network
+/// context.
+pub async fn run(context: Context) -> Result<()> {
     info!("forked network running, waiting for shutdown signal (Ctrl+C)");
     tokio::signal::ctrl_c().await?;
     info!("shutdown signal received, stopping forked network");

@@ -303,6 +303,18 @@ impl TestTransactionBuilder {
         )
     }
 
+    pub fn call_unstaking(self, staked_sui: ObjectRef) -> Self {
+        self.move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.as_str(),
+            "request_withdraw_stake",
+            vec![
+                CallArg::SUI_SYSTEM_MUT,
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(staked_sui)),
+            ],
+        )
+    }
+
     pub fn call_emit_random(
         self,
         package_id: ObjectID,

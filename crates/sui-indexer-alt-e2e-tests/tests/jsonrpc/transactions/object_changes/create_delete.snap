@@ -37,7 +37,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "digest": "8Ky4uhGSKmKEYaML3ot21Lboo227QX9yqhrVb9cmqtdP",
+    "digest": "6Cr5KVF9bWDnKZV5f6X3uj7tHVBWvgzb1zMqeKZX5Tkp",
     "objectChanges": [
       {
         "type": "created",
@@ -45,10 +45,10 @@ Response: {
         "owner": {
           "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
         },
-        "objectType": "0xfef5d3b34a3628f1ebb9eaedb689ad44908716c56f03733940a350b7dec69e5a::M::O",
-        "objectId": "0x9c19c2ef91ba603ee8fb874cffea7636504d936d8b81adf0089fd1e01f22e3ab",
+        "objectType": "0x3376a8209a89a133a491bacb345c6067f2132151b38ea14986fc91cc21c9c26a::M::O",
+        "objectId": "0x9ff1788c1c06353ce13b6882bde78106e90f04dcd8da90f1c5f7baeb196b9a77",
         "version": "2",
-        "digest": "HNdobL19Sfpw5mvexRyb7TaC1VHpTccvxSdYouWN4GwF"
+        "digest": "6EvAhpUhASnBeZsUYU7V5M9z9zUWAeBYfQYfDLMYTDEN"
       },
       {
         "type": "mutated",
@@ -60,7 +60,7 @@ Response: {
         "objectId": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
         "version": "2",
         "previousVersion": "1",
-        "digest": "5Tqq3RiTVjscmQQAP8vKjDrPCqsfy1JZHrECPH19vPst"
+        "digest": "ApGZPTiNVKVBNtvG5LtComPTg8g9n7rNiY7368dRSjaG"
       }
     ],
     "timestampMs": "0",
@@ -74,13 +74,13 @@ Response: {
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "digest": "HVeyWQhjHggzyuEGSfzeGTLz8ED1Z9bxLnjnwqNHnRWn",
+    "digest": "AwnqZMkQQbNheVUFF6prNXYt5y6vB8tRdo3DJ8CnKavP",
     "objectChanges": [
       {
         "type": "deleted",
         "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-        "objectType": "0xfef5d3b34a3628f1ebb9eaedb689ad44908716c56f03733940a350b7dec69e5a::M::O",
-        "objectId": "0x9c19c2ef91ba603ee8fb874cffea7636504d936d8b81adf0089fd1e01f22e3ab",
+        "objectType": "0x3376a8209a89a133a491bacb345c6067f2132151b38ea14986fc91cc21c9c26a::M::O",
+        "objectId": "0x9ff1788c1c06353ce13b6882bde78106e90f04dcd8da90f1c5f7baeb196b9a77",
         "version": "3"
       },
       {
@@ -93,7 +93,7 @@ Response: {
         "objectId": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
         "version": "3",
         "previousVersion": "2",
-        "digest": "2E8uHFtxD73RQwnyoTH2tr288wEXSyMqypydwxgyKypX"
+        "digest": "JAcM5kPGTLcpqL9QK7kh2QFFmfKiiAjYQ4kgzt3w9BvP"
       }
     ],
     "timestampMs": "0",

@@ -10,14 +10,16 @@ export default function DocCardListForCurrentSidebarCategory(props) {
   const scopeClass = 'docCardListScopeExclude';
 
   const css = `
-    .${scopeClass} .col:has(a[href="/guides"]),
-    .${scopeClass} .col:has(a[href="/guides/"]),
-    .${scopeClass} .col:has(a[href="/concepts/"]),
-    .${scopeClass} .col:has(a[href="/concepts"]),
+    .${scopeClass} .col:has(a[href="/getting-started"]),
+    .${scopeClass} .col:has(a[href="/getting-started/"]),
+    .${scopeClass} .col:has(a[href="/onchain-finance/"]),
+    .${scopeClass} .col:has(a[href="/onchain-finance"]),
+    .${scopeClass} .col:has(a[href="/develop/"]),
+    .${scopeClass} .col:has(a[href="/develop"]),
     .${scopeClass} .col:has(a[href="/references/"]),
     .${scopeClass} .col:has(a[href="/references"]),
-    .${scopeClass} .col:has(a[href="/standards/"]),
-    .${scopeClass} .col:has(a[href="/standards"])
+    .${scopeClass} .col:has(a[href="/sui-stack/"]),
+    .${scopeClass} .col:has(a[href="/sui-stack"])
      {
       display: none !important;
     }

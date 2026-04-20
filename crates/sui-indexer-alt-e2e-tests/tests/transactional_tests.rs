@@ -16,6 +16,7 @@ use serde_json::json;
 use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
+use sui_indexer_alt_jsonrpc::NodeArgs;
 use sui_transactional_test_runner::create_adapter;
 use sui_transactional_test_runner::offchain_state::OffchainStateReader;
 use sui_transactional_test_runner::offchain_state::TestResponse;
@@ -149,6 +150,11 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
             client_args,
             OffchainClusterConfig {
                 indexer_config,
+                // TODO: dummy value until simulacrum exposes grpc
+                jsonrpc_node_args: NodeArgs {
+                    fullnode_grpc_url: Some("http://127.0.0.1:1".into()),
+                    fullnode_rpc_url: None,
+                },
                 ..Default::default()
             },
             &prometheus::Registry::new(),

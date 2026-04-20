@@ -1376,6 +1376,7 @@
                 "enable_ptb_execution_v2": false,
                 "enable_ristretto255_group_ops": false,
                 "enable_vdf": false,
+                "enable_verify_bulletproofs_ristretto255": false,
                 "end_of_epoch_transaction_supported": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fix_checkpoint_signature_mapping": false,
@@ -2092,7 +2093,9 @@
                 "vector_pop_back_base_cost": null,
                 "vector_push_back_base_cost": null,
                 "vector_push_back_legacy_per_abstract_memory_unit_cost": null,
-                "vector_swap_base_cost": null
+                "vector_swap_base_cost": null,
+                "verify_bulletproofs_ristretto255_base_cost": null,
+                "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment": null
               }
             }
           }

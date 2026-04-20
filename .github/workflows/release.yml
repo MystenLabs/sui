@@ -42,10 +42,6 @@ jobs:
   release-build:
     name: Build & Publish Binaries
     timeout-minutes: 240
-    env:
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ${{ matrix.os }}
     strategy:
       matrix:
         os:
@@ -162,16 +158,12 @@ jobs:
           sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
           df -h /
 
-      - name: Setup sccache
+      - uses: ./.github/actions/setup-sccache
         if: ${{ env.s3_existing_archive == '' }}
-        id: sccache
-        continue-on-error: true
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
-
-      - name: Enable sccache
-        if: steps.sccache.outcome == 'success'
-        shell: bash
-        run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ${{ matrix.os }}
 
       - name: Register cargo problem matcher
         run: echo "::add-matcher::.github/matchers/cargo.json"

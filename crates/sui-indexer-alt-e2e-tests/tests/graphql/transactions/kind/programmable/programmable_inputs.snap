@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 16 tasks
 
@@ -77,7 +76,7 @@ task 12, lines 84-103:
 Response: {
   "data": {
     "pureInputTest": {
-      "digest": "5LzDM5eQumKbRqe4oRFisPr8Ac7g9bx9DZ3Kbko7drUp",
+      "digest": "CHptXRsAADVbbuYuvjhkvRTVN6bukFCTawaoCdXEHALj",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -102,14 +101,14 @@ task 13, lines 105-126:
 Response: {
   "data": {
     "sharedInputTest": {
-      "digest": "A4pwYGvGBtGzcEjQuZnZSCH1hjDbsazHNLJexATQg9sL",
+      "digest": "BgyVWkMb3V6Z5Ks2NLjJbrohJ2xGQ5xYKqU1husoUhk9",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
           "nodes": [
             {
               "__typename": "SharedInput",
-              "address": "0x6efabd895ffd324d60bcffd16fefc12b8019357444fb318338a55c838f0fa0ba",
+              "address": "0x2fb770f5cd650d7db23a7a5af74c6d6e0a7227dad7431470fc4d054dc5ceeba4",
               "initialSharedVersion": 2,
               "mutable": true
             },
@@ -128,7 +127,7 @@ task 14, lines 128-151:
 Response: {
   "data": {
     "ownedOrImmutableTest": {
-      "digest": "5NQrues5DqGT2TnBssic3s6LcvxWVz9iTuwSDyTjFrsX",
+      "digest": "CLWcCZBe21bfABbxTAXGMkHX7AmdafQn6bnxJMuxJrDD",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -136,9 +135,9 @@ Response: {
             {
               "__typename": "OwnedOrImmutable",
               "object": {
-                "address": "0xfc6958b9c843379a3b412e17eadf49b033c98e10dade1e05a5bd5f2ac7343122",
+                "address": "0x3e8068450e610053f4f65e29e414135a7652146c724148de35eb14c2e73f0b36",
                 "version": 2,
-                "digest": "AeTDMJVbfk2CXee9ij3LJtenniYqRrj5PwoRkfY7fPeu"
+                "digest": "FbFbpCEftUMJZJhuTh9Pou3b1SexCmuqrqb1utbHyCbC"
               }
             }
           ]
@@ -153,7 +152,7 @@ task 15, lines 153-176:
 Response: {
   "data": {
     "receivingInputTest": {
-      "digest": "5qnWWyFfja2MJhbJzcSevFWYekDLMLsEXoYi7gq88uwK",
+      "digest": "GQG22XMrzZYrd2Gr5zeSXwyx237Y7L5SRfeQZ31ZdQoo",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -164,9 +163,9 @@ Response: {
             {
               "__typename": "Receiving",
               "object": {
-                "address": "0x7ff22016dd7eef6dc2ff2d80ecc8f040b5deec8104adbf003979891287ccc775",
+                "address": "0xc7f1c5b162c28d835e635f9e1c10de45ae9362e9cbb02c34eb8bd1e1a4a86519",
                 "version": 6,
-                "digest": "F4wwLhrBr5wYUhrfE4PrUoSxY2oR1ShAX2EYXP47szoM"
+                "digest": "9wDNw619rmt9pFy2cj5km7UpqrBAxLxY9H1vFNDzUbYS"
               }
             },
             {

@@ -39,23 +39,30 @@ use crate::PackageData;
 use crate::ProtocolConfigData;
 use crate::TransactionData;
 use crate::TransactionEventsData;
-use crate::Watermark;
+use crate::WatermarkV0;
+use crate::WatermarkV1;
 use crate::bigtable::metrics::KvMetrics;
+use crate::bigtable::proto::bigtable::v2::CheckAndMutateRowRequest;
 use crate::bigtable::proto::bigtable::v2::MutateRowsRequest;
+use crate::bigtable::proto::bigtable::v2::Mutation;
 use crate::bigtable::proto::bigtable::v2::PingAndWarmRequest;
 use crate::bigtable::proto::bigtable::v2::ReadRowsRequest;
 use crate::bigtable::proto::bigtable::v2::RequestStats;
 use crate::bigtable::proto::bigtable::v2::RowFilter;
 use crate::bigtable::proto::bigtable::v2::RowRange;
 use crate::bigtable::proto::bigtable::v2::RowSet;
+use crate::bigtable::proto::bigtable::v2::ValueRange;
 use crate::bigtable::proto::bigtable::v2::bigtable_client::BigtableClient as BigtableInternalClient;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
+use crate::bigtable::proto::bigtable::v2::mutation;
+use crate::bigtable::proto::bigtable::v2::mutation::SetCell;
 use crate::bigtable::proto::bigtable::v2::read_rows_response::cell_chunk::RowStatus;
 use crate::bigtable::proto::bigtable::v2::request_stats::StatsView;
 use crate::bigtable::proto::bigtable::v2::row_filter::Chain;
 use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
+use crate::bigtable::proto::bigtable::v2::value_range;
 use crate::tables;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
@@ -364,35 +371,160 @@ impl BigTableClient {
         Ok(None)
     }
 
-    /// Get the pipeline watermark from the watermarks table.
-    pub async fn get_pipeline_watermark(&mut self, pipeline: &str) -> Result<Option<Watermark>> {
+    /// Read the raw cells of a pipeline's watermark row. Returns an empty vec when the row
+    /// does not exist. Callers decode whichever schema variant they need (e.g.
+    /// [`tables::watermarks::decode_v1`] / [`tables::watermarks::decode_v0`]).
+    pub async fn get_pipeline_watermark_rows(
+        &mut self,
+        pipeline: &str,
+    ) -> Result<Vec<(Bytes, Bytes)>> {
         let pipeline_key = tables::watermarks::encode_key(pipeline);
-
         let rows = self
             .multi_get(tables::watermarks::NAME, vec![pipeline_key.clone()], None)
             .await?;
-
         for (key, row) in rows {
             if key.as_ref() == pipeline_key.as_slice() {
-                return Ok(Some(tables::watermarks::decode(&row)?));
+                return Ok(row);
             }
         }
-
-        Ok(None)
+        Ok(Vec::new())
     }
 
-    /// Set the pipeline watermark in the watermarks table.
-    pub async fn set_pipeline_watermark(
+    /// CAS write to a watermarks row: write `cells` only when the existing `column` cell is
+    /// absent or has a u64 BE value strictly less than `new_value`. Returns `true` iff the
+    /// write happened (i.e. the new value strictly increased the guarded column). Cells not
+    /// included here retain their existing values in BigTable.
+    pub async fn cas_write_pipeline_watermark_cells(
         &mut self,
         pipeline: &str,
-        watermark: &Watermark,
-    ) -> Result<()> {
-        let entry = tables::make_entry(
-            tables::watermarks::encode_key(pipeline),
-            tables::watermarks::encode(watermark)?,
-            Some(watermark.timestamp_ms_hi_inclusive),
-        );
-        self.write_entries(tables::watermarks::NAME, [entry]).await
+        column: &'static str,
+        new_value: u64,
+        cells: Vec<(&'static str, Bytes)>,
+    ) -> Result<bool> {
+        let mutations = build_set_cell_mutations(cells);
+        let predicate = column_value_at_least_filter(column, u64_be(new_value));
+        // Predicate is "guarded column has a value >= new" → predicate_matched = true means
+        // the existing value blocks the write, so false_mutations are what we want to run.
+        let predicate_matched = self
+            .check_and_mutate_row(
+                tables::watermarks::NAME,
+                tables::watermarks::encode_key(pipeline),
+                Some(predicate),
+                Vec::new(),
+                mutations,
+            )
+            .await?;
+        Ok(!predicate_matched)
+    }
+
+    /// Returns `true` iff the supplied `chain_id` matches the chain_id stored for `pipeline`.
+    /// On the first call (no chain_id cell yet) writes `chain_id` and returns `true`. The
+    /// chain_id cell is independent of the v1 watermark cells, so this can be invoked before
+    /// `init_watermark`.
+    pub async fn accepts_chain_id(&mut self, pipeline: &str, chain_id: [u8; 32]) -> Result<bool> {
+        use tables::watermarks::col;
+        let mutations =
+            build_set_cell_mutations([(col::CHAIN_ID, Bytes::copy_from_slice(&chain_id))]);
+        let predicate = column_exists_filter(col::CHAIN_ID);
+        // Predicate is "row already has a chain_id" → false_mutations write the new chain_id
+        // when nothing is stored yet.
+        let predicate_matched = self
+            .check_and_mutate_row(
+                tables::watermarks::NAME,
+                tables::watermarks::encode_key(pipeline),
+                Some(predicate),
+                Vec::new(),
+                mutations,
+            )
+            .await?;
+        if !predicate_matched {
+            return Ok(true);
+        }
+        let row = self.get_pipeline_watermark_rows(pipeline).await?;
+        let cell = row
+            .iter()
+            .find_map(|(c, v)| (c.as_ref() == col::CHAIN_ID.as_bytes()).then_some(v))
+            .context("chain_id missing after CAS reported it present")?;
+        let stored: [u8; 32] = cell.as_ref().try_into().map_err(|_| {
+            anyhow::anyhow!(
+                "`{}` column has unexpected length {} (expected 32)",
+                col::CHAIN_ID,
+                cell.len()
+            )
+        })?;
+        Ok(stored == chain_id)
+    }
+
+    /// Create the row for a pipeline iff no schema-version cell exists yet. Used by
+    /// `init_watermark` for fresh rows and the v0 → v1 bootstrap. Returns `true` iff the
+    /// write happened.
+    pub async fn create_pipeline_watermark_if_absent(
+        &mut self,
+        pipeline: &str,
+        new: &WatermarkV1,
+    ) -> Result<bool> {
+        use tables::watermarks::col;
+        let mut cells = vec![
+            (col::SCHEMA_VERSION, u64_be(tables::watermarks::SCHEMA_V1)),
+            (col::EPOCH_HI, u64_be(new.epoch_hi_inclusive)),
+            (col::TX_HI, u64_be(new.tx_hi)),
+            (col::TIMESTAMP_MS_HI, u64_be(new.timestamp_ms_hi_inclusive)),
+            (col::READER_LO, u64_be(new.reader_lo)),
+            (col::PRUNER_HI, u64_be(new.pruner_hi)),
+            (col::PRUNER_TIMESTAMP_MS, u64_be(new.pruner_timestamp_ms)),
+        ];
+        if let Some(checkpoint) = new.checkpoint_hi_inclusive {
+            cells.push((col::CHECKPOINT_HI, u64_be(checkpoint)));
+            let v0 = WatermarkV0 {
+                epoch_hi_inclusive: new.epoch_hi_inclusive,
+                checkpoint_hi_inclusive: checkpoint,
+                tx_hi: new.tx_hi,
+                timestamp_ms_hi_inclusive: new.timestamp_ms_hi_inclusive,
+            };
+            cells.push((col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)));
+        }
+        let mutations = build_set_cell_mutations(cells);
+        let predicate = column_exists_filter(tables::watermarks::col::SCHEMA_VERSION);
+        // Predicate is "row has any schema-version cell" → false_mutations write the new row.
+        let predicate_matched = self
+            .check_and_mutate_row(
+                tables::watermarks::NAME,
+                tables::watermarks::encode_key(pipeline),
+                Some(predicate),
+                Vec::new(),
+                mutations,
+            )
+            .await?;
+        Ok(!predicate_matched)
+    }
+
+    /// Issue a `CheckAndMutateRow` request and return whether the predicate matched.
+    async fn check_and_mutate_row(
+        &mut self,
+        table: &str,
+        row_key: Vec<u8>,
+        predicate_filter: Option<RowFilter>,
+        true_mutations: Vec<Mutation>,
+        false_mutations: Vec<Mutation>,
+    ) -> Result<bool> {
+        let mut request = CheckAndMutateRowRequest {
+            table_name: format!("{}{}", self.table_prefix, table),
+            row_key: row_key.into(),
+            predicate_filter,
+            true_mutations,
+            false_mutations,
+            ..CheckAndMutateRowRequest::default()
+        };
+        if let Some(ref app_profile_id) = self.app_profile_id {
+            request.app_profile_id = app_profile_id.clone();
+        }
+        let response = self
+            .client
+            .clone()
+            .check_and_mutate_row(request)
+            .await?
+            .into_inner();
+        Ok(response.predicate_matched)
     }
 
     /// Write pre-built entries to BigTable.
@@ -812,7 +944,7 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_watermark_for_pipelines(
         &mut self,
         pipelines: &[&str],
-    ) -> Result<Option<Watermark>> {
+    ) -> Result<Option<WatermarkV1>> {
         let keys: Vec<Vec<u8>> = pipelines
             .iter()
             .map(|name| tables::watermarks::encode_key(name))
@@ -824,16 +956,23 @@ impl KeyValueStoreReader for BigTableClient {
             return Ok(None);
         }
 
-        let mut min_wm: Option<Watermark> = None;
+        // A row is hidden if `checkpoint_hi_inclusive == None` or
+        // `checkpoint_hi_inclusive < reader_lo`. If any pipeline is hidden, every consumer
+        // of this method (RPC/graphql) treats the whole result as missing, resulting in `Ok(None)`.
+        let mut min_wm: Option<(u64, WatermarkV1)> = None;
         for (_, row) in &rows {
-            let wm = tables::watermarks::decode(row)?;
-            min_wm = Some(match min_wm {
-                Some(prev) if prev.checkpoint_hi_inclusive <= wm.checkpoint_hi_inclusive => prev,
-                _ => wm,
-            });
+            let Some(wm) = tables::watermarks::decode_v1(row)? else {
+                return Ok(None);
+            };
+            let Some(cp) = wm.checkpoint_hi_inclusive.filter(|cp| *cp >= wm.reader_lo) else {
+                return Ok(None);
+            };
+            if min_wm.as_ref().is_none_or(|(prev, _)| cp < *prev) {
+                min_wm = Some((cp, wm));
+            }
         }
 
-        Ok(min_wm)
+        Ok(min_wm.map(|(_, wm)| wm))
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
@@ -1118,5 +1257,75 @@ impl KeyValueStoreReader for BigTableClient {
             }
         }
         Ok(results)
+    }
+}
+
+fn u64_be(v: u64) -> Bytes {
+    Bytes::copy_from_slice(&v.to_be_bytes())
+}
+
+/// Build `Mutation::SetCell` entries for the given `(column, value)` cells, all in the `sui`
+/// column family with server-assigned timestamps.
+fn build_set_cell_mutations(
+    cells: impl IntoIterator<Item = (&'static str, Bytes)>,
+) -> Vec<Mutation> {
+    cells
+        .into_iter()
+        .map(|(col, val)| Mutation {
+            mutation: Some(mutation::Mutation::SetCell(SetCell {
+                family_name: tables::FAMILY.to_string(),
+                column_qualifier: Bytes::from(col),
+                timestamp_micros: -1,
+                value: val,
+            })),
+        })
+        .collect()
+}
+
+/// Build a `RowFilter` matching cells in `sui:<column>` whose value is `>= value` (interpreted
+/// as raw cell bytes; callers pass the u64 BE encoding for watermark cells). Used as the
+/// CAS predicate for the monotonic-increase setters: predicate matches iff the existing value
+/// would block the write.
+fn column_value_at_least_filter(column: &str, value: Bytes) -> RowFilter {
+    RowFilter {
+        filter: Some(Filter::Chain(Chain {
+            filters: vec![
+                RowFilter {
+                    filter: Some(Filter::FamilyNameRegexFilter(tables::FAMILY.to_string())),
+                },
+                RowFilter {
+                    filter: Some(Filter::ColumnQualifierRegexFilter(Bytes::from(format!(
+                        "^{}$",
+                        column
+                    )))),
+                },
+                RowFilter {
+                    filter: Some(Filter::ValueRangeFilter(ValueRange {
+                        start_value: Some(value_range::StartValue::StartValueClosed(value)),
+                        end_value: None,
+                    })),
+                },
+            ],
+        })),
+    }
+}
+
+/// Build a `RowFilter` matching any cell in the `sui:<column>` column. Used as a CAS predicate
+/// for "create-if-absent" paths: if the predicate matches, the cell already exists.
+fn column_exists_filter(column: &str) -> RowFilter {
+    RowFilter {
+        filter: Some(Filter::Chain(Chain {
+            filters: vec![
+                RowFilter {
+                    filter: Some(Filter::FamilyNameRegexFilter(tables::FAMILY.to_string())),
+                },
+                RowFilter {
+                    filter: Some(Filter::ColumnQualifierRegexFilter(Bytes::from(format!(
+                        "^{}$",
+                        column
+                    )))),
+                },
+            ],
+        })),
     }
 }

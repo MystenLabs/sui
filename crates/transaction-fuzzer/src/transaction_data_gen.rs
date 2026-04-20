@@ -9,7 +9,7 @@ use crate::type_arg_fuzzer::{gen_type_tag, pt_for_tags};
 use proptest::collection::vec;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 
-use sui_types::digests::ObjectDigest;
+use sui_types::digests::{ChainIdentifier, ObjectDigest};
 use sui_types::transaction::{
     GasData, TransactionData, TransactionDataV1, TransactionExpiration, TransactionKind,
 };
@@ -18,12 +18,35 @@ use crate::account_universe::{gas_budget_selection_strategy, gas_price_selection
 
 const MAX_NUM_GAS_OBJS: usize = 1024_usize;
 
+pub fn gen_valid_during_expiration() -> impl Strategy<Value = TransactionExpiration> {
+    (
+        proptest::option::of(any::<u64>()),
+        proptest::option::of(any::<u64>()),
+        proptest::option::of(any::<u64>()),
+        proptest::option::of(any::<u64>()),
+        any::<u32>(),
+    )
+        .prop_map(
+            |(min_epoch, max_epoch, min_timestamp, max_timestamp, nonce)| {
+                TransactionExpiration::ValidDuring {
+                    min_epoch,
+                    max_epoch,
+                    min_timestamp,
+                    max_timestamp,
+                    chain: ChainIdentifier::random(),
+                    nonce,
+                }
+            },
+        )
+}
+
 pub fn gen_transaction_expiration_with_bound(
     max_epoch: u64,
 ) -> impl Strategy<Value = TransactionExpiration> {
     prop_oneof![
         Just(TransactionExpiration::None),
         (0u64..=max_epoch).prop_map(TransactionExpiration::Epoch),
+        gen_valid_during_expiration(),
     ]
 }
 
@@ -31,6 +54,7 @@ pub fn gen_transaction_expiration() -> impl Strategy<Value = TransactionExpirati
     prop_oneof![
         Just(TransactionExpiration::None),
         (0u64..=u64::MAX).prop_map(TransactionExpiration::Epoch),
+        gen_valid_during_expiration(),
     ]
 }
 
