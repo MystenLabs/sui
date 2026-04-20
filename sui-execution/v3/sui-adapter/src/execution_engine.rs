@@ -229,8 +229,7 @@ mod checked {
                 _ => (),
             };
 
-            let (status, command) = error.to_execution_status();
-            ExecutionStatus::new_failure(status, command)
+            ExecutionStatus::new_failure(error.to_execution_failure())
         } else {
             ExecutionStatus::Success
         };

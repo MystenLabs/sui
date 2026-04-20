@@ -1,5 +1,6 @@
 ---
 source: crates/sui-swarm-config/tests/snapshot_tests.rs
+assertion_line: 136
 expression: network_config
 ---
 validator_configs:
@@ -22,8 +23,6 @@ validator_configs:
       db-retention-epochs: ~
       db-pruner-period-secs: ~
       max-pending-transactions: ~
-      max-submit-position: ~
-      submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
@@ -196,8 +195,6 @@ validator_configs:
       db-retention-epochs: ~
       db-pruner-period-secs: ~
       max-pending-transactions: ~
-      max-submit-position: ~
-      submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
@@ -370,8 +367,6 @@ validator_configs:
       db-retention-epochs: ~
       db-pruner-period-secs: ~
       max-pending-transactions: ~
-      max-submit-position: ~
-      submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
@@ -544,8 +539,6 @@ validator_configs:
       db-retention-epochs: ~
       db-pruner-period-secs: ~
       max-pending-transactions: ~
-      max-submit-position: ~
-      submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
@@ -718,8 +711,6 @@ validator_configs:
       db-retention-epochs: ~
       db-pruner-period-secs: ~
       max-pending-transactions: ~
-      max-submit-position: ~
-      submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
@@ -892,8 +883,6 @@ validator_configs:
       db-retention-epochs: ~
       db-pruner-period-secs: ~
       max-pending-transactions: ~
-      max-submit-position: ~
-      submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false
@@ -1066,8 +1055,6 @@ validator_configs:
       db-retention-epochs: ~
       db-pruner-period-secs: ~
       max-pending-transactions: ~
-      max-submit-position: ~
-      submit-delay-step-override-millis: ~
       parameters: ~
     enable-index-processing: true
     sync-post-process-one-tx: false

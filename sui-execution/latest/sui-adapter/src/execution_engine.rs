@@ -63,7 +63,7 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorTrait};
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
-    use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
+    use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::id::UID;
@@ -255,8 +255,7 @@ mod checked {
                 _ => (),
             };
 
-            let ExecutionFailure { error, command } = error.to_execution_failure();
-            ExecutionStatus::new_failure(error, command)
+            ExecutionStatus::new_failure(error.to_execution_failure())
         } else {
             ExecutionStatus::Success
         };

@@ -154,6 +154,7 @@ pub struct OffchainClusterConfig {
     pub indexer_config: IndexerConfig,
     pub consistent_config: ConsistentConfig,
     pub jsonrpc_config: JsonRpcConfig,
+    pub jsonrpc_node_args: JsonRpcNodeArgs,
     pub graphql_config: GraphQlConfig,
     pub bootstrap_genesis: Option<BootstrapGenesis>,
 }
@@ -336,6 +337,7 @@ impl OffchainCluster {
             indexer_config,
             consistent_config,
             jsonrpc_config,
+            jsonrpc_node_args,
             graphql_config,
             bootstrap_genesis,
         }: OffchainClusterConfig,
@@ -431,7 +433,7 @@ impl OffchainCluster {
             kv_args.clone(),
             consistent_reader_args.clone(),
             jsonrpc_args,
-            JsonRpcNodeArgs::default(),
+            jsonrpc_node_args,
             SystemPackageTaskArgs::default(),
             jsonrpc_config,
             registry,
@@ -738,6 +740,7 @@ impl Default for OffchainClusterConfig {
             indexer_config: IndexerConfig::for_test(),
             consistent_config: ConsistentConfig::for_test(),
             jsonrpc_config: Default::default(),
+            jsonrpc_node_args: Default::default(),
             graphql_config: Default::default(),
             bootstrap_genesis: None,
         }

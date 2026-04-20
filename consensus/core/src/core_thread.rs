@@ -408,16 +408,11 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();
         let (commit_consumer, _commit_receiver) = CommitConsumerArgs::new(0, 0);
-        let leader_schedule = Arc::new(LeaderSchedule::from_store(
-            context.clone(),
-            dag_state.clone(),
-        ));
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
             transaction_vote_tracker.clone(),
-            leader_schedule.clone(),
         )
         .await;
         let leader_schedule = Arc::new(LeaderSchedule::from_store(

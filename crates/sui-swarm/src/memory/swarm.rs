@@ -60,8 +60,6 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_run_with_range: Option<RunWithRange>,
     fullnode_policy_config: Option<PolicyConfig>,
     fullnode_fw_config: Option<RemoteFirewallConfig>,
-    max_submit_position: Option<usize>,
-    submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
     funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     disable_fullnode_pruning: bool,
@@ -96,8 +94,6 @@ impl SwarmBuilder {
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
             fullnode_fw_config: None,
-            max_submit_position: None,
-            submit_delay_step_override_millis: None,
             global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(true),
             funds_withdraw_scheduler_type_config: None,
             disable_fullnode_pruning: false,
@@ -134,8 +130,6 @@ impl<R> SwarmBuilder<R> {
             fullnode_run_with_range: self.fullnode_run_with_range,
             fullnode_policy_config: self.fullnode_policy_config,
             fullnode_fw_config: self.fullnode_fw_config,
-            max_submit_position: self.max_submit_position,
-            submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
             funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
@@ -352,21 +346,8 @@ impl<R> SwarmBuilder<R> {
         self.genesis_config.as_mut().unwrap()
     }
 
-    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
-        self.max_submit_position = Some(max_submit_position);
-        self
-    }
-
     pub fn with_disable_fullnode_pruning(mut self) -> Self {
         self.disable_fullnode_pruning = true;
-        self
-    }
-
-    pub fn with_submit_delay_step_override_millis(
-        mut self,
-        submit_delay_step_override_millis: u64,
-    ) -> Self {
-        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
         self
     }
 }
@@ -413,16 +394,6 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
 
             if let Some(path) = self.data_ingestion_dir {
                 config_builder = config_builder.with_data_ingestion_dir(path);
-            }
-
-            if let Some(max_submit_position) = self.max_submit_position {
-                config_builder = config_builder.with_max_submit_position(max_submit_position);
-            }
-
-            if let Some(submit_delay_step_override_millis) = self.submit_delay_step_override_millis
-            {
-                config_builder = config_builder
-                    .with_submit_delay_step_override_millis(submit_delay_step_override_millis);
             }
 
             #[allow(unused_mut)]

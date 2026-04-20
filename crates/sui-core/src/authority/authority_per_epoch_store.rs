@@ -3192,12 +3192,11 @@ impl AuthorityPerEpochStore {
         // Signatures are verified as part of the consensus payload verification in SuiTxValidator
         match &transaction.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
-                kind: ConsensusTransactionKind::CertifiedTransaction(_certificate),
-                ..
-            }) => {}
-            SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind:
-                    ConsensusTransactionKind::UserTransaction(_)
+                    // CertifiedTransaction and UserTransaction (v1) are deprecated and
+                    // rejected by SuiTxValidator; kept in the match for exhaustiveness.
+                    ConsensusTransactionKind::CertifiedTransaction(_)
+                    | ConsensusTransactionKind::UserTransaction(_)
                     | ConsensusTransactionKind::UserTransactionV2(_),
                 ..
             }) => {}

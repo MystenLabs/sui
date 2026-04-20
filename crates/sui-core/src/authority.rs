@@ -327,14 +327,14 @@ pub struct AuthorityMetrics {
     /// Consensus commit and transaction handler metrics
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_transaction_sizes: HistogramVec,
-    pub consensus_handler_num_low_scoring_authorities: IntGauge,
-    pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
+    pub accumulator_deposits: IntCounter,
+    pub accumulator_withdrawals: IntCounter,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
     pub consensus_finalized_user_transactions: IntGaugeVec,
@@ -652,17 +652,6 @@ impl AuthorityMetrics {
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
-                "consensus_handler_num_low_scoring_authorities",
-                "Number of low scoring authorities based on reputation scores from consensus",
-                registry
-            ).unwrap(),
-            consensus_handler_scores: register_int_gauge_vec_with_registry!(
-                "consensus_handler_scores",
-                "scores from consensus for each authority",
-                &["authority"],
-                registry,
-            ).unwrap(),
             consensus_handler_deferred_transactions: register_int_counter_with_registry!(
                 "consensus_handler_deferred_transactions",
                 "Number of transactions deferred by consensus handler",
@@ -693,6 +682,16 @@ impl AuthorityMetrics {
                 "consensus_committed_subdags",
                 "Number of committed subdags, sliced by author",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            accumulator_deposits: register_int_counter_with_registry!(
+                "accumulator_deposits",
+                "Total accumulator deposit (merge) events processed in settlement",
+                registry,
+            ).unwrap(),
+            accumulator_withdrawals: register_int_counter_with_registry!(
+                "accumulator_withdrawals",
+                "Total accumulator withdrawal (split) events processed in settlement",
                 registry,
             ).unwrap(),
             consensus_committed_messages: register_int_gauge_vec_with_registry!(

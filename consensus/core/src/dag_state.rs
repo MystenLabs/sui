@@ -149,8 +149,7 @@ impl DagState {
                             max(last_committed_rounds[block_ref.author], block_ref.round);
                     }
                     let committed_subdag =
-                        load_committed_subdag_from_store(store.as_ref(), commit.clone(), vec![]);
-                    // We don't need to recover reputation scores for unscored_committed_subdags
+                        load_committed_subdag_from_store(store.as_ref(), commit.clone());
                     unscored_committed_subdags.push(committed_subdag);
                 });
         }
@@ -1165,10 +1164,6 @@ impl DagState {
 
     pub(crate) fn scoring_subdags_count(&self) -> usize {
         self.scoring_subdag.scored_subdags_count()
-    }
-
-    pub(crate) fn is_scoring_subdag_empty(&self) -> bool {
-        self.scoring_subdag.is_empty()
     }
 
     pub(crate) fn calculate_scoring_subdag_scores(&self) -> ReputationScores {

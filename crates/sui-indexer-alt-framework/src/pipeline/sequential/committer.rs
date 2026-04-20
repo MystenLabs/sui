@@ -34,7 +34,6 @@ use crate::store::SequentialStore;
 /// Writes are performed on checkpoint boundaries (more than one checkpoint can be present in a
 /// single write), in a single transaction that includes all row updates and an update to the
 /// watermark table.
-///
 /// The committer can be configured to lag behind the ingestion service by a fixed number of
 /// checkpoints (configured by `checkpoint_lag`). A value of `0` means no lag.
 ///
