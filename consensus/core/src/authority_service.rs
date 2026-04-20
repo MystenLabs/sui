@@ -365,7 +365,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             if proposed_blocks.is_empty() {
                 let last_proposed_block = dag_state
                     .get_last_proposed_block()
-                    .expect("A block should have been returned");
+                    .expect("Last proposed block should be returned on validators");
                 proposed_blocks = if last_proposed_block.round() > GENESIS_ROUND {
                     vec![last_proposed_block]
                 } else {

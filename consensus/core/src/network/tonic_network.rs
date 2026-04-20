@@ -764,9 +764,14 @@ impl TonicManager {
         // Calculate own address
         let own_address = if let Some(listen_addr) = &context.parameters.listen_address_override {
             listen_addr
-        } else if !context.is_validator() {
-            // Observer node - use a default local address since we're not in the committee. The port will be set separately during the server setup.
-            &Multiaddr::try_from("/ip4/0.0.0.0/tcp/0").unwrap()
+        } else if context.is_observer() {
+            // Observer node - use the configured observer server port since we're not in the committee.
+            let port = context
+                .parameters
+                .tonic
+                .observer_server_port
+                .expect("Observer server port must be configured for observer nodes");
+            &Multiaddr::try_from(format!("/ip4/0.0.0.0/tcp/{port}")).unwrap()
         } else {
             let authority = context.committee.authority(context.own_index);
             // By default, bind to the unspecified address to allow the actual address to be assigned.

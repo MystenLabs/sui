@@ -61,29 +61,18 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let observer_service = self.observer_service.clone();
-
-        // Get the highest rounds we've seen per authority from DagState
-        let highest_round_per_authority = {
-            let dag_state = self.dag_state.read();
-            let mut rounds = vec![0u64; context.committee.size()];
-            for (authority, _) in context.committee.authorities() {
-                rounds[authority.value()] =
-                    dag_state.get_last_block_for_authority(authority).round() as u64;
-            }
-            rounds
-        };
-
-        if let Some(handle) = self.subscription.lock().take() {
-            handle.abort();
-        }
+        let dag_state = self.dag_state.clone();
 
         let mut subscription = self.subscription.lock();
+        if let Some(handle) = subscription.take() {
+            handle.abort();
+        }
         *subscription = Some(spawn_monitored_task!(Self::subscription_loop(
             context,
             network_client,
             observer_service,
+            dag_state,
             peer,
-            highest_round_per_authority,
         )));
     }
 
@@ -99,8 +88,8 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         context: Arc<Context>,
         network_client: Arc<C>,
         observer_service: Arc<S>,
+        dag_state: Arc<parking_lot::RwLock<DagState>>,
         peer: PeerId,
-        highest_round_per_authority: Vec<u64>,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
         const MIN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -126,14 +115,23 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             }
             retries += 1;
 
+            // Recompute highest rounds from DagState before each connection attempt
+            // so reconnections resume from where we left off rather than re-fetching
+            // already-seen blocks.
+            let highest_round_per_authority = {
+                let ds = dag_state.read();
+                let mut rounds = vec![0u64; context.committee.size()];
+                for (authority, _) in context.committee.authorities() {
+                    rounds[authority.value()] =
+                        ds.get_last_block_for_authority(authority).round() as u64;
+                }
+                rounds
+            };
+
             // Subscribe to stream blocks from the peer.
             let request_timeout = MIN_TIMEOUT.max(delay);
             let mut blocks = match network_client
-                .stream_blocks(
-                    peer.clone(),
-                    highest_round_per_authority.clone(),
-                    request_timeout,
-                )
+                .stream_blocks(peer.clone(), highest_round_per_authority, request_timeout)
                 .await
             {
                 Ok(blocks) => {
@@ -213,8 +211,9 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                             counter.fetch_sub(1, Ordering::AcqRel);
                         });
 
-                        // Reset retries when a block is received.
+                        // Reset retries when a block is received and also reset the backoff.
                         retries = 0;
+                        backoff.reset();
                     }
                     None => {
                         debug!("Subscription to blocks from peer {:?} ended", peer);
