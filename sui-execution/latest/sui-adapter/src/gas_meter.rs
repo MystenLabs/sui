@@ -16,7 +16,9 @@ use move_vm_runtime::{
     },
 };
 use sui_types::gas_model::{
-    gas_predicates::{native_function_threshold_exceeded, use_legacy_abstract_size},
+    gas_predicates::{
+        fix_native_double_pop, native_function_threshold_exceeded, use_legacy_abstract_size,
+    },
     tables::{GasStatus, REFERENCE_SIZE, STRUCT_SIZE, VEC_SIZE},
 };
 
@@ -91,11 +93,19 @@ fn get_simple_instruction_stack_change(
 }
 
 impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
-    /// Charge an instruction and fail if not enough gas units are left.
+    /// In gas model v12+, gas is batched by the Charge instruction so this only
+    /// tracks stack height. In older versions, this charges gas as before.
     fn charge_simple_instr(&mut self, instr: SimpleInstruction) -> PartialVMResult<()> {
         let (pops, pushes, pop_size, push_size) = get_simple_instruction_stack_change(instr)?;
-        self.0
-            .charge(1, pushes, pops, push_size.into(), pop_size.into())
+        if use_charge_batching(self.0.gas_model_version) {
+            // Gas is charged by the Charge instruction. Only update stack height.
+            self.0.push_stack(pushes)?;
+            self.0.pop_stack(pops);
+            Ok(())
+        } else {
+            self.0
+                .charge(1, pushes, pops, push_size.into(), pop_size.into())
+        }
     }
 
     fn charge_pop(&mut self, popped_val: impl ValueView) -> PartialVMResult<()> {
@@ -148,18 +158,21 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         &mut self,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
-        // Determine the number of pops that are going to be needed for this function call, and
-        // charge for them.
-        let pops = args.len() as u64;
-        // Calculate the size decrease of the stack from the above pops.
-        let stack_reduction_size = args.try_fold(
-            AbstractMemorySize::new(pops),
-            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(&self.0, elem)?) },
-        )?;
-        // Track that this is going to be popping from the operand stack. We also increment the
-        // instruction count as we need to account for the `Call` bytecode that initiated this
-        // native call.
-        self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
+        if fix_native_double_pop(self.0.gas_model_version) {
+            // The args were already popped by charge_call/charge_call_generic.
+            // Only charge the instruction cost, not the pops.
+            self.0.charge(1, 0, 0, 0, 0)
+        } else {
+            // Legacy: pop args again (double-pop, masked by saturating_sub).
+            let pops = args.len() as u64;
+            let stack_reduction_size = args.try_fold(
+                AbstractMemorySize::new(pops),
+                |acc, elem| -> PartialVMResult<_> {
+                    Ok(acc + abstract_memory_size(&self.0, elem)?)
+                },
+            )?;
+            self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
+        }
     }
 
     fn charge_call(
@@ -384,6 +397,25 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         Ok(())
     }
 
+    fn charge_block(
+        &mut self,
+        instructions: u64,
+        _pushes: u64,
+        _pops: u64,
+        push_size: u64,
+        pop_size: u64,
+    ) -> PartialVMResult<()> {
+        if use_charge_batching(self.0.gas_model_version) {
+            // Do not pass pushes/pops — stack height is tracked per-instruction by
+            // charge_simple_instr. Only charge gas (instruction count + sizes).
+            self.0.charge(instructions, 0, 0, push_size, pop_size)
+        } else {
+            // Legacy: Charge instruction is a no-op because charge_simple_instr
+            // already charged per-instruction.
+            Ok(())
+        }
+    }
+
     fn remaining_gas(&self) -> InternalGas {
         if !self.0.charge {
             return InternalGas::new(u64::MAX);
@@ -427,6 +459,13 @@ fn reduce_stack_size(gas_model_version: u64) -> bool {
     gas_model_version > 10
 }
 
+fn use_charge_batching(gas_model_version: u64) -> bool {
+    // In gas model v12+, the Charge instruction batches gas deduction for
+    // fixed-cost instructions. charge_simple_instr then only tracks stack
+    // height without charging gas.
+    gas_model_version > 11
+}
+
 fn size_config_for_gas_model_version(
     gas_model_version: u64,
     should_traverse_refs: bool,
@@ -446,5 +485,94 @@ fn size_config_for_gas_model_version(
             traverse_references: false,
             include_vector_size: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::gas_model::tables::unit_cost_schedule;
+
+    /// Drives `SuiGasMeter` through the same sequence of fixed-cost instructions
+    /// under both gas-model versions (pre-batching v11 vs batching v12) and
+    /// reports the gas each path charged.
+    ///
+    /// The block is `{LdU64, LdU64, Add}` so aggregates are deterministic and
+    /// hand-verifiable under `unit_cost_schedule` (all tier multipliers = 1).
+    fn drive_block(gas_model_version: u64) -> u64 {
+        let cost_table = unit_cost_schedule();
+        // Large enough budget that tiers don't advance during the block.
+        let budget: u64 = 1_000_000_000;
+        let gas_price: u64 = 1;
+        let mut status = GasStatus::new(cost_table, budget, gas_price, gas_model_version);
+        let initial: u64 = u64::from(GasMeter::remaining_gas(&SuiGasMeter(&mut status)));
+
+        let block = [
+            SimpleInstruction::LdU64,
+            SimpleInstruction::LdU64,
+            SimpleInstruction::Add,
+        ];
+        let (mut agg_instrs, mut agg_pushes, mut agg_pops, mut agg_push_size, mut agg_pop_size) =
+            (0u64, 0u64, 0u64, 0u64, 0u64);
+        for instr in block {
+            let (pops, pushes, pop_size, push_size) =
+                get_simple_instruction_stack_change(instr).unwrap();
+            agg_instrs += 1;
+            agg_pushes += pushes;
+            agg_pops += pops;
+            agg_push_size += u64::from(push_size);
+            agg_pop_size += u64::from(pop_size);
+        }
+
+        let mut meter = SuiGasMeter(&mut status);
+        // In v12, the JIT prepends Charge to the block; in v11 it's a no-op.
+        meter
+            .charge_block(
+                agg_instrs,
+                agg_pushes,
+                agg_pops,
+                agg_push_size,
+                agg_pop_size,
+            )
+            .unwrap();
+        // Per-instruction traversal happens in both versions.
+        for instr in block {
+            meter.charge_simple_instr(instr).unwrap();
+        }
+
+        let remaining: u64 = u64::from(GasMeter::remaining_gas(&SuiGasMeter(&mut status)));
+        initial - remaining
+    }
+
+    /// A basic block charges identical gas under v11 (per-instruction) and v12
+    /// (batched Charge) up to the expected `pushes * stack_height_tier_mult`
+    /// delta. The delta is inherent to the v12 design: `charge_block` does not
+    /// include a stack-height gas term, and `charge_simple_instr` under v12
+    /// only tracks stack height without charging. This documents that the
+    /// protocol gate is consistent with the gas model it enables.
+    #[test]
+    fn gas_parity_v11_vs_v12_with_documented_delta() {
+        let gas_v11 = drive_block(11);
+        let gas_v12 = drive_block(12);
+
+        // LdU64, LdU64, Add — 3 pushes total, stack_height_tier_mult = 1 under
+        // unit_cost_schedule, so the v11 path charges 3 extra units for
+        // `pushes * height_mult` that v12 omits by design.
+        let expected_delta: u64 = 3;
+        assert_eq!(
+            gas_v11,
+            gas_v12 + expected_delta,
+            "v11 gas {} should exceed v12 gas {} by exactly {} (pushes * height_tier_mult)",
+            gas_v11,
+            gas_v12,
+            expected_delta,
+        );
+
+        // Hand-verification under unit_cost_schedule (abstract sizes of U64/U256
+        // are 1 unit each): instructions=3, push_size=3, pushes=3.
+        // v11 per-instruction: (1+1+1) + (1+1+1) + (1+1+1) = 9
+        // v12 batched charge:  (3+3+0)                      = 6
+        assert_eq!(gas_v11, 9);
+        assert_eq!(gas_v12, 6);
     }
 }

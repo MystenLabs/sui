@@ -312,7 +312,8 @@ fn control_flow_instruction(instruction: &Bytecode) -> bool {
         | Bytecode::Branch(_)
         | Bytecode::VariantSwitch(_) => true,
 
-        Bytecode::Pop
+        Bytecode::Charge(..)
+        | Bytecode::Pop
         | Bytecode::LdU8(_)
         | Bytecode::LdU64(_)
         | Bytecode::LdU128(_)
@@ -394,6 +395,25 @@ fn op_step_impl(
     gas_meter: &mut impl GasMeter,
     instruction: &Bytecode,
 ) -> PartialVMResult<()> {
+    if run_context.vm_config.enable_charge_instruction {
+        op_step_impl_block_charge(state, run_context, gas_meter, instruction)
+    } else {
+        op_step_impl_one_step_charge(state, run_context, gas_meter, instruction)
+    }
+}
+
+/// Pre-Charge-instruction interpreter body: each fixed-cost opcode charges gas
+/// individually via `charge_simple_instr`. Used under protocol versions that
+/// have not enabled `enable_charge_instruction`. The JIT's Charge-insertion
+/// pass is skipped for these protocols, so encountering `Bytecode::Charge`
+/// here is an invariant violation.
+#[inline]
+fn op_step_impl_one_step_charge(
+    state: &mut MachineState,
+    run_context: &mut RunContext,
+    gas_meter: &mut impl GasMeter,
+    instruction: &Bytecode,
+) -> PartialVMResult<()> {
     use SimpleInstruction as S;
 
     match instruction {
@@ -406,6 +426,13 @@ fn op_step_impl(
             return Err(partial_vm_error!(
                 UNREACHABLE,
                 "Call/Return instructions should be handled in `step`, not `op_step_impl`"
+            ));
+        }
+        Bytecode::Charge(_) => {
+            return Err(partial_vm_error!(
+                UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                "Charge instruction encountered under a protocol version that has \
+                 not enabled charge-instruction batching"
             ));
         }
         // -- INTERNAL CONTROL FLOW --------------
@@ -725,6 +752,507 @@ fn op_step_impl(
             gas_meter.charge_simple_instr(S::FreezeRef)?;
             // FreezeRef should just be a null op as we don't distinguish between mut
             // and immut ref at runtime.
+        }
+        Bytecode::Not => {
+            gas_meter.charge_simple_instr(S::Not)?;
+            let value = !state.pop_operand_as::<bool>()?;
+            state.push_operand(Value::bool(value))?;
+        }
+        Bytecode::Nop => {
+            gas_meter.charge_simple_instr(S::Nop)?;
+        }
+        Bytecode::VecPack(ty_ptr, num) => {
+            let num = checked_as!(*num, u16)?;
+            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            check_depth_of_type(run_context, &ty)?;
+            gas_meter.charge_vec_pack(state.last_n_operands(num as usize)?)?;
+            let elements = state.pop_n_operands(num)?;
+            let specialization: VectorSpecialization = (&ty).try_into()?;
+            let value = Vector::pack(specialization, elements)?;
+            state.push_operand(value)?;
+        }
+        Bytecode::VecLen(ty_ptr) => {
+            let vec_ref = state.pop_operand_as::<VectorRef>()?;
+            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            gas_meter.charge_vec_len()?;
+            let value = vec_ref.len(&ty)?;
+            state.push_operand(value)?;
+        }
+        Bytecode::VecImmBorrow(ty_ptr) => {
+            let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
+            let vec_ref = state.pop_operand_as::<VectorRef>()?;
+            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let res = vec_ref.borrow_elem(idx, &ty);
+            gas_meter.charge_vec_borrow(false, res.is_ok())?;
+            state.push_operand(res?)?;
+        }
+        Bytecode::VecMutBorrow(ty_ptr) => {
+            let idx = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
+            let vec_ref = state.pop_operand_as::<VectorRef>()?;
+            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let res = vec_ref.borrow_elem(idx, &ty);
+            gas_meter.charge_vec_borrow(true, res.is_ok())?;
+            state.push_operand(res?)?;
+        }
+        Bytecode::VecPushBack(ty_ptr) => {
+            let elem = state.pop_operand()?;
+            let vec_ref = state.pop_operand_as::<VectorRef>()?;
+            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            gas_meter.charge_vec_push_back(&elem)?;
+            vec_ref.push_back(
+                elem,
+                &ty,
+                run_context.vm_config.runtime_limits_config.vector_len_max,
+            )?;
+        }
+        Bytecode::VecPopBack(ty_ptr) => {
+            let vec_ref = state.pop_operand_as::<VectorRef>()?;
+            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            let res = vec_ref.pop(&ty);
+            gas_meter.charge_vec_pop_back(res.as_ref().ok())?;
+            state.push_operand(res?)?;
+        }
+        Bytecode::VecUnpack(ty_ptr, num) => {
+            let vec_val = state.pop_operand_as::<Vector>()?;
+            let ty = instantiate_single_type(ty_ptr, state.call_stack.current_frame.ty_args())?;
+            gas_meter.charge_vec_unpack(NumArgs::new(*num), vec_val.elem_views()?)?;
+            let elements = vec_val.unpack(&ty, *num)?;
+            for value in elements {
+                state.push_operand(value)?;
+            }
+        }
+        Bytecode::VecSwap(ty_ptr) => {
+            let idx2 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
+            let idx1 = checked_as!(state.pop_operand_as::<u64>()?, usize)?;
+            let vec_ref = state.pop_operand_as::<VectorRef>()?;
+            let ty =
+                instantiate_single_type(ty_ptr.to_ref(), state.call_stack.current_frame.ty_args())?;
+            gas_meter.charge_vec_swap()?;
+            vec_ref.swap(idx1, idx2, &ty)?;
+        }
+        Bytecode::PackVariant(variant_def_ptr) => {
+            let enum_type = variant_def_ptr.datatype();
+            let field_count = variant_def_ptr.field_count();
+            check_depth_of_type(run_context, &enum_type)?;
+            gas_meter.charge_pack(false, state.last_n_operands(field_count)?)?;
+            let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
+            state.push_operand(Value::make_variant(variant_def_ptr.variant_tag, args))?;
+        }
+        Bytecode::PackVariantGeneric(vinst_ptr) => {
+            let variant = &vinst_ptr.variant;
+            let (field_count, variant_tag) = (variant.field_count(), variant.variant_tag);
+            let ty = instantiate_enum_type(vinst_ptr, state.call_stack.current_frame.ty_args())?;
+            check_depth_of_type(run_context, &ty)?;
+            gas_meter.charge_pack(true, state.last_n_operands(field_count)?)?;
+            let args = state.pop_n_operands(checked_as!(field_count, u16)?)?;
+            state.push_operand(Value::make_variant(variant_tag, args))?;
+        }
+        Bytecode::UnpackVariant(variant_ptr) => {
+            let variant = state.pop_operand_as::<Variant>()?;
+            let variant_tag = variant_ptr.variant_tag;
+            gas_meter.charge_unpack(false, variant.field_views())?;
+            variant.check_tag(variant_tag)?;
+            for value in variant.unpack() {
+                state.push_operand(value)?;
+            }
+        }
+        Bytecode::UnpackVariantImmRef(variant_ptr) | Bytecode::UnpackVariantMutRef(variant_ptr) => {
+            let reference = state.pop_operand_as::<VariantRef>()?;
+            let variant_tag = variant_ptr.variant_tag;
+            reference.check_tag(variant_tag)?;
+            let references = reference.unpack_variant()?;
+            gas_meter.charge_unpack(false, references.iter())?;
+            for reference in references {
+                state.push_operand(reference)?;
+            }
+        }
+        Bytecode::UnpackVariantGeneric(variant_inst_ptr) => {
+            let variant = state.pop_operand_as::<Variant>()?;
+            gas_meter.charge_unpack(true, variant.field_views())?;
+            let variant_tag = variant_inst_ptr.variant.variant_tag;
+            variant.check_tag(variant_tag)?;
+            for value in variant.unpack() {
+                state.push_operand(value)?;
+            }
+        }
+        Bytecode::UnpackVariantGenericImmRef(variant_inst_ptr)
+        | Bytecode::UnpackVariantGenericMutRef(variant_inst_ptr) => {
+            let reference = state.pop_operand_as::<VariantRef>()?;
+            let variant_tag = variant_inst_ptr.variant.variant_tag;
+            reference.check_tag(variant_tag)?;
+            let references = reference.unpack_variant()?;
+            gas_meter.charge_unpack(true, references.iter())?;
+            for reference in references {
+                state.push_operand(reference)?;
+            }
+        }
+    }
+    if !control_flow_instruction(instruction) {
+        state.call_stack.current_frame.pc = state
+            .call_stack
+            .current_frame
+            .pc
+            .checked_add(1)
+            .ok_or_else(|| {
+                partial_vm_error!(
+                    PC_OVERFLOW,
+                    "PC overflow when advancing to next instruction"
+                )
+            })?;
+    }
+    Ok(())
+}
+
+/// Post-Charge-instruction interpreter body: basic blocks are prefixed with a
+/// `Charge` opcode that batches fixed gas costs for the block, and
+/// `charge_simple_instr` is used only for per-instruction stack height
+/// tracking. Used under protocol versions with `enable_charge_instruction`.
+#[inline]
+fn op_step_impl_block_charge(
+    state: &mut MachineState,
+    run_context: &mut RunContext,
+    gas_meter: &mut impl GasMeter,
+    instruction: &Bytecode,
+) -> PartialVMResult<()> {
+    use SimpleInstruction as S;
+
+    match instruction {
+        // -- CALL/RETURN OPERATIONS -------------
+        // These should have been handled in `step` above.
+        Bytecode::Ret
+        | Bytecode::CallGeneric(_)
+        | Bytecode::DirectCall(_)
+        | Bytecode::VirtualCall(_) => {
+            return Err(partial_vm_error!(
+                UNREACHABLE,
+                "Call/Return instructions should be handled in `step`, not `op_step_impl`"
+            ));
+        }
+        // -- GAS BATCHING ----------------------
+        // Charge gas for a basic block's fixed-cost instructions at once.
+        // Stack height tracking is handled by the per-instruction charge_simple_instr
+        // calls below; charge_block only handles gas cost.
+        Bytecode::Charge(info) => {
+            gas_meter.charge_block(
+                info.instructions,
+                info.pushes,
+                info.pops,
+                info.push_size,
+                info.pop_size,
+            )?;
+        }
+        // -- INTERNAL CONTROL FLOW --------------
+        Bytecode::BrTrue(offset) => {
+            gas_meter.charge_simple_instr(S::BrTrue)?;
+            state.call_stack.current_frame.pc = if state.pop_operand_as::<bool>()? {
+                *offset
+            } else {
+                state.call_stack.current_frame.pc.safe_add(1)?
+            };
+        }
+        Bytecode::BrFalse(offset) => {
+            gas_meter.charge_simple_instr(S::BrFalse)?;
+            state.call_stack.current_frame.pc = if !state.pop_operand_as::<bool>()? {
+                *offset
+            } else {
+                state.call_stack.current_frame.pc.safe_add(1)?
+            };
+        }
+        Bytecode::Branch(offset) => {
+            gas_meter.charge_simple_instr(S::Branch)?;
+            state.call_stack.current_frame.pc = *offset;
+        }
+        Bytecode::VariantSwitch(jump_table_ptr) => {
+            let reference = state.pop_operand_as::<VariantRef>()?;
+            gas_meter.charge_variant_switch(&reference)?;
+            let tag = reference.get_tag()?;
+            state.call_stack.current_frame.pc = *jump_table_ptr.safe_get(tag as usize)?;
+        }
+        // -- OTHER OPCODES ----------------------
+        Bytecode::Pop => {
+            let popped_val = state.pop_operand()?;
+            gas_meter.charge_pop(popped_val)?;
+        }
+        Bytecode::LdU8(int_const) => {
+            gas_meter.charge_simple_instr(S::LdU8)?;
+            state.push_operand(Value::u8(*int_const))?;
+        }
+        Bytecode::LdU16(int_const) => {
+            gas_meter.charge_simple_instr(S::LdU16)?;
+            state.push_operand(Value::u16(*int_const))?;
+        }
+        Bytecode::LdU32(int_const) => {
+            gas_meter.charge_simple_instr(S::LdU32)?;
+            state.push_operand(Value::u32(*int_const))?;
+        }
+        Bytecode::LdU64(int_const) => {
+            gas_meter.charge_simple_instr(S::LdU64)?;
+            state.push_operand(Value::u64(*int_const))?;
+        }
+        Bytecode::LdU128(int_const) => {
+            gas_meter.charge_simple_instr(S::LdU128)?;
+            state.push_operand(Value::u128(**int_const))?;
+        }
+        Bytecode::LdU256(int_const) => {
+            gas_meter.charge_simple_instr(S::LdU256)?;
+            state.push_operand(Value::u256(**int_const))?;
+        }
+        Bytecode::LdConst(const_ptr) => {
+            gas_meter.charge_ld_const(NumBytes::new(const_ptr.size))?;
+            let val = const_ptr.value.to_value();
+            gas_meter.charge_ld_const_after_deserialization(&val)?;
+            state.push_operand(val)?
+        }
+        Bytecode::LdTrue => {
+            gas_meter.charge_simple_instr(S::LdTrue)?;
+            state.push_operand(Value::bool(true))?;
+        }
+        Bytecode::LdFalse => {
+            gas_meter.charge_simple_instr(S::LdFalse)?;
+            state.push_operand(Value::bool(false))?;
+        }
+        Bytecode::CopyLoc(idx) => {
+            let local = state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .copy_loc(*idx as usize)?;
+            gas_meter.charge_copy_loc(&local)?;
+            state.push_operand(local)?;
+        }
+        Bytecode::MoveLoc(idx) => {
+            let local = state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .move_loc(*idx as usize)?;
+            gas_meter.charge_move_loc(&local)?;
+
+            state.push_operand(local)?;
+        }
+        Bytecode::StLoc(idx) => {
+            let value_to_store = state.pop_operand()?;
+            gas_meter.charge_store_loc(&value_to_store)?;
+            state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .store_loc(*idx as usize, value_to_store)?;
+        }
+        Bytecode::MutBorrowLoc(idx) | Bytecode::ImmBorrowLoc(idx) => {
+            let instr = match instruction {
+                Bytecode::MutBorrowLoc(_) => S::MutBorrowLoc,
+                _ => S::ImmBorrowLoc,
+            };
+            gas_meter.charge_simple_instr(instr)?;
+            let loc_ref = state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .borrow_loc(*idx as usize)?;
+            state.push_operand(loc_ref)?;
+        }
+        Bytecode::ImmBorrowField(fh_ptr) | Bytecode::MutBorrowField(fh_ptr) => {
+            let instr = match instruction {
+                Bytecode::MutBorrowField(_) => S::MutBorrowField,
+                _ => S::ImmBorrowField,
+            };
+            gas_meter.charge_simple_instr(instr)?;
+
+            let reference = state.pop_operand_as::<StructRef>()?;
+
+            let offset = fh_ptr.offset;
+            let field_ref = reference.borrow_field(offset)?;
+            state.push_operand(field_ref)?;
+        }
+        Bytecode::ImmBorrowFieldGeneric(fi_ptr) | Bytecode::MutBorrowFieldGeneric(fi_ptr) => {
+            let instr = match instruction {
+                Bytecode::MutBorrowFieldGeneric(_) => S::MutBorrowFieldGeneric,
+                _ => S::ImmBorrowFieldGeneric,
+            };
+            gas_meter.charge_simple_instr(instr)?;
+
+            let reference = state.pop_operand_as::<StructRef>()?;
+
+            let offset = fi_ptr.offset;
+            let field_ref = reference.borrow_field(offset)?;
+            state.push_operand(field_ref)?;
+        }
+        Bytecode::Pack(struct_ptr) => {
+            let field_count = checked_as!(struct_ptr.field_count(), u16)?;
+            let struct_type = struct_ptr.datatype();
+            check_depth_of_type(run_context, &struct_type)?;
+            gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
+            let args = state.pop_n_operands(field_count)?;
+            state.push_operand(Value::make_struct(args))?;
+        }
+        Bytecode::PackGeneric(struct_inst_ptr) => {
+            let field_count = struct_inst_ptr.field_count;
+            let ty =
+                instantiate_struct_type(struct_inst_ptr, state.call_stack.current_frame.ty_args())?;
+            check_depth_of_type(run_context, &ty)?;
+            gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
+            let args = state.pop_n_operands(field_count)?;
+            state.push_operand(Value::make_struct(args))?;
+        }
+        Bytecode::Unpack(_struct_ptr) => {
+            let struct_ = state.pop_operand_as::<Struct>()?;
+
+            gas_meter.charge_unpack(false, struct_.field_views())?;
+
+            for value in struct_.unpack() {
+                state.push_operand(value)?;
+            }
+        }
+        Bytecode::UnpackGeneric(_struct_inst_ptr) => {
+            let struct_ = state.pop_operand_as::<Struct>()?;
+
+            gas_meter.charge_unpack(true, struct_.field_views())?;
+
+            for value in struct_.unpack() {
+                state.push_operand(value)?;
+            }
+        }
+        Bytecode::ReadRef => {
+            let reference = state.pop_operand_as::<Reference>()?;
+            gas_meter.charge_read_ref(reference.value_view())?;
+            let value = reference.read_ref()?;
+            state.push_operand(value)?;
+        }
+        Bytecode::WriteRef => {
+            let reference = state.pop_operand_as::<Reference>()?;
+            let value = state.pop_operand()?;
+            gas_meter.charge_write_ref(&value, reference.value_view())?;
+            reference.write_ref(value)?;
+        }
+        Bytecode::CastU8 => {
+            gas_meter.charge_simple_instr(S::CastU8)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::u8(integer_value.cast_u8()?))?;
+        }
+        Bytecode::CastU16 => {
+            gas_meter.charge_simple_instr(S::CastU16)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::u16(integer_value.cast_u16()?))?;
+        }
+        Bytecode::CastU32 => {
+            gas_meter.charge_simple_instr(S::CastU32)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::u32(integer_value.cast_u32()?))?;
+        }
+        Bytecode::CastU64 => {
+            gas_meter.charge_simple_instr(S::CastU64)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::u64(integer_value.cast_u64()?))?;
+        }
+        Bytecode::CastU128 => {
+            gas_meter.charge_simple_instr(S::CastU128)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::u128(integer_value.cast_u128()?))?;
+        }
+        Bytecode::CastU256 => {
+            gas_meter.charge_simple_instr(S::CastU256)?;
+            let integer_value = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(Value::u256(integer_value.cast_u256()?))?;
+        }
+        Bytecode::Add => {
+            gas_meter.charge_simple_instr(S::Add)?;
+            binop_int(state, IntegerValue::add_checked)?
+        }
+        Bytecode::Sub => {
+            gas_meter.charge_simple_instr(S::Sub)?;
+            binop_int(state, IntegerValue::sub_checked)?
+        }
+        Bytecode::Mul => {
+            gas_meter.charge_simple_instr(S::Mul)?;
+            binop_int(state, IntegerValue::mul_checked)?
+        }
+        Bytecode::Mod => {
+            gas_meter.charge_simple_instr(S::Mod)?;
+            binop_int(state, IntegerValue::rem_checked)?
+        }
+        Bytecode::Div => {
+            gas_meter.charge_simple_instr(S::Div)?;
+            binop_int(state, IntegerValue::div_checked)?
+        }
+        Bytecode::BitOr => {
+            gas_meter.charge_simple_instr(S::BitOr)?;
+            binop_int(state, IntegerValue::bit_or)?
+        }
+        Bytecode::BitAnd => {
+            gas_meter.charge_simple_instr(S::BitAnd)?;
+            binop_int(state, IntegerValue::bit_and)?
+        }
+        Bytecode::Xor => {
+            gas_meter.charge_simple_instr(S::Xor)?;
+            binop_int(state, IntegerValue::bit_xor)?
+        }
+        Bytecode::Shl => {
+            gas_meter.charge_simple_instr(S::Shl)?;
+            let rhs = state.pop_operand_as::<u8>()?;
+            let lhs = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(lhs.shl_checked(rhs)?.into_value())?;
+        }
+        Bytecode::Shr => {
+            gas_meter.charge_simple_instr(S::Shr)?;
+            let rhs = state.pop_operand_as::<u8>()?;
+            let lhs = state.pop_operand_as::<IntegerValue>()?;
+            state.push_operand(lhs.shr_checked(rhs)?.into_value())?;
+        }
+        Bytecode::Or => {
+            gas_meter.charge_simple_instr(S::Or)?;
+            binop_bool(state, |l, r| Ok(l || r))?
+        }
+        Bytecode::And => {
+            gas_meter.charge_simple_instr(S::And)?;
+            binop_bool(state, |l, r| Ok(l && r))?
+        }
+        Bytecode::Lt => {
+            gas_meter.charge_simple_instr(S::Lt)?;
+            binop_bool(state, IntegerValue::lt)?
+        }
+        Bytecode::Gt => {
+            gas_meter.charge_simple_instr(S::Gt)?;
+            binop_bool(state, IntegerValue::gt)?
+        }
+        Bytecode::Le => {
+            gas_meter.charge_simple_instr(S::Le)?;
+            binop_bool(state, IntegerValue::le)?
+        }
+        Bytecode::Ge => {
+            gas_meter.charge_simple_instr(S::Ge)?;
+            binop_bool(state, IntegerValue::ge)?
+        }
+        Bytecode::Abort => {
+            gas_meter.charge_simple_instr(S::Abort)?;
+            let error_code = state.pop_operand_as::<u64>()?;
+            let error = partial_vm_error!(ABORTED)
+                .with_sub_status(error_code)
+                .with_message(format!(
+                    "{} at offset {}",
+                    state
+                        .call_stack
+                        .current_frame
+                        .function()
+                        .pretty_string(&run_context.vtables.interner),
+                    state.call_stack.current_frame.pc,
+                ));
+            return Err(error);
+        }
+        Bytecode::Eq => {
+            let lhs = state.pop_operand()?;
+            let rhs = state.pop_operand()?;
+            gas_meter.charge_eq(&lhs, &rhs)?;
+            state.push_operand(Value::bool(lhs.equals(&rhs)?))?;
+        }
+        Bytecode::Neq => {
+            let lhs = state.pop_operand()?;
+            let rhs = state.pop_operand()?;
+            gas_meter.charge_neq(&lhs, &rhs)?;
+            state.push_operand(Value::bool(!lhs.equals(&rhs)?))?;
+        }
+        Bytecode::FreezeRef => {
+            gas_meter.charge_simple_instr(S::FreezeRef)?;
         }
         Bytecode::Not => {
             gas_meter.charge_simple_instr(S::Not)?;

@@ -7,6 +7,7 @@ use crate::{
     validation::verification::ast as Input,
 };
 use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
+
 use move_binary_format::{
     checked_as,
     errors::PartialVMResult,
@@ -99,7 +100,7 @@ fn generate_basic_blocks(
             let end = cfg.block_end(label) as usize;
             let label = label as ast::Label;
             // TODO: Try and make this code a bit nicer
-            let code = input
+            let code: Vec<ast::Bytecode> = input
                 .safe_get(start..(end.safe_add(1)?))?
                 .iter()
                 .map(bytecode)

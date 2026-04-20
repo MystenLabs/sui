@@ -28,7 +28,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 122;
+const MAX_PROTOCOL_VERSION: u64 = 123;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -317,6 +317,7 @@ const TESTNET_USDC: &str =
 // Version 120: Disallow unused jump tables
 // Version 121: Re-enable defer_unpaid_amplification (devnet + testnet).
 // Version 122: Framework update: vector::empty is deprecated.
+// Version 123: Fix native call double-pop in gas meter stack height tracking (gas_model v12).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -967,6 +968,13 @@ struct FeatureFlags {
     // If true, normalize depth formula to not be empty for zero depth.
     #[serde(skip_serializing_if = "is_false")]
     normalize_depth_formula: bool,
+
+    // If true, the Move VM JIT inserts a `Charge` opcode at the top of each
+    // basic block that batches the block's fixed gas costs into a single
+    // deduction. When false, gas is charged per-instruction as before. Must
+    // be gated in lockstep with the gas model version that consumes it.
+    #[serde(skip_serializing_if = "is_false")]
+    gas_charge_instruction_batching: bool,
 
     // If true, skip GC'ed accept votes in CommitFinalizer.
     #[serde(skip_serializing_if = "is_false")]
@@ -2632,6 +2640,10 @@ impl ProtocolConfig {
 
     pub fn normalize_depth_formula(&self) -> bool {
         self.feature_flags.normalize_depth_formula
+    }
+
+    pub fn gas_charge_instruction_batching(&self) -> bool {
+        self.feature_flags.gas_charge_instruction_batching
     }
 
     pub fn consensus_skip_gced_accept_votes(&self) -> bool {
@@ -4801,6 +4813,13 @@ impl ProtocolConfig {
                         .early_return_receive_object_mismatched_type = true;
                 }
                 122 => {}
+                123 => {
+                    // Fix native call double-pop in gas meter stack height tracking.
+                    // charge_native_function_before_execution was popping args that
+                    // charge_call already popped. The resulting negative heights were
+                    // masked by saturating_sub in pop_stack. Version 12 fixes this.
+                    cfg.gas_model_version = Some(12);
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.

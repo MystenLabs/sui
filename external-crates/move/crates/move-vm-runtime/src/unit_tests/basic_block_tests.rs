@@ -21,7 +21,8 @@ fn test_basic_blocks_0() {
     let (verif_pkg, _) = adapter
         .verify_package(package_address, serialized_package)
         .unwrap();
-    let pkg = optimization::to_optimized_form(verif_pkg).unwrap();
+    let pkg =
+        optimization::to_optimized_form(verif_pkg, /* enable_charge_instruction */ true).unwrap();
     println!("Blocks\n---------------------------\n{:#?}", pkg.modules);
 }
 

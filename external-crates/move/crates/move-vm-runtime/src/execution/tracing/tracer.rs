@@ -1089,6 +1089,10 @@ impl VMTracer<'_> {
                     }),
                 ]);
             }
+            // Charge is a gas-only instruction with no operand effects
+            B::Charge(..) => {
+                self.register_pre_effects(vec![]);
+            }
         }
         Some(())
     }
@@ -1745,6 +1749,12 @@ impl VMTracer<'_> {
             B::VariantSwitch(_) => {
                 self.type_stack.pop()?;
                 let effects = emit_effects!(vec![]);
+                self.trace
+                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
+            }
+            // Charge is a gas-only instruction with no type stack or value effects
+            B::Charge(..) => {
+                let effects = self.register_post_effects(vec![]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }

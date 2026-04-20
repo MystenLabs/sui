@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::gas_predicates::charge_input_as_memory;
+use super::gas_predicates::{charge_input_as_memory, fix_native_double_pop};
 use crate::gas_model::units_types::{CostTable, Gas, GasCost};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 
@@ -168,6 +168,13 @@ impl GasStatus {
     }
 
     pub fn pop_stack(&mut self, pops: u64) {
+        debug_assert!(
+            !fix_native_double_pop(self.gas_model_version) || self.stack_height_current >= pops,
+            "stack height underflow: current={}, pops={}. \
+             This indicates a double-pop or missing push in the gas meter.",
+            self.stack_height_current,
+            pops,
+        );
         self.stack_height_current = self.stack_height_current.saturating_sub(pops);
     }
 
@@ -568,5 +575,65 @@ pub fn initial_cost_schedule_v5() -> CostTable {
         instruction_tiers,
         stack_size_tiers,
         stack_height_tiers,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unmetered_with_version(version: u64) -> GasStatus {
+        let mut s = GasStatus::new_unmetered();
+        s.gas_model_version = version;
+        s
+    }
+
+    /// Simulates the charge sequence for a native function call as it happens
+    /// in the interpreter (call_function → call_native_impl → call_native_with_args):
+    ///
+    ///   1. charge_call: pops args from the stack
+    ///   2. charge_native_function_before_execution: pops args AGAIN (the double-pop bug)
+    ///   3. charge_native_function: pushes return values
+    fn simulate_native_call(s: &mut GasStatus, num_args: u64, num_returns: u64) {
+        for _ in 0..num_args {
+            s.push_stack(1).unwrap();
+        }
+        s.pop_stack(num_args);
+        if !fix_native_double_pop(s.gas_model_version) {
+            s.pop_stack(num_args);
+        }
+        s.push_stack(num_returns).unwrap();
+    }
+
+    #[test]
+    fn test_v12_native_call_stack_height_is_exact() {
+        let mut s = unmetered_with_version(12);
+        for _ in 0..10 {
+            simulate_native_call(&mut s, 1, 1);
+        }
+        assert_eq!(s.stack_height_current(), 10);
+    }
+
+    #[test]
+    fn test_v11_native_call_stack_height_is_wrong() {
+        let mut s = unmetered_with_version(11);
+        for _ in 0..10 {
+            simulate_native_call(&mut s, 1, 1);
+        }
+        assert_eq!(
+            s.stack_height_current(),
+            1,
+            "v11: saturation prevents correct accumulation (should be 10, got 1)"
+        );
+    }
+
+    #[test]
+    #[cfg_attr(not(debug_assertions), ignore)]
+    #[should_panic(expected = "stack height underflow")]
+    fn test_v12_debug_assert_catches_double_pop() {
+        let mut s = unmetered_with_version(12);
+        s.push_stack(2).unwrap();
+        s.pop_stack(2);
+        s.pop_stack(2); // underflow → debug_assert fires
     }
 }
