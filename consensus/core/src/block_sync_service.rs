@@ -47,16 +47,21 @@ impl BlockSyncService {
         }
     }
 
-    /// Fetches blocks from the DAG state based on the provided block references.
-    ///
-    /// This method handles two types of requests:
-    /// 1. Missing block for block sync (when highest_accepted_rounds is provided):
-    ///    - Returns up to max_blocks_per_sync blocks
-    ///    - Can fetch ancestors if breadth_first is true
-    ///    - Can fetch additional blocks from authorities with missing blocks
-    /// 2. Committed block for commit sync (when highest_accepted_rounds is empty):
-    ///    - Returns up to max_blocks_per_fetch blocks
-    ///    - Simple fetch of requested blocks only
+    // Handles 3 types of requests:
+    // 1. Live sync:
+    //    - Both missing block refs and highest accepted rounds are specified.
+    //    - fetch_missing_ancestors is true.
+    //    - response returns max_blocks_per_sync blocks.
+    // 2. Periodic sync:
+    //    - Highest accepted rounds must be specified.
+    //    - Missing block refs are optional.
+    //    - fetch_missing_ancestors is false (default).
+    //    - response returns max_blocks_per_fetch blocks.
+    // 3. Commit sync:
+    //    - Missing block refs are specified.
+    //    - Highest accepted rounds are empty.
+    //    - fetch_missing_ancestors is false (default).
+    //    - response returns max_blocks_per_fetch blocks.
     pub async fn fetch_blocks(
         &self,
         mut block_refs: Vec<BlockRef>,
