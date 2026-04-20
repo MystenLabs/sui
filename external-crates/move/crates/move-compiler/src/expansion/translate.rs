@@ -1557,20 +1557,27 @@ fn module_warning_filter(
     }
 }
 
+fn insert_implicit_allows(
+    overrides: &mut BTreeMap<DiagnosticsID, Spanned<FilterKind>>,
+    ids: Vec<DiagnosticsID>,
+) {
+    for id in ids {
+        overrides
+            .entry(id)
+            .or_insert(sp(Loc::invalid(), FilterKind::Allow));
+    }
+}
+
 fn struct_warning_filter(context: &mut Context, attributes: &E::Attributes) -> FilterScope {
     let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        add_filter_entries_(
+        insert_implicit_allows(
             &mut overrides,
-            Loc::invalid(),
-            FilterKind::Allow,
             context.env().filter_from_str(none, FILTER_DEPRECATED),
         );
-        add_filter_entries_(
+        insert_implicit_allows(
             &mut overrides,
-            Loc::invalid(),
-            FilterKind::Allow,
             context
                 .env()
                 .filter_from_str(none, FILTER_UNUSED_STRUCT_FIELD),
@@ -1583,10 +1590,8 @@ fn function_warning_filter(context: &mut Context, attributes: &E::Attributes) ->
     let mut overrides = warning_filter_(context, attributes);
     if attributes.contains_key_(&AttributeKind_::Deprecation) {
         let none: Option<Symbol> = None;
-        add_filter_entries_(
+        insert_implicit_allows(
             &mut overrides,
-            Loc::invalid(),
-            FilterKind::Allow,
             context.env().filter_from_str(none, FILTER_DEPRECATED),
         );
     }
@@ -1597,41 +1602,39 @@ fn warning_filter(context: &mut Context, attributes: &E::Attributes) -> FilterSc
     FilterScope::new(warning_filter_(context, attributes))
 }
 
+fn get_diagnostic_attribute<'a>(
+    context: &Context,
+    attributes: &'a E::Attributes,
+    kind: known_attributes::AttributeKind_,
+) -> Option<&'a DiagnosticAttribute> {
+    let attr = attributes.get_(&kind)?;
+    if let KnownAttribute::Diagnostic(ref diag) = attr.value {
+        Some(diag)
+    } else {
+        context.add_diag(ice!((
+            attr.loc,
+            format!(
+                "Expected diagnostics based on kind, but found {}",
+                attr.value.attribute_kind()
+            )
+        )));
+        None
+    }
+}
+
 fn warning_filter_(
     context: &Context,
     attributes: &E::Attributes,
 ) -> BTreeMap<DiagnosticsID, Spanned<FilterKind>> {
-    fn unexpected_attribute_ice(context: &Context<'_>, allow: &Spanned<KnownAttribute>) {
-        context.add_diag(ice!((
-            allow.loc,
-            format!(
-                "Expected diagnostics based on kind, but found {}",
-                allow.value.attribute_kind()
-            )
-        )));
-    }
-
-    macro_rules! resolve_attribute_or_ice_return {
-        (($attr_kind:ident, $variant:ident, $set_name:ident)) => {
-            match attributes.get_(&known_attributes::AttributeKind_::$attr_kind) {
-                Some(attr) => {
-                    if let KnownAttribute::Diagnostic(DiagnosticAttribute::$variant { $set_name }) =
-                        &attr.value
-                    {
-                        Some($set_name)
-                    } else {
-                        unexpected_attribute_ice(context, attr);
-                        None
-                    }
-                }
-                None => None,
-            }
-        };
-    }
-
     let mut filter_entries = BTreeMap::new();
 
-    if let Some(lint_allow) = resolve_attribute_or_ice_return!((LintAllow, LintAllow, allow_set)) {
+    if let Some(DiagnosticAttribute::LintAllow {
+        allow_set: lint_allow,
+    }) = get_diagnostic_attribute(
+        context,
+        attributes,
+        known_attributes::AttributeKind_::LintAllow,
+    ) {
         let prefix = Some(DiagnosticAttribute::LINT_SYMBOL);
         for name in lint_allow {
             let filters = context.env().filter_from_str(prefix, name.value);
@@ -1644,24 +1647,27 @@ fn warning_filter_(
                 context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
                 continue;
             };
-            add_filter_entries_(
-                &mut filter_entries,
-                Loc::invalid(),
-                FilterKind::Allow,
-                filters,
-            );
+            insert_implicit_allows(&mut filter_entries, filters);
         }
     }
 
-    if let Some(allow_set) = resolve_attribute_or_ice_return!((Allow, Allow, allow_set)) {
+    if let Some(DiagnosticAttribute::Allow { allow_set }) =
+        get_diagnostic_attribute(context, attributes, known_attributes::AttributeKind_::Allow)
+    {
         add_filter_entries(context, &mut filter_entries, FilterKind::Allow, allow_set);
     }
 
-    if let Some(deny_set) = resolve_attribute_or_ice_return!((Deny, Deny, deny_set)) {
+    if let Some(DiagnosticAttribute::Deny { deny_set }) =
+        get_diagnostic_attribute(context, attributes, known_attributes::AttributeKind_::Deny)
+    {
         add_filter_entries(context, &mut filter_entries, FilterKind::Deny, deny_set);
     }
 
-    if let Some(expect_set) = resolve_attribute_or_ice_return!((Expect, Expect, expect_set)) {
+    if let Some(DiagnosticAttribute::Expect { expect_set }) = get_diagnostic_attribute(
+        context,
+        attributes,
+        known_attributes::AttributeKind_::Expect,
+    ) {
         let mut expect_set = expect_set.clone();
         expect_set.retain(|(prefix, name)| {
             let prefix = prefix.map(|sym| sym.value);
@@ -1708,18 +1714,35 @@ fn add_filter_entries(
             context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
             continue;
         };
-        add_filter_entries_(filter_entries, name_loc, filter_kind, filters);
-    }
-}
-
-fn add_filter_entries_(
-    filter_entries: &mut BTreeMap<DiagnosticsID, Spanned<FilterKind>>,
-    loc: Loc,
-    kind: FilterKind,
-    ids: Vec<DiagnosticsID>,
-) {
-    for id in ids {
-        filter_entries.insert(id, sp(loc, kind));
+        let conflict = filters.iter().find_map(|id| {
+            let existing = filter_entries.get(id)?;
+            (existing.value != filter_kind).then_some(existing)
+        });
+        if let Some(sp!(prev_loc, _)) = conflict {
+            let filter_name = format_allow_attr(prefix, name);
+            let (fst_loc, snd_loc) = if *prev_loc > name_loc {
+                (*prev_loc, name_loc)
+            } else {
+                (name_loc, *prev_loc)
+            };
+            context.add_diag(diag!(
+                Attributes::AmbiguousAttributeValue,
+                (
+                    snd_loc,
+                    format!(
+                        "Conflicting filter for '{filter_name}' specified in the same attribute"
+                    )
+                ),
+                (
+                    fst_loc,
+                    format!("Conflicting filter for '{filter_name}' specified here")
+                )
+            ));
+            continue;
+        }
+        for id in filters {
+            filter_entries.insert(id, sp(name_loc, filter_kind));
+        }
     }
 }
 

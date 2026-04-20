@@ -87,6 +87,17 @@ pub enum FilterKind {
     Drop,
 }
 
+impl std::fmt::Display for FilterKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FilterKind::Allow => write!(f, "allow"),
+            FilterKind::Deny => write!(f, "deny"),
+            FilterKind::Expect => write!(f, "expect"),
+            FilterKind::Drop => write!(f, "drop"),
+        }
+    }
+}
+
 /// What a filter entry matches against. Variants are ordered by decreasing specificity;
 /// during resolution the most specific match wins within a scope.
 ///
@@ -134,7 +145,7 @@ struct ExpectState {
 
 /// An immutable set of entries plus expect-fulfillment side-car.
 #[derive(Debug)]
-pub struct FilterScopeData {
+pub(crate) struct FilterScopeData {
     filter_entries: BTreeMap<FilterTarget, FilterEntry>,
     expects: Vec<ExpectState>,
 }
