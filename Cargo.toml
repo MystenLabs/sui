@@ -337,7 +337,7 @@ bytes = { version = "1.11.1", features = ["serde"] }
 cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
-chrono = { version = "=0.4.39", features = ["clock", "serde"] }
+chrono = { version = "0.4.44", features = ["clock", "serde"] }
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
 clap_complete = "4.4"
 codespan-reporting = "0.11.1"
