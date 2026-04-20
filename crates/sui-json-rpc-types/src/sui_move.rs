@@ -94,6 +94,12 @@ pub enum SuiMoveNormalizedType {
     U64,
     U128,
     U256,
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    I256,
     Address,
     Signer,
     Struct {
@@ -310,6 +316,12 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             NormalizedType::U64 => SuiMoveNormalizedType::U64,
             NormalizedType::U128 => SuiMoveNormalizedType::U128,
             NormalizedType::U256 => SuiMoveNormalizedType::U256,
+            NormalizedType::I8 => SuiMoveNormalizedType::I8,
+            NormalizedType::I16 => SuiMoveNormalizedType::I16,
+            NormalizedType::I32 => SuiMoveNormalizedType::I32,
+            NormalizedType::I64 => SuiMoveNormalizedType::I64,
+            NormalizedType::I128 => SuiMoveNormalizedType::I128,
+            NormalizedType::I256 => SuiMoveNormalizedType::I256,
             NormalizedType::Address => SuiMoveNormalizedType::Address,
             NormalizedType::Signer => SuiMoveNormalizedType::Signer,
             NormalizedType::Datatype(dt) => {
@@ -338,14 +350,6 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             NormalizedType::Reference(true, mr) => SuiMoveNormalizedType::MutableReference(
                 Box::new(SuiMoveNormalizedType::from(&**mr)),
             ),
-            NormalizedType::I8
-            | NormalizedType::I16
-            | NormalizedType::I32
-            | NormalizedType::I64
-            | NormalizedType::I128
-            | NormalizedType::I256 => {
-                panic!("Signed integer types are not yet supported in sui-json-rpc-types")
-            }
         }
     }
 }
@@ -463,6 +467,15 @@ impl From<MoveValue> for SuiMoveValue {
             MoveValue::U64(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U128(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::U256(value) => SuiMoveValue::String(format!("{value}")),
+            // Signed integer types are not accepted as pure transaction inputs on Sui, but
+            // may appear in Move values read back from on-chain data. Render them as strings
+            // for consistency with the larger unsigned integer types.
+            MoveValue::I8(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I16(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I32(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I64(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I128(value) => SuiMoveValue::String(format!("{value}")),
+            MoveValue::I256(value) => SuiMoveValue::String(format!("{value}")),
             MoveValue::Bool(value) => SuiMoveValue::Bool(value),
             MoveValue::Vector(values) => {
                 SuiMoveValue::Vector(values.into_iter().map(|value| value.into()).collect())

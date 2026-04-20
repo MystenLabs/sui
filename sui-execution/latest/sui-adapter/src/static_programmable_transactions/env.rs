@@ -537,6 +537,20 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
                 TypeInput::U64 => TypeTag::U64,
                 TypeInput::U128 => TypeTag::U128,
                 TypeInput::U256 => TypeTag::U256,
+                // Signed integer types are not accepted as transaction inputs on Sui.
+                TypeInput::I8
+                | TypeInput::I16
+                | TypeInput::I32
+                | TypeInput::I64
+                | TypeInput::I128
+                | TypeInput::I256 => {
+                    return Err(ExecutionError::from_kind(
+                        ExecutionErrorKind::TypeArgumentError {
+                            argument_idx: checked_as!(type_arg_idx, u16)?,
+                            kind: TypeArgumentError::TypeNotFound,
+                        },
+                    ));
+                }
                 TypeInput::Address => TypeTag::Address,
                 TypeInput::Signer => TypeTag::Signer,
                 TypeInput::Vector(type_input) => {

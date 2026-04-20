@@ -322,6 +322,12 @@ fn resolve_to_layout(
         TypeTag::U16 => MoveTypeLayout::U16,
         TypeTag::U32 => MoveTypeLayout::U32,
         TypeTag::U256 => MoveTypeLayout::U256,
+        TypeTag::I8 => MoveTypeLayout::I8,
+        TypeTag::I16 => MoveTypeLayout::I16,
+        TypeTag::I32 => MoveTypeLayout::I32,
+        TypeTag::I64 => MoveTypeLayout::I64,
+        TypeTag::I128 => MoveTypeLayout::I128,
+        TypeTag::I256 => MoveTypeLayout::I256,
     }
 }
 

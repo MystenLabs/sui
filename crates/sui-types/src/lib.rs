@@ -261,8 +261,20 @@ pub fn is_primitive(
 ) -> bool {
     use SignatureToken as S;
     match s {
-        S::Bool | S::U8 | S::U16 | S::U32 | S::U64 | S::U128 | S::U256 | S::Address => true,
-        S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => true,
+        S::Bool
+        | S::U8
+        | S::U16
+        | S::U32
+        | S::U64
+        | S::U128
+        | S::U256
+        | S::I8
+        | S::I16
+        | S::I32
+        | S::I64
+        | S::I128
+        | S::I256
+        | S::Address => true,
         S::Signer => false,
         // optimistic, but no primitive has key
         S::TypeParameter(idx) => !function_type_args[*idx as usize].has_key(),

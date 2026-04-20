@@ -298,6 +298,12 @@ impl AstDebug for MoveValue {
             V::Struct(_) => panic!("ICE struct constants not supported"),
             V::Variant(_) => panic!("ICE enum constants not supported"),
             V::Signer(_) => panic!("ICE signer constants not supported"),
+            V::I8(i) => w.write(format!("{}", i)),
+            V::I16(i) => w.write(format!("{}", i)),
+            V::I32(i) => w.write(format!("{}", i)),
+            V::I64(i) => w.write(format!("{}", i)),
+            V::I128(i) => w.write(format!("{}", i)),
+            V::I256(i) => w.write(format!("{}", i)),
         }
     }
 }

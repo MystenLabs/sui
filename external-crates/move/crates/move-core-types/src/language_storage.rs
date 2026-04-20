@@ -56,6 +56,18 @@ pub enum TypeTag {
     U32,
     #[serde(rename = "u256", alias = "U256")]
     U256,
+    #[serde(rename = "i8", alias = "I8")]
+    I8,
+    #[serde(rename = "i16", alias = "I16")]
+    I16,
+    #[serde(rename = "i32", alias = "I32")]
+    I32,
+    #[serde(rename = "i64", alias = "I64")]
+    I64,
+    #[serde(rename = "i128", alias = "I128")]
+    I128,
+    #[serde(rename = "i256", alias = "I256")]
+    I256,
 }
 
 impl TypeTag {
@@ -96,6 +108,12 @@ impl TypeTag {
                     TypeTag::U64 => write!(f, "u64"),
                     TypeTag::U128 => write!(f, "u128"),
                     TypeTag::U256 => write!(f, "u256"),
+                    TypeTag::I8 => write!(f, "i8"),
+                    TypeTag::I16 => write!(f, "i16"),
+                    TypeTag::I32 => write!(f, "i32"),
+                    TypeTag::I64 => write!(f, "i64"),
+                    TypeTag::I128 => write!(f, "i128"),
+                    TypeTag::I256 => write!(f, "i256"),
                     TypeTag::Address => write!(f, "address"),
                     TypeTag::Signer => write!(f, "signer"),
                     TypeTag::Vector(t) => {
@@ -126,7 +144,13 @@ impl TypeTag {
                 | TypeTag::Signer
                 | TypeTag::U16
                 | TypeTag::U32
-                | TypeTag::U256 => AbstractMemorySize::new(0),
+                | TypeTag::U256
+                | TypeTag::I8
+                | TypeTag::I16
+                | TypeTag::I32
+                | TypeTag::I64
+                | TypeTag::I128
+                | TypeTag::I256 => AbstractMemorySize::new(0),
                 TypeTag::Vector(x) => x.abstract_size_for_gas_metering(),
                 TypeTag::Struct(y) => y.abstract_size_for_gas_metering(),
             }
@@ -148,6 +172,12 @@ impl TypeTag {
             | TypeTag::U16
             | TypeTag::U32
             | TypeTag::U256
+            | TypeTag::I8
+            | TypeTag::I16
+            | TypeTag::I32
+            | TypeTag::I64
+            | TypeTag::I128
+            | TypeTag::I256
             | TypeTag::Address
             | TypeTag::Signer => (),
             TypeTag::Vector(inner) => inner.find_addresses_internal(account_addresses),
@@ -411,6 +441,12 @@ impl Display for TypeTag {
             TypeTag::U64 => write!(f, "u64"),
             TypeTag::U128 => write!(f, "u128"),
             TypeTag::U256 => write!(f, "u256"),
+            TypeTag::I8 => write!(f, "i8"),
+            TypeTag::I16 => write!(f, "i16"),
+            TypeTag::I32 => write!(f, "i32"),
+            TypeTag::I64 => write!(f, "i64"),
+            TypeTag::I128 => write!(f, "i128"),
+            TypeTag::I256 => write!(f, "i256"),
             TypeTag::Address => write!(f, "address"),
             TypeTag::Signer => write!(f, "signer"),
             TypeTag::Bool => write!(f, "bool"),
@@ -445,6 +481,38 @@ mod tests {
         let c: TypeTag = serde_json::from_str(&b).unwrap();
         assert!(a.eq(&c), "Typetag serde error");
         assert_eq!(mem::size_of::<TypeTag>(), 16);
+    }
+
+    #[test]
+    fn test_signed_type_tag_parse_roundtrip() {
+        for (s, tag) in [
+            ("i8", TypeTag::I8),
+            ("i16", TypeTag::I16),
+            ("i32", TypeTag::I32),
+            ("i64", TypeTag::I64),
+            ("i128", TypeTag::I128),
+            ("i256", TypeTag::I256),
+        ] {
+            let parsed: TypeTag = s.parse().unwrap();
+            assert_eq!(parsed, tag);
+            assert_eq!(tag.to_string(), s);
+        }
+    }
+
+    #[test]
+    fn test_signed_type_tag_serde() {
+        for tag in [
+            TypeTag::I8,
+            TypeTag::I16,
+            TypeTag::I32,
+            TypeTag::I64,
+            TypeTag::I128,
+            TypeTag::I256,
+        ] {
+            let json = serde_json::to_string(&tag).unwrap();
+            let back: TypeTag = serde_json::from_str(&json).unwrap();
+            assert_eq!(tag, back);
+        }
     }
 
     #[test]

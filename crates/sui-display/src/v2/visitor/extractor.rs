@@ -91,6 +91,56 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         Ok(self.path.is_empty().then_some(Value::U256(n)))
     }
 
+    /// Signed integer types are not supported on Sui, and the display `Value`
+    /// enum has no variants for them.
+    fn visit_i8(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: i8,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(None)
+    }
+
+    fn visit_i16(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: i16,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(None)
+    }
+
+    fn visit_i32(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: i32,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(None)
+    }
+
+    fn visit_i64(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: i64,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(None)
+    }
+
+    fn visit_i128(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: i128,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(None)
+    }
+
+    fn visit_i256(
+        &mut self,
+        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: move_core_types::i256::I256,
+    ) -> Result<Self::Value, Self::Error> {
+        Ok(None)
+    }
+
     fn visit_bool(
         &mut self,
         _: &AV::ValueDriver<'_, 'v, 'v>,

@@ -53,6 +53,20 @@ pub enum TypeInput {
     U32,
     #[serde(rename = "u256", alias = "U256")]
     U256,
+
+    // NOTE: Added in bytecode version v8, do not reorder!
+    #[serde(rename = "i8", alias = "I8")]
+    I8,
+    #[serde(rename = "i16", alias = "I16")]
+    I16,
+    #[serde(rename = "i32", alias = "I32")]
+    I32,
+    #[serde(rename = "i64", alias = "I64")]
+    I64,
+    #[serde(rename = "i128", alias = "I128")]
+    I128,
+    #[serde(rename = "i256", alias = "I256")]
+    I256,
 }
 
 impl TypeInput {
@@ -93,6 +107,12 @@ impl TypeInput {
                     TypeInput::U64 => write!(f, "u64"),
                     TypeInput::U128 => write!(f, "u128"),
                     TypeInput::U256 => write!(f, "u256"),
+                    TypeInput::I8 => write!(f, "i8"),
+                    TypeInput::I16 => write!(f, "i16"),
+                    TypeInput::I32 => write!(f, "i32"),
+                    TypeInput::I64 => write!(f, "i64"),
+                    TypeInput::I128 => write!(f, "i128"),
+                    TypeInput::I256 => write!(f, "i256"),
                     TypeInput::Address => write!(f, "address"),
                     TypeInput::Signer => write!(f, "signer"),
                     TypeInput::Vector(t) => {
@@ -127,6 +147,12 @@ impl TypeInput {
             TypeInput::U64 => TypeTag::U64,
             TypeInput::U128 => TypeTag::U128,
             TypeInput::U256 => TypeTag::U256,
+            TypeInput::I8 => TypeTag::I8,
+            TypeInput::I16 => TypeTag::I16,
+            TypeInput::I32 => TypeTag::I32,
+            TypeInput::I64 => TypeTag::I64,
+            TypeInput::I128 => TypeTag::I128,
+            TypeInput::I256 => TypeTag::I256,
             TypeInput::Address => TypeTag::Address,
             TypeInput::Signer => TypeTag::Signer,
             TypeInput::Vector(inner) => unsafe {
@@ -168,6 +194,12 @@ impl TypeInput {
             I::U64 => T::U64,
             I::U128 => T::U128,
             I::U256 => T::U256,
+            I::I8 => T::I8,
+            I::I16 => T::I16,
+            I::I32 => T::I32,
+            I::I64 => T::I64,
+            I::I128 => T::I128,
+            I::I256 => T::I256,
             I::Address => T::Address,
             I::Signer => T::Signer,
             I::Vector(t) => T::Vector(Box::new(t.to_type_tag()?)),
@@ -268,6 +300,12 @@ impl From<TypeTag> for TypeInput {
             TypeTag::U16 => TypeInput::U16,
             TypeTag::U32 => TypeInput::U32,
             TypeTag::U256 => TypeInput::U256,
+            TypeTag::I8 => TypeInput::I8,
+            TypeTag::I16 => TypeInput::I16,
+            TypeTag::I32 => TypeInput::I32,
+            TypeTag::I64 => TypeInput::I64,
+            TypeTag::I128 => TypeInput::I128,
+            TypeTag::I256 => TypeInput::I256,
         }
     }
 }
@@ -323,6 +361,12 @@ impl Display for TypeInput {
             TypeInput::U64 => write!(f, "u64"),
             TypeInput::U128 => write!(f, "u128"),
             TypeInput::U256 => write!(f, "u256"),
+            TypeInput::I8 => write!(f, "i8"),
+            TypeInput::I16 => write!(f, "i16"),
+            TypeInput::I32 => write!(f, "i32"),
+            TypeInput::I64 => write!(f, "i64"),
+            TypeInput::I128 => write!(f, "i128"),
+            TypeInput::I256 => write!(f, "i256"),
             TypeInput::Address => write!(f, "address"),
             TypeInput::Signer => write!(f, "signer"),
             TypeInput::Bool => write!(f, "bool"),
@@ -333,6 +377,7 @@ impl Display for TypeInput {
 #[cfg(test)]
 mod test {
     use super::TypeInput;
+    use move_core_types::language_storage::TypeTag;
     use sui_enum_compat_util::*;
 
     #[test]
@@ -340,5 +385,27 @@ mod test {
         let mut path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         path.extend(["tests", "staged", "type_input.yaml"]);
         check_enum_compat_order::<TypeInput>(path);
+    }
+
+    #[test]
+    fn signed_type_input_type_tag_roundtrip() {
+        for (input, expected) in [
+            (TypeInput::I8, TypeTag::I8),
+            (TypeInput::I16, TypeTag::I16),
+            (TypeInput::I32, TypeTag::I32),
+            (TypeInput::I64, TypeTag::I64),
+            (TypeInput::I128, TypeTag::I128),
+            (TypeInput::I256, TypeTag::I256),
+        ] {
+            assert_eq!(input.to_type_tag().unwrap(), expected);
+            assert_eq!(TypeInput::from(expected), input);
+        }
+    }
+
+    #[test]
+    fn signed_type_input_canonical_display() {
+        assert_eq!(TypeInput::I8.to_canonical_string(false), "i8");
+        assert_eq!(TypeInput::I64.to_canonical_string(true), "i64");
+        assert_eq!(TypeInput::I256.to_canonical_string(false), "i256");
     }
 }

@@ -338,6 +338,18 @@ impl VMDispatchTables {
             TypeTag::Address => Type::Address,
             TypeTag::Signer => Type::Signer,
             TypeTag::Vector(tt) => Type::Vector(Box::new(self.load_type(tt)?)),
+            TypeTag::I8
+            | TypeTag::I16
+            | TypeTag::I32
+            | TypeTag::I64
+            | TypeTag::I128
+            | TypeTag::I256 => {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "signed integer types not yet supported in VM runtime"
+                )
+                .finish(Location::Undefined));
+            }
             // NB: Note that this tag is slightly misnamed and used for all Datatypes.
             TypeTag::Struct(struct_tag) => {
                 let defining_id = struct_tag.address;

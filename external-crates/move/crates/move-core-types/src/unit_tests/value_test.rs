@@ -393,3 +393,75 @@ fn nested_typed_struct_formatted_display() {
 }"#
     );
 }
+
+#[test]
+fn signed_integer_bcs_roundtrip() {
+    use crate::i256::I256;
+
+    // Zero, min, max for every width — these are the values most likely to
+    // trip up two's-complement encoding or off-by-one boundary bugs.
+    let cases: Vec<(R::MoveValue, R::MoveTypeLayout)> = vec![
+        // i8
+        (R::MoveValue::I8(0), R::MoveTypeLayout::I8),
+        (R::MoveValue::I8(i8::MIN), R::MoveTypeLayout::I8),
+        (R::MoveValue::I8(i8::MAX), R::MoveTypeLayout::I8),
+        // i16
+        (R::MoveValue::I16(0), R::MoveTypeLayout::I16),
+        (R::MoveValue::I16(i16::MIN), R::MoveTypeLayout::I16),
+        (R::MoveValue::I16(i16::MAX), R::MoveTypeLayout::I16),
+        // i32
+        (R::MoveValue::I32(0), R::MoveTypeLayout::I32),
+        (R::MoveValue::I32(i32::MIN), R::MoveTypeLayout::I32),
+        (R::MoveValue::I32(i32::MAX), R::MoveTypeLayout::I32),
+        // i64
+        (R::MoveValue::I64(0), R::MoveTypeLayout::I64),
+        (R::MoveValue::I64(i64::MIN), R::MoveTypeLayout::I64),
+        (R::MoveValue::I64(i64::MAX), R::MoveTypeLayout::I64),
+        // i128
+        (R::MoveValue::I128(0), R::MoveTypeLayout::I128),
+        (R::MoveValue::I128(i128::MIN), R::MoveTypeLayout::I128),
+        (R::MoveValue::I128(i128::MAX), R::MoveTypeLayout::I128),
+        // i256 — no literal MIN/MAX, construct from known constants
+        (R::MoveValue::I256(I256::zero()), R::MoveTypeLayout::I256),
+        (
+            R::MoveValue::I256(I256::min_value()),
+            R::MoveTypeLayout::I256,
+        ),
+        (
+            R::MoveValue::I256(I256::max_value()),
+            R::MoveTypeLayout::I256,
+        ),
+        // negative-one is a common sentinel that exercises sign-extension
+        (R::MoveValue::I8(-1), R::MoveTypeLayout::I8),
+        (R::MoveValue::I16(-1), R::MoveTypeLayout::I16),
+        (R::MoveValue::I32(-1), R::MoveTypeLayout::I32),
+        (R::MoveValue::I64(-1), R::MoveTypeLayout::I64),
+        (R::MoveValue::I128(-1), R::MoveTypeLayout::I128),
+        (
+            R::MoveValue::I256(I256::from(-1i128)),
+            R::MoveTypeLayout::I256,
+        ),
+    ];
+    for (value, layout) in cases {
+        let bytes = value.simple_serialize().unwrap();
+        let back = R::MoveValue::simple_deserialize(&bytes, &layout).unwrap();
+        assert_eq!(value, back, "round-trip failed for {value:?}");
+    }
+}
+
+#[test]
+fn signed_integer_display() {
+    assert_eq!(R::MoveValue::I8(0).to_string(), "0i8");
+    assert_eq!(R::MoveValue::I8(i8::MIN).to_string(), "-128i8");
+    assert_eq!(R::MoveValue::I8(i8::MAX).to_string(), "127i8");
+    assert_eq!(R::MoveValue::I16(-1).to_string(), "-1i16");
+    assert_eq!(R::MoveValue::I32(42).to_string(), "42i32");
+    assert_eq!(
+        R::MoveValue::I64(i64::MIN).to_string(),
+        "-9223372036854775808i64"
+    );
+    assert_eq!(
+        R::MoveValue::I128(i128::MAX).to_string(),
+        "170141183460469231731687303715884105727i128"
+    );
+}
