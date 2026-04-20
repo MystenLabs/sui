@@ -766,11 +766,7 @@ impl TonicManager {
             listen_addr
         } else if context.is_observer() {
             // Observer node - use the configured observer server port since we're not in the committee.
-            let port = context
-                .parameters
-                .tonic
-                .observer_server_port
-                .expect("Observer server port must be configured for observer nodes");
+            let port = context.parameters.tonic.observer_server_port.unwrap_or(0);
             &Multiaddr::try_from(format!("/ip4/0.0.0.0/tcp/{port}")).unwrap()
         } else {
             let authority = context.committee.authority(context.own_index);

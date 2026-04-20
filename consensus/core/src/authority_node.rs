@@ -878,8 +878,26 @@ mod tests {
                 .get_metric_with_label_values(&[&authority_info.hostname])
             {
                 authority_0_total_verified_blocks += metric.get();
+                println!(
+                    "authority_info.hostname: {}, metric: {:?}",
+                    authority_info.hostname, authority_0_total_verified_blocks
+                );
             }
         }
+
+        let mut authority_0_total_proposed_blocks = 0;
+        for force in [true, false] {
+            if let Ok(metric) = authority_0_context
+                .metrics
+                .node_metrics
+                .proposed_blocks
+                .get_metric_with_label_values(&[&force.to_string()])
+            {
+                authority_0_total_proposed_blocks += metric.get();
+            }
+        }
+
+        authority_0_total_verified_blocks += authority_0_total_proposed_blocks;
 
         // Get the observer's received_blocks_observer metric
         let observer_received_blocks_metric = observer_context
@@ -898,10 +916,17 @@ mod tests {
             observer_received_blocks
         );
 
+        println!(
+            "authority_0_total_verified_blocks: {}, observer_received_blocks: {}",
+            authority_0_total_verified_blocks, observer_received_blocks
+        );
+
         const TOLERANCE: u64 = 20;
         assert!(
             authority_0_total_verified_blocks - observer_received_blocks <= TOLERANCE,
-            "The number of blocks received by the observer should be close to the number of blocks sent by authority 0"
+            "The number of blocks received by the observer ({}) should be close to the number of blocks verified by authority 0 ({})",
+            observer_received_blocks,
+            authority_0_total_verified_blocks,
         );
 
         // Stop observer first
