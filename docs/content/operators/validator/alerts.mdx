@@ -122,7 +122,7 @@ sum(
   sum by (host) (current_voting_right{network="$network"})
   and
   histogram_quantile(0.95, sum by (le, host) (
-    rate(sequencing_certificate_latency_bucket{network="$network", position="0", tx_type=~"shared_certificate|owned_certificate|soft_bundle"}[2m])
+    rate(sequencing_certificate_latency_bucket{network="$network", submitted="submitted", tx_type=~"shared_certificate|owned_certificate|soft_bundle"}[2m])
   )) < 2
 ) < 5000
 ```
