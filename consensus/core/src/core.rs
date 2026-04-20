@@ -516,6 +516,10 @@ impl Core {
             && let Some(extended_block) = proposer.try_new_block(force)
         {
             self.signals.new_block(extended_block.clone())?;
+            self.signals.new_accepted_block(
+                extended_block.block.clone(),
+                self.dag_state.read().last_commit_index(),
+            );
 
             fail_point!("consensus-after-propose");
 

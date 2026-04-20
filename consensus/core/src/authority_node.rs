@@ -428,6 +428,18 @@ where
                 .start(),
             );
 
+            // Start the observer server if the observer server is enabled in the parameters.
+            if context.parameters.tonic.is_observer_server_enabled() {
+                let observer_service = Arc::new(ObserverService::new(
+                    context.clone(),
+                    dag_state.clone(),
+                    signals_receivers.accepted_block_broadcast_receiver(),
+                ));
+                network_manager
+                    .start_observer_server(observer_service)
+                    .await;
+            }
+
             (SubscriberType::Validator(s), round_prober_handle)
         } else {
             // Observer node: subscribe to specified peer(s) using ObserverSubscriber
@@ -465,18 +477,6 @@ where
 
             (SubscriberType::Observer(observer_subscriber), None)
         };
-
-        // Start the observer server if this is an observer node, or the observer server is enabled in the parameters.
-        if context.is_observer() || context.parameters.tonic.is_observer_server_enabled() {
-            let observer_service = Arc::new(ObserverService::new(
-                context.clone(),
-                dag_state.clone(),
-                signals_receivers.accepted_block_broadcast_receiver(),
-            ));
-            network_manager
-                .start_observer_server(observer_service)
-                .await;
-        }
 
         info!(
             "Consensus authority started, took {:?}",
