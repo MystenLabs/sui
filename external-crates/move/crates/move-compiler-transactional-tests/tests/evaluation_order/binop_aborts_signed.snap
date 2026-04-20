@@ -1,0 +1,78 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+task 2, lines 19-27:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(1),
+    location: 0x42::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0x0000000000000000000000000000000000000000000000000000000000000042::m::aborter_i8 at offset 1",
+}
+
+task 3, lines 28-36:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(1),
+    location: 0x42::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(1), 1)],
+    message: "0x0000000000000000000000000000000000000000000000000000000000000042::m::aborter_i64 at offset 1",
+}
+
+task 4, lines 37-45:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x45::test2,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 5, lines 46-54:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(10),
+    location: 0x42::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(1), 1)],
+    message: "0x0000000000000000000000000000000000000000000000000000000000000042::m::aborter_i64 at offset 1",
+}
+
+task 6, lines 55-63:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x47::test4,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 7, lines 64-72:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(0),
+    location: 0x48::test5,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0x0000000000000000000000000000000000000000000000000000000000000048::test5::main at offset 1",
+}
+
+task 8, lines 73-79:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x49::test6,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}

@@ -7,9 +7,8 @@ use crate::{
     PreCompiledProgramInfo,
     cfgir::ast as G,
     compiled_unit::*,
-    dev_feature, diag,
+    diag,
     diagnostics::{DiagnosticReporter, Diagnostics, warning_filters::WarningFiltersScope},
-    editions::FeatureGate,
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::{
         ast::{self as H, Value_, Var, Visibility},
@@ -980,19 +979,12 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U128))), _) => IRT::U128,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::U256))), _) => IRT::U256,
 
-        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I8))), _)
-        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I16))), _)
-        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I32))), _)
-        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I64))), _)
-        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I128))), _)
-        | B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I256))), _) => {
-            context
-                .env
-                .diagnostic_reporter_at_top_level()
-                .add_diag(dev_feature!(FeatureGate::SignedIntegers, bt_loc));
-            debug_assert!(context.env.has_errors());
-            IRT::U64
-        }
+        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I8))), _) => IRT::I8,
+        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I16))), _) => IRT::I16,
+        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I32))), _) => IRT::I32,
+        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I64))), _) => IRT::I64,
+        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I128))), _) => IRT::I128,
+        B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::I256))), _) => IRT::I256,
 
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Bool))), _) => IRT::Bool,
         B::Apply(_, sp!(_, TN::Builtin(sp!(_, BT::Vector))), mut args) => {
@@ -1202,14 +1194,12 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 V::U64(u) => B::LdU64(u),
                 V::U128(u) => B::LdU128(u),
                 V::U256(u) => B::LdU256(u),
-                V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
-                    context
-                        .env
-                        .diagnostic_reporter_at_top_level()
-                        .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
-                    debug_assert!(context.env.has_errors());
-                    B::LdU64(0)
-                }
+                V::I8(v) => B::LdI8(v),
+                V::I16(v) => B::LdI16(v),
+                V::I32(v) => B::LdI32(v),
+                V::I64(v) => B::LdI64(v),
+                V::I128(v) => B::LdI128(v),
+                V::I256(v) => B::LdI256(v),
                 V::Bool(b) => {
                     if b {
                         B::LdTrue
@@ -1384,14 +1374,12 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 BT::U64 => B::CastU64,
                 BT::U128 => B::CastU128,
                 BT::U256 => B::CastU256,
-                BT::I8 | BT::I16 | BT::I32 | BT::I64 | BT::I128 | BT::I256 => {
-                    context
-                        .env
-                        .diagnostic_reporter_at_top_level()
-                        .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
-                    debug_assert!(context.env.has_errors());
-                    B::CastU64
-                }
+                BT::I8 => B::CastI8,
+                BT::I16 => B::CastI16,
+                BT::I32 => B::CastI32,
+                BT::I64 => B::CastI64,
+                BT::I128 => B::CastI128,
+                BT::I256 => B::CastI256,
                 BT::Address | BT::Signer | BT::Vector | BT::Bool => {
                     panic!("ICE type checking failed. unexpected cast")
                 }
@@ -1419,21 +1407,14 @@ fn module_call(
     }
 }
 
-fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
+fn unary_op(_context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): UnaryOp) {
     use IR::Bytecode_ as B;
     use UnaryOp_ as O;
     code.push(sp(
         loc,
         match op_ {
             O::Not => B::Not,
-            O::Neg => {
-                context
-                    .env
-                    .diagnostic_reporter_at_top_level()
-                    .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
-                debug_assert!(context.env.has_errors());
-                B::Not
-            }
+            O::Neg => B::Neg,
         },
     ));
 }

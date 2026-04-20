@@ -1,0 +1,147 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --edition development
+
+// Equality (==)
+//# run
+module 0x6.m {
+
+entry foo() {
+label b0:
+    assert(0i8 == 0i8, 1000);
+    assert(0i64 == 0i64, 1001);
+    assert(-1i8 == -1i8, 1002);
+    assert(-1i64 == -1i64, 1003);
+    assert(-128i8 == -128i8, 1004);
+
+    assert(!(0i8 == 1i8), 1100);
+    assert(!(0i64 == 1i64), 1101);
+    assert(!(-1i8 == 0i8), 1102);
+    assert(!(-1i64 == 1i64), 1103);
+
+    assert(!(1i8 == -1i8), 1200);
+    assert(!(127i8 == -128i8), 1201);
+    return;
+}
+
+}
+
+// Not-equal (!=)
+//# run
+module 0x7.m {
+
+entry foo() {
+label b0:
+    assert(0i8 != 1i8, 2000);
+    assert(0i64 != 1i64, 2001);
+    assert(-1i8 != 0i8, 2002);
+    assert(-1i64 != 0i64, 2003);
+    assert(-128i8 != 127i8, 2004);
+
+    assert(!(0i8 != 0i8), 2100);
+    assert(!(0i64 != 0i64), 2101);
+    assert(!(-1i8 != -1i8), 2102);
+    return;
+}
+
+}
+
+// Less-than (<)
+//# run
+module 0x8.m {
+
+entry foo() {
+label b0:
+    assert(0i8 < 1i8, 3000);
+    assert(0i64 < 1i64, 3001);
+    assert(-1i8 < 0i8, 3002);
+    assert(-1i64 < 0i64, 3003);
+    assert(-2i8 < -1i8, 3004);
+    assert(-2i64 < -1i64, 3005);
+    assert(-128i8 < 127i8, 3006);
+    assert(-9223372036854775808i64 < 9223372036854775807i64, 3007);
+
+    assert(!(1i8 < 0i8), 3100);
+    assert(!(1i64 < 0i64), 3101);
+    assert(!(0i8 < -1i8), 3102);
+    assert(!(-1i8 < -2i8), 3103);
+
+    assert(!(0i8 < 0i8), 3200);
+    assert(!(0i64 < 0i64), 3201);
+    assert(!(-1i8 < -1i8), 3202);
+    return;
+}
+
+}
+
+// Greater-than (>)
+//# run
+module 0x9.m {
+
+entry foo() {
+label b0:
+    assert(1i8 > 0i8, 4000);
+    assert(1i64 > 0i64, 4001);
+    assert(0i8 > -1i8, 4002);
+    assert(0i64 > -1i64, 4003);
+    assert(-1i8 > -2i8, 4004);
+    assert(127i8 > -128i8, 4005);
+    assert(9223372036854775807i64 > -9223372036854775808i64, 4006);
+
+    assert(!(0i8 > 1i8), 4100);
+    assert(!(-1i8 > 0i8), 4101);
+    assert(!(-2i64 > -1i64), 4102);
+
+    assert(!(0i8 > 0i8), 4200);
+    assert(!(-1i64 > -1i64), 4201);
+    return;
+}
+
+}
+
+// Less-than-or-equal (<=)
+//# run
+module 0xa.m {
+
+entry foo() {
+label b0:
+    assert(0i8 <= 1i8, 5000);
+    assert(-1i8 <= 0i8, 5001);
+    assert(-128i8 <= 127i8, 5002);
+    assert(-1i64 <= 0i64, 5003);
+
+    assert(0i8 <= 0i8, 5100);
+    assert(-1i8 <= -1i8, 5101);
+    assert(-128i8 <= -128i8, 5102);
+
+    assert(!(1i8 <= 0i8), 5200);
+    assert(!(0i8 <= -1i8), 5201);
+    assert(!(127i8 <= -128i8), 5202);
+    return;
+}
+
+}
+
+// Greater-than-or-equal (>=)
+//# run
+module 0xb.m {
+
+entry foo() {
+label b0:
+    assert(1i8 >= 0i8, 6000);
+    assert(0i8 >= -1i8, 6001);
+    assert(127i8 >= -128i8, 6002);
+    assert(0i64 >= -1i64, 6003);
+
+    assert(0i8 >= 0i8, 6100);
+    assert(-1i8 >= -1i8, 6101);
+    assert(-128i8 >= -128i8, 6102);
+
+    assert(!(0i8 >= 1i8), 6200);
+    assert(!(-1i8 >= 0i8), 6201);
+    assert(!(-128i8 >= 127i8), 6202);
+    return;
+}
+
+}

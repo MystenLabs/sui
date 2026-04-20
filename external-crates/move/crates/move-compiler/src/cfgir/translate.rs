@@ -10,9 +10,8 @@ use crate::{
         cfg::{ImmForwardCFG, MutForwardCFG},
         visitor::{CFGIRVisitor, CFGIRVisitorConstructor, CFGIRVisitorContext},
     },
-    dev_feature, diag,
+    diag,
     diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
-    editions::FeatureGate,
     expansion::ast::{Attributes, ModuleIdent, Mutability},
     hlir::ast::{self as H, BlockLabel, Label, Value, Value_, Var},
     ice_assert,
@@ -490,11 +489,7 @@ fn constant(
             constant_values
                 .add(name, value.clone())
                 .expect("ICE constant name collision");
-            let loc = value.loc;
             let mv = move_value_from_value(context.env, value);
-            if mv.is_none() {
-                context.add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
-            }
             mv
         }
         _ => None,
@@ -620,7 +615,7 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
 
 pub(crate) fn move_value_from_value(
     env: &CompilationEnv,
-    sp!(vloc, v_): Value,
+    sp!(_, v_): Value,
 ) -> Option<MoveValue> {
     use MoveValue as MV;
     use Value_ as V;
@@ -640,11 +635,12 @@ pub(crate) fn move_value_from_value(
                 .collect();
             MV::Vector(mvs?)
         }
-        V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
-            env.diagnostic_reporter_at_top_level()
-                .add_diag(dev_feature!(FeatureGate::SignedIntegers, vloc));
-            return None;
-        }
+        V::I8(i) => MV::I8(i),
+        V::I16(i) => MV::I16(i),
+        V::I32(i) => MV::I32(i),
+        V::I64(i) => MV::I64(i),
+        V::I128(i) => MV::I128(i),
+        V::I256(i) => MV::I256(i),
     })
 }
 

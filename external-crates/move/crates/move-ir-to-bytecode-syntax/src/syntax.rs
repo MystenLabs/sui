@@ -11,7 +11,7 @@ use std::{
 
 use crate::lexer::*;
 use move_command_line_common::files::FileHash;
-use move_core_types::{account_address::AccountAddress, u256};
+use move_core_types::{account_address::AccountAddress, i256, u256};
 use move_ir_types::{ast::*, location::*};
 use move_symbol_pool::Symbol;
 
@@ -339,6 +339,60 @@ fn parse_copyable_val(tokens: &mut Lexer) -> Result<CopyableVal, ParseError<Loc,
             tokens.advance()?;
             CopyableVal_::U256(i)
         }
+        Tok::I8Value => {
+            let mut s = tokens.content();
+            if s.ends_with("i8") {
+                s = &s[..s.len() - 2]
+            }
+            let i = i8::from_str(s).unwrap();
+            tokens.advance()?;
+            CopyableVal_::I8(i)
+        }
+        Tok::I16Value => {
+            let mut s = tokens.content();
+            if s.ends_with("i16") {
+                s = &s[..s.len() - 3]
+            }
+            let i = i16::from_str(s).unwrap();
+            tokens.advance()?;
+            CopyableVal_::I16(i)
+        }
+        Tok::I32Value => {
+            let mut s = tokens.content();
+            if s.ends_with("i32") {
+                s = &s[..s.len() - 3]
+            }
+            let i = i32::from_str(s).unwrap();
+            tokens.advance()?;
+            CopyableVal_::I32(i)
+        }
+        Tok::I64Value => {
+            let mut s = tokens.content();
+            if s.ends_with("i64") {
+                s = &s[..s.len() - 3]
+            }
+            let i = i64::from_str(s).unwrap();
+            tokens.advance()?;
+            CopyableVal_::I64(i)
+        }
+        Tok::I128Value => {
+            let mut s = tokens.content();
+            if s.ends_with("i128") {
+                s = &s[..s.len() - 4]
+            }
+            let i = i128::from_str(s).unwrap();
+            tokens.advance()?;
+            CopyableVal_::I128(i)
+        }
+        Tok::I256Value => {
+            let mut s = tokens.content();
+            if s.ends_with("i256") {
+                s = &s[..s.len() - 4]
+            }
+            let i = i256::I256::from_str(s).unwrap();
+            tokens.advance()?;
+            CopyableVal_::I256(i)
+        }
         Tok::ByteArrayValue => {
             let s = tokens.content();
             let buf = hex::decode(&s[2..s.len() - 1]).unwrap_or_else(|_| {
@@ -480,7 +534,14 @@ fn parse_qualified_function_name(
         | Tok::ToU32
         | Tok::ToU64
         | Tok::ToU128
-        | Tok::ToU256 => {
+        | Tok::ToU256
+        | Tok::ToI8
+        | Tok::ToI16
+        | Tok::ToI32
+        | Tok::ToI64
+        | Tok::ToI128
+        | Tok::ToI256
+        | Tok::Neg => {
             let f = parse_builtin(tokens)?;
             FunctionCall_::Builtin(f)
         }
@@ -745,6 +806,12 @@ fn parse_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error
         | Tok::U64Value
         | Tok::U128Value
         | Tok::U256Value
+        | Tok::I8Value
+        | Tok::I16Value
+        | Tok::I32Value
+        | Tok::I64Value
+        | Tok::I128Value
+        | Tok::I256Value
         | Tok::ByteArrayValue => Ok(Exp_::Value(parse_copyable_val(tokens)?)),
         Tok::NameValue | Tok::NameBeginTyValue => {
             let (name, type_actuals) = parse_name_and_type_actuals(tokens)?;
@@ -870,6 +937,34 @@ fn parse_builtin(tokens: &mut Lexer) -> Result<Builtin, ParseError<Loc, anyhow::
         Tok::ToU256 => {
             tokens.advance()?;
             Ok(Builtin::ToU256)
+        }
+        Tok::ToI8 => {
+            tokens.advance()?;
+            Ok(Builtin::ToI8)
+        }
+        Tok::ToI16 => {
+            tokens.advance()?;
+            Ok(Builtin::ToI16)
+        }
+        Tok::ToI32 => {
+            tokens.advance()?;
+            Ok(Builtin::ToI32)
+        }
+        Tok::ToI64 => {
+            tokens.advance()?;
+            Ok(Builtin::ToI64)
+        }
+        Tok::ToI128 => {
+            tokens.advance()?;
+            Ok(Builtin::ToI128)
+        }
+        Tok::ToI256 => {
+            tokens.advance()?;
+            Ok(Builtin::ToI256)
+        }
+        Tok::Neg => {
+            tokens.advance()?;
+            Ok(Builtin::Neg)
         }
         t => Err(ParseError::InvalidToken {
             location: current_token_loc(tokens),
@@ -1359,6 +1454,30 @@ fn parse_type(tokens: &mut Lexer) -> Result<Type, ParseError<Loc, anyhow::Error>
         Tok::NameValue if matches!(tokens.content(), "u256") => {
             tokens.advance()?;
             Type_::U256
+        }
+        Tok::NameValue if matches!(tokens.content(), "i8") => {
+            tokens.advance()?;
+            Type_::I8
+        }
+        Tok::NameValue if matches!(tokens.content(), "i16") => {
+            tokens.advance()?;
+            Type_::I16
+        }
+        Tok::NameValue if matches!(tokens.content(), "i32") => {
+            tokens.advance()?;
+            Type_::I32
+        }
+        Tok::NameValue if matches!(tokens.content(), "i64") => {
+            tokens.advance()?;
+            Type_::I64
+        }
+        Tok::NameValue if matches!(tokens.content(), "i128") => {
+            tokens.advance()?;
+            Type_::I128
+        }
+        Tok::NameValue if matches!(tokens.content(), "i256") => {
+            tokens.advance()?;
+            Type_::I256
         }
         Tok::NameValue if matches!(tokens.content(), "bool") => {
             tokens.advance()?;

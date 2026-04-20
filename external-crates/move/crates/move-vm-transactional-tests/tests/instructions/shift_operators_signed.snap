@@ -1,0 +1,80 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 13 tasks
+
+task 1, lines 7-16:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x6::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 2, lines 17-28:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x7::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 3, lines 29-38:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x8::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 4, lines 39-50:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0x9::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 5, lines 51-60:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xa::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 6, lines 61-72:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: ARITHMETIC_ERROR,
+    sub_status: None,
+    location: 0xb::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 2)],
+}
+
+task 8, lines 91-110:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term Minus
+
+task 10, lines 125-141:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term Minus
+
+task 11, lines 142-162:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term Minus
+
+task 12, lines 163-177:
+//# run
+Error: ParserError: Invalid Token: unrecognized token kind for term Minus

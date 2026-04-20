@@ -1,0 +1,100 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//# init --edition development
+
+// Bitwise AND (&)
+//# run
+module 0x6.m {
+
+entry foo() {
+label b0:
+    assert(0i8 & 0i8 == 0i8, 1000);
+    assert(0i64 & 0i64 == 0i64, 1001);
+
+    // x & x == x
+    assert(42i8 & 42i8 == 42i8, 1100);
+    assert(42i64 & 42i64 == 42i64, 1101);
+    assert(-1i8 & -1i8 == -1i8, 1102);
+    assert(-1i64 & -1i64 == -1i64, 1103);
+
+    // -1 is all-bits-set, so -1 & x == x
+    assert(-1i8 & 127i8 == 127i8, 1200);
+    assert(-1i64 & 127i64 == 127i64, 1201);
+    assert(-1i8 & 0i8 == 0i8, 1202);
+    assert(-1i8 & -128i8 == -128i8, 1203);
+
+    // 0 & x == 0
+    assert(0i8 & 42i8 == 0i8, 1300);
+    assert(0i64 & -1i64 == 0i64, 1301);
+
+    // -128i8 is 0x80, 127i8 is 0x7F: no overlap
+    assert(-128i8 & 127i8 == 0i8, 1400);
+
+    // Mixed
+    assert(85i8 & 51i8 == 17i8, 1500);
+    return;
+}
+
+}
+
+// Bitwise OR (|)
+//# run
+module 0x7.m {
+
+entry foo() {
+label b0:
+    assert(0i8 | 0i8 == 0i8, 2000);
+    assert(0i64 | 0i64 == 0i64, 2001);
+
+    // x | x == x
+    assert(42i8 | 42i8 == 42i8, 2100);
+    assert(-1i8 | -1i8 == -1i8, 2101);
+
+    // 0 | x == x
+    assert(0i8 | 42i8 == 42i8, 2200);
+    assert(0i8 | -1i8 == -1i8, 2201);
+    assert(0i64 | -1i64 == -1i64, 2202);
+
+    // -128 | 127 == -1 (0x80 | 0x7F == 0xFF == -1 in i8)
+    assert(-128i8 | 127i8 == -1i8, 2300);
+
+    // Mixed
+    assert(85i8 | 51i8 == 119i8, 2400);
+    return;
+}
+
+}
+
+// Bitwise XOR (^)
+//# run
+module 0x8.m {
+
+entry foo() {
+label b0:
+    assert(0i8 ^ 0i8 == 0i8, 3000);
+    assert(0i64 ^ 0i64 == 0i64, 3001);
+
+    // x ^ x == 0
+    assert(42i8 ^ 42i8 == 0i8, 3100);
+    assert(42i64 ^ 42i64 == 0i64, 3101);
+    assert(-1i8 ^ -1i8 == 0i8, 3102);
+    assert(-1i64 ^ -1i64 == 0i64, 3103);
+
+    // x ^ 0 == x
+    assert(42i8 ^ 0i8 == 42i8, 3200);
+    assert(-1i8 ^ 0i8 == -1i8, 3201);
+    assert(-128i8 ^ 0i8 == -128i8, 3202);
+
+    // -128 ^ 127 == -1 (0x80 ^ 0x7F == 0xFF == -1 in i8)
+    assert(-128i8 ^ 127i8 == -1i8, 3300);
+
+    // -1 ^ 127 == -128 (0xFF ^ 0x7F == 0x80 == -128 in i8)
+    assert(-1i8 ^ 127i8 == -128i8, 3301);
+
+    // Mixed
+    assert(85i8 ^ 51i8 == 102i8, 3400);
+    return;
+}
+
+}

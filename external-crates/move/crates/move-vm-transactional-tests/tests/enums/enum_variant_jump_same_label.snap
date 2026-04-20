@@ -5,7 +5,7 @@ processed 5 tasks
 
 task 0, lines 1-43:
 //# print-bytecode
-// Move bytecode v7
+// Move bytecode v8
 module 6.Enums {
 
 enum EnumWithThreeVariants<T> {

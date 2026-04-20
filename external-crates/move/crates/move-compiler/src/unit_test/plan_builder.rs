@@ -382,13 +382,12 @@ fn convert_builtin_type_to_typetag(s_type: &HA::SingleType_) -> Option<TypeTag> 
                         TypeTag::Vector(Box::new(tts.remove(0)))
                     }
                     NA::BuiltinTypeName_::Signer => TypeTag::Signer,
-                    // TODO (signed-ints): Fix this when we have signed ints in the bytecode
-                    NA::BuiltinTypeName_::I8
-                    | NA::BuiltinTypeName_::I16
-                    | NA::BuiltinTypeName_::I32
-                    | NA::BuiltinTypeName_::I64
-                    | NA::BuiltinTypeName_::I128
-                    | NA::BuiltinTypeName_::I256 => return None,
+                    NA::BuiltinTypeName_::I8 => TypeTag::I8,
+                    NA::BuiltinTypeName_::I16 => TypeTag::I16,
+                    NA::BuiltinTypeName_::I32 => TypeTag::I32,
+                    NA::BuiltinTypeName_::I64 => TypeTag::I64,
+                    NA::BuiltinTypeName_::I128 => TypeTag::I128,
+                    NA::BuiltinTypeName_::I256 => TypeTag::I256,
                 };
                 Some(tag)
             }
