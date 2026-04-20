@@ -107,9 +107,9 @@ impl RocksDBStore {
             KeyIndexing, KeySpaceConfig, KeyType, ThConfig, default_mutex_count,
         };
         let mutexes = default_mutex_count();
-        let index_digest_key = KeyIndexing::fixed(36);
-        let index_index_digest_key = KeyIndexing::fixed(40);
-        let commit_vote_key = KeyIndexing::fixed(76);
+        let index_digest_key = KeyIndexing::key_reduction(36, 0..12);
+        let index_index_digest_key = KeyIndexing::key_reduction(40, 0..24);
+        let commit_vote_key = KeyIndexing::key_reduction(76, 0..60);
         let u32_prefix = KeyType::from_prefix_bits(3 * 8);
         let u64_prefix = KeyType::from_prefix_bits(6 * 8);
         let configs = vec![
