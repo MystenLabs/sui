@@ -598,8 +598,7 @@ fn parse_call(
 // }
 
 fn parse_call_or_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error>> {
-    let is_module_call =
-        tokens.peek() == Tok::NameValue && tokens.lookahead()? == Tok::ColonColon;
+    let is_module_call = tokens.peek() == Tok::NameValue && tokens.lookahead()? == Tok::ColonColon;
     if is_module_call {
         let f = parse_qualified_function_name(tokens)?;
         return if tokens.peek() == Tok::LBrace {

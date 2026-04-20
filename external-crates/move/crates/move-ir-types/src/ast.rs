@@ -1741,7 +1741,9 @@ impl fmt::Display for Bytecode_ {
             Bytecode_::CopyLoc(v) => write!(f, "CopyLoc {}", v),
             Bytecode_::MoveLoc(v) => write!(f, "MoveLoc {}", v),
             Bytecode_::StLoc(v) => write!(f, "StLoc {}", v),
-            Bytecode_::Call(m, n, tys) => write!(f, "Call {}::{}{}", m, n, format_type_actuals(tys)),
+            Bytecode_::Call(m, n, tys) => {
+                write!(f, "Call {}::{}{}", m, n, format_type_actuals(tys))
+            }
             Bytecode_::Pack(n, tys) => write!(f, "Pack {}{}", n, format_type_actuals(tys)),
             Bytecode_::Unpack(n, tys) => write!(f, "Unpack {}{}", n, format_type_actuals(tys)),
             Bytecode_::ReadRef => write!(f, "ReadRef"),
