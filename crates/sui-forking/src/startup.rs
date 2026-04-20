@@ -6,7 +6,6 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
-use prometheus::Registry;
 use rand::rngs::OsRng;
 use sui_rpc_api::{RpcService, ServerVersion};
 use sui_types::storage::RpcStateReader;
@@ -22,7 +21,9 @@ use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 
 use crate::Node;
 use crate::context::Context;
+use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
+use crate::rpc::forking_service::ForkingServiceImpl;
 use crate::store::DataStore;
 
 /// Initialize a forked network by fetching state from the remote endpoint at
@@ -93,7 +94,12 @@ pub async fn run(context: Context, rpc_addr: SocketAddr, version: &'static str) 
     };
     let mut service = RpcService::new(reader);
     service.with_server_version(ServerVersion::new("sui-forking", version));
-    service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.into())));
+    let context = Arc::new(context);
+    service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));
+    service.with_custom_service(ForkingServiceServer::new(ForkingServiceImpl::new(
+        context.clone(),
+    )));
+    service.with_file_descriptor_set(crate::proto::FILE_DESCRIPTOR_SET);
 
     info!("starting sui-rpc-api server on {rpc_addr}");
     let server_handle = tokio::spawn(async move { service.start_service(rpc_addr).await });
@@ -104,8 +110,6 @@ pub async fn run(context: Context, rpc_addr: SocketAddr, version: &'static str) 
             res?;
             info!("shutdown signal received, stopping forked network");
         }
-        // If the RPC server task aborts unexpectedly, surface that as an
-        // error rather than blocking on Ctrl+C indefinitely.
         join = server_handle => {
             if let Err(e) = join {
                 return Err(anyhow!("rpc server task panicked: {e}"));

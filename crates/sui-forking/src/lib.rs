@@ -9,6 +9,7 @@ pub(crate) mod context;
 pub(crate) mod filesystem;
 mod gql;
 mod node;
+mod proto;
 mod rpc;
 pub mod startup;
 pub mod store;
