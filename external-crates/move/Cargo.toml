@@ -139,6 +139,7 @@ lcov = "0.8.1"
 fs4 = { version = "0.13.1" }
 
 
+bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util" }
 invalid-mutations = { path = "crates/invalid-mutations" }
 jsonrpc = { path = "crates/jsonrpc" }
@@ -151,6 +152,7 @@ move-borrow-graph = { path = "crates/move-borrow-graph" }
 move-bytecode-source-map = { path = "crates/move-bytecode-source-map" }
 move-bytecode-utils = { path = "crates/move-bytecode-utils" }
 move-bytecode-verifier = { path = "crates/move-bytecode-verifier" }
+move-bytecode-verifier-analyzer = { path = "crates/move-bytecode-verifier-analyzer" }
 move-bytecode-verifier-meter = { path = "crates/move-bytecode-verifier-meter" }
 move-bytecode-viewer = { path = "crates/move-bytecode-viewer" }
 move-cli = { path = "crates/move-cli" }
@@ -161,6 +163,7 @@ move-coverage = { path = "crates/move-coverage" }
 move-decompiler = { path = "crates/move-decompiler" }
 move-disassembler = { path = "crates/move-disassembler" }
 move-docgen = { path = "crates/move-docgen" }
+move-docgen-tests = { path = "crates/move-docgen-tests" }
 move-ir-compiler = { path = "crates/move-ir-compiler" }
 move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }
@@ -175,12 +178,14 @@ move-regex-borrow-graph = { path = "crates/move-regex-borrow-graph" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stackless-bytecode-2 = { path = "crates/move-stackless-bytecode-2" }
 move-stdlib = { path = "crates/move-stdlib" }
+move-stdlib-natives = { path = "crates/move-stdlib-natives" }
 move-symbol-pool = { path = "crates/move-symbol-pool" }
 move-transactional-test-runner = { path = "crates/move-transactional-test-runner" }
 move-unit-test = { path = "crates/move-unit-test" }
 move-vm-config = { path = "crates/move-vm-config" }
 move-vm-profiler = { path = "crates/move-vm-profiler" }
 move-vm-runtime = { path = "crates/move-vm-runtime" }
+prover_bytecode = { path = "crates/move-stackless-bytecode", package = "move-stackless-bytecode" }
 
 [profile.bench]
 debug = true
