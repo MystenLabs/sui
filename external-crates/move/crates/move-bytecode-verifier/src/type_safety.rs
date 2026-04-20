@@ -708,6 +708,30 @@ fn verify_instr(
             verifier.push(meter, ST::U256)?;
         }
 
+        Bytecode::LdI8(_) => {
+            verifier.push(meter, ST::I8)?;
+        }
+
+        Bytecode::LdI16(_) => {
+            verifier.push(meter, ST::I16)?;
+        }
+
+        Bytecode::LdI32(_) => {
+            verifier.push(meter, ST::I32)?;
+        }
+
+        Bytecode::LdI64(_) => {
+            verifier.push(meter, ST::I64)?;
+        }
+
+        Bytecode::LdI128(_) => {
+            verifier.push(meter, ST::I128)?;
+        }
+
+        Bytecode::LdI256(_) => {
+            verifier.push(meter, ST::I256)?;
+        }
+
         Bytecode::LdConst(idx) => {
             let signature = charge_clone!(meter, &verifier.module.constant_at(*idx).type_);
             verifier.push(meter, signature)?;
@@ -1077,6 +1101,58 @@ fn verify_instr(
             }
             verifier.push(meter, ST::U256)?;
         }
+        Bytecode::CastI8 => {
+            let operand = safe_unwrap_err!(verifier.stack.pop());
+            if !operand.is_integer() {
+                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
+            }
+            verifier.push(meter, ST::I8)?;
+        }
+        Bytecode::CastI16 => {
+            let operand = safe_unwrap_err!(verifier.stack.pop());
+            if !operand.is_integer() {
+                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
+            }
+            verifier.push(meter, ST::I16)?;
+        }
+        Bytecode::CastI32 => {
+            let operand = safe_unwrap_err!(verifier.stack.pop());
+            if !operand.is_integer() {
+                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
+            }
+            verifier.push(meter, ST::I32)?;
+        }
+        Bytecode::CastI64 => {
+            let operand = safe_unwrap_err!(verifier.stack.pop());
+            if !operand.is_integer() {
+                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
+            }
+            verifier.push(meter, ST::I64)?;
+        }
+        Bytecode::CastI128 => {
+            let operand = safe_unwrap_err!(verifier.stack.pop());
+            if !operand.is_integer() {
+                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
+            }
+            verifier.push(meter, ST::I128)?;
+        }
+        Bytecode::CastI256 => {
+            let operand = safe_unwrap_err!(verifier.stack.pop());
+            if !operand.is_integer() {
+                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
+            }
+            verifier.push(meter, ST::I256)?;
+        }
+        Bytecode::Neg => {
+            let operand = safe_unwrap_err!(verifier.stack.pop());
+            // Neg is restricted to signed integer types only. Unsigned integers use
+            // wrapping subtraction from zero instead. The operand type is preserved
+            // (negating an i32 produces an i32, etc.).
+            if !operand.is_signed_integer() {
+                return Err(verifier.error(StatusCode::INTEGER_OP_TYPE_MISMATCH_ERROR, offset));
+            }
+            verifier.push(meter, operand)?;
+        }
         Bytecode::PackVariant(vidx) => {
             let handle = verifier.module.variant_handle_at(*vidx);
             let enum_def = verifier.module.enum_def_at(handle.enum_def);
@@ -1225,6 +1301,12 @@ fn instantiate(
             U64 => U64,
             U128 => U128,
             U256 => U256,
+            I8 => I8,
+            I16 => I16,
+            I32 => I32,
+            I64 => I64,
+            I128 => I128,
+            I256 => I256,
             Address => Address,
             Signer => Signer,
             Vector(ty) => Vector(Box::new(rec(ty, subst))),

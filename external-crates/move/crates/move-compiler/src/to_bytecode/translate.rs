@@ -990,6 +990,7 @@ fn base_type(context: &mut Context, sp!(bt_loc, bt_): H::BaseType) -> IR::Type {
                 .env
                 .diagnostic_reporter_at_top_level()
                 .add_diag(dev_feature!(FeatureGate::SignedIntegers, bt_loc));
+            debug_assert!(context.env.has_errors());
             IRT::U64
         }
 
@@ -1206,6 +1207,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                         .env
                         .diagnostic_reporter_at_top_level()
                         .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
+                    debug_assert!(context.env.has_errors());
                     B::LdU64(0)
                 }
                 V::Bool(b) => {
@@ -1387,6 +1389,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                         .env
                         .diagnostic_reporter_at_top_level()
                         .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
+                    debug_assert!(context.env.has_errors());
                     B::CastU64
                 }
                 BT::Address | BT::Signer | BT::Vector | BT::Bool => {
@@ -1428,6 +1431,7 @@ fn unary_op(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, op_): 
                     .env
                     .diagnostic_reporter_at_top_level()
                     .add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
+                debug_assert!(context.env.has_errors());
                 B::Not
             }
         },

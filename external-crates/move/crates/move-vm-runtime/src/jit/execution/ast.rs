@@ -1123,6 +1123,13 @@ impl Type {
                     "Unable to load const type signature"
                 ));
             }
+            // Signed integer constants are not yet supported in the VM runtime
+            S::I8 | S::I16 | S::I32 | S::I64 | S::I128 | S::I256 => {
+                return Err(partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Signed integer constants are not yet supported"
+                ));
+            }
             // Not allowed/Not meaningful
             S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
                 return Err(partial_vm_error!(

@@ -109,7 +109,16 @@ impl SurfStrategy {
                         }
                     }
                 }
-                Type::U256 | Type::Signer | Type::Vector(_) | Type::TypeParameter(_) => {
+                Type::I8 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i8>()).unwrap()),
+                Type::I16 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i16>()).unwrap()),
+                Type::I32 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i32>()).unwrap()),
+                Type::I64 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i64>()).unwrap()),
+                Type::I128 => CallArg::Pure(bcs::to_bytes(&state.rng.r#gen::<i128>()).unwrap()),
+                Type::U256
+                | Type::I256
+                | Type::Signer
+                | Type::Vector(_)
+                | Type::TypeParameter(_) => {
                     failed = true;
                     break;
                 }

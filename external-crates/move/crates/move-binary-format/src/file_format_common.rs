@@ -241,6 +241,12 @@ pub enum SerializedType {
     U16                     = 0xD,
     U32                     = 0xE,
     U256                    = 0xF,
+    I8                      = 0x10,
+    I16                     = 0x11,
+    I32                     = 0x12,
+    I64                     = 0x13,
+    I128                    = 0x14,
+    I256                    = 0x15,
 }
 
 #[rustfmt::skip]
@@ -352,6 +358,20 @@ pub enum Opcodes {
     UNPACK_VARIANT_GENERIC_IMM_REF = 0x54,
     UNPACK_VARIANT_GENERIC_MUT_REF = 0x55,
     VARIANT_SWITCH                 = 0x56,
+
+    LD_I8                          = 0x57,
+    LD_I16                         = 0x58,
+    LD_I32                         = 0x59,
+    LD_I64                         = 0x5A,
+    LD_I128                        = 0x5B,
+    LD_I256                        = 0x5C,
+    CAST_I8                        = 0x5D,
+    CAST_I16                       = 0x5E,
+    CAST_I32                       = 0x5F,
+    CAST_I64                       = 0x60,
+    CAST_I128                      = 0x61,
+    CAST_I256                      = 0x62,
+    NEG                            = 0x63,
 
     // ******** DEPRECATED BYTECODES ********
     // global storage opcodes are unused and deprecated
@@ -476,6 +496,39 @@ pub(crate) fn write_u128(binary: &mut BinaryData, value: u128) -> Result<()> {
     binary.extend(&value.to_le_bytes())
 }
 
+/// Write an `i8` in Little Endian format.
+pub(crate) fn write_i8(binary: &mut BinaryData, value: i8) -> Result<()> {
+    binary.push(value as u8)
+}
+
+/// Write an `i16` in Little Endian format.
+pub(crate) fn write_i16(binary: &mut BinaryData, value: i16) -> Result<()> {
+    binary.extend(&value.to_le_bytes())
+}
+
+/// Write an `i32` in Little Endian format.
+pub(crate) fn write_i32(binary: &mut BinaryData, value: i32) -> Result<()> {
+    binary.extend(&value.to_le_bytes())
+}
+
+/// Write an `i64` in Little Endian format.
+pub(crate) fn write_i64(binary: &mut BinaryData, value: i64) -> Result<()> {
+    binary.extend(&value.to_le_bytes())
+}
+
+/// Write an `i128` in Little Endian format.
+pub(crate) fn write_i128(binary: &mut BinaryData, value: i128) -> Result<()> {
+    binary.extend(&value.to_le_bytes())
+}
+
+/// Write an `I256` in Little Endian format.
+pub(crate) fn write_i256(
+    binary: &mut BinaryData,
+    value: move_core_types::i256::I256,
+) -> Result<()> {
+    binary.extend(&value.to_le_bytes())
+}
+
 /// Write a `u256` in Little Endian format.
 pub(crate) fn write_u256(
     binary: &mut BinaryData,
@@ -555,6 +608,10 @@ pub const VERSION_6: u32 = 6;
 /// Version 7: changes compared with version 6
 ///  + enums
 pub const VERSION_7: u32 = 7;
+
+/// Version 8: changes compared with version 7
+///  + signed integer bytecodes (i8–i256): LdI8–LdI256, CastI8–CastI256, Neg
+pub const VERSION_8: u32 = 8;
 
 // Mark which version is the latest version
 pub const VERSION_MAX: u32 = VERSION_7;
@@ -643,6 +700,19 @@ pub fn instruction_opcode(instruction: &Bytecode) -> Opcodes {
         UnpackVariantGenericImmRef(_) => Opcodes::UNPACK_VARIANT_GENERIC_IMM_REF,
         UnpackVariantGenericMutRef(_) => Opcodes::UNPACK_VARIANT_GENERIC_MUT_REF,
         VariantSwitch(_) => Opcodes::VARIANT_SWITCH,
+        LdI8(_) => Opcodes::LD_I8,
+        LdI16(_) => Opcodes::LD_I16,
+        LdI32(_) => Opcodes::LD_I32,
+        LdI64(_) => Opcodes::LD_I64,
+        LdI128(_) => Opcodes::LD_I128,
+        LdI256(_) => Opcodes::LD_I256,
+        CastI8 => Opcodes::CAST_I8,
+        CastI16 => Opcodes::CAST_I16,
+        CastI32 => Opcodes::CAST_I32,
+        CastI64 => Opcodes::CAST_I64,
+        CastI128 => Opcodes::CAST_I128,
+        CastI256 => Opcodes::CAST_I256,
+        Neg => Opcodes::NEG,
         // ******** DEPRECATED BYTECODES ********
         ExistsDeprecated(_) => Opcodes::EXISTS_DEPRECATED,
         ExistsGenericDeprecated(_) => Opcodes::EXISTS_GENERIC_DEPRECATED,

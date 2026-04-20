@@ -207,8 +207,8 @@ fn malformed_simple() {
         StatusCode::UNKNOWN_VERSION
     );
 
-    // versioned tests
-    for version in VERSION_1..VERSION_MAX {
+    // versioned tests (only up to VERSION_6 since version 7+ requires flavor encoding)
+    for version in VERSION_1..=VERSION_6 {
         malformed_simple_versioned_test(version);
     }
 }
@@ -441,6 +441,42 @@ fn deserialize_empty_enum_fails() {
 }
 
 #[test]
+fn signed_integer_signature_token_rejected_at_version_7() {
+    use crate::file_format::{Signature, SignatureToken};
+    let mut module = basic_test_module();
+    // Inject a signed integer type into the signature pool.
+    module.signatures.push(Signature(vec![SignatureToken::I8]));
+    let mut v = vec![];
+    // VERSION_MAX is VERSION_7 in this branch, so serialize_with_version(VERSION_MAX, ...)
+    // must reject the signed integer signature token.
+    let res = module.serialize_with_version(VERSION_MAX, &mut v);
+    assert!(
+        res.is_err(),
+        "Expected rejection of signed integer types at version {VERSION_MAX}"
+    );
+    let err_msg = res.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("Signed integer types"),
+        "Error should mention signed integer types, got: {err_msg}"
+    );
+}
+
+#[test]
+fn is_signed_integer_predicate() {
+    use crate::file_format::SignatureToken as ST;
+    assert!(ST::I8.is_signed_integer());
+    assert!(ST::I16.is_signed_integer());
+    assert!(ST::I32.is_signed_integer());
+    assert!(ST::I64.is_signed_integer());
+    assert!(ST::I128.is_signed_integer());
+    assert!(ST::I256.is_signed_integer());
+    assert!(!ST::U8.is_signed_integer());
+    assert!(!ST::U64.is_signed_integer());
+    assert!(!ST::Bool.is_signed_integer());
+    assert!(!ST::Address.is_signed_integer());
+}
+
+#[test]
 fn serialize_deserialize_v6_no_flavor() {
     let module = basic_test_module();
     let mut bin = vec![];
@@ -475,7 +511,8 @@ fn serialize_deserialize_v7_with_no_flavor() {
 
 #[test]
 fn serialize_deserialize_v7_with_flavor() {
-    let module = basic_test_module_with_enum();
+    let mut module = basic_test_module_with_enum();
+    module.version = VERSION_7;
     let mut bin = vec![];
     module.serialize_with_version(VERSION_7, &mut bin).unwrap();
     let x = CompiledModule::deserialize_with_defaults(&bin).unwrap();
@@ -506,7 +543,8 @@ fn serialize_deserialize_unpublishable_v7_with_no_flavor() {
 
 #[test]
 fn serialize_deserialize_unpublishable_v7_with_flavor() {
-    let module = basic_unpublishable_test_module_with_enum();
+    let mut module = basic_unpublishable_test_module_with_enum();
+    module.version = VERSION_7;
     let mut bin = vec![];
     // Deserialization will now fail because of bad magic with the default config.
     module.serialize_with_version(VERSION_7, &mut bin).unwrap();

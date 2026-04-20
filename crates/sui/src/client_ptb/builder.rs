@@ -488,7 +488,13 @@ impl<'a> PTBBuilder<'a> {
                 | SignatureToken::Vector(_)
                 | SignatureToken::U16
                 | SignatureToken::U32
-                | SignatureToken::U256 => {
+                | SignatureToken::U256
+                | SignatureToken::I8
+                | SignatureToken::I16
+                | SignatureToken::I32
+                | SignatureToken::I64
+                | SignatureToken::I128
+                | SignatureToken::I256 => {
                     is_mutable = false;
                 }
             }
