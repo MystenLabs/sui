@@ -287,6 +287,8 @@ pub static COMPILER_KNOWN_FILTERS: LazyLock<Vec<(&'static str, KnownFilterExpans
                 DiagnosticsID::exact(None, Category::$cat as u8, $cat::$code as u8)
             };
         }
+        // Deliberate leak: these slices live for the process lifetime (behind LazyLock)
+        // and are referenced by every FilterScope. The total size is small and bounded.
         fn leak(v: Vec<DiagnosticsID>) -> KnownFilterExpansion {
             Box::leak(v.into_boxed_slice())
         }
@@ -509,8 +511,8 @@ impl FilterStack {
         };
 
         match resolved.kind {
-            FilterKind::Drop => FilterResult::Discarded,
             _ if diag.severity() > Severity::Warning => FilterResult::Emit(diag),
+            FilterKind::Drop => FilterResult::Discarded,
             FilterKind::Allow => FilterResult::Filtered(diag),
             FilterKind::Deny => {
                 diag = diag.set_severity(Severity::NonblockingError);
