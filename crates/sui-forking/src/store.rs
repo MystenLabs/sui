@@ -41,6 +41,8 @@ use crate::GraphQLClient;
 use crate::Node;
 use crate::ObjectKey;
 use crate::ObjectRead;
+use crate::TransactionInfo;
+use crate::TransactionRead;
 use crate::VersionQuery;
 use crate::filesystem::FilesystemStore;
 
@@ -86,16 +88,107 @@ impl DataStore {
         self.gql.chain()
     }
 
-    /// Fetch a verified checkpoint from the remote GraphQL endpoint. When `checkpoint` is `None`,
-    /// the store's `forked_at_checkpoint` is used as the default.
-    pub(crate) async fn get_verified_checkpoint_from_rpc(
+    /// Get a checkpoint summary by sequence number. Tries the local filesystem first. If it's a
+    /// miss, then fetches it from remote if it's at or before the fork checkpoint and caches it
+    /// locally for next time.
+    pub(crate) fn get_checkpoint_by_sequence_number(
         &self,
-        checkpoint: Option<CheckpointSequenceNumber>,
+        sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
-        let checkpoint = checkpoint.unwrap_or(self.forked_at_checkpoint);
-        let verified_checkpoint = self.gql.get_verified_checkpoint(Some(checkpoint))?;
+        if let Some(checkpoint) = self.local.get_checkpoint_by_sequence_number(sequence)? {
+            return Ok(Some(checkpoint));
+        }
+        if sequence > self.forked_at_checkpoint {
+            return Ok(None);
+        }
+        Ok(self
+            .fetch_and_cache_checkpoint(sequence)?
+            .map(|(checkpoint, _)| checkpoint))
+    }
 
-        Ok(verified_checkpoint)
+    /// Get checkpoint contents by sequence number, with the same local-first
+    /// remote-fallback policy as [`Self::get_checkpoint_by_sequence_number`].
+    pub(crate) fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Option<CheckpointContents>> {
+        if let Some(contents) = self
+            .local
+            .get_checkpoint_contents_by_sequence_number(sequence)?
+        {
+            return Ok(Some(contents));
+        }
+        if sequence > self.forked_at_checkpoint {
+            return Ok(None);
+        }
+        Ok(self
+            .fetch_and_cache_checkpoint(sequence)?
+            .map(|(_, contents)| contents))
+    }
+
+    /// Look up a checkpoint summary by its digest. Local only: the GraphQL
+    /// checkpoint query is keyed by sequence number, so there is no remote
+    /// fallback for digest lookups.
+    pub(crate) fn get_checkpoint_by_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+        self.local.get_checkpoint_by_digest(digest)
+    }
+
+    /// Look up checkpoint contents by their digest. Local only: contents are
+    /// content-addressed on disk, but the remote GraphQL schema does not
+    /// expose a contents-by-digest query, so there is no fallback path.
+    pub(crate) fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> anyhow::Result<Option<CheckpointContents>> {
+        self.local.get_checkpoint_contents_by_digest(digest)
+    }
+
+    /// Return the highest checkpoint summary cached locally. This never
+    /// consults the remote endpoint — the local executor is the source of
+    /// truth for "latest" in a forked network.
+    pub(crate) fn get_highest_verified_checkpoint(
+        &self,
+    ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+        self.local.get_highest_verified_checkpoint()
+    }
+
+    /// Eagerly populate the cache with the startup (forked-at) checkpoint so
+    /// any bootstrap failure surfaces now instead of on first access.
+    pub(crate) fn download_and_persist_startup_checkpoint(&self) -> anyhow::Result<()> {
+        self.get_checkpoint_by_sequence_number(self.forked_at_checkpoint)?
+            .ok_or_else(|| {
+                anyhow!(
+                    "checkpoint {} not found on remote",
+                    self.forked_at_checkpoint
+                )
+            })?;
+        Ok(())
+    }
+
+    /// Get the highest checkpoint sequence number available on disk.
+    pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
+        self.local.get_highest_checkpoint_sequence_number()
+    }
+
+    /// Fetch checkpoint summary and contents from the remote GraphQL endpoint and persist them to
+    /// disk. Shared by the sequence-keyed cache-aware getters.
+    fn fetch_and_cache_checkpoint(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
+        let Some((checkpoint, contents)) = self.gql.get_verified_checkpoint(Some(sequence))? else {
+            return Ok(None);
+        };
+        // Write contents first: they're content-addressed (idempotent), so
+        // if the summary write fails afterward the contents are harmless
+        // orphans and the next request retries cleanly. The reverse order
+        // would leave a summary on disk pointing to missing contents.
+        self.local.write_checkpoint_contents(&contents)?;
+        self.local.write_checkpoint_summary(&checkpoint)?;
+        Ok(Some((checkpoint, contents)))
     }
 
     /// Get the object at the latest version available on disk. If not found, it will fetch the
@@ -176,9 +269,65 @@ impl DataStore {
             .map(|(object, _)| object))
     }
 
-    /// Get the highest checkpoint sequence number available on disk.
-    pub(crate) fn get_highest_checkpoint(&self) -> anyhow::Result<CheckpointSequenceNumber> {
-        self.local.get_highest_checkpoint_sequence_number()
+    /// Get a signed transaction by digest. First tries the local filesystem, and on miss it falls
+    /// back to the remote GraphQL endpoint. If the transaction is found remotely and is at or
+    /// before the fork checkpoint, then it is saved to disk before being returned. Transactions
+    /// produced by the local executor are always on disk.
+    ///
+    /// Note that currently historical reads do not include events, whereas local execution does
+    /// write events to disk.
+    pub(crate) fn get_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> anyhow::Result<Option<VerifiedTransaction>> {
+        if let Some(transaction) = self.local.get_transaction(digest)? {
+            return Ok(Some(transaction));
+        }
+        Ok(self
+            .fetch_and_cache_transaction(digest)?
+            .map(|info| info.transaction))
+    }
+
+    /// Get transaction effects by digest, with the same local-first remote-fallback
+    /// policy as [`Self::get_transaction`].
+    pub(crate) fn get_transaction_effects(
+        &self,
+        digest: &TransactionDigest,
+    ) -> anyhow::Result<Option<TransactionEffects>> {
+        if let Some(effects) = self.local.get_transaction_effects(digest)? {
+            return Ok(Some(effects));
+        }
+        Ok(self
+            .fetch_and_cache_transaction(digest)?
+            .map(|info| info.effects))
+    }
+
+    /// Fetch a transaction and its effects from the remote GraphQL endpoint and persist both halves
+    /// to disk. Shared by [`Self::get_transaction`] and [`Self::get_transaction_effects`] so a
+    /// single remote round-trip is used.
+    ///
+    /// Pre-fork guard: transaction digests aren't ordered, so we can't reject post-fork requests
+    /// up front the way [`Self::get_checkpoint_by_sequence_number`] does. Instead we check
+    /// `info.checkpoint` on the remote response and drop anything executed strictly after
+    /// `forked_at_checkpoint` so our fork doesn't silently absorb upstream activity that
+    /// happened after the fork point.
+    fn fetch_and_cache_transaction(
+        &self,
+        digest: &TransactionDigest,
+    ) -> anyhow::Result<Option<TransactionInfo>> {
+        let Some(info) = self
+            .gql
+            .transaction_data_and_effects(&digest.base58_encode())?
+        else {
+            return Ok(None);
+        };
+        if info.checkpoint > self.forked_at_checkpoint {
+            return Ok(None);
+        }
+        self.local.write_transaction(digest, &info.transaction)?;
+        self.local
+            .write_transaction_effects(digest, &info.effects)?;
+        Ok(Some(info))
     }
 
     /// Construct a `DataStore` for tests, backed by an explicit local root and a fake (unused)
@@ -191,6 +340,24 @@ impl DataStore {
         let local = FilesystemStore::new_with_root(root);
         Self {
             forked_at_checkpoint: 0,
+            gql,
+            local,
+        }
+    }
+
+    /// Test-only constructor that lets callers point the GraphQL client at an arbitrary URL
+    /// (e.g., a wiremock `MockServer`) and pin `forked_at_checkpoint` explicitly.
+    #[cfg(test)]
+    pub(crate) fn new_for_testing_with_remote(
+        root: std::path::PathBuf,
+        gql_url: String,
+        forked_at_checkpoint: CheckpointSequenceNumber,
+    ) -> Self {
+        let gql = GraphQLClient::new(Node::Custom(gql_url), "test")
+            .expect("graphql store with custom url should construct");
+        let local = FilesystemStore::new_with_root(root);
+        Self {
+            forked_at_checkpoint,
             gql,
             local,
         }
@@ -290,24 +457,32 @@ impl ChildObjectResolver for DataStore {
 impl SimulatorStore for DataStore {
     fn get_checkpoint_by_sequence_number(
         &self,
-        _sequence_number: CheckpointSequenceNumber,
+        sequence_number: CheckpointSequenceNumber,
     ) -> Option<VerifiedCheckpoint> {
-        todo!("SimulatorStore::get_checkpoint_by_sequence_number")
+        DataStore::get_checkpoint_by_sequence_number(self, sequence_number)
+            .ok()
+            .flatten()
     }
 
-    fn get_checkpoint_by_digest(&self, _digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
-        todo!("SimulatorStore::get_checkpoint_by_digest")
+    fn get_checkpoint_by_digest(&self, digest: &CheckpointDigest) -> Option<VerifiedCheckpoint> {
+        DataStore::get_checkpoint_by_digest(self, digest)
+            .ok()
+            .flatten()
     }
 
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
-        todo!()
+        DataStore::get_highest_verified_checkpoint(self)
+            .ok()
+            .flatten()
     }
 
     fn get_checkpoint_contents(
         &self,
-        _digest: &CheckpointContentsDigest,
+        digest: &CheckpointContentsDigest,
     ) -> Option<CheckpointContents> {
-        todo!("SimulatorStore::get_checkpoint_contents")
+        DataStore::get_checkpoint_contents_by_digest(self, digest)
+            .ok()
+            .flatten()
     }
 
     fn get_committee_by_epoch(&self, _epoch: EpochId) -> Option<Committee> {
@@ -315,11 +490,13 @@ impl SimulatorStore for DataStore {
     }
 
     fn get_transaction(&self, digest: &TransactionDigest) -> Option<VerifiedTransaction> {
-        self.local.get_transaction(digest).ok().flatten()
+        DataStore::get_transaction(self, digest).ok().flatten()
     }
 
     fn get_transaction_effects(&self, digest: &TransactionDigest) -> Option<TransactionEffects> {
-        self.local.get_transaction_effects(digest).ok().flatten()
+        DataStore::get_transaction_effects(self, digest)
+            .ok()
+            .flatten()
     }
 
     fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
@@ -353,12 +530,46 @@ impl SimulatorStore for DataStore {
         todo!("SimulatorStore::owned_objects")
     }
 
-    fn insert_checkpoint(&mut self, _checkpoint: VerifiedCheckpoint) {
-        todo!("SimulatorStore::insert_checkpoint")
+    fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
+        let sequence = checkpoint.data().sequence_number;
+        // Pre-fork summary was persisted at seed time; skip rewrites.
+        if self
+            .local
+            .get_checkpoint_by_sequence_number(sequence)
+            .ok()
+            .flatten()
+            .is_some()
+        {
+            return;
+        }
+        if let Err(err) = self.local.write_checkpoint_summary(&checkpoint) {
+            tracing::error!(
+                sequence_number = sequence,
+                "failed to persist checkpoint summary: {err:?}",
+            );
+        }
     }
 
-    fn insert_checkpoint_contents(&mut self, _contents: CheckpointContents) {
-        todo!("SimulatorStore::insert_checkpoint_contents")
+    fn insert_checkpoint_contents(&mut self, contents: CheckpointContents) {
+        // Contents are content-addressed, so writes are independent of the
+        // summary that references them. Idempotent: re-writing the same
+        // digest is a no-op.
+        let digest = *contents.digest();
+        if self
+            .local
+            .get_checkpoint_contents_by_digest(&digest)
+            .ok()
+            .flatten()
+            .is_some()
+        {
+            return;
+        }
+        if let Err(err) = self.local.write_checkpoint_contents(&contents) {
+            tracing::error!(
+                contents_digest = %digest,
+                "failed to persist checkpoint contents: {err:?}",
+            );
+        }
     }
 
     fn insert_committee(&mut self, _committee: Committee) {
@@ -418,181 +629,13 @@ impl SimulatorStore for DataStore {
 }
 
 #[cfg(test)]
-mod execution_tests {
-    use std::num::NonZeroUsize;
-    use std::time::Duration;
+#[path = "tests/store_checkpoint_persistence.rs"]
+mod checkpoint_persistence_tests;
 
-    use rand::rngs::OsRng;
-    use simulacrum::Simulacrum;
-    use simulacrum::store::in_mem_store::KeyStore;
-    use sui_swarm_config::network_config::NetworkConfig;
-    use sui_swarm_config::network_config_builder::ConfigBuilder;
-    use sui_types::base_types::SuiAddress;
-    use sui_types::effects::TransactionEffectsAPI;
-    use sui_types::gas_coin::GasCoin;
-    use sui_types::object::Owner;
-    use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{GasData, Transaction, TransactionData, TransactionKind};
+#[cfg(test)]
+#[path = "tests/store_execution.rs"]
+mod execution_tests;
 
-    use super::*;
-    use sui_types::crypto::KeypairTraits;
-
-    /// Build a `Simulacrum<OsRng, DataStore>` from a fresh genesis NetworkConfig. The DataStore's
-    /// local cache lives in the returned tempdir; its remote endpoint is fake and never called.
-    /// Genesis objects are populated directly via `update_objects` to avoid touching the
-    /// `init_with_genesis` checkpoint/committee paths (which are still `todo!()`).
-    ///
-    /// Returns the simulacrum, the underlying NetworkConfig (so tests can find genesis objects
-    /// and account keys), and the tempdir guarding the local cache.
-    fn test_simulacrum() -> (
-        Simulacrum<OsRng, DataStore>,
-        NetworkConfig,
-        tempfile::TempDir,
-    ) {
-        let temp = tempfile::tempdir().expect("failed to create tempdir");
-        let mut rng = OsRng;
-        let config = ConfigBuilder::new_with_temp_dir()
-            .rng(&mut rng)
-            .deterministic_committee_size(NonZeroUsize::MIN)
-            .build();
-
-        let mut data_store = DataStore::new_for_testing(temp.path().to_path_buf());
-        let written: BTreeMap<ObjectID, Object> = config
-            .genesis
-            .objects()
-            .iter()
-            .map(|o| (o.id(), o.clone()))
-            .collect();
-        data_store.update_objects(written, vec![]);
-
-        let keystore = KeyStore::from_network_config(&config);
-        let sim = Simulacrum::new_from_custom_state(
-            keystore,
-            config.genesis.checkpoint(),
-            config.genesis.sui_system_object(),
-            &config,
-            data_store,
-            rng,
-        );
-        (sim, config, temp)
-    }
-
-    /// Find the first gas coin in the genesis object set owned by `owner`.
-    fn find_gas_coin(config: &NetworkConfig, owner: SuiAddress) -> Object {
-        config
-            .genesis
-            .objects()
-            .iter()
-            .find(|obj| obj.owner == Owner::AddressOwner(owner) && obj.is_gas_coin())
-            .expect("owner should have a gas coin in genesis")
-            .clone()
-    }
-
-    #[test]
-    fn test_advance_clock_executes_and_persists() {
-        let (mut sim, _config, _temp) = test_simulacrum();
-        let initial_ts = sim.store().get_clock().timestamp_ms;
-
-        let effects = sim.advance_clock(Duration::from_secs(60));
-        assert!(
-            effects.status().is_ok(),
-            "execution failed: {:?}",
-            effects.status()
-        );
-
-        assert_eq!(sim.store().get_clock().timestamp_ms, initial_ts + 60_000,);
-
-        // The transaction was persisted to the filesystem cache.
-        let tx_digest = effects.transaction_digest();
-        let persisted = sim.store().get_transaction(tx_digest);
-        assert!(persisted.is_some(), "transaction not persisted on disk");
-
-        let persisted_effects = sim.store().get_transaction_effects(tx_digest);
-        assert_eq!(persisted_effects.unwrap(), effects);
-    }
-
-    #[test]
-    fn test_transfer_sui_executes_and_persists() {
-        let (mut sim, config, _temp) = test_simulacrum();
-
-        // Pick a sender from the genesis keystore and a gas coin owned by the sender.
-        let (sender, sender_key) = {
-            let (addr, key) = sim
-                .keystore()
-                .accounts()
-                .next()
-                .expect("at least one account");
-            (*addr, key.copy())
-        };
-        let gas_object = find_gas_coin(&config, sender);
-        let gas_coin = GasCoin::try_from(&gas_object).unwrap();
-        let initial_balance = gas_coin.value();
-        let transfer_amount = initial_balance / 2;
-
-        let recipient = SuiAddress::random_for_testing_only();
-
-        // Build a transfer-SUI programmable transaction.
-        let pt = {
-            let mut builder = ProgrammableTransactionBuilder::new();
-            builder.transfer_sui(recipient, Some(transfer_amount));
-            builder.finish()
-        };
-        let tx_data = TransactionData::new_with_gas_data(
-            TransactionKind::ProgrammableTransaction(pt),
-            sender,
-            GasData {
-                payment: vec![gas_object.compute_object_reference()],
-                owner: sender,
-                price: sim.reference_gas_price(),
-                budget: 100_000_000,
-            },
-        );
-
-        // Sign with the real account key from the genesis keystore.
-        let tx = Transaction::from_data_and_signer(tx_data, vec![&sender_key]);
-
-        let (effects, exec_error) = sim.execute_transaction(tx).unwrap();
-        assert!(
-            effects.status().is_ok(),
-            "transfer failed: status={:?} exec_error={:?}",
-            effects.status(),
-            exec_error,
-        );
-
-        // The transaction is persisted on disk.
-        let tx_digest = effects.transaction_digest();
-        assert!(
-            sim.store().get_transaction(tx_digest).is_some(),
-            "transaction not persisted on disk",
-        );
-        assert_eq!(
-            sim.store().get_transaction_effects(tx_digest).unwrap(),
-            effects,
-        );
-
-        // The recipient now owns a gas coin holding exactly `transfer_amount`.
-        let recipient_coin = effects
-            .created()
-            .into_iter()
-            .find_map(|((id, _, _), owner)| (owner == Owner::AddressOwner(recipient)).then_some(id))
-            .expect("transfer should create a coin owned by the recipient");
-        let recipient_obj = sim
-            .store()
-            .get_object(&recipient_coin)
-            .expect("recipient coin lookup failed")
-            .expect("recipient coin should be readable from the store");
-        let recipient_gas = GasCoin::try_from(&recipient_obj).unwrap();
-        assert_eq!(recipient_gas.value(), transfer_amount);
-
-        // The sender's gas coin still exists, charged for gas, balance reduced by transfer_amount + net gas.
-        let updated_gas_obj = sim
-            .store()
-            .get_object(&gas_object.id())
-            .expect("sender gas coin lookup failed")
-            .expect("sender gas coin should still exist");
-        let updated_gas = GasCoin::try_from(&updated_gas_obj).unwrap();
-        let net_gas = effects.gas_cost_summary().net_gas_usage();
-        let expected = (initial_balance as i64 - transfer_amount as i64 - net_gas) as u64;
-        assert_eq!(updated_gas.value(), expected);
-    }
-}
+#[cfg(test)]
+#[path = "tests/store_transaction_fallback.rs"]
+mod transaction_fallback_tests;

@@ -337,7 +337,7 @@ bytes = { version = "1.11.1", features = ["serde"] }
 cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
-chrono = { version = "=0.4.39", features = ["clock", "serde"] }
+chrono = { version = "0.4.44", features = ["clock", "serde"] }
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
 clap_complete = "4.4"
 codespan-reporting = "0.11.1"
@@ -793,6 +793,12 @@ sui-execution = { path = "sui-execution" }
 # move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
 
 [patch.crates-io]
+# Go back to using a crates.io release once a release is made that includes
+# this fix: https://github.com/hyperium/tonic/pull/2596
+tonic = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce69b0d93e1de21b0769e942ace00b48f52e17" }
+tonic-prost = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce69b0d93e1de21b0769e942ace00b48f52e17" }
+tonic-reflection = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce69b0d93e1de21b0769e942ace00b48f52e17" }
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
+

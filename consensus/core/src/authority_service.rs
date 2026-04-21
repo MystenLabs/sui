@@ -363,7 +363,9 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             let mut proposed_blocks =
                 dag_state.get_cached_blocks(self.context.own_index, last_received + 1);
             if proposed_blocks.is_empty() {
-                let last_proposed_block = dag_state.get_last_proposed_block();
+                let last_proposed_block = dag_state
+                    .get_last_proposed_block()
+                    .expect("Last proposed block should be returned on validators");
                 proposed_blocks = if last_proposed_block.round() > GENESIS_ROUND {
                     vec![last_proposed_block]
                 } else {
