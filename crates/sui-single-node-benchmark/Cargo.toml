@@ -17,6 +17,7 @@ sui-test-transaction-builder.workspace = true
 sui-transaction-checks.workspace = true
 sui-types.workspace = true
 sui-storage.workspace = true
+sui-protocol-config.workspace = true
 
 bcs.workspace = true
 clap.workspace = true
