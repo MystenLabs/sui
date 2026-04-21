@@ -70,25 +70,26 @@ pub async fn initialize(
     // 6. Build KeyStore.
     let keystore = KeyStore::from_network_config(&config);
 
-    // 7. Create Simulacrum from custom state. Hand the simulacrum its own
-    //    clone of the data store so the RPC server can keep an independent
-    //    handle for read traffic without taking the simulacrum's lock.
+    // 7. Create Simulacrum from custom state.
     let simulacrum = Simulacrum::new_from_custom_state(
         keystore,
         checkpoint,
         system_state,
         &config,
-        data_store.clone(),
+        data_store,
         rng,
     );
 
-    Ok(Context::new(simulacrum, data_store, chain_identifier))
+    Ok(Context::new(simulacrum, chain_identifier))
 }
 
 /// Run the forked network. Spawns a `sui-rpc-api` gRPC server bound to
 /// `rpc_addr` on top of the context's `DataStore`, then blocks on Ctrl+C.
 pub async fn run(context: Context, rpc_addr: SocketAddr, version: &'static str) -> Result<()> {
-    let reader: Arc<dyn RpcStateReader> = Arc::new(context.data_store().clone());
+    let reader: Arc<dyn RpcStateReader> = {
+        let sim = context.simulacrum().read().await;
+        Arc::new(sim.store().clone())
+    };
     let mut service = RpcService::new(reader);
     service.with_server_version(ServerVersion::new("sui-forking", version));
 
