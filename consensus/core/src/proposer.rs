@@ -134,6 +134,9 @@ impl ValidatorProposer {
     fn leaders_exist(&self, round: Round) -> bool {
         let dag_state = self.dag_state.read();
         for leader in self.leaders(round) {
+            // Search for all the leaders. If at least one is not found, then return false.
+            // A linear search should be fine here as the set of elements is not expected to be small enough and more sophisticated
+            // data structures might not give us much here.
             if !dag_state.contains_cached_block_at_slot(leader) {
                 return false;
             }
@@ -601,6 +604,7 @@ impl Proposer for ValidatorProposer {
         if self.context.protocol_config.transaction_voting_enabled() {
             self.transaction_vote_tracker
                 .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
+            // Set the proposed block to be linked. Linked statuses of its ancestors have already been set.
             self.dag_state
                 .write()
                 .link_causal_history(verified_block.reference());

@@ -110,7 +110,14 @@ impl Core {
             .expect("A block should have been returned");
         let last_signaled_round = last_proposed_block.round();
 
-        // Recover the last included ancestor rounds based on the last proposed block
+        // Recover the last included ancestor rounds based on the last proposed block. That will allow
+        // to perform the next block proposal by using ancestor blocks of higher rounds and avoid
+        // re-including blocks that have been already included in the last (or earlier) block proposal.
+        // This is only strongly guaranteed for a quorum of ancestors. It is still possible to re-include
+        // a block from an authority which hadn't been added as part of the last proposal hence its
+        // latest included ancestor is not accurately captured here. This is considered a small deficiency,
+        // and it mostly matters just for this next proposal without any actual penalties in performance
+        // or block proposal.
         let mut last_included_ancestors = vec![None; context.committee.size()];
         for ancestor in last_proposed_block.ancestors() {
             last_included_ancestors[ancestor.author] = Some(*ancestor);
