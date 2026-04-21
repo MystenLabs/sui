@@ -5,6 +5,7 @@
 
 #![allow(unused)]
 
+pub mod cli;
 pub(crate) mod context;
 pub(crate) mod filesystem;
 mod gql;
