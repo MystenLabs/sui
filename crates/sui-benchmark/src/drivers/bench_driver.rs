@@ -1081,6 +1081,8 @@ async fn run_bench_worker(
                             max_bundles
                         );
 
+                        let committee = worker.execution_proxy.clone_committee();
+                        let committee_size = committee.num_members();
                         let res = async move {
                             // Submit each bundle concurrently
                             let bundle_futures: Vec<_> = bundles
@@ -1091,14 +1093,19 @@ async fn run_bench_worker(
                                         bundle_txs.iter().map(|tx| *tx.digest()).collect();
                                     async move {
                                         info!("executing bundle {:?}", digests);
-                                        // For single-transaction bundles, randomly use execute_transaction_block
-                                        let result = if bundle_txs.len() == 1
-                                            && rand::thread_rng().gen_bool(0.5)
-                                        {
+                                        let result = if bundle_txs.len() == 1 {
                                             let tx = bundle_txs.into_iter().next().unwrap();
                                             let digest = *tx.digest();
-                                            let (_, exec_result) =
-                                                proxy.execute_transaction_block(tx).await;
+                                            // 5% of single-tx bundles: amplify to 3-5 validators
+                                            let use_amplification = rand::thread_rng().gen_bool(0.05);
+                                            let (_, exec_result) = if use_amplification {
+                                                let max_validators = committee_size.min(5);
+                                                let min_validators = 3.min(max_validators);
+                                                let num_validators = rand::thread_rng().gen_range(min_validators..=max_validators);
+                                                proxy.execute_transaction_block_with_amplification(tx, num_validators).await
+                                            } else {
+                                                proxy.execute_transaction_block(tx).await
+                                            };
                                             exec_result.map(|effects| {
                                                 vec![(digest, BundleItemResponse::DirectEffects(effects.into()))]
                                             })
