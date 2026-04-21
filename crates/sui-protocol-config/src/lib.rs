@@ -317,6 +317,7 @@ const TESTNET_USDC: &str =
 // Version 120: Disallow unused jump tables
 // Version 121: Re-enable defer_unpaid_amplification (devnet + testnet).
 // Version 122: Framework update: vector::empty is deprecated.
+//              Enable bulletproofs verification on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -590,6 +591,10 @@ struct FeatureFlags {
     // Enable group operations for Ristretto255
     #[serde(skip_serializing_if = "is_false")]
     enable_ristretto255_group_ops: bool,
+
+    // Enable native functions for group operations.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_verify_bulletproofs_ristretto255: bool,
 
     // Enable nitro attestation.
     #[serde(skip_serializing_if = "is_false")]
@@ -1047,6 +1052,9 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_gasless: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    gasless_verify_remaining_balance: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     disallow_jump_orphans: bool,
@@ -1726,6 +1734,9 @@ pub struct ProtocolConfig {
     group_ops_ristretto_scalar_div_cost: Option<u64>,
     group_ops_ristretto_point_div_cost: Option<u64>,
 
+    verify_bulletproofs_ristretto255_base_cost: Option<u64>,
+    verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: Option<u64>,
+
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
@@ -2281,6 +2292,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_ristretto255_group_ops
     }
 
+    pub fn enable_verify_bulletproofs_ristretto255(&self) -> bool {
+        self.feature_flags.enable_verify_bulletproofs_ristretto255
+    }
+
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
         self.feature_flags.reject_mutable_random_on_entry_functions
     }
@@ -2727,6 +2742,10 @@ impl ProtocolConfig {
 
     pub fn enable_gasless(&self) -> bool {
         self.feature_flags.enable_gasless
+    }
+
+    pub fn gasless_verify_remaining_balance(&self) -> bool {
+        self.feature_flags.gasless_verify_remaining_balance
     }
 
     pub fn gasless_allowed_token_types(&self) -> &[(String, u64)] {
@@ -3199,6 +3218,9 @@ impl ProtocolConfig {
             group_ops_ristretto_point_mul_cost: None,
             group_ops_ristretto_scalar_div_cost: None,
             group_ops_ristretto_point_div_cost: None,
+
+            verify_bulletproofs_ristretto255_base_cost: None,
+            verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -4800,7 +4822,15 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .early_return_receive_object_mismatched_type = true;
                 }
-                122 => {}
+                122 => {
+                    // Enable bulletproofs range proofs on devnet
+                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(30000);
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(6500);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
+                    }
+                    cfg.feature_flags.gasless_verify_remaining_balance = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5195,6 +5225,7 @@ impl ProtocolConfig {
     pub fn enable_gasless_for_testing(&mut self) {
         self.enable_address_balance_gas_payments_for_testing();
         self.feature_flags.enable_gasless = true;
+        self.feature_flags.gasless_verify_remaining_balance = true;
         self.gasless_max_computation_units = Some(50_000);
         self.gasless_allowed_token_types = Some(vec![]);
         self.gasless_max_tps = Some(1000);

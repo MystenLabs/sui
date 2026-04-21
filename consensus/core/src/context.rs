@@ -35,13 +35,20 @@ pub struct Context {
 impl Context {
     pub(crate) fn new(
         epoch_start_timestamp_ms: u64,
-        own_index: AuthorityIndex,
+        own_index: Option<AuthorityIndex>,
         committee: Committee,
         parameters: Parameters,
         protocol_config: ConsensusProtocolConfig,
         metrics: Arc<Metrics>,
         clock: Arc<Clock>,
     ) -> Self {
+        let own_index = if let Some(own_index) = own_index {
+            own_index
+        } else {
+            // If no index is provided, then this is an observer node. We assign a max index to it as a special value.
+            AuthorityIndex::MAX
+        };
+
         Self {
             epoch_start_timestamp_ms,
             own_index,
@@ -74,7 +81,7 @@ impl Context {
 
         let context = Context::new(
             0,
-            AuthorityIndex::new_for_test(0),
+            Some(AuthorityIndex::new_for_test(0)),
             committee,
             Parameters {
                 db_path: temp_dir.keep(),
@@ -115,6 +122,11 @@ impl Context {
     /// Returns true if this node is a validator (i.e., part of the committee).
     pub fn is_validator(&self) -> bool {
         self.committee.is_valid_index(self.own_index)
+    }
+
+    /// Returns true if this node is an observer (i.e., not part of the committee).
+    pub fn is_observer(&self) -> bool {
+        !self.is_validator()
     }
 }
 

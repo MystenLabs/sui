@@ -139,12 +139,11 @@ function getHierarchy(relPath) {
   // Capitalize the section heading (e.g. "concepts" → "Concepts")
   const section = formatTitle(parts[0] || "General");
 
-  // Use up to 3 path parts for subsection so guides/developer/app-examples
-  // groups under ### Guides/Developer/App Examples rather than flattening
-  // everything under ### Guides/Developer.
-  // Still requires parts.length >= 3 so flat files (section/file.md) never
-  // get a lone subsection heading.
-  const subsection = parts.length >= 3 ? parts.slice(0, 3).join("/") : null;
+  // Use the full parent directory path as the subsection so each directory
+  // gets its own group. For index files (already popped), parts IS the
+  // directory path. For regular files, drop the filename to get the directory.
+  const dirParts = isIndex ? parts : parts.slice(0, -1);
+  const subsection = dirParts.length >= 2 ? dirParts.join("/") : null;
 
   return { section, subsection, isIndex, parts };
 }

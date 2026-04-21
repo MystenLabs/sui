@@ -5,18 +5,23 @@
 //! {base_path}/{network_name}/forked_at_{checkpoint}/
 //!     - objects/
 //!         - {object_id}/
-//!            - latest (contains the latest version number)
-//!            - {version} (contains the object data in BCS format)
-//!      - checkpoints/
-//!          - latest (contains the latest checkpoint sequence number)
-//!          - {checkpoint} (contains the checkpoint data in BCS format)
-//!      - transactions/
-//!          - {tx_digest}/
-//!              - data    (BCS-encoded Transaction envelope)
-//!              - effects (BCS-encoded TransactionEffects)
-//!              - events  (BCS-encoded TransactionEvents)
+//!            - latest                  (text: latest persisted version number)
+//!            - {version}                (BCS-encoded Object)
+//!     - checkpoints/
+//!         - latest                     (text: highest persisted sequence number)
+//!         - {seq}/
+//!             - summary                (BCS-encoded CertifiedCheckpointSummary)
+//!         - contents/
+//!             - {contents_digest}      (BCS-encoded CheckpointContents)
+//!         - digest_index               ("{checkpoint_digest} {seq}\n", append-only)
+//!     - transactions/
+//!         - {tx_digest}/
+//!             - data                   (BCS-encoded Transaction envelope)
+//!             - effects                (BCS-encoded TransactionEffects)
+//!             - events                 (BCS-encoded TransactionEvents)
 
 use std::fs;
+use std::io::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -26,10 +31,15 @@ use anyhow::anyhow;
 use anyhow::bail;
 
 use sui_types::base_types::ObjectID;
+use sui_types::digests::CheckpointContentsDigest;
+use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
+use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
+use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::VerifiedTransaction;
@@ -50,6 +60,12 @@ const TX_DATA_FILE: &str = "data";
 const TX_EFFECTS_FILE: &str = "effects";
 /// Filename for the BCS-encoded transaction events within a transaction directory.
 const TX_EVENTS_FILE: &str = "events";
+/// Filename for the BCS-encoded checkpoint summary within a checkpoint sequence directory.
+const CHECKPOINT_SUMMARY_FILE: &str = "summary";
+/// Subdirectory for content-addressed checkpoint contents files.
+const CHECKPOINT_CONTENTS_DIR: &str = "contents";
+/// Append-only index file mapping checkpoint digest to sequence number.
+const CHECKPOINT_DIGEST_INDEX_FILE: &str = "digest_index";
 /// Marker file for the latest checkpoint sequence known to the store.
 const LATEST_FILE: &str = "latest";
 
@@ -107,7 +123,7 @@ impl FilesystemStore {
     }
 
     /// Return the directory for a specific transaction.
-    fn transaction_dir(&self, digest: &TransactionDigest) -> PathBuf {
+    fn tx_dir(&self, digest: &TransactionDigest) -> PathBuf {
         self.transactions_dir().join(digest.to_string())
     }
 
@@ -118,7 +134,7 @@ impl FilesystemStore {
         digest: &TransactionDigest,
         transaction: &VerifiedTransaction,
     ) -> Result<(), Error> {
-        let path = self.transaction_dir(digest).join(TX_DATA_FILE);
+        let path = self.tx_dir(digest).join(TX_DATA_FILE);
         self.write_bcs_file(&path, transaction.inner())
     }
 
@@ -128,7 +144,7 @@ impl FilesystemStore {
         digest: &TransactionDigest,
         effects: &TransactionEffects,
     ) -> Result<(), Error> {
-        let path = self.transaction_dir(digest).join(TX_EFFECTS_FILE);
+        let path = self.tx_dir(digest).join(TX_EFFECTS_FILE);
         self.write_bcs_file(&path, effects)
     }
 
@@ -138,7 +154,7 @@ impl FilesystemStore {
         digest: &TransactionDigest,
         events: &TransactionEvents,
     ) -> Result<(), Error> {
-        let path = self.transaction_dir(digest).join(TX_EVENTS_FILE);
+        let path = self.tx_dir(digest).join(TX_EVENTS_FILE);
         self.write_bcs_file(&path, events)
     }
 
@@ -147,7 +163,7 @@ impl FilesystemStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<VerifiedTransaction>, Error> {
-        let path = self.transaction_dir(digest).join(TX_DATA_FILE);
+        let path = self.tx_dir(digest).join(TX_DATA_FILE);
         if !path.exists() {
             return Ok(None);
         }
@@ -160,7 +176,7 @@ impl FilesystemStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<TransactionEffects>, Error> {
-        let path = self.transaction_dir(digest).join(TX_EFFECTS_FILE);
+        let path = self.tx_dir(digest).join(TX_EFFECTS_FILE);
         if !path.exists() {
             return Ok(None);
         }
@@ -172,7 +188,7 @@ impl FilesystemStore {
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<TransactionEvents>, Error> {
-        let path = self.transaction_dir(digest).join(TX_EVENTS_FILE);
+        let path = self.tx_dir(digest).join(TX_EVENTS_FILE);
         if !path.exists() {
             return Ok(None);
         }
@@ -242,6 +258,150 @@ impl FilesystemStore {
         self.read_latest_file(&checkpoint_dir)
     }
 
+    /// Path to the per-sequence directory holding `summary`.
+    fn checkpoint_seq_dir(&self, sequence: CheckpointSequenceNumber) -> PathBuf {
+        self.checkpoints_dir().join(sequence.to_string())
+    }
+
+    /// Path to the content-addressed contents directory.
+    fn checkpoint_contents_dir(&self) -> PathBuf {
+        self.checkpoints_dir().join(CHECKPOINT_CONTENTS_DIR)
+    }
+
+    /// Path to the file storing a specific `CheckpointContents` blob.
+    fn checkpoint_contents_path(&self, digest: &CheckpointContentsDigest) -> PathBuf {
+        self.checkpoint_contents_dir().join(digest.to_string())
+    }
+
+    fn checkpoint_digest_index_path(&self) -> PathBuf {
+        self.checkpoints_dir().join(CHECKPOINT_DIGEST_INDEX_FILE)
+    }
+
+    /// Persist a checkpoint summary to `checkpoints/{seq}/summary`, append the
+    /// checkpoint digest to the digest index, and bump the `latest` marker if
+    /// `seq` is strictly higher than the currently recorded value.
+    pub(crate) fn write_checkpoint_summary(
+        &self,
+        checkpoint: &VerifiedCheckpoint,
+    ) -> anyhow::Result<()> {
+        let sequence = checkpoint.data().sequence_number;
+        let path = self
+            .checkpoint_seq_dir(sequence)
+            .join(CHECKPOINT_SUMMARY_FILE);
+        self.write_bcs_file(&path, checkpoint.inner())?;
+
+        self.update_latest_checkpoint_marker(sequence)?;
+        append_index_line(
+            &self.checkpoint_digest_index_path(),
+            &checkpoint.digest().to_string(),
+            sequence,
+        )
+    }
+
+    /// Persist checkpoint contents to `checkpoints/contents/{digest}`.
+    /// Contents are content-addressed, so this write is independent of the
+    /// summary that references it.
+    pub(crate) fn write_checkpoint_contents(
+        &self,
+        contents: &CheckpointContents,
+    ) -> anyhow::Result<()> {
+        let path = self.checkpoint_contents_path(contents.digest());
+        self.write_bcs_file(&path, contents)
+    }
+
+    /// Read a previously persisted checkpoint summary. Returns `None` if no
+    /// summary file exists for the given sequence.
+    pub(crate) fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+        let path = self
+            .checkpoint_seq_dir(sequence)
+            .join(CHECKPOINT_SUMMARY_FILE);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let certified: CertifiedCheckpointSummary = self.read_bcs_file(&path)?;
+        Ok(Some(VerifiedCheckpoint::new_unchecked(certified)))
+    }
+
+    /// Read checkpoint contents for a given sequence by joining through the
+    /// summary's `content_digest`. Returns `None` if either the summary or
+    /// the referenced contents file is missing.
+    pub(crate) fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> anyhow::Result<Option<CheckpointContents>> {
+        let Some(summary) = self.get_checkpoint_by_sequence_number(sequence)? else {
+            return Ok(None);
+        };
+        self.get_checkpoint_contents_by_digest(&summary.data().content_digest)
+    }
+
+    /// Resolve a checkpoint by its summary digest via the digest index.
+    pub(crate) fn get_checkpoint_by_digest(
+        &self,
+        digest: &CheckpointDigest,
+    ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+        match lookup_index(&self.checkpoint_digest_index_path(), &digest.to_string())? {
+            Some(sequence) => self.get_checkpoint_by_sequence_number(sequence),
+            None => Ok(None),
+        }
+    }
+
+    /// Resolve checkpoint contents by their digest via a direct filesystem
+    /// lookup in the content-addressed contents directory.
+    pub(crate) fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> anyhow::Result<Option<CheckpointContents>> {
+        let path = self.checkpoint_contents_path(digest);
+        if !path.exists() {
+            return Ok(None);
+        }
+        self.read_bcs_file(&path).map(Some)
+    }
+
+    /// Return the checkpoint at the highest persisted sequence number, or
+    /// `None` if nothing has been persisted yet.
+    pub(crate) fn get_highest_verified_checkpoint(
+        &self,
+    ) -> anyhow::Result<Option<VerifiedCheckpoint>> {
+        let checkpoints_dir = self.checkpoints_dir();
+        if !checkpoints_dir.join(LATEST_FILE).exists() {
+            return Ok(None);
+        }
+        let sequence = self.read_latest_file(&checkpoints_dir)?;
+        self.get_checkpoint_by_sequence_number(sequence)
+    }
+
+    /// Update the `checkpoints/latest` marker if `sequence` is higher than the
+    /// currently recorded value, creating the file (and parent directory) if
+    /// this is the first checkpoint being persisted.
+    fn update_latest_checkpoint_marker(
+        &self,
+        sequence: CheckpointSequenceNumber,
+    ) -> anyhow::Result<()> {
+        let dir = self.checkpoints_dir();
+        fs::create_dir_all(&dir)
+            .with_context(|| format!("Failed to create directory: {}", dir.display()))?;
+        let path = dir.join(LATEST_FILE);
+        let current = if path.exists() {
+            Some(self.read_latest_file(&dir)?)
+        } else {
+            None
+        };
+        if current.is_none_or(|c| sequence > c) {
+            fs::write(&path, sequence.to_string()).with_context(|| {
+                format!(
+                    "Failed to write latest checkpoint marker: {}",
+                    path.display()
+                )
+            })?;
+        }
+        Ok(())
+    }
+
     fn read_bcs_file<T: serde::de::DeserializeOwned>(&self, path: &Path) -> Result<T, Error> {
         let bytes =
             fs::read(path).with_context(|| format!("Failed to read file: {}", path.display()))?;
@@ -277,140 +437,51 @@ impl FilesystemStore {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use sui_types::base_types::ObjectID;
-    use sui_types::base_types::SequenceNumber;
-    use sui_types::digests::TransactionDigest;
-    use sui_types::effects::TransactionEffects;
-    use sui_types::effects::TransactionEvents;
-    use sui_types::object::MoveObject;
-    use sui_types::object::Object;
-    use sui_types::object::ObjectInner;
-    use sui_types::object::Owner;
-
-    use super::*;
-
-    fn test_store() -> (tempfile::TempDir, FilesystemStore) {
-        let dir = tempfile::tempdir().expect("failed to create tempdir");
-        let store = FilesystemStore::new_with_root(dir.path().to_path_buf());
-        (dir, store)
+/// Append a single `{key} {value}\n` line to `path`, creating the file and
+/// any missing parent directories. Uses `O_APPEND` so concurrent appends of
+/// short lines remain atomic under POSIX semantics.
+fn append_index_line(
+    path: &Path,
+    key: &str,
+    value: CheckpointSequenceNumber,
+) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
     }
-
-    fn make_object(id: ObjectID, version: u64) -> Object {
-        let move_obj = MoveObject::new_gas_coin(SequenceNumber::from_u64(version), id, 1_000_000);
-        ObjectInner {
-            owner: Owner::Immutable,
-            data: sui_types::object::Data::Move(move_obj),
-            previous_transaction: TransactionDigest::genesis_marker(),
-            storage_rebate: 0,
-        }
-        .into()
-    }
-
-    #[test]
-    fn test_write_and_read_latest_object() {
-        let (_dir, store) = test_store();
-        let id = ObjectID::random();
-        let obj = make_object(id, 5);
-
-        store.write_object(&obj).unwrap();
-        let loaded = store.get_latest_object(&id).unwrap();
-        assert_eq!(loaded.clone().unwrap(), obj);
-        assert_eq!(loaded.unwrap().version(), SequenceNumber::from_u64(5));
-    }
-
-    #[test]
-    fn test_write_and_read_object_at_version() {
-        let (_dir, store) = test_store();
-        let id = ObjectID::random();
-        let obj = make_object(id, 5);
-
-        store.write_object(&obj).unwrap();
-        let loaded = store.get_object_at_version(&id, 5).unwrap();
-        assert_eq!(loaded.unwrap(), obj);
-    }
-
-    #[test]
-    fn test_get_latest_object_returns_none_for_unknown_id() {
-        let (_dir, store) = test_store();
-        let result = store.get_latest_object(&ObjectID::random()).unwrap();
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_get_object_at_version_returns_none_for_unknown_version() {
-        let (_dir, store) = test_store();
-        let id = ObjectID::random();
-        let obj = make_object(id, 5);
-        store.write_object(&obj).unwrap();
-
-        let result = store.get_object_at_version(&id, 99).unwrap();
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_latest_tracks_highest_written_version() {
-        let (_dir, store) = test_store();
-        let id = ObjectID::random();
-
-        let v1 = make_object(id, 1);
-        let v3 = make_object(id, 3);
-        store.write_object(&v1).unwrap();
-        store.write_object(&v3).unwrap();
-
-        let latest = store.get_latest_object(&id).unwrap().unwrap();
-        assert_eq!(latest, v3);
-
-        // v1 is still accessible by version
-        let old = store.get_object_at_version(&id, 1).unwrap().unwrap();
-        assert_eq!(old, v1);
-    }
-
-    #[test]
-    fn test_get_highest_checkpoint_errors_when_dir_missing() {
-        let (_dir, store) = test_store();
-        let err = store.get_highest_checkpoint_sequence_number().unwrap_err();
-        assert!(err.to_string().contains("does not exist"));
-    }
-
-    #[test]
-    fn test_get_highest_checkpoint_errors_when_latest_file_missing() {
-        let (_dir, store) = test_store();
-        fs::create_dir_all(store.checkpoints_dir()).unwrap();
-        let err = store.get_highest_checkpoint_sequence_number().unwrap_err();
-        assert!(err.to_string().contains("Latest file not found"));
-    }
-
-    #[test]
-    fn test_write_and_read_transaction_effects() {
-        let (_dir, store) = test_store();
-        let digest = TransactionDigest::random();
-        let effects = TransactionEffects::default();
-
-        store.write_transaction_effects(&digest, &effects).unwrap();
-        let loaded = store.get_transaction_effects(&digest).unwrap();
-        assert_eq!(loaded.unwrap(), effects);
-    }
-
-    #[test]
-    fn test_write_and_read_transaction_events() {
-        let (_dir, store) = test_store();
-        let digest = TransactionDigest::random();
-        let events = TransactionEvents { data: vec![] };
-
-        store.write_transaction_events(&digest, &events).unwrap();
-        let loaded = store.get_transaction_events(&digest).unwrap();
-        assert_eq!(loaded.unwrap(), events);
-    }
-
-    #[test]
-    fn test_get_transaction_returns_none_for_unknown_digest() {
-        let (_dir, store) = test_store();
-        let digest = TransactionDigest::random();
-
-        assert!(store.get_transaction(&digest).unwrap().is_none());
-        assert!(store.get_transaction_effects(&digest).unwrap().is_none());
-        assert!(store.get_transaction_events(&digest).unwrap().is_none());
-    }
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .with_context(|| format!("Failed to open index file: {}", path.display()))?;
+    writeln!(file, "{} {}", key, value)
+        .with_context(|| format!("Failed to append to index file: {}", path.display()))
 }
+
+/// Scan a space-delimited index file for `key`. Returns the value from the
+/// last matching line (last-wins), so re-appending the same key is idempotent.
+fn lookup_index(path: &Path, key: &str) -> anyhow::Result<Option<CheckpointSequenceNumber>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("Failed to read index file: {}", path.display()))?;
+    let mut found = None;
+    for line in content.lines() {
+        let Some((k, v)) = line.split_once(' ') else {
+            continue;
+        };
+        if k == key {
+            found = Some(
+                v.trim()
+                    .parse::<CheckpointSequenceNumber>()
+                    .with_context(|| format!("Failed to parse index entry: {}", path.display()))?,
+            );
+        }
+    }
+    Ok(found)
+}
+
+#[cfg(test)]
+#[path = "tests/filesystem.rs"]
+mod tests;

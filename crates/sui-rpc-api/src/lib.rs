@@ -1,13 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::convert::Infallible;
+use std::sync::Arc;
+
 use mysten_network::callback::CallbackLayer;
 use reader::StateReader;
-use std::sync::Arc;
 use subscription::SubscriptionServiceHandle;
 use sui_types::storage::RpcStateReader;
 use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
+use tonic::server::NamedService;
+use tower::Service;
 
 pub mod client;
 mod config;
@@ -57,6 +61,9 @@ pub struct RpcService {
     server_version: Option<ServerVersion>,
     metrics: Option<Arc<RpcMetrics>>,
     config: Config,
+    extra_routes: axum::Router,
+    extra_service_names: Vec<&'static str>,
+    extra_file_descriptor_sets: Vec<&'static [u8]>,
 }
 
 impl RpcService {
@@ -70,6 +77,9 @@ impl RpcService {
             server_version: None,
             metrics: None,
             config: Config::default(),
+            extra_routes: axum::Router::new(),
+            extra_service_names: Vec::new(),
+            extra_file_descriptor_sets: Vec::new(),
         }
     }
 
@@ -97,6 +107,29 @@ impl RpcService {
         self.metrics = Some(Arc::new(metrics));
     }
 
+    pub fn with_custom_service<S>(&mut self, svc: S)
+    where
+        S: Service<
+                axum::extract::Request,
+                Response: axum::response::IntoResponse,
+                Error = Infallible,
+            > + NamedService
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        S::Future: Send + 'static,
+        S::Error: Into<grpc::BoxError> + Send,
+    {
+        self.extra_service_names.push(S::NAME);
+        self.extra_routes = std::mem::take(&mut self.extra_routes)
+            .route_service(&format!("/{}/{{*rest}}", S::NAME), svc);
+    }
+
+    pub fn with_file_descriptor_set(&mut self, encoded_fds: &'static [u8]) {
+        self.extra_file_descriptor_sets.push(encoded_fds);
+    }
+
     pub fn chain_id(&self) -> sui_types::digests::ChainIdentifier {
         self.chain_id
     }
@@ -105,8 +138,11 @@ impl RpcService {
         self.server_version.as_ref()
     }
 
-    pub async fn into_router(self) -> axum::Router {
+    pub async fn into_router(mut self) -> axum::Router {
         let metrics = self.metrics.clone();
+        let extra_routes = std::mem::take(&mut self.extra_routes);
+        let extra_service_names = std::mem::take(&mut self.extra_service_names);
+        let extra_file_descriptor_sets = std::mem::take(&mut self.extra_file_descriptor_sets);
 
         let router = {
             let ledger_service =
@@ -142,7 +178,7 @@ impl RpcService {
 
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
-            let reflection_v1 = tonic_reflection::server::Builder::configure()
+            let mut reflection_v1_builder = tonic_reflection::server::Builder::configure()
                 .register_encoded_file_descriptor_set(
                     crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
                 )
@@ -152,11 +188,9 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
                 )
-                .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
-                .build_v1()
-                .unwrap();
+                .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET);
 
-            let reflection_v1alpha = tonic_reflection::server::Builder::configure()
+            let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure()
                 .register_encoded_file_descriptor_set(
                     crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
                 )
@@ -166,9 +200,17 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(
                     sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
                 )
-                .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
-                .build_v1alpha()
-                .unwrap();
+                .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET);
+
+            for fds in &extra_file_descriptor_sets {
+                reflection_v1_builder =
+                    reflection_v1_builder.register_encoded_file_descriptor_set(fds);
+                reflection_v1alpha_builder =
+                    reflection_v1alpha_builder.register_encoded_file_descriptor_set(fds);
+            }
+
+            let reflection_v1 = reflection_v1_builder.build_v1().unwrap();
+            let reflection_v1alpha = reflection_v1alpha_builder.build_v1alpha().unwrap();
 
             fn service_name<S: tonic::server::NamedService>(_service: &S) -> &'static str {
                 S::NAME
@@ -219,7 +261,16 @@ sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceSe
                 services = services.add_service(subscription_service);
             }
 
-            services.add_service(health_service).into_router()
+            for name in &extra_service_names {
+                health_reporter
+                    .set_service_status(*name, tonic_health::ServingStatus::Serving)
+                    .await;
+            }
+
+            services
+                .merge_router(extra_routes)
+                .add_service(health_service)
+                .into_router()
         };
 
         let health_endpoint = axum::Router::new()

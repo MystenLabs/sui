@@ -18,6 +18,7 @@ building block for core collection types
 -  [Function `remove`](#sui_dynamic_field_remove)
 -  [Function `exists`](#sui_dynamic_field_exists)
 -  [Function `remove_opt`](#sui_dynamic_field_remove_opt)
+-  [Function `replace`](#sui_dynamic_field_replace)
 -  [Function `exists_with_type`](#sui_dynamic_field_exists_with_type)
 -  [Macro function `borrow_or_add`](#sui_dynamic_field_borrow_or_add)
 -  [Macro function `borrow_mut_or_add`](#sui_dynamic_field_borrow_mut_or_add)
@@ -333,11 +334,44 @@ Removes the dynamic field if it exists. Returns <code>some(Value)</code> if it e
     <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
     name: Name,
 ): Option&lt;Value&gt; {
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;Name&gt;(<a href="../sui/object.md#sui_object">object</a>, name)) {
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>(<a href="../sui/object.md#sui_object">object</a>, name)) {
         option::some(<a href="../sui/dynamic_field.md#sui_dynamic_field_remove">remove</a>(<a href="../sui/object.md#sui_object">object</a>, name))
     } <b>else</b> {
         option::none()
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_dynamic_field_replace"></a>
+
+## Function `replace`
+
+Removes the existing value at <code>name</code> (if any) and adds <code>value</code> in its place.
+Returns the old value if it existed, or <code>none</code> otherwise.
+Note: the old and new value types may differ.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_replace">replace</a>&lt;Name: <b>copy</b>, drop, store, ValueNew: store, ValueOld: store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name, value: ValueNew): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;ValueOld&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_replace">replace</a>&lt;Name: <b>copy</b> + drop + store, ValueNew: store, ValueOld: store&gt;(
+    <a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> UID,
+    name: Name,
+    value: ValueNew,
+): Option&lt;ValueOld&gt; {
+    <b>let</b> old = <a href="../sui/dynamic_field.md#sui_dynamic_field_remove_opt">remove_opt</a>&lt;Name, ValueOld&gt;(<a href="../sui/object.md#sui_object">object</a>, name);
+    <a href="../sui/dynamic_field.md#sui_dynamic_field_add">add</a>(<a href="../sui/object.md#sui_object">object</a>, name, value);
+    old
 }
 </code></pre>
 

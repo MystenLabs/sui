@@ -420,7 +420,7 @@ mod test {
             dag_state.clone(),
         ));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
-        let core = Core::new(
+        let core = Core::new_validator(
             context.clone(),
             leader_schedule,
             transaction_consumer,
