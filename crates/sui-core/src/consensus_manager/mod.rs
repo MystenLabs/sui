@@ -242,12 +242,6 @@ impl ConsensusManager {
             ..consensus_config.parameters.clone().unwrap_or_default()
         };
 
-        let own_protocol_key = self.protocol_keypair.public();
-        let (own_index, _) = committee
-            .authorities()
-            .find(|(_, a)| a.protocol_key == own_protocol_key)
-            .expect("Own authority should be among the consensus authorities!");
-
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
@@ -299,11 +293,10 @@ impl ConsensusManager {
         let authority = ConsensusAuthority::start(
             NetworkType::Tonic,
             epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
-            own_index,
             committee.clone(),
             parameters.clone(),
             to_consensus_protocol_config(protocol_config, epoch_store.get_chain()),
-            self.protocol_keypair.clone(),
+            Some(self.protocol_keypair.clone()),
             self.network_keypair.clone(),
             Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),

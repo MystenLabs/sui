@@ -12,6 +12,7 @@ open-spec
 .docusaurus
 .cache-loader
 .generated
+.resolved
 
 # Misc
 .DS_Store

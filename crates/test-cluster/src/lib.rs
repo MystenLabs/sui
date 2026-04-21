@@ -48,7 +48,7 @@ use sui_types::crypto::SuiKeyPair;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::SuiResult;
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_grpc::{
     RawSubmitTxRequest, SubmitTxRequest, SubmitTxResult, SubmitTxType, WaitForEffectsRequest,
     WaitForEffectsResponse,
@@ -687,11 +687,8 @@ impl TestCluster {
         let clients = &agg.authority_clients;
         // Use seeded RNG for deterministic but varying validator selection in simtests
         let index = rand::thread_rng().gen_range(0..clients.len());
-        let mut validator_client = clients
-            .iter()
-            .nth(index)
-            .unwrap()
-            .1
+        let (_, safe_client) = clients.iter().nth(index).unwrap();
+        let mut validator_client = safe_client
             .authority_client()
             .get_client_for_testing()
             .unwrap();
@@ -702,16 +699,69 @@ impl TestCluster {
             .map(tonic::Response::into_inner)?;
         assert_eq!(result.results.len(), signed_txs.len());
 
-        for raw_result in result.results.iter() {
-            let submit_result: sui_types::messages_grpc::SubmitTxResult =
-                raw_result.clone().try_into()?;
-            if let sui_types::messages_grpc::SubmitTxResult::Rejected { error } = submit_result {
-                return Err(error);
+        let mut executed_results = vec![None; signed_txs.len()];
+        let mut submitted_positions = Vec::new();
+        for (index, raw_result) in result.results.into_iter().enumerate() {
+            let submit_result: SubmitTxResult = raw_result.try_into()?;
+            match submit_result {
+                SubmitTxResult::Executed { details, .. } => {
+                    let data = details.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
+                        error: "Expected execution details".to_string(),
+                    })?;
+                    executed_results[index] = Some((digests[index], data.effects));
+                }
+                SubmitTxResult::Rejected { error } => {
+                    return Err(error);
+                }
+                SubmitTxResult::Submitted { consensus_position } => {
+                    submitted_positions.push((index, consensus_position));
+                }
             }
         }
 
-        let effects = self
-            .fullnode_handle
+        let wait_futures: Vec<_> = submitted_positions
+            .iter()
+            .map(|(index, position)| {
+                let request = WaitForEffectsRequest {
+                    transaction_digest: Some(digests[*index]),
+                    consensus_position: Some(*position),
+                    include_details: true,
+                    ping_type: None,
+                };
+                safe_client.wait_for_effects(request, None)
+            })
+            .collect();
+
+        let wait_responses = join_all(wait_futures).await;
+        for ((index, _), response) in submitted_positions
+            .into_iter()
+            .zip_debug_eq(wait_responses.into_iter())
+        {
+            match response? {
+                WaitForEffectsResponse::Executed { details, .. } => {
+                    let data = details.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
+                        error: "Expected execution details".to_string(),
+                    })?;
+                    executed_results[index] = Some((digests[index], data.effects));
+                }
+                WaitForEffectsResponse::Rejected { error } => {
+                    return Err(error.unwrap_or_else(|| {
+                        SuiErrorKind::GenericAuthorityError {
+                            error: "Transaction was rejected".to_string(),
+                        }
+                        .into()
+                    }));
+                }
+                WaitForEffectsResponse::Expired { .. } => {
+                    return Err(SuiErrorKind::TransactionExpired.into());
+                }
+            }
+        }
+
+        // Effects were already obtained from the validator above; this call is a
+        // synchronization barrier so callers that query the fullnode (e.g. RPC)
+        // after this returns see the transactions' effects.
+        self.fullnode_handle
             .sui_node
             .with_async(|node| {
                 let digests = digests.clone();
@@ -719,7 +769,7 @@ impl TestCluster {
                     let state = node.state();
                     let transaction_cache_reader = state.get_transaction_cache_reader();
                     transaction_cache_reader
-                        .notify_read_executed_effects(
+                        .notify_read_executed_effects_digests(
                             "sign_and_execute_txns_in_soft_bundle",
                             &digests,
                         )
@@ -728,10 +778,17 @@ impl TestCluster {
             })
             .await;
 
-        Ok(digests
+        executed_results
             .into_iter()
-            .zip_debug_eq(effects.into_iter())
-            .collect())
+            .map(|result| {
+                result.ok_or_else(|| {
+                    SuiErrorKind::GenericAuthorityError {
+                        error: "Missing execution result".to_string(),
+                    }
+                    .into()
+                })
+            })
+            .collect()
     }
 
     /// Execute signed transactions in a soft bundle and return results for each transaction.
@@ -892,28 +949,33 @@ impl TestCluster {
             .submit_transaction(submit_request, client_addr)
             .await?;
 
-        // Check if already executed
+        let mut consensus_position = None;
         for result in submit_response.results {
             match result {
                 SubmitTxResult::Executed { details, .. } => {
-                    if let Some(data) = details {
-                        let events = data.events.unwrap_or_default();
-                        return Ok((data.effects, events));
-                    }
+                    let data =
+                        details.ok_or_else(|| anyhow::anyhow!("Expected execution details"))?;
+                    let events = data.events.unwrap_or_default();
+                    return Ok((data.effects, events));
                 }
                 SubmitTxResult::Rejected { error } => {
                     return Err(error.into());
                 }
-                SubmitTxResult::Submitted { .. } => {
-                    // Need to wait for effects
+                SubmitTxResult::Submitted {
+                    consensus_position: position,
+                } => {
+                    consensus_position = Some(position);
                 }
             }
         }
 
+        let consensus_position = consensus_position
+            .ok_or_else(|| anyhow::anyhow!("Expected submitted transaction result"))?;
+
         // Wait for effects
         let wait_request = WaitForEffectsRequest {
             transaction_digest: Some(*tx.digest()),
-            consensus_position: None,
+            consensus_position: Some(consensus_position),
             include_details: true,
             ping_type: None,
         };
@@ -926,9 +988,14 @@ impl TestCluster {
                 Ok((data.effects, events))
             }
             WaitForEffectsResponse::Rejected { error } => Err(error
-                .ok_or_else(|| anyhow::anyhow!("Transaction was rejected"))?
+                .unwrap_or_else(|| {
+                    SuiErrorKind::GenericAuthorityError {
+                        error: "Transaction was rejected".to_string(),
+                    }
+                    .into()
+                })
                 .into()),
-            WaitForEffectsResponse::Expired { .. } => Err(anyhow::anyhow!("Transaction expired")),
+            WaitForEffectsResponse::Expired { .. } => Err(SuiErrorKind::TransactionExpired.into()),
         }
     }
 

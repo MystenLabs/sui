@@ -117,7 +117,7 @@ impl ChannelPool {
     fn new(context: Arc<Context>) -> Self {
         // Only allow to connect to peers that are within this pool.
         let mut observer_peers = BTreeMap::new();
-        for peer in &context.parameters.tonic.observer_peers {
+        for peer in &context.parameters.observer.peers {
             observer_peers.insert(peer.public_key.clone(), peer.address.clone());
         }
         Self {
@@ -536,8 +536,8 @@ mod tests {
 
         // Set up validator 0 with observer server
         let mut parameters = context.parameters.clone();
-        parameters.tonic.observer_server_port = Some(OBSERVER_PORT);
-        parameters.tonic.observer_peers = vec![PeerRecord {
+        parameters.observer.server_port = Some(OBSERVER_PORT);
+        parameters.observer.peers = vec![PeerRecord {
             public_key: keys[0].0.public(),
             address: Multiaddr::from_str(&format!("/ip4/127.0.0.1/udp/{}", OBSERVER_PORT)).unwrap(),
         }];

@@ -569,7 +569,11 @@ impl<'backing> TemporaryStore<'backing> {
     /// - No new objects were created or existing objects mutated (written_objects is empty)
     /// - The set of deleted objects exactly equals the set of input Coin objects
     /// - Each recipient receives at least the minimum transfer amount per token type
-    pub fn check_gasless_execution_requirements(&self) -> Result<(), String> {
+    /// - Unused withdrawal reservation (reservation - actual split) is 0 or >= min_amount
+    pub fn check_gasless_execution_requirements(
+        &self,
+        withdrawal_reservations: Option<&BTreeMap<(SuiAddress, TypeTag), u64>>,
+    ) -> Result<(), String> {
         if !self.execution_results.written_objects.is_empty() {
             return Err("Gasless transactions cannot create or mutate objects".to_string());
         }
@@ -604,17 +608,37 @@ impl<'backing> TemporaryStore<'backing> {
             },
         );
 
-        for ((recipient, token_type), net_amount) in net_totals {
-            if net_amount <= 0 {
+        for ((recipient, token_type), net_amount) in &net_totals {
+            if *net_amount <= 0 {
                 continue;
             }
-            if let Some(&min_amount) = allowed_types.get(&token_type)
-                && net_amount < i128::from(min_amount)
+            if let Some(&min_amount) = allowed_types.get(token_type)
+                && *net_amount < i128::from(min_amount)
             {
                 return Err(format!(
                     "Gasless transfer of {net_amount} to {recipient} is below \
                      minimum {min_amount} for token type {token_type}"
                 ));
+            }
+        }
+
+        if let Some(reservations) = withdrawal_reservations {
+            for ((owner, token_type), &reserved) in reservations {
+                let net = net_totals
+                    .get(&(*owner, token_type.clone()))
+                    .copied()
+                    .unwrap_or(0);
+                let remaining = (reserved as i128).saturating_add(net);
+                if remaining > 0
+                    && let Some(&min_balance_remaining) = allowed_types.get(token_type)
+                    && min_balance_remaining > 0
+                    && remaining < min_balance_remaining as i128
+                {
+                    return Err(format!(
+                        "Gasless withdrawal leaves {remaining} unused for {owner}, \
+                         below minimum {min_balance_remaining} for token type {token_type}"
+                    ));
+                }
             }
         }
 

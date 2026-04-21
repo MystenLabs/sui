@@ -349,13 +349,14 @@ impl DagState {
 
         if self.threshold_clock.add_block(block_ref) {
             // Do not measure quorum delay when no local block is proposed in the round.
-            let last_proposed_block = self.get_last_proposed_block();
-            if last_proposed_block.round() == block_ref.round {
+            if let Some(last_proposed_block) = self.get_last_proposed_block()
+                && last_proposed_block.round() == block_ref.round
+            {
                 let quorum_delay_ms = self
                     .context
                     .clock
                     .timestamp_utc_ms()
-                    .saturating_sub(self.get_last_proposed_block().timestamp_ms());
+                    .saturating_sub(last_proposed_block.timestamp_ms());
                 self.context
                     .metrics
                     .node_metrics
@@ -530,8 +531,13 @@ impl DagState {
 
     /// Gets the last proposed block from this authority.
     /// If no block is proposed yet, returns the genesis block.
-    pub(crate) fn get_last_proposed_block(&self) -> VerifiedBlock {
-        self.get_last_block_for_authority(self.context.own_index)
+    /// If the node is an observer, returns None.
+    pub(crate) fn get_last_proposed_block(&self) -> Option<VerifiedBlock> {
+        if self.context.is_validator() {
+            Some(self.get_last_block_for_authority(self.context.own_index))
+        } else {
+            None
+        }
     }
 
     /// Retrieves the last accepted block from the specified `authority`. If no block is found in cache
@@ -2545,7 +2551,7 @@ mod test {
                 .find(|block| block.author() == context.own_index)
                 .unwrap();
 
-            assert_eq!(dag_state.read().get_last_proposed_block(), my_genesis);
+            assert_eq!(dag_state.read().get_last_proposed_block(), Some(my_genesis));
         }
 
         // WHEN adding some blocks for authorities, only the last ones should be returned
