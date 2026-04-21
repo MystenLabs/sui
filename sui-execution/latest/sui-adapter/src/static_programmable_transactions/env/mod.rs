@@ -9,6 +9,7 @@ use crate::{
     data_store::{PackageStore, cached_package_store::CachedPackageStore},
     execution_value::ExecutionState,
     static_programmable_transactions::{
+        env::cache::{LoadedFunctionKey, PerTxCache, TypeLinkageCacheKey},
         execution::context::subst_signature,
         linkage::{analysis::LinkageAnalyzer, resolved_linkage::ExecutableLinkage},
         loading::ast::{self as L, Datatype, LoadedFunction, LoadedFunctionInstantiation, Type},
@@ -30,7 +31,7 @@ use move_vm_runtime::{
     execution::{self as vm_runtime, vm::MoveVM},
     runtime::MoveRuntime,
 };
-use std::{cell::OnceCell, rc::Rc};
+use std::{rc::Rc, sync::LazyLock};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     Identifier, SUI_FRAMEWORK_PACKAGE_ID, TypeTag,
@@ -46,33 +47,25 @@ use sui_types::{
     type_input::{StructInput, TypeInput},
 };
 
+mod cache;
+
+static GAS_COIN_TYPE: LazyLock<StructTag> = LazyLock::new(GasCoin::type_);
+static UPGRADE_TICKET_TYPE: LazyLock<StructTag> = LazyLock::new(UpgradeTicket::type_);
+static UPGRADE_RECEIPT_TYPE: LazyLock<StructTag> = LazyLock::new(UpgradeReceipt::type_);
+static UPGRADE_CAP_TYPE: LazyLock<StructTag> = LazyLock::new(UpgradeCap::type_);
+static TX_CONTEXT_TYPE: LazyLock<StructTag> = LazyLock::new(TxContext::type_);
+
 pub struct Env<'pc, 'vm, 'state, 'linkage, 'extensions> {
     pub protocol_config: &'pc ProtocolConfig,
     pub vm: &'vm MoveRuntime,
     pub state_view: &'state mut dyn ExecutionState,
     pub linkable_store: &'linkage CachedPackageStore<'state, 'vm>,
     pub linkage_analysis: &'linkage LinkageAnalyzer,
-    gas_coin_type: OnceCell<Type>,
-    upgrade_ticket_type: OnceCell<Type>,
-    upgrade_receipt_type: OnceCell<Type>,
-    upgrade_cap_type: OnceCell<Type>,
-    tx_context_type: OnceCell<Type>,
     // The VM used for type resolution of input types (and types statically present in the PTB)
     // only. This VM should only be used for resolution of input types, but should not be used for
     // resolution around function calls, execution, or final serialization of execution values.
     input_type_resolution_vm: &'linkage MoveVM<'extensions>,
-}
-
-macro_rules! get_or_init_ty {
-    ($env:expr, $ident:ident, $tag:expr) => {{
-        let env = $env;
-        if env.$ident.get().is_none() {
-            let tag = $tag;
-            let ty = env.load_type_from_struct(&tag)?;
-            env.$ident.set(ty.clone()).unwrap();
-        }
-        Ok(env.$ident.get().unwrap().clone())
-    }};
+    per_tx_cache: PerTxCache<'pc>,
 }
 
 impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'extensions> {
@@ -90,12 +83,8 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
             state_view,
             linkable_store,
             linkage_analysis,
-            gas_coin_type: OnceCell::new(),
-            upgrade_ticket_type: OnceCell::new(),
-            upgrade_receipt_type: OnceCell::new(),
-            upgrade_cap_type: OnceCell::new(),
-            tx_context_type: OnceCell::new(),
             input_type_resolution_vm,
+            per_tx_cache: PerTxCache::new(protocol_config),
         }
     }
 
@@ -142,19 +131,24 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         }
     }
 
+    /// Resolve an adapter `Type` to its `TypeTag`, consulting (and populating) the per-tx cache.
+    fn tag_from_type(&self, ty: &Type) -> Result<Rc<TypeTag>, ExecutionError> {
+        if let Some(rc) = self.per_tx_cache.lookup_tag_by_type(ty)? {
+            return Ok(rc);
+        }
+        let tag: TypeTag = ty.clone().try_into().map_err(|s| {
+            ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
+        })?;
+        let (rc, _) = self.per_tx_cache.insert_tag_type_pair(tag, ty.clone())?;
+        Ok(rc)
+    }
+
     pub fn fully_annotated_layout(
         &self,
         ty: &Type,
     ) -> Result<annotated_value::MoveTypeLayout, ExecutionError> {
-        let tag: TypeTag = ty.clone().try_into().map_err(|s| {
-            ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
-        })?;
-        let objects = tag.all_addresses();
-        let tag_linkage = ExecutableLinkage::type_linkage(
-            self.linkage_analysis.config().clone(),
-            objects.into_iter().map(ObjectID::from),
-            self.linkable_store,
-        )?;
+        let tag = self.tag_from_type(ty)?;
+        let tag_linkage = self.get_type_linkage(&tag)?;
         self.input_type_resolution_vm
             .annotated_type_layout(&tag)
             .map_err(|e| self.convert_linked_vm_error(e, &tag_linkage))
@@ -164,15 +158,8 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         &self,
         ty: &Type,
     ) -> Result<runtime_value::MoveTypeLayout, ExecutionError> {
-        let tag: TypeTag = ty.clone().try_into().map_err(|s| {
-            ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
-        })?;
-        let objects = tag.all_addresses();
-        let tag_linkage = ExecutableLinkage::type_linkage(
-            self.linkage_analysis.config().clone(),
-            objects.into_iter().map(ObjectID::from),
-            self.linkable_store,
-        )?;
+        let tag = self.tag_from_type(ty)?;
+        let tag_linkage = self.get_type_linkage(&tag)?;
         self.input_type_resolution_vm
             .runtime_type_layout(&tag)
             .map_err(|e| self.convert_linked_vm_error(e, &tag_linkage))
@@ -183,7 +170,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         module: &IdentStr,
         function: &IdentStr,
         type_arguments: Vec<Type>,
-    ) -> Result<LoadedFunction, ExecutionError> {
+    ) -> Result<Rc<LoadedFunction>, ExecutionError> {
         self.load_function(
             SUI_FRAMEWORK_PACKAGE_ID,
             module.to_string(),
@@ -198,9 +185,19 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         module: String,
         function: String,
         type_arguments: Vec<Type>,
-    ) -> Result<LoadedFunction, ExecutionError> {
+    ) -> Result<Rc<LoadedFunction>, ExecutionError> {
         let module = to_identifier(module)?;
         let name = to_identifier(function)?;
+
+        let cache_key = LoadedFunctionKey::new(
+            package,
+            module.clone(),
+            name.clone(),
+            type_arguments.clone(),
+        );
+        if let Some(cached) = self.per_tx_cache.lookup_function(&cache_key)? {
+            return Ok(cached);
+        }
 
         let linkage = self.linkage_analysis.compute_call_linkage(
             &package,
@@ -264,7 +261,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
             parameters,
             return_,
         };
-        Ok(LoadedFunction {
+        let loaded = Rc::new(LoadedFunction {
             version_mid,
             original_mid,
             name,
@@ -276,24 +273,44 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
             visibility: runtime_signature.visibility,
             is_entry: runtime_signature.is_entry,
             is_native: runtime_signature.is_native,
-        })
+        });
+        self.per_tx_cache
+            .insert_function(cache_key, loaded.clone())?;
+        Ok(loaded)
     }
 
     pub fn load_type_input(&self, idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
-        let vm_type = self.load_vm_type_from_type_input(idx, ty)?;
-        self.adapter_type_from_vm_type(self.input_type_resolution_vm, &vm_type)
+        if let Some(cached) = self.per_tx_cache.lookup_type_by_input(&ty)? {
+            return Ok(cached);
+        }
+        let vm_type = self.load_vm_type_from_type_input(idx, ty.clone())?;
+        let adapter = self.adapter_type_from_vm_type(self.input_type_resolution_vm, &vm_type)?;
+        self.per_tx_cache.insert_type_input(ty, adapter.clone())?;
+        Ok(adapter)
     }
 
     pub fn load_type_tag(&self, idx: usize, ty: &TypeTag) -> Result<Type, ExecutionError> {
+        if let Some(cached) = self.per_tx_cache.lookup_type_by_tag(ty)? {
+            return Ok(cached);
+        }
         let vm_type = self.load_vm_type_from_type_tag(Some(idx), ty)?;
-        self.adapter_type_from_vm_type(self.input_type_resolution_vm, &vm_type)
+        let adapter = self.adapter_type_from_vm_type(self.input_type_resolution_vm, &vm_type)?;
+        self.per_tx_cache
+            .insert_tag_type_pair(ty.clone(), adapter.clone())?;
+        Ok(adapter)
     }
 
     /// We verify that all types in the `StructTag` are defining ID-based types.
     pub fn load_type_from_struct(&self, tag: &StructTag) -> Result<Type, ExecutionError> {
-        let vm_type =
-            self.load_vm_type_from_type_tag(None, &TypeTag::Struct(Box::new(tag.clone())))?;
-        self.adapter_type_from_vm_type(self.input_type_resolution_vm, &vm_type)
+        let tag = TypeTag::Struct(Box::new(tag.clone()));
+        if let Some(cached) = self.per_tx_cache.lookup_type_by_tag(&tag)? {
+            return Ok(cached);
+        }
+        let vm_type = self.load_vm_type_from_type_tag(None, &tag)?;
+        let adapter = self.adapter_type_from_vm_type(self.input_type_resolution_vm, &vm_type)?;
+        self.per_tx_cache
+            .insert_tag_type_pair(tag, adapter.clone())?;
+        Ok(adapter)
     }
 
     pub fn type_layout_for_struct(
@@ -305,23 +322,23 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
     }
 
     pub fn gas_coin_type(&self) -> Result<Type, ExecutionError> {
-        get_or_init_ty!(self, gas_coin_type, GasCoin::type_())
+        self.load_type_from_struct(&GAS_COIN_TYPE)
     }
 
     pub fn upgrade_ticket_type(&self) -> Result<Type, ExecutionError> {
-        get_or_init_ty!(self, upgrade_ticket_type, UpgradeTicket::type_())
+        self.load_type_from_struct(&UPGRADE_TICKET_TYPE)
     }
 
     pub fn upgrade_receipt_type(&self) -> Result<Type, ExecutionError> {
-        get_or_init_ty!(self, upgrade_receipt_type, UpgradeReceipt::type_())
+        self.load_type_from_struct(&UPGRADE_RECEIPT_TYPE)
     }
 
     pub fn upgrade_cap_type(&self) -> Result<Type, ExecutionError> {
-        get_or_init_ty!(self, upgrade_cap_type, UpgradeCap::type_())
+        self.load_type_from_struct(&UPGRADE_CAP_TYPE)
     }
 
     pub fn tx_context_type(&self) -> Result<Type, ExecutionError> {
-        get_or_init_ty!(self, tx_context_type, TxContext::type_())
+        self.load_type_from_struct(&TX_CONTEXT_TYPE)
     }
 
     pub fn coin_type(&self, inner_type: Type) -> Result<Type, ExecutionError> {
@@ -398,10 +415,14 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         type_arg_idx: Option<usize>,
         ty: &Type,
     ) -> Result<vm_runtime::Type, ExecutionError> {
-        let tag: TypeTag = ty.clone().try_into().map_err(|s| {
-            ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, s)
-        })?;
-        self.load_vm_type_from_type_tag(type_arg_idx, &tag)
+        if let Some(cached) = self.per_tx_cache.lookup_vm_type_by_type(ty)? {
+            return Ok((*cached).clone());
+        }
+        let tag = self.tag_from_type(ty)?;
+        let vm_type = self.load_vm_type_from_type_tag(type_arg_idx, &tag)?;
+        self.per_tx_cache
+            .insert_vm_type_pair(vm_type.clone(), ty.clone())?;
+        Ok(vm_type)
     }
 
     /// Take a type tag and returns a VM runtime Type and the linkage for it.
@@ -423,18 +444,28 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
             }
         }
 
-        let objects = tag.all_addresses();
-
-        let tag_linkage = ExecutableLinkage::type_linkage(
-            self.linkage_analysis.config().clone(),
-            objects.iter().map(|a| ObjectID::from(*a)),
-            self.linkable_store,
-        )?;
+        let tag_linkage = self.get_type_linkage(tag)?;
         let ty = self
             .input_type_resolution_vm
             .load_type(tag)
             .map_err(|e| execution_error(self, type_arg_idx, e, &tag_linkage))?;
         Ok(ty)
+    }
+
+    fn get_type_linkage(&self, tag: &TypeTag) -> Result<ExecutableLinkage, ExecutionError> {
+        let root_ids = tag.all_addresses();
+        let key = TypeLinkageCacheKey::new(&root_ids);
+        if let Some(cached) = self.per_tx_cache.lookup_type_linkage(&key)? {
+            return Ok(cached);
+        }
+        let linkage = ExecutableLinkage::type_linkage(
+            self.linkage_analysis.config().clone(),
+            root_ids.into_iter().map(ObjectID::from),
+            self.linkable_store,
+        )?;
+        self.per_tx_cache
+            .insert_type_linkage(key, linkage.clone())?;
+        Ok(linkage)
     }
 
     /// Converts a VM runtime Type to an adapter Type.
@@ -445,7 +476,11 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
     ) -> Result<Type, ExecutionError> {
         use vm_runtime as VRT;
 
-        Ok(match vm_type {
+        if let Some(cached) = self.per_tx_cache.lookup_type_by_vm_type(vm_type)? {
+            return Ok(cached);
+        }
+
+        let ty = match vm_type {
             VRT::Type::Bool => Type::Bool,
             VRT::Type::U8 => Type::U8,
             VRT::Type::U16 => Type::U16,
@@ -516,7 +551,10 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
                     vm_type
                 );
             }
-        })
+        };
+        self.per_tx_cache
+            .insert_vm_type_pair(vm_type.clone(), ty.clone())?;
+        Ok(ty)
     }
 
     /// Load a `TypeInput` into a VM runtime `Type` and its `Linkage`. Loading into the VM ensures
@@ -530,7 +568,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         fn to_type_tag_internal(
             env: &Env,
             type_arg_idx: usize,
-            ty: TypeInput,
+            ty: &TypeInput,
         ) -> Result<TypeTag, ExecutionError> {
             Ok(match ty {
                 TypeInput::Bool => TypeTag::Bool,
@@ -543,7 +581,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
                 TypeInput::Address => TypeTag::Address,
                 TypeInput::Signer => TypeTag::Signer,
                 TypeInput::Vector(type_input) => {
-                    let inner = to_type_tag_internal(env, type_arg_idx, *type_input)?;
+                    let inner = to_type_tag_internal(env, type_arg_idx, type_input)?;
                     TypeTag::Vector(Box::new(inner))
                 }
                 TypeInput::Struct(struct_input) => {
@@ -552,11 +590,11 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
                         module,
                         name,
                         type_params,
-                    } = *struct_input;
+                    } = &**struct_input;
 
                     let pkg = env
                         .linkable_store
-                        .get_package(&address.into())
+                        .get_package(&ObjectID::from(*address))
                         .ok()
                         .flatten()
                         .ok_or_else(|| {
@@ -569,8 +607,8 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
                                 kind: TypeArgumentError::TypeNotFound,
                             })
                         })?;
-                    let module = to_identifier(module)?;
-                    let name = to_identifier(name)?;
+                    let module = to_identifier(module.clone())?;
+                    let name = to_identifier(name.clone())?;
                     let tid = IntraPackageName {
                         module_name: module,
                         type_name: name,
@@ -585,7 +623,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
                     };
 
                     let tys = type_params
-                        .into_iter()
+                        .iter()
                         .map(|tp| to_type_tag_internal(env, type_arg_idx, tp))
                         .collect::<Result<Vec<_>, _>>()?;
                     TypeTag::Struct(Box::new(StructTag {
@@ -597,7 +635,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
                 }
             })
         }
-        let tag = to_type_tag_internal(self, type_arg_idx, ty)?;
+        let tag = to_type_tag_internal(self, type_arg_idx, &ty)?;
         self.load_vm_type_from_type_tag(Some(type_arg_idx), &tag)
     }
 }

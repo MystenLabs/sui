@@ -1076,6 +1076,10 @@ struct FeatureFlags {
     // fallback for manual epoch close.
     #[serde(skip_serializing_if = "is_false")]
     timestamp_based_epoch_close: bool,
+
+    // If true, enable caching in ptb execution.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_ptb_tx_cache: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2802,6 +2806,10 @@ impl ProtocolConfig {
 
     pub fn timestamp_based_epoch_close(&self) -> bool {
         self.feature_flags.timestamp_based_epoch_close
+    }
+
+    pub fn enable_ptb_tx_cache(&self) -> bool {
+        self.feature_flags.enable_ptb_tx_cache
     }
 }
 
@@ -4882,6 +4890,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.timestamp_based_epoch_close = true;
                     }
                     cfg.gas_model_version = Some(12);
+                    cfg.feature_flags.enable_ptb_tx_cache = true;
                 }
                 // Use this template when making changes:
                 //
