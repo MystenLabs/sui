@@ -365,7 +365,7 @@ mod consensus_tests {
             let db_dir = Arc::new(TempDir::new().unwrap());
             let mut parameters = default_parameters();
             parameters.db_path = db_dir.path().to_path_buf();
-            parameters.tonic.observer_server_port = Some(9600 + authority_index.value() as u16);
+            parameters.observer.server_port = Some(9600 + authority_index.value() as u16);
 
             let config = Config {
                 authority_index,
@@ -409,11 +409,11 @@ mod consensus_tests {
 
         let mut observer1_params = default_parameters();
         observer1_params.db_path = observer1_dir.path().to_path_buf();
-        observer1_params.tonic = consensus_config::TonicParameters {
+        observer1_params.observer = consensus_config::ObserverParameters {
             // Enable observer server on Observer 1 (port 9610) so Observer 2 can connect
-            observer_server_port: Some(9610),
+            server_port: Some(9610),
             // Connect to validator 0's observer server port
-            observer_peers: vec![consensus_config::PeerRecord {
+            peers: vec![consensus_config::PeerRecord {
                 public_key: validator_info.network_key.clone(),
                 address: validator_observer_address,
             }],
@@ -455,9 +455,9 @@ mod consensus_tests {
 
         let mut observer2_params = default_parameters();
         observer2_params.db_path = observer2_dir.path().to_path_buf();
-        observer2_params.tonic = consensus_config::TonicParameters {
+        observer2_params.observer = consensus_config::ObserverParameters {
             // Configure to connect to Observer 1's observer server at port 9610
-            observer_peers: vec![consensus_config::PeerRecord {
+            peers: vec![consensus_config::PeerRecord {
                 public_key: observer1_keypair.public().clone(),
                 address: observer1_address,
             }],
