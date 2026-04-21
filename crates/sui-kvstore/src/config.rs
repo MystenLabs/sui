@@ -138,6 +138,7 @@ pub struct ConcurrentLayer {
     pub processor_channel_size: Option<usize>,
     pub collector_channel_size: Option<usize>,
     pub committer_channel_size: Option<usize>,
+    pub pruner_channel_size: Option<usize>,
 }
 
 impl ConcurrentLayer {
@@ -156,6 +157,7 @@ impl ConcurrentLayer {
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
             collector_channel_size: self.collector_channel_size.or(base.collector_channel_size),
             committer_channel_size: self.committer_channel_size.or(base.committer_channel_size),
+            pruner_channel_size: self.pruner_channel_size.or(base.pruner_channel_size),
         }
     }
 }

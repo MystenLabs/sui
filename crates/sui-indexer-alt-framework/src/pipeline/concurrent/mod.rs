@@ -23,6 +23,7 @@ use crate::pipeline::concurrent::collector::collector;
 use crate::pipeline::concurrent::commit_watermark::commit_watermark;
 use crate::pipeline::concurrent::committer::committer;
 use crate::pipeline::concurrent::main_reader_lo::track_main_reader_lo;
+use crate::pipeline::concurrent::prune_watermark::prune_watermark;
 use crate::pipeline::concurrent::pruner::pruner;
 use crate::pipeline::concurrent::reader_watermark::reader_watermark;
 use crate::pipeline::processor::processor;
@@ -33,6 +34,7 @@ mod collector;
 mod commit_watermark;
 mod committer;
 mod main_reader_lo;
+mod prune_watermark;
 mod pruner;
 mod reader_watermark;
 
@@ -142,6 +144,9 @@ pub struct ConcurrentConfig {
 
     /// Size of the channel between the committer and the watermark updater.
     pub committer_channel_size: Option<usize>,
+
+    /// Size of the channel between the pruner and the pruner watermark updater.
+    pub pruner_channel_size: Option<usize>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -257,6 +262,7 @@ pub(crate) fn pipeline<H: Handler>(
         processor_channel_size,
         collector_channel_size,
         committer_channel_size,
+        pruner_channel_size,
     } = config;
 
     let concurrency = fanout.unwrap_or(ConcurrencyConfig::Adaptive {
@@ -278,6 +284,8 @@ pub(crate) fn pipeline<H: Handler>(
     //docs::/#buff
     let committer_channel_size = committer_channel_size.unwrap_or(num_cpus::get());
     let (committer_tx, watermark_rx) = mpsc::channel(committer_channel_size);
+    let pruner_channel_size = pruner_channel_size.unwrap_or(64);
+    let (pruner_tx, prune_watermark_rx) = mpsc::channel::<(u64, u64)>(pruner_channel_size);
     let main_reader_lo = Arc::new(SetOnce::new());
 
     let handler = Arc::new(handler);
@@ -330,7 +338,15 @@ pub(crate) fn pipeline<H: Handler>(
     let s_reader_watermark =
         reader_watermark::<H>(pruner_config.clone(), store.clone(), metrics.clone());
 
-    let s_pruner = pruner(handler, pruner_config, store, metrics);
+    let s_pruner = pruner(
+        handler,
+        pruner_config.clone(),
+        store.clone(),
+        pruner_tx,
+        metrics.clone(),
+    );
+
+    let s_prune_watermark = prune_watermark::<H>(pruner_config, prune_watermark_rx, store, metrics);
 
     s_processor
         .merge(s_collector)
@@ -339,6 +355,7 @@ pub(crate) fn pipeline<H: Handler>(
         .attach(s_track_reader_lo)
         .attach(s_reader_watermark)
         .attach(s_pruner)
+        .attach(s_prune_watermark)
 }
 
 #[cfg(test)]

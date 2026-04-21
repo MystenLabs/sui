@@ -82,6 +82,7 @@ pub struct ConcurrentLayer {
     pub processor_channel_size: Option<usize>,
     pub collector_channel_size: Option<usize>,
     pub committer_channel_size: Option<usize>,
+    pub pruner_channel_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -237,6 +238,7 @@ impl ConcurrentLayer {
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
             collector_channel_size: self.collector_channel_size.or(base.collector_channel_size),
             committer_channel_size: self.committer_channel_size.or(base.committer_channel_size),
+            pruner_channel_size: self.pruner_channel_size.or(base.pruner_channel_size),
         })
     }
 }
@@ -354,6 +356,7 @@ impl Merge for ConcurrentLayer {
             processor_channel_size: other.processor_channel_size.or(self.processor_channel_size),
             collector_channel_size: other.collector_channel_size.or(self.collector_channel_size),
             committer_channel_size: other.committer_channel_size.or(self.committer_channel_size),
+            pruner_channel_size: other.pruner_channel_size.or(self.pruner_channel_size),
         })
     }
 }
@@ -465,6 +468,7 @@ impl From<ConcurrentConfig> for ConcurrentLayer {
             processor_channel_size: config.processor_channel_size,
             collector_channel_size: config.collector_channel_size,
             committer_channel_size: config.committer_channel_size,
+            pruner_channel_size: config.pruner_channel_size,
         }
     }
 }
