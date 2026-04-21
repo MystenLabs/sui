@@ -50,6 +50,8 @@ const protocolInject = async function (source) {
     }
 
     // Filter TOC entries based on which page we are rendering.
+    // Always include all three arrays so the Protocol component can safely
+    // access .messages.length, .services.length, and .enums.length.
     if (isTypesPage) {
       // Types page shows messages and enums only.
       if (messages.length > 0 || enums.length > 0) {
@@ -57,6 +59,7 @@ const protocolInject = async function (source) {
           name: proto.name,
           link: createId(proto.name),
           messages,
+          services: [],
           enums,
         });
       }
@@ -66,7 +69,9 @@ const protocolInject = async function (source) {
         toc.push({
           name: proto.name,
           link: createId(proto.name),
+          messages: [],
           services,
+          enums: [],
         });
       }
     }
@@ -85,6 +90,8 @@ const protocolInject = async function (source) {
       name: "Scalar Value Types",
       link: "scalar-value-types",
       messages: types,
+      services: [],
+      enums: [],
     });
   }
 
