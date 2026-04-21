@@ -105,6 +105,7 @@
 - [Common Errors](https://docs.sui.io/develop/testing-debugging/common-errors.md)
 - [Testing Debugging Index](https://docs.sui.io/develop/testing-debugging/index.md)
 - [Testing](https://docs.sui.io/develop/testing-debugging/testing.md)
+<<<<<<< Updated upstream
 - [Gas In Sui](https://docs.sui.io/develop/transaction-payment/gas-in-sui.md)
 - [Gas Smashing](https://docs.sui.io/develop/transaction-payment/gas-smashing.md)
 - [Gasless Transactions](https://docs.sui.io/develop/transaction-payment/gasless-transactions.md)
@@ -134,6 +135,8 @@
 - [Move Fundamentals](https://docs.sui.io/develop/write-move/move-fundamentals.md)
 - [Package Overview](https://docs.sui.io/develop/write-move/package-overview.md)
 - [Sui Move Concepts](https://docs.sui.io/develop/write-move/sui-move-concepts.md)
+=======
+>>>>>>> Stashed changes
 
 ## Getting Started
 
@@ -149,11 +152,6 @@
 - [Install Binaries](https://docs.sui.io/getting-started/onboarding/install-binaries.md)
 - [Install Source](https://docs.sui.io/getting-started/onboarding/install-source.md)
 - [Local Network](https://docs.sui.io/getting-started/onboarding/local-network.md)
-- [Next Steps](https://docs.sui.io/getting-started/onboarding/next-steps.md)
-- [Sui Install](https://docs.sui.io/getting-started/onboarding/sui-install.md)
-- [Sui For Ethereum](https://docs.sui.io/getting-started/sui-for-ethereum.md)
-- [Sui For Solana](https://docs.sui.io/getting-started/sui-for-solana.md)
-- [Tooling](https://docs.sui.io/getting-started/tooling.md)
 
 ## Onchain Finance
 
@@ -247,6 +245,7 @@
 - [Nft Rental](https://docs.sui.io/onchain-finance/examples-patterns/nft-rental.md)
 - [Soulbound Tokens](https://docs.sui.io/onchain-finance/examples-patterns/soulbound-tokens.md)
 - [Wasm Template](https://docs.sui.io/onchain-finance/examples-patterns/wasm-template.md)
+<<<<<<< Updated upstream
 - [Coin](https://docs.sui.io/onchain-finance/fungible-tokens/coin.md)
 - [Create A Fungible Token
     Coin](https://docs.sui.io/onchain-finance/fungible-tokens/create-a-fungible-token-coin.md)
@@ -275,6 +274,8 @@
     Asset](https://docs.sui.io/onchain-finance/tokenized-assets/deploy-tokenized-asset.md)
 - [Tokenized Assets Index](https://docs.sui.io/onchain-finance/tokenized-assets/index.md)
 - [Types Of Assets](https://docs.sui.io/onchain-finance/types-of-assets.md)
+=======
+>>>>>>> Stashed changes
 
 ## Operators
 
@@ -295,12 +296,15 @@
 - [Operators Index](https://docs.sui.io/operators/index.md)
 - [Observability](https://docs.sui.io/operators/observability.md)
 - [Snapshots](https://docs.sui.io/operators/snapshots.md)
+<<<<<<< Updated upstream
 - [Alerts](https://docs.sui.io/operators/validator/alerts.md)
 - [Validator Index](https://docs.sui.io/operators/validator/index.md)
 - [Node Tools](https://docs.sui.io/operators/validator/node-tools.md)
 - [Validator Config](https://docs.sui.io/operators/validator/validator-config.md)
 - [Validator Rewards](https://docs.sui.io/operators/validator/validator-rewards.md)
 - [Validator Tasks](https://docs.sui.io/operators/validator/validator-tasks.md)
+=======
+>>>>>>> Stashed changes
 
 ## References
 
@@ -409,6 +413,7 @@
 - [Priority Queue](https://docs.sui.io/references/framework/sui_sui/priority_queue.md)
 - [Protocol Config](https://docs.sui.io/references/framework/sui_sui/protocol_config.md)
 - [Random](https://docs.sui.io/references/framework/sui_sui/random.md)
+- [Rangeproofs](https://docs.sui.io/references/framework/sui_sui/rangeproofs.md)
 - [Ristretto255](https://docs.sui.io/references/framework/sui_sui/ristretto255.md)
 - [Sui](https://docs.sui.io/references/framework/sui_sui/sui.md)
 - [Table Vec](https://docs.sui.io/references/framework/sui_sui/table_vec.md)
@@ -759,6 +764,7 @@
     Object](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/move-object.md)
 - [Move Package
     Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/move-package-connection.md)
+<<<<<<< Updated upstream
 - [Move Package
     Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/move-package-edge.md)
 - [Move
@@ -958,6 +964,8 @@
 - [Sui Graphql](https://docs.sui.io/references/sui-graphql.md)
 - [Sui Move](https://docs.sui.io/references/sui-move.md)
 - [Sui Sdks](https://docs.sui.io/references/sui-sdks.md)
+=======
+>>>>>>> Stashed changes
 
 ## Sui Stack
 
@@ -977,9 +985,12 @@
 - [Best Practices](https://docs.sui.io/sui-stack/suiplay0x1/best-practices.md)
 - [Suiplay0x1 Index](https://docs.sui.io/sui-stack/suiplay0x1/index.md)
 - [Integration](https://docs.sui.io/sui-stack/suiplay0x1/integration.md)
+<<<<<<< Updated upstream
 - [Migration Strategies](https://docs.sui.io/sui-stack/suiplay0x1/migration-strategies.md)
 - [Wallet Integration](https://docs.sui.io/sui-stack/suiplay0x1/wallet-integration.md)
 - [Developer Account](https://docs.sui.io/sui-stack/zklogin-integration/developer-account.md)
 - [Zklogin Integration Index](https://docs.sui.io/sui-stack/zklogin-integration/index.md)
 - [Zklogin Example](https://docs.sui.io/sui-stack/zklogin-integration/zklogin-example.md)
 - [Zklogin](https://docs.sui.io/sui-stack/zklogin-integration/zklogin.md)
+=======
+>>>>>>> Stashed changes

@@ -58,6 +58,7 @@ export default async function middleware(request) {
 		new URL(`/markdown${path}/index.md`, request.url),
 	];
 
+<<<<<<< Updated upstream
 	const fetchOpts = {
 		headers: {
 			...Object.fromEntries(request.headers),
@@ -83,9 +84,41 @@ export default async function middleware(request) {
 				status: 200,
 				headers,
 			});
+=======
+	try {
+		const response = await fetch(markdownUrl);
+
+		if (!response.ok) {
+			// Markdown version doesn't exist for this path, fall through to HTML
+			return;
+>>>>>>> Stashed changes
 		}
 	}
 
+<<<<<<< Updated upstream
 	// Markdown version doesn't exist for this path, fall through to HTML
 	return;
+=======
+		// Return the markdown with proper headers
+		const headers = new Headers();
+		headers.set('content-type', 'text/markdown; charset=utf-8');
+		headers.set('content-disposition', 'inline');
+		headers.set('vary', 'Accept');
+		headers.set('cache-control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400');
+
+		// Token count hint for agents (approximate: 1 token ≈ 4 chars)
+		const body = await response.text();
+		const tokens = Math.ceil(body.length / 4);
+		headers.set('x-markdown-tokens', String(tokens));
+		headers.set('content-length', String(new TextEncoder().encode(body).byteLength));
+
+		return new Response(body, {
+			status: 200,
+			headers,
+		});
+	} catch (e) {
+		// On any fetch error, fall through to HTML
+		return;
+	}
+>>>>>>> Stashed changes
 }

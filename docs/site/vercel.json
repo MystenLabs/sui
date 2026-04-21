@@ -2598,7 +2598,7 @@
         {
           "type": "header",
           "key": "accept",
-          "value": "(?:.*,\\s*)?text/markdown(?:\\s*;.*)?"
+          "value": "(?:^|.*[,\\s])text/markdown(?:[;,\\s].*)?$"
         }
       ],
       "destination": "/markdown/:path.md"
@@ -2633,7 +2633,7 @@
         },
         {
           "key": "Cache-Control",
-          "value": "public, max-age=3600, s-maxage=3600"
+          "value": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
         },
         {
           "key": "Vary",
@@ -2673,6 +2673,27 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=3600, s-maxage=3600"
+        }
+      ]
+    },
+    {
+      "source": "/:path(.*)\\.md",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/markdown; charset=utf-8"
+        },
+        {
+          "key": "Content-Disposition",
+          "value": "inline"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400"
+        },
+        {
+          "key": "Vary",
+          "value": "Accept"
         }
       ]
     },
