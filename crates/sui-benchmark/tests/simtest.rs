@@ -2090,9 +2090,9 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_observer_node_connectivity() {
         use consensus_config::{NetworkPublicKey, PeerRecord};
-        use sui_types::crypto::KeypairTraits;
         use fastcrypto::ed25519::Ed25519PublicKey;
         use fastcrypto::traits::ToFromBytes;
+        use sui_types::crypto::KeypairTraits;
 
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
@@ -2159,7 +2159,10 @@ mod test {
             }
         };
 
-        info!("Creating Observer node with {} configured peers", observer_peers.len());
+        info!(
+            "Creating Observer node with {} configured peers",
+            observer_peers.len()
+        );
 
         // Create an Observer node configuration using the new with_observer_config method
         let observer_config = test_cluster
@@ -2170,7 +2173,9 @@ mod test {
         info!("Starting Observer node with consensus enabled");
 
         // Start the Observer node
-        let observer_handle = test_cluster.start_fullnode_from_config(observer_config).await;
+        let observer_handle = test_cluster
+            .start_fullnode_from_config(observer_config)
+            .await;
         let observer_node_id = observer_handle.sui_node.with(|n| n.get_sim_node_id());
         let observer_state = observer_handle.sui_node.state();
 
@@ -2178,7 +2183,10 @@ mod test {
             "Observer node started with node_id: {:?}, node_role: {:?}, runs_consensus_handler: {}",
             observer_node_id,
             observer_state.epoch_store_for_testing().node_role(),
-            observer_state.epoch_store_for_testing().node_role().runs_consensus_handler()
+            observer_state
+                .epoch_store_for_testing()
+                .node_role()
+                .runs_consensus_handler()
         );
 
         // Let the Observer node stabilize
