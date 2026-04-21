@@ -294,11 +294,10 @@ pub(crate) async fn make_authority(
     let authority = ConsensusAuthority::start(
         NetworkType::Tonic,
         0,
-        authority_index,
         committee,
         parameters,
         protocol_config,
-        protocol_keypair,
+        Some(protocol_keypair),
         network_keypair,
         Arc::new(Clock::new_for_test(clock_drift)),
         transaction_verifier,

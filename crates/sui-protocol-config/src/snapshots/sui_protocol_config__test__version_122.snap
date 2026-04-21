@@ -165,6 +165,7 @@ feature_flags:
   merge_randomness_into_checkpoint: true
   use_coin_party_owner: true
   enable_gasless: true
+  gasless_verify_remaining_balance: true
   disallow_jump_orphans: true
   early_return_receive_object_mismatched_type: true
 max_tx_size_bytes: 131072

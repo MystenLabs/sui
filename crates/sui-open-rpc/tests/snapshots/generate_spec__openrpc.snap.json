@@ -1384,6 +1384,7 @@
                 "fresh_vm_on_framework_upgrade": false,
                 "gas_rounding_halve_digits": false,
                 "gasless_transaction_drop_safety": false,
+                "gasless_verify_remaining_balance": false,
                 "generate_df_type_layouts": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
