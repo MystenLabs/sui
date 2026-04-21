@@ -1447,7 +1447,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             // close_user_certs() is only needed here when timestamp_based_epoch_close is enabled.
             let reconfig_guard = self.epoch_store.get_reconfig_state_write_lock_guard();
             if reconfig_guard.should_accept_user_certs() {
-                self.epoch_store.close_user_certs(reconfig_guard);
+                self.epoch_store.close_user_certs_for_commit(reconfig_guard);
             }
         }
         let collected_eop_quorum =
