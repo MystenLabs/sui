@@ -57,7 +57,7 @@ This function takes the `Child` object by value and makes it a dynamic field of 
 
 1. The `Parent` object owns the `Child` object, and can refer to it by the name `b"child"`.
 
-A transaction that attempts to add a field with the same `<Name>` type and value as one that is already defined fails. You can modify fields in-place by borrowing them mutably and you can overwrite them safely by removing the old value first.
+A transaction that attempts to add a field with the same `<Name>` type and value as one that is already defined fails. You can modify fields in-place by borrowing them mutably, overwrite them safely by removing the old value first, or use the `replace` function to swap out the value directly.
 
 ## Accessing dynamic fields
 
@@ -94,6 +94,26 @@ A transaction fails if it attempts to borrow a field that does not exist.
 The `<Value>` type passed to `borrow` and `borrow_mut` must match the type of the stored field, or the transaction aborts.
 
 You must access dynamic object field values through these APIs. A transaction that attempts to use those objects as inputs (by value or by reference), is rejected for having invalid inputs.
+
+## Replacing a dynamic field value
+
+Use the `replace` function to swap out the value of an existing dynamic field and receive the old value in return:
+
+<ImportContent source="crates/sui-framework/packages/sui-framework/sources/dynamic_field.move" mode="code" fun="replace" noComments />
+
+This function requires that a field with the given `name` already exists on `object`. If no such field exists, the transaction aborts. The old value is returned, so you can inspect, delete, or transfer it as needed.
+
+:::info
+
+`sui::dynamic_object_field` has an equivalent `replace` function for object fields, with the added constraint `Value: key + store`.
+
+:::
+
+Use `replace` when you want to atomically swap a field's value without first removing it. Compared to the alternatives:
+
+- Use `borrow_mut` when you want to update fields of the existing value in-place without replacing the value itself.
+- Use `remove` followed by `add` when you need to replace a value and the field might not already exist, or when you want to change the value type.
+- Use `replace` when the field is guaranteed to exist and you want to directly substitute the stored value, receiving the old value back.
 
 ## Removing a dynamic field
 
