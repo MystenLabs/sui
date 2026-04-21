@@ -9,6 +9,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 use once_cell::sync::Lazy;
 use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
+use sui_package_resolver::SyncResolver;
 use sui_types::{storage::ObjectStore, transaction::Transaction};
 
 mod account;
@@ -130,15 +131,12 @@ pub fn assert_accounts_match(
     let state = executor.state.clone();
     let backing_package_store = state.get_backing_package_store();
     let object_store = state.get_object_store();
-    let epoch_store = state.load_epoch_store_one_call_per_task();
-    let mut layout_resolver = epoch_store
-        .executor()
-        .type_layout_resolver(Box::new(backing_package_store.as_ref()));
+    let mut layout_resolver = SyncResolver::new(backing_package_store.as_ref());
     for (idx, account) in universe.accounts().iter().enumerate() {
         for (balance_idx, acc_object) in account.current_coins.iter().enumerate() {
             let object = object_store.get_object(&acc_object.id()).unwrap();
             let total_sui_value =
-                object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
+                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
             let account_balance_i = account.current_balances[balance_idx];
             prop_assert_eq!(
                 account_balance_i,

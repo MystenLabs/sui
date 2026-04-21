@@ -22,6 +22,7 @@ use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
+use sui_package_resolver::SyncResolver;
 use sui_types::error::{SuiErrorKind, UserInputError};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
@@ -1199,7 +1200,6 @@ impl AuthorityStore {
             return Ok(());
         }
 
-        let executor = old_epoch_store.executor();
         info!("Starting SUI conservation check. This may take a while..");
         let cur_time = Instant::now();
         let mut pending_objects = vec![];
@@ -1217,8 +1217,7 @@ impl AuthorityStore {
                             let mut task_objects = vec![];
                             mem::swap(&mut pending_objects, &mut task_objects);
                             pending_tasks.push(s.spawn(move || {
-                                let mut layout_resolver =
-                                    executor.type_layout_resolver(Box::new(type_layout_store));
+                                let mut layout_resolver = SyncResolver::new(type_layout_store);
                                 let mut total_storage_rebate = 0;
                                 let mut total_sui = 0;
                                 for object in task_objects {
@@ -1226,7 +1225,7 @@ impl AuthorityStore {
                                     // get_total_sui includes storage rebate, however all storage rebate is
                                     // also stored in the storage fund, so we need to subtract it here.
                                     let object_contained_sui = match object
-                                        .get_total_sui(layout_resolver.as_mut())
+                                        .get_total_sui(&mut layout_resolver)
                                     {
                                         Ok(sui) => sui,
                                         Err(e)
@@ -1265,11 +1264,11 @@ impl AuthorityStore {
                 (init.0 + result.0, init.1 + result.1)
             })
         });
-        let mut layout_resolver = executor.type_layout_resolver(Box::new(type_layout_store));
+        let mut layout_resolver = SyncResolver::new(type_layout_store);
         for object in pending_objects {
             total_storage_rebate += object.storage_rebate;
             total_sui +=
-                object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
+                object.get_total_sui(&mut layout_resolver).unwrap() - object.storage_rebate;
         }
         info!(
             "Scanned {} live objects, took {:?}",

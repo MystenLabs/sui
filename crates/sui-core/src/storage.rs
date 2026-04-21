@@ -12,6 +12,7 @@ use crate::rpc_index::RpcIndexStore;
 use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use sui_package_resolver::SyncResolver;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
@@ -21,6 +22,7 @@ use sui_types::committee::EpochId;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::full_checkpoint_content::ObjectSet;
+use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -556,11 +558,8 @@ impl RpcStateReader for RestReadStore {
     ) -> Result<Option<move_core_types::annotated_value::MoveTypeLayout>> {
         let backing_store = self.state.get_backing_package_store();
         let overlay_store = OverlayBackingPackageStore::new(overlay, backing_store.as_ref());
-        self.state
-            .load_epoch_store_one_call_per_task()
-            .executor()
-            // TODO(cache) - must read through cache
-            .type_layout_resolver(Box::new(overlay_store))
+        // TODO(cache) - must read through cache
+        SyncResolver::new(overlay_store)
             .get_annotated_layout(struct_tag)
             .map(|layout| layout.into_layout())
             .map(Some)

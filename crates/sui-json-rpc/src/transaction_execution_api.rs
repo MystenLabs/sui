@@ -26,6 +26,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEvents, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_open_rpc::Module;
+use sui_package_resolver::SyncResolver;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::default_hash;
 use sui_types::digests::TransactionDigest;
@@ -182,19 +183,16 @@ impl TransactionExecutionApi {
         let _post_orch_timer = self.metrics.post_orchestrator_latency_ms.start_timer();
 
         let events = if opts.show_events {
-            let epoch_store = self.state.load_epoch_store_one_call_per_task();
             let backing_package_store = PostExecutionPackageResolver::new(
                 self.state.get_backing_package_store().clone(),
                 &response.output_objects,
             );
-            let mut layout_resolver = epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(backing_package_store));
+            let mut layout_resolver = SyncResolver::new(backing_package_store);
             Some(SuiTransactionBlockEvents::try_from(
                 response.events.unwrap_or_default(),
                 digest,
                 None,
-                layout_resolver.as_mut(),
+                &mut layout_resolver,
             )?)
         } else {
             None

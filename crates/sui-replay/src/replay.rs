@@ -877,7 +877,6 @@ impl LocalExec {
                 Pretty(&FullPTB {
                     ptb: pt.clone(),
                     results: transform_command_results_to_annotated(
-                        executor,
                         &self.clone(),
                         executor.dev_inspect_transaction(
                             &self,

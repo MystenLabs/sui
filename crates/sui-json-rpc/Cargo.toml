@@ -43,6 +43,7 @@ tap.workspace = true
 
 sui-core.workspace = true
 sui-display.workspace = true
+sui-package-resolver.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true

@@ -16,11 +16,10 @@ use sui_types::{
     digests::TransactionDigest,
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
-    execution::{ExecutionResult, TypeLayoutStore},
+    execution::ExecutionResult,
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    layout_resolver::LayoutResolver,
     metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
@@ -31,7 +30,6 @@ use sui_adapter_v1::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
 use sui_adapter_v1::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
 };
-use sui_adapter_v1::type_layout_resolver::TypeLayoutResolver;
 use sui_move_natives_v1::all_natives;
 use sui_types::storage::BackingStore;
 use sui_verifier_v1::meter::SuiVerifierMeter;
@@ -254,13 +252,6 @@ impl executor::Executor for Executor {
             input_objects,
             pt,
         )
-    }
-
-    fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
-        &'vm self,
-        store: Box<dyn TypeLayoutStore + 'store>,
-    ) -> Box<dyn LayoutResolver + 'r> {
-        Box::new(TypeLayoutResolver::new(&self.0, store))
     }
 }
 
