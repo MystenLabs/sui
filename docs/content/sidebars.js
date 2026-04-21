@@ -546,8 +546,22 @@ suiStackSidebar: [
           href: 'https://docs.wal.app',
         },
         'sui-stack/walrus/sui-stack-walrus',
+        'sui-stack/walrus/sui-stack-walrus-sites',
         'sui-stack/walrus/indexer-walrus',
         'sui-stack/walrus/only-fins',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'SuiNS',
+      link: { type: 'doc', id: 'sui-stack/suins/index' },
+      items: [
+        {
+          type: 'link',
+          label: 'SuiNS Docs',
+          href: 'https://docs.suins.io',
+        },
+        'sui-stack/suins/sui-stack-suins',
       ],
     },
     {

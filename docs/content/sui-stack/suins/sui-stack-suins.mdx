@@ -1,0 +1,213 @@
+---
+title: Domain Names with SuiNS
+description: Integrate Sui Name Service (SuiNS) into your app using onchain or offchain resolution, reverse lookup, subnames, and the Enoki subname API, by walking through Sui Messenger.
+keywords: [SuiNS, Sui Name Service, domain names, name resolution, subnames, reverse lookup, onchain resolution, offchain resolution, Sui Stack]
+draft: true
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+This guide uses [Sui Messenger](https://github.com/MystenLabs/messaging-sdk-example) as a concrete example throughout. Sui Messenger is a demo encrypted messaging app built on Sui that assigns every user a SuiNS subname under the `sui-stack.sui` parent domain. These subnames serve as human-readable identities in the app's channel system, replacing raw wallet addresses with names like `alice.sui-stack.sui`. The [Onchain Websites with Walrus Sites](/sui-stack/walrus/sui-stack-walrus-sites) guide uses SuiNS to attach a readable URL to a deployed Walrus Site.
+
+## Introduction to SuiNS
+
+Sui Name Service (SuiNS) is a decentralized naming service on the Sui blockchain. You use SuiNS to replace complex wallet addresses with human-readable names ending in `.sui`, and to resolve names to addresses at runtime, both onchain in Move and offchain through RPCs. For the full developer reference including the SuiNS SDK, active package constants, and transaction patterns, see the [SuiNS developer documentation](https://docs.suins.io/developer).
+
+SuiNS has 3 main use cases in app development:
+
+- **Address display:** Show `alice.sui` instead of `0xfe9c7a...` in your UI.
+- **Name-based transfers:** Send assets to a name rather than a raw address. The SuiNS registry resolves the name to the correct target address at transaction time.
+- **App-specific subnames:** Create subnames under a domain you control (for example, `alice.myapp.sui`) to use as per-user or per-resource identifiers within your app.
+
+Sui Messenger uses the third pattern. The app registers a subname for each user under `sui-stack.sui`, giving every participant a unique identity that the channel UI displays in place of their wallet address.
+
+## Resolution types
+
+SuiNS supports 2 types of resolution:
+
+- **Lookup:** A name resolves to an address. For example, `example.sui` resolves to `0x2`. Use this when you want to send assets or look up what address a name points to.
+- **Reverse lookup:** An address resolves to a name. For example, `0x2` resolves to `example.sui`. Use this when you want to display a human-readable name for a known address.
+
+Both resolution types are available onchain in Move and offchain through the Sui RPC.
+
+## Address types
+
+Lookups work with 2 types of addresses:
+
+- **Target address:** The address that a SuiNS name points to. The NFT holder sets this. For example, `example.sui` might point to `0x2`, making `0x2` the target address for `example.sui`.
+- **Default address:** The SuiNS name that the owner of a wallet address has designated to represent that address. For example, if you own `example.sui` and its target address is your wallet, you can set `example.sui` as the default name for your wallet. The owner must sign a set-default transaction to establish this connection. The default address resets any time the target address changes.
+
+:::caution
+Do not use SuiNS NFT ownership as a resolution method. A SuiNS NFT acts as a capability to change the target address, but it does not identify any specific address. Use the target address for lookup resolution and the default address for reverse lookup resolution.
+:::
+
+## Onchain resolution
+
+Use the SuiNS core package to resolve names from within a Move module. Add the dependency to your `Move.toml`:
+
+<Tabs groupId="network">
+<TabItem value="mainnet" label="Mainnet">
+
+```toml
+[dependencies]
+suins = { git = "https://github.com/mystenlabs/suins-contracts/", subdir = "packages/suins", rev = "releases/mainnet/core/v3" }
+```
+
+</TabItem>
+<TabItem value="testnet" label="Testnet">
+
+```toml
+[dependencies]
+suins = { git = "https://github.com/mystenlabs/suins-contracts/", subdir = "packages/suins", rev = "releases/testnet/core/v2" }
+```
+
+</TabItem>
+</Tabs>
+
+:::caution
+Use the core package only for onchain integration. The utility packages are subject to replacement and may break your logic if they change without a corresponding update to your code.
+:::
+
+The following Move module demonstrates how to transfer an object to a SuiNS name. It looks up the name in the SuiNS registry, checks that the name exists and has not expired, retrieves its target address, and transfers the object:
+
+```move
+module demo::demo {
+    use std::string::String;
+    use sui::clock::Clock;
+    use suins::{
+        suins::SuiNS,
+        registry::Registry,
+        domain
+    };
+
+    const ENameNotFound: u64 = 0;
+    const ENameNotPointingToAddress: u64 = 1;
+    const ENameExpired: u64 = 2;
+
+    public fun send_to_name<T: key + store>(
+        suins: &SuiNS,
+        obj: T,
+        name: String,
+        clock: &Clock
+    ) {
+        let mut optional = suins.registry<Registry>().lookup(domain::new(name));
+        assert!(optional.is_some(), ENameNotFound);
+        let name_record = optional.extract();
+        assert!(!name_record.has_expired(clock), ENameExpired);
+        assert!(name_record.target_address().is_some(), ENameNotPointingToAddress);
+        transfer::public_transfer(obj, name_record.target_address().extract())
+    }
+}
+```
+
+The `lookup` call takes a `Domain` value constructed from the name string. `has_expired` takes a [`Clock`](/sui-stack/on-chain-primitives/access-time) reference. `target_address` returns an `Option<address>` that you extract after verifying it is set.
+
+Pass the `SuiNS` [shared object](/develop/objects/object-ownership/shared) as an argument to any function that performs onchain resolution. The object IDs for Mainnet and Testnet are listed in the [SuiNS active constants](https://docs.suins.io/developer#active-constants).
+
+## Offchain resolution
+
+For offchain resolution in a TypeScript or JavaScript app, use the Sui RPC endpoints. No additional package is required beyond `@mysten/sui`. For a higher-level TypeScript client that wraps these calls, see the [SuiNS SDK](https://docs.suins.io/developer/sdk).
+
+**Lookup (name to address)** uses the `suix_resolveNameServiceAddress` JSON-RPC method:
+
+```ts
+import { SuiClient } from '@mysten/sui/client';
+
+const client = new SuiClient({ url: 'https://fullnode.mainnet.sui.io:443' });
+
+const address = await client.resolveNameServiceAddress({
+  name: 'example.sui',
+});
+// Returns: '0x2' or null if the name does not exist
+```
+
+**Reverse lookup (address to default name)** uses the `suix_resolveNameServiceNames` JSON-RPC method, or the `defaultSuinsName` field in GraphQL:
+
+```ts
+const names = await client.resolveNameServiceNames({
+  address: '0x2',
+});
+// Returns: { data: ['example.sui'], hasNextPage: false, nextCursor: null }
+```
+
+For GraphQL, use the `resolveSuinsAddress` query for lookup and the `defaultSuinsName` field on the `Address` type for reverse lookup. See the [Sui GraphQL reference](https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/resolve-suins-address) for the full schema.
+
+In Sui Messenger, the `useUserSubname` hook resolves the subname for the connected wallet by querying the Enoki subname API rather than the SuiNS registry directly. This is because subnames under `sui-stack.sui` are provisioned programmatically through Enoki rather than registered by users through the SuiNS portal:
+
+<ImportContent
+  source="frontend/src/hooks/useUserSubname.ts"
+  mode="code"
+  org="MystenLabs"
+  repo="messaging-sdk-example"
+  language="ts"
+/>
+
+The hook queries `https://api.enoki.mystenlabs.com/v1/subnames` with the wallet address and parent domain. It returns the first matching subname for that address under `sui-stack.sui`. The `staleTime` of 5 minutes avoids redundant requests while keeping data reasonably fresh.
+
+## Indexing
+
+For queries that go beyond looking up a single name or address, the `suins-indexer` enables more expressive queries over the active domain state. Common use cases include:
+
+- Retrieve all subnames under a given parent domain.
+- Retrieve all names pointing to a given wallet address.
+
+The indexer lives in the [`suins-indexer` crate](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer) in the Sui monorepo. You can run your own instance for queries tailored to your app's needs. For setup instructions, see the [custom indexer documentation](/develop/accessing-data/custom-indexer).
+
+Sui Messenger uses the Enoki subname API rather than a self-hosted indexer because its subname provisioning is tied to the Enoki authentication flow. For apps that manage their own domain and need bulk subname queries, running `suins-indexer` is the more appropriate path.
+
+## Subnames
+
+Subnames are nested names under a parent name. For example, `alice.myapp.sui` is a subname under `myapp.sui`. Creating subnames has no cost. The maximum nesting depth is 8 levels (10 levels including the second-level domain (SLD) and top-level domain (TLD)).
+
+Parent rules control whether children can be created and whether subnames can extend their expiration to match the parent.
+
+### Subname types
+
+SuiNS has 2 subname types:
+
+- **Node subnames:** Have an associated NFT (`SubDomainRegistration`). The NFT holder can update the target address, create child subnames (if the parent permits), and transfer ownership. Node subnames have their own expiration, which the parent can allow extending.
+- **Leaf subnames:** Have no associated NFT. The parent's NFT holder controls the leaf's configuration. Leaf subnames do not expire independently; their lifetime is tied to the parent. The parent holder can revoke a leaf subname at any time.
+
+The following table summarizes the key differences:
+
+| Capability | Node subnames | Leaf subnames |
+|---|---|---|
+| Has NFT | Yes | No, parent NFT acts as capability |
+| Can create children | Yes, if parent allows | No |
+| Expiration | Yes, parent-determined or extendable | No, tied to parent |
+| Target address | NFT holder can set; can be empty | Active parent holder can set; cannot be empty |
+| Reverse registry | Yes | Yes |
+| Transfer ownership | Yes, through NFT | No |
+| Revoke | No (except post-expiration) | Yes, parent holder can revoke |
+
+In Sui Messenger, each user receives a leaf subname under `sui-stack.sui`. Leaf subnames are the right choice here because the app manages them programmatically through Enoki. Users do not own or transfer their subnames. The Enoki API provisions a leaf subname for each address that authenticates with the app.
+
+The `MessagingClientProvider` in Sui Messenger composes `SuiStackMessagingClient` with `SealClient` and `WalrusStorageAdapter` into a single extended client. The subname for the connected wallet is fetched separately and displayed in the channel UI alongside messages:
+
+```tsx
+import { SealClient } from '@mysten/seal';
+import { SuiStackMessagingClient, WalrusStorageAdapter } from '@mysten/messaging';
+
+const extendedClient = new SuiClient({ url: 'https://fullnode.testnet.sui.io:443' })
+  .$extend(
+    SealClient.asClientExtension({
+      serverConfigs: SEAL_SERVERS.map((id) => ({ objectId: id, weight: 1 })),
+    }),
+  )
+  .$extend(
+    SuiStackMessagingClient.experimental_asClientExtension({
+      storage: (client) =>
+        new WalrusStorageAdapter(client, {
+          publisher: 'https://publisher.walrus-testnet.walrus.space',
+          aggregator: 'https://aggregator.testnet.walrus.mirai.cloud',
+          epochs: 10,
+        }),
+      sessionKey,
+    }),
+  );
+```
+
+The `useUserSubname` hook resolves the wallet's subname independently and the UI renders it next to messages and channel entries, replacing raw addresses throughout the app.
+
+For name registration, see [suins.io](https://suins.io/). For the full developer reference including the SuiNS SDK and transaction patterns, see [docs.suins.io](https://docs.suins.io/developer).
