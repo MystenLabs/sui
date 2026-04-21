@@ -15783,6 +15783,7 @@ name = "sui-json-rpc-types"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bcs",
  "colored",
  "enum_dispatch",
@@ -15810,6 +15811,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-types",
  "tabled",
+ "tokio",
  "tracing",
 ]
 
