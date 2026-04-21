@@ -31,10 +31,11 @@ pub async fn initialize(
     let data_store = DataStore::new(node.clone(), forked_at_checkpoint, version).await?;
     let chain_identifier = data_store.get_chain_identifier();
 
-    // 2. Fetch verified checkpoint from remote.
+    // 2. Download and persist the startup checkpoint (summary + contents),
+    //    then read the summary back through the cache-aware getter.
+    data_store.download_and_persist_startup_checkpoint()?;
     let checkpoint = data_store
-        .get_verified_checkpoint_from_rpc(Some(forked_at_checkpoint))
-        .await?
+        .get_checkpoint_by_sequence_number(forked_at_checkpoint)?
         .ok_or_else(|| anyhow!("checkpoint {} not found", forked_at_checkpoint))?;
 
     // 3. Read system state — fetches object 0x5 + dynamic fields from remote via ObjectStore.

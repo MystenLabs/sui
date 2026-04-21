@@ -155,6 +155,90 @@ fun delete_uid_with_fields() {
     id.delete();
 }
 
+#[test]
+fun remove_opt_existing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let old: Option<u64> = dynamic_field::remove_opt(&mut id, 0u64);
+    assert_eq!(old, option::some(42));
+    assert!(!exists<u64>(&id, 0));
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun remove_opt_missing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    let old: Option<u64> = dynamic_field::remove_opt(&mut id, 0u64);
+    assert_eq!(old, option::none());
+    scenario.end();
+    id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun remove_opt_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    // Value is u8 but actual value is u64, so remove_opt should abort
+    let _old: Option<u8> = dynamic_field::remove_opt(&mut id, 0u64);
+    abort
+}
+
+#[test]
+fun replace_existing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let old = dynamic_field::replace<u64, u64, u64>(&mut id, 0, 100);
+    assert_eq!(old, option::some(42));
+    assert_eq!(*borrow<u64, u64>(&id, 0), 100);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun replace_missing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    let old = dynamic_field::replace<u64, u64, u64>(&mut id, 0, 100);
+    assert_eq!(old, option::none());
+    assert_eq!(*borrow<u64, u64>(&id, 0), 100);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun replace_different_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let old = dynamic_field::replace<u64, u8, u64>(&mut id, 0, 7u8);
+    assert_eq!(old, option::some(42u64));
+    assert_eq!(*borrow<u64, u8>(&id, 0), 7);
+    scenario.end();
+    id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun replace_wrong_old_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    // ValueOld is u8 but actual value is u64, so remove_opt call in replace should abort
+    let _old = dynamic_field::replace<u64, u8, u8>(&mut id, 0, 7u8);
+    abort
+}
+
 // === Macro Tests ===
 
 #[test]
@@ -182,6 +266,17 @@ fun borrow_or_add_missing() {
     id.delete();
 }
 
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun borrow_or_add_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    // borrow aborts on type mismatch
+    dynamic_field::borrow_or_add!(&mut id, 0u64, { assert!(false); 0u8 });
+    abort
+}
+
 #[test]
 fun borrow_mut_or_add_existing() {
     let sender = @0x0;
@@ -205,6 +300,17 @@ fun borrow_mut_or_add_missing() {
     assert_eq!(*borrow(&id, 0u64), 100u64);
     scenario.end();
     id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun borrow_mut_or_add_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    // borrow_mut aborts on type mismatch
+    dynamic_field::borrow_mut_or_add!(&mut id, 0u64, { assert!(false); 0u8 });
+    abort
 }
 
 #[test]
@@ -236,6 +342,19 @@ fun get_do_missing() {
 }
 
 #[test]
+fun get_do_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let mut called = false;
+    dynamic_field::get_do!(&id, 0u64, |_v: &u8| { called = true; assert!(false) });
+    assert!(!called);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
 fun get_mut_do_existing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -254,6 +373,19 @@ fun get_mut_do_missing() {
     let mut id = scenario.new_object();
     let mut called = false;
     dynamic_field::get_mut_do!(&mut id, 0u64, |_v: &mut u64| { called = true; assert!(false) });
+    assert!(!called);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun get_mut_do_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let mut called = false;
+    dynamic_field::get_mut_do!(&mut id, 0u64, |_v: &mut u8| { called = true; assert!(false) });
     assert!(!called);
     scenario.end();
     id.delete();
@@ -283,6 +415,18 @@ fun get_fold_missing() {
 }
 
 #[test]
+fun get_fold_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let result: u8 = dynamic_field::get_fold!(&id, 0u64, 0u8, |_: &u8| abort 0);
+    assert_eq!(result, 0);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
 fun get_mut_fold_existing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
@@ -304,6 +448,18 @@ fun get_mut_fold_missing() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     let result: u64 = dynamic_field::get_mut_fold!(&mut id, 0u64, 0u64, |_: &mut u64| abort 0);
+    assert_eq!(result, 0);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun get_mut_fold_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, 42u64);
+    let result: u8 = dynamic_field::get_mut_fold!(&mut id, 0u64, 0u8, |_: &mut u8| abort 0);
     assert_eq!(result, 0);
     scenario.end();
     id.delete();
