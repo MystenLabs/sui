@@ -766,7 +766,7 @@ impl TonicManager {
             listen_addr
         } else if context.is_observer() {
             // Observer node - use the configured observer server port since we're not in the committee.
-            let port = context.parameters.tonic.observer_server_port.unwrap_or(0);
+            let port = context.parameters.observer.server_port.unwrap_or(0);
             &Multiaddr::try_from(format!("/ip4/0.0.0.0/tcp/{port}")).unwrap()
         } else {
             let authority = context.committee.authority(context.own_index);
@@ -969,14 +969,15 @@ impl TonicManager {
     }
 
     async fn start_observer_server_impl<O: ObserverNetworkService>(&mut self, service: Arc<O>) {
-        let config = &self.context.parameters.tonic;
-        let Some(observer_port) = config.observer_server_port else {
+        let observer_params = &self.context.parameters.observer;
+        let tonic_config = &self.context.parameters.tonic;
+        let Some(observer_port) = observer_params.server_port else {
             info!("Observer server not configured, skipping observer server start");
             return;
         };
 
         // Parse observer allowlist from configuration and create TLS verifier
-        let observer_allowlist = parse_observer_allowlist(&config.observer_allowlist);
+        let observer_allowlist = parse_observer_allowlist(&observer_params.allowlist);
         let observer_tls_config = if observer_allowlist.is_empty() {
             info!("Observer server allowlist disabled - all observers allowed");
             sui_tls::create_rustls_server_config_with_client_verifier(
@@ -1007,8 +1008,8 @@ impl TonicManager {
         let observer_service_proxy = ObserverServiceProxy::new(service);
 
         let observer_service_server = ObserverServiceServer::new(observer_service_proxy)
-            .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit)
+            .max_encoding_message_size(tonic_config.message_size_limit)
+            .max_decoding_message_size(tonic_config.message_size_limit)
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
 
@@ -1048,8 +1049,8 @@ impl TonicManager {
         let http_config = sui_http::Config::default()
             .initial_connection_window_size(HTTP2_INITIAL_CONNECTION_WINDOW_SIZE)
             .initial_stream_window_size(HTTP2_INITIAL_STREAM_WINDOW_SIZE)
-            .http2_keepalive_interval(Some(config.keepalive_interval))
-            .http2_keepalive_timeout(Some(config.keepalive_interval))
+            .http2_keepalive_interval(Some(tonic_config.keepalive_interval))
+            .http2_keepalive_timeout(Some(tonic_config.keepalive_interval))
             .accept_http1(false);
 
         let deadline = Instant::now() + Duration::from_secs(20);

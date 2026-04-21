@@ -429,7 +429,7 @@ where
             );
 
             // Start the observer server if the observer server is enabled in the parameters.
-            if context.parameters.tonic.is_observer_server_enabled() {
+            if context.parameters.observer.is_server_enabled() {
                 let observer_service = Arc::new(ObserverService::new(
                     context.clone(),
                     dag_state.clone(),
@@ -460,7 +460,7 @@ where
             // Subscribe to peers specified in the configuration
             // For now get the first peer from the list to connect to.
             // TODO: support multiple peers - as in choose/detect which one to connect to.
-            for peer_record in context.parameters.tonic.observer_peers.iter().take(1) {
+            for peer_record in context.parameters.observer.peers.iter().take(1) {
                 let peer_id = if let Some((index, _)) = context
                     .committee
                     .authorities()
@@ -583,7 +583,7 @@ mod tests {
     };
 
     use consensus_config::{
-        AuthorityIndex, Parameters, PeerRecord, TonicParameters, local_committee_and_keys,
+        AuthorityIndex, ObserverParameters, Parameters, PeerRecord, local_committee_and_keys,
     };
     use mysten_metrics::RegistryService;
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -762,9 +762,9 @@ mod tests {
 
         let observer_parameters = Parameters {
             db_path: observer_temp_dir.path().to_path_buf(),
-            tonic: TonicParameters {
+            observer: ObserverParameters {
                 // Configure Observer to connect to authority 0
-                observer_peers: vec![PeerRecord {
+                peers: vec![PeerRecord {
                     public_key: authority_0_network_key
                         .clone()
                         .expect("Authority 0 network key should be set"),
@@ -1198,7 +1198,7 @@ mod tests {
 
         // Enable observer server if port is provided
         if let Some(port) = observer_server_port {
-            parameters.tonic.observer_server_port = Some(port);
+            parameters.observer.server_port = Some(port);
         }
 
         let txn_verifier = NoopTransactionVerifier {};
