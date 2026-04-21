@@ -14835,6 +14835,7 @@ dependencies = [
  "bcs",
  "bin-version",
  "chrono",
+ "clap",
  "cynic",
  "cynic-codegen",
  "fastcrypto",

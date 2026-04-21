@@ -83,8 +83,13 @@ impl FilesystemStore {
     pub(crate) fn new(
         node: &Node,
         forked_at_checkpoint: CheckpointSequenceNumber,
+        data_dir: Option<PathBuf>,
     ) -> Result<Self, Error> {
-        let root = Self::base_path()?
+        let base = match data_dir {
+            Some(dir) => dir,
+            None => Self::base_path()?,
+        };
+        let root = base
             .join(node.network_name())
             .join(format!("forked_at_{}", forked_at_checkpoint));
         Ok(Self { root })

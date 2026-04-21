@@ -51,7 +51,7 @@ impl Node {
     }
 
     /// Returns a human-readable network name.
-    pub(crate) fn network_name(&self) -> String {
+    pub fn network_name(&self) -> String {
         match self {
             Node::Mainnet => "mainnet".to_string(),
             Node::Testnet => "testnet".to_string(),

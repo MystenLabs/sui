@@ -28,6 +28,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 bin-version.workspace = true
+clap.workspace = true
 simulacrum.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc-api.workspace = true

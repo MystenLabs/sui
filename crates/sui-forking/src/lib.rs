@@ -16,6 +16,8 @@ pub mod store;
 
 pub use gql::GraphQLClient;
 pub use node::Node;
+pub use proto::forking::forking_service_client::ForkingServiceClient;
+pub use proto::forking::{AdvanceCheckpointRequest, AdvanceClockRequest, GetStatusRequest};
 pub use store::DataStore;
 
 use anyhow::{Error, Result};

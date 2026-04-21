@@ -82,9 +82,10 @@ impl DataStore {
         node: Node,
         forked_at_checkpoint: CheckpointSequenceNumber,
         version: &str,
+        data_dir: Option<std::path::PathBuf>,
     ) -> Result<Self, anyhow::Error> {
         let gql = GraphQLClient::new(node.clone(), version)?;
-        let local = FilesystemStore::new(&node, forked_at_checkpoint)?;
+        let local = FilesystemStore::new(&node, forked_at_checkpoint, data_dir)?;
 
         Ok(Self {
             forked_at_checkpoint,

@@ -32,9 +32,10 @@ pub async fn initialize(
     node: Node,
     forked_at_checkpoint: CheckpointSequenceNumber,
     version: &str,
+    data_dir: Option<std::path::PathBuf>,
 ) -> Result<Context> {
     // 1. Create DataStore — empty local cache, GraphQL wired up.
-    let data_store = DataStore::new(node.clone(), forked_at_checkpoint, version).await?;
+    let data_store = DataStore::new(node.clone(), forked_at_checkpoint, version, data_dir).await?;
     let chain_identifier = data_store.chain();
 
     // 2. Download and persist the startup checkpoint (summary + contents),
