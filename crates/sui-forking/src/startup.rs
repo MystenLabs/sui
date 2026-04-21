@@ -93,7 +93,7 @@ pub async fn run(context: Context, rpc_addr: SocketAddr, version: &'static str) 
     };
     let mut service = RpcService::new(reader);
     service.with_server_version(ServerVersion::new("sui-forking", version));
-    service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));
+    service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.into())));
 
     info!("starting sui-rpc-api server on {rpc_addr}");
     let server_handle = tokio::spawn(async move { service.start_service(rpc_addr).await });

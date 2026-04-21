@@ -86,7 +86,8 @@ impl TransactionExecutor for ForkedTransactionExecutor {
         // execution it holds the pre-execution input versions (from the
         // fork snapshot / filesystem cache) and the newly written output
         // versions.
-        let object_store = self.context.data_store();
+        let sim = self.context.simulacrum().read().await;
+        let object_store = sim.store();
         let input_objects = if request.include_input_objects {
             Some(
                 get_transaction_input_objects(object_store, &effects).map_err(|e| {

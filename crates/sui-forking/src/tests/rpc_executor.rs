@@ -79,7 +79,7 @@ async fn test_tx_execution() {
         .cloned()
         .expect("sender should have a gas coin in genesis");
 
-    let context = Arc::new(Context::new(sim, data_store, Chain::Unknown));
+    let context = Arc::new(Context::new(sim, Chain::Unknown));
     let executor = ForkedTransactionExecutor::new(context);
 
     // Build a transfer-SUI transaction signed by the genesis sender key;
