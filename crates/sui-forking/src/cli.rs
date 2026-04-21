@@ -190,7 +190,7 @@ async fn cmd_advance_clock(
     duration_ms: Option<u64>,
     json_output: bool,
 ) -> Result<()> {
-    let mut client = ForkingServiceClient::connect(rpc_url(rpc_addr)).await?;
+    let mut client = ForkingServiceClient::connect(format!("http://{rpc_addr}")).await?;
     let resp = client
         .advance_clock(AdvanceClockRequest { duration_ms })
         .await?
@@ -206,7 +206,7 @@ async fn cmd_advance_clock(
 }
 
 async fn cmd_advance_checkpoint(rpc_addr: SocketAddr, json_output: bool) -> Result<()> {
-    let mut client = ForkingServiceClient::connect(rpc_url(rpc_addr)).await?;
+    let mut client = ForkingServiceClient::connect(format!("http://{rpc_addr}")).await?;
     let resp = client
         .advance_checkpoint(AdvanceCheckpointRequest {})
         .await?
@@ -222,7 +222,7 @@ async fn cmd_advance_checkpoint(rpc_addr: SocketAddr, json_output: bool) -> Resu
 }
 
 async fn cmd_status(rpc_addr: SocketAddr, json_output: bool) -> Result<()> {
-    let mut client = ForkingServiceClient::connect(rpc_url(rpc_addr)).await?;
+    let mut client = ForkingServiceClient::connect(format!("http://{rpc_addr}")).await?;
     let resp = client.get_status(GetStatusRequest {}).await?.into_inner();
 
     let output = StatusOutput {
@@ -234,10 +234,6 @@ async fn cmd_status(rpc_addr: SocketAddr, json_output: bool) -> Result<()> {
     };
     print_output(&output, json_output);
     Ok(())
-}
-
-fn rpc_url(addr: SocketAddr) -> String {
-    format!("http://{addr}")
 }
 
 fn format_timestamp(ms: u64) -> String {
