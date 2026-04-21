@@ -104,22 +104,6 @@ impl GraphQLClient {
             .context("Failed to read response in GQL query")
     }
 
-    /// Get a checkpoint (summary and contents) by sequence number from GraphQL RPC. If
-    /// `sequence_number` is `None`, gets the latest checkpoint.
-    async fn get_checkpoint_impl(
-        &self,
-        sequence_number: Option<CheckpointSequenceNumber>,
-    ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error> {
-        queries::checkpoint_query::query(sequence_number, self).await
-    }
-
-    /// Get the latest checkpoint sequence number from GraphQL RPC.
-    pub async fn get_latest_checkpoint_sequence_number(
-        &self,
-    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
-        queries::latest_checkpoint_query::query(self).await
-    }
-
     pub(crate) fn chain(&self) -> Chain {
         match self.node {
             Node::Mainnet => Chain::Mainnet,
@@ -140,6 +124,22 @@ impl TransactionRead for GraphQLClient {
 }
 
 impl GraphQLClient {
+    /// Get the latest checkpoint sequence number from GraphQL RPC.
+    pub async fn get_latest_checkpoint_sequence_number(
+        &self,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        queries::latest_checkpoint_query::query(self).await
+    }
+
+    /// Get a checkpoint (summary and contents) by sequence number from GraphQL RPC. If
+    /// `sequence_number` is `None`, gets the latest checkpoint.
+    async fn get_checkpoint_impl(
+        &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
+    ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error> {
+        queries::checkpoint_query::query(sequence_number, self).await
+    }
+
     /// Fetch all events for a transaction, paginating through the GraphQL
     /// events connection. Returns `None` if the transaction doesn't exist.
     pub(crate) fn get_transaction_events(

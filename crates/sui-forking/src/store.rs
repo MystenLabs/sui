@@ -214,7 +214,7 @@ impl DataStore {
         &self,
         sequence: CheckpointSequenceNumber,
     ) -> anyhow::Result<Option<(VerifiedCheckpoint, CheckpointContents)>> {
-        let Some((checkpoint, contents)) = self.gql.get_verified_checkpoint(Some(sequence))? else {
+        let Some((checkpoint, contents)) = self.gql.get_checkpoint(Some(sequence))? else {
             return Ok(None);
         };
         // Write contents first: they're content-addressed (idempotent), so
