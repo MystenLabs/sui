@@ -1440,7 +1440,7 @@ fn default_admission_queue_bypass_fraction() -> f64 {
 }
 
 fn default_admission_queue_enabled() -> bool {
-    true
+    false
 }
 
 fn default_admission_queue_failover_timeout() -> Duration {

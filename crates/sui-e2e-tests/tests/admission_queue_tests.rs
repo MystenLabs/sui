@@ -37,6 +37,7 @@ async fn make_transfer_tx_with_gas_price(
 #[sim_test]
 async fn test_admission_queue_basic() {
     let config = AuthorityOverloadConfig {
+        admission_queue_enabled: true,
         admission_queue_bypass_fraction: 0.0,
         admission_queue_capacity_fraction: 0.001,
         ..Default::default()
@@ -64,6 +65,7 @@ async fn test_admission_queue_basic() {
 #[sim_test]
 async fn test_admission_queue_eviction_and_rejection() {
     let overload_config = AuthorityOverloadConfig {
+        admission_queue_enabled: true,
         admission_queue_bypass_fraction: 0.0,
         // capacity = 20_000 * 0.0001 = 2
         admission_queue_capacity_fraction: 0.0001,
@@ -181,6 +183,7 @@ async fn test_admission_queue_eviction_and_rejection() {
 #[sim_test]
 async fn test_admission_queue_epoch_boundary_cleanup() {
     let config = AuthorityOverloadConfig {
+        admission_queue_enabled: true,
         admission_queue_bypass_fraction: 0.0,
         admission_queue_capacity_fraction: 0.001,
         ..Default::default()
@@ -228,6 +231,7 @@ async fn test_admission_queue_epoch_boundary_cleanup() {
 #[sim_test]
 async fn test_admission_queue_reconfig_with_pending_entries() {
     let overload_config = AuthorityOverloadConfig {
+        admission_queue_enabled: true,
         admission_queue_bypass_fraction: 0.0,
         admission_queue_capacity_fraction: 0.0001,
         ..Default::default()
