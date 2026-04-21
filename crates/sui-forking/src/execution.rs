@@ -3,6 +3,8 @@
 
 //! Transaction execution logic for the forked network.
 
+use tracing::info;
+
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
@@ -10,7 +12,6 @@ use sui_types::error::ExecutionError;
 use sui_types::transaction::InputObjectKind;
 use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
-use tracing::info;
 
 use crate::context::Context;
 

@@ -14,7 +14,7 @@
 
 use anyhow::{Context, Error, anyhow};
 use cynic::QueryBuilder;
-use fastcrypto::encoding::{Base64 as CryptoBase64, Encoding};
+use fastcrypto::encoding::{Base64 as FastCryptoBase64, Encoding};
 use itertools::Itertools;
 
 use crate::gql::client::GraphQLClient;
@@ -29,7 +29,13 @@ mod schema {
 
 pub(crate) mod txn_query {
     use super::*;
-    use sui_types::transaction::TransactionData;
+    use fastcrypto::traits::ToFromBytes;
+    use sui_types::signature::GenericSignature;
+    use sui_types::transaction::{
+        Transaction as SuiTransaction, TransactionData, VerifiedTransaction,
+    };
+
+    use crate::TransactionInfo;
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "Base64")]
@@ -50,7 +56,13 @@ pub(crate) mod txn_query {
     #[derive(cynic::QueryFragment)]
     pub(crate) struct Transaction {
         transaction_bcs: Option<Base64>,
+        signatures: Vec<UserSignature>,
         effects: Option<TransactionEffects>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct UserSignature {
+        signature_bytes: Option<Base64>,
     }
 
     #[derive(cynic::QueryFragment)]
@@ -67,7 +79,7 @@ pub(crate) mod txn_query {
     pub(crate) async fn query(
         digest: String,
         client: &GraphQLClient,
-    ) -> Result<Option<(TransactionData, sui_types::effects::TransactionEffects, u64)>, Error> {
+    ) -> Result<Option<TransactionInfo>, Error> {
         let query = Query::build(TransactionDataArgs {
             digest: digest.clone(),
         });
@@ -81,7 +93,7 @@ pub(crate) mod txn_query {
         };
 
         let txn_data: TransactionData = bcs::from_bytes(
-            &CryptoBase64::decode(
+            &FastCryptoBase64::decode(
                 &transaction
                     .transaction_bcs
                     .ok_or_else(|| {
@@ -102,11 +114,28 @@ pub(crate) mod txn_query {
             digest
         ))?;
 
+        let signatures: Vec<GenericSignature> = transaction
+            .signatures
+            .into_iter()
+            .map(|sig| {
+                let encoded = sig
+                    .signature_bytes
+                    .ok_or_else(|| anyhow!("Missing signatureBytes for transaction {}", digest))?;
+                let bytes = FastCryptoBase64::decode(&encoded.0).context(format!(
+                    "User signature does not decode for digest: {}",
+                    digest
+                ))?;
+                GenericSignature::from_bytes(&bytes).map_err(|e| {
+                    anyhow!("User signature parse failed for digest {}: {}", digest, e)
+                })
+            })
+            .collect::<Result<_, _>>()?;
+
         let effect_frag = transaction
             .effects
             .ok_or_else(|| anyhow!("Missing effects in transaction data response"))?;
         let effects: sui_types::effects::TransactionEffects = bcs::from_bytes(
-            &CryptoBase64::decode(
+            &FastCryptoBase64::decode(
                 &effect_frag
                     .effects_bcs
                     .ok_or_else(|| anyhow!("Missing effects bcs in transaction data response"))?
@@ -124,10 +153,18 @@ pub(crate) mod txn_query {
 
         let checkpoint = effect_frag
             .checkpoint
-            .ok_or_else(|| anyhow!("Missing checkpoint in transaction query response"))?
+            .ok_or_else(|| anyhow!("Missing checkpoint in transaction data response"))?
             .sequence_number;
 
-        Ok(Some((txn_data, effects, checkpoint)))
+        let transaction = VerifiedTransaction::new_unchecked(
+            SuiTransaction::from_generic_sig_data(txn_data, signatures),
+        );
+
+        Ok(Some(TransactionInfo {
+            transaction,
+            effects,
+            checkpoint,
+        }))
     }
 }
 
@@ -318,7 +355,7 @@ pub(crate) mod object_query {
                     .object_bcs
                     .ok_or_else(|| anyhow!("Object bcs is None for object"))?
                     .0;
-                let bytes = CryptoBase64::decode(&b64)?;
+                let bytes = FastCryptoBase64::decode(&b64)?;
                 let obj: Object = bcs::from_bytes(&bytes)?;
                 let version = frag
                     .version
@@ -446,7 +483,9 @@ pub(crate) mod checkpoint_query {
     use roaring::RoaringBitmap;
     use sui_types::{
         crypto::{AggregateAuthoritySignature, AuthorityStrongQuorumSignInfo},
-        messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSummary, VerifiedCheckpoint},
+        messages_checkpoint::{
+            CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary, VerifiedCheckpoint,
+        },
     };
 
     use super::*;
@@ -470,6 +509,7 @@ pub(crate) mod checkpoint_query {
     #[derive(cynic::QueryFragment)]
     pub(crate) struct Checkpoint {
         summary_bcs: Option<Base64>,
+        content_bcs: Option<Base64>,
         validator_signatures: Option<ValidatorAggregatedSignature>,
     }
 
@@ -479,10 +519,12 @@ pub(crate) mod checkpoint_query {
         signers_map: Vec<i32>,
     }
 
+    /// Fetch a checkpoint by sequence number (or the latest if `None`), returning
+    /// both the verified summary envelope and the decoded checkpoint contents.
     pub(crate) async fn query(
         sequence_number: Option<u64>,
         data_store: &GraphQLClient,
-    ) -> Result<Option<VerifiedCheckpoint>, Error> {
+    ) -> Result<Option<(VerifiedCheckpoint, CheckpointContents)>, Error> {
         let query = Query::build(CheckpointArgs { sequence_number });
         let response = data_store.run_query(&query).await?;
         let Some(checkpoint) = response.data.and_then(|data| data.checkpoint) else {
@@ -491,7 +533,11 @@ pub(crate) mod checkpoint_query {
         Ok(Some(decode_checkpoint(checkpoint)?))
     }
 
-    fn decode_checkpoint(checkpoint: Checkpoint) -> Result<VerifiedCheckpoint, Error> {
+    fn decode_checkpoint(
+        checkpoint: Checkpoint,
+    ) -> Result<(VerifiedCheckpoint, CheckpointContents), Error> {
+        let contents: CheckpointContents =
+            decode_bcs(checkpoint.content_bcs, "checkpoint contents")?;
         let summary: CheckpointSummary = decode_bcs(checkpoint.summary_bcs, "checkpoint summary")?;
         let Some(validator_signatures) = checkpoint.validator_signatures else {
             return Err(anyhow!(
@@ -499,7 +545,7 @@ pub(crate) mod checkpoint_query {
             ));
         };
 
-        let signature_bytes = CryptoBase64::decode(
+        let signature_bytes = FastCryptoBase64::decode(
             &validator_signatures
                 .signature
                 .ok_or_else(|| anyhow!("Missing aggregated checkpoint signature"))?
@@ -525,16 +571,24 @@ pub(crate) mod checkpoint_query {
                 signers_map,
             },
         );
+        if summary.content_digest != *contents.digest() {
+            return Err(anyhow!(
+                "checkpoint summary content digest does not match decoded contents: \
+                 summary={:?} contents={:?}",
+                summary.content_digest,
+                contents.digest(),
+            ));
+        }
         // TODO: should we fetch the committee and pass that into try_into_verified instead of
         // constructing this with new_unchecked?
-        Ok(VerifiedCheckpoint::new_unchecked(certified))
+        Ok((VerifiedCheckpoint::new_unchecked(certified), contents))
     }
 
     fn decode_bcs<T>(field: Option<Base64>, label: &str) -> Result<T, Error>
     where
         T: serde::de::DeserializeOwned,
     {
-        let bytes = CryptoBase64::decode(
+        let bytes = FastCryptoBase64::decode(
             &field
                 .ok_or_else(|| anyhow!("Missing {} in checkpoint response", label))?
                 .0,
@@ -552,18 +606,24 @@ pub(crate) mod checkpoint_query {
 
         use super::{Base64, Checkpoint, ValidatorAggregatedSignature, decode_checkpoint};
 
+        fn encode_bcs<T: serde::Serialize>(value: &T) -> Base64 {
+            Base64(
+                FastCryptoBase64::from_bytes(
+                    &bcs::to_bytes(value).expect("value should serialize"),
+                )
+                .encoded(),
+            )
+        }
+
         #[test]
         fn decode_checkpoint_reconstructs_verified_checkpoint() {
             let checkpoint = TestCheckpointBuilder::new(7).build_checkpoint();
             let certified = checkpoint.summary;
+            let contents = checkpoint.contents;
 
-            let decoded = decode_checkpoint(Checkpoint {
-                summary_bcs: Some(Base64(
-                    FastCryptoBase64::from_bytes(
-                        &bcs::to_bytes(certified.data()).expect("summary should serialize"),
-                    )
-                    .encoded(),
-                )),
+            let (decoded, decoded_contents) = decode_checkpoint(Checkpoint {
+                summary_bcs: Some(encode_bcs(certified.data())),
+                content_bcs: Some(encode_bcs(&contents)),
                 validator_signatures: Some(ValidatorAggregatedSignature {
                     signature: Some(Base64(
                         FastCryptoBase64::from_bytes(certified.auth_sig().signature.as_ref())
@@ -589,6 +649,7 @@ pub(crate) mod checkpoint_query {
                 decoded.auth_sig().signers_map,
                 certified.auth_sig().signers_map
             );
+            assert_eq!(decoded_contents.digest(), contents.digest());
         }
 
         #[test]
@@ -596,13 +657,8 @@ pub(crate) mod checkpoint_query {
             let checkpoint = TestCheckpointBuilder::new(7).build_checkpoint();
 
             let error = decode_checkpoint(Checkpoint {
-                summary_bcs: Some(Base64(
-                    FastCryptoBase64::from_bytes(
-                        &bcs::to_bytes(checkpoint.summary.data())
-                            .expect("summary should serialize"),
-                    )
-                    .encoded(),
-                )),
+                summary_bcs: Some(encode_bcs(checkpoint.summary.data())),
+                content_bcs: Some(encode_bcs(&checkpoint.contents)),
                 validator_signatures: None,
             })
             .expect_err("missing validator signatures should fail");
@@ -619,13 +675,8 @@ pub(crate) mod checkpoint_query {
             let checkpoint = TestCheckpointBuilder::new(7).build_checkpoint();
 
             let error = decode_checkpoint(Checkpoint {
-                summary_bcs: Some(Base64(
-                    FastCryptoBase64::from_bytes(
-                        &bcs::to_bytes(checkpoint.summary.data())
-                            .expect("summary should serialize"),
-                    )
-                    .encoded(),
-                )),
+                summary_bcs: Some(encode_bcs(checkpoint.summary.data())),
+                content_bcs: Some(encode_bcs(&checkpoint.contents)),
                 validator_signatures: Some(ValidatorAggregatedSignature {
                     signature: Some(Base64(
                         FastCryptoBase64::from_bytes(

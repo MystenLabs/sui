@@ -5,7 +5,7 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "update-cli-docs": "node src/shared/js/update-cli-output.js",
-    "prebuild": "node scripts/generate-import-context.js; node scripts/convert-awesome-sui.mjs; node scripts/convert-awesome-sui-gaming.mjs; node src/shared/js/convert-release-notes.cjs",
+    "prebuild": "node scripts/generate-import-context.js; node scripts/generate-resolved-pages.js; node scripts/convert-awesome-sui.mjs; node scripts/convert-awesome-sui-gaming.mjs; node src/shared/js/convert-release-notes.cjs",
     "prestart": "node scripts/convert-awesome-sui.mjs;  node scripts/convert-awesome-sui-gaming.mjs; node src/shared/js/convert-release-notes.cjs",
     "start": "rm -r ../content/references/framework; node scripts/grpc-download.js; docusaurus graphql-to-doc:beta && node scripts/remove-no-desc.mjs ../content/references/sui-api/sui-graphql/beta/reference; node scripts/getopenrpcspecs.js; node scripts/massagegraphql.js; docusaurus start",
     "build": "bash scripts/build-and-check.sh",

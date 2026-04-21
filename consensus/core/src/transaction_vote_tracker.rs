@@ -320,7 +320,7 @@ struct VoteInfo {
 mod test {
     use std::sync::Arc;
 
-    use consensus_config::Parameters;
+    use consensus_config::{AuthorityIndex, Parameters};
 
     use crate::{
         TestBlock, Transaction, VerifiedBlock, block::BlockTransactionVotes, context::Context,
@@ -338,7 +338,7 @@ mod test {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let context = Arc::new(Context::new(
             0,
-            consensus_config::AuthorityIndex::new_for_test(0),
+            Some(AuthorityIndex::new_for_test(0)),
             committee,
             Parameters {
                 db_path: temp_dir.path().to_path_buf(),

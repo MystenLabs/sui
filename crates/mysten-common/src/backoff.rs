@@ -33,6 +33,7 @@ use rand::Rng as _;
 /// ```
 #[derive(Debug, Clone)]
 pub struct ExponentialBackoff {
+    initial_delay: Duration,
     next: Duration,
     factor: f64,
     max_delay: Duration,
@@ -43,11 +44,17 @@ impl ExponentialBackoff {
     /// Constructs a new exponential backoff generator, specifying the maximum delay.
     pub fn new(initial_delay: Duration, max_delay: Duration) -> ExponentialBackoff {
         ExponentialBackoff {
+            initial_delay,
             next: initial_delay,
             factor: 1.2,
             max_delay,
             max_jitter: initial_delay,
         }
+    }
+
+    /// Resets the backoff to the initial delay.
+    pub fn reset(&mut self) {
+        self.next = self.initial_delay;
     }
 
     /// Sets the approximate ratio of consecutive backoff delays, before jitters are applied.
@@ -129,4 +136,20 @@ fn test_exponential_backoff_max_delay() {
     for _ in 0..10 {
         assert_eq!(backoff.next(), Some(Duration::from_secs(1)));
     }
+}
+
+#[test]
+fn test_exponential_backoff_reset() {
+    let mut backoff = ExponentialBackoff::new(Duration::from_millis(100), Duration::from_secs(10))
+        .factor(2.0)
+        .max_jitter(Duration::ZERO);
+
+    assert_eq!(backoff.next(), Some(Duration::from_millis(100)));
+    assert_eq!(backoff.next(), Some(Duration::from_millis(200)));
+    assert_eq!(backoff.next(), Some(Duration::from_millis(400)));
+
+    backoff.reset();
+
+    assert_eq!(backoff.next(), Some(Duration::from_millis(100)));
+    assert_eq!(backoff.next(), Some(Duration::from_millis(200)));
 }
