@@ -27,6 +27,8 @@ use crate::{
     },
 };
 
+// Is used to calculate the threshold for blocking blocks when the commit index is lagging too far from the quorum commit index.
+// This is a multiplier of the commit_sync_batch_size.
 pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
 
 /// Serves observer requests from observer or validator peers. It is the server-side
