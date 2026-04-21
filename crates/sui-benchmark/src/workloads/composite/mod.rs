@@ -603,6 +603,7 @@ impl CompositePayload {
                             ResourceRequest::AddressBalance
                                 | ResourceRequest::ObjectBalance
                                 | ResourceRequest::AccumulatorRoot
+                                | ResourceRequest::CoinReservation
                         )
                     })
                 });
