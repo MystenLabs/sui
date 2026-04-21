@@ -3100,21 +3100,31 @@ impl AuthorityPerEpochStore {
         self.reconfig_state_mem.write()
     }
 
-    pub fn close_user_certs(&self, mut lock_guard: RwLockWriteGuard<'_, ReconfigState>) {
-        lock_guard.close_user_certs();
-        self.store_reconfig_state(&lock_guard)
-            .expect("Updating reconfig state cannot fail");
-
-        // Set epoch_close_time for metric purpose.
+    fn record_epoch_close_time(&self) {
         let mut epoch_close_time = self.epoch_close_time.write();
         if epoch_close_time.is_none() {
-            // Only update it the first time epoch is closed.
             *epoch_close_time = Some(Instant::now());
-
             self.user_certs_closed_notify
                 .notify()
                 .expect("user_certs_closed_notify called twice on same epoch store");
         }
+    }
+
+    /// Transition to RejectUserCerts with immediate disk persistence.
+    /// Used by consensus_adapter::close_epoch() where there is no commit batch.
+    pub fn close_user_certs(&self, mut lock_guard: RwLockWriteGuard<'_, ReconfigState>) {
+        lock_guard.close_user_certs();
+        self.store_reconfig_state(&lock_guard)
+            .expect("Updating reconfig state cannot fail");
+        self.record_epoch_close_time();
+    }
+
+    /// Transition to RejectUserCerts WITHOUT persisting to disk.
+    /// Used by the consensus handler where persistence happens through the commit batch
+    /// (via advance_eop_state_machine -> state.output.store_reconfig_state).
+    pub fn close_user_certs_for_commit(&self, mut lock_guard: RwLockWriteGuard<'_, ReconfigState>) {
+        lock_guard.close_user_certs();
+        self.record_epoch_close_time();
     }
 
     pub async fn user_certs_closed_notify(&self) {
