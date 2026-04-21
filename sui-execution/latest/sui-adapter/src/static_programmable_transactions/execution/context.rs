@@ -956,7 +956,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
 
     pub fn vm_move_call(
         &mut self,
-        function: T::LoadedFunction,
+        function: Rc<T::LoadedFunction>,
         args: Vec<CtxValue>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, ExecutionError> {
@@ -983,7 +983,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             )?;
             self.take_user_events(
                 vm,
-                function.version_mid,
+                function.version_mid.clone(),
                 function.definition_index,
                 function.instruction_length,
                 &function.linkage,

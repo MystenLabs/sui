@@ -164,7 +164,7 @@ pub struct LoadedFunction {
 
 #[derive(Debug)]
 pub struct MoveCall {
-    pub function: LoadedFunction,
+    pub function: Rc<LoadedFunction>,
     pub arguments: Vec<Argument>,
 }
 
