@@ -150,10 +150,11 @@ pub struct OffchainCluster {
 pub struct OffchainClusterConfig {
     pub indexer_args: IndexerArgs,
     pub consistent_indexer_args: IndexerArgs,
-    pub fullnode_args: Option<FullnodeArgs>,
+    pub fullnode_args: FullnodeArgs,
     pub indexer_config: IndexerConfig,
     pub consistent_config: ConsistentConfig,
     pub jsonrpc_config: JsonRpcConfig,
+    pub jsonrpc_node_args: JsonRpcNodeArgs,
     pub graphql_config: GraphQlConfig,
     pub bootstrap_genesis: Option<BootstrapGenesis>,
 }
@@ -336,6 +337,7 @@ impl OffchainCluster {
             indexer_config,
             consistent_config,
             jsonrpc_config,
+            jsonrpc_node_args,
             graphql_config,
             bootstrap_genesis,
         }: OffchainClusterConfig,
@@ -431,7 +433,7 @@ impl OffchainCluster {
             kv_args.clone(),
             consistent_reader_args.clone(),
             jsonrpc_args,
-            JsonRpcNodeArgs::default(),
+            jsonrpc_node_args,
             SystemPackageTaskArgs::default(),
             jsonrpc_config,
             registry,
@@ -715,11 +717,12 @@ impl OffchainCluster {
             let mut interval = interval(Duration::from_millis(200));
             loop {
                 interval.tick().await;
-                if client
-                    .get_watermark()
-                    .await
-                    .is_ok_and(|wm| wm.is_some_and(|wm| wm.checkpoint_hi_inclusive >= checkpoint))
-                {
+                if client.get_watermark().await.is_ok_and(|wm| {
+                    wm.is_some_and(|wm| {
+                        wm.checkpoint_hi_inclusive
+                            .is_some_and(|cp| cp >= checkpoint)
+                    })
+                }) {
                     break;
                 }
             }
@@ -733,10 +736,11 @@ impl Default for OffchainClusterConfig {
         Self {
             indexer_args: Default::default(),
             consistent_indexer_args: Default::default(),
-            fullnode_args: None,
+            fullnode_args: FullnodeArgs::default(),
             indexer_config: IndexerConfig::for_test(),
             consistent_config: ConsistentConfig::for_test(),
             jsonrpc_config: Default::default(),
+            jsonrpc_node_args: Default::default(),
             graphql_config: Default::default(),
             bootstrap_genesis: None,
         }

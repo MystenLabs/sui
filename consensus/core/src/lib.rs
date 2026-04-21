@@ -27,6 +27,8 @@ mod linearizer;
 mod metrics;
 mod network;
 mod observer_service;
+mod observer_subscriber;
+mod proposer;
 mod round_prober;
 mod round_tracker;
 mod stake_aggregator;

@@ -36,6 +36,39 @@ const config = {
         content: "BCA21DA2879818D2",
       },
     },
+    {
+      tagName: "link",
+      attributes: {
+        rel: "service-doc",
+        href: "/llms.txt",
+        type: "text/plain",
+        title: "LLM-optimized documentation",
+      },
+    },
+    {
+      tagName: "link",
+      attributes: {
+        rel: "service-doc",
+        href: "/references/sui-api",
+        title: "Sui API Reference",
+      },
+    },
+    {
+      tagName: "link",
+      attributes: {
+        rel: "sitemap",
+        href: "/sitemap.xml",
+        type: "application/xml",
+      },
+    },
+    {
+      tagName: "link",
+      attributes: {
+        rel: "api-catalog",
+        href: "/.well-known/api-catalog",
+        type: "application/linkset+json",
+      },
+    },
   ],
   // Set the production url of your site here
   url: "https://docs.sui.io",
@@ -57,7 +90,10 @@ const config = {
   },
   },
   
-  clientModules: [require.resolve("./src/client/pushfeedback-toc.js")],
+  clientModules: [
+    require.resolve("./src/client/pushfeedback-toc.js"),
+    require.resolve("./src/client/webmcp.js"),
+  ],
   plugins: [
     function llmsTxtDirectivePlugin() {
       return {

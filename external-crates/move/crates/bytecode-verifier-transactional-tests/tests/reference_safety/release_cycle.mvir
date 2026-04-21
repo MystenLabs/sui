@@ -1,5 +1,5 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     t0(cond: bool) {
         let v: u64;
         let x: &u64;

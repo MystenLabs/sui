@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 10 tasks
 
@@ -60,9 +59,9 @@ Response: {
           {
             "node": {
               "object": {
-                "address": "0x7c22875f7e243bb92e432f05b20441a29c46f7bc37733fdccae1de8299764159",
+                "address": "0x441e45f4007da8866c3e5d686df090c7fce31cfc731922a05f0b6ba2244b9124",
                 "version": 2,
-                "digest": "38kP97vkPDU12qxzHN8irW8j9KZ3pzUTSCuwbyKffmUV"
+                "digest": "DQP6JzhRYE5bsqgJXdiBp1rtvyGiubpDBsbvV4Y29zga"
               }
             }
           }
@@ -94,9 +93,9 @@ Response: {
           {
             "node": {
               "object": {
-                "address": "0x7c22875f7e243bb92e432f05b20441a29c46f7bc37733fdccae1de8299764159",
+                "address": "0x441e45f4007da8866c3e5d686df090c7fce31cfc731922a05f0b6ba2244b9124",
                 "version": 4,
-                "digest": "BKD1wetyMseNCzdriXYYL5yaHV7wGFa38XpjBVahCfCk"
+                "digest": "AuAYMSMJVQYTQ85KTs3b1s5hpkav7LL9MCYBdfGsgjU4"
               }
             }
           }

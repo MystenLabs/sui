@@ -18,12 +18,9 @@ move-core-types.workspace = true
 # refactor the crate into a `move-utils` at some point and use that instead
 # here once we do.
 move-command-line-common.workspace = true
-mysten-common.workspace = true
 sui-types.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-eyre.workspace = true
-serde.workspace = true
 lru.workspace = true
 
 [dev-dependencies]

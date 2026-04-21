@@ -1,5 +1,6 @@
 ---
 source: crates/sui/tests/shell_tests.rs
+assertion_line: 112
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -72,6 +73,7 @@ priority_queue.json
 protocol_config.json
 prover.json
 random.json
+rangeproofs.json
 ristretto255.json
 sui.json
 table.json
@@ -120,7 +122,7 @@ vector.json
   "linkage": {
     "0x0000000000000000000000000000000000000000000000000000000000000001": {
       "upgraded_id": "0x0000000000000000000000000000000000000000000000000000000000000001",
-      "upgraded_version": 1
+      "upgraded_version": 0
     }
   },
   "type_origins": {

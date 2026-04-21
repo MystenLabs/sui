@@ -1,5 +1,5 @@
 //# publish
-module 0x42.M {
+module 0x42::M {
     public id3(a: u64, b: bool, c: address): u64 * bool * address {
     label b0:
         return move(a), move(b), move(c);
@@ -7,8 +7,8 @@ module 0x42.M {
 }
 
 //# run
-module 0x43.m {
-import 0x42.M;
+module 0x43::m {
+import 0x42::M;
 
 entry foo() {
     let a: u64;
@@ -19,7 +19,7 @@ label b0:
     b = false;
     c = 0x0;
 
-    a, b, c = M.id3(move(a), move(b), move(c));
+    a, b, c = M::id3(move(a), move(b), move(c));
     assert(move(a) == 10, 42);
     assert(move(b) == false, 43);
     assert(move(c) == 0x0, 44);

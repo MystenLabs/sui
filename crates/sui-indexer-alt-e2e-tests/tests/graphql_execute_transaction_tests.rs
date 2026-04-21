@@ -123,14 +123,12 @@ impl GraphQlTestCluster {
             no_ide: true,
         };
 
-        let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: validator_cluster.rpc_url().parse().unwrap(),
-        };
+        let fullnode_args = FullnodeArgs::new(validator_cluster.rpc_url().parse().unwrap());
 
         // Start GraphQL server that connects directly to TestCluster's RPC
         let service = start_graphql(
             None, // No database - GraphQL will use fullnode RPC for executeTransaction
-            Some(fullnode_args),
+            fullnode_args,
             DbArgs::default(),
             KvArgs::default(),
             ConsistentReaderArgs::default(),

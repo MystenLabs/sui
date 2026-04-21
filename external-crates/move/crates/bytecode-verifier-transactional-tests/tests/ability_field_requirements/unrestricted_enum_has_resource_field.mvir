@@ -1,25 +1,25 @@
 //# publish
-module 0x42.Test {
-import 0x1.XUS;
+module 0x42::Test {
+import 0x1::XUS;
     struct Coin has store { value: u64 }
     enum T has copy, drop {
         V0 { },
         V1 { 
             // does not have copy or drop
-            fc: Self.Coin,
+            fc: Self::Coin,
             fint: u64,
         },
     }
 }
 
 //# publish
-module 0x42.Test {
-import 0x1.XUS;
+module 0x42::Test {
+import 0x1::XUS;
     enum T has copy, drop {
         V0 { },
         V1 { 
             // does not have copy or drop
-            fc: Self.Coin,
+            fc: Self::Coin,
             fint: u64,
         },
     }
@@ -27,11 +27,11 @@ import 0x1.XUS;
 }
 
 //# publish
-module 0x42.Test {
-import 0x1.XUS;
+module 0x42::Test {
+import 0x1::XUS;
     struct T has copy, drop {
         // does not have copy or drop
-        fc: Self.Coin,
+        fc: Self::Coin,
         fint: u64,
     }
 

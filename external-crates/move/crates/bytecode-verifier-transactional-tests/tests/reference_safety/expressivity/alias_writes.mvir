@@ -2,7 +2,7 @@
 
 //# publish
 
-module 0x2.borrow_local_twice {
+module 0x2::borrow_local_twice {
 
 t() {
     let a: u64;
@@ -21,7 +21,7 @@ label b0:
 
 //# publish
 
-module 0x3.borrow_local_twice_reverse {
+module 0x3::borrow_local_twice_reverse {
 
 t() {
     let a: u64;
@@ -40,7 +40,7 @@ label b0:
 
 //# publish
 
-module 0x4.borrow_local_and_copy_ref {
+module 0x4::borrow_local_and_copy_ref {
 
 t() {
     let a: u64;
@@ -59,7 +59,7 @@ label b0:
 
 //# publish
 
-module 0x5.borrow_local_and_copy_ref_reverse {
+module 0x5::borrow_local_and_copy_ref_reverse {
 
 t() {
     let a: u64;

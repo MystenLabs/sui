@@ -14,7 +14,6 @@ anyhow.workspace = true
 bcs.workspace = true
 camino.workspace = true
 fastcrypto.workspace = true
-move-binary-format.workspace = true
 move-core-types.workspace = true
 rand.workspace = true
 serde.workspace = true

@@ -3,7 +3,10 @@
 
 use crate::{
     data_store::PackageStore,
-    static_programmable_transactions::linkage::resolution::{ResolutionTable, VersionConstraint},
+    static_programmable_transactions::linkage::{
+        config::ResolutionConfig,
+        resolution::{ResolutionTable, VersionConstraint},
+    },
 };
 use move_vm_runtime::shared::linkage_context::LinkageContext;
 use std::{borrow::Borrow, collections::BTreeMap, rc::Rc};
@@ -20,12 +23,16 @@ impl ExecutableLinkage {
     /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
     /// Since this linkage analysis should only be used for types, all packages are resolved
     /// "upwards" (i.e., later versions of the package are preferred).
-    pub fn type_linkage<I>(ids: I, store: &dyn PackageStore) -> Result<Self, ExecutionError>
+    pub fn type_linkage<I>(
+        config: ResolutionConfig,
+        ids: I,
+        store: &dyn PackageStore,
+    ) -> Result<Self, ExecutionError>
     where
         I: IntoIterator,
         I::Item: Borrow<ObjectID>,
     {
-        let mut resolution_table = ResolutionTable::empty();
+        let mut resolution_table = ResolutionTable::empty(config);
         resolution_table.add_type_linkages_to_table(ids, store)?;
         Ok(Self::new(ResolvedLinkage::from_resolution_table(
             resolution_table,

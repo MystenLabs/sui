@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Tester {
+module 0x1::Tester {
     eqtest1() {
         let x: u64;
         let r: &mut u64;
@@ -13,7 +13,7 @@ module 0x1.Tester {
 }
 
 //# publish
-module 0x1.Tester2 {
+module 0x1::Tester2 {
     eqtest2() {
         let x: u64;
         let r: &mut u64;
@@ -27,7 +27,7 @@ module 0x1.Tester2 {
 }
 
 //# publish
-module 0x1.Tester3 {
+module 0x1::Tester3 {
     neqtest1() {
         let x: u64;
         let r: &mut u64;
@@ -41,7 +41,7 @@ module 0x1.Tester3 {
 }
 
 //# publish
-module 0x1.Tester4 {
+module 0x1::Tester4 {
     neqtest2() {
         let x: u64;
         let r: &mut u64;

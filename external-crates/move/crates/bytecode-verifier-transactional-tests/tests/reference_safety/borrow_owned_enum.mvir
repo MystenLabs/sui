@@ -1,6 +1,6 @@
 //# publish
 
-module 0x2.borrow_owned_enum {
+module 0x2::borrow_owned_enum {
 
 enum E has drop {
     A { a: u64, b: u64, c: u64, d: u64, e: u64, f: u64, g: u64, h: u64,
@@ -8,7 +8,7 @@ enum E has drop {
     B {}
 }
 
-public test(owned_enum: Self.E, test: bool) {
+public test(owned_enum: Self::E, test: bool) {
     let a: &u64;
     let b: &u64;
     let c: &u64;
@@ -29,7 +29,7 @@ public test(owned_enum: Self.E, test: bool) {
     let y: u64;
 label l0:
     y = 0;
-    &E.A { a: a, b: b, c: c, d: d, e: e, f: f, g: g, h: h,
+    &E::A { a: a, b: b, c: c, d: d, e: e, f: f, g: g, h: h,
         i: i, j: j, k: k, l: l, m: m, n: n, o: o, p: p } = &owned_enum;
 
     x = &y;
@@ -49,7 +49,7 @@ label l0:
     jump_if_false (false) ln; x = move(n); label ln:
     jump_if_false (false) lo; x = move(o); label lo:
     jump_if_false (false) lp; x = move(p); label lp:
-    *&mut owned_enum = E.B {};
+    *&mut owned_enum = E::B {};
     return;
 }
 

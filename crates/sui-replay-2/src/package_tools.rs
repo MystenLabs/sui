@@ -25,7 +25,6 @@ use sui_types::{
     digests::TransactionDigest,
     move_package::{MovePackage, TypeOrigin, UpgradeInfo},
     object::{Data, Object},
-    supported_protocol_versions::ProtocolConfig,
 };
 
 /// Information about a package in the cache
@@ -561,16 +560,14 @@ impl PackageRebuilder {
             .build_new_linkage_table(&compiled_modules, &original_package)
             .context("Failed to build linkage table")?;
 
-        // Get protocol config for max package size
-        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
-        let max_package_size = protocol_config.max_move_package_size();
-
         // Create a new MovePackage with updated modules and properly generated tables
         let rebuilt_package = MovePackage::new(
             self.package_info.package_id, // Use the package ID directly
             version,
             module_map,
-            max_package_size,
+            // We're trying to rebuild the package (locally!) and this package may be a system
+            // package, so be permissive and allow rebuilding a package of any size.
+            u64::MAX,
             type_origin_table,
             linkage_table,
         )

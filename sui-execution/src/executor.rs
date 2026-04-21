@@ -129,6 +129,7 @@ pub trait Executor {
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
         &'vm self,
+        protocol_config: &'vm ProtocolConfig,
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r>;
 }

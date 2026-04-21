@@ -99,15 +99,32 @@ public fun exists<Name: copy + drop + store>(object: &UID, name: Name): bool {
 }
 
 /// Removes the dynamic field if it exists. Returns `some(Value)` if it exists or `none` otherwise.
+/// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
+/// type.
 public fun remove_opt<Name: copy + drop + store, Value: store>(
     object: &mut UID,
     name: Name,
 ): Option<Value> {
-    if (exists<Name>(object, name)) {
+    if (exists(object, name)) {
         option::some(remove(object, name))
     } else {
         option::none()
     }
+}
+
+/// Removes the existing value at `name` (if any) and adds `value` in its place.
+/// Returns the old value if it existed, or `none` otherwise.
+/// Note: the old and new value types may differ.
+/// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
+/// `ValueOld` type.
+public fun replace<Name: copy + drop + store, ValueNew: store, ValueOld: store>(
+    object: &mut UID,
+    name: Name,
+    value: ValueNew,
+): Option<ValueOld> {
+    let old = remove_opt<Name, ValueOld>(object, name);
+    add(object, name, value);
+    old
 }
 
 /// Returns true if and only if the `object` has a dynamic field with the name specified by
@@ -125,6 +142,8 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
 
 /// Immutably borrows the field value, adding it with `$default` if it doesn't exist.
 /// Note that `$default` is evaluated only if the field does not already exist.
+/// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
+/// type.
 public macro fun borrow_or_add<$Name: copy + drop + store, $Value: store>(
     $object: &mut UID,
     $name: $Name,
@@ -138,6 +157,8 @@ public macro fun borrow_or_add<$Name: copy + drop + store, $Value: store>(
 
 /// Mutably borrows the field value, adding it with `$default` if it doesn't exist.
 /// Note that `$default` is evaluated only if the field does not already exist.
+/// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
+/// type.
 public macro fun borrow_mut_or_add<$Name: copy + drop + store, $Value: store>(
     $object: &mut UID,
     $name: $Name,
@@ -151,6 +172,8 @@ public macro fun borrow_mut_or_add<$Name: copy + drop + store, $Value: store>(
 
 /// If the field exists, calls `$f` on an immutable reference to the value; otherwise, does nothing.
 /// This is like getting an `Option<&Value>` then calling `std::option::do`.
+/// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
+/// type.
 public macro fun get_do<$Name: copy + drop + store, $Value: store, $R: drop>(
     $object: &UID,
     $name: $Name,
@@ -158,11 +181,13 @@ public macro fun get_do<$Name: copy + drop + store, $Value: store, $R: drop>(
 ) {
     let o = $object;
     let name = $name;
-    if (exists_with_type<$Name, $Value>(o, name)) { $f(borrow(o, name)); }
+    if (exists<$Name>(o, name)) { $f(borrow(o, name)); }
 }
 
 /// If the field exists, calls `$f` on a mutable reference to the value; otherwise, does nothing.
 /// This is like getting an `Option<&mut Value>` then calling `std::option::do`.
+/// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
+/// type.
 public macro fun get_mut_do<$Name: copy + drop + store, $Value: store, $R: drop>(
     $object: &mut UID,
     $name: $Name,
@@ -170,12 +195,14 @@ public macro fun get_mut_do<$Name: copy + drop + store, $Value: store, $R: drop>
 ) {
     let o = $object;
     let name = $name;
-    if (exists_with_type<$Name, $Value>(o, name)) { $f(borrow_mut(o, name)); }
+    if (exists<$Name>(o, name)) { $f(borrow_mut(o, name)); }
 }
 
 /// If the field exists, applies `$some` to an immutable reference to the value; otherwise, returns
 /// `$none`.
 /// This is like getting an `Option<&Value>` then calling `std::option::fold`.
+/// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
+/// type.
 public macro fun get_fold<$Name: copy + drop + store, $Value: store, $R>(
     $object: &UID,
     $name: $Name,
@@ -184,12 +211,14 @@ public macro fun get_fold<$Name: copy + drop + store, $Value: store, $R>(
 ): $R {
     let o = $object;
     let name = $name;
-    if (exists_with_type<$Name, $Value>(o, name)) $some(borrow(o, name)) else $none
+    if (exists<$Name>(o, name)) $some(borrow(o, name)) else $none
 }
 
 /// If the field exists, applies `$some` to a mutable reference to the value; otherwise, returns
 /// `$none`.
 /// This is like getting an `Option<&mut Value>` then calling `std::option::fold`.
+/// Aborts with `EFieldTypeMismatch` if the field exists, but the value does not have the specified
+/// type.
 public macro fun get_mut_fold<$Name: copy + drop + store, $Value: store, $R>(
     $object: &mut UID,
     $name: $Name,
@@ -198,7 +227,7 @@ public macro fun get_mut_fold<$Name: copy + drop + store, $Value: store, $R>(
 ): $R {
     let o = $object;
     let name = $name;
-    if (exists_with_type<$Name, $Value>(o, name)) $some(borrow_mut(o, name)) else $none
+    if (exists<$Name>(o, name)) $some(borrow_mut(o, name)) else $none
 }
 
 // === Deprecated ===

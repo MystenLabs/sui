@@ -1,5 +1,5 @@
 //# publish
-module 0x6.A {
+module 0x6::A {
     three(): u8 * u8{
     label b0:
         return 0u8, 255u8;
@@ -8,14 +8,14 @@ module 0x6.A {
     pop() {
     label b0:
         // negative stack size, extra pop
-        _, _, _  = Self.three();
+        _, _, _  = Self::three();
         return;
     }
 }
 
 
 //# publish
-module 0x7.A {
+module 0x7::A {
     three(): u16 * u16{
     label b0:
         return 0u16, 65535u16;
@@ -24,13 +24,13 @@ module 0x7.A {
     pop() {
     label b0:
         // negative stack size, extra pop
-        _, _, _  = Self.three();
+        _, _, _  = Self::three();
         return;
     }
 }
 
 //# publish
-module 0x8.A {
+module 0x8::A {
     three(): u32 * u32{
     label b0:
         return 0u32, 4294967295u32;
@@ -39,13 +39,13 @@ module 0x8.A {
     pop() {
     label b0:
         // negative stack size, extra pop
-        _, _, _  = Self.three();
+        _, _, _  = Self::three();
         return;
     }
 }
 
 //# publish
-module 0x9.A {
+module 0x9::A {
     three(): u64 * u64{
     label b0:
         return 0u64, 18446744073709551615u64;
@@ -54,13 +54,13 @@ module 0x9.A {
     pop() {
     label b0:
         // negative stack size, extra pop
-        _, _, _  = Self.three();
+        _, _, _  = Self::three();
         return;
     }
 }
 
 //# publish
-module 0xa.A {
+module 0xa::A {
     three(): u128 * u128{
     label b0:
         return 0u128, 340282366920938463463374607431768211455u128;
@@ -69,13 +69,13 @@ module 0xa.A {
     pop() {
     label b0:
         // negative stack size, extra pop
-        _, _, _  = Self.three();
+        _, _, _  = Self::three();
         return;
     }
 }
 
 //# publish
-module 0xb.A {
+module 0xb::A {
     three(): u256 * u256{
     label b0:
         return 0u256, 115792089237316195423570985008687907853269984665640564039457584007913129639935u256;
@@ -84,7 +84,7 @@ module 0xb.A {
     pop() {
     label b0:
         // negative stack size, extra pop
-        _, _, _  = Self.three();
+        _, _, _  = Self::three();
         return;
     }
 }

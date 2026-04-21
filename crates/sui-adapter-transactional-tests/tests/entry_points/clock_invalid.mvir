@@ -4,25 +4,25 @@
 //# init --accounts A B --addresses test=0x0
 
 //# publish --sender A
-module 0x0.m {
-    import 0x2.clock;
+module 0x0::m {
+    import 0x2::clock;
 
-    entry entry_clock_mut(c: &mut clock.Clock) {
+    entry entry_clock_mut(c: &mut clock::Clock) {
         label l0:
         abort 0;
     }
 
-    entry entry_clock_owned(c: clock.Clock) {
+    entry entry_clock_owned(c: clock::Clock) {
         label l0:
         abort 0;
     }
 
-    public public_clock_mut(c: &mut clock.Clock) {
+    public public_clock_mut(c: &mut clock::Clock) {
         label l0:
         abort 0;
     }
 
-    public public_clock_owned(c: clock.Clock) {
+    public public_clock_owned(c: clock::Clock) {
         label l0:
         abort 0;
     }

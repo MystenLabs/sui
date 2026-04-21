@@ -1,5 +1,5 @@
 //# publish
-module 0x5.A {
+module 0x5::A {
     public push_u64(): u64  {
     label b0:
         return 42;
@@ -22,15 +22,15 @@ module 0x5.A {
 
 
 //# run
-module 0x43.m {
+module 0x43::m {
 
-import 0x5.A;
+import 0x5::A;
 
 entry foo() {
     let ans: u64;
 label b0:
-    (A.push_u64(), A.push_bool());
-    ans = A.foo();
+    (A::push_u64(), A::push_bool());
+    ans = A::foo();
     return;
 }
 }

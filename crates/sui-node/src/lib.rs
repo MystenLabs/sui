@@ -96,13 +96,9 @@ use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
 };
-use sui_core::consensus_adapter::{
-    CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
-};
+use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_manager::ConsensusManager;
-use sui_core::consensus_throughput_calculator::{
-    ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
-};
+use sui_core::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::db_checkpoint_handler::DBCheckpointHandler;
 use sui_core::epoch::committee_store::CommitteeStore;
@@ -264,7 +260,6 @@ pub struct SuiNode {
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
     global_state_hasher: Mutex<Option<Arc<GlobalStateHasher>>>,
-    connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     /// Broadcast channel to send the starting system state for the next epoch.
     end_of_epoch_channel: broadcast::Sender<SuiSystemState>,
@@ -835,16 +830,10 @@ impl SuiNode {
             GlobalStateHashMetrics::new(&prometheus_registry),
         ));
 
-        let authority_names_to_peer_ids = epoch_store
-            .epoch_start_state()
-            .get_authority_names_to_peer_ids();
-
         let network_connection_metrics = mysten_network::quinn_metrics::QuinnConnectionMetrics::new(
             "sui",
             &registry_service.default_registry(),
         );
-
-        let authority_names_to_peer_ids = ArcSwap::from_pointee(authority_names_to_peer_ids);
 
         let connection_monitor_handle =
             mysten_network::anemo_connection_monitor::AnemoConnectionMonitor::spawn(
@@ -853,12 +842,6 @@ impl SuiNode {
                 known_peers,
             );
 
-        let connection_monitor_status = ConnectionMonitorStatus {
-            connection_statuses: connection_monitor_handle.connection_statuses(),
-            authority_names_to_peer_ids,
-        };
-
-        let connection_monitor_status = Arc::new(connection_monitor_status);
         let sui_node_metrics = Arc::new(SuiNodeMetrics::new(&registry_service.default_registry()));
 
         sui_node_metrics
@@ -879,7 +862,6 @@ impl SuiNode {
                 randomness_handle.clone(),
                 Arc::downgrade(&global_state_hasher),
                 backpressure_manager.clone(),
-                connection_monitor_status.clone(),
                 &registry_service,
                 sui_node_metrics.clone(),
                 checkpoint_metrics.clone(),
@@ -919,7 +901,6 @@ impl SuiNode {
             checkpoint_store,
             global_state_hasher: Mutex::new(Some(global_state_hasher)),
             end_of_epoch_channel,
-            connection_monitor_status,
             endpoint_manager,
             backpressure_manager,
 
@@ -1262,7 +1243,6 @@ impl SuiNode {
         randomness_handle: randomness::Handle,
         global_state_hasher: Weak<GlobalStateHasher>,
         backpressure_manager: Arc<BackpressureManager>,
-        connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
@@ -1278,9 +1258,7 @@ impl SuiNode {
             &committee,
             consensus_config,
             state.name,
-            connection_monitor_status.clone(),
             &registry_service.default_registry(),
-            epoch_store.protocol_config().clone(),
             client.clone(),
             checkpoint_store.clone(),
         ));
@@ -1378,13 +1356,6 @@ impl SuiNode {
             checkpoint_metrics.clone(),
         );
 
-        // create a new map that gets injected into both the consensus handler and the consensus adapter
-        // the consensus handler will write values forwarded from consensus, and the consensus adapter
-        // will read the values to make decisions about which validator submits a transaction to consensus
-        let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
-
-        consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.clone());
-
         if epoch_store.randomness_state_enabled() {
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
@@ -1414,22 +1385,11 @@ impl SuiNode {
             state.metrics.clone(),
         ));
 
-        let throughput_profiler = Arc::new(ConsensusThroughputProfiler::new(
-            throughput_calculator.clone(),
-            None,
-            None,
-            state.metrics.clone(),
-            ThroughputProfileRanges::from_chain(epoch_store.get_chain_identifier()),
-        ));
-
-        consensus_adapter.swap_throughput_profiler(throughput_profiler);
-
         let consensus_handler_initializer = ConsensusHandlerInitializer::new(
             state.clone(),
             checkpoint_service.clone(),
             epoch_store.clone(),
             consensus_adapter.clone(),
-            low_scoring_authorities,
             throughput_calculator,
             backpressure_manager,
             config.congestion_log.clone(),
@@ -1544,9 +1504,7 @@ impl SuiNode {
         committee: &Committee,
         consensus_config: &ConsensusConfig,
         authority: AuthorityName,
-        connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
-        protocol_config: ProtocolConfig,
         consensus_client: Arc<dyn ConsensusClient>,
         checkpoint_store: Arc<CheckpointStore>,
     ) -> ConsensusAdapter {
@@ -1557,13 +1515,9 @@ impl SuiNode {
             consensus_client,
             checkpoint_store,
             authority,
-            connection_monitor_status,
             consensus_config.max_pending_transactions(),
             consensus_config.max_pending_transactions() * 2 / committee.num_members(),
-            consensus_config.max_submit_position,
-            consensus_config.submit_delay_step_override(),
             ca_metrics,
-            protocol_config,
         )
     }
 
@@ -1799,15 +1753,6 @@ impl SuiNode {
 
             fail_point_async!("reconfig_delay");
 
-            // We save the connection monitor status map regardless of validator / fullnode status
-            // so that we don't need to restart the connection monitor every epoch.
-            // Update the mappings that will be used by the consensus adapter if it exists or is
-            // about to be created.
-            let authority_names_to_peer_ids =
-                new_epoch_start_state.get_authority_names_to_peer_ids();
-            self.connection_monitor_status
-                .update_mapping_for_epoch(authority_names_to_peer_ids);
-
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
 
             update_peer_addresses(&self.config, &self.endpoint_manager, &new_epoch_start_state);
@@ -1911,7 +1856,6 @@ impl SuiNode {
                         self.randomness_handle.clone(),
                         weak_hasher,
                         self.backpressure_manager.clone(),
-                        self.connection_monitor_status.clone(),
                         &self.registry_service,
                         self.metrics.clone(),
                         self.checkpoint_metrics.clone(),

@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data_store::PackageStore;
+use crate::{
+    data_store::PackageStore, static_programmable_transactions::linkage::config::ResolutionConfig,
+};
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use std::{
     borrow::Borrow,
@@ -27,6 +29,7 @@ pub enum VersionConstraint {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolutionTable {
+    pub(crate) config: ResolutionConfig,
     pub(crate) resolution_table: BTreeMap<ObjectID, VersionConstraint>,
     /// For every version of every package that we have seen, a mapping of the ObjectID for that
     /// package to its runtime ID.
@@ -34,8 +37,9 @@ pub(crate) struct ResolutionTable {
 }
 
 impl ResolutionTable {
-    pub fn empty() -> Self {
+    pub fn empty(config: ResolutionConfig) -> Self {
         Self {
+            config,
             resolution_table: BTreeMap::new(),
             all_versions_resolution_table: BTreeMap::new(),
         }
@@ -55,7 +59,11 @@ impl ResolutionTable {
     {
         for id in ids {
             let pkg = get_package(id.borrow(), store)?;
-            let transitive_deps = pkg.linkage_table().values().copied().map(ObjectID::from);
+            let transitive_deps = self
+                .config
+                .linkage_table(&pkg)
+                .into_values()
+                .map(ObjectID::from);
             let package_id = pkg.version_id().into();
             add_and_unify(&package_id, store, self, VersionConstraint::at_least)?;
             for object_id in transitive_deps {

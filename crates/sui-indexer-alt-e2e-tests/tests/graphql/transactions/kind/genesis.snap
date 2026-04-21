@@ -23,7 +23,7 @@ task 3, lines 12-27:
 Response: {
   "data": {
     "nonGenesisTransaction": {
-      "digest": "BRkEX8WQkc2pZR4ozzYB6s7dQhdMCE7ftaKFbwusU9Sn",
+      "digest": "DWjnPxbJEEPdhxFENBccBWw6Jp4GSt4YzcnVxLuTmAde",
       "kind": {}
     }
   }
@@ -36,7 +36,7 @@ Response: {
     "genesisTransaction": {
       "nodes": [
         {
-          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+          "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {
@@ -169,7 +169,7 @@ Response: {
     "paginationTest": {
       "nodes": [
         {
-          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+          "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {
@@ -195,7 +195,7 @@ Response: {
     "backwardPaginationTest": {
       "nodes": [
         {
-          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+          "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {
@@ -228,7 +228,7 @@ Response: {
     "paginationAfterCursor": {
       "nodes": [
         {
-          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+          "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {
@@ -276,7 +276,7 @@ Response: {
     "paginationBeforeCursor": {
       "nodes": [
         {
-          "digest": "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY",
+          "digest": "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV",
           "kind": {
             "__typename": "GenesisTransaction",
             "objects": {

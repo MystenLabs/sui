@@ -9,6 +9,7 @@ use diesel::QueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReader;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
+use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_indexer_alt_reader::package_resolver::DbPackageStore;
@@ -55,6 +56,12 @@ pub(crate) struct Context {
     /// The chain identifier, derived from the genesis checkpoint digest. This is `None` if no
     /// database is configured.
     chain_identifier: Option<ChainIdentifier>,
+
+    /// Direct access to the fullnode client for executing transactions.
+    fullnode_client: Option<FullnodeClient>,
+
+    /// Access to the same `fullnode_client` through a `DataLoader` to batch requests.
+    execution_loader: Option<Arc<DataLoader<FullnodeClient>>>,
 }
 
 impl Context {
@@ -71,6 +78,7 @@ impl Context {
         db_args: DbArgs,
         kv_args: KvArgs,
         consistent_reader_args: ConsistentReaderArgs,
+        fullnode_client: Option<FullnodeClient>,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
@@ -131,6 +139,8 @@ impl Context {
             metrics,
             config: Arc::new(config),
             chain_identifier,
+            fullnode_client: fullnode_client.clone(),
+            execution_loader: fullnode_client.map(|client| Arc::new(client.as_data_loader())),
         })
     }
 
@@ -173,5 +183,17 @@ impl Context {
     /// The chain identifier.
     pub(crate) fn chain_identifier(&self) -> Option<ChainIdentifier> {
         self.chain_identifier
+    }
+
+    pub(crate) fn fullnode_client(&self) -> anyhow::Result<&FullnodeClient> {
+        self.fullnode_client
+            .as_ref()
+            .context("Fullnode gRPC client is not configured")
+    }
+
+    pub(crate) fn execution_loader(&self) -> anyhow::Result<&Arc<DataLoader<FullnodeClient>>> {
+        self.execution_loader
+            .as_ref()
+            .context("Execution loader is not configured")
     }
 }

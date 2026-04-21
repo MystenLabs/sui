@@ -117,6 +117,10 @@ async fn main() -> anyhow::Result<()> {
         IndexerArgs::default(),
         ClientArgs {
             ingestion: IngestionClientArgs {
+                // Use full node gRPC as the primary steady-state source and the
+                // remote checkpoint store as a fallback.
+                rpc_api_url: Some("https://fullnode.testnet.sui.io:443".parse()?),
+                streaming_url: Some("https://fullnode.testnet.sui.io:443".parse()?),
                 remote_store_url: Some("https://checkpoints.testnet.sui.io".to_string()),
                 ..Default::default()
             },

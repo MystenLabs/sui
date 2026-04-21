@@ -29,6 +29,12 @@ pub struct ExecutionFailure {
     pub command: Option<CommandIndex>,
 }
 
+impl ExecutionFailure {
+    pub fn new(error: ExecutionErrorKind, command: Option<CommandIndex>) -> Self {
+        ExecutionFailure { error, command }
+    }
+}
+
 impl From<ExecutionError> for ExecutionFailure {
     fn from(value: ExecutionError) -> Self {
         Self {
@@ -451,11 +457,8 @@ impl Display for MoveLocation {
 }
 
 impl ExecutionStatus {
-    pub fn new_failure(
-        error: ExecutionErrorKind,
-        command: Option<CommandIndex>,
-    ) -> ExecutionStatus {
-        ExecutionStatus::Failure(ExecutionFailure { error, command })
+    pub fn new_failure(failure: ExecutionFailure) -> ExecutionStatus {
+        ExecutionStatus::Failure(failure)
     }
 
     pub fn is_ok(&self) -> bool {

@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.m {
-    import 0x2.object;
+module 0x0::m {
+    import 0x2::object;
 
     struct Foo {
-        id: object.UID,
+        id: object::UID,
     }
 
-    foo(f: Self.Foo) {
+    foo(f: Self::Foo) {
         label l0:
         _ = &mut (&mut f).Foo::id;
         abort 0;

@@ -160,9 +160,8 @@ impl GraphQlTestCluster {
         let database = TempDb::new().expect("Failed to create temp database");
         let database_url = database.database().url().clone();
 
-        let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: validator_cluster.rpc_url().parse().unwrap(),
-        };
+        let fullnode_args = FullnodeArgs::new(validator_cluster.rpc_url().parse().unwrap());
+
         let client_args = ClientArgs {
             ingestion: IngestionClientArgs {
                 rpc_api_url: Some(
@@ -190,7 +189,7 @@ impl GraphQlTestCluster {
 
         let s_graphql = start_graphql(
             Some(database_url),
-            Some(fullnode_args),
+            fullnode_args,
             DbArgs::default(),
             KvArgs::default(),
             ConsistentReaderArgs::default(),

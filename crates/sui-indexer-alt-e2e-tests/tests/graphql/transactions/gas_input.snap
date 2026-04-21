@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 13 tasks
 
@@ -91,11 +90,11 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0x40cc0a82e96c32c503043269e7037df96b2608faec8c77d6cae7ba4998649794",
+              "address": "0x7cdf1d63a451e8353460b1e434d2c1386da0e1c93a6159506beaae6aaba45c3c",
               "version": 4
             },
             {
-              "address": "0x215d3d383d0cf09d512e8ac1ea3df4fd783071ff7451c83f502ec5fd79cb68be",
+              "address": "0xb6a494bd01ccb6649315305a2c6683d188bedb64eb42e3f1ba03dc05e750a6c0",
               "version": 4
             }
           ]
@@ -119,7 +118,7 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0x40cc0a82e96c32c503043269e7037df96b2608faec8c77d6cae7ba4998649794",
+              "address": "0x7cdf1d63a451e8353460b1e434d2c1386da0e1c93a6159506beaae6aaba45c3c",
               "version": 4
             }
           ]
@@ -143,7 +142,7 @@ Response: {
           },
           "nodes": [
             {
-              "address": "0x215d3d383d0cf09d512e8ac1ea3df4fd783071ff7451c83f502ec5fd79cb68be",
+              "address": "0xb6a494bd01ccb6649315305a2c6683d188bedb64eb42e3f1ba03dc05e750a6c0",
               "version": 4
             }
           ]

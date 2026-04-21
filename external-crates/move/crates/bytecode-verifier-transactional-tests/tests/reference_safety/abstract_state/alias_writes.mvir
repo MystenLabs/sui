@@ -2,7 +2,7 @@
 
 //# publish
 
-module 0x2.alias_after_join {
+module 0x2::alias_after_join {
 
 t(cond: bool) {
     let a: u64;

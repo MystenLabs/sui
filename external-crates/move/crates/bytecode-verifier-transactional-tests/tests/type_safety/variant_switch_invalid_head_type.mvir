@@ -1,8 +1,8 @@
 //# publish
-module 0x2.O {
+module 0x2::O {
     enum Foo<T> { V { x: T } }
 
-    foo(x: &mut Self.Foo<u64>) {
+    foo(x: &mut Self::Foo<u64>) {
     label b0:
         // mut ref is not allowed
         variant_switch Foo move(x) {
@@ -14,10 +14,10 @@ module 0x2.O {
 }
 
 //# publish
-module 0x2.O {
+module 0x2::O {
     enum Foo<T> { V { x: T } }
 
-    foo(x: Self.Foo<u64>) {
+    foo(x: Self::Foo<u64>) {
     label b0:
         // by value is not allowed
         variant_switch Foo move(x) {
@@ -29,7 +29,7 @@ module 0x2.O {
 }
 
 //# publish
-module 0x2.O {
+module 0x2::O {
     enum Foo<T> { V { x: T } }
 
     foo(x: u64) {
@@ -44,7 +44,7 @@ module 0x2.O {
 }
 
 //# publish
-module 0x2.O {
+module 0x2::O {
     enum Foo<T> { V { x: T } }
 
     foo(x: &u64) {
@@ -59,7 +59,7 @@ module 0x2.O {
 }
 
 //# publish
-module 0x2.O {
+module 0x2::O {
     enum Foo<T> { V { x: T } }
 
     foo(x: &mut u64) {
@@ -75,12 +75,12 @@ module 0x2.O {
 
 
 //# publish
-module 0x2.O {
+module 0x2::O {
     struct Bar { x: bool }
 
     enum Foo<T> { V { x: T } }
 
-    foo(x: &Self.Bar) {
+    foo(x: &Self::Bar) {
     label b0:
         // type mismatch
         variant_switch Foo move(x) {
@@ -92,12 +92,12 @@ module 0x2.O {
 }
 
 //# publish
-module 0x2.O {
+module 0x2::O {
     struct Bar { x: bool }
 
     enum Foo<T> { V { x: T } }
 
-    foo(x: &mut Self.Bar) {
+    foo(x: &mut Self::Bar) {
     label b0:
         // type mismatch and invalid operand
         variant_switch Foo move(x) {
@@ -109,11 +109,11 @@ module 0x2.O {
 }
 
 //# publish
-module 0x2.P {
+module 0x2::P {
     enum Foo<T> { V { x: T } }
     enum Bar<T> { V { x: T } }
 
-    foo(x: &Self.Bar<u64>) {
+    foo(x: &Self::Bar<u64>) {
     label b0:
         // valid
         variant_switch Bar move(x) {
@@ -125,11 +125,11 @@ module 0x2.P {
 }
 
 //# publish
-module 0x2.P {
+module 0x2::P {
     enum Foo<T> { V { x: T } }
     enum Bar<T> { V { x: T } }
 
-    foo(x: &Self.Foo<u64>) {
+    foo(x: &Self::Foo<u64>) {
     label b0:
         // type mismatch
         variant_switch Bar move(x) {
@@ -141,11 +141,11 @@ module 0x2.P {
 }
 
 //# publish
-module 0x2.P {
+module 0x2::P {
     enum Foo<T> { V { x: T } }
     enum Bar { V { x: u64 } }
 
-    foo(x: &Self.Foo<u64>) {
+    foo(x: &Self::Foo<u64>) {
     label b0:
         // type mismatch
         variant_switch Bar move(x) {
@@ -157,11 +157,11 @@ module 0x2.P {
 }
 
 //# publish
-module 0x2.P {
+module 0x2::P {
     enum Foo<T> { V { x: T } }
     enum Bar { V { x: u64 } }
 
-    foo(x: &Self.Bar) {
+    foo(x: &Self::Bar) {
     label b0:
         // type mismatch
         variant_switch Foo move(x) {

@@ -8,7 +8,6 @@ use fastcrypto::encoding::Base64;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use prost_types::FieldMask;
-use sui_indexer_alt_reader::fullnode_client::FullnodeClient;
 use sui_json_rpc_types::DryRunTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
@@ -55,7 +54,6 @@ pub trait WriteApi {
 }
 
 pub(crate) struct Write {
-    client: FullnodeClient,
     context: Context,
 }
 
@@ -75,8 +73,8 @@ pub enum Error {
 }
 
 impl Write {
-    pub(crate) fn new(client: FullnodeClient, context: Context) -> Self {
-        Self { client, context }
+    pub(crate) fn new(context: Context) -> Self {
+        Self { context }
     }
 }
 
@@ -120,6 +118,7 @@ impl Write {
         options: Option<SuiTransactionBlockResponseOptions>,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> Result<SuiTransactionBlockResponse, RpcError<Error>> {
+        let client = self.context.fullnode_client()?;
         if let Some(ExecuteTransactionRequestType::WaitForLocalExecution) = request_type {
             return Err(invalid_params(Error::DeprecatedWaitForLocalExecution));
         }
@@ -129,8 +128,7 @@ impl Write {
         let parsed_sigs = parse_signatures_impl(&signatures)?;
         let read_mask = build_execute_read_mask(&options);
 
-        let grpc_response = self
-            .client
+        let grpc_response = client
             .execute_transaction(tx_data.clone(), parsed_sigs.clone(), read_mask)
             .await
             .map_err(grpc_error_to_rpc_error)?;
@@ -147,6 +145,7 @@ impl Write {
         &self,
         tx_bytes: Base64,
     ) -> Result<DryRunTransactionBlockResponse, RpcError<Error>> {
+        let client = self.context.fullnode_client()?;
         let tx_data = parse_transaction_data(&tx_bytes)?;
 
         let mut proto_tx = proto::Transaction::default();
@@ -166,8 +165,7 @@ impl Write {
             "suggested_gas_price",
         ]);
 
-        let grpc_response = self
-            .client
+        let grpc_response = client
             .simulate_transaction(proto_tx, true, false, read_mask)
             .await
             .map_err(grpc_error_to_rpc_error)?;

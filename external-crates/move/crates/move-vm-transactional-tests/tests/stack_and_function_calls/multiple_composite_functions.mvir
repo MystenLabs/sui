@@ -1,13 +1,13 @@
 //# publish
-module 0x5.A {
+module 0x5::A {
     struct T has drop {value: u64}
 
-    public new(v: u64): Self.T {
+    public new(v: u64): Self::T {
     label b0:
         return T{value: move(v)};
     }
 
-    public add_one(this: &mut Self.T): u64 {
+    public add_one(this: &mut Self::T): u64 {
         let b: &u64;
     label b0:
         b = &move(this).T::value;
@@ -22,15 +22,15 @@ module 0x5.A {
 
 
 //# run
-module 0x43.m {
-import 0x5.A;
+module 0x43::m {
+import 0x5::A;
 
 entry foo() {
     let z: u64;
-    let x: A.T;
+    let x: A::T;
 label b0:
-    x = A.new(5);
-    z = A.add_two(A.add_two(A.add_one(&mut x)));
+    x = A::new(5);
+    z = A::add_two(A::add_two(A::add_one(&mut x)));
     assert(move(z) == 10, 42);
     return;
 }

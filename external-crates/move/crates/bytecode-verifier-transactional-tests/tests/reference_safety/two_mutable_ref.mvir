@@ -1,11 +1,11 @@
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct Foo {
         a: u64,
         b: u64,
     }
 
-    public create_mutable_field_addresses(addr: &mut Self.Foo) {
+    public create_mutable_field_addresses(addr: &mut Self::Foo) {
         let a_ref: &mut u64;
         let b_ref: &mut u64;
     label b0:

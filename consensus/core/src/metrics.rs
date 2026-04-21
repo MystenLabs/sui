@@ -146,6 +146,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) invalid_blocks: IntCounterVec,
     pub(crate) rejected_blocks: IntCounterVec,
     pub(crate) subscribed_blocks: IntCounterVec,
+    #[allow(unused)]
+    pub(crate) observer_subscribed_blocks: IntCounter,
     pub(crate) verified_blocks: IntCounterVec,
     pub(crate) committed_leaders_total: IntCounterVec,
     pub(crate) last_committed_authority_round: IntGaugeVec,
@@ -504,6 +506,11 @@ impl NodeMetrics {
                 "subscribed_blocks",
                 "Number of blocks received from each peer before verification",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            observer_subscribed_blocks: register_int_counter_with_registry!(
+                "observer_subscribed_blocks",
+                "Number of blocks received from a peer before verification",
                 registry,
             ).unwrap(),
             verified_blocks: register_int_counter_vec_with_registry!(

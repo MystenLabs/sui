@@ -1,5 +1,5 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     id<T>(x: T) { label b0: return move(x); }
 
     foo() {
@@ -8,7 +8,7 @@ module 0x1.M {
     label b0:
         y = &x;
         // cannot use refs in generics
-        Self.id<&u64>(move(y));
+        Self::id<&u64>(move(y));
         return;
     }
 }

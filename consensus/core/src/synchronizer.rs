@@ -824,7 +824,7 @@ where
                 let mut retry_delay_step = Duration::from_millis(500);
                 'main:loop {
                     if context.committee.size() == 1 {
-                        highest_round = dag_state.read().get_last_proposed_block().round();
+                        highest_round = dag_state.read().get_last_proposed_block().expect("Last proposed block should be returned on validators").round();
                         info!("Only one node in the network, will not try fetching own last block from peers.");
                         break 'main;
                     }

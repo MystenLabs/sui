@@ -105,14 +105,14 @@ Response: {
                   {
                     "contents": {
                       "type": {
-                        "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                        "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                       },
                       "json": {
-                        "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                        "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                         "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                        "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                        "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                         "bag": {
-                          "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                          "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                           "size": "2"
                         }
                       }
@@ -121,10 +121,10 @@ Response: {
                   {
                     "contents": {
                       "type": {
-                        "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
+                        "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::FooCap"
                       },
                       "json": {
-                        "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
+                        "id": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7"
                       }
                     }
                   }
@@ -198,22 +198,6 @@ Response: {
                       "objectChanges": {
                         "nodes": [
                           {
-                            "idCreated": true,
-                            "inputState": null,
-                            "outputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
-                                  },
-                                  "json": {
-                                    "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
-                                  }
-                                }
-                              }
-                            }
-                          },
-                          {
                             "idCreated": false,
                             "inputState": {
                               "asMoveObject": {
@@ -241,6 +225,22 @@ Response: {
                                 }
                               }
                             }
+                          },
+                          {
+                            "idCreated": true,
+                            "inputState": null,
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::FooCap"
+                                  },
+                                  "json": {
+                                    "id": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7"
+                                  }
+                                }
+                              }
+                            }
                           }
                         ]
                       }
@@ -250,33 +250,6 @@ Response: {
                     "effects": {
                       "objectChanges": {
                         "nodes": [
-                          {
-                            "idCreated": false,
-                            "inputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
-                                  },
-                                  "json": {
-                                    "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
-                                  }
-                                }
-                              }
-                            },
-                            "outputState": {
-                              "asMoveObject": {
-                                "contents": {
-                                  "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
-                                  },
-                                  "json": {
-                                    "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
-                                  }
-                                }
-                              }
-                            }
-                          },
                           {
                             "idCreated": false,
                             "inputState": {
@@ -313,13 +286,40 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": null
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "idCreated": false,
+                            "inputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::FooCap"
+                                  },
+                                  "json": {
+                                    "id": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7"
+                                  }
+                                }
+                              }
+                            },
+                            "outputState": {
+                              "asMoveObject": {
+                                "contents": {
+                                  "type": {
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::FooCap"
+                                  },
+                                  "json": {
+                                    "id": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7"
                                   }
                                 }
                               }
@@ -373,12 +373,12 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": null
                                   }
                                 }
@@ -388,14 +388,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": {
-                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                                       "size": "0"
                                     }
                                   }
@@ -421,7 +421,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0x62216fda04b35ef594c8e1b8addac946530cb72879a44d48b7c92e4ded0214a1",
+                                    "id": "0x7416853ee264f7bb69166a2c616a46b4712baadacf4bb4df070cc44b5fea1dc3",
                                     "name": "1",
                                     "value": "200"
                                   }
@@ -464,14 +464,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": {
-                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                                       "size": "0"
                                     }
                                   }
@@ -482,14 +482,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": {
-                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                                       "size": "1"
                                     }
                                   }
@@ -544,7 +544,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0xe0e54e608fd0fd7d66ed72de1d6f6dffa68b3b79a78954eaf9d9d72574f0370c",
+                                    "id": "0xdccce68c8340417a430d44bab18807312f39ab83f311c78ded6da9881641272e",
                                     "name": "3",
                                     "value": "400"
                                   }
@@ -558,14 +558,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": {
-                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                                       "size": "1"
                                     }
                                   }
@@ -576,14 +576,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": {
-                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                                       "size": "2"
                                     }
                                   }
@@ -637,7 +637,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0xe0e54e608fd0fd7d66ed72de1d6f6dffa68b3b79a78954eaf9d9d72574f0370c",
+                                    "id": "0xdccce68c8340417a430d44bab18807312f39ab83f311c78ded6da9881641272e",
                                     "name": "3",
                                     "value": "400"
                                   }
@@ -651,7 +651,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0xe0e54e608fd0fd7d66ed72de1d6f6dffa68b3b79a78954eaf9d9d72574f0370c",
+                                    "id": "0xdccce68c8340417a430d44bab18807312f39ab83f311c78ded6da9881641272e",
                                     "name": "3",
                                     "value": "4"
                                   }
@@ -665,14 +665,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": {
-                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                                       "size": "2"
                                     }
                                   }
@@ -683,14 +683,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": {
-                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                                       "size": "2"
                                     }
                                   }
@@ -715,7 +715,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0x62216fda04b35ef594c8e1b8addac946530cb72879a44d48b7c92e4ded0214a1",
+                                    "id": "0x7416853ee264f7bb69166a2c616a46b4712baadacf4bb4df070cc44b5fea1dc3",
                                     "name": "1",
                                     "value": "200"
                                   }
@@ -729,7 +729,7 @@ Response: {
                                     "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,u64>"
                                   },
                                   "json": {
-                                    "id": "0x62216fda04b35ef594c8e1b8addac946530cb72879a44d48b7c92e4ded0214a1",
+                                    "id": "0x7416853ee264f7bb69166a2c616a46b4712baadacf4bb4df070cc44b5fea1dc3",
                                     "name": "1",
                                     "value": "2"
                                   }
@@ -772,14 +772,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": {
-                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                                       "size": "2"
                                     }
                                   }
@@ -790,14 +790,14 @@ Response: {
                               "asMoveObject": {
                                 "contents": {
                                   "type": {
-                                    "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::Foo"
+                                    "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::Foo"
                                   },
                                   "json": {
-                                    "id": "0xe2ea558b8d92b40df20b37d4b1bcaa9de9bfd302ff948e27821c3765ac798c72",
+                                    "id": "0xddb8c91c401c671dc643fda068b5fe2fc203283348759978584dd72c494a2c30",
                                     "creator": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-                                    "cap": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975",
+                                    "cap": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7",
                                     "bag": {
-                                      "id": "0xa6803fa967edac151cacbb50fe1cdbbf3f639827b04508c6ac43197fb0fdb1b7",
+                                      "id": "0x748f7b30fe6a5b182855516fd131d6a660299585437a18e20e6f9e92f2f31ce1",
                                       "size": "2"
                                     }
                                   }
@@ -832,10 +832,10 @@ Response: {
                 "asMoveObject": {
                   "contents": {
                     "type": {
-                      "repr": "0x5cdb90a22c345f7ec4ef7a2450a16147d9ef64fee1f2fd1a721676fd2870629f::mod::FooCap"
+                      "repr": "0x40e99ad2f7ef895e6ab15680c406db87d3afb3acb1880a67958c692074755221::mod::FooCap"
                     },
                     "json": {
-                      "id": "0x893b1bbfc65d011eb0db3069480ed7c08a91764ce145235b11dbf03e49994975"
+                      "id": "0xeb1dff0d5886a2ae2238a9794543552736f35bb809841bea3729a76ca363fac7"
                     }
                   }
                 }

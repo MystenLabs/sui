@@ -4,101 +4,101 @@
 //# init --addresses test=0x0
 
 //# publish
-module 0x0.f {
-    import 0x2.transfer;
-    import 0x2.object;
-    import 0x2.dynamic_field;
-    import 0x2.dynamic_object_field;
-    import 0x2.tx_context;
+module 0x0::f {
+    import 0x2::transfer;
+    import 0x2::object;
+    import 0x2::dynamic_field;
+    import 0x2::dynamic_object_field;
+    import 0x2::tx_context;
 
     enum X has store, key {
-        A { id: object.UID } 
+        A { id: object::UID } 
     }
 
-    public transfer(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let id: object.UID;
+    public transfer(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let id: object::UID;
         label  l0:
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            transfer.transfer<Self.X>(move(x), 0x0);
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            transfer::transfer<Self::X>(move(x), 0x0);
         return;
     }
 
-    public share(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let id: object.UID;
+    public share(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let id: object::UID;
         label  l0:
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            transfer.share_object<Self.X>(move(x));
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            transfer::share_object<Self::X>(move(x));
         return;
     }
 
-    public public_transfer(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let id: object.UID;
+    public public_transfer(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let id: object::UID;
         label  l0:
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            transfer.public_transfer<Self.X>(move(x), 0x0);
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            transfer::public_transfer<Self::X>(move(x), 0x0);
         return;
     }
 
-    public public_share(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let id: object.UID;
+    public public_share(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let id: object::UID;
         label  l0:
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            transfer.public_share_object<Self.X>(move(x));
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            transfer::public_share_object<Self::X>(move(x));
         return;
     }
 
-    public freezer(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let id: object.UID;
+    public freezer(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let id: object::UID;
         label l0:
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            transfer.freeze_object<Self.X>(move(x));
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            transfer::freeze_object<Self::X>(move(x));
         return;
     }
 
-    public public_freezer(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let id: object.UID;
+    public public_freezer(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let id: object::UID;
         label l0:
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            transfer.public_freeze_object<Self.X>(move(x));
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            transfer::public_freeze_object<Self::X>(move(x));
         return;
     }
 
-    public add_as_df(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let parent_id: object.UID;
-        let id: object.UID;
+    public add_as_df(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let parent_id: object::UID;
+        let id: object::UID;
         label l0:
-            parent_id = object.new(copy(ctx));
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            dynamic_field.add<u64, Self.X>(&mut parent_id, 0, move(x));
-            object.delete(move(parent_id));
+            parent_id = object::new(copy(ctx));
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            dynamic_field::add<u64, Self::X>(&mut parent_id, 0, move(x));
+            object::delete(move(parent_id));
         return;
 
     }
 
-    public dof_add(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let parent_id: object.UID;
-        let id: object.UID;
+    public dof_add(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let parent_id: object::UID;
+        let id: object::UID;
         label l0:
-            parent_id = object.new(copy(ctx));
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            dynamic_object_field.add<u64, Self.X>(&mut parent_id, 0, move(x));
-            object.delete(move(parent_id));
+            parent_id = object::new(copy(ctx));
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            dynamic_object_field::add<u64, Self::X>(&mut parent_id, 0, move(x));
+            object::delete(move(parent_id));
         return;
     }
 }

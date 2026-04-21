@@ -21,7 +21,7 @@ Push-based sources deliver real-time checkpoint data as it becomes available, of
 
 #### Recommended: gRPC streaming
 
-gRPC streaming delivers real-time checkpoint data pushed from full nodes for the latest checkpoints. Because it only streams latest data, you must configure a polling-based fallback source (remote store, local path, or full node RPC) to retrieve historical checkpoints and ensure reliability:
+gRPC streaming from a full node should be the default choice for production indexers. It delivers real-time checkpoint data pushed from full nodes for the latest checkpoints. Because it only streams latest data, you must configure a polling-based fallback source (remote store, local path, or full node RPC) to retrieve historical checkpoints and ensure reliability:
 
 ```sh
 $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming-url https://fullnode.testnet.sui.io:443
@@ -41,7 +41,10 @@ $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming
 
 :::info
 
-- Always configure a polling-based fallback source (like `--remote-store-url`) to ensure reliability and access to historical data.
+- Use full node gRPC as your primary source by default.
+- Always configure a polling-based fallback source to ensure reliability and access to historical data.
+- Use `https://checkpoints.<network>.sui.io` only as a fallback, not as your default steady-state source.
+- `https://checkpoints.mainnet.sui.io` retains only the most recent 30 days of checkpoints. Testnet still provides full history.
 - The streaming connection automatically falls back to the polling source when streaming is unavailable or when historical checkpoints are needed.
 
 :::
@@ -52,7 +55,7 @@ Polling-based sources periodically check for new checkpoints using the polling m
 
 #### Remote store
 
-The most direct stream source is a subscription to a remote checkpoint store. Sui provides the following endpoints:
+Remote checkpoint stores are intended for fallback and backfill. Sui provides the following endpoints:
 
 - **Testnet**: `https://checkpoints.testnet.sui.io`
 - **Mainnet**: `https://checkpoints.mainnet.sui.io`
@@ -60,6 +63,8 @@ The most direct stream source is a subscription to a remote checkpoint store. Su
 ```sh
 $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io
 ```
+
+Do not use `https://checkpoints.<network>.sui.io` as your default steady-state source if you have access to a full node gRPC endpoint. On Mainnet, `https://checkpoints.mainnet.sui.io` retains only the latest 30 days of checkpoints. If you need to backfill older Mainnet history, use `gs://mysten-mainnet-checkpoints-use4` via `--remote-store-gcs mysten-mainnet-checkpoints-use4`. This bucket is Requester Pays enabled and is intended to be accessed through the indexing framework's `--remote-store-gcs` option rather than `--remote-store-url`. Testnet still provides full history through `https://checkpoints.testnet.sui.io`. See [Running a Remote Store](/operators/data-management/remote-store-setup) and Google Cloud [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays).
 
 #### Local path
 
@@ -90,6 +95,6 @@ $ cargo run -- --rpc-api-url https://fullnode.testnet.sui.io:443
 
 **When to use RPC API:**
 
+- Default polling source for steady-state indexing
 - Networks without official remote store (Devnet, Localnet, custom networks)
 - Development against local Sui networks
-

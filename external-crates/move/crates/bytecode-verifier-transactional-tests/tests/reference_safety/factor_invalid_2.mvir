@@ -1,8 +1,8 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct S { g: u64 }
 
-    t1(root: &mut Self.S, cond: bool) {
+    t1(root: &mut Self::S, cond: bool) {
         let x1: u64;
         let x2: u64;
         let eps: &u64;
@@ -16,7 +16,7 @@ module 0x1.M {
         eps = &x1;
         jump b3;
     label b2:
-        eps = Self.bar(copy(root));
+        eps = Self::bar(copy(root));
     label b3:
         // Error: root has weak empty borrow and hence a field cannot be borrowed mutably
         g_mut = &mut move(root).S::g;
@@ -24,7 +24,7 @@ module 0x1.M {
         return;
     }
 
-    bar(a: &mut Self.S): &u64 {
+    bar(a: &mut Self::S): &u64 {
     label b0:
         return &move(a).S::g;
     }

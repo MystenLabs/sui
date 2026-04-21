@@ -33,13 +33,15 @@ impl LinkageAnalyzer {
         protocol_config: &ProtocolConfig,
     ) -> Result<Self, ExecutionError> {
         let always_include_system_packages = !Mode::packages_are_predefined();
-        let linkage_config = LinkageConfig::legacy_linkage_settings(always_include_system_packages);
+        let linkage_config = LinkageConfig::new(
+            protocol_config
+                .include_special_package_amendments_as_option()
+                .clone(),
+            always_include_system_packages,
+        );
         let binary_config = protocol_config.binary_config(None);
         Ok(Self {
-            internal: ResolutionConfig {
-                linkage_config,
-                binary_config,
-            },
+            internal: ResolutionConfig::new(linkage_config, binary_config),
         })
     }
 
@@ -98,10 +100,7 @@ impl LinkageAnalyzer {
         type_args: &[Type],
         store: &dyn PackageStore,
     ) -> Result<ResolutionTable, ExecutionError> {
-        let mut resolution_table = self
-            .internal
-            .linkage_config
-            .resolution_table_with_native_packages(store)?;
+        let mut resolution_table = self.internal.resolution_table_with_native_packages(store)?;
 
         fn add_package(
             object_id: &ObjectID,
@@ -111,7 +110,11 @@ impl LinkageAnalyzer {
             dep_resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
         ) -> Result<(), ExecutionError> {
             let pkg = get_package(object_id, store)?;
-            let transitive_deps = pkg.linkage_table().values().copied().map(ObjectID::from);
+            let transitive_deps = resolution_table
+                .config
+                .linkage_table(&pkg)
+                .into_values()
+                .map(ObjectID::from);
             for object_id in transitive_deps {
                 add_and_unify(&object_id, store, resolution_table, dep_resolution_fn)?;
             }
@@ -172,10 +175,7 @@ impl LinkageAnalyzer {
         deps: &[ObjectID],
         store: &dyn PackageStore,
     ) -> Result<ResolutionTable, ExecutionError> {
-        let mut resolution_table = self
-            .internal
-            .linkage_config
-            .resolution_table_with_native_packages(store)?;
+        let mut resolution_table = self.internal.resolution_table_with_native_packages(store)?;
         for id in deps {
             add_and_unify(id, store, &mut resolution_table, VersionConstraint::exact)?;
         }
@@ -215,7 +215,6 @@ mod input_type_resolution_analysis {
 
         let mut resolution_table = analyzer
             .internal
-            .linkage_config
             .resolution_table_with_native_packages(package_store)?;
         for arg in inputs.iter() {
             input(&mut resolution_table, arg, package_store, object_store)?;

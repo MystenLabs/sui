@@ -1,0 +1,93 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://docs.sui.io/references/sui-api",
+      "service-doc": [
+        {
+          "href": "https://docs.sui.io/references/sui-api",
+          "type": "text/html",
+          "title": "Sui JSON-RPC API Documentation"
+        }
+      ],
+      "service-desc": [
+        {
+          "href": "https://docs.sui.io/open-spec/mainnet/openrpc.json",
+          "type": "application/json",
+          "title": "Sui JSON-RPC OpenRPC Specification (Mainnet)"
+        },
+        {
+          "href": "https://docs.sui.io/open-spec/testnet/openrpc.json",
+          "type": "application/json",
+          "title": "Sui JSON-RPC OpenRPC Specification (Testnet)"
+        },
+        {
+          "href": "https://docs.sui.io/open-spec/devnet/openrpc.json",
+          "type": "application/json",
+          "title": "Sui JSON-RPC OpenRPC Specification (Devnet)"
+        }
+      ]
+    },
+    {
+      "anchor": "https://fullnode.mainnet.sui.io:443",
+      "service-doc": [
+        {
+          "href": "https://docs.sui.io/references/sui-api",
+          "type": "text/html",
+          "title": "Sui JSON-RPC API Documentation"
+        }
+      ],
+      "service-desc": [
+        {
+          "href": "https://docs.sui.io/open-spec/mainnet/openrpc.json",
+          "type": "application/json",
+          "title": "Sui JSON-RPC OpenRPC Specification"
+        }
+      ]
+    },
+    {
+      "anchor": "https://graphql.mainnet.sui.io/graphql",
+      "service-doc": [
+        {
+          "href": "https://docs.sui.io/references/sui-graphql",
+          "type": "text/html",
+          "title": "Sui GraphQL RPC Documentation"
+        }
+      ]
+    },
+    {
+      "anchor": "https://graphql.testnet.sui.io/graphql",
+      "service-doc": [
+        {
+          "href": "https://docs.sui.io/references/sui-graphql",
+          "type": "text/html",
+          "title": "Sui GraphQL RPC Documentation (Testnet)"
+        }
+      ]
+    },
+    {
+      "anchor": "https://docs.sui.io",
+      "service-doc": [
+        {
+          "href": "https://docs.sui.io/llms.txt",
+          "type": "text/plain",
+          "title": "LLM-optimized documentation index"
+        },
+        {
+          "href": "https://docs.sui.io/references/framework",
+          "type": "text/html",
+          "title": "Sui Move Framework Reference"
+        },
+        {
+          "href": "https://docs.sui.io/references/cli",
+          "type": "text/html",
+          "title": "Sui CLI Reference"
+        },
+        {
+          "href": "https://docs.sui.io/references/sui-sdks",
+          "type": "text/html",
+          "title": "Sui SDK Reference"
+        }
+      ]
+    }
+  ]
+}

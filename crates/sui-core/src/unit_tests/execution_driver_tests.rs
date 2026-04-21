@@ -12,7 +12,7 @@ use crate::authority_server::{ValidatorService, ValidatorServiceMetrics};
 use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::consensus_adapter::ConsensusAdapterMetrics;
-use crate::consensus_adapter::{ConnectionMonitorStatusForTests, MockConsensusClient};
+use crate::consensus_adapter::MockConsensusClient;
 use crate::safe_client::SafeClient;
 use crate::test_authority_clients::LocalAuthorityClient;
 use crate::test_utils::{make_transfer_object_move_transaction, make_transfer_object_transaction};
@@ -777,18 +777,13 @@ async fn test_authority_txn_validation_pushback() {
         .await;
 
     // Create a validator service around the `authority_state`.
-    let epoch_store = authority_state.epoch_store_for_testing();
     let consensus_adapter = Arc::new(ConsensusAdapter::new(
         Arc::new(MockConsensusClient::new()),
         CheckpointStore::new_for_tests(),
         authority_state.name,
-        Arc::new(ConnectionMonitorStatusForTests {}),
         100_000,
         100_000,
-        None,
-        None,
         ConsensusAdapterMetrics::new_test(),
-        epoch_store.protocol_config().clone(),
     ));
     let validator_service = Arc::new(ValidatorService::new_for_tests(
         authority_state.clone(),

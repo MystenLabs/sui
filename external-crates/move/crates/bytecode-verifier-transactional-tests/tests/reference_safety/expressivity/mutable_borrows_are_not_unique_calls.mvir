@@ -1,16 +1,16 @@
 // mutable borrows are not unique
 
 //# publish
-module 0x4.call {
+module 0x4::call {
 
     struct S has copy, drop { f: u64 }
 
-    borrow_f(s: &mut Self.S): &mut u64 {
+    borrow_f(s: &mut Self::S): &mut u64 {
     label b0:
         return &mut move(s).S::f;
     }
 
-    create(s: &mut Self.S) {
+    create(s: &mut Self::S) {
         let call: &mut u64;
         let f: &mut u64;
     label b0:
@@ -19,7 +19,7 @@ module 0x4.call {
         // not overlap with any other arguments)
 
         // if we swap the call with the field borrow, this will error
-        call = Self.borrow_f(copy(s));
+        call = Self::borrow_f(copy(s));
         f = &mut copy(s).S::f;
         return;
     }
@@ -27,16 +27,16 @@ module 0x4.call {
 }
 
 //# publish
-module 0x5.call_and_write_invalid {
+module 0x5::call_and_write_invalid {
 
     struct S has copy, drop { f: u64 }
 
-    borrow_f(s: &mut Self.S): &mut u64 {
+    borrow_f(s: &mut Self::S): &mut u64 {
     label b0:
         return &mut move(s).S::f;
     }
 
-    write(s: &mut Self.S) {
+    write(s: &mut Self::S) {
         let call: &mut u64;
         let f: &mut u64;
     label b0:
@@ -45,7 +45,7 @@ module 0x5.call_and_write_invalid {
         // We cannot write to either call or f since we do not know the relationship between them.
         // While it is "safe" in this case, we do not look at the type layout for that information.
         // It could be the case that f extends call, and that call extends f.
-        call = Self.borrow_f(copy(s));
+        call = Self::borrow_f(copy(s));
         f = &mut copy(s).S::f;
         *copy(call) = 0;
         *copy(f) = 0;
@@ -55,21 +55,21 @@ module 0x5.call_and_write_invalid {
 }
 
 //# publish
-module 0x6.call_and_write_valid {
+module 0x6::call_and_write_valid {
 
     struct S has copy, drop { f: u64 }
 
-    borrow_f(s: &mut Self.S): &mut u64 {
+    borrow_f(s: &mut Self::S): &mut u64 {
     label b0:
         return &mut move(s).S::f;
     }
 
-    write(s: &mut Self.S) {
+    write(s: &mut Self::S) {
         let call: &mut u64;
         let f: &mut u64;
     label b0:
         // If however we free the call's return value before borrowing f, this is valid.
-        call = Self.borrow_f(copy(s));
+        call = Self::borrow_f(copy(s));
         *move(call) = 0; // the move frees the value
         f = &mut copy(s).S::f;
         *copy(f) = 0;

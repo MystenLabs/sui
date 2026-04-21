@@ -295,6 +295,128 @@ mod tests {
         assert!(conn.accepts_chain_id("Checkpoint", chain_id).await.unwrap());
     }
 
+    /// Build a config with two pipelines (Checkpoint at prefix `cp`, Transaction at
+    /// prefix `tx`) that the SystemPackageEviction test cases derive their watermark from.
+    fn multi_pipeline_config(object_store: Arc<dyn object_store::ObjectStore>) -> IndexerConfig {
+        let mut cfg = test_config(object_store);
+        cfg.pipeline_configs = vec![
+            PipelineConfig {
+                pipeline: Pipeline::Checkpoint,
+                file_format: crate::config::FileFormat::Parquet,
+                package_id_filter: None,
+                sf_table_id: None,
+                sf_checkpoint_col_id: None,
+                report_sf_max_table_checkpoint: false,
+                batch_size: None,
+                output_prefix: Some("cp".to_string()),
+                force_batch_cut_after_secs: 600,
+                sequential: Default::default(),
+            },
+            PipelineConfig {
+                pipeline: Pipeline::Transaction,
+                file_format: crate::config::FileFormat::Parquet,
+                package_id_filter: None,
+                sf_table_id: None,
+                sf_checkpoint_col_id: None,
+                report_sf_max_table_checkpoint: false,
+                batch_size: None,
+                output_prefix: Some("tx".to_string()),
+                force_batch_cut_after_secs: 600,
+                sequential: Default::default(),
+            },
+        ];
+        cfg
+    }
+
+    fn eviction_store() -> (Arc<dyn object_store::ObjectStore>, AnalyticsStore) {
+        let object_store: Arc<dyn object_store::ObjectStore> = Arc::new(InMemory::new());
+        let config = multi_pipeline_config(object_store.clone());
+        let store = AnalyticsStore::new(object_store.clone(), config, test_metrics());
+        (object_store, store)
+    }
+
+    /// Simulate the framework's per-pipeline `init_watermark` calls in registration
+    /// order, populating the initial_watermarks cache before the eviction pipeline fires.
+    async fn prime_pipelines(conn: &mut crate::store::AnalyticsConnection<'_>, pipelines: &[&str]) {
+        for p in pipelines {
+            let _ = conn.committer_watermark(p).await.unwrap();
+        }
+    }
+
+    #[tokio::test]
+    async fn test_eviction_watermark_max_across_pipelines() {
+        let (object_store, store) = eviction_store();
+        // Checkpoint at checkpoint 399 — higher, should dominate max
+        create_test_file(&object_store, "cp", 0, 0, 400).await;
+        // Transaction at checkpoint 199
+        create_test_file(&object_store, "tx", 0, 0, 200).await;
+
+        let mut conn = store.connect().await.unwrap();
+        prime_pipelines(&mut conn, &["Checkpoint", "Transaction"]).await;
+
+        let w = conn
+            .committer_watermark(
+                crate::handlers::system_package_eviction::SYSTEM_PACKAGE_EVICTION_PIPELINE,
+            )
+            .await
+            .unwrap()
+            .expect("expected Some watermark when other pipelines have files");
+        assert_eq!(w.checkpoint_hi_inclusive, 399);
+    }
+
+    #[tokio::test]
+    async fn test_eviction_watermark_nothing_primed_returns_none() {
+        // Eviction fires before any pipeline's init_watermark — initial_watermarks empty.
+        let (_object_store, store) = eviction_store();
+        let mut conn = store.connect().await.unwrap();
+        let w = conn
+            .committer_watermark(
+                crate::handlers::system_package_eviction::SYSTEM_PACKAGE_EVICTION_PIPELINE,
+            )
+            .await
+            .unwrap();
+        assert!(w.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_eviction_watermark_fresh_pipelines_returns_none() {
+        // Pipelines registered but no files written yet — each caches `None`, max of an
+        // empty filtered iter is `None`.
+        let (_object_store, store) = eviction_store();
+        let mut conn = store.connect().await.unwrap();
+        prime_pipelines(&mut conn, &["Checkpoint", "Transaction"]).await;
+
+        let w = conn
+            .committer_watermark(
+                crate::handlers::system_package_eviction::SYSTEM_PACKAGE_EVICTION_PIPELINE,
+            )
+            .await
+            .unwrap();
+        assert!(w.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_eviction_watermark_ignores_unregistered_pipelines() {
+        // Only Checkpoint is "registered" (its init_watermark fires). Transaction has
+        // newer files on disk but never goes through registration in this process, so
+        // it doesn't show up in initial_watermarks and is correctly ignored.
+        let (object_store, store) = eviction_store();
+        create_test_file(&object_store, "cp", 0, 0, 200).await;
+        create_test_file(&object_store, "tx", 0, 0, 400).await;
+
+        let mut conn = store.connect().await.unwrap();
+        prime_pipelines(&mut conn, &["Checkpoint"]).await;
+
+        let w = conn
+            .committer_watermark(
+                crate::handlers::system_package_eviction::SYSTEM_PACKAGE_EVICTION_PIPELINE,
+            )
+            .await
+            .unwrap()
+            .expect("expected Some watermark from registered pipeline");
+        assert_eq!(w.checkpoint_hi_inclusive, 199);
+    }
+
     #[tokio::test]
     async fn test_accepts_chain_id_mismatching_rejects() {
         let (object_store, store) = in_memory_store();

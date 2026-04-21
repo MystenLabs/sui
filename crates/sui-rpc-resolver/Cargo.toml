@@ -14,7 +14,6 @@ bcs.workspace = true
 futures.workspace = true
 lru.workspace = true
 move-core-types.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 sui-package-resolver.workspace = true
 sui-rpc-api.workspace = true

@@ -58,6 +58,13 @@ A 30-day retention adds 1.8 TB on top, while a 90-day retention contributes up t
 
 ### Run `sui-indexer-alt`
 
+Use full node gRPC as the default source for steady-state operation. Use a checkpoint bucket only for backfill, recovery, or fallback when historical checkpoints are required.
+
+For steady-state operation, use the public full node gRPC endpoint pattern `https://fullnode.<network>.sui.io:443`, for example:
+
+- Mainnet: `https://fullnode.mainnet.sui.io:443`
+- Testnet: `https://fullnode.testnet.sui.io:443`
+
 Run an indexer instance using this command for each of the configuration files. The command varies based on whether the pipeline is prunable or unprunable:
 
 #### For unprunable pipelines (must start from genesis)
@@ -65,7 +72,7 @@ Run an indexer instance using this command for each of the configuration files. 
 $ sui-indexer-alt indexer \
     --config <CONFIG_FILE> \
     --database-url <DATABASE_URL> \
-    --remote-store-url <REMOTE_STORE_URL>
+    --remote-store-gcs <REMOTE_STORE_GCS_BUCKET>
 ```
 
 #### For prunable pipelines with retention period
@@ -73,7 +80,7 @@ $ sui-indexer-alt indexer \
 $ sui-indexer-alt indexer \
     --config <CONFIG_FILE> \
     --database-url <DATABASE_URL> \
-    --remote-store-url <REMOTE_STORE_URL> \
+    --remote-store-gcs <REMOTE_STORE_GCS_BUCKET> \
     --first-checkpoint <CHECKPOINT_NUMBER>
 ```
 
@@ -81,21 +88,21 @@ For prunable pipelines, calculate the `first-checkpoint` based on your retention
 - **30-day retention**: Start from checkpoint `current_checkpoint - 10368000`
 - **90-day retention**: Start from checkpoint `current_checkpoint - 31104000`
 
-| **CLI param**            | **Description**                                                                                                                          |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `<CONFIG_FILE>`      | Path to indexer configuration file.                                                                                                  |
-| `<DATABASE_URL>`     | Postgres database connection string.                                                                                                 |
-| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/develop/accessing-data/custom-indexer/custom-indexers#data-sources). |
-| `<CHECKPOINT_NUMBER>`| (Optional) For prunable pipelines only - the checkpoint to start indexing from based on retention requirements.                        |
+| **CLI param** | **Description** |
+| --- | --- |
+| `<CONFIG_FILE>` | Path to indexer configuration file. |
+| `<DATABASE_URL>` | Postgres database connection string. |
+| `<REMOTE_STORE_GCS_BUCKET>` | GCS bucket name to index from. Recommended for backfill because it uses the GCS API directly instead of HTTPS. See [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources). |
+| `<CHECKPOINT_NUMBER>` | (Optional) For prunable pipelines only, the checkpoint to start indexing from based on retention requirements. |
 
 #### Examples
 
-**Unprunable pipeline (from genesis):**
+**Unprunable pipeline (from genesis via GCS bucket):**
 ```sh
 $ sui-indexer-alt indexer \
     --config unpruned.toml \
     --database-url postgres://username:password@localhost:5432/database \
-    --remote-store-url https://checkpoints.mainnet.sui.io
+    --remote-store-gcs mysten-mainnet-checkpoints-use4
 ```
 
 **Prunable pipeline with 30-day retention (assuming current checkpoint is 100,000,000):**
@@ -103,9 +110,37 @@ $ sui-indexer-alt indexer \
 $ sui-indexer-alt indexer \
     --config events.toml \
     --database-url postgres://username:password@localhost:5432/database \
+    --remote-store-gcs mysten-mainnet-checkpoints-use4 \
+    --first-checkpoint 89632000
+```
+
+**HTTPS remote store URL (alternative to GCS bucket access):**
+```sh
+$ sui-indexer-alt indexer \
+    --config events.toml \
+    --database-url postgres://username:password@localhost:5432/database \
     --remote-store-url https://checkpoints.mainnet.sui.io \
     --first-checkpoint 89632000
 ```
+
+**Steady-state operation from a full node gRPC endpoint (recommended):**
+```sh
+$ sui-indexer-alt indexer \
+    --config events.toml \
+    --database-url postgres://username:password@localhost:5432/database \
+    --rpc-api-url https://fullnode.mainnet.sui.io:443 \
+    --streaming-url https://fullnode.mainnet.sui.io:443
+```
+
+:::info
+
+`https://checkpoints.mainnet.sui.io` retains only the most recent 30 days of checkpoints. For Mainnet backfills older than 30 days or from genesis, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4`.
+
+If the checkpoint bucket you are using has Requester Pays enabled, configure GCS credentials and a billing project when using `--remote-store-gcs`. In Sui's object store config, the relevant fields are `google_service_account` and `google_project_id`. `google_project_id` is sent as the `x-goog-user-project` header required by GCS Requester Pays.
+
+For more on Requester Pays, see [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays). For source selection and steady-state operation guidance, see [Running a Remote Store](/operators/data-management/remote-store-setup) and [Archival Stack Setup](/operators/data-management/archival-stack-setup). In general, `https://checkpoints.mainnet.sui.io` should not be your default source in steady state if a full node gRPC endpoint is available.
+
+:::
 
 ### Run config recommendations {#indexer-run-config}
 
@@ -320,6 +355,8 @@ $ sui-indexer-alt-consistent-store restore \
     --remote-store-url https://checkpoints.mainnet.sui.io
 ```
 
+`https://checkpoints.mainnet.sui.io` retains only the most recent 30 days of checkpoints. For Mainnet backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` via the indexing framework's `--remote-store-gcs mysten-mainnet-checkpoints-use4` option instead of `--remote-store-url`.
+
 ### Run command
 
 Run a consistent store instance using this command for the configuration file that follows:
@@ -335,7 +372,7 @@ $ sui-indexer-alt-consistent-store run \
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `<CONFIG_FILE>`      | Path to consistent store configuration file.                                                                                         |
 | `<DATABASE_PATH>`    | Path to RocksDB database.                                                                                                            |
-| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/develop/accessing-data/custom-indexer/custom-indexers#data-sources). |
+| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/develop/accessing-data/custom-indexer/custom-indexers#data-sources). Public HTTPS checkpoint endpoints retain only the most recent 30 days of checkpoints. |
 
 Example:
 
@@ -345,6 +382,8 @@ $ sui-indexer-alt-consistent-store run \
     --database-path /path/to/rocksdb \
     --remote-store-url https://checkpoints.mainnet.sui.io
 ```
+
+For Mainnet full-history backfill, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` rather than `--remote-store-url`.
 
 ### Run config recommendations
 

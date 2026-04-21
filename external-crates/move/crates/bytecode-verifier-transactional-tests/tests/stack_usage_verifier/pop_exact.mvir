@@ -1,5 +1,5 @@
 //# publish
-module 0x6.A {
+module 0x6::A {
     three(): u64 * u64 * u64 {
     label b0:
         return 0, 1, 2;
@@ -8,7 +8,7 @@ module 0x6.A {
     pop() {
     label b0:
         // correct amount of pops
-        _, _, _ = Self.three();
+        _, _, _ = Self::three();
         return;
     }
 }

@@ -41,6 +41,11 @@ impl Services {
         self
     }
 
+    pub fn merge_router(mut self, router: axum::Router) -> Self {
+        self.router = self.router.merge(router);
+        self
+    }
+
     pub fn into_router(self) -> axum::Router {
         self.router.layer(tonic_web::GrpcWebLayer::new())
     }

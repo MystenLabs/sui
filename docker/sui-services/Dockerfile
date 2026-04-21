@@ -13,7 +13,8 @@ COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
 RUN cargo build --release \
-    --bin sui-oracle
+    --bin sui-oracle \
+    --bin sui-metric-checker
 RUN mkdir /sui/bin/
 RUN find /sui/target/release/ -maxdepth 1 -type f -executable -print 
 RUN find /sui/target/release/ -maxdepth 1 -type f -executable -print | xargs cp -t /sui/bin/

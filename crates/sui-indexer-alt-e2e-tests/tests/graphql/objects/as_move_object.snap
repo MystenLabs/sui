@@ -22,9 +22,9 @@ task 3, lines 12-27:
 Response: {
   "data": {
     "object": {
-      "objectBcs": "AAEBAgAAAAAAAAAosNgmeGrTdLnm552kotbI1fI8QTrrdvoLB+VjbRc6So9galAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiA6FRkwQZSZpOiqyn60vqQr3FF9jxMCc5e4igsyAUCtkWATDwAAAAAA",
+      "objectBcs": "AAEBAgAAAAAAAAAosNgmeGrTdLnm552kotbI1fI8QTrrdvoLB+VjbRc6So9galAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiCT9Xh938NvFCTRvtEk+Bc6X1308522M7aKJk0h7Aqp+2ATDwAAAAAA",
       "asMoveObject": {
-        "objectBcs": "AAEBAgAAAAAAAAAosNgmeGrTdLnm552kotbI1fI8QTrrdvoLB+VjbRc6So9galAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiA6FRkwQZSZpOiqyn60vqQr3FF9jxMCc5e4igsyAUCtkWATDwAAAAAA",
+        "objectBcs": "AAEBAgAAAAAAAAAosNgmeGrTdLnm552kotbI1fI8QTrrdvoLB+VjbRc6So9galAx2RABAAD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHiCT9Xh938NvFCTRvtEk+Bc6X1308522M7aKJk0h7Aqp+2ATDwAAAAAA",
         "moveObjectBcs": "AQECAAAAAAAAACiw2CZ4atN0uebnnaSi1sjV8jxBOut2+gsH5WNtFzpKj2BqUDHZEAEA",
         "contents": {
           "type": {

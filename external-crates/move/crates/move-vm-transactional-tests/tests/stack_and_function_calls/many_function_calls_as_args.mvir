@@ -1,20 +1,20 @@
 //# publish
-module 0x5.A {
+module 0x5::A {
     struct T has drop {value: u64, even: bool}
 
-    public new(): Self.T {
+    public new(): Self::T {
     label b0:
         return T {value: 0, even: true};
     }
 
-    public get_value(this: &mut Self.T): u64 {
+    public get_value(this: &mut Self::T): u64 {
         let v: &u64;
     label b0:
         v = &move(this).T::value;
         return *move(v);
     }
 
-    public get_parity(this: &mut Self.T): bool {
+    public get_parity(this: &mut Self::T): bool {
         let b: &bool;
     label b0:
         b = &move(this).T::even;
@@ -40,16 +40,16 @@ module 0x5.A {
 
 
 //# run
-module 0x43.m {
-import 0x5.A;
+module 0x43::m {
+import 0x5::A;
 
 entry foo() {
-    let x: A.T;
+    let x: A::T;
     let y: u64;
     let z: bool;
 label b0:
-    x = A.new();
-    y, z = A.change_parity(A.get_value(&mut x), A.get_parity(&mut x));
+    x = A::new();
+    y, z = A::change_parity(A::get_value(&mut x), A::get_parity(&mut x));
     assert(move(y) == 1, 42);
     assert(move(z) == false, 42);
     return;

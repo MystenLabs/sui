@@ -1,13 +1,13 @@
 //# publish
-module 0x1.M {
-    struct X has drop { f: Self.Y }
+module 0x1::M {
+    struct X has drop { f: Self::Y }
     struct Y has drop { g: u64, h: u64 }
 
     // tests deep borrows + releases
     t1() {
-        let x: Self.X;
-        let ref_x: &mut Self.X;
-        let ref_x_f: &mut Self.Y;
+        let x: Self::X;
+        let ref_x: &mut Self::X;
+        let ref_x_f: &mut Self::Y;
         let ref_x_f_g: &mut u64;
         let ref_x_f_h: &mut u64;
     label b0:
@@ -24,7 +24,7 @@ module 0x1.M {
         *copy(ref_x_f_g) = *copy(ref_x_f_h);
         *copy(ref_x_f_h) = *copy(ref_x_f_g);
 
-        Self.foo(move(ref_x_f_g), move(ref_x_f_h));
+        Self::foo(move(ref_x_f_g), move(ref_x_f_h));
         return;
     }
 

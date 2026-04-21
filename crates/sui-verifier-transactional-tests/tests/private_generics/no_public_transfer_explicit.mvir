@@ -6,20 +6,20 @@
 //# init --addresses test=0x0
 
 //# publish
-module test.m {
-    import 0x2.object;
+module test::m {
+    import 0x2::object;
 
     struct KeyStruct has key {
-        id: object.UID,
+        id: object::UID,
     }
 
     struct KeyStoreStruct has key, store {
-        id: object.UID,
+        id: object::UID,
     }
 
     // Enums cannot have key see failure below
     enum StoreEnum has store {
-        V { id: object.UID },
+        V { id: object::UID },
     }
 }
 
@@ -28,75 +28,75 @@ module test.m {
 //# set-address test object(1,0)
 
 //# publish
-module 0x0.m {
-    import 0x2.object;
+module 0x0::m {
+    import 0x2::object;
     // Enums cannot have key
     enum StoreEnum has key {
-        V { id: object.UID },
+        V { id: object::UID },
     }
 }
 
 // Key-only struct not defined in current module
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
 
-    f(x: m.KeyStruct) {
+    f(x: m::KeyStruct) {
         label l0:
-        transfer.transfer<m.KeyStruct>(move(x), 0x0);
+        transfer::transfer<m::KeyStruct>(move(x), 0x0);
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
 
-    f(x: m.KeyStruct) {
+    f(x: m::KeyStruct) {
         label l0:
-        transfer.freeze_object<m.KeyStruct>(move(x));
+        transfer::freeze_object<m::KeyStruct>(move(x));
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
 
-    f(x: m.KeyStruct) {
+    f(x: m::KeyStruct) {
         label l0:
-        transfer.share_object<m.KeyStruct>(move(x));
+        transfer::share_object<m::KeyStruct>(move(x));
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
-    import 0x2.object;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
+    import 0x2::object;
 
-    f(uid: &mut object.UID, x: transfer.Receiving<m.KeyStruct>): m.KeyStruct {
-        let c: m.KeyStruct;
+    f(uid: &mut object::UID, x: transfer::Receiving<m::KeyStruct>): m::KeyStruct {
+        let c: m::KeyStruct;
         label l0:
-        c = transfer.receive<m.KeyStruct>(move(uid), move(x));
+        c = transfer::receive<m::KeyStruct>(move(uid), move(x));
         return move(c);
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
-    import 0x2.party;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
+    import 0x2::party;
 
-    f(x: m.KeyStruct, p: party.Party) {
+    f(x: m::KeyStruct, p: party::Party) {
         label l0:
-        transfer.party_transfer<m.KeyStruct>(move(x), move(p));
+        transfer::party_transfer<m::KeyStruct>(move(x), move(p));
         return;
     }
 }
@@ -104,64 +104,64 @@ module 0x0.u {
 // Key + store struct not defined in current module
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
 
-    f(x: m.KeyStoreStruct) {
+    f(x: m::KeyStoreStruct) {
         label l0:
-        transfer.transfer<m.KeyStoreStruct>(move(x), 0x0);
+        transfer::transfer<m::KeyStoreStruct>(move(x), 0x0);
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
 
-    f(x: m.KeyStoreStruct) {
+    f(x: m::KeyStoreStruct) {
         label l0:
-        transfer.freeze_object<m.KeyStoreStruct>(move(x));
+        transfer::freeze_object<m::KeyStoreStruct>(move(x));
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
 
-    f(x: m.KeyStoreStruct) {
+    f(x: m::KeyStoreStruct) {
         label l0:
-        transfer.share_object<m.KeyStoreStruct>(move(x));
+        transfer::share_object<m::KeyStoreStruct>(move(x));
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
-    import 0x2.object;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
+    import 0x2::object;
 
-    f(uid: &mut object.UID, x: transfer.Receiving<m.KeyStoreStruct>): m.KeyStoreStruct {
-        let c: m.KeyStoreStruct;
+    f(uid: &mut object::UID, x: transfer::Receiving<m::KeyStoreStruct>): m::KeyStoreStruct {
+        let c: m::KeyStoreStruct;
         label l0:
-        c = transfer.receive<m.KeyStoreStruct>(move(uid), move(x));
+        c = transfer::receive<m::KeyStoreStruct>(move(uid), move(x));
         return move(c);
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
-    import 0x2.party;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
+    import 0x2::party;
 
-    f(x: m.KeyStoreStruct, p: party.Party) {
+    f(x: m::KeyStoreStruct, p: party::Party) {
         label l0:
-        transfer.party_transfer<m.KeyStoreStruct>(move(x), move(p));
+        transfer::party_transfer<m::KeyStoreStruct>(move(x), move(p));
         return;
     }
 }
@@ -169,64 +169,64 @@ module 0x0.u {
 // Store enum not defined in current module
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
 
-    f(x: m.StoreEnum) {
+    f(x: m::StoreEnum) {
         label l0:
-        transfer.transfer<m.StoreEnum>(move(x), 0x0);
+        transfer::transfer<m::StoreEnum>(move(x), 0x0);
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
 
-    f(x: m.StoreEnum) {
+    f(x: m::StoreEnum) {
         label l0:
-        transfer.freeze_object<m.StoreEnum>(move(x));
+        transfer::freeze_object<m::StoreEnum>(move(x));
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
 
-    f(x: m.StoreEnum) {
+    f(x: m::StoreEnum) {
         label l0:
-        transfer.share_object<m.StoreEnum>(move(x));
+        transfer::share_object<m::StoreEnum>(move(x));
         return;
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
-    import 0x2.object;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
+    import 0x2::object;
 
-    f(uid: &mut object.UID, x: transfer.Receiving<m.StoreEnum>): m.StoreEnum {
-        let c: m.StoreEnum;
+    f(uid: &mut object::UID, x: transfer::Receiving<m::StoreEnum>): m::StoreEnum {
+        let c: m::StoreEnum;
         label l0:
-        c = transfer.receive<m.StoreEnum>(move(uid), move(x));
+        c = transfer::receive<m::StoreEnum>(move(uid), move(x));
         return move(c);
     }
 }
 
 //# publish --dependencies test
-module 0x0.u {
-    import test.m;
-    import 0x2.transfer;
-    import 0x2.party;
+module 0x0::u {
+    import test::m;
+    import 0x2::transfer;
+    import 0x2::party;
 
-    f(x: m.StoreEnum, p: party.Party) {
+    f(x: m::StoreEnum, p: party::Party) {
         label l0:
-        transfer.party_transfer<m.StoreEnum>(move(x), move(p));
+        transfer::party_transfer<m::StoreEnum>(move(x), move(p));
         return;
     }
 }

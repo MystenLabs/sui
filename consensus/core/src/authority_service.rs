@@ -34,8 +34,8 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
-        BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream, ObserverNetworkService,
-        PeerId, ValidatorNetworkService,
+        BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream, ObserverBlockStreamItem,
+        ObserverNetworkService, PeerId, ValidatorNetworkService,
     },
     round_tracker::RoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
@@ -363,7 +363,9 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             let mut proposed_blocks =
                 dag_state.get_cached_blocks(self.context.own_index, last_received + 1);
             if proposed_blocks.is_empty() {
-                let last_proposed_block = dag_state.get_last_proposed_block();
+                let last_proposed_block = dag_state
+                    .get_last_proposed_block()
+                    .expect("Last proposed block should be returned on validators");
                 proposed_blocks = if last_proposed_block.round() > GENESIS_ROUND {
                     vec![last_proposed_block]
                 } else {
@@ -670,6 +672,17 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
 #[async_trait]
 impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
+    async fn handle_block(
+        &self,
+        _peer: PeerId,
+        _item: ObserverBlockStreamItem,
+    ) -> ConsensusResult<()> {
+        // TODO: implement observer block handling, similar to validator block handling.
+        Err(ConsensusError::NetworkRequest(
+            "Observer block handling not yet implemented".to_string(),
+        ))
+    }
+
     async fn handle_stream_blocks(
         &self,
         _peer: NodeId,

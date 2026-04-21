@@ -1,23 +1,23 @@
 // Vector unpack with an unreachable element reference due to control flow.
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 struct S has copy, drop { f: u64 }
 
 entry foo() {
-    let s: Self.S;
-    let v: vector<Self.S>;
-    let er: &Self.S;
-    let unpacked: Self.S;
+    let s: Self::S;
+    let v: vector<Self::S>;
+    let er: &Self::S;
+    let unpacked: Self::S;
 label b0:
     s = S { f: 0 };
-    v = vec_pack_1<Self.S>(copy(s));
+    v = vec_pack_1<Self::S>(copy(s));
     jump_if_false (true) b_join;
 label b_ref:
-    er = vec_imm_borrow<Self.S>(&v, 0);
+    er = vec_imm_borrow<Self::S>(&v, 0);
 label b_join:
-    unpacked = vec_unpack_1<Self.S>(move(v));
+    unpacked = vec_unpack_1<Self::S>(move(v));
     assert(move(unpacked) == copy(s), 1);
     return;
 }
