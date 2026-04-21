@@ -110,12 +110,14 @@ impl TransactionExecutor for ForkedTransactionExecutor {
             None
         };
 
+        let executed_epoch = effects.executed_epoch();
+
         Ok(ExecuteTransactionResponseV3 {
             effects: FinalizedEffects {
-                effects: effects.clone(),
+                effects,
                 // The forked network is single-node with no consensus; we
                 // report the effects as executed within their embedded epoch.
-                finality_info: EffectsFinalityInfo::QuorumExecuted(effects.executed_epoch()),
+                finality_info: EffectsFinalityInfo::QuorumExecuted(executed_epoch),
             },
             events,
             input_objects,
