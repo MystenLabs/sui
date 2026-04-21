@@ -63,7 +63,7 @@ impl PeersPool {
         }
 
         // Register all the observer peers in the peers pool
-        for peer in context.parameters.tonic.observer_peers.iter() {
+        for peer in context.parameters.observer.peers.iter() {
             // If the peer's public key is in the committe, then register it as a validator.
             if let Some((index, _)) = context
                 .committee
