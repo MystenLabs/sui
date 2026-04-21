@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
-use move_binary_format::partial_vm_error;
 use move_binary_format::errors::PartialVMResult;
+use move_binary_format::partial_vm_error;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
     execution::{
