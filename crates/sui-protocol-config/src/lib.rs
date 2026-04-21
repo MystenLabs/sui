@@ -4866,7 +4866,6 @@ impl ProtocolConfig {
                     }
                     cfg.feature_flags
                         .early_return_receive_object_mismatched_type = true;
-                    cfg.feature_flags.limit_groth16_pvk_inputs = true;
                 }
                 122 => {
                     // Enable unpaid amplification deferral on mainnet
@@ -4892,6 +4891,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.timestamp_based_epoch_close = true;
                     }
                     cfg.gas_model_version = Some(12);
+                    cfg.feature_flags.limit_groth16_pvk_inputs = true;
                 }
                 // Use this template when making changes:
                 //

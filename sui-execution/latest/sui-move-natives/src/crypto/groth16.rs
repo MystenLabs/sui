@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
 use fastcrypto::groups::bls12381::{G1Element, G1_ELEMENT_BYTE_LENGTH, G2_ELEMENT_BYTE_LENGTH};
-use fastcrypto_zkp::groth16::VerifyingKey;
+use fastcrypto_zkp::groth16::get_public_inputs_num;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
@@ -85,21 +85,19 @@ pub fn prepare_verifying_key_internal(
         .limit_groth16_pvk_inputs()
     {
         // The type parameter is not used by get_public_inputs_num, only the const generics matter.
-        type Vk = VerifyingKey<G1Element>;
         let num_public_inputs = match curve {
-            BLS12381 => Vk::get_public_inputs_num::<
+            BLS12381 => get_public_inputs_num::<
                 { G1_ELEMENT_BYTE_LENGTH },
                 { G2_ELEMENT_BYTE_LENGTH },
             >(verifying_key.len()),
-            BN254 => Vk::get_public_inputs_num::<32, 64>(verifying_key.len()),
-            _ => unreachable!(),
+            BN254 => get_public_inputs_num::<32, 64>(verifying_key.len()),
+            _ => return Err(partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION)),
         };
-        if let Ok(n) = num_public_inputs {
-            if n > MAX_PUBLIC_INPUTS {
-                return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
-            }
-        } else {
+        let Ok(n) = num_public_inputs else {
             return Ok(NativeResult::err(cost, INVALID_VERIFYING_KEY));
+        }
+        if n > MAX_PUBLIC_INPUTS {
+            return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
         }
     }
 
