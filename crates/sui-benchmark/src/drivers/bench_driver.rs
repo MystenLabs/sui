@@ -1384,6 +1384,15 @@ fn process_bundle_results(
             .num_success
             .with_label_values(&[payload.to_string().as_str(), "soft_bundle"])
             .inc();
+        metrics
+            .latency_s
+            .with_label_values(&[payload.to_string().as_str(), "soft_bundle"])
+            .observe(latency.as_secs_f64());
+        let square_latency_ms = latency.as_secs_f64().powf(2.0);
+        metrics
+            .latency_squared_s
+            .with_label_values(&[payload.to_string().as_str(), "soft_bundle"])
+            .inc_by(square_latency_ms);
         NextOp::Response {
             latency,
             num_commands: num_txs as u16,

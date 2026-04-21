@@ -12,7 +12,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use sui_types::base_types::ObjectID;
-use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{Argument, Command, ObjectArg, TransactionData};
 use tokio::runtime::Builder;
@@ -108,9 +107,14 @@ impl BenchmarkSetup {
                 ))
             })?;
 
-        let current_gas = if opts.use_fullnode_for_execution {
-            // Go through fullnode to get the current gas object.
-            let gas_objects = execution_proxy
+        // Always use a fullnode proxy for gas object lookup, since the primary
+        // gas owner may not have been funded at genesis (e.g. on public testnet).
+        let fullnode_proxy = fullnode_proxies
+            .choose(&mut rand::thread_rng())
+            .context("Failed to get fullnode proxy for gas object lookup")?;
+
+        let current_gas = {
+            let gas_objects = fullnode_proxy
                 .get_owned_objects(primary_gas_owner_addr.into())
                 .await?;
 
@@ -199,39 +203,6 @@ impl BenchmarkSetup {
                     keypair,
                 )
             }
-        } else {
-            // Go through local proxy to get the current gas object.
-            let mut genesis_gas_objects = Vec::new();
-
-            for obj in genesis.objects().iter() {
-                let owner = &obj.owner;
-                if let Owner::AddressOwner(addr) = owner
-                    && *addr == primary_gas_owner_addr.into()
-                {
-                    genesis_gas_objects.push(obj.clone());
-                }
-            }
-
-            let genesis_gas_obj = genesis_gas_objects
-                .choose(&mut rand::thread_rng())
-                .context("Failed to choose a random primary gas")?
-                .clone();
-
-            let current_gas_object = execution_proxy.get_object(genesis_gas_obj.id()).await?;
-            let current_gas_account = current_gas_object.owner.get_owner_address()?;
-
-            let keypair = Arc::new(get_ed25519_keypair_from_keystore(
-                keystore_path,
-                &current_gas_account,
-            )?);
-
-            info!("Using primary gas obj: {}", current_gas_object.id());
-
-            (
-                current_gas_object.compute_object_reference(),
-                current_gas_account,
-                keypair,
-            )
         };
 
         Ok(BenchmarkSetup {
