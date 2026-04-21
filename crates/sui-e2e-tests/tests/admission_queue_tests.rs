@@ -137,8 +137,8 @@ async fn test_admission_queue_eviction_and_rejection() {
         .await;
     let err = r_low.expect_err("Low gas price tx should be rejected when queue is full");
     assert!(
-        err.to_string().contains("too many transactions pending"),
-        "Expected consensus overload error, got: {err}"
+        err.to_string().contains("outbid"),
+        "Expected outbid error, got: {err}"
     );
 
     // A high gas price tx should evict an RGP entry and be accepted.

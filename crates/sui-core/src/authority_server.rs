@@ -1067,9 +1067,13 @@ impl ValidatorService {
                 let mut receivers = Vec::with_capacity(tx_groups.len());
                 for txns in tx_groups {
                     let gas_price = Self::extract_gas_price(&txns);
-                    let rx = aq
+                    let (rx, newly_inserted) = aq
                         .try_insert(gas_price, txns, submitter_client_addr)
                         .await?;
+                    if !newly_inserted {
+                        // Count duplicate tx submissions towards spam tallies.
+                        spam_weight = Weight::one();
+                    }
                     receivers.push(rx);
                 }
                 let results = future::try_join_all(receivers.into_iter().map(|rx| async move {

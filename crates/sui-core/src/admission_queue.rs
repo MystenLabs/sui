@@ -4,12 +4,13 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use arc_swap::ArcSwap;
+use mysten_common::debug_fatal;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
     Histogram, IntCounter, IntGauge, Registry, register_histogram_with_registry,
     register_int_counter_with_registry, register_int_gauge_with_registry,
 };
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::net::IpAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -54,6 +55,7 @@ pub struct AdmissionQueueMetrics {
     pub queue_wait_latency: Histogram,
     pub evictions: IntCounter,
     pub rejections: IntCounter,
+    pub duplicate_inserts: IntCounter,
 }
 
 impl AdmissionQueueMetrics {
@@ -84,6 +86,12 @@ impl AdmissionQueueMetrics {
                 registry,
             )
             .unwrap(),
+            duplicate_inserts: register_int_counter_with_registry!(
+                "admission_queue_duplicate_inserts",
+                "Transactions admitted to the queue whose ConsensusTransactionKey duplicated an entry already present. Tallied as spam for DoS protection.",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -98,8 +106,8 @@ impl AdmissionQueueMetrics {
 pub struct PriorityAdmissionQueue {
     capacity: usize,
     map: BTreeMap<u64, VecDeque<QueueEntry>>,
-    /// Tracks transaction keys currently in the queue to reject duplicates.
-    queued_keys: HashSet<ConsensusTransactionKey>,
+    /// Number of queue entries per transaction key, for duplicate detection.
+    queued_keys: HashMap<ConsensusTransactionKey, u32>,
     total_len: usize,
     metrics: Arc<AdmissionQueueMetrics>,
 }
@@ -109,7 +117,7 @@ impl PriorityAdmissionQueue {
         Self {
             capacity,
             map: BTreeMap::new(),
-            queued_keys: HashSet::new(),
+            queued_keys: HashMap::new(),
             total_len: 0,
             metrics,
         }
@@ -123,29 +131,47 @@ impl PriorityAdmissionQueue {
         self.map.first_key_value().map(|(&k, _)| k)
     }
 
-    /// Returns true if the entry was accepted into the queue.
-    pub fn insert(&mut self, entry: QueueEntry) -> bool {
+    /// On success, returns `Ok(true)` or `Ok(false)` to indicate whether the
+    /// value was newly inserted. Returns `Err` if the queue was full and the
+    /// tx's gas price was not high enough to evict an existing entry.
+    pub fn insert(&mut self, entry: QueueEntry) -> SuiResult<bool> {
         let keys: Vec<_> = entry.transactions.iter().map(|t| t.key()).collect();
-        if keys.iter().any(|k| self.queued_keys.contains(k)) {
-            return false; // duplicate insert
+        let newly_inserted = !keys.iter().any(|k| self.queued_keys.contains_key(k));
+        if !newly_inserted {
+            self.metrics.duplicate_inserts.inc();
         }
 
         if self.total_len < self.capacity {
             self.push_entry(entry, keys);
             self.metrics.queue_depth.set(self.total_len as i64);
-            return true; // directly inserted
+            return Ok(newly_inserted);
         }
 
         let min_price = self.min_gas_price().unwrap();
         if entry.gas_price > min_price {
-            self.evict_lowest();
+            let evicter_price = entry.gas_price;
+            let evicted = self.evict_lowest();
             self.push_entry(entry, keys);
             self.metrics.evictions.inc();
-            return true; // inserted after evicting lower-priority tx
+            // Signal the evicted entry's caller so `position_rx.await` returns
+            // a distinct outbid error rather than a generic RecvError.
+            let _ = evicted
+                .position_sender
+                .send(Err(tonic::Status::from(SuiError::from(
+                    SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion {
+                        min_gas_price: evicter_price,
+                    },
+                ))));
+            return Ok(newly_inserted);
         }
 
         self.metrics.rejections.inc();
-        false
+        Err(
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion {
+                min_gas_price: min_price,
+            }
+            .into(),
+        )
     }
 
     /// Pop up to `count` entries, highest gas price first.
@@ -182,7 +208,9 @@ impl PriorityAdmissionQueue {
     }
 
     fn push_entry(&mut self, entry: QueueEntry, keys: Vec<ConsensusTransactionKey>) {
-        self.queued_keys.extend(keys);
+        for key in keys {
+            *self.queued_keys.entry(key).or_insert(0) += 1;
+        }
         self.map
             .entry(entry.gas_price)
             .or_default()
@@ -190,11 +218,12 @@ impl PriorityAdmissionQueue {
         self.total_len += 1;
     }
 
-    fn evict_lowest(&mut self) {
+    fn evict_lowest(&mut self) -> QueueEntry {
         let evicted = {
-            let Some(mut first) = self.map.first_entry() else {
-                return;
-            };
+            let mut first = self
+                .map
+                .first_entry()
+                .expect("evict_lowest called on empty queue");
             let deque = first.get_mut();
             let evicted = deque.pop_front().unwrap();
             if deque.is_empty() {
@@ -204,11 +233,21 @@ impl PriorityAdmissionQueue {
         };
         self.remove_keys(&evicted);
         self.total_len -= 1;
+        evicted
     }
 
     fn remove_keys(&mut self, entry: &QueueEntry) {
         for tx in &entry.transactions {
-            self.queued_keys.remove(&tx.key());
+            let key = tx.key();
+            let std::collections::hash_map::Entry::Occupied(mut slot) = self.queued_keys.entry(key)
+            else {
+                debug_fatal!("remove_keys on absent key");
+                continue;
+            };
+            *slot.get_mut() -= 1;
+            if *slot.get() == 0 {
+                slot.remove();
+            }
         }
     }
 }
@@ -216,7 +255,7 @@ impl PriorityAdmissionQueue {
 /// Command sent from RPC handlers to the admission queue actor via mpsc channel.
 struct InsertCommand {
     entry: QueueEntry,
-    response: oneshot::Sender<SuiResult<()>>,
+    response: oneshot::Sender<SuiResult<bool>>,
 }
 
 /// Cloneable handle for submitting transactions to the admission queue actor.
@@ -241,13 +280,17 @@ impl AdmissionQueueHandle {
         self.last_drain.lock().unwrap().elapsed() > self.failover_timeout
     }
 
-    /// Returns Ok(receiver for consensus position) if accepted, Err if rejected.
+    /// Returns `(position_receiver, newly_inserted)` on admission. Returns `Err` on outbid
+    /// rejection.
     pub async fn try_insert(
         &self,
         gas_price: u64,
         transactions: Vec<ConsensusTransaction>,
         submitter_client_addr: Option<IpAddr>,
-    ) -> SuiResult<oneshot::Receiver<Result<Vec<ConsensusPosition>, tonic::Status>>> {
+    ) -> SuiResult<(
+        oneshot::Receiver<Result<Vec<ConsensusPosition>, tonic::Status>>,
+        bool,
+    )> {
         let (position_tx, position_rx) = oneshot::channel();
         let entry = QueueEntry {
             gas_price,
@@ -268,11 +311,11 @@ impl AdmissionQueueHandle {
             .await
             .map_err(|_| SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus))?;
 
-        resp_rx
+        let newly_inserted = resp_rx
             .await
             .map_err(|_| SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus))??;
 
-        Ok(position_rx)
+        Ok((position_rx, newly_inserted))
     }
 }
 
@@ -498,6 +541,9 @@ impl AdmissionQueueEventLoop {
         let available =
             max_pending.saturating_sub(self.consensus_adapter.num_inflight_transactions());
         let entries = self.queue.pop_batch(usize::try_from(available).unwrap());
+        if entries.is_empty() {
+            return;
+        }
         for entry in entries {
             self.queue
                 .metrics
@@ -511,13 +557,7 @@ impl AdmissionQueueEventLoop {
     }
 
     fn handle_insert(&mut self, cmd: InsertCommand) {
-        if self.queue.insert(cmd.entry) {
-            let _ = cmd.response.send(Ok(()));
-        } else {
-            let _ = cmd
-                .response
-                .send(Err(SuiErrorKind::TooManyTransactionsPendingConsensus.into()));
-        }
+        let _ = cmd.response.send(self.queue.insert(cmd.entry));
     }
 }
 
@@ -557,7 +597,7 @@ mod tests {
         let mut q = PriorityAdmissionQueue::new(capacity, metrics);
         for &gp in gas_prices {
             let (entry, _) = make_test_entry(gp);
-            q.insert(entry);
+            q.insert(entry).unwrap();
         }
         q
     }
@@ -577,13 +617,15 @@ mod tests {
         let (e2, _) = make_test_entry(200);
         let (e3, _) = make_test_entry(300);
 
-        q.insert(e1);
-        q.insert(e2);
+        q.insert(e1).unwrap();
+        q.insert(e2).unwrap();
         assert_eq!(q.len(), 2);
 
-        assert!(q.insert(e3));
+        assert!(q.insert(e3).is_ok());
         assert_eq!(q.len(), 2);
-        assert!(r1.try_recv().is_err());
+        // Evicted entry's caller receives an explicit outbid error.
+        let r1_result = r1.try_recv().expect("evicted entry must be signalled");
+        assert!(matches!(r1_result, Err(ref status) if status.message().contains("outbid")));
     }
 
     #[test]
@@ -595,10 +637,13 @@ mod tests {
         let (e2, _) = make_test_entry(200);
         let (e3, mut r3) = make_test_entry(50);
 
-        q.insert(e1);
-        q.insert(e2);
+        q.insert(e1).unwrap();
+        q.insert(e2).unwrap();
 
-        assert!(!q.insert(e3));
+        assert!(matches!(
+            q.insert(e3).unwrap_err().as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 100 }
+        ));
         assert_eq!(q.len(), 2);
         assert!(r3.try_recv().is_err());
     }
@@ -626,11 +671,14 @@ mod tests {
         let (normal, _) = make_test_entry(1000);
         let (high, _) = make_test_entry(2000);
 
-        q.insert(gasless);
-        q.insert(normal);
+        q.insert(gasless).unwrap();
+        q.insert(normal).unwrap();
 
-        assert!(q.insert(high));
-        assert!(r_gasless.try_recv().is_err());
+        assert!(q.insert(high).is_ok());
+        let gasless_result = r_gasless
+            .try_recv()
+            .expect("evicted gasless entry must be signalled");
+        assert!(matches!(gasless_result, Err(ref status) if status.message().contains("outbid")));
         assert_eq!(q.min_gas_price(), Some(1000));
     }
 
@@ -650,77 +698,111 @@ mod tests {
         let (e1, _) = make_test_entry(100);
         let (e2, _) = make_test_entry(100);
 
-        q.insert(e1);
-        assert!(!q.insert(e2));
+        q.insert(e1).unwrap();
+        assert!(matches!(
+            q.insert(e2).unwrap_err().as_inner(),
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: 100 }
+        ));
+    }
+
+    fn make_dup_entry(
+        gas_price: u64,
+        tx: ConsensusTransaction,
+    ) -> (
+        QueueEntry,
+        oneshot::Receiver<Result<Vec<ConsensusPosition>, tonic::Status>>,
+    ) {
+        let (position_tx, position_rx) = oneshot::channel();
+        let entry = QueueEntry {
+            gas_price,
+            transactions: vec![tx],
+            position_sender: position_tx,
+            submitter_client_addr: None,
+            enqueue_time: Instant::now(),
+        };
+        (entry, position_rx)
     }
 
     #[test]
-    fn test_duplicate_transaction_rejected() {
+    fn test_duplicate_transaction_admitted_and_flagged() {
         use sui_types::base_types::AuthorityName;
 
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
 
-        let authority = AuthorityName::ZERO;
-        let tx = ConsensusTransaction::new_end_of_publish(authority);
+        let tx = ConsensusTransaction::new_end_of_publish(AuthorityName::ZERO);
 
-        let (position_tx1, _rx1) = oneshot::channel();
-        let entry1 = QueueEntry {
-            gas_price: 100,
-            transactions: vec![tx.clone()],
-            position_sender: position_tx1,
-            submitter_client_addr: None,
-            enqueue_time: Instant::now(),
-        };
-        assert!(q.insert(entry1));
-
-        // Same transaction again — rejected as duplicate
-        let (position_tx2, _rx2) = oneshot::channel();
-        let entry2 = QueueEntry {
-            gas_price: 100,
-            transactions: vec![tx.clone()],
-            position_sender: position_tx2,
-            submitter_client_addr: None,
-            enqueue_time: Instant::now(),
-        };
-        assert!(!q.insert(entry2));
+        let (entry1, _rx1) = make_dup_entry(100, tx.clone());
+        assert!(q.insert(entry1).unwrap());
         assert_eq!(q.len(), 1);
+
+        // Same transaction again — admitted, but flagged as not-fresh so the
+        // RPC layer can tally it as spam for DoS protection.
+        let (entry2, _rx2) = make_dup_entry(100, tx.clone());
+        assert!(!q.insert(entry2).unwrap());
+        assert_eq!(q.len(), 2);
     }
 
     #[test]
-    fn test_duplicate_key_freed_after_pop() {
+    fn test_duplicate_key_counter_decrements_on_pop() {
         use sui_types::base_types::AuthorityName;
 
         let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
         let mut q = PriorityAdmissionQueue::new(10, metrics);
 
-        let authority = AuthorityName::ZERO;
-        let tx = ConsensusTransaction::new_end_of_publish(authority);
+        let tx = ConsensusTransaction::new_end_of_publish(AuthorityName::ZERO);
 
-        let (position_tx1, _rx1) = oneshot::channel();
-        let entry1 = QueueEntry {
-            gas_price: 100,
-            transactions: vec![tx.clone()],
-            position_sender: position_tx1,
-            submitter_client_addr: None,
-            enqueue_time: Instant::now(),
-        };
-        q.insert(entry1);
+        // Insert two copies of the same tx.
+        let (entry1, _rx1) = make_dup_entry(100, tx.clone());
+        q.insert(entry1).unwrap();
+        let (entry2, _rx2) = make_dup_entry(100, tx.clone());
+        assert!(!q.insert(entry2).unwrap());
 
-        // Pop the entry — key should be freed
+        // Pop one copy. The key's counter should drop to 1 — a fresh insert
+        // should still be flagged as not-fresh against the remaining copy.
         let batch = q.pop_batch(1);
         assert_eq!(batch.len(), 1);
+        let (entry3, _rx3) = make_dup_entry(100, tx.clone());
+        assert!(!q.insert(entry3).unwrap());
+        assert_eq!(q.len(), 2);
 
-        // Now the same transaction can be re-inserted
-        let (position_tx2, _rx2) = oneshot::channel();
-        let entry2 = QueueEntry {
-            gas_price: 100,
-            transactions: vec![tx],
-            position_sender: position_tx2,
-            submitter_client_addr: None,
-            enqueue_time: Instant::now(),
-        };
-        assert!(q.insert(entry2));
+        // Drain both remaining entries. The counter should hit 0 and the key
+        // should be removed — a subsequent insert is fresh again.
+        let _ = q.pop_batch(q.len());
+        assert!(q.is_empty());
+        let (entry4, _rx4) = make_dup_entry(100, tx);
+        assert!(q.insert(entry4).unwrap());
+    }
+
+    #[test]
+    fn test_duplicate_key_counter_decrements_on_evict() {
+        use sui_types::base_types::AuthorityName;
+
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let mut q = PriorityAdmissionQueue::new(2, metrics);
+
+        let tx = ConsensusTransaction::new_end_of_publish(AuthorityName::ZERO);
+
+        // Fill queue with two copies of `tx` at price 100.
+        let (entry1, _rx1) = make_dup_entry(100, tx.clone());
+        q.insert(entry1).unwrap();
+        let (entry2, _rx2) = make_dup_entry(100, tx.clone());
+        q.insert(entry2).unwrap();
+        assert_eq!(q.len(), 2);
+
+        // Evict one dup with a higher-priced non-dup.
+        let (filler, _) = make_test_entry(200);
+        q.insert(filler).unwrap();
+        assert_eq!(q.len(), 2);
+
+        // Evict the remaining dup with another non-dup. After both dups are
+        // evicted, the counter should hit 0 and re-inserting `tx` is not a
+        // duplicate.
+        let (filler2, _) = make_test_entry(300);
+        q.insert(filler2).unwrap();
+
+        let (entry3, _rx3) = make_dup_entry(500, tx);
+        assert!(q.insert(entry3).unwrap());
     }
 
     #[tokio::test]
@@ -774,7 +856,9 @@ mod tests {
             .expect("actor task panicked");
     }
 
-    async fn build_consensus_adapter() -> (
+    async fn build_consensus_adapter(
+        max_pending_transactions: usize,
+    ) -> (
         Arc<ConsensusAdapter>,
         Arc<AuthorityPerEpochStore>,
         Arc<tokio::sync::Notify>,
@@ -793,7 +877,7 @@ mod tests {
             CheckpointStore::new_for_tests(),
             AuthorityName::ZERO,
             Arc::new(ConnectionMonitorStatusForTests {}),
-            100_000,
+            max_pending_transactions,
             100_000,
             None,
             None,
@@ -827,7 +911,7 @@ mod tests {
     async fn test_idle_actor_does_not_trip_failover() {
         // A healthy actor with an empty queue must never trip failover, even
         // after long idle periods while blocked on `receiver.recv()`.
-        let (adapter, epoch_store, notify) = build_consensus_adapter().await;
+        let (adapter, epoch_store, notify) = build_consensus_adapter(100_000).await;
         let manager = AdmissionQueueManager::new(
             adapter,
             Arc::new(AdmissionQueueMetrics::new_for_tests()),
@@ -841,6 +925,50 @@ mod tests {
         assert!(
             !handle.failover_tripped(),
             "idle actor with empty queue must not trip failover"
+        );
+    }
+
+    /// If `drain_batch` is entered but consensus has zero slots available
+    /// (the inflight count raced past `max_pending_transactions` between the
+    /// `has_consensus_capacity` check and the read inside `drain_batch`), no
+    /// entries are popped and `last_drain` must NOT advance — otherwise a
+    /// truly stuck drainer would be hidden from the failover check.
+    #[tokio::test]
+    async fn test_drain_batch_does_not_bump_last_drain_when_no_slots() {
+        let (adapter, epoch_store, notify) = build_consensus_adapter(0).await;
+        let metrics = Arc::new(AdmissionQueueMetrics::new_for_tests());
+        let (_sender, receiver) = mpsc::channel(10);
+
+        let mut queue = PriorityAdmissionQueue::new(10, metrics.clone());
+        let (entry, _rx) = make_test_entry(100);
+        assert!(queue.insert(entry).is_ok());
+        assert_eq!(queue.len(), 1);
+
+        let last_drain = Arc::new(Mutex::new(Instant::now()));
+        let before = *last_drain.lock().unwrap();
+
+        let mut event_loop = AdmissionQueueEventLoop {
+            receiver,
+            queue,
+            consensus_adapter: adapter,
+            slot_freed_notify: notify,
+            epoch_store,
+            last_drain: last_drain.clone(),
+            queue_depth: Arc::new(AtomicUsize::new(0)),
+            last_published_depth: 0,
+        };
+
+        // Sleep so that if drain_batch erroneously stamps Instant::now() the
+        // stored value would differ from `before`.
+        tokio::time::sleep(Duration::from_millis(20)).await;
+
+        event_loop.drain_batch();
+
+        assert_eq!(event_loop.queue.len(), 1, "no entries should be drained");
+        assert_eq!(
+            *last_drain.lock().unwrap(),
+            before,
+            "last_drain must not advance when drain_batch drained nothing"
         );
     }
 }
