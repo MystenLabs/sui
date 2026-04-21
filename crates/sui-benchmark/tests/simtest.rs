@@ -2106,7 +2106,6 @@ mod test {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_submit_delay_step_override_millis(3000)
             .build()
             .await;
 
@@ -2122,7 +2121,7 @@ mod test {
                 let observer_port = consensus_config
                     .parameters
                     .as_ref()
-                    .and_then(|p| p.tonic.observer_server_port)
+                    .and_then(|p| p.observer.server_port)
                     .expect("Validator should have observer_server_port configured");
 
                 // Get the validator's network public key
