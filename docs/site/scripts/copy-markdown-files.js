@@ -191,12 +191,30 @@ function expandImportContent(fullMatch) {
 
 function expandDocCardList(filePath) {
   const dir = path.dirname(filePath);
+  const basename = path.basename(filePath, path.extname(filePath));
+  const isIndex = basename === 'index';
+
+  // Determine which directory to list:
+  // - index files list their sibling pages (same directory)
+  // - non-index files list the matching subdirectory (e.g. getting-started.mdx → getting-started/)
+  let targetDir;
+  if (isIndex) {
+    targetDir = dir;
+  } else {
+    targetDir = path.join(dir, basename);
+    if (!fs.existsSync(targetDir) || !fs.statSync(targetDir).isDirectory()) {
+      targetDir = dir; // fallback to parent
+    }
+  }
+
   const entries = [];
+  if (!fs.existsSync(targetDir)) return '';
 
-  if (!fs.existsSync(dir)) return '';
+  for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+    const fullPath = path.join(targetDir, entry.name);
 
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const fullPath = path.join(dir, entry.name);
+    // Skip snippets directory
+    if (entry.name === 'snippets') continue;
 
     if (entry.isDirectory()) {
       // Look for index file in subdirectory
@@ -331,7 +349,10 @@ function expandProtocol() {
 
 function stripFrontmatter(content, outputPath, filePath) {
   const { content: markdownContent, data } = matter(content);
-  const cleaned = cleanMdxComponents(markdownContent, filePath);
+
+  // Prepend the title as an h1 so the markdown export matches the HTML page.
+  const titlePrefix = data.title ? `# ${data.title}\n\n` : '';
+  const cleaned = cleanMdxComponents(titlePrefix + markdownContent, filePath);
 
   const meta = {};
   if (data.title) meta.title = data.title;
@@ -426,6 +447,67 @@ function cleanMdxComponents(content, filePath) {
   // Remove bare expression blocks that often break markdown export.
   // Keep this conservative so we do not nuke prose accidentally.
   cleaned = cleaned.replace(/^\s*\{[A-Z][A-Za-z0-9_.]*\}\s*$/gm, '');
+
+  // ── HTML-to-markdown cleanup (for framework-generated pages) ────────────
+
+  // Convert <span class="code-inline">X</span> to `X`
+  cleaned = cleaned.replace(
+    /<span\s+class="code-inline">([^<]*)<\/span>/g,
+    '`$1`',
+  );
+
+  // Convert <pre><code>...</code></pre> to fenced code blocks.
+  cleaned = cleaned.replace(
+    /<pre><code>([\s\S]*?)<\/code><\/pre>/g,
+    (_, inner) => {
+      // Strip HTML tags inside code blocks for readability
+      const plain = inner.replace(/<\/?[a-z][^>]*>/gi, '');
+      return `\n\`\`\`\n${plain.trim()}\n\`\`\`\n`;
+    },
+  );
+
+  // Convert <h2 id="...">text</h2> etc. to markdown headings
+  cleaned = cleaned.replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/g, (_, level, text) => {
+    const plain = text.replace(/<\/?[a-z][^>]*>/gi, '').trim();
+    return '\n' + '#'.repeat(parseInt(level)) + ' ' + plain + '\n';
+  });
+
+  // Convert <dl>/<dt>/<dd> definition lists to bold+text
+  cleaned = cleaned.replace(/<dl>([\s\S]*?)<\/dl>/g, (_, inner) => {
+    let result = inner;
+    result = result.replace(/<dt>([\s\S]*?)<\/dt>/g, (__, dt) => {
+      const plain = dt.replace(/<\/?[a-z][^>]*>/gi, '').trim();
+      return `\n**${plain}**`;
+    });
+    result = result.replace(/<dd>([\s\S]*?)<\/dd>/g, (__, dd) => {
+      return `\n${dd.replace(/<\/?[a-z][^>]*>/gi, '').trim()}\n`;
+    });
+    return result;
+  });
+
+  // Convert <a href="...">text</a> to [text](href)
+  cleaned = cleaned.replace(
+    /<a\s+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g,
+    (_, href, text) => `[${text.replace(/<\/?[a-z][^>]*>/gi, '')}](${href})`,
+  );
+
+  // Convert <b>text</b> and <strong>text</strong> to **text**
+  cleaned = cleaned.replace(/<(?:b|strong)>([\s\S]*?)<\/(?:b|strong)>/g, '**$1**');
+
+  // Convert <em>text</em> and <i>text</i> to *text*
+  cleaned = cleaned.replace(/<(?:em|i)>([\s\S]*?)<\/(?:em|i)>/g, '*$1*');
+
+  // Convert <code>text</code> (inline) to `text`
+  cleaned = cleaned.replace(/<code>([\s\S]*?)<\/code>/g, '`$1`');
+
+  // Convert <br/> and <br> to newlines
+  cleaned = cleaned.replace(/<br\s*\/?>/g, '\n');
+
+  // Remove remaining HTML block-level tags but keep content
+  cleaned = cleaned.replace(/<\/?(?:div|p|ul|ol|li|table|thead|tbody|tr|td|th|nav|header|footer|article|aside|figure|figcaption)\b[^>]*>/g, '');
+
+  // Remove any remaining self-closing HTML tags
+  cleaned = cleaned.replace(/<[a-z][^>]*\/>/gi, '');
 
   // Normalize internal links.
   cleaned = cleaned.replace(

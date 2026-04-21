@@ -2604,6 +2604,17 @@
       "destination": "/markdown/:path.md"
     },
     {
+      "source": "/:path((?!markdown|_next|api|static|img|fonts|doc|paper|display-preview|llms\\.txt|robots\\.txt|sitemap\\.xml|\\.well-known).*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": "(?:.*,\\s*)?text/markdown(?:\\s*;.*)?"
+        }
+      ],
+      "destination": "/markdown/:path/index.md"
+    },
+    {
       "source": "/(.+)\\.md",
       "destination": "/markdown/$1.md"
     }
