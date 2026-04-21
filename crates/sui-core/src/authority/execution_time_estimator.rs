@@ -898,8 +898,7 @@ mod tests {
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use crate::checkpoints::CheckpointStore;
     use crate::consensus_adapter::{
-        ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
-        MockConsensusClient,
+        ConsensusAdapter, ConsensusAdapterMetrics, MockConsensusClient,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
@@ -942,13 +941,9 @@ mod tests {
             Arc::new(mock_consensus_client),
             CheckpointStore::new_for_tests(),
             authority.name,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            epoch_store.protocol_config().clone(),
             Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(
@@ -1081,13 +1076,9 @@ mod tests {
             Arc::new(mock_consensus_client),
             CheckpointStore::new_for_tests(),
             authority.name,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            epoch_store.protocol_config().clone(),
             Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(
@@ -1178,13 +1169,9 @@ mod tests {
             Arc::new(mock_consensus_client),
             CheckpointStore::new_for_tests(),
             authority.name,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            epoch_store.protocol_config().clone(),
             Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(
@@ -1279,13 +1266,9 @@ mod tests {
             Arc::new(mock_consensus_client),
             CheckpointStore::new_for_tests(),
             authority.name,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            epoch_store.protocol_config().clone(),
             Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(
@@ -1426,13 +1409,9 @@ mod tests {
             Arc::new(mock_consensus_client),
             CheckpointStore::new_for_tests(),
             authority.name,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            epoch_store.protocol_config().clone(),
             Arc::new(tokio::sync::Notify::new()),
         ));
         let mut observer = ExecutionTimeObserver::new_for_testing(

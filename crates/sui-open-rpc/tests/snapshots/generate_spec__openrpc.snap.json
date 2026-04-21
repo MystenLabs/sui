@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "121",
+              "maxSupportedProtocolVersion": "122",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1376,6 +1376,7 @@
                 "enable_ptb_execution_v2": false,
                 "enable_ristretto255_group_ops": false,
                 "enable_vdf": false,
+                "enable_verify_bulletproofs_ristretto255": false,
                 "end_of_epoch_transaction_supported": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fix_checkpoint_signature_mapping": false,
@@ -1383,6 +1384,7 @@
                 "fresh_vm_on_framework_upgrade": false,
                 "gas_rounding_halve_digits": false,
                 "gasless_transaction_drop_safety": false,
+                "gasless_verify_remaining_balance": false,
                 "generate_df_type_layouts": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
@@ -2092,7 +2094,9 @@
                 "vector_pop_back_base_cost": null,
                 "vector_push_back_base_cost": null,
                 "vector_push_back_legacy_per_abstract_memory_unit_cost": null,
-                "vector_swap_base_cost": null
+                "vector_swap_base_cost": null,
+                "verify_bulletproofs_ristretto255_base_cost": null,
+                "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment": null
               }
             }
           }

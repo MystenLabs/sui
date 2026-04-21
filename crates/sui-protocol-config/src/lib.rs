@@ -28,7 +28,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 121;
+const MAX_PROTOCOL_VERSION: u64 = 122;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -316,6 +316,8 @@ const TESTNET_USDC: &str =
 // Version 119: Enable the new VM.
 // Version 120: Disallow unused jump tables
 // Version 121: Re-enable defer_unpaid_amplification (devnet + testnet).
+// Version 122: Framework update: vector::empty is deprecated.
+//              Enable bulletproofs verification on devnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -589,6 +591,10 @@ struct FeatureFlags {
     // Enable group operations for Ristretto255
     #[serde(skip_serializing_if = "is_false")]
     enable_ristretto255_group_ops: bool,
+
+    // Enable native functions for group operations.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_verify_bulletproofs_ristretto255: bool,
 
     // Enable nitro attestation.
     #[serde(skip_serializing_if = "is_false")]
@@ -1046,6 +1052,9 @@ struct FeatureFlags {
 
     #[serde(skip_serializing_if = "is_false")]
     enable_gasless: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
+    gasless_verify_remaining_balance: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     disallow_jump_orphans: bool,
@@ -1725,6 +1734,9 @@ pub struct ProtocolConfig {
     group_ops_ristretto_scalar_div_cost: Option<u64>,
     group_ops_ristretto_point_div_cost: Option<u64>,
 
+    verify_bulletproofs_ristretto255_base_cost: Option<u64>,
+    verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: Option<u64>,
+
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
@@ -1927,6 +1939,7 @@ pub struct ProtocolConfig {
     gasless_max_computation_units: Option<u64>,
 
     /// Allowed token types for gasless transactions, with minimum transfer sizes per token.
+    #[skip_accessor]
     gasless_allowed_token_types: Option<Vec<(String, u64)>>,
 
     /// Maximum number of unused Pure inputs allowed in a gasless transaction.
@@ -2277,6 +2290,10 @@ impl ProtocolConfig {
 
     pub fn enable_ristretto255_group_ops(&self) -> bool {
         self.feature_flags.enable_ristretto255_group_ops
+    }
+
+    pub fn enable_verify_bulletproofs_ristretto255(&self) -> bool {
+        self.feature_flags.enable_verify_bulletproofs_ristretto255
     }
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
@@ -2727,6 +2744,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_gasless
     }
 
+    pub fn gasless_verify_remaining_balance(&self) -> bool {
+        self.feature_flags.gasless_verify_remaining_balance
+    }
+
     pub fn gasless_allowed_token_types(&self) -> &[(String, u64)] {
         debug_assert!(self.gasless_allowed_token_types.is_some());
         self.gasless_allowed_token_types.as_deref().unwrap_or(&[])
@@ -2801,6 +2822,7 @@ impl ProtocolConfig {
         if version.0 >= ProtocolVersion::MIN.0 && version.0 <= ProtocolVersion::MAX_ALLOWED.0 {
             let mut ret = Self::get_for_version_impl(version, chain);
             ret.version = version;
+            ret = Self::apply_config_override(version, ret);
             Some(ret)
         } else {
             None
@@ -3196,6 +3218,9 @@ impl ProtocolConfig {
             group_ops_ristretto_point_mul_cost: None,
             group_ops_ristretto_scalar_div_cost: None,
             group_ops_ristretto_point_div_cost: None,
+
+            verify_bulletproofs_ristretto255_base_cost: None,
+            verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: None,
 
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
@@ -4797,6 +4822,15 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .early_return_receive_object_mismatched_type = true;
                 }
+                122 => {
+                    // Enable bulletproofs range proofs on devnet
+                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(30000);
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(6500);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
+                    }
+                    cfg.feature_flags.gasless_verify_remaining_balance = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5191,6 +5225,7 @@ impl ProtocolConfig {
     pub fn enable_gasless_for_testing(&mut self) {
         self.enable_address_balance_gas_payments_for_testing();
         self.feature_flags.enable_gasless = true;
+        self.feature_flags.gasless_verify_remaining_balance = true;
         self.gasless_max_computation_units = Some(50_000);
         self.gasless_allowed_token_types = Some(vec![]);
         self.gasless_max_tps = Some(1000);
@@ -5443,6 +5478,26 @@ mod test {
 
         prot.set_attr_for_testing("max_arguments".to_string(), "456".to_string());
         assert_eq!(prot.max_arguments(), 456);
+    }
+
+    #[test]
+    fn test_get_for_version_if_supported_applies_test_overrides() {
+        let before =
+            ProtocolConfig::get_for_version_if_supported(ProtocolVersion::new(1), Chain::Unknown)
+                .unwrap();
+
+        assert!(!before.enable_coin_reservation_obj_refs());
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        });
+
+        let after =
+            ProtocolConfig::get_for_version_if_supported(ProtocolVersion::new(1), Chain::Unknown)
+                .unwrap();
+
+        assert!(after.enable_coin_reservation_obj_refs());
     }
 
     #[test]

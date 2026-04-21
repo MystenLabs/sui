@@ -88,14 +88,6 @@ impl LeaderSchedule {
             .unwrap() as usize
     }
 
-    /// Checks whether the dag state sub dags list is empty. If yes then that means that
-    /// either (1) the system has just started and there is no unscored sub dag available (2) the
-    /// schedule has updated - new scores have been calculated. Both cases we consider as valid cases
-    /// where the schedule has been updated.
-    pub(crate) fn leader_schedule_updated(&self, dag_state: &RwLock<DagState>) -> bool {
-        dag_state.read().is_scoring_subdag_empty()
-    }
-
     pub(crate) fn update_leader_schedule_v2(&self, dag_state: &RwLock<DagState>) {
         let _s = self
             .context
@@ -223,10 +215,6 @@ pub(crate) struct LeaderSwapTable {
     /// Storing the hostname & stake along side the authority index for debugging.
     pub(crate) bad_nodes: BTreeMap<AuthorityIndex, (String, Stake)>,
 
-    /// Scores by authority in descending order, needed by other parts of the system
-    /// for a consistent view on how each validator performs in consensus.
-    pub(crate) reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
-
     // The scores for which the leader swap table was built from. This struct is
     // used for debugging purposes. Once `good_nodes` & `bad_nodes` are identified
     // the `reputation_scores` are no longer needed functionally for the swap table.
@@ -326,7 +314,6 @@ impl LeaderSwapTable {
         Self {
             good_nodes,
             bad_nodes,
-            reputation_scores_desc: authorities_by_score,
             reputation_scores,
         }
     }

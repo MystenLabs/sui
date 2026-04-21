@@ -92,22 +92,35 @@ public fun remove<Name: copy + drop + store, Value: store>(object: &mut UID, nam
 
 /// Returns true if and only if the `object` has a dynamic field with the name specified by
 /// `name: Name` but without specifying the `Value` type
-public fun exists_<Name: copy + drop + store>(object: &UID, name: Name): bool {
+public fun exists<Name: copy + drop + store>(object: &UID, name: Name): bool {
     let object_addr = object.to_address();
     let hash = hash_type_and_key(object_addr, name);
     has_child_object(object_addr, hash)
 }
 
-/// Removes the dynamic field if it exists. Returns the `some(Value)` if it exists or none otherwise.
-public fun remove_if_exists<Name: copy + drop + store, Value: store>(
+/// Removes the dynamic field if it exists. Returns `some(Value)` if it exists or `none` otherwise.
+public fun remove_opt<Name: copy + drop + store, Value: store>(
     object: &mut UID,
     name: Name,
 ): Option<Value> {
-    if (exists_<Name>(object, name)) {
+    if (exists(object, name)) {
         option::some(remove(object, name))
     } else {
         option::none()
     }
+}
+
+/// Removes the existing value at `name` (if any) and adds `value` in its place.
+/// Returns the old value if it existed, or `none` otherwise.
+/// Note: the old and new value types may differ.
+public fun replace<Name: copy + drop + store, ValueNew: store, ValueOld: store>(
+    object: &mut UID,
+    name: Name,
+    value: ValueNew,
+): Option<ValueOld> {
+    let old = remove_opt<Name, ValueOld>(object, name);
+    add(object, name, value);
+    old
 }
 
 /// Returns true if and only if the `object` has a dynamic field with the name specified by
@@ -119,6 +132,101 @@ public fun exists_with_type<Name: copy + drop + store, Value: store>(
     let object_addr = object.to_address();
     let hash = hash_type_and_key(object_addr, name);
     has_child_object_with_ty<Field<Name, Value>>(object_addr, hash)
+}
+
+// === Macro Functions ===
+
+/// Immutably borrows the field value, adding it with `$default` if it doesn't exist.
+/// Note that `$default` is evaluated only if the field does not already exist.
+public macro fun borrow_or_add<$Name: copy + drop + store, $Value: store>(
+    $object: &mut UID,
+    $name: $Name,
+    $default: $Value,
+): &$Value {
+    let o = $object;
+    let name = $name;
+    if (!exists<$Name>(o, name)) add(o, name, $default);
+    borrow(o, name)
+}
+
+/// Mutably borrows the field value, adding it with `$default` if it doesn't exist.
+/// Note that `$default` is evaluated only if the field does not already exist.
+public macro fun borrow_mut_or_add<$Name: copy + drop + store, $Value: store>(
+    $object: &mut UID,
+    $name: $Name,
+    $default: $Value,
+): &mut $Value {
+    let o = $object;
+    let name = $name;
+    if (!exists<$Name>(o, name)) add(o, name, $default);
+    borrow_mut(o, name)
+}
+
+/// If the field exists, calls `$f` on an immutable reference to the value; otherwise, does nothing.
+/// This is like getting an `Option<&Value>` then calling `std::option::do`.
+public macro fun get_do<$Name: copy + drop + store, $Value: store, $R: drop>(
+    $object: &UID,
+    $name: $Name,
+    $f: |&$Value| -> $R,
+) {
+    let o = $object;
+    let name = $name;
+    if (exists_with_type<$Name, $Value>(o, name)) { $f(borrow(o, name)); }
+}
+
+/// If the field exists, calls `$f` on a mutable reference to the value; otherwise, does nothing.
+/// This is like getting an `Option<&mut Value>` then calling `std::option::do`.
+public macro fun get_mut_do<$Name: copy + drop + store, $Value: store, $R: drop>(
+    $object: &mut UID,
+    $name: $Name,
+    $f: |&mut $Value| -> $R,
+) {
+    let o = $object;
+    let name = $name;
+    if (exists_with_type<$Name, $Value>(o, name)) { $f(borrow_mut(o, name)); }
+}
+
+/// If the field exists, applies `$some` to an immutable reference to the value; otherwise, returns
+/// `$none`.
+/// This is like getting an `Option<&Value>` then calling `std::option::fold`.
+public macro fun get_fold<$Name: copy + drop + store, $Value: store, $R>(
+    $object: &UID,
+    $name: $Name,
+    $none: $R,
+    $some: |&$Value| -> $R,
+): $R {
+    let o = $object;
+    let name = $name;
+    if (exists_with_type<$Name, $Value>(o, name)) $some(borrow(o, name)) else $none
+}
+
+/// If the field exists, applies `$some` to a mutable reference to the value; otherwise, returns
+/// `$none`.
+/// This is like getting an `Option<&mut Value>` then calling `std::option::fold`.
+public macro fun get_mut_fold<$Name: copy + drop + store, $Value: store, $R>(
+    $object: &mut UID,
+    $name: $Name,
+    $none: $R,
+    $some: |&mut $Value| -> $R,
+): $R {
+    let o = $object;
+    let name = $name;
+    if (exists_with_type<$Name, $Value>(o, name)) $some(borrow_mut(o, name)) else $none
+}
+
+// === Deprecated ===
+
+#[deprecated(note = b"Renamed to `exists`")]
+public fun exists_<Name: copy + drop + store>(object: &UID, name: Name): bool {
+    exists(object, name)
+}
+
+#[deprecated(note = b"Renamed to `remove_opt`")]
+public fun remove_if_exists<Name: copy + drop + store, Value: store>(
+    object: &mut UID,
+    name: Name,
+): Option<Value> {
+    remove_opt(object, name)
 }
 
 public(package) fun field_info<Name: copy + drop + store>(

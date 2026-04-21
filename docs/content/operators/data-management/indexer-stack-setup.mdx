@@ -1,0 +1,601 @@
+---
+title: GraphQL and General-Purpose Indexer
+description: Setup instructions for running the indexer, consistent store, and GraphQL in production.
+keywords: [indexer, consistent store, graphql, setup]
+---
+
+<ImportContent source="indexer-graphql" mode="snippet" />
+
+See [GraphQL and General-Purpose Indexer](/develop/accessing-data/custom-indexer/custom-indexers) for more information on the stack.
+
+## Indexer setup
+
+The indexer consists of multiple pipelines that each read, transform, and write checkpoint data to various Postgres tables. Multiple instances of the indexer can run in parallel, each configured by its own TOML file.
+
+#### Hardware requirements
+
+- **CPU:** 2 cores per instance
+- **Memory:** 4GB per instance
+
+Internally at Mysten Labs, indexer instances use 8 CPUs and 16 GiB of memory for backfill, and scale down to 0.5 CPU and 1 GiB of memory for normal operation at network tip.
+
+#### Storage requirements
+The general-purpose indexer writes to a Postgres database. The storage footprint estimations outlined below are based on the network as of early 2026, and might fluctuate in relation to network growth. These numbers should be seen as directional rather than exact figures.
+
+The bulk of the storage is consumed by `obj_versions` at 8.2 TB. A pruning strategy is in development.
+
+The unpruned `tx_balance_changes` table adds another 1.2 TB.
+
+A 30-day retention adds 1.8 TB on top, while a 90-day retention contributes up to an additional 3.1 TB.
+
+30-day retention:
+
+| Table | Heap (GB) | Idx (GB) |
+|-------|-----------|-----------------|
+| tx_affected_objects | 64–70 | 276–397 |
+| tx_calls | 27–30 | 239–366 |
+| ev_struct_inst | 15–19 | 174–267 |
+| tx_affected_addresses | 17–18 | 63–92 |
+| ev_emit_mod | 8–9 | 54–85 |
+| tx_digests | 8 | 21–25 |
+| tx_kinds | 5 | 14–16 |
+| cp_sequence_numbers | 10 | 5 |
+| **TOTAL** | **426–430** | **1,822–1,836** |
+
+90-day retention:
+
+| Table | Heap (GB) | Idx (GB) |
+|-------|-----------|-----------------|
+| tx_affected_objects | 188–202 | 580–752 |
+| tx_calls | 82–87 | 560–715 |
+| ev_struct_inst | 45–50 | 432–531 |
+| tx_affected_addresses | 50–54 | 151–183 |
+| ev_emit_mod | 22–24 | 129–167 |
+| tx_digests | 24–26 | 45–55 |
+| tx_kinds | 15–16 | 30–36 |
+| cp_sequence_numbers | 10 | 5 |
+| **TOTAL** | **698–779** | **2,430–3,165** |
+
+### Run `sui-indexer-alt`
+
+Use full node gRPC as the default source for steady-state operation. Use a checkpoint bucket only for backfill, recovery, or fallback when historical checkpoints are required.
+
+For steady-state operation, use the public full node gRPC endpoint pattern `https://fullnode.<network>.sui.io:443`, for example:
+
+- Mainnet: `https://fullnode.mainnet.sui.io:443`
+- Testnet: `https://fullnode.testnet.sui.io:443`
+
+Run an indexer instance using this command for each of the configuration files. The command varies based on whether the pipeline is prunable or unprunable:
+
+#### For unprunable pipelines (must start from genesis)
+```sh
+$ sui-indexer-alt indexer \
+    --config <CONFIG_FILE> \
+    --database-url <DATABASE_URL> \
+    --remote-store-gcs <REMOTE_STORE_GCS_BUCKET>
+```
+
+#### For prunable pipelines with retention period
+```sh
+$ sui-indexer-alt indexer \
+    --config <CONFIG_FILE> \
+    --database-url <DATABASE_URL> \
+    --remote-store-gcs <REMOTE_STORE_GCS_BUCKET> \
+    --first-checkpoint <CHECKPOINT_NUMBER>
+```
+
+For prunable pipelines, calculate the `first-checkpoint` based on your retention period:
+- **30-day retention**: Start from checkpoint `current_checkpoint - 10368000`
+- **90-day retention**: Start from checkpoint `current_checkpoint - 31104000`
+
+| **CLI param** | **Description** |
+| --- | --- |
+| `<CONFIG_FILE>` | Path to indexer configuration file. |
+| `<DATABASE_URL>` | Postgres database connection string. |
+| `<REMOTE_STORE_GCS_BUCKET>` | GCS bucket name to index from. Recommended for backfill because it uses the GCS API directly instead of HTTPS. See [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources). |
+| `<CHECKPOINT_NUMBER>` | (Optional) For prunable pipelines only, the checkpoint to start indexing from based on retention requirements. |
+
+#### Examples
+
+**Unprunable pipeline (from genesis via GCS bucket):**
+```sh
+$ sui-indexer-alt indexer \
+    --config unpruned.toml \
+    --database-url postgres://username:password@localhost:5432/database \
+    --remote-store-gcs mysten-mainnet-checkpoints-use4
+```
+
+**Prunable pipeline with 30-day retention (assuming current checkpoint is 100,000,000):**
+```sh
+$ sui-indexer-alt indexer \
+    --config events.toml \
+    --database-url postgres://username:password@localhost:5432/database \
+    --remote-store-gcs mysten-mainnet-checkpoints-use4 \
+    --first-checkpoint 89632000
+```
+
+**HTTPS remote store URL (alternative to GCS bucket access):**
+```sh
+$ sui-indexer-alt indexer \
+    --config events.toml \
+    --database-url postgres://username:password@localhost:5432/database \
+    --remote-store-url https://checkpoints.mainnet.sui.io \
+    --first-checkpoint 89632000
+```
+
+**Steady-state operation from a full node gRPC endpoint (recommended):**
+```sh
+$ sui-indexer-alt indexer \
+    --config events.toml \
+    --database-url postgres://username:password@localhost:5432/database \
+    --rpc-api-url https://fullnode.mainnet.sui.io:443 \
+    --streaming-url https://fullnode.mainnet.sui.io:443
+```
+
+:::info
+
+`https://checkpoints.mainnet.sui.io` retains only the most recent 30 days of checkpoints. For Mainnet backfills older than 30 days or from genesis, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4`.
+
+If the checkpoint bucket you are using has Requester Pays enabled, configure GCS credentials and a billing project when using `--remote-store-gcs`. In Sui's object store config, the relevant fields are `google_service_account` and `google_project_id`. `google_project_id` is sent as the `x-goog-user-project` header required by GCS Requester Pays.
+
+For more on Requester Pays, see [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays). For source selection and steady-state operation guidance, see [Running a Remote Store](/operators/data-management/remote-store-setup) and [Archival Stack Setup](/operators/data-management/archival-stack-setup). In general, `https://checkpoints.mainnet.sui.io` should not be your default source in steady state if a full node gRPC endpoint is available.
+
+:::
+
+### Run config recommendations {#indexer-run-config}
+
+Use the TOML files below; they are grouped by pipeline speed. All pipelines in an instance are limited by the slowest pipeline in that instance so these files each contain pipelines that run at approximately the same speed.
+
+:::info
+The example configurations linked below use a fixed concurrency of 20 for simplicity, but this leads to longer backfill times.
+When backfilling a pipeline, consider setting the `ingest-concurrency` to a higher initial concurrency, such as `{ kind = "adaptive", initial = 200, min = 50, max = 2000 }`. The indexer automatically adjusts concurrency based on current load and performance.
+Once caught up to network tip, you can manually set the max concurrency to a lower value. Mysten-internal indexers are capped at 20.
+:::
+
+<table>
+	<thead>
+		<tr>
+			<th>Config TOML</th>
+			<th>Type</th>
+			<th>Description</th>
+			<th>Pipelines</th>
+			<th>Backfill time</th>
+			<th>Data retention</th>
+			<th>Start checkpoint</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>`events.toml`</td>
+			<td>**Prunable**</td>
+			<td>Lightweight event tables.</td>
+			<td>
+				<ul className="pl-4">
+					<li>`ev_emit_mod`</li>
+					<li>`ev_struct_inst`</li>
+				</ul>
+			</td>
+			<td>1-2 days</td>
+			<td>Configurable (for example, 30 or 90 days)</td>
+			<td>Based on retention period</td>
+		</tr>
+		<tr>
+			<td colspan={7}>
+				<details>
+					<summary>`events.toml`</summary>
+					<ImportContent source="examples/prod-config/indexer/events.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`obj_versions.toml`</td>
+			<td>**Unprunable**</td>
+			<td>Object versions table containing complete object version to checkpoint mappings.</td>
+			<td>`obj_versions`</td>
+			<td>10-14 days</td>
+			<td>Must retain all data</td>
+			<td>Genesis (checkpoint 0)</td>
+		</tr>
+		<tr>
+			<td colspan={7}>
+				<details>
+					<summary>`obj_versions.toml`</summary>
+					<ImportContent source="examples/prod-config/indexer/obj_versions.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`tx_affected_addresses.toml`</td>
+			<td>**Prunable**</td>
+			<td>Midweight transaction table.</td>
+			<td>`tx_affected_addresses`</td>
+			<td>1-2 days</td>
+			<td>Configurable (for example, 30 or 90 days)</td>
+			<td>Based on retention period</td>
+		</tr>
+		<tr>
+			<td colspan={7}>
+				<details>
+					<summary>`tx_affected_addresses.toml`</summary>
+					<ImportContent source="examples/prod-config/indexer/tx_affected_addresses.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`tx_affected_objects.toml`</td>
+			<td>**Prunable**</td>
+			<td>Midweight transaction table.</td>
+			<td>`tx_affected_objects`</td>
+			<td>1-2 days</td>
+			<td>Configurable (for example, 30 or 90 days)</td>
+			<td>Based on retention period</td>
+		</tr>
+		<tr>
+			<td colspan={7}>
+				<details>
+					<summary>`tx_affected_objects.toml`</summary>
+					<ImportContent source="examples/prod-config/indexer/tx_affected_objects.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`tx_calls.toml`</td>
+			<td>**Prunable**</td>
+			<td>Midweight transaction table.</td>
+			<td>`tx_calls`</td>
+			<td>1-2 days</td>
+			<td>Configurable (for example, 30 or 90 days)</td>
+			<td>Based on retention period</td>
+		</tr>
+		<tr>
+			<td colspan={7}>
+				<details>
+					<summary>`tx_calls.toml`</summary>
+					<ImportContent source="examples/prod-config/indexer/tx_calls.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`tx_kinds.toml`</td>
+			<td>**Prunable**</td>
+			<td>Midweight transaction table.</td>
+			<td>`tx_kinds`</td>
+			<td>1-2 days</td>
+			<td>Configurable (for example, 30 or 90 days)</td>
+			<td>Based on retention period</td>
+		</tr>
+		<tr>
+			<td colspan={7}>
+				<details>
+					<summary>`tx_kinds.toml`</summary>
+					<ImportContent source="examples/prod-config/indexer/tx_kinds.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+		<tr>
+			<td>`unpruned.toml`</td>
+			<td>**Unprunable**</td>
+			<td>Foundational reference data that other queries depend on.</td>
+			<td>
+				<ul className="pl-4">
+					<li>`cp_sequence_numbers`</li>
+					<li>`kv_epoch_ends`</li>
+					<li>`kv_epoch_starts`</li>
+					<li>`kv_feature_flags`</li>
+					<li>`kv_packages`</li>
+					<li>`kv_protocol_configs`</li>
+					<li>`sum_displays`</li>
+					<li>`tx_balance_changes`</li>
+					<li>`tx_digests`</li>
+				</ul>
+			</td>
+			<td>2-4 days</td>
+			<td>Must retain all data</td>
+			<td>Genesis (checkpoint 0)</td>
+		</tr>
+		<tr>
+			<td colspan={7}>
+				<details>
+					<summary>`unpruned.toml`</summary>
+					<ImportContent source="examples/prod-config/indexer/unpruned.toml" mode="code" />
+				</details>
+			</td>
+		</tr>
+	</tbody>
+</table>
+
+## Consistent store setup
+
+All consistent store pipelines run in the same instance based on a single configuration file. Like the indexer, the pipelines run in parallel and throughput is limited by the slowest pipeline.
+
+#### Hardware requirements
+
+- **CPU:** 8 cores
+- **Memory:** 32GB
+
+### Restore command
+
+When you add a new pipeline to the consistent store, the service backfills from genesis by default. To avoid this, use the `restore` command to construct the consistent state at the latest epoch, or a specific epoch with the `--epoch` flag.
+
+```sh
+$ sui-indexer-alt-consistent-store restore \
+    --azure <AZURE_BUCKET> \
+    --database-path <DATABASE_PATH> \
+    --gcs <GCS_BUCKET> \
+    --http <HTTP_ENDPOINT> \
+    --object-file-concurrency <OBJECT_FILE_CONCURRENCY> \
+    --pipeline <PIPELINE_NAME> \
+    --remote-store-url <REMOTE_STORE_URL> \
+    --s3 <S3_BUCKET>
+```
+
+| CLI parameter               | Description                                                                                                                               |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `<AZURE_BUCKET>` \*         | Name or URL of Azure bucket containing [managed snapshots](https://docs.sui.io/operators/snapshots#mysten-labs-managed-snapshots).  |
+| `<DATABASE_PATH>`           | Path to RocksDB database.                                                                                                                 |
+| `<GCS_ACCOUNT>` \*          | Name or URL of GCS bucket containing [managed snapshots](https://docs.sui.io/operators/snapshots#mysten-labs-managed-snapshots).    |
+| `<HTTP_ENDPOINT>` \*        | URL of formal snapshot API.                                                                                                               |
+| `<OBJECT_FILE_CONCURRENCY>` | Path to indexer configuration file.                                                                                                       |
+| `<PIPELINE_NAME>`           | Name of pipeline to restore. Can be set multiple times; once per pipeline.                                                                |
+| `<REMOTE_STORE_URL>`        | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/develop/accessing-data/custom-indexer/custom-indexers#data-sources).      |
+| `<S3_BUCKET>` \*            | Name or URL of AWS S3 bucket containing [managed snapshots](https://docs.sui.io/operators/snapshots#mysten-labs-managed-snapshots). |
+
+\* Must specify one of `<AZURE_BUCKET>`, `<GCS_ACCOUNT>`, `<HTTP_ENDPOINT>`, or `<S3_BUCKET>`.
+
+Example:
+
+```sh
+$ sui-indexer-alt-consistent-store restore \
+    --database-path /path/to/rocksdb \
+    --http https://formal-snapshot.mainnet.sui.io \
+    --object-file-concurrency 5 \
+    --pipeline balances \
+    --pipeline object_by_owner \
+    --pipeline object_by_type \
+    --remote-store-url https://checkpoints.mainnet.sui.io
+```
+
+`https://checkpoints.mainnet.sui.io` retains only the most recent 30 days of checkpoints. For Mainnet backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` via the indexing framework's `--remote-store-gcs mysten-mainnet-checkpoints-use4` option instead of `--remote-store-url`.
+
+### Run command
+
+Run a consistent store instance using this command for the configuration file that follows:
+
+```sh
+$ sui-indexer-alt-consistent-store run \
+    --config <CONFIG_FILE> \
+    --database-path <DATABASE_PATH> \
+    --remote-store-url <REMOTE_STORE_URL>
+```
+
+| CLI param            | Description                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `<CONFIG_FILE>`      | Path to consistent store configuration file.                                                                                         |
+| `<DATABASE_PATH>`    | Path to RocksDB database.                                                                                                            |
+| `<REMOTE_STORE_URL>` | URL of a checkpoint bucket to index from, one of multiple possible [data sources](/develop/accessing-data/custom-indexer/custom-indexers#data-sources). Public HTTPS checkpoint endpoints retain only the most recent 30 days of checkpoints. |
+
+Example:
+
+```sh
+$ sui-indexer-alt-consistent-store run \
+    --config consistent-store.toml \
+    --database-path /path/to/rocksdb \
+    --remote-store-url https://checkpoints.mainnet.sui.io
+```
+
+For Mainnet full-history backfill, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` rather than `--remote-store-url`.
+
+### Run config recommendations
+
+<table>
+	<thead>
+		<tr>
+			<th>Config TOML</th>
+			<th>Description</th>
+			<th>Pipelines</th>
+			<th>Backfill time</th>
+			<th>Data retention</th>
+		</tr>
+	</thead>
+	<tbody>
+		<tr>
+			<td>`consistent-store.toml`</td>
+			<td>Consistent store API configuration and event tables.</td>
+			<td>
+				<ul className="pl-4">
+					<li>`balances`</li>
+					<li>`object-by-owner`</li>
+					<li>`object-by-type`</li>
+				</ul>
+			</td>
+			<td>1-2 hours</td>
+			<td>Must retain all data</td>
+		</tr>
+	</tbody>
+</table>
+
+<details>
+	<summary>`consistent-store.toml`</summary>
+	<ImportContent source="examples/prod-config/consistent_store.toml" mode="code" />
+</details>
+
+## GraphQL RPC server setup
+
+GraphQL RPC server reads data from the general-purpose indexer's database (Postgres), the consistent store, and the [archival service](/develop/accessing-data/archival-store).
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] Ensure that **all unprunable indexer pipelines** (`obj_versions.toml` and `unpruned.toml`) have fully caught up to the network tip before starting the GraphQL RPC server. The GraphQL service only operates normally once these pipelines are complete.
+
+</TabItem>
+</Tabs>
+
+#### Hardware requirements
+
+- **CPU:** 2 cores per instance
+- **Memory:** 4GB per instance
+
+Scale the number of nodes based on the desired read throughput requirements of your client applications.
+
+### GraphQL RPC server dependencies
+
+The GraphQL RPC server relies on multiple backend services to fulfill different types of queries:
+- Archival service (`--ledger-grpc-url`) provides historical data for most queries involving checkpoints, objects, and transactions.
+- Consistent store (`--consistent-store-url`) serves live data for queries related to current object and balance ownership.
+- Postgres database (`--database-url`) is the primary store for most queries, except for direct object and transaction lookups handled by the Archival service.
+- Fullnode RPC (`--fullnode-rpc-url`) powers transaction simulation and execution.
+
+Set the appropriate service URLs in your run command based on the query types your GraphQL RPC server needs to support.
+
+### Run `sui-indexer-alt-graphql`
+
+:::info
+
+If you use the Sui Foundation-hosted public good archival service on Testnet or Mainnet, you might encounter performance issues. The team plans to address these before the GraphQL RPC and Archival Service reach general availability.
+
+:::
+
+Use the following command to run a GraphQL RPC server node:
+```sh
+sui-indexer-alt-graphql rpc \
+    --config <PATH_TO_GRAPHQL_CONFIG_FILE> \
+    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_1> \
+    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_2> \
+    --indexer-config <PATH_TO_INDEXER_CONFIG_FILE_3> \
+    --ledger-grpc-url <LEDGER_GRPC_URL> \
+    --consistent-store-url <CONSISTENT_STORE_URL> \
+    --database-url <DATABASE_URL> \
+    --fullnode-rpc-url <FULLNODE_RPC_URL>
+```
+
+Multiple `--indexer-config` parameters can be provided, one for each general-purpose indexer instance.
+
+| CLI parameter                        | Description                                                                        |
+|----------------------------------|------------------------------------------------------------------------------------|
+| `CONFIG_FILE`                    | Path to the optional GraphQL RPC server configuration file |
+| `INDEXER_CONFIG_FILE`            | Path to general-purpose indexer configuration file; can be set multiple times for different pipelines                 |
+| `LEDGER_GRPC_URL`                | URL to Archival service's `LedgerService` gRPC API                                   |
+| `CONSISTENT_STORE_URL`           | URL to [Consistent store](#consistent-store-setup) API                             |
+| `DATABASE_URL`                   | Postgres database connection string                                                |
+| `FULLNODE_RPC_URL`               | URL to full node RPC                                                            |
+
+
+Example:
+```sh
+sui-indexer-alt-graphql rpc \
+    --config graphql.toml \
+    --indexer-config events.toml \
+    --indexer-config obj_versions.toml \
+    --indexer-config tx_affected_addresses.toml \
+    --indexer-config tx_affected_objects.toml \
+    --indexer-config tx_calls.toml \
+    --indexer-config tx_kinds.toml \
+    --indexer-config unpruned.toml \
+    --ledger-grpc-url https://archive.mainnet.sui.io:443 \
+    --consistent-store-url https://localhost:7001 \
+    --database-url postgres://username:password@localhost:5432/database \
+    --fullnode-rpc-url https://localhost:9000
+```
+
+### Generating configuration
+
+You can run the GraphQL RPC server without a configuration file, which uses default values. To customize settings, generate a configuration file using the following command and edit it as needed:
+
+```sh
+
+sui-indexer-alt-graphql generate-config > <PATH_TO_GRAPHQL_CONFIG_FILE>
+```
+
+This produces output similar to the following:
+
+<details>
+	<summary>`graphql.toml`</summary>
+	<ImportContent source="examples/prod-config/graphql.toml" mode="code" />
+</details>
+
+## Indexer/GraphQL Postgres-compatible database setup
+
+Both the indexer and GraphQL server require a Postgres-compatible database shared between them.
+
+These GraphQL request throughputs were tested against the following recommended specs:
+- 500 requests per second when the indexer is backfilling from genesis or running a restore
+- 1000 requests per second when the indexer is indexing from the network tip (~4.25 checkpoints per second)
+
+### AlloyDB Omni
+
+AlloyDB Omni recommends 8GB RAM per vCPU. See the [AlloyDB Omni hardware requirements](https://docs.cloud.google.com/alloydb/omni/containers/current/docs/plan-installation#hardware) for details. Allocating less than this results in the database closing indexer and GraphQL connections during load testing.
+
+#### Hardware requirements
+
+- **CPU:** 6 cores
+- **Memory:** 48GB
+
+### Vanilla Postgres
+
+You can also use a standard Postgres installation.
+
+#### Hardware requirements
+
+- **CPU:** 6 cores
+- **Memory:** 48GB
+
+## Adding a new pipeline
+
+Adding a new pipeline to an existing indexer currently requires these steps:
+
+1. Start a new pipeline in its own indexer instance, optionally with the `--first-checkpoint <checkpoint>` flag set if you want to start from a checkpoint after genesis.
+   * The `--first-checkpoint` flag is only respected if no watermark record exists for the pipeline (the pipeline has not run before). You must manually remove the watermark record if you want to run the pipeline with a different value of `--first-checkpoint`, or it is ignored.
+2. After the new pipeline catches up to the tip of the network, you can optionally merge it into another indexer instance.
+
+## Re-indexing from a different checkpoint
+
+Once the pipeline starts indexing data and the indexer starts recording watermarks, future runs of the pipeline ignore the `--first-checkpoint` flag and always resume from the last recorded checkpoint.
+
+To restart and index from a different initial checkpoint, delete the watermark record for that pipeline. Delete the existing data for that pipeline as well to avoid any data inconsistencies.
+
+Use the following template for the general-purpose indexer to write to Postgres.
+```sql
+BEGIN;
+
+-- One statement per pipeline to re-index
+TRUNCATE TABLE ev_emit_mod;
+
+
+DELETE FROM watermarks
+WHERE pipeline IN (
+-- List all pipelines to re-index
+  'ev_emit_mod'
+);
+
+SELECT * FROM WATERMARKS; -- Verify that the watermark record(s) have been deleted
+
+-- Verify that the tables have been cleared
+
+COMMIT;
+```
+
+## Reducing indexer pipeline table and index bloat
+
+Bloat occurs when dead rows from deletes accumulate faster than autovacuum can reclaim them. This happens in two cases:
+
+- You enable pruning on a previously unpruned pipeline.
+- You reduce the retention period on an already-pruned pipeline.
+
+Mysten Labs uses the following autovacuum settings for a 32-vCPU, 256 GiB Postgres instance. Adjust these proportionally for your setup:
+
+| Parameter | Value |
+|-----------|-------|
+| `autovacuum_max_workers` | `8` |
+| `autovacuum_vacuum_cost_limit` | `8000` |
+| `autovacuum_vacuum_scale_factor` | `0.01` |
+| `maintenance_work_mem` | `13GB` |
+| `max_parallel_maintenance_workers` | `4` |
+
+While autovacuum enables reusing dead rows for future inserts, it does not return reclaimed disk space to the operating system. The on-disk footprint remains until you compact tables and indexes using one of the following tools:
+
+| Tool          | Type      | `ACCESS EXCLUSIVE` locking            | Schedulable | Link                                                    |
+|---------------|-----------|---------------------------------------|-------------|---------------------------------------------------------|
+| `VACUUM FULL` | Built-in  | Entire operation                      | No          | [PostgreSQL VACUUM documentation](https://www.postgresql.org/docs/current/sql-vacuum.html) |
+| pg_repack     | Extension | Briefly during initial and final step | No          | [pg_repack documentation](https://reorg.github.io/pg_repack/)                      |
+| pg_squeeze    | Extension | Briefly during final step             | Yes         | [pg_squeeze on GitHub](https://github.com/cybertec-postgresql/pg_squeeze)       |

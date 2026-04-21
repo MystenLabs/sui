@@ -1,5 +1,6 @@
 ---
 source: crates/sui/tests/shell_tests.rs
+assertion_line: 112
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -70,6 +71,7 @@ priority_queue.yaml
 protocol_config.yaml
 prover.yaml
 random.yaml
+rangeproofs.yaml
 ristretto255.yaml
 sui.yaml
 table.yaml
@@ -117,7 +119,7 @@ dependencies:
 linkage:
   "0x0000000000000000000000000000000000000000000000000000000000000001":
     upgraded_id: "0x0000000000000000000000000000000000000000000000000000000000000001"
-    upgraded_version: 1
+    upgraded_version: 0
 type_origins:
   "0x0000000000000000000000000000000000000000000000000000000000000001":
     - module_name: fixed_point32

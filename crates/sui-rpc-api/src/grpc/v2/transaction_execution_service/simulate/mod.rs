@@ -20,7 +20,13 @@ use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::execution_status::ExecutionFailure;
+use sui_types::execution_status::ExecutionStatus;
+use sui_types::transaction::InputObjectKind;
+use sui_types::transaction::InputObjects;
+use sui_types::transaction::ObjectReadResult;
 use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionKind;
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
 
@@ -92,64 +98,88 @@ pub fn simulate_transaction(
         )?,
     };
 
-    // Perform budgest estimation and gas selection if requested and if TransactionChecks are enabled (it
-    // makes no sense to do gas selection if checks are disabled because such a transaction can't
-    // ever be committed to the chain).
-    if request.do_gas_selection() && checks.enabled() {
-        // At this point, the budget on the transaction can be set to one of the following:
-        // - The budget from the request, if specified.
-        // - The total balance of all of the gas payment coins (clamped to the protocol
-        //   MAX_GAS_BUDGET) in the request if the budget was not
-        //   specified but the gas payment coins were specified.
-        // - Protocol MAX_GAS_BUDGET if the request did not specified neither gas payment or budget.
-        //
-        // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
-        // overwrite the resolved budget with the more accurate estimate.
-        if request.transaction().gas_payment().budget.is_none()
-            && request.transaction().bcs_opt().is_none()
-        {
-            let mut estimation_transaction = transaction.clone();
-            estimation_transaction.gas_data_mut().payment = Vec::new();
-            estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
+    let perform_gas_selection = request.do_gas_selection() && checks.enabled();
+    let simulation_result = 'simulate: {
+        if perform_gas_selection {
+            // If the caller didn't set a price and the tx passes the cheap structural +
+            // object-input gasless checks, try a gasless simulate first. Post-execution gasless
+            // requirements (all input Coins consumed, minimum transfer amounts) can only be
+            // verified by running the tx. If that fails, we discard the gasless variant and
+            // fall through to the priced flow. `payment` is already empty here, verified by
+            // is_gasless_candidate.
+            if is_gasless_candidate(&request, &transaction, &protocol_config, service)? {
+                let mut gasless_tx = transaction.clone();
+                gasless_tx.gas_data_mut().price = 0;
+                gasless_tx.gas_data_mut().budget = 0;
 
-            let simulation_result = executor
-                .simulate_transaction(
-                    estimation_transaction,
-                    TransactionChecks::Enabled,
-                    true, /* allow mock gas coin */
-                )
-                .map_err(anyhow::Error::from)?;
+                let simulation_result = executor
+                    .simulate_transaction(gasless_tx.clone(), checks, false)
+                    .map_err(anyhow::Error::from)?;
 
-            let estimate = estimate_gas_budget_from_gas_cost(
-                simulation_result.effects.gas_cost_summary(),
-                reference_gas_price,
-                request.transaction().gas_payment().objects.len(),
-                &protocol_config,
-            );
-
-            // If the request specified gas payment, then transaction.gas_data().budget should have been
-            // resolved to the cumulative balance of those coins. We don't want to return a resolved transaction
-            // where the gas payment can't satisfy the budget, so validate that balance can actually cover the
-            // estimated budget.
-            let gas_balance = transaction.gas_data().budget;
-            if gas_balance < estimate {
-                return Err(RpcError::new(
-                    tonic::Code::InvalidArgument,
-                    format!(
-                        "Insufficient gas balance to cover estimated transaction cost. \
-                        Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"
-                    ),
-                ));
+                if !is_gasless_post_execution_failure(simulation_result.effects.status()) {
+                    transaction = gasless_tx;
+                    break 'simulate simulation_result;
+                }
             }
-            transaction.gas_data_mut().budget = estimate;
+
+            // Priced-flow budget estimation and gas selection.
+            // At this point, the budget on the transaction can be set to one of the following:
+            // - The budget from the request, if specified.
+            // - The total balance of all of the gas payment coins (clamped to the protocol
+            //   MAX_GAS_BUDGET) in the request if the budget was not
+            //   specified but the gas payment coins were specified.
+            // - Protocol MAX_GAS_BUDGET if the request did not specified neither gas payment or budget.
+            //
+            // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
+            // overwrite the resolved budget with the more accurate estimate.
+            if request.transaction().gas_payment().budget.is_none()
+                && request.transaction().bcs_opt().is_none()
+            {
+                let mut estimation_transaction = transaction.clone();
+                estimation_transaction.gas_data_mut().payment = Vec::new();
+                estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
+
+                let simulation_result = executor
+                    .simulate_transaction(
+                        estimation_transaction,
+                        TransactionChecks::Enabled,
+                        true, /* allow mock gas coin */
+                    )
+                    .map_err(anyhow::Error::from)?;
+
+                let estimate = estimate_gas_budget_from_gas_cost(
+                    simulation_result.effects.gas_cost_summary(),
+                    reference_gas_price,
+                    request.transaction().gas_payment().objects.len(),
+                    &protocol_config,
+                );
+
+                // If the request specified gas payment, then transaction.gas_data().budget should have been
+                // resolved to the cumulative balance of those coins. We don't want to return a resolved transaction
+                // where the gas payment can't satisfy the budget, so validate that balance can actually cover the
+                // estimated budget.
+                let gas_balance = transaction.gas_data().budget;
+                if gas_balance < estimate {
+                    return Err(RpcError::new(
+                        tonic::Code::InvalidArgument,
+                        format!(
+                            "Insufficient gas balance to cover estimated transaction cost. \
+                            Available gas balance: {gas_balance} MIST. Estimated gas budget required: {estimate} MIST"
+                        ),
+                    ));
+                }
+                transaction.gas_data_mut().budget = estimate;
+            }
+
+            if transaction.gas_data().payment.is_empty() {
+                select_gas(service, &mut transaction, &protocol_config)?;
+            }
         }
 
-        if transaction.gas_data().payment.is_empty() {
-            select_gas(service, &mut transaction, &protocol_config)?;
-        }
-    }
-
-    let allow_mock_gas_coin = checks.disabled() || !request.do_gas_selection();
+        executor
+            .simulate_transaction(transaction.clone(), checks, !perform_gas_selection)
+            .map_err(anyhow::Error::from)?
+    };
 
     let SimulateTransactionResult {
         effects,
@@ -159,11 +189,9 @@ pub fn simulate_transaction(
         mock_gas_id,
         unchanged_loaded_runtime_objects,
         suggested_gas_price,
-    } = executor
-        .simulate_transaction(transaction.clone(), checks, allow_mock_gas_coin)
-        .map_err(anyhow::Error::from)?;
+    } = simulation_result;
 
-    if !allow_mock_gas_coin && mock_gas_id.is_some() {
+    if perform_gas_selection && mock_gas_id.is_some() {
         // If we don't allow for using a mock coin, but we still did, return a server error
         return Err(RpcError::new(
             tonic::Code::Internal,
@@ -528,4 +556,83 @@ fn select_gas(
             ),
         ))
     }
+}
+
+/// Returns true if the simulate request is eligible for auto gas_price=0 handling.
+///
+/// Requires: gasless enabled by protocol, caller did not set price or gas payment objects, tx is a
+/// PTB that passes the structural gasless checks, and all loaded Move object inputs pass the
+/// runtime gasless input check (`Coin<T>` with `T` allowlisted, AddressOwner/ConsensusAddressOwner).
+fn is_gasless_candidate(
+    request: &SimulateTransactionRequest,
+    transaction: &sui_types::transaction::TransactionData,
+    protocol_config: &ProtocolConfig,
+    service: &RpcService,
+) -> Result<bool> {
+    if !protocol_config.enable_gasless() {
+        return Ok(false);
+    }
+    // When the caller passed a full BCS TransactionData, treat it as explicit — don't second-guess
+    // their gas choice. Only auto-switch in the unresolved/proto path.
+    if request.transaction().bcs_opt().is_some() {
+        return Ok(false);
+    }
+    if request.transaction().gas_payment().price.is_some() {
+        return Ok(false);
+    }
+    if !request.transaction().gas_payment().objects.is_empty() {
+        return Ok(false);
+    }
+    let TransactionKind::ProgrammableTransaction(pt) = transaction.kind() else {
+        return Ok(false);
+    };
+    if pt.validate_gasless_transaction(protocol_config).is_err() {
+        return Ok(false);
+    }
+
+    // Load Move object inputs so we can run the runtime input check. Packages need not be loaded
+    // since check_gasless_object_inputs skips them.
+    let input_object_kinds = match transaction.input_objects() {
+        Ok(kinds) => kinds,
+        Err(_) => return Ok(false),
+    };
+    let mut loaded = Vec::with_capacity(input_object_kinds.len());
+    for kind in input_object_kinds {
+        match kind {
+            InputObjectKind::MovePackage(_) => continue,
+            InputObjectKind::ImmOrOwnedMoveObject(object_ref) => {
+                let Some(object) = service.reader.inner().get_object(&object_ref.0) else {
+                    return Ok(false);
+                };
+                loaded.push(ObjectReadResult::new(kind, object.into()));
+            }
+            InputObjectKind::SharedMoveObject { id, .. } => {
+                let Some(object) = service.reader.inner().get_object(&id) else {
+                    return Ok(false);
+                };
+                loaded.push(ObjectReadResult::new(kind, object.into()));
+            }
+        }
+    }
+    let input_objects = InputObjects::new(loaded);
+    Ok(
+        sui_transaction_checks::check_gasless_object_inputs(&input_objects, protocol_config)
+            .is_ok(),
+    )
+}
+
+/// The executor maps a post-execution gasless-requirements failure
+/// (`TemporaryStore::check_gasless_execution_requirements`) to
+/// `ExecutionErrorKind::InsufficientGas` on the effects (see
+/// `sui-execution/latest/sui-adapter/src/execution_engine.rs`). During a gasless simulate, that's
+/// the only way InsufficientGas can surface (gasless uses a large compute cap and ignores budget),
+/// so we treat it as the fallback trigger.
+fn is_gasless_post_execution_failure(status: &ExecutionStatus) -> bool {
+    matches!(
+        status,
+        ExecutionStatus::Failure(ExecutionFailure {
+            error: sui_types::execution_status::ExecutionErrorKind::InsufficientGas,
+            ..
+        })
+    )
 }

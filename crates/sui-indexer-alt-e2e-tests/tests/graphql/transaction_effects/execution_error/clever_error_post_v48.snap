@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 908
 ---
 processed 6 tasks
 
@@ -33,10 +32,10 @@ task 5, lines 37-65:
 Response: {
   "data": {
     "originalPackage": {
-      "address": "0x491b027e18cb7a511fbf349789ad0c8b08b8696285e47962033b0cd33cd10f0f"
+      "address": "0x3660cad88aba4ea7890593cc17c0437105cab7946008d3e9caf0dc27e5aa211a"
     },
     "upgradedPackage": {
-      "address": "0x875d46704de500c8953e182916922602b76000758d181a3781742e6b6e611ad6"
+      "address": "0xdfd491f9dc40f6408b3c858b9f7acf530475f43239b82a45f9a4f7dedac88a32"
     },
     "cleverErrorPostV48": {
       "executionError": {
@@ -45,11 +44,11 @@ Response: {
         "instructionOffset": 1,
         "identifier": "ENewError",
         "constant": "New error in v2",
-        "message": "Error in 1st command, from '0x875d46704de500c8953e182916922602b76000758d181a3781742e6b6e611ad6::clever_error_post_v48::test_new_error' (line 26), abort 'ENewError': New error in v2",
+        "message": "Error in 1st command, from '0xdfd491f9dc40f6408b3c858b9f7acf530475f43239b82a45f9a4f7dedac88a32::clever_error_post_v48::test_new_error' (line 26), abort 'ENewError': New error in v2",
         "module": {
           "name": "clever_error_post_v48",
           "package": {
-            "address": "0x875d46704de500c8953e182916922602b76000758d181a3781742e6b6e611ad6"
+            "address": "0xdfd491f9dc40f6408b3c858b9f7acf530475f43239b82a45f9a4f7dedac88a32"
           }
         },
         "function": {

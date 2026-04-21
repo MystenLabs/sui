@@ -24,7 +24,7 @@ Response: {
   "data": {
     "transactionEffects": {
       "effectsJson": {
-        "digest": "GY3mZYY4NYXoPrwN2P8eL1a6acoRZ8XxyLQxKqVmT4XK",
+        "digest": "9EFn3X229C8hhL6Aet61aAqherndQG2buJXPpHDEmyAm",
         "version": 2,
         "status": {
           "success": true
@@ -36,19 +36,19 @@ Response: {
           "storageRebate": "0",
           "nonRefundableStorageFee": "0"
         },
-        "transactionDigest": "AProzpzHPFFVZQnWTEVQ34iWFYRE5Bpev598QSaqxjB9",
+        "transactionDigest": "FKqhR5h5uQemq2dDWJ9358i3jsF1aZXtXC8gVVZiik3p",
         "gasObject": {
           "objectId": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
           "inputState": "INPUT_OBJECT_STATE_EXISTS",
           "inputVersion": "1",
-          "inputDigest": "CvPQ2HgmZYFvRDiN9nkUJa1ZhbN9ote38764XzqHZGzP",
+          "inputDigest": "Bzr4WpBBP9U9NhnHLWMKujjzcRczyxdxswVrvKK3RoL4",
           "inputOwner": {
             "kind": "ADDRESS",
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
           },
           "outputState": "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
           "outputVersion": "2",
-          "outputDigest": "GK99NRdLS8L3bpK2t5Kiiiwi842Z2Auz99RBi1RtJ1yC",
+          "outputDigest": "FULbvFu1oiEmSEK8tDBoHhjrchpY73TK2gk7g1TcbDdg",
           "outputOwner": {
             "kind": "ADDRESS",
             "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -56,16 +56,16 @@ Response: {
           "idOperation": "NONE"
         },
         "dependencies": [
-          "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY"
+          "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV"
         ],
         "lamportVersion": "2",
         "changedObjects": [
           {
-            "objectId": "0x31605f56765d792390ad4597a3187ec4a8aac3f4f82d19822dd3038163c6ee76",
+            "objectId": "0x6ac0b6e729a14fe16883300ec3ebeb7f70eceaf796d5f3a394cd1d383fdebd08",
             "inputState": "INPUT_OBJECT_STATE_DOES_NOT_EXIST",
             "outputState": "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
             "outputVersion": "2",
-            "outputDigest": "6MsinMtuBig5pHYvRycdZ81nyzw8GuoNuCLxpgDb82WX",
+            "outputDigest": "EPKxkRtQjp2UMsQw1mkQRf825E64KXmg3h7Prt3D2hvA",
             "outputOwner": {
               "kind": "ADDRESS",
               "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
@@ -76,14 +76,14 @@ Response: {
             "objectId": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
             "inputState": "INPUT_OBJECT_STATE_EXISTS",
             "inputVersion": "1",
-            "inputDigest": "CvPQ2HgmZYFvRDiN9nkUJa1ZhbN9ote38764XzqHZGzP",
+            "inputDigest": "Bzr4WpBBP9U9NhnHLWMKujjzcRczyxdxswVrvKK3RoL4",
             "inputOwner": {
               "kind": "ADDRESS",
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "outputState": "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
             "outputVersion": "2",
-            "outputDigest": "GK99NRdLS8L3bpK2t5Kiiiwi842Z2Auz99RBi1RtJ1yC",
+            "outputDigest": "FULbvFu1oiEmSEK8tDBoHhjrchpY73TK2gk7g1TcbDdg",
             "outputOwner": {
               "kind": "ADDRESS",
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -101,10 +101,10 @@ task 4, lines 19-27:
 Response: {
   "data": {
     "transaction": {
-      "digest": "AProzpzHPFFVZQnWTEVQ34iWFYRE5Bpev598QSaqxjB9",
+      "digest": "FKqhR5h5uQemq2dDWJ9358i3jsF1aZXtXC8gVVZiik3p",
       "effects": {
         "effectsJson": {
-          "digest": "GY3mZYY4NYXoPrwN2P8eL1a6acoRZ8XxyLQxKqVmT4XK",
+          "digest": "9EFn3X229C8hhL6Aet61aAqherndQG2buJXPpHDEmyAm",
           "version": 2,
           "status": {
             "success": true
@@ -116,19 +116,19 @@ Response: {
             "storageRebate": "0",
             "nonRefundableStorageFee": "0"
           },
-          "transactionDigest": "AProzpzHPFFVZQnWTEVQ34iWFYRE5Bpev598QSaqxjB9",
+          "transactionDigest": "FKqhR5h5uQemq2dDWJ9358i3jsF1aZXtXC8gVVZiik3p",
           "gasObject": {
             "objectId": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
             "inputState": "INPUT_OBJECT_STATE_EXISTS",
             "inputVersion": "1",
-            "inputDigest": "CvPQ2HgmZYFvRDiN9nkUJa1ZhbN9ote38764XzqHZGzP",
+            "inputDigest": "Bzr4WpBBP9U9NhnHLWMKujjzcRczyxdxswVrvKK3RoL4",
             "inputOwner": {
               "kind": "ADDRESS",
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
             },
             "outputState": "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
             "outputVersion": "2",
-            "outputDigest": "GK99NRdLS8L3bpK2t5Kiiiwi842Z2Auz99RBi1RtJ1yC",
+            "outputDigest": "FULbvFu1oiEmSEK8tDBoHhjrchpY73TK2gk7g1TcbDdg",
             "outputOwner": {
               "kind": "ADDRESS",
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -136,16 +136,16 @@ Response: {
             "idOperation": "NONE"
           },
           "dependencies": [
-            "ANmrqK6Qg9cMHFakzsPZbW5xW4mTpLjdbcpisVh9NfiY"
+            "GKpM9uNhR96ZtkZk6QRLW8teqPb5JYcE5icGcJVBMNtV"
           ],
           "lamportVersion": "2",
           "changedObjects": [
             {
-              "objectId": "0x31605f56765d792390ad4597a3187ec4a8aac3f4f82d19822dd3038163c6ee76",
+              "objectId": "0x6ac0b6e729a14fe16883300ec3ebeb7f70eceaf796d5f3a394cd1d383fdebd08",
               "inputState": "INPUT_OBJECT_STATE_DOES_NOT_EXIST",
               "outputState": "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
               "outputVersion": "2",
-              "outputDigest": "6MsinMtuBig5pHYvRycdZ81nyzw8GuoNuCLxpgDb82WX",
+              "outputDigest": "EPKxkRtQjp2UMsQw1mkQRf825E64KXmg3h7Prt3D2hvA",
               "outputOwner": {
                 "kind": "ADDRESS",
                 "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
@@ -156,14 +156,14 @@ Response: {
               "objectId": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
               "inputState": "INPUT_OBJECT_STATE_EXISTS",
               "inputVersion": "1",
-              "inputDigest": "CvPQ2HgmZYFvRDiN9nkUJa1ZhbN9ote38764XzqHZGzP",
+              "inputDigest": "Bzr4WpBBP9U9NhnHLWMKujjzcRczyxdxswVrvKK3RoL4",
               "inputOwner": {
                 "kind": "ADDRESS",
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
               },
               "outputState": "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
               "outputVersion": "2",
-              "outputDigest": "GK99NRdLS8L3bpK2t5Kiiiwi842Z2Auz99RBi1RtJ1yC",
+              "outputDigest": "FULbvFu1oiEmSEK8tDBoHhjrchpY73TK2gk7g1TcbDdg",
               "outputOwner": {
                 "kind": "ADDRESS",
                 "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"

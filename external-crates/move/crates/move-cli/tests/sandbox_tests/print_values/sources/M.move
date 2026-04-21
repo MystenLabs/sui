@@ -33,7 +33,7 @@ module 0x2::M {
         let x = 42u64;
         print(&x);
 
-        let mut v: vector<u64> = vector::empty();
+        let mut v: vector<u64> = vector[];
         vector::push_back(&mut v, 100);
         vector::push_back(&mut v, 200);
         vector::push_back(&mut v, 300);

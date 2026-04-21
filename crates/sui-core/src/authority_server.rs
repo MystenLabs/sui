@@ -63,11 +63,10 @@ use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, info, instrument};
 
 use crate::admission_queue::{AdmissionQueueContext, AdmissionQueueManager};
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
 use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
-    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, ConsensusOverloadChecker},
     traffic_controller::{TrafficController, parse_ip, policies::TrafficTally},
 };
 use crate::{
@@ -141,13 +140,9 @@ impl AuthorityServer {
             Arc::new(LazyMysticetiClient::new()),
             CheckpointStore::new_for_tests(),
             state.name,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            state.epoch_store_for_testing().protocol_config().clone(),
             slot_freed_notify,
         ));
         Self::new_for_test_with_consensus_adapter(state, consensus_adapter)
@@ -655,13 +650,6 @@ impl ValidatorService {
         submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<(RawSubmitTxResponse, Weight)> {
         let epoch_store = state.load_epoch_store_one_call_per_task();
-        if !epoch_store.protocol_config().mysticeti_fastpath() {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "Mysticeti fastpath".to_string(),
-            }
-            .into());
-        }
-
         let submit_type = SubmitTxType::try_from(request.submit_type).map_err(|e| {
             SuiErrorKind::GrpcMessageDeserializeError {
                 type_info: "RawSubmitTxRequest.submit_type".to_string(),
@@ -1262,11 +1250,7 @@ impl ValidatorService {
                 Some(pos) => pos,
                 None => return futures::future::pending().await,
             };
-            let consensus_tx_status_cache = epoch_store.consensus_tx_status_cache.as_ref().ok_or(
-                SuiErrorKind::UnsupportedFeatureError {
-                    error: "Consensus tx status cache".to_string(),
-                },
-            )?;
+            let consensus_tx_status_cache = &epoch_store.consensus_tx_status_cache;
             consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
             match consensus_tx_status_cache
                 .notify_read_transaction_status(consensus_position)
@@ -1321,12 +1305,7 @@ impl ValidatorService {
         request: WaitForEffectsRequest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<WaitForEffectsResponse> {
-        let Some(consensus_tx_status_cache) = epoch_store.consensus_tx_status_cache.as_ref() else {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "Mysticeti fastpath".to_string(),
-            }
-            .into());
-        };
+        let consensus_tx_status_cache = &epoch_store.consensus_tx_status_cache;
 
         let Some(consensus_position) = request.consensus_position else {
             return Err(SuiErrorKind::InvalidRequest(
@@ -1466,8 +1445,7 @@ impl ValidatorService {
         // Get last committed leader round from epoch store
         let last_committed_leader_round = epoch_store
             .consensus_tx_status_cache
-            .as_ref()
-            .and_then(|cache| cache.get_last_committed_leader_round())
+            .get_last_committed_leader_round()
             .unwrap_or(0);
 
         // Get last locally built checkpoint sequence

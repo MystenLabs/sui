@@ -19,7 +19,7 @@ module test::m {
     entry fun get_objects(ctx: &mut TxContext) {
         let mut i = 0u64;
         while (i < 5) {
-            let obj = Obj { id: object::new(ctx), contents: vector::empty() };
+            let obj = Obj { id: object::new(ctx), contents: vector[] };
             transfer::transfer(obj, tx_context::sender(ctx));
             i = i + 1;
         };
@@ -31,19 +31,19 @@ module test::m {
     }
 
     public entry fun large_storage_func(n: u64, ctx: &mut TxContext) {
-        let mut v: vector<u64> = vector::empty();
+        let mut v: vector<u64> = vector[];
         let mut i = 0u64;
         while (i < n) {
             vector::push_back(&mut v, i);
             i = i + 1;
         };
 
-        transfer::transfer(Obj { id: object::new(ctx), contents: vector::empty() }, tx_context::sender(ctx))
+        transfer::transfer(Obj { id: object::new(ctx), contents: vector[] }, tx_context::sender(ctx))
     }
 
     // no objects just computation
     public entry fun large_compute_func(n: u64) {
-        let mut v: vector<u64> = vector::empty();
+        let mut v: vector<u64> = vector[];
         let mut i = 0u64;
         while (i < n) {
             vector::push_back(&mut v, i);

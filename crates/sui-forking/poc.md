@@ -135,7 +135,7 @@ The command accepts a checkpoint to fork from. This must not larger than the lat
 - `--data-dir <path>`: The directory to persist the network state (checkpoints, epochs, transactions, objects, etc). This allows the user to maintain the state of the forked network across restarts.
 
 **The startup flow**
-- Initialize store layer (forking-data-store)
+- Initialize store layer
 - Fetch the latest checkpoint (or the checkpoint specified by the user)
 - Accept incoming gRPC requests (data fetching, transaction execution, forked network control).
 

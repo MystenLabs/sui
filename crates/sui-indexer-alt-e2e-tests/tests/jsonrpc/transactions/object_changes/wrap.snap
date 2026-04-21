@@ -39,26 +39,8 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "digest": "7xTokw4CWViwDFDQBTVQ3nYjWNRXTsLjShM7ZDaEW7vC",
+    "digest": "GYGsDM7sjoyoxXdkpv9X4dY2mQ3vvxagegQSSn4aA1Vw",
     "objectChanges": [
-      {
-        "type": "wrapped",
-        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-        "objectType": "0x32d04f45af84c316d8a7ceeff0f88ec294a029dbdfe3b8a47e79613500da3d8a::M::I",
-        "objectId": "0x53b5e4dec21fc7df049d902ca13c3af4fe01315907ed6b7c4f14843aa71ed8bc",
-        "version": "3"
-      },
-      {
-        "type": "created",
-        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
-        "owner": {
-          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
-        },
-        "objectType": "0x32d04f45af84c316d8a7ceeff0f88ec294a029dbdfe3b8a47e79613500da3d8a::M::O",
-        "objectId": "0x68bf6a04735ba374a49bc7eb9cc83b20646a138e96527705562789647b043326",
-        "version": "3",
-        "digest": "8BiMCNxAZAkNKaQfepeepjPkV3M2w7BfwPEkBfM2UB9N"
-      },
       {
         "type": "mutated",
         "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
@@ -69,7 +51,25 @@ Response: {
         "objectId": "0xb0d826786ad374b9e6e79da4a2d6c8d5f23c413aeb76fa0b07e5636d173a4a8f",
         "version": "3",
         "previousVersion": "2",
-        "digest": "HTb9DVQPEvF2JkAfHH3bBwW9wusuKsXB5CKPvJqcfiSn"
+        "digest": "4acGW9ssSnE6qQBdMFfCezjr7gVVax7D5P8Gd9JDGRpS"
+      },
+      {
+        "type": "wrapped",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "objectType": "0xe0e8ff4a12d417c24565ba858103e9b2fb9dd36788684c13f31816adb3df2da0::M::I",
+        "objectId": "0xb892ec1f5cf3d3fed3fc4ce98b28192a41d425c6247b3628d5971b52a99fc27d",
+        "version": "3"
+      },
+      {
+        "type": "created",
+        "sender": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e",
+        "owner": {
+          "AddressOwner": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+        },
+        "objectType": "0xe0e8ff4a12d417c24565ba858103e9b2fb9dd36788684c13f31816adb3df2da0::M::O",
+        "objectId": "0xef366edc0879b148443bf4783241cbd6d6928f721b9aab25565c094594ea98d6",
+        "version": "3",
+        "digest": "36dbMMn8uQBg4is6t1YaGABqkgWxByTidoaFQKQdwaYW"
       }
     ],
     "timestampMs": "0",

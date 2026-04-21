@@ -250,7 +250,7 @@ mod tests {
         AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
         EffectsObjectChange,
     };
-    use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
+    use sui_types::execution_status::{ExecutionFailure, ExecutionFailureStatus, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas_coin::GAS;
     use sui_types::object::MoveObject;
@@ -335,7 +335,10 @@ mod tests {
         );
 
         let effects = TransactionEffects::new_from_execution_v2(
-            ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None),
+            ExecutionStatus::new_failure(ExecutionFailure::new(
+                ExecutionFailureStatus::InsufficientGas,
+                None,
+            )),
             0,
             GasCostSummary::new(gas_deduction, 0, 0, 0),
             vec![],
@@ -387,7 +390,10 @@ mod tests {
         changed_objects.insert(obj_id, change);
 
         TransactionEffects::new_from_execution_v2(
-            ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None),
+            ExecutionStatus::new_failure(ExecutionFailure::new(
+                ExecutionFailureStatus::InsufficientGas,
+                None,
+            )),
             0,
             GasCostSummary::new(amount, 0, 0, 0),
             vec![],
@@ -442,7 +448,10 @@ mod tests {
         changed_objects.insert(acc_obj_id, acc_change);
 
         let effects = TransactionEffects::new_from_execution_v2(
-            ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None),
+            ExecutionStatus::new_failure(ExecutionFailure::new(
+                ExecutionFailureStatus::InsufficientGas,
+                None,
+            )),
             0,
             GasCostSummary::new(gas_deduction, 0, 0, 0),
             vec![],
@@ -507,7 +516,10 @@ mod tests {
     #[tokio::test]
     async fn test_failed_txn_zero_gas_no_objects_returns_empty() {
         let effects = TransactionEffects::new_from_execution_v2(
-            ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None),
+            ExecutionStatus::new_failure(ExecutionFailure::new(
+                ExecutionFailureStatus::InsufficientGas,
+                None,
+            )),
             0,
             GasCostSummary::new(0, 0, 0, 0),
             vec![],

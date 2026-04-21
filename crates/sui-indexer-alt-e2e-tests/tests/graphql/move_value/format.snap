@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 9 tasks
 
@@ -86,7 +85,7 @@ Response: {
           "alt": "default!",
           "df": "100",
           "dof": {
-            "id": "0x4716ecbc082b4d37d08417272998c2145ef026e62d2c1e2f9887aea419078e5e",
+            "id": "0xe376465c63a20d50634250aae8c46f81164e21863db401c08c180c1f3c23cf13",
             "map": {
               "contents": [
                 {

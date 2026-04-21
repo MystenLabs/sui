@@ -33,15 +33,34 @@ fn new_gas_coin_with_balance_and_owner(balance: u64, owner: Owner) -> Object {
 }
 
 /// Given a list of gas coin owners, generate random gas data and gas coins
-/// with the given owners.
+/// with the given owners. When `allow_address_balance` is true, randomly
+/// generates address-balance gas payments (empty payment vector) instead.
 fn generate_random_gas_data(
     seed: [u8; 32],
     gas_coin_owners: Vec<Owner>, // arbitrarily generated owners, can be shared or immutable or obj-owned too
     owned_by_sender: bool,       // whether to set owned gas coins to be owned by the sender
     force_all_sender_owned: bool, // whether to force ALL gas coins to be owned by the sender
+    allow_address_balance: bool, // whether to sometimes generate address-balance gas payments
 ) -> GasDataWithObjects {
     let (sender, sender_key): (SuiAddress, AccountKeyPair) = get_key_pair();
     let mut rng = StdRng::from_seed(seed);
+
+    // When allowed, randomly choose address-balance gas payment (empty payment vector)
+    if allow_address_balance && rng.gen_bool(0.5) {
+        return GasDataWithObjects {
+            gas_data: GasData {
+                payment: vec![],
+                owner: sender,
+                price: rng
+                    .gen_range(0..=ProtocolConfig::get_for_max_version_UNSAFE().max_gas_price()),
+                budget: rng
+                    .gen_range(0..=ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas()),
+            },
+            objects: vec![],
+            sender_key,
+        };
+    }
+
     let mut gas_objects = vec![];
     let mut object_refs = vec![];
 
@@ -116,6 +135,9 @@ pub struct GasDataGenConfig {
     /// When true, ALL generated gas coins are forced to `AddressOwner(sender)`,
     /// regardless of the randomly generated owner type.
     pub force_all_sender_owned: bool,
+    /// When true, the strategy will sometimes generate address-balance gas
+    /// payments (empty `payment` vector, no gas coin objects).
+    pub allow_address_balance: bool,
 }
 
 impl GasDataGenConfig {
@@ -125,6 +147,7 @@ impl GasDataGenConfig {
                 .max_gas_payment_objects() as usize,
             owned_by_sender: true,
             force_all_sender_owned: false,
+            allow_address_balance: false,
         }
     }
 
@@ -134,6 +157,7 @@ impl GasDataGenConfig {
                 .max_gas_payment_objects() as usize,
             owned_by_sender: false,
             force_all_sender_owned: false,
+            allow_address_balance: false,
         }
     }
 
@@ -146,6 +170,19 @@ impl GasDataGenConfig {
                 .max_gas_payment_objects() as usize,
             owned_by_sender: true,
             force_all_sender_owned: true,
+            allow_address_balance: false,
+        }
+    }
+
+    /// Mix of coin-based and address-balance gas payments.
+    /// Address-balance payments use an empty `payment` vector and no gas coin objects.
+    pub fn with_address_balance() -> Self {
+        Self {
+            max_num_gas_objects: ProtocolConfig::get_for_max_version_UNSAFE()
+                .max_gas_payment_objects() as usize,
+            owned_by_sender: true,
+            force_all_sender_owned: false,
+            allow_address_balance: true,
         }
     }
 }
@@ -165,6 +202,7 @@ impl proptest::arbitrary::Arbitrary for GasDataWithObjects {
                     owners,
                     params.owned_by_sender,
                     params.force_all_sender_owned,
+                    params.allow_address_balance,
                 )
             })
             .boxed()

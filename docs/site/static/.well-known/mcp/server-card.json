@@ -1,0 +1,50 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/modelcontextprotocol/main/schema/server-card.json",
+  "serverInfo": {
+    "name": "Sui Documentation",
+    "version": "1.0.0",
+    "description": "AI-powered Q&A over Sui blockchain documentation. Ask questions about Move programming, Sui architecture, SDK usage, transaction building, and more.",
+    "homepage": "https://docs.sui.io",
+    "contactEmail": "docs@mystenlabs.com"
+  },
+  "transport": {
+    "type": "streamable-http",
+    "url": "https://sui.mcp.kapa.ai/",
+    "authentication": {
+      "type": "bearer",
+      "description": "Requires a Kapa API token. Contact docs@mystenlabs.com or visit https://kapa.ai for access."
+    }
+  },
+  "capabilities": {
+    "tools": {
+      "supported": true,
+      "description": "Search and query Sui documentation, ask technical questions, and get AI-generated answers grounded in official docs."
+    },
+    "resources": {
+      "supported": false
+    },
+    "prompts": {
+      "supported": false
+    }
+  },
+  "relatedResources": [
+    {
+      "href": "https://docs.sui.io/llms.txt",
+      "type": "text/plain",
+      "title": "LLM-optimized documentation index",
+      "rel": "service-doc"
+    },
+    {
+      "href": "https://docs.sui.io/.well-known/api-catalog",
+      "type": "application/linkset+json",
+      "title": "Sui API catalog",
+      "rel": "api-catalog"
+    },
+    {
+      "href": "https://docs.sui.io/sitemap.xml",
+      "type": "application/xml",
+      "title": "Full site index",
+      "rel": "sitemap"
+    }
+  ]
+}

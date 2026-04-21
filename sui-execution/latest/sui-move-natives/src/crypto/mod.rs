@@ -12,5 +12,6 @@ pub mod hash;
 pub mod hmac;
 pub mod nitro_attestation;
 pub mod poseidon;
+pub mod rangeproofs;
 pub mod vdf;
 pub mod zklogin;

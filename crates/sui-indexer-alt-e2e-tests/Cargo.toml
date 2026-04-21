@@ -6,6 +6,9 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[features]
+staging = ["sui-indexer-alt-graphql/staging"]
+
 [lints]
 workspace = true
 
@@ -60,12 +63,20 @@ tracing.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+coset.workspace = true
 prost-types.workspace = true
 datatest-stable.workspace = true
 insta.workspace = true
+p256.workspace = true
+passkey-authenticator.workspace = true
+passkey-client.workspace = true
+passkey-types.workspace = true
 jsonrpsee.workspace = true
 telemetry-subscribers.workspace = true
+tokio-stream.workspace = true
+tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 tonic.workspace = true
+futures.workspace = true
 
 sui-field-count.workspace = true
 sui-framework.workspace = true

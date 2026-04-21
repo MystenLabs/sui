@@ -449,7 +449,7 @@ module deepbook::clob {
     ): vector<Order> {
         let user = object::id(account_cap);
         let usr_open_order_ids = table::borrow(&pool.usr_open_orders, user);
-        let mut open_orders = vector::empty<Order>();
+        let mut open_orders = vector[];
         let mut order_id = linked_table::front(usr_open_order_ids);
         while (!option::is_none(order_id)) {
             let order_price = *linked_table::borrow(usr_open_order_ids, *option::borrow(order_id));
@@ -507,8 +507,8 @@ module deepbook::clob {
         if (price_high > price_high_) price_high = price_high_;
         price_low = critbit::find_closest_key(&pool.bids, price_low);
         price_high = critbit::find_closest_key(&pool.bids, price_high);
-        let mut price_vec = vector::empty<u64>();
-        let mut depth_vec = vector::empty<u64>();
+        let mut price_vec = vector[];
+        let mut depth_vec = vector[];
         if (price_low == 0) { return (price_vec, depth_vec) };
         while (price_low <= price_high) {
             let depth = get_level2_book_status(
@@ -541,8 +541,8 @@ module deepbook::clob {
         if (price_high > price_high_) price_high = price_high_;
         price_low = critbit::find_closest_key(&pool.asks, price_low);
         price_high = critbit::find_closest_key(&pool.asks, price_high);
-        let mut price_vec = vector::empty<u64>();
-        let mut depth_vec = vector::empty<u64>();
+        let mut price_vec = vector[];
+        let mut depth_vec = vector[];
         if (price_low == 0) { return (price_vec, depth_vec) };
         while (price_low <= price_high) {
             let depth = get_level2_book_status(

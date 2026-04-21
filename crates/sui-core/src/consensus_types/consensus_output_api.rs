@@ -25,7 +25,6 @@ pub(crate) trait ConsensusCommitAPI: Display {
     /// Returns the ref of consensus output.
     fn commit_ref(&self) -> CommitRef;
 
-    fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>>;
     fn leader_round(&self) -> u64;
     fn leader_author_index(&self) -> AuthorityIndex;
 
@@ -46,19 +45,6 @@ pub(crate) trait ConsensusCommitAPI: Display {
 impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
     fn commit_ref(&self) -> CommitRef {
         self.commit_ref
-    }
-
-    fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-        if !self.reputation_scores_desc.is_empty() {
-            Some(
-                self.reputation_scores_desc
-                    .iter()
-                    .map(|(id, score)| (id.value() as AuthorityIndex, *score))
-                    .collect(),
-            )
-        } else {
-            None
-        }
     }
 
     fn leader_round(&self) -> u64 {

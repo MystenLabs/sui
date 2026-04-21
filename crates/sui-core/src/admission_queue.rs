@@ -809,7 +809,7 @@ mod tests {
     async fn test_actor_shuts_down_when_handle_dropped() {
         use crate::authority::test_authority_builder::TestAuthorityBuilder;
         use crate::checkpoints::CheckpointStore;
-        use crate::consensus_adapter::{ConnectionMonitorStatusForTests, ConsensusAdapterMetrics};
+        use crate::consensus_adapter::ConsensusAdapterMetrics;
         use crate::mysticeti_adapter::LazyMysticetiClient;
         use sui_types::base_types::AuthorityName;
 
@@ -819,13 +819,9 @@ mod tests {
             Arc::new(LazyMysticetiClient::new()),
             CheckpointStore::new_for_tests(),
             AuthorityName::ZERO,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            epoch_store.protocol_config().clone(),
             Arc::new(tokio::sync::Notify::new()),
         ));
 
@@ -865,7 +861,7 @@ mod tests {
     ) {
         use crate::authority::test_authority_builder::TestAuthorityBuilder;
         use crate::checkpoints::CheckpointStore;
-        use crate::consensus_adapter::{ConnectionMonitorStatusForTests, ConsensusAdapterMetrics};
+        use crate::consensus_adapter::ConsensusAdapterMetrics;
         use crate::mysticeti_adapter::LazyMysticetiClient;
         use sui_types::base_types::AuthorityName;
 
@@ -876,13 +872,9 @@ mod tests {
             Arc::new(LazyMysticetiClient::new()),
             CheckpointStore::new_for_tests(),
             AuthorityName::ZERO,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             max_pending_transactions,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            epoch_store.protocol_config().clone(),
             slot_freed_notify.clone(),
         ));
         (adapter, epoch_store, slot_freed_notify)

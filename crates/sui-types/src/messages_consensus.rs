@@ -470,7 +470,6 @@ pub enum ConsensusTransactionKind {
 impl ConsensusTransactionKind {
     pub fn as_user_transaction(&self) -> Option<&Transaction> {
         match self {
-            ConsensusTransactionKind::UserTransaction(tx) => Some(tx),
             ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.tx()),
             _ => None,
         }
@@ -478,7 +477,6 @@ impl ConsensusTransactionKind {
 
     pub fn into_user_transaction(self) -> Option<Transaction> {
         match self {
-            ConsensusTransactionKind::UserTransaction(tx) => Some(*tx),
             ConsensusTransactionKind::UserTransactionV2(tx) => Some(tx.into_tx()),
             _ => None,
         }
@@ -619,23 +617,6 @@ impl ConsensusTransaction {
         }
     }
 
-    pub fn new_mysticeti_certificate(
-        round: u64,
-        offset: u64,
-        certificate: CertifiedTransaction,
-    ) -> Self {
-        let mut hasher = DefaultHasher::new();
-        let tx_digest = certificate.digest();
-        tx_digest.hash(&mut hasher);
-        round.hash(&mut hasher);
-        offset.hash(&mut hasher);
-        let tracking_id = hasher.finish().to_le_bytes();
-        Self {
-            tracking_id,
-            kind: ConsensusTransactionKind::CertifiedTransaction(Box::new(certificate)),
-        }
-    }
-
     pub fn new_jwk_fetched(authority: AuthorityName, id: JwkId, jwk: JWK) -> Self {
         let mut hasher = DefaultHasher::new();
         id.hash(&mut hasher);
@@ -764,12 +745,8 @@ impl ConsensusTransaction {
     }
 
     pub fn is_user_transaction(&self) -> bool {
-        // CertifiedTransaction is unused and not accepted now.
-        matches!(
-            self.kind,
-            ConsensusTransactionKind::UserTransaction(_)
-                | ConsensusTransactionKind::UserTransactionV2(_)
-        )
+        // CertifiedTransaction and UserTransaction are unused and not accepted now.
+        matches!(self.kind, ConsensusTransactionKind::UserTransactionV2(_))
     }
 
     pub fn is_end_of_publish(&self) -> bool {

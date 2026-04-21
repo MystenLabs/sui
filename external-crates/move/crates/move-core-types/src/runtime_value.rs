@@ -21,6 +21,8 @@ use std::{
     io::Cursor,
 };
 
+pub use crate::compressed::runtime as compressed_layouts;
+
 /// In the `WithTypes` configuration, a Move struct gets serialized into a Serde struct with this name
 pub const MOVE_STRUCT_NAME: &str = "struct";
 

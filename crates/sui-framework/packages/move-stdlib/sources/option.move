@@ -19,12 +19,12 @@ const EOPTION_NOT_SET: u64 = 0x40001;
 
 /// Return an empty `Option`
 public fun none<Element>(): Option<Element> {
-    Option { vec: vector::empty() }
+    Option { vec: vector[] }
 }
 
 /// Return an `Option` containing `e`
 public fun some<Element>(e: Element): Option<Element> {
-    Option { vec: vector::singleton(e) }
+    Option { vec: vector[e] }
 }
 
 /// Return true if `t` does not hold a value

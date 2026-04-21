@@ -1,0 +1,271 @@
+---
+title: Validator Node Management
+description: Learn the processes you need to perform to ensure your validator nodes are always optimized.
+keywords: [ run sui validator, sui validator tasks, running a validator node, running validator, deploy validator node, configure validator node, node storage, node metrics, node logs, node dashboards, state sync, node updates, joining the validator set, leaving the validator set, private security fixes ]
+sidebar_label: Management
+---
+
+As a validator on Sui, there are some processes you need to perform to ensure your nodes are always optimized.
+
+## Storage management
+
+By default, all `sui-node` related data is stored under `/opt/sui/db/`, as specified in the `sui-node` configuration file.
+
+```sh
+$ cat /opt/sui/config/validator.yaml | grep db-path
+```
+
+```
+  db-path: /opt/sui/db/authorities_db
+  db-path: /opt/sui/db/consensus_db
+```
+
+Ensure that you have an appropriately sized disk mounted for the database to write to.
+
+- To check the size of the local `sui-node` databases:
+
+```sh
+$ du -sh /opt/sui/db/
+$ du -sh /opt/sui/db/authorities_db
+$ du -sh /opt/sui/db/consensus_db
+```
+
+- To delete the local `sui-node` databases:
+
+```sh
+$ sudo systemctl stop sui-node
+$ sudo rm -rf /opt/sui/db/authorities_db /opt/sui/db/consensus_db
+```
+
+## Key management
+
+The following keys are used by `sui-node`:
+
+| Key          | Scheme   | Purpose                         |
+| ------------ | -------- | ------------------------------- |
+| `protocol.key` | bls12381 | Transactions                    |
+| `account.key`  | ed25519  | Controls assets for staking     |
+| `network.key`  | ed25519  | State sync                      |
+| `worker.key`   | ed25519  | Consensus (to be migrated)      |
+
+These are configured in the [`sui-node` configuration file](/operators/validator/validator-config).
+
+## Metrics
+
+`sui-node` exposes metrics through a local HTTP interface. You can scrape these for use in a central monitoring system, or view them directly from the node.
+
+- View all metrics:
+
+```sh
+$ curl -s http://localhost:9184/metrics
+```
+
+- Search for a particular metric:
+
+```sh
+$ curl http://localhost:9184/metrics | grep <METRIC>
+```
+
+`sui-node` also pushes metrics to a central Sui metrics proxy.
+
+## Logs
+
+Logs are controlled using the `RUST_LOG` environment variable.
+
+You can optionally set the `RUST_LOG_JSON=1` environment variable to enable logging in JSON structured format.
+
+Depending on your deployment method, you configure these in the following places:
+
+- [Ansible](https://github.com/MystenLabs/sui/blob/main/nre/ansible/roles/sui-node/files/sui-node.service)
+- [Native systemd](https://github.com/MystenLabs/sui/blob/main/nre/systemd/sui-node.service)
+- [Docker Compose](https://github.com/MystenLabs/sui/blob/main/nre/docker/docker-compose.yaml)
+
+To view and follow the `sui-node` logs:
+
+```sh
+$ journalctl -u sui-node -f
+```
+
+To search for a particular match:
+
+```sh
+$ journalctl -u sui-node -g <SEARCH_TERM>
+```
+
+- If you are using Docker Compose, look at the [examples in the README](https://github.com/MystenLabs/sui/blob/main/nre/docker/README.md#logs).
+
+You can change the logging configuration while a node is running using the admin interface.
+
+To view the currently configured logging values:
+
+```sh
+$ curl localhost:1337/logging
+```
+
+To change the currently configured logging values:
+
+```sh
+$ curl localhost:1337/logging -d "info"
+```
+
+## Dashboards
+
+Public dashboard for network-wide visibility:
+
+- [Sui Testnet Validators](https://metrics.sui.io/public-dashboards/9b841d63c9bf43fe8acec4f0fa991f5e)
+
+## Software updates
+
+When you need to update the `sui-node` software, use the following process. Follow the relevant Systemd or Docker Compose run book depending on your deployment type. You most likely do not want to restart with a clean database.
+
+- [Systemd](https://github.com/MystenLabs/sui/blob/main/nre/systemd/README.md#updates)
+- [Docker Compose](https://github.com/MystenLabs/sui/blob/main/nre/docker/README.md#updates)
+
+## State sync
+
+Checkpoints in Sui contain the permanent history of the network. They are comparable to blocks in other blockchains with one key difference: they lag instead of lead. All transactions are final and executed before being included in a checkpoint.
+
+These checkpoints synchronize between validators and full nodes through a dedicated peer-to-peer state sync interface.
+
+Inter-validator state sync is always permitted, but you can use controls to limit which full nodes can sync from a specific validator.
+
+The default and recommended `max-concurrent-connections: 0` configuration does not affect inter-validator state sync, but restricts all full nodes from syncing. The [`sui-node` configuration](/operators/validator/validator-config) can be modified to allow a known full node to sync from a validator:
+
+```sh
+p2p-config:
+  anemo-config:
+    max-concurrent-connections: 0
+  seed-peers:
+    - address: <multiaddr>  # The p2p address of the full node
+      peer-id: <peer-id>    # hex encoded network public key of the node
+    - address: ...          # another permitted peer
+      peer-id: ...
+```
+
+## Chain operations
+
+You execute the following chain operations using the `sui` CLI. This binary is built and provided as a release similar to `sui-node`, for example:
+
+```sh
+$ wget https://releases.sui.io/$SUI_SHA/sui
+$ chmod +x sui
+```
+
+```sh
+$ curl https://releases.sui.io/$SUI_SHA/sui -o sui
+$ chmod +x sui
+```
+
+Ensure that the `sui` binary release/version matches that of the deployed network, as this is often required.
+
+### Updating onchain metadata
+
+You can leverage the [validator tool](https://github.com/MystenLabs/sui/blob/main/nre/validator_tool.md) to perform a majority of the following tasks.
+
+An active or pending validator can update its onchain metadata by submitting a transaction. Some metadata changes take effect immediately, including:
+
+- Name
+- Description
+- Image URL
+- Project URL
+
+Other metadata (keys, addresses, and so on) only come into effect at the next epoch.
+
+To update metadata, a validator makes a `MoveCall` transaction that interacts with the system object. For example:
+
+1. To update `name` to `new_validator_name`, use the Sui Client CLI to call `sui_system::update_validator_name`:
+
+<ImportContent source="info-gas-budget" mode="snippet" />
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function update_validator_name --args 0x5 \"new_validator_name\" --gas-budget 10000
+```
+
+2. To update the p2p address starting from next epoch to `/ip4/192.168.1.1`, use the Sui Client CLI to call `sui_system::update_validator_next_epoch_p2p_address`:
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function update_validator_next_epoch_p2p_address --args 0x5 "[4, 192, 168, 1, 1]" --gas-budget 10000
+```
+
+See the [full list of metadata update functions](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-system/sources/sui_system.move#L267-L444).
+
+### Operation Cap
+
+To avoid touching account keys too often and to allow storing them offline, you can delegate the operation ability to another address. This address can then update the reference gas price and tallying rule on behalf of the validator.
+
+When you create a validator, the system creates a `UnverifiedValidatorOperationCap` and transfers it to the validator address. The holder of this `Cap` object (short for Capability) can therefore perform operational actions for this validator. To authorize another address to conduct these operations, transfer the object to another address that you control.
+
+You can perform the transfer using Sui Client CLI: `sui client transfer`.
+
+To rotate the delegatee address or revoke the authorization, the current holder of `Cap` transfers it to another address. If keys are compromised or lost, the validator can create a new `Cap` object to invalidate the existing one.
+
+Call `sui_system::rotate_operation_cap` to do this:
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function rotate_operation_cap --args 0x5 --gas-budget 10000
+```
+
+By default, the new `Cap` object transfers to the validator address, and you can then transfer it to the new delegatee address. At this point, the old `Cap` becomes invalid and no longer represents eligibility.
+
+To get the current valid `Cap` object's ID of a validator, use the Sui Client CLI `sui client objects` command after setting the holder as the active address.
+
+### Updating the gas price survey quote
+
+To update the gas price survey quote of a validator, which the network uses to calculate the reference gas price at the end of the epoch, the sender needs to hold a valid [`UnverifiedValidatorOperationCap`](#operation-cap). The sender can be the validator itself or a trusted delegatee.
+
+Call `sui_system::request_set_gas_price`:
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_set_gas_price --args 0x5 {cap_object_id} {new_gas_price} --gas-budget 10000
+```
+
+### Reporting/un-reporting validators
+
+To report a validator or undo an existing report, the sender needs to hold a valid [`UnverifiedValidatorOperationCap`](#operation-cap). The sender can be the validator itself or a trusted delegatee.
+
+Call `sui_system::report_validator/undo_report_validator`:
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function report_validator/undo_report_validator --args 0x5 {cap_object_id} {reportee_address} --gas-budget 10000
+```
+
+After `2f + 1` other validators by voting power report a validator, the network slashes their staking rewards.
+
+### Joining the validator set
+
+To join the validator set, you need to first sign up as a validator candidate by calling `sui_system::request_add_validator_candidate` with your metadata and initial configs:
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_add_validator_candidate --args 0x5 {protocol_pubkey_bytes} {network_pubkey_bytes} {worker_pubkey_bytes} {proof_of_possession} {name} {description} {image_url} {project_url} {net_address} {p2p_address} {primary_address} {worker_address} {gas_price} {commission_rate} --gas-budget 10000
+```
+
+After an address becomes a validator candidate, any address (including the candidate address itself) can start staking with the candidate's staking pool. After a candidate's staking pool accumulates at least `sui_system::MIN_VALIDATOR_JOINING_STAKE` amount of stake, the candidate can call `sui_system::request_add_validator` to officially join the next epoch's active validator set:
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_add_validator --args 0x5 --gas-budget 10000000
+```
+
+### Leaving the validator set
+
+To leave the validator set starting next epoch, the sender needs to be an active validator in the current epoch and should call `sui_system::request_remove_validator`:
+
+```sh
+$ sui client call --package 0x3 --module sui_system --function request_remove_validator --args 0x5 --gas-budget 10000
+```
+
+After the validator is removed at the next epoch change, the staking pool becomes inactive and you can only withdraw stakes from an inactive pool.
+
+## Private security fixes
+
+There might be instances where urgent security fixes need to roll out before public announcement (issues affecting liveness, invariants such as SUI supply, governance, and so on). To avoid active exploitation, Mysten Labs releases signed security binaries incorporating such fixes with a delay in publishing the source code until a large percentage of validators have patched the vulnerability.
+
+This release process is different, and you should expect that announcements of the directory for such binaries arrive out of band.
+[View the public key used to verify these binaries](https://sui-private.s3.us-west-2.amazonaws.com/sui_security_release.pem).
+
+A script is also available that downloads all the necessary signed binaries and Docker artifacts incorporating the security fixes.
+
+- Usage: `./download_private.sh <directory-name>`
+
+You can also download and verify specific binaries that might not be included by the above script using the `download_and_verify_private_binary.sh` script.
+
+- Usage: `./download_and_verify_private_binary.sh <directory-name> <binary-name>`

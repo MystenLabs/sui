@@ -221,7 +221,7 @@ module bridge::bridge_env {
             scenario,
             chain_id,
             vault,
-            validators: vector::empty(),
+            validators: vector[],
             clock,
         }
     }

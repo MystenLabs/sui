@@ -40,6 +40,7 @@ mod checked {
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_core_types::ident_str;
+    use move_core_types::language_storage::TypeTag;
     use sui_move_natives::all_natives;
     use sui_protocol_config::{
         LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig, check_limit_by_meter,
@@ -63,7 +64,7 @@ mod checked {
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorTrait};
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
-    use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
+    use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
     use sui_types::id::UID;
@@ -75,8 +76,8 @@ mod checked {
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
         Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
-        ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
-        WriteAccumulatorStorageCost, is_gasless_transaction,
+        ProgrammableTransaction, Reservation, StoredExecutionTimeObservations, TransactionKind,
+        WithdrawFrom, WriteAccumulatorStorageCost, is_gasless_transaction,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
@@ -213,7 +214,7 @@ mod checked {
             tx_ctx,
             move_vm,
             protocol_config,
-            metrics,
+            metrics.clone(),
             enable_expensive_checks,
             execution_params,
             trace_builder_opt,
@@ -255,8 +256,7 @@ mod checked {
                 _ => (),
             };
 
-            let ExecutionFailure { error, command } = error.to_execution_failure();
-            ExecutionStatus::new_failure(error, command)
+            ExecutionStatus::new_failure(error.to_execution_failure())
         } else {
             ExecutionStatus::Success
         };
@@ -297,6 +297,63 @@ mod checked {
             &mut gas_charger,
             *epoch_id,
         );
+
+        metrics.vm_telemetry_metrics.try_update(|vm_metrics| {
+            let t = move_vm.get_telemetry_report();
+            vm_metrics
+                .move_vm_package_cache_count
+                .set(t.package_cache_count as i64);
+            vm_metrics
+                .move_vm_total_arena_size_bytes
+                .set(t.total_arena_size as i64);
+            vm_metrics.move_vm_module_count.set(t.module_count as i64);
+            vm_metrics
+                .move_vm_function_count
+                .set(t.function_count as i64);
+            vm_metrics.move_vm_type_count.set(t.type_count as i64);
+            vm_metrics.move_vm_interner_size.set(t.interner_size as i64);
+            vm_metrics
+                .move_vm_vtable_cache_count
+                .set(t.vtable_cache_count as i64);
+            vm_metrics
+                .move_vm_vtable_cache_hits
+                .set(t.vtable_cache_hits as i64);
+            vm_metrics
+                .move_vm_vtable_cache_misses
+                .set(t.vtable_cache_misses as i64);
+            vm_metrics
+                .move_vm_load_time_ms
+                .set(t.total_load_time as i64);
+            vm_metrics.move_vm_load_count.set(t.load_count as i64);
+            vm_metrics
+                .move_vm_validation_time_ms
+                .set(t.total_validation_time as i64);
+            vm_metrics
+                .move_vm_validation_count
+                .set(t.validation_count as i64);
+            vm_metrics.move_vm_jit_time_ms.set(t.total_jit_time as i64);
+            vm_metrics.move_vm_jit_count.set(t.jit_count as i64);
+            vm_metrics
+                .move_vm_execution_time_ms
+                .set(t.total_execution_time as i64);
+            vm_metrics
+                .move_vm_execution_count
+                .set(t.execution_count as i64);
+            vm_metrics
+                .move_vm_interpreter_time_ms
+                .set(t.total_interpreter_time as i64);
+            vm_metrics
+                .move_vm_interpreter_count
+                .set(t.interpreter_count as i64);
+            vm_metrics
+                .move_vm_max_callstack_size
+                .set(t.max_callstack_size as i64);
+            vm_metrics
+                .move_vm_max_valuestack_size
+                .set(t.max_valuestack_size as i64);
+            vm_metrics.move_vm_total_time_ms.set(t.total_time as i64);
+            vm_metrics.move_vm_total_count.set(t.total_count as i64);
+        });
 
         (
             inner,
@@ -372,6 +429,12 @@ mod checked {
         let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
         let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
         let digest = tx_ctx.borrow().digest();
+        let withdrawal_reservations =
+            if is_gasless && protocol_config.gasless_verify_remaining_balance() {
+                gasless_withdrawal_reservations(&transaction_kind, &tx_ctx.borrow())
+            } else {
+                None
+            };
 
         // We must charge object read here during transaction execution, because if this fails
         // we must still ensure an effect is committed and all objects versions incremented
@@ -434,7 +497,8 @@ mod checked {
         };
         if is_gasless
             && result.is_ok()
-            && let Err(msg) = temporary_store.check_gasless_execution_requirements()
+            && let Err(msg) = temporary_store
+                .check_gasless_execution_requirements(withdrawal_reservations.as_ref())
         {
             result = Err(
                 ExecutionError::new_with_source(ExecutionErrorKind::InsufficientGas, msg).into(),
@@ -624,6 +688,38 @@ mod checked {
         }
 
         Ok(())
+    }
+
+    fn gasless_withdrawal_reservations(
+        transaction_kind: &TransactionKind,
+        tx_ctx: &TxContext,
+    ) -> Option<BTreeMap<(SuiAddress, TypeTag), u64>> {
+        let TransactionKind::ProgrammableTransaction(pt) = transaction_kind else {
+            debug_fatal!("Gasless transaction must be a ProgrammableTransaction");
+            return None;
+        };
+        let sender = tx_ctx.sender();
+        let mut reservations = BTreeMap::<(SuiAddress, TypeTag), u64>::new();
+        for input in &pt.inputs {
+            let CallArg::FundsWithdrawal(fw) = input else {
+                continue;
+            };
+            let Some(coin_type) = fw.type_arg.get_balance_type_param() else {
+                debug_fatal!("expected Balance type for withdrawal");
+                continue;
+            };
+            let owner = match fw.withdraw_from {
+                WithdrawFrom::Sender => sender,
+                WithdrawFrom::Sponsor => {
+                    debug_fatal!("WithdrawFrom::Sponsor is not expected in gasless transactions");
+                    tx_ctx.sponsor().unwrap_or(sender)
+                }
+            };
+            let Reservation::MaxAmountU64(amount) = fw.reservation;
+            let entry = reservations.entry((owner, coin_type)).or_insert(0);
+            *entry = entry.saturating_add(amount);
+        }
+        Some(reservations)
     }
 
     #[instrument(level = "debug", skip_all)]

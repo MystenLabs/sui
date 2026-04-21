@@ -42,7 +42,6 @@
 - [Sui Move Concepts](/concepts/sui-move-concepts.md)
 - [Tokenomics Index](/concepts/tokenomics.md)
 - [Gas In Sui](/concepts/tokenomics/gas-in-sui.md)
-- [Staking Unstaking](/concepts/tokenomics/staking-unstaking.md)
 - [Sui Bridging](/concepts/tokenomics/sui-bridging.md)
 - [Tokenomics Overview](/concepts/tokenomics/tokenomics-overview.md)
 
@@ -177,7 +176,6 @@
 - [Shared](/guides/developer/objects/object-ownership/shared.md)
 - [Wrapped](/guides/developer/objects/object-ownership/wrapped.md)
 - [Simulating Refs](/guides/developer/objects/simulating-refs.md)
-- [Tables Bags](/guides/developer/objects/tables-bags.md)
 - [Transfers Index](/guides/developer/objects/transfers.md)
 - [Custom Rules](/guides/developer/objects/transfers/custom-rules.md)
 - [Transfer Policies](/guides/developer/objects/transfers/transfer-policies.md)
@@ -204,7 +202,6 @@
 - [Building Ptb](/guides/developer/transactions/ptbs/building-ptb.md)
 - [Inputs And Results](/guides/developer/transactions/ptbs/inputs-and-results.md)
 - [Prog Txn Blocks](/guides/developer/transactions/ptbs/prog-txn-blocks.md)
-- [Sign And Send Txn](/guides/developer/transactions/ptbs/sign-and-send-txn.md)
 - [Sponsor Txn](/guides/developer/transactions/sponsor-txn.md)
 - [Transaction Auth Index](/guides/developer/transactions/transaction-auth.md)
 - [Address Aliases](/guides/developer/transactions/transaction-auth/address-aliases.md)

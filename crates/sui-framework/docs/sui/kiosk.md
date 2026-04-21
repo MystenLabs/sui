@@ -956,7 +956,7 @@ Performs an authorization check to make sure only owner can do that.
     <b>assert</b>!(!self.<a href="../sui/kiosk.md#sui_kiosk_is_listed_exclusively">is_listed_exclusively</a>(id), <a href="../sui/kiosk.md#sui_kiosk_EListedExclusively">EListedExclusively</a>);
     <b>assert</b>!(self.<a href="../sui/kiosk.md#sui_kiosk_has_item">has_item</a>(id), <a href="../sui/kiosk.md#sui_kiosk_EItemNotFound">EItemNotFound</a>);
     self.<a href="../sui/kiosk.md#sui_kiosk_item_count">item_count</a> = self.<a href="../sui/kiosk.md#sui_kiosk_item_count">item_count</a> - 1;
-    df::remove_if_exists&lt;<a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
+    df::remove_opt&lt;<a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> });
     dof::remove(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Item">Item</a> { id })
 }
 </code></pre>
@@ -1089,7 +1089,7 @@ finalized.
     <b>let</b> inner = dof::remove&lt;<a href="../sui/kiosk.md#sui_kiosk_Item">Item</a>, T&gt;(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Item">Item</a> { id });
     self.<a href="../sui/kiosk.md#sui_kiosk_item_count">item_count</a> = self.<a href="../sui/kiosk.md#sui_kiosk_item_count">item_count</a> - 1;
     <b>assert</b>!(price == payment.value(), <a href="../sui/kiosk.md#sui_kiosk_EIncorrectAmount">EIncorrectAmount</a>);
-    df::remove_if_exists&lt;<a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a>, bool&gt;(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a> { id });
+    df::remove_opt&lt;<a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a>, bool&gt;(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a> { id });
     <a href="../sui/coin.md#sui_coin_put">coin::put</a>(&<b>mut</b> self.profits, payment);
     <a href="../sui/event.md#sui_event_emit">event::emit</a>(<a href="../sui/kiosk.md#sui_kiosk_ItemPurchased">ItemPurchased</a>&lt;T&gt; { <a href="../sui/kiosk.md#sui_kiosk">kiosk</a>: <a href="../sui/object.md#sui_object_id">object::id</a>(self), id, price });
     (inner, <a href="../sui/transfer_policy.md#sui_transfer_policy_new_request">transfer_policy::new_request</a>(id, price, <a href="../sui/object.md#sui_object_id">object::id</a>(self)))
@@ -1172,7 +1172,7 @@ as the price for the listing making sure it's no less than <code>min_amount</cod
     df::remove&lt;<a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a>, u64&gt;(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> });
     <a href="../sui/coin.md#sui_coin_put">coin::put</a>(&<b>mut</b> self.profits, payment);
     self.<a href="../sui/kiosk.md#sui_kiosk_item_count">item_count</a> = self.<a href="../sui/kiosk.md#sui_kiosk_item_count">item_count</a> - 1;
-    df::remove_if_exists&lt;<a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a>, bool&gt;(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a> { id });
+    df::remove_opt&lt;<a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a>, bool&gt;(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a> { id });
     <b>let</b> item = dof::remove&lt;<a href="../sui/kiosk.md#sui_kiosk_Item">Item</a>, T&gt;(&<b>mut</b> self.id, <a href="../sui/kiosk.md#sui_kiosk_Item">Item</a> { id });
     (item, <a href="../sui/transfer_policy.md#sui_transfer_policy_new_request">transfer_policy::new_request</a>(id, paid, <a href="../sui/object.md#sui_object_id">object::id</a>(self)))
 }
@@ -1343,7 +1343,7 @@ Check whether the <code>item</code> is present in the <code><a href="../sui/kios
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_has_item">has_item</a>(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">Kiosk</a>, id: ID): bool {
-    dof::exists_(&self.id, <a href="../sui/kiosk.md#sui_kiosk_Item">Item</a> { id })
+    dof::exists(&self.id, <a href="../sui/kiosk.md#sui_kiosk_Item">Item</a> { id })
 }
 </code></pre>
 
@@ -1395,7 +1395,7 @@ that the only two actions that can be performed on it are <code><a href="../sui/
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_is_locked">is_locked</a>(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">Kiosk</a>, id: ID): bool {
-    df::exists_(&self.id, <a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a> { id })
+    df::exists(&self.id, <a href="../sui/kiosk.md#sui_kiosk_Lock">Lock</a> { id })
 }
 </code></pre>
 
@@ -1420,7 +1420,7 @@ Check whether an <code>item</code> is listed (exclusively or non exclusively).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_is_listed">is_listed</a>(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">Kiosk</a>, id: ID): bool {
-    df::exists_(&self.id, <a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> })
+    df::exists(&self.id, <a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a> { id, is_exclusive: <b>false</b> })
         || self.<a href="../sui/kiosk.md#sui_kiosk_is_listed_exclusively">is_listed_exclusively</a>(id)
 }
 </code></pre>
@@ -1446,7 +1446,7 @@ Check whether there's a <code><a href="../sui/kiosk.md#sui_kiosk_PurchaseCap">Pu
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk.md#sui_kiosk_is_listed_exclusively">is_listed_exclusively</a>(self: &<a href="../sui/kiosk.md#sui_kiosk_Kiosk">Kiosk</a>, id: ID): bool {
-    df::exists_(&self.id, <a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> })
+    df::exists(&self.id, <a href="../sui/kiosk.md#sui_kiosk_Listing">Listing</a> { id, is_exclusive: <b>true</b> })
 }
 </code></pre>
 

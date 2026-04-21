@@ -4014,3 +4014,2013 @@ async fn test_redeem_invalid_validator() {
         flow_result.metadata
     );
 }
+
+// ================================================================================
+// PR 1 e2e tests — ConsolidateAllStakedSuiToFungible parser
+// ================================================================================
+
+#[derive(serde::Deserialize)]
+struct ParseResp {
+    operations: Operations,
+    #[allow(dead_code)]
+    account_identifier_signers: Vec<AccountIdentifier>,
+}
+
+/// POST unsigned TX bytes to /construction/parse (offline endpoint).
+/// Note: SuiEnv serializes as lowercase (e.g., `localnet`), not `LocalNet`.
+async fn parse_unsigned(
+    rosetta_client: &rosetta_client::RosettaClient,
+    unsigned_tx: impl serde::Serialize,
+) -> ParseResp {
+    let request = serde_json::json!({
+        "network_identifier": {
+            "blockchain": "sui",
+            "network": serde_json::to_value(SuiEnv::LocalNet).unwrap(),
+        },
+        "signed": false,
+        "transaction": serde_json::to_value(&unsigned_tx).unwrap(),
+    });
+    rosetta_client
+        .call(rosetta_client::RosettaEndpoint::Parse, &request)
+        .await
+        .expect("parse failed")
+}
+
+async fn first_validator(client: &mut GrpcClient) -> SuiAddress {
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .clone()
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    response
+        .epoch
+        .and_then(|e| e.system_state)
+        .unwrap()
+        .validators
+        .unwrap()
+        .active_validators[0]
+        .address()
+        .parse()
+        .unwrap()
+}
+
+/// Stake `amount_mist` SUI with `validator` via the Rosetta flow.
+async fn stake_via_rosetta(
+    rosetta_client: &rosetta_client::RosettaClient,
+    client: &mut GrpcClient,
+    keystore: &sui_keys::keystore::Keystore,
+    sender: SuiAddress,
+    validator: SuiAddress,
+    amount_mist: u64,
+) {
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier":{"index":0},
+        "type":"Stake",
+        "account": { "address": sender.to_string() },
+        "amount": { "value": format!("-{}", amount_mist) },
+        "metadata": { "Stake": {"validator": validator.to_string()} }
+    }]))
+    .unwrap();
+    let resp: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    wait_for_transaction(client, &resp.transaction_identifier.hash.to_string())
+        .await
+        .unwrap();
+}
+
+/// Convert every owned `StakedSui` to a `FungibleStakedSui` via a direct PTB.
+/// Requires epoch to already be advanced so stakes are activated.
+async fn convert_all_staked_to_fss_directly(
+    client: &mut GrpcClient,
+    keystore: &sui_keys::keystore::Keystore,
+    sender: SuiAddress,
+) {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+
+    let staked_req = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(100u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+    let staked_objs: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_req)
+        .try_collect()
+        .await
+        .unwrap();
+
+    for staked_obj in &staked_objs {
+        let staked_ref = (
+            ObjectID::from_str(staked_obj.object_id()).unwrap(),
+            staked_obj.version().into(),
+            staked_obj.digest().parse().unwrap(),
+        );
+        let gas_price = client.get_reference_gas_price().await.unwrap();
+        let coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+        let gas_object = get_object_ref(&mut client.clone(), coins[0].id())
+            .await
+            .unwrap()
+            .as_object_ref();
+
+        let mut ptb = ProgrammableTransactionBuilder::new();
+        let sys = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+        let staked_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
+        let fss_result = ptb.command(Command::move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+            vec![],
+            vec![sys, staked_arg],
+        ));
+        let sender_arg = ptb.pure(sender).unwrap();
+        ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+
+        let tx_data = TransactionData::new_programmable(
+            sender,
+            vec![gas_object],
+            ptb.finish(),
+            1_000_000_000,
+            gas_price,
+        );
+        let tx = to_sender_signed_transaction(tx_data, keystore.export(&sender).unwrap());
+        execute_transaction(&mut client.clone(), &tx).await.unwrap();
+    }
+}
+
+/// S=1, F=0 — single StakedSui conversion, no pre-existing FSS.
+#[tokio::test]
+async fn test_e2e_parse_consolidate_1_stake_0_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    let consolidate_ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": validator.to_string()}
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+    let payloads = flow.payloads.expect("payloads").expect("payloads errored");
+    let parsed = parse_unsigned(&rosetta_client, &payloads.unsigned_transaction).await;
+
+    let ops: Vec<_> = parsed.operations.into_iter().collect();
+    assert_eq!(ops.len(), 1);
+    assert_eq!(
+        ops[0].type_,
+        OperationType::ConsolidateAllStakedSuiToFungible
+    );
+    assert_eq!(ops[0].account.as_ref().unwrap().address, sender);
+    let Some(sui_rosetta::operations::OperationMetadata::ConsolidateAllStakedSuiToFungible {
+        validator: v,
+        staked_sui_ids,
+        fss_ids,
+    }) = ops[0].metadata.clone()
+    else {
+        panic!("wrong metadata variant");
+    };
+    assert!(v.is_none(), "validator must be None from parser");
+    assert_eq!(staked_sui_ids.len(), 1);
+    assert!(fss_ids.is_empty());
+}
+
+/// S=0, F=2 — pure FSS merge (no conversion).
+#[tokio::test]
+async fn test_e2e_parse_consolidate_0_stakes_2_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    // Stake twice, advance epoch, convert both to FSS.
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+
+    let consolidate_ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": validator.to_string()}
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+    let payloads = flow.payloads.expect("payloads").expect("payloads errored");
+    let parsed = parse_unsigned(&rosetta_client, &payloads.unsigned_transaction).await;
+
+    let ops: Vec<_> = parsed.operations.into_iter().collect();
+    assert_eq!(ops.len(), 1);
+    assert_eq!(
+        ops[0].type_,
+        OperationType::ConsolidateAllStakedSuiToFungible
+    );
+    let Some(sui_rosetta::operations::OperationMetadata::ConsolidateAllStakedSuiToFungible {
+        staked_sui_ids,
+        fss_ids,
+        ..
+    }) = ops[0].metadata.clone()
+    else {
+        panic!();
+    };
+    assert!(
+        staked_sui_ids.is_empty(),
+        "pure merge should have no StakedSui IDs"
+    );
+    assert_eq!(fss_ids.len(), 2);
+}
+
+/// S=1, F=1 — mixed case: 1 stake + 1 pre-existing FSS, cross-merge path.
+#[tokio::test]
+async fn test_e2e_parse_consolidate_1_stake_1_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    // Stake 1, advance, convert to FSS (= 1 FSS, 0 stakes).
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+    // Stake again, advance again. Now we have 1 activated stake + 1 FSS.
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    let consolidate_ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": validator.to_string()}
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+    let payloads = flow.payloads.expect("payloads").expect("payloads errored");
+    let parsed = parse_unsigned(&rosetta_client, &payloads.unsigned_transaction).await;
+
+    let ops: Vec<_> = parsed.operations.into_iter().collect();
+    let Some(sui_rosetta::operations::OperationMetadata::ConsolidateAllStakedSuiToFungible {
+        staked_sui_ids,
+        fss_ids,
+        ..
+    }) = ops[0].metadata.clone()
+    else {
+        panic!();
+    };
+    assert_eq!(staked_sui_ids.len(), 1);
+    assert_eq!(fss_ids.len(), 1);
+}
+
+/// Submit + wait, then verify the block/transaction endpoint exposes the typed op.
+#[tokio::test]
+async fn test_e2e_block_consolidate_1_stake_0_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    let consolidate_ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": validator.to_string()}
+        }
+    }]))
+    .unwrap();
+    let submit_resp: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    let tx_hash = submit_resp.transaction_identifier.hash.to_string();
+    wait_for_transaction(&mut client, &tx_hash).await.unwrap();
+
+    // Read back the executed TX and reparse through the same code path.
+    let get_tx = GetTransactionRequest::default()
+        .with_digest(tx_hash.clone())
+        .with_read_mask(FieldMask::from_paths([
+            "transaction",
+            "effects",
+            "events",
+            "balance_changes",
+        ]));
+    let executed = client
+        .clone()
+        .ledger_client()
+        .get_transaction(get_tx)
+        .await
+        .unwrap()
+        .into_inner();
+    let cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(100).unwrap());
+    let ops = Operations::try_from_executed_transaction(executed.transaction.unwrap(), &cache)
+        .await
+        .unwrap();
+    let ops_vec: Vec<_> = ops.into_iter().collect();
+    let typed = ops_vec
+        .iter()
+        .find(|o| o.type_ == OperationType::ConsolidateAllStakedSuiToFungible)
+        .expect("expected typed Consolidate op");
+    assert_eq!(typed.account.as_ref().unwrap().address, sender);
+    // Also confirm a Gas op is present.
+    assert!(ops_vec.iter().any(|o| o.type_ == OperationType::Gas));
+    // And NO SuiBalanceChange for sender (Consolidate is object-only, no net SUI delta).
+    let sender_balance_changes: Vec<_> = ops_vec
+        .iter()
+        .filter(|o| {
+            o.type_ == OperationType::SuiBalanceChange
+                && o.account.as_ref().map(|a| a.address) == Some(sender)
+        })
+        .collect();
+    assert!(
+        sender_balance_changes.is_empty(),
+        "Consolidate should have no SuiBalanceChange for sender, got {:?}",
+        sender_balance_changes
+    );
+}
+
+/// Invalid validator address (not in active set) should error at /metadata.
+#[tokio::test]
+async fn test_e2e_consolidate_errors_invalid_validator() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client).await;
+
+    let fake_validator = SuiAddress::random_for_testing_only();
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": fake_validator.to_string()}
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    assert!(
+        flow.metadata.as_ref().is_some_and(|r| r.is_err()),
+        "Expected metadata error for invalid validator, got: {:?}",
+        flow.metadata
+    );
+}
+
+/// Submitting a Consolidate op without the validator field should NOT produce a valid
+/// preprocess response. Note: the test helper's `RosettaAPIResult` untagged enum may
+/// deserialize a server error response as an empty-Ok (since `ConstructionPreprocessResponse`
+/// has all-optional fields), so we accept either an explicit `Err` OR an `Ok` with no
+/// `options` / `required_public_keys` as evidence of rejection.
+#[tokio::test]
+async fn test_e2e_consolidate_errors_missing_validator_in_metadata() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client).await;
+
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {}
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let preprocess = flow.preprocess.as_ref().expect("preprocess attempted");
+    match preprocess {
+        Err(_) => { /* expected */ }
+        Ok(resp) => {
+            // Masked error: options must be None AND required_public_keys empty.
+            assert!(
+                resp.options.is_none() && resp.required_public_keys.is_empty(),
+                "expected rejection for missing validator, got success: {:?}",
+                resp
+            );
+        }
+    }
+}
+
+/// Garbage bytes to /construction/parse should return an error response, not panic.
+/// Note: the test helper's untagged `RosettaAPIResult` with `T = serde_json::Value` will
+/// accept ANY JSON as `Ok`. We look for Rosetta error shape (a `code` field) instead.
+#[tokio::test]
+async fn test_e2e_parse_garbage_bytes() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client).await;
+
+    let request = serde_json::json!({
+        "network_identifier": {
+            "blockchain": "sui",
+            "network": serde_json::to_value(SuiEnv::LocalNet).unwrap(),
+        },
+        "signed": false,
+        "transaction": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    });
+    let result: Result<serde_json::Value, _> = rosetta_client
+        .call(rosetta_client::RosettaEndpoint::Parse, &request)
+        .await;
+    let json = match result {
+        Ok(v) => v,
+        Err(e) => serde_json::to_value(e.code).unwrap_or_default(),
+    };
+    let has_error_shape = json.get("code").is_some() || json.get("message").is_some();
+    assert!(
+        has_error_shape,
+        "expected Rosetta error response for garbage bytes, got: {:?}",
+        json
+    );
+}
+
+/// Truncated TX bytes to /construction/parse should return an error response, not panic.
+#[tokio::test]
+async fn test_e2e_parse_truncated_tx_data() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client).await;
+
+    let request = serde_json::json!({
+        "network_identifier": {
+            "blockchain": "sui",
+            "network": serde_json::to_value(SuiEnv::LocalNet).unwrap(),
+        },
+        "signed": false,
+        "transaction": "00",
+    });
+    let result: Result<serde_json::Value, _> = rosetta_client
+        .call(rosetta_client::RosettaEndpoint::Parse, &request)
+        .await;
+    let json = match result {
+        Ok(v) => v,
+        Err(e) => serde_json::to_value(e.code).unwrap_or_default(),
+    };
+    let has_error_shape = json.get("code").is_some() || json.get("message").is_some();
+    assert!(
+        has_error_shape,
+        "expected Rosetta error response for truncated bytes, got: {:?}",
+        json
+    );
+}
+
+/// S=3, F=0 — 3 stakes, no pre-existing FSS.
+#[tokio::test]
+async fn test_e2e_parse_consolidate_3_stakes_0_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    for _ in 0..3 {
+        stake_via_rosetta(
+            &rosetta_client,
+            &mut client,
+            keystore,
+            sender,
+            validator,
+            1_000_000_000,
+        )
+        .await;
+    }
+    test_cluster.trigger_reconfiguration().await;
+
+    let consolidate_ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": validator.to_string()}
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+    let payloads = flow.payloads.expect("payloads").expect("payloads errored");
+    let parsed = parse_unsigned(&rosetta_client, &payloads.unsigned_transaction).await;
+
+    let ops: Vec<_> = parsed.operations.into_iter().collect();
+    assert_eq!(ops.len(), 1);
+    assert_eq!(
+        ops[0].type_,
+        OperationType::ConsolidateAllStakedSuiToFungible
+    );
+    let Some(sui_rosetta::operations::OperationMetadata::ConsolidateAllStakedSuiToFungible {
+        staked_sui_ids,
+        fss_ids,
+        ..
+    }) = ops[0].metadata.clone()
+    else {
+        panic!();
+    };
+    assert_eq!(staked_sui_ids.len(), 3);
+    assert!(fss_ids.is_empty());
+}
+
+/// S=0, F=3 — three pre-existing FSS, pure merge.
+#[tokio::test]
+async fn test_e2e_parse_consolidate_0_stakes_3_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    for _ in 0..3 {
+        stake_via_rosetta(
+            &rosetta_client,
+            &mut client,
+            keystore,
+            sender,
+            validator,
+            1_000_000_000,
+        )
+        .await;
+    }
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+
+    let consolidate_ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": validator.to_string()}
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+    let payloads = flow.payloads.expect("payloads").expect("payloads errored");
+    let parsed = parse_unsigned(&rosetta_client, &payloads.unsigned_transaction).await;
+
+    let ops: Vec<_> = parsed.operations.into_iter().collect();
+    let Some(sui_rosetta::operations::OperationMetadata::ConsolidateAllStakedSuiToFungible {
+        staked_sui_ids,
+        fss_ids,
+        ..
+    }) = ops[0].metadata.clone()
+    else {
+        panic!();
+    };
+    assert!(staked_sui_ids.is_empty());
+    assert_eq!(fss_ids.len(), 3);
+}
+
+/// S=2, F=2 — full flow with both existing FSS and activated StakedSui.
+#[tokio::test]
+async fn test_e2e_parse_consolidate_2_stakes_2_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    // First: stake twice, advance, convert to 2 FSS.
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+    // Then: stake twice more, advance, leaving 2 activated stakes + 2 FSS.
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    let consolidate_ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": validator.to_string()}
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+    let payloads = flow.payloads.expect("payloads").expect("payloads errored");
+    let parsed = parse_unsigned(&rosetta_client, &payloads.unsigned_transaction).await;
+
+    let ops: Vec<_> = parsed.operations.into_iter().collect();
+    let Some(sui_rosetta::operations::OperationMetadata::ConsolidateAllStakedSuiToFungible {
+        staked_sui_ids,
+        fss_ids,
+        ..
+    }) = ops[0].metadata.clone()
+    else {
+        panic!();
+    };
+    assert_eq!(staked_sui_ids.len(), 2);
+    assert_eq!(fss_ids.len(), 2);
+}
+
+/// Stake with two different validators; consolidate validator A and verify only A's
+/// objects appear in the parse output.
+#[tokio::test]
+async fn test_e2e_parse_consolidate_multi_validator_isolation() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .clone()
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let validators = response
+        .epoch
+        .and_then(|e| e.system_state)
+        .unwrap()
+        .validators
+        .unwrap();
+    let validator_a: SuiAddress = validators.active_validators[0].address().parse().unwrap();
+    let validator_b: SuiAddress = validators.active_validators[1].address().parse().unwrap();
+
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_a,
+        1_000_000_000,
+    )
+    .await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_b,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    // Consolidate only validator_a's stakes.
+    let consolidate_ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": validator_a.to_string()}
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await;
+    let payloads = flow.payloads.expect("payloads").expect("payloads errored");
+    let parsed = parse_unsigned(&rosetta_client, &payloads.unsigned_transaction).await;
+
+    let ops: Vec<_> = parsed.operations.into_iter().collect();
+    let Some(sui_rosetta::operations::OperationMetadata::ConsolidateAllStakedSuiToFungible {
+        staked_sui_ids,
+        fss_ids,
+        ..
+    }) = ops[0].metadata.clone()
+    else {
+        panic!();
+    };
+    // Exactly 1 staked (from A), 0 FSS.
+    assert_eq!(staked_sui_ids.len(), 1);
+    assert!(fss_ids.is_empty());
+}
+
+/// Helper: submit a Consolidate op and verify /block/transaction exposes the typed op.
+async fn submit_and_assert_block_consolidate(
+    rosetta_client: &rosetta_client::RosettaClient,
+    client: &mut GrpcClient,
+    keystore: &sui_keys::keystore::Keystore,
+    sender: SuiAddress,
+    validator: SuiAddress,
+    expected_staked: usize,
+    expected_fss: usize,
+) {
+    let consolidate_ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "ConsolidateAllStakedSuiToFungible",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "ConsolidateAllStakedSuiToFungible": {"validator": validator.to_string()}
+        }
+    }]))
+    .unwrap();
+    let submit_resp: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&consolidate_ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    let tx_hash = submit_resp.transaction_identifier.hash.to_string();
+    wait_for_transaction(client, &tx_hash).await.unwrap();
+
+    let get_tx = GetTransactionRequest::default()
+        .with_digest(tx_hash.clone())
+        .with_read_mask(FieldMask::from_paths([
+            "transaction",
+            "effects",
+            "events",
+            "balance_changes",
+        ]));
+    let executed = client
+        .clone()
+        .ledger_client()
+        .get_transaction(get_tx)
+        .await
+        .unwrap()
+        .into_inner();
+    let cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(100).unwrap());
+    let ops = Operations::try_from_executed_transaction(executed.transaction.unwrap(), &cache)
+        .await
+        .unwrap();
+    let ops_vec: Vec<_> = ops.into_iter().collect();
+    let typed = ops_vec
+        .iter()
+        .find(|o| o.type_ == OperationType::ConsolidateAllStakedSuiToFungible)
+        .expect("expected typed Consolidate op");
+    assert_eq!(typed.account.as_ref().unwrap().address, sender);
+    let Some(sui_rosetta::operations::OperationMetadata::ConsolidateAllStakedSuiToFungible {
+        staked_sui_ids,
+        fss_ids,
+        ..
+    }) = typed.metadata.clone()
+    else {
+        panic!();
+    };
+    assert_eq!(staked_sui_ids.len(), expected_staked);
+    assert_eq!(fss_ids.len(), expected_fss);
+    // Must have a Gas op.
+    assert!(ops_vec.iter().any(|o| o.type_ == OperationType::Gas));
+    // No SuiBalanceChange for sender (Consolidate is object-only).
+    let sender_balance_changes: Vec<_> = ops_vec
+        .iter()
+        .filter(|o| {
+            o.type_ == OperationType::SuiBalanceChange
+                && o.account.as_ref().map(|a| a.address) == Some(sender)
+        })
+        .collect();
+    assert!(
+        sender_balance_changes.is_empty(),
+        "Consolidate should have no sender SuiBalanceChange, got {:?}",
+        sender_balance_changes
+    );
+}
+
+#[tokio::test]
+async fn test_e2e_block_consolidate_0_stakes_2_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    for _ in 0..2 {
+        stake_via_rosetta(
+            &rosetta_client,
+            &mut client,
+            keystore,
+            sender,
+            validator,
+            1_000_000_000,
+        )
+        .await;
+    }
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+
+    submit_and_assert_block_consolidate(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        0,
+        2,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_consolidate_0_stakes_3_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    for _ in 0..3 {
+        stake_via_rosetta(
+            &rosetta_client,
+            &mut client,
+            keystore,
+            sender,
+            validator,
+            1_000_000_000,
+        )
+        .await;
+    }
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+
+    submit_and_assert_block_consolidate(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        0,
+        3,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_consolidate_3_stakes_0_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    for _ in 0..3 {
+        stake_via_rosetta(
+            &rosetta_client,
+            &mut client,
+            keystore,
+            sender,
+            validator,
+            1_000_000_000,
+        )
+        .await;
+    }
+    test_cluster.trigger_reconfiguration().await;
+
+    submit_and_assert_block_consolidate(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        3,
+        0,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_consolidate_1_stake_1_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    submit_and_assert_block_consolidate(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        1,
+        1,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_consolidate_2_stakes_2_fss() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    for _ in 0..2 {
+        stake_via_rosetta(
+            &rosetta_client,
+            &mut client,
+            keystore,
+            sender,
+            validator,
+            1_000_000_000,
+        )
+        .await;
+    }
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+    for _ in 0..2 {
+        stake_via_rosetta(
+            &rosetta_client,
+            &mut client,
+            keystore,
+            sender,
+            validator,
+            1_000_000_000,
+        )
+        .await;
+    }
+    test_cluster.trigger_reconfiguration().await;
+
+    submit_and_assert_block_consolidate(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        2,
+        2,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_consolidate_multi_validator_isolation() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .clone()
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let validators = response
+        .epoch
+        .and_then(|e| e.system_state)
+        .unwrap()
+        .validators
+        .unwrap();
+    let validator_a: SuiAddress = validators.active_validators[0].address().parse().unwrap();
+    let validator_b: SuiAddress = validators.active_validators[1].address().parse().unwrap();
+
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_a,
+        1_000_000_000,
+    )
+    .await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_b,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    // Consolidate only validator_a's stake — expect 1 staked, 0 fss.
+    submit_and_assert_block_consolidate(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_a,
+        1,
+        0,
+    )
+    .await;
+}
+
+// ================================================================================
+// PR 2 e2e tests — MergeAndRedeemFungibleStakedSui parser
+// ================================================================================
+
+/// Scaffold: stake `n` times, advance epoch, convert each StakedSui to FSS via direct PTB.
+/// Produces `n` FSS objects all on the same validator's pool.
+async fn setup_n_fss(
+    rosetta_client: &rosetta_client::RosettaClient,
+    client: &mut GrpcClient,
+    keystore: &sui_keys::keystore::Keystore,
+    test_cluster: &test_cluster::TestCluster,
+    sender: SuiAddress,
+    validator: SuiAddress,
+    n: usize,
+) {
+    for _ in 0..n {
+        stake_via_rosetta(
+            rosetta_client,
+            client,
+            keystore,
+            sender,
+            validator,
+            1_000_000_000,
+        )
+        .await;
+    }
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(client, keystore, sender).await;
+}
+
+/// Run a MergeAndRedeem through /preprocess → /metadata → /payloads, then POST the
+/// unsigned bytes to /construction/parse. Returns the parsed operations.
+async fn run_merge_redeem_and_parse(
+    rosetta_client: &rosetta_client::RosettaClient,
+    keystore: &sui_keys::keystore::Keystore,
+    sender: SuiAddress,
+    validator: SuiAddress,
+    amount: Option<u64>,
+    mode: &str,
+) -> Vec<sui_rosetta::operations::Operation> {
+    let mut metadata_value = serde_json::json!({
+        "validator": validator.to_string(),
+        "redeem_mode": mode,
+    });
+    if let Some(a) = amount {
+        metadata_value["amount"] = serde_json::Value::String(a.to_string());
+    }
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "MergeAndRedeemFungibleStakedSui",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "MergeAndRedeemFungibleStakedSui": metadata_value,
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let payloads = flow.payloads.expect("payloads").expect("payloads errored");
+    let parsed = parse_unsigned(rosetta_client, &payloads.unsigned_transaction).await;
+    parsed.operations.into_iter().collect()
+}
+
+fn assert_merge_redeem_parse_ops(
+    ops: &[sui_rosetta::operations::Operation],
+    expected_sender: SuiAddress,
+    expected_fss_count: usize,
+    expected_mode: Option<sui_rosetta::types::RedeemMode>,
+) {
+    assert_eq!(ops.len(), 1, "expected exactly one parsed op");
+    assert_eq!(ops[0].type_, OperationType::MergeAndRedeemFungibleStakedSui);
+    assert_eq!(ops[0].account.as_ref().unwrap().address, expected_sender);
+    let Some(sui_rosetta::operations::OperationMetadata::MergeAndRedeemFungibleStakedSui {
+        validator,
+        amount,
+        redeem_mode,
+        fss_ids,
+    }) = ops[0].metadata.clone()
+    else {
+        panic!("wrong metadata variant: {:?}", ops[0].metadata);
+    };
+    assert!(validator.is_none(), "validator must be None from parser");
+    assert!(amount.is_none(), "amount must be None from parser");
+    assert_eq!(redeem_mode, expected_mode);
+    assert_eq!(fss_ids.len(), expected_fss_count);
+}
+
+/// F=1, All mode — single FSS fully redeemed.
+#[tokio::test]
+async fn test_e2e_parse_merge_redeem_single_fss_all() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        1,
+    )
+    .await;
+
+    let ops =
+        run_merge_redeem_and_parse(&rosetta_client, keystore, sender, validator, None, "All").await;
+    assert_merge_redeem_parse_ops(&ops, sender, 1, Some(sui_rosetta::types::RedeemMode::All));
+}
+
+/// F=1, AtLeast partial redeem.
+#[tokio::test]
+async fn test_e2e_parse_merge_redeem_single_fss_atleast() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        1,
+    )
+    .await;
+
+    let ops = run_merge_redeem_and_parse(
+        &rosetta_client,
+        keystore,
+        sender,
+        validator,
+        Some(500_000_000),
+        "AtLeast",
+    )
+    .await;
+    // Partial mode — redeem_mode is None on parse output (AtLeast vs AtMost indistinguishable).
+    assert_merge_redeem_parse_ops(&ops, sender, 1, None);
+}
+
+/// F=1, AtMost partial redeem.
+#[tokio::test]
+async fn test_e2e_parse_merge_redeem_single_fss_atmost() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        1,
+    )
+    .await;
+
+    let ops = run_merge_redeem_and_parse(
+        &rosetta_client,
+        keystore,
+        sender,
+        validator,
+        Some(500_000_000),
+        "AtMost",
+    )
+    .await;
+    assert_merge_redeem_parse_ops(&ops, sender, 1, None);
+}
+
+/// F=3, All mode.
+#[tokio::test]
+async fn test_e2e_parse_merge_redeem_three_fss_all() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        3,
+    )
+    .await;
+
+    let ops =
+        run_merge_redeem_and_parse(&rosetta_client, keystore, sender, validator, None, "All").await;
+    assert_merge_redeem_parse_ops(&ops, sender, 3, Some(sui_rosetta::types::RedeemMode::All));
+}
+
+/// F=3, AtLeast partial.
+#[tokio::test]
+async fn test_e2e_parse_merge_redeem_three_fss_atleast() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        3,
+    )
+    .await;
+
+    let ops = run_merge_redeem_and_parse(
+        &rosetta_client,
+        keystore,
+        sender,
+        validator,
+        Some(500_000_000),
+        "AtLeast",
+    )
+    .await;
+    assert_merge_redeem_parse_ops(&ops, sender, 3, None);
+}
+
+/// F=3, AtMost partial.
+#[tokio::test]
+async fn test_e2e_parse_merge_redeem_three_fss_atmost() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        3,
+    )
+    .await;
+
+    let ops = run_merge_redeem_and_parse(
+        &rosetta_client,
+        keystore,
+        sender,
+        validator,
+        Some(500_000_000),
+        "AtMost",
+    )
+    .await;
+    assert_merge_redeem_parse_ops(&ops, sender, 3, None);
+}
+
+/// Multi-validator: FSS on both A and B; redeem only from A.
+#[tokio::test]
+async fn test_e2e_parse_merge_redeem_multi_validator_isolation() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .clone()
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let validators = response
+        .epoch
+        .and_then(|e| e.system_state)
+        .unwrap()
+        .validators
+        .unwrap();
+    let validator_a: SuiAddress = validators.active_validators[0].address().parse().unwrap();
+    let validator_b: SuiAddress = validators.active_validators[1].address().parse().unwrap();
+
+    // Stake on A and B, advance, convert BOTH to FSS.
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_a,
+        1_000_000_000,
+    )
+    .await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_b,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+
+    // Redeem only from validator_a.
+    let ops =
+        run_merge_redeem_and_parse(&rosetta_client, keystore, sender, validator_a, None, "All")
+            .await;
+    // Exactly 1 FSS (A's).
+    assert_merge_redeem_parse_ops(&ops, sender, 1, Some(sui_rosetta::types::RedeemMode::All));
+}
+
+// ================================================================================
+// /block/transaction tests — submit then reparse via try_from_executed_transaction
+// ================================================================================
+
+async fn submit_and_assert_block_merge_redeem(
+    rosetta_client: &rosetta_client::RosettaClient,
+    client: &mut GrpcClient,
+    keystore: &sui_keys::keystore::Keystore,
+    sender: SuiAddress,
+    validator: SuiAddress,
+    amount: Option<u64>,
+    mode: &str,
+    expected_fss_count: usize,
+    expected_mode: Option<sui_rosetta::types::RedeemMode>,
+) {
+    let mut metadata_value = serde_json::json!({
+        "validator": validator.to_string(),
+        "redeem_mode": mode,
+    });
+    if let Some(a) = amount {
+        metadata_value["amount"] = serde_json::Value::String(a.to_string());
+    }
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "MergeAndRedeemFungibleStakedSui",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "MergeAndRedeemFungibleStakedSui": metadata_value,
+        }
+    }]))
+    .unwrap();
+    let submit_resp: TransactionIdentifierResponse = rosetta_client
+        .rosetta_flow(&ops, keystore, None)
+        .await
+        .submit
+        .unwrap()
+        .unwrap();
+    let tx_hash = submit_resp.transaction_identifier.hash.to_string();
+    wait_for_transaction(client, &tx_hash).await.unwrap();
+
+    let get_tx = GetTransactionRequest::default()
+        .with_digest(tx_hash.clone())
+        .with_read_mask(FieldMask::from_paths([
+            "transaction",
+            "effects",
+            "events",
+            "balance_changes",
+        ]));
+    let executed = client
+        .clone()
+        .ledger_client()
+        .get_transaction(get_tx)
+        .await
+        .unwrap()
+        .into_inner();
+    let cache = CoinMetadataCache::new(client.clone(), NonZeroUsize::new(100).unwrap());
+    let ops = Operations::try_from_executed_transaction(executed.transaction.unwrap(), &cache)
+        .await
+        .unwrap();
+    let ops_vec: Vec<_> = ops.into_iter().collect();
+    let typed = ops_vec
+        .iter()
+        .find(|o| o.type_ == OperationType::MergeAndRedeemFungibleStakedSui)
+        .expect("expected typed MergeAndRedeem op");
+    assert_eq!(typed.account.as_ref().unwrap().address, sender);
+    let Some(sui_rosetta::operations::OperationMetadata::MergeAndRedeemFungibleStakedSui {
+        redeem_mode,
+        fss_ids,
+        ..
+    }) = typed.metadata.clone()
+    else {
+        panic!();
+    };
+    assert_eq!(redeem_mode, expected_mode);
+    assert_eq!(fss_ids.len(), expected_fss_count);
+    // Gas op is present.
+    assert!(ops_vec.iter().any(|o| o.type_ == OperationType::Gas));
+    // And SuiBalanceChange for sender — redemption produces liquid SUI.
+    let sender_balance_change = ops_vec.iter().find(|o| {
+        o.type_ == OperationType::SuiBalanceChange
+            && o.account.as_ref().map(|a| a.address) == Some(sender)
+    });
+    assert!(
+        sender_balance_change.is_some(),
+        "MergeAndRedeem should produce a SuiBalanceChange for sender: {:?}",
+        ops_vec
+    );
+}
+
+#[tokio::test]
+async fn test_e2e_block_merge_redeem_single_fss_all() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        1,
+    )
+    .await;
+
+    submit_and_assert_block_merge_redeem(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        None,
+        "All",
+        1,
+        Some(sui_rosetta::types::RedeemMode::All),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_merge_redeem_single_fss_atleast() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        1,
+    )
+    .await;
+
+    submit_and_assert_block_merge_redeem(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        Some(500_000_000),
+        "AtLeast",
+        1,
+        None,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_merge_redeem_single_fss_atmost() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        1,
+    )
+    .await;
+
+    submit_and_assert_block_merge_redeem(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        Some(500_000_000),
+        "AtMost",
+        1,
+        None,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_merge_redeem_three_fss_all() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        3,
+    )
+    .await;
+
+    submit_and_assert_block_merge_redeem(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        None,
+        "All",
+        3,
+        Some(sui_rosetta::types::RedeemMode::All),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_merge_redeem_three_fss_atleast() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        3,
+    )
+    .await;
+
+    submit_and_assert_block_merge_redeem(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        Some(500_000_000),
+        "AtLeast",
+        3,
+        None,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_merge_redeem_three_fss_atmost() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        3,
+    )
+    .await;
+
+    submit_and_assert_block_merge_redeem(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        Some(500_000_000),
+        "AtMost",
+        3,
+        None,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_e2e_block_merge_redeem_multi_validator_isolation() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths(["system_state"]));
+    let response = client
+        .clone()
+        .ledger_client()
+        .get_epoch(request)
+        .await
+        .unwrap()
+        .into_inner();
+    let validators = response
+        .epoch
+        .and_then(|e| e.system_state)
+        .unwrap()
+        .validators
+        .unwrap();
+    let validator_a: SuiAddress = validators.active_validators[0].address().parse().unwrap();
+    let validator_b: SuiAddress = validators.active_validators[1].address().parse().unwrap();
+
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_a,
+        1_000_000_000,
+    )
+    .await;
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_b,
+        1_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+    convert_all_staked_to_fss_directly(&mut client, keystore, sender).await;
+
+    submit_and_assert_block_merge_redeem(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator_a,
+        None,
+        "All",
+        1,
+        Some(sui_rosetta::types::RedeemMode::All),
+    )
+    .await;
+}
+
+// ================================================================================
+// PR 2 write-error tests — 5 new (2 cases covered by existing tests)
+// ================================================================================
+// Existing coverage:
+// - test_redeem_no_fss_error (line 3936) covers #81 no_fss error
+// - test_redeem_invalid_validator (line 3982) covers #84 invalid_validator
+
+/// AtLeast amount exceeds available FSS SUI value → server should error.
+#[tokio::test]
+async fn test_e2e_merge_redeem_errors_atleast_exceeds_balance() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        1,
+    )
+    .await;
+
+    // Ask for much more SUI than 1 FSS can provide.
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "MergeAndRedeemFungibleStakedSui",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "MergeAndRedeemFungibleStakedSui": {
+                "validator": validator.to_string(),
+                "amount": "100000000000000",
+                "redeem_mode": "AtLeast",
+            }
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    assert!(
+        flow.metadata.as_ref().is_some_and(|r| r.is_err()),
+        "expected metadata error for AtLeast exceeding balance, got: {:?}",
+        flow.metadata
+    );
+}
+
+/// AtMost amount too small (rounds to zero pool tokens) → server should error.
+#[tokio::test]
+async fn test_e2e_merge_redeem_errors_atmost_too_small() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client.clone()).await;
+
+    let validator = first_validator(&mut client).await;
+    setup_n_fss(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        &test_cluster,
+        sender,
+        validator,
+        1,
+    )
+    .await;
+
+    // Amount = 1 MIST; with the typical pool exchange rate this rounds to 0 pool tokens.
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "MergeAndRedeemFungibleStakedSui",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "MergeAndRedeemFungibleStakedSui": {
+                "validator": validator.to_string(),
+                "amount": "1",
+                "redeem_mode": "AtMost",
+            }
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    assert!(
+        flow.metadata.as_ref().is_some_and(|r| r.is_err()),
+        "expected metadata error for AtMost too small, got: {:?}",
+        flow.metadata
+    );
+}
+
+/// Missing amount in AtLeast/AtMost mode → write-side error at preprocess (MissingInput).
+#[tokio::test]
+async fn test_e2e_merge_redeem_errors_missing_amount() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client).await;
+
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "MergeAndRedeemFungibleStakedSui",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "MergeAndRedeemFungibleStakedSui": {
+                "validator": SuiAddress::random_for_testing_only().to_string(),
+                "redeem_mode": "AtLeast",
+            }
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let preprocess = flow.preprocess.as_ref().expect("preprocess attempted");
+    match preprocess {
+        Err(_) => {}
+        Ok(resp) => {
+            // Masked error: empty response (untagged enum quirk in test harness).
+            assert!(
+                resp.options.is_none() && resp.required_public_keys.is_empty(),
+                "expected rejection for missing amount, got success: {:?}",
+                resp
+            );
+        }
+    }
+}
+
+/// Zero amount for AtLeast/AtMost → write-side error "must be at least 1 MIST".
+#[tokio::test]
+async fn test_e2e_merge_redeem_errors_zero_amount() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client).await;
+
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "MergeAndRedeemFungibleStakedSui",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "MergeAndRedeemFungibleStakedSui": {
+                "validator": SuiAddress::random_for_testing_only().to_string(),
+                "amount": "0",
+                "redeem_mode": "AtLeast",
+            }
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let preprocess = flow.preprocess.as_ref().expect("preprocess attempted");
+    match preprocess {
+        Err(_) => {}
+        Ok(resp) => {
+            assert!(
+                resp.options.is_none() && resp.required_public_keys.is_empty(),
+                "expected rejection for zero amount, got success: {:?}",
+                resp
+            );
+        }
+    }
+}
+
+/// Missing redeem_mode in metadata → write-side error (MissingInput).
+#[tokio::test]
+async fn test_e2e_merge_redeem_errors_missing_redeem_mode() {
+    let test_cluster = TestClusterBuilder::new().build().await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handle) = start_rosetta_test_server(client).await;
+
+    let ops = serde_json::from_value(json!([{
+        "operation_identifier": {"index": 0},
+        "type": "MergeAndRedeemFungibleStakedSui",
+        "account": {"address": sender.to_string()},
+        "metadata": {
+            "MergeAndRedeemFungibleStakedSui": {
+                "validator": SuiAddress::random_for_testing_only().to_string(),
+            }
+        }
+    }]))
+    .unwrap();
+    let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
+    let preprocess = flow.preprocess.as_ref().expect("preprocess attempted");
+    match preprocess {
+        Err(_) => {}
+        Ok(resp) => {
+            assert!(
+                resp.options.is_none() && resp.required_public_keys.is_empty(),
+                "expected rejection for missing redeem_mode, got success: {:?}",
+                resp
+            );
+        }
+    }
+}

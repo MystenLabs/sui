@@ -52,7 +52,7 @@ module tto::M1 {
             let child: &A = dof::borrow(&parent.id, KEY);
             assert!(&child.value == option::borrow(&v3), 0);
         } else {
-            assert!(!dof::exists_<u64>(&parent.id, KEY), 0);
+            assert!(!dof::exists<u64>(&parent.id, KEY), 0);
         }
     }
 }

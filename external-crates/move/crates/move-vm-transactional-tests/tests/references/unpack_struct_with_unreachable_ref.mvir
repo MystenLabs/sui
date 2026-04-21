@@ -1,0 +1,25 @@
+// Struct unpack with an unreachable field reference due to control flow.
+
+//# run
+module 0x42.m {
+
+struct S has drop { f: u64 }
+
+entry foo() {
+    let s: Self.S;
+    let sr: &Self.S;
+    let fr: &u64;
+    let val: u64;
+label b0:
+    s = S { f: 42 };
+    jump_if_false (true) b_join;
+label b_ref:
+    sr = &s;
+    fr = &copy(sr).S::f;
+label b_join:
+    S { f: val } = move(s);
+    assert(move(val) == 42, 1);
+    return;
+}
+
+}

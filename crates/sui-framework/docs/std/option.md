@@ -121,7 +121,7 @@ Return an empty <code><a href="../std/option.md#std_option_Option">Option</a></c
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_none">none</a>&lt;Element&gt;(): <a href="../std/option.md#std_option_Option">Option</a>&lt;Element&gt; {
-    <a href="../std/option.md#std_option_Option">Option</a> { vec: <a href="../std/vector.md#std_vector_empty">vector::empty</a>() }
+    <a href="../std/option.md#std_option_Option">Option</a> { vec: <a href="../std/vector.md#std_vector">vector</a>[] }
 }
 </code></pre>
 
@@ -146,7 +146,7 @@ Return an <code><a href="../std/option.md#std_option_Option">Option</a></code> c
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_some">some</a>&lt;Element&gt;(e: Element): <a href="../std/option.md#std_option_Option">Option</a>&lt;Element&gt; {
-    <a href="../std/option.md#std_option_Option">Option</a> { vec: <a href="../std/vector.md#std_vector_singleton">vector::singleton</a>(e) }
+    <a href="../std/option.md#std_option_Option">Option</a> { vec: <a href="../std/vector.md#std_vector">vector</a>[e] }
 }
 </code></pre>
 

@@ -333,16 +333,79 @@ div[role="tabpanel"] {
   justify-content: space-between;
 }
 
+@media screen and (min-width: 1280px) {
+  .navbar__items {
+    min-width: 0;
+    flex-wrap: nowrap !important;
+  }
+
+  .navbar__inner {
+    flex-wrap: nowrap !important;
+    gap: clamp(0.5rem, 1.5vw, 2rem);
+  }
+
+  .navbar__items:not(.navbar__items--right) {
+    flex: 1 1 0%;
+  }
+
+  .navbar__items--right {
+    flex: 0 0 auto;
+  }
+}
+
 .navbar__items .navbar__brand {
-  width: 27%;
+  width: auto;
+  flex-shrink: 0;
+  margin-right: clamp(0.5rem, 1vw, 1.5rem);
 }
 
 .navbar__items .navbar__item.navbar__link {
   font-family: var(--headerFont);
-  font-size: .9375rem;
+  font-size: clamp(0.8rem, 0.95vw, 0.9375rem);
   font-weight: 500;
   line-height: 1.125rem;
   letter-spacing: -0.02em;
+  white-space: nowrap;
+  padding: 0.5rem clamp(0.25rem, 0.6vw, 0.75rem);
+}
+
+@media screen and (min-width: 1280px) {
+  .navbar-left-items {
+    display: flex !important;
+    flex: 1 1 0%;
+    flex-wrap: nowrap;
+    align-items: center;
+    min-width: 0;
+    justify-content: space-evenly;
+  }
+
+  .navbar-left-items > .navbar__item {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
+@media screen and (max-width: 1279px) {
+  .navbar-left-items {
+    display: none !important;
+  }
+
+  .navbar__brand {
+    display: none !important;
+  }
+}
+
+
+
+.navbar-right-controls {
+  gap: clamp(0.5rem, 1vw, 0.75rem);
+}
+
+/* Show hamburger toggle up to 1279px instead of Docusaurus default 996px */
+@media screen and (min-width: 997px) and (max-width: 1279px) {
+  .navbar__toggle {
+    display: inherit !important;
+  }
 }
 
 .darkNavbarColorModeToggle {
@@ -351,7 +414,29 @@ div[role="tabpanel"] {
 
 @media screen and (min-width: 767px) {
   .navbar__items.navbar__items--right {
+    min-width: 0;
+  }
+}
+
+@media screen and (min-width: 1400px) {
+  .navbar__items.navbar__items--right {
     min-width: 325px;
+  }
+}
+
+/* Compact right-side controls below full desktop width */
+@media screen and (max-width: 1399px) {
+  .navbar .kapa-trigger-btn {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    padding: 0 !important;
+    justify-content: center;
+    margin: 0;
+  }
+
+  .DocSearch-Button {
+    width: 9rem;
   }
 }
 
@@ -1910,7 +1995,7 @@ html[data-theme="dark"] .api-code-title { background: rgba(255,255,255,0.04); }
   color: var(--ifm-color-emphasis-700);
 }
 
-@media (max-width: 996px) {
+@media (max-width: 1279px) {
   .theme-toggle-wrapper {
     display: flex !important;
     align-items: center !important;
@@ -2034,7 +2119,7 @@ html[data-theme="dark"] .api-code-title { background: rgba(255,255,255,0.04); }
   }
 }
 
-@media (max-width: 996px) {
+@media (max-width: 1279px) {
   /* --- Kapa: keep only the icon on mobile --- */
 
   /* Ensure Kapa trigger lays out like an icon button */
@@ -2491,7 +2576,7 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 /* All sidebar links */
 .menu__link {
   border-radius: 0.5rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1.4;
   padding: 0.375rem 0.625rem !important;
   transition: background 0.15s ease, color 0.15s ease;
@@ -2542,7 +2627,7 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 
 /* Top-level page links — same weight as categories, no dot */
 .theme-doc-sidebar-menu > .menu__list > .theme-doc-sidebar-item-link > .menu__link {
-  font-size: 0.95rem !important;
+  font-size: 1rem !important;
   font-weight: 600;
   color: #000000;
   padding-left: 0.625rem !important;
@@ -2574,7 +2659,7 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 /* Child pages and child categories — muted color */
 .theme-doc-sidebar-item-category .menu__list > .theme-doc-sidebar-item-link > .menu__link,
 .theme-doc-sidebar-item-category .menu__list > .theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link {
-  font-size: 0.9rem !important;
+  font-size: 0.95rem !important;
   color: #4B515B;
 }
 
@@ -2626,4 +2711,99 @@ html[data-theme='dark'] .protoUnionNote {
 .protoArrow {
   margin: 0 4px;
   opacity: 0.5;
+}
+
+/* ── Navbar dropdown styling ─────────────────────────────────────────────── */
+
+@media screen and (min-width: 997px) {
+  .navbar .dropdown {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
+    position: relative;
+  }
+
+  .navbar .dropdown .dropdown__menu {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+.navbar .dropdown .dropdown__menu {
+  min-width: 240px;
+  padding: 6px;
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  backdrop-filter: blur(12px);
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__menu {
+  background: #131518;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.navbar .dropdown .dropdown__link {
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  border-radius: 2px;
+  margin: 1px 0;
+  color: #343940;
+  transition: all 0.12s ease;
+  border-left: 2px solid transparent;
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__link {
+  color: #C2C6CD;
+}
+
+.navbar .dropdown .dropdown__link:hover {
+  background: rgba(41, 141, 255, 0.06);
+  color: #1759C4;
+  border-left-color: #298DFF;
+  text-decoration: none;
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__link:hover {
+  background: rgba(41, 141, 255, 0.1);
+  color: #5CA9FF;
+  border-left-color: #5CA9FF;
+}
+
+/* No persistent active highlight in dropdown menus */
+.navbar .dropdown .dropdown__link--active {
+  color: #343940 !important;
+  font-weight: 500 !important;
+  background: transparent !important;
+  border-left-color: transparent !important;
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__link--active {
+  color: #C2C6CD !important;
+  background: transparent !important;
+  border-left-color: transparent !important;
+}
+
+/* But hover still works on active items */
+.navbar .dropdown .dropdown__link--active:hover {
+  background: rgba(41, 141, 255, 0.06) !important;
+  color: #1759C4 !important;
+  border-left-color: #298DFF !important;
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__link--active:hover {
+  background: rgba(41, 141, 255, 0.1) !important;
+  color: #5CA9FF !important;
+  border-left-color: #5CA9FF !important;
+}
+
+/* No highlight on dropdown trigger labels */
+.navbar .dropdown > .navbar__link,
+.navbar .dropdown > .navbar__link.navbar__link--active {
+  color: var(--ifm-navbar-link-color) !important;
+  background: transparent !important;
 }

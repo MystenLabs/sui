@@ -12,7 +12,34 @@ import {
     TextDocument,
     Position
 } from 'vscode';
-import { decompress } from 'fzstd';
+/**
+ * Shape of the `ZSTDDecoder` class from the `zstddec/stream` package.
+ * Hand-typed here because we load the package via `await import()` (its module
+ * format is not directly compatible with the format this project compiles to)
+ * and need a local type to work with the returned object.
+ */
+interface ZstdDecoder {
+    init(): Promise<void>;
+    decode(array: Uint8Array, uncompressedSize?: number): Uint8Array;
+    decodeStreaming(arrays: Iterable<Uint8Array>): Generator<Uint8Array>;
+}
+
+/**
+ * Number of lines kept verbatim (effects included) for traces small enough to
+ * display in full. Traces larger than this fall back to the
+ * `PREVIEW_MAX_NON_EFFECT_LINES` cap below with `Effect`-prefixed lines
+ * dropped, to fit VSCode's editor render budget.
+ */
+const PREVIEW_MAX_LINES_WITH_EFFECTS = 1000;
+
+/**
+ * Number of non-`Effect` lines emitted for traces larger than
+ * `PREVIEW_MAX_LINES_WITH_EFFECTS`.
+ */
+const PREVIEW_MAX_NON_EFFECT_LINES = 10000;
+
+const NEWLINE_BYTE = 0x0A;
+const EFFECT_LINE_PREFIX = '{"Effect":';
 
 /**
  * Log level for the debug adapter.
@@ -200,14 +227,13 @@ export function activate(context: vscode.ExtensionContext) {
     }));
 
     // Create and register custom content provider for compressed trace files,
-    // as well as custom editor for Move trace files.
-    // TODO: for now it's OK to decompress the whole trace here because the debugger
-    // does not handle streaming traces at the moment anyway, but it will have to change
-    // once it does.
+    // as well as custom editor for Move trace files. Both providers stream the
+    // file via `decompressTraceFileForPreview` so they never materialise more
+    // than ~10K lines, which is what fits in VSCode's editor render budget.
     const trace_content_provider: vscode.TextDocumentContentProvider = {
         async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
             try {
-                return trimTraceFileContent(await decompressTraceFile(uri.path));
+                return await decompressTraceFileForPreview(uri.path);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 return `Failed to decode trace:\n${msg}`;
@@ -271,7 +297,7 @@ class MoveTraceViewProvider implements vscode.CustomReadonlyEditorProvider {
         webviewPanel.webview.options = { enableScripts: true };
 
         try {
-            const traceContent = trimTraceFileContent(await decompressTraceFile(document.uri.fsPath));
+            const traceContent = await decompressTraceFileForPreview(document.uri.fsPath);
             webviewPanel.webview.html = this.renderHtml(traceContent);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -502,7 +528,7 @@ function findTracedFunctionsFromPath(pkgRoot: string, pkgModules: string[]): str
  * @returns traced function info containing package address, module, and function itself.
  */
 async function getTracedFunctionInfo(traceFilePath: string): Promise<TracedFunctionInfo> {
-    const traceLines = await decompressTraceFile(traceFilePath);
+    const traceLines = await readTraceFileFirstLines(traceFilePath, 2);
     if (traceLines.length <= 1) {
         throw new Error(`Empty trace file at '${traceFilePath}`);
     }
@@ -651,80 +677,6 @@ async function pickTraceFileToDebug(
 }
 
 /**
- * Splits decompressed trace file data into lines without creating a large intermediate string.
- * This avoids hitting JavaScript's maximum string length limit for large trace files.
- *
- * @param decompressed the decompressed buffer containing trace data
- * @returns array of strings representing lines from the trace file
- */
-function splitTraceFileLines(decompressed: Uint8Array): string[] {
-    const NEWLINE_BYTE = 0x0A;
-    const decoder = new TextDecoder();
-    const lines: string[] = [];
-
-    let lineStart = 0;
-
-    for (let i = 0; i <= decompressed.length; i++) {
-        if (i === decompressed.length || decompressed[i] === NEWLINE_BYTE) {
-            // end of the buffer or a new line
-            if (i > lineStart) {
-                const lineBytes = decompressed.slice(lineStart, i);
-                const line = decoder.decode(lineBytes).trimEnd();
-                lines.push(line);
-            }
-            lineStart = i + 1;
-        }
-    }
-
-    return lines;
-}
-
-/**
- * Reads and decompresses a trace file.
- * @param traceFilePath path to the trace file.
- * @returns decompressed trace file content as a string.
- */
-async function decompressTraceFile(traceFilePath: string): Promise<string[]> {
-    // Read as Buffer then view it as a Uint8Array for fzstd which expects Uint8Array
-    const buf = fs.readFileSync(traceFilePath);
-    const u8 = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
-    // fzstd.decompress is synchronous, no need to await
-    const decompressed = decompress(u8);
-    return splitTraceFileLines(decompressed);
-}
-
-/**
- * Trims the trace file content to have it fit in VSCode's
- * 50M display limit.
- * @param traceFileContent content of the trace file.
- * @returns string representation of the trace file content.
- */
-function trimTraceFileContent(lines: string[]): string {
-    // Max numbers of lines to display, including effects
-    const maxLinesWithEffects = 1000;
-    if (lines.length <= maxLinesWithEffects) {
-        return lines.join('\n');
-    }
-    // Max number of lines to display without effects
-    // (if the number of lines in the trace is greater thatn
-    // maxLinesWithEffects, let's filter out the effects, but
-    // display a larger number of lines to hopefully include
-    // the whole trace sans effects).
-    let maxLines = 10000;
-    let result = "";
-    for (let i = 0; i < lines.length; i++) {
-        if (!lines[i].startsWith('{\"Effect\":')) {
-            maxLines--;
-            result += lines[i] + '\n';
-        }
-        if (maxLines === 0) {
-            break;
-        }
-    }
-    return result;
-}
-
-/**
  * Get the URI of the currently active trace view tab.
  * @returns uri of the active trace view tab or undefined if no such tab is active.
  */
@@ -744,4 +696,125 @@ function traceViewTabUri(): vscode.Uri | undefined {
         }
     }
     return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Trace file decompression and streaming helpers
+// ---------------------------------------------------------------------------
+
+let decoderPromise: Promise<ZstdDecoder> | undefined;
+
+/**
+ * Returns a lazily-initialized, cached `ZSTDDecoder` instance from
+ * the `zstddec/stream` package.
+ */
+async function getDecoder(): Promise<ZstdDecoder> {
+    if (!decoderPromise) {
+        decoderPromise = (async () => {
+            const mod = await import('zstddec/stream');
+            const decoder = new mod.ZSTDDecoder();
+            await decoder.init();
+            return decoder as unknown as ZstdDecoder;
+        })();
+    }
+    return decoderPromise;
+}
+
+/**
+ * Streams a zstd-compressed trace file and yields decompressed lines one at
+ * a time. The compressed file is read in full but decompressed data is
+ * processed in batches, so peak memory is dominated by the compressed file
+ * size, not the decompressed one.
+ */
+async function* streamTraceLines(
+    traceFilePath: string,
+): AsyncGenerator<string, void, void> {
+    const decoder = await getDecoder();
+    const buf = fs.readFileSync(traceFilePath);
+    const u8 = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    const td = new TextDecoder();
+    let leftover: Uint8Array | undefined;
+    for (const decompressed of decoder.decodeStreaming([u8])) {
+        if (decompressed.length === 0) continue;
+        const cur = leftover && leftover.length > 0
+            // Cast needed: Buffer extends Uint8Array at runtime but TS
+            // considers them incompatible due to SharedArrayBuffer in Buffer's
+            // type signature.
+            ? Buffer.concat([leftover, decompressed]) as Uint8Array
+            : decompressed;
+        leftover = undefined;
+        let lineStart = 0;
+        for (let i = 0; i < cur.length; i++) {
+            if (cur[i] !== NEWLINE_BYTE) continue;
+            if (i > lineStart) {
+                yield td.decode(cur.subarray(lineStart, i)).trimEnd();
+            }
+            lineStart = i + 1;
+        }
+        if (lineStart < cur.length) {
+            leftover = cur.subarray(lineStart);
+        }
+    }
+    if (leftover && leftover.length > 0) {
+        const tail = td.decode(leftover).trimEnd();
+        if (tail) yield tail;
+    }
+}
+
+/**
+ * Streams a trace file and returns the editor-preview text. For small traces
+ * (≤ `PREVIEW_MAX_LINES_WITH_EFFECTS` lines) every line is emitted verbatim.
+ * For larger traces, `Effect`-prefixed lines are dropped and the first
+ * `PREVIEW_MAX_NON_EFFECT_LINES` non-effect lines are emitted, then the
+ * stream stops early without materialising the rest of the file.
+ */
+async function decompressTraceFileForPreview(traceFilePath: string): Promise<string> {
+    const buffered: string[] = [];
+    const nonEffects: string[] = [];
+    let largeMode = false;
+
+    for await (const line of streamTraceLines(traceFilePath)) {
+        if (!largeMode) {
+            buffered.push(line);
+            if (buffered.length > PREVIEW_MAX_LINES_WITH_EFFECTS) {
+                // Crossed the small-trace threshold: re-classify the buffered
+                // tail through the large-mode filter and continue streaming.
+                for (const l of buffered) {
+                    if (!l.startsWith(EFFECT_LINE_PREFIX)) {
+                        nonEffects.push(l);
+                        if (nonEffects.length >= PREVIEW_MAX_NON_EFFECT_LINES) {
+                            return nonEffects.join('\n');
+                        }
+                    }
+                }
+                buffered.length = 0;
+                largeMode = true;
+            }
+        } else {
+            if (!line.startsWith(EFFECT_LINE_PREFIX)) {
+                nonEffects.push(line);
+                if (nonEffects.length >= PREVIEW_MAX_NON_EFFECT_LINES) {
+                    return nonEffects.join('\n');
+                }
+            }
+        }
+    }
+    return largeMode ? nonEffects.join('\n') : buffered.join('\n');
+}
+
+/**
+ * Streams the first `n` lines from a trace file and stops decoding the rest.
+ * Used to extract metadata (e.g. the trace header / first event) without
+ * decompressing the entire file.
+ */
+async function readTraceFileFirstLines(
+    traceFilePath: string,
+    n: number,
+): Promise<string[]> {
+    const lines: string[] = [];
+    for await (const line of streamTraceLines(traceFilePath)) {
+        lines.push(line);
+        if (lines.length >= n) break;
+    }
+    return lines;
 }

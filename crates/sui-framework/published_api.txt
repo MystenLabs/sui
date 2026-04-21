@@ -1489,13 +1489,22 @@ borrow_mut
 remove
 	public fun
 	0x2::dynamic_field
+exists
+	public fun
+	0x2::dynamic_field
+remove_opt
+	public fun
+	0x2::dynamic_field
+replace
+	public fun
+	0x2::dynamic_field
+exists_with_type
+	public fun
+	0x2::dynamic_field
 exists_
 	public fun
 	0x2::dynamic_field
 remove_if_exists
-	public fun
-	0x2::dynamic_field
-exists_with_type
 	public fun
 	0x2::dynamic_field
 field_info
@@ -2320,13 +2329,22 @@ borrow_mut
 remove
 	public fun
 	0x2::dynamic_object_field
-exists_
+exists
 	public fun
 	0x2::dynamic_object_field
 exists_with_type
 	public fun
 	0x2::dynamic_object_field
 id
+	public fun
+	0x2::dynamic_object_field
+remove_opt
+	public fun
+	0x2::dynamic_object_field
+replace
+	public fun
+	0x2::dynamic_object_field
+exists_
 	public fun
 	0x2::dynamic_object_field
 internal_add
@@ -3748,6 +3766,12 @@ g_div
 g_neg
 	public fun
 	0x2::ristretto255
+verify_bulletproofs_ristretto255
+	public fun
+	0x2::rangeproofs
+verify_bulletproofs_ristretto255_internal
+	fun
+	0x2::rangeproofs
 TableVec
 	public struct
 	0x2::table_vec
@@ -5017,9 +5041,6 @@ Permit
 permit
 	public fun
 	0x1::internal
-empty
-	public fun
-	0x1::vector
 length
 	public fun
 	0x1::vector
@@ -5039,9 +5060,6 @@ destroy_empty
 	public fun
 	0x1::vector
 swap
-	public fun
-	0x1::vector
-singleton
 	public fun
 	0x1::vector
 reverse
@@ -5075,6 +5093,12 @@ take
 	public fun
 	0x1::vector
 flatten
+	public fun
+	0x1::vector
+empty
+	public fun
+	0x1::vector
+singleton
 	public fun
 	0x1::vector
 Option

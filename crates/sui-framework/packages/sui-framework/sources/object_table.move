@@ -66,7 +66,7 @@ public fun remove<K: copy + drop + store, V: key + store>(table: &mut ObjectTabl
 /// Returns true if there is a value associated with the key `k: K` in table
 /// `table: &ObjectTable<K, V>`
 public fun contains<K: copy + drop + store, V: key + store>(table: &ObjectTable<K, V>, k: K): bool {
-    ofield::exists_<K>(&table.id, k)
+    ofield::exists<K>(&table.id, k)
 }
 
 /// Returns the size of the table, the number of key-value pairs
