@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{NativesCostTable, get_extension, object_runtime::ObjectRuntime};
-use fastcrypto::groups::bls12381::{G1Element, G1_ELEMENT_BYTE_LENGTH, G2_ELEMENT_BYTE_LENGTH};
-use fastcrypto_zkp::groth16::get_public_inputs_num;
+use move_binary_format::partial_vm_error;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
@@ -86,16 +85,13 @@ pub fn prepare_verifying_key_internal(
     {
         // The type parameter is not used by get_public_inputs_num, only the const generics matter.
         let num_public_inputs = match curve {
-            BLS12381 => get_public_inputs_num::<
-                { G1_ELEMENT_BYTE_LENGTH },
-                { G2_ELEMENT_BYTE_LENGTH },
-            >(verifying_key.len()),
-            BN254 => get_public_inputs_num::<32, 64>(verifying_key.len()),
-            _ => return Err(partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION)),
+            BLS12381 => fastcrypto_zkp::bls12381::api::get_public_inputs_num(verifying_key.len()),
+            BN254 => fastcrypto_zkp::bn254::api::get_public_inputs_num(verifying_key.len()),
+            _ => return Err(partial_vm_error!(UNKNOWN_INVARIANT_VIOLATION_ERROR)),
         };
         let Ok(n) = num_public_inputs else {
             return Ok(NativeResult::err(cost, INVALID_VERIFYING_KEY));
-        }
+        };
         if n > MAX_PUBLIC_INPUTS {
             return Ok(NativeResult::err(cost, TOO_MANY_PUBLIC_INPUTS));
         }
