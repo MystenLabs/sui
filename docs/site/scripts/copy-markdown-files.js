@@ -365,42 +365,7 @@ function stripFrontmatter(content, outputPath, filePath) {
   return cleaned;
 }
 
-<<<<<<< Updated upstream
 function cleanMdxComponents(content, filePath) {
-=======
-function stripMultilineExports(content) {
-  const lines = content.split('\n');
-  const result = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-    if (/^\s*export\s+(const|let|var|function|class)\b/.test(line)) {
-      // Track brace/paren depth to find the end of the block
-      let depth = 0;
-      let foundOpen = false;
-      while (i < lines.length) {
-        const current = lines[i];
-        for (const ch of current) {
-          if (ch === '{' || ch === '(') { depth++; foundOpen = true; }
-          if (ch === '}' || ch === ')') { depth--; }
-        }
-        i++;
-        if (foundOpen && depth <= 0) break;
-        // Single-line export with no braces
-        if (!foundOpen && (current.endsWith(';') || i >= lines.length)) break;
-      }
-      continue;
-    }
-    result.push(line);
-    i++;
-  }
-
-  return result.join('\n');
-}
-
-function cleanMdxComponents(content) {
->>>>>>> Stashed changes
   let cleaned = content;
 
   // Remove import lines.
@@ -541,7 +506,6 @@ function cleanMdxComponents(content) {
   // Keep this conservative so we do not nuke prose accidentally.
   cleaned = cleaned.replace(/^\s*\{[A-Z][A-Za-z0-9_.]*\}\s*$/gm, '');
 
-<<<<<<< Updated upstream
   // ── HTML-to-markdown cleanup (for framework-generated pages) ────────────
 
   // Convert <span class="code-inline">X</span> to `X`
@@ -602,19 +566,6 @@ function cleanMdxComponents(content) {
 
   // Remove any remaining self-closing HTML tags
   cleaned = cleaned.replace(/<[a-z][^>]*\/>/gi, '');
-=======
-  // Catch-all: remove any remaining self-closing JSX components.
-  cleaned = cleaned.replace(/<[A-Z][A-Za-z0-9]*\b[^>]*\/>/g, '');
-
-  // Catch-all: unwrap any remaining JSX component pairs (keep inner content).
-  // Run multiple passes for nested components.
-  for (let i = 0; i < 3; i++) {
-    cleaned = cleaned.replace(
-      /<([A-Z][A-Za-z0-9]*)\b[^>]*>([\s\S]*?)<\/\1>/g,
-      '$2',
-    );
-  }
->>>>>>> Stashed changes
 
   // Normalize internal links.
   cleaned = cleaned.replace(

@@ -121,7 +121,6 @@
 - [Common Errors](https://docs.sui.io/develop/testing-debugging/common-errors.md)
 - [Testing Debugging Index](https://docs.sui.io/develop/testing-debugging/index.md)
 - [Testing](https://docs.sui.io/develop/testing-debugging/testing.md)
-<<<<<<< Updated upstream
 - [Gas In Sui](https://docs.sui.io/develop/transaction-payment/gas-in-sui.md)
 - [Gas Smashing](https://docs.sui.io/develop/transaction-payment/gas-smashing.md)
 - [Gasless Transactions](https://docs.sui.io/develop/transaction-payment/gasless-transactions.md)
@@ -155,8 +154,6 @@
 - [Move Fundamentals](https://docs.sui.io/develop/write-move/move-fundamentals.md)
 - [Package Overview](https://docs.sui.io/develop/write-move/package-overview.md)
 - [Sui Move Concepts](https://docs.sui.io/develop/write-move/sui-move-concepts.md)
-=======
->>>>>>> Stashed changes
 
 ## Getting Started
 
@@ -829,7 +826,6 @@
     Object](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/move-object.md)
 - [Move Package
     Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/move-package-connection.md)
-<<<<<<< Updated upstream
 - [Move Package
     Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/move-package-edge.md)
 - [Move
@@ -1033,8 +1029,6 @@
 - [Sui Graphql](https://docs.sui.io/references/sui-graphql.md)
 - [Sui Move](https://docs.sui.io/references/sui-move.md)
 - [Sui Sdks](https://docs.sui.io/references/sui-sdks.md)
-=======
->>>>>>> Stashed changes
 
 ## Sui Stack
 
@@ -1060,7 +1054,6 @@
 - [Best Practices](https://docs.sui.io/sui-stack/suiplay0x1/best-practices.md)
 - [Suiplay0x1 Index](https://docs.sui.io/sui-stack/suiplay0x1/index.md)
 - [Integration](https://docs.sui.io/sui-stack/suiplay0x1/integration.md)
-<<<<<<< Updated upstream
 - [Migration Strategies](https://docs.sui.io/sui-stack/suiplay0x1/migration-strategies.md)
 - [Wallet Integration](https://docs.sui.io/sui-stack/suiplay0x1/wallet-integration.md)
 
@@ -1069,5 +1062,3 @@
 - [Zklogin Integration Index](https://docs.sui.io/sui-stack/zklogin-integration/index.md)
 - [Zklogin Example](https://docs.sui.io/sui-stack/zklogin-integration/zklogin-example.md)
 - [Zklogin](https://docs.sui.io/sui-stack/zklogin-integration/zklogin.md)
-=======
->>>>>>> Stashed changes
