@@ -585,13 +585,41 @@ impl CheckpointExecutor {
         pipeline_handle: &mut PipelineHandle,
     ) -> CheckpointExecutionState {
         let sequence_number = checkpoint.sequence_number;
-        let (mut ckpt_state, tx_data, unexecuted_tx_digests) = {
+        let (mut ckpt_state, tx_data, settlement_digests, remaining_txns, unexecuted_tx_digests) = {
             let _scope =
                 mysten_metrics::monitored_scope("CheckpointExecutor::execute_transactions");
             let (ckpt_state, tx_data) = self.load_checkpoint_transactions(checkpoint);
-            let unexecuted_tx_digests = self.schedule_transaction_execution(&ckpt_state, &tx_data);
-            (ckpt_state, tx_data, unexecuted_tx_digests)
+            let (settlement_digests, remaining_txns, unexecuted_tx_digests) =
+                self.schedule_settlement_transactions(&ckpt_state, &tx_data);
+            (
+                ckpt_state,
+                tx_data,
+                settlement_digests,
+                remaining_txns,
+                unexecuted_tx_digests,
+            )
         };
+
+        finish_stage!(pipeline_handle, ExecuteSettlements);
+
+        // Wait for settlement transactions to finish before enqueuing other transactions.
+        // Settlement transactions create/update accumulator objects that coin-reservation
+        // transactions depend on. Without this ordering, a coin-reservation tx could
+        // execute before the accumulator it references exists on this node.
+        if !settlement_digests.is_empty() {
+            self.transaction_cache_reader
+                .notify_read_executed_effects_digests(
+                    "CheckpointExecutor::wait_for_settlements",
+                    &settlement_digests,
+                )
+                .await;
+        }
+
+        finish_stage!(pipeline_handle, WaitForSettlements);
+
+        // Now enqueue non-settlement transactions.
+        self.execution_scheduler
+            .enqueue_transactions(remaining_txns, &self.epoch_store);
 
         finish_stage!(pipeline_handle, ExecuteTransactions);
 
@@ -851,84 +879,101 @@ impl CheckpointExecutor {
         }
     }
 
-    // Schedule all unexecuted transactions in the checkpoint for execution
+    /// Enqueue settlement transactions for execution and return the remaining transactions
+    /// to be enqueued after settlements complete.
+    ///
+    /// Settlement transactions must execute before other transactions in the checkpoint
+    /// because they create/update accumulator objects that coin-reservation transactions
+    /// depend on. During checkpoint replay, without this ordering a coin-reservation tx
+    /// could execute before the accumulator it references exists on this node.
     #[instrument(level = "info", skip_all)]
-    fn schedule_transaction_execution(
+    fn schedule_settlement_transactions(
         &self,
         ckpt_state: &CheckpointExecutionState,
         tx_data: &CheckpointTransactionData,
-    ) -> Vec<TransactionDigest> {
+    ) -> (
+        Vec<TransactionDigest>,
+        Vec<(VerifiedExecutableTransaction, ExecutionEnv)>,
+        Vec<TransactionDigest>,
+    ) {
         let mut barrier_deps_builder = BarrierDependencyBuilder::new();
 
-        // Find unexecuted transactions and their expected effects digests
-        let (unexecuted_tx_digests, unexecuted_txns): (Vec<_>, Vec<_>) = itertools::multiunzip(
-            izip_debug_eq!(
-                tx_data.transactions.iter(),
-                ckpt_state.data.tx_digests.iter(),
-                ckpt_state.data.fx_digests.iter(),
-                tx_data.effects.iter(),
-                tx_data.executed_fx_digests.iter(),
-                tx_data.accumulator_versions.iter()
-            )
-            .filter_map(
-                |(
-                    txn,
+        let mut settlement_txns = Vec::new();
+        let mut settlement_digests = Vec::new();
+        let mut remaining_txns = Vec::new();
+        let mut all_unexecuted_digests = Vec::new();
+
+        for (
+            txn,
+            tx_digest,
+            expected_fx_digest,
+            effects,
+            executed_fx_digest,
+            accumulator_version,
+        ) in izip_debug_eq!(
+            tx_data.transactions.iter(),
+            ckpt_state.data.tx_digests.iter(),
+            ckpt_state.data.fx_digests.iter(),
+            tx_data.effects.iter(),
+            tx_data.executed_fx_digests.iter(),
+            tx_data.accumulator_versions.iter()
+        ) {
+            let barrier_deps = barrier_deps_builder.process_tx(*tx_digest, txn.transaction_data());
+
+            if let Some(executed_fx_digest) = executed_fx_digest {
+                assert_not_forked(
+                    &ckpt_state.data.checkpoint,
                     tx_digest,
                     expected_fx_digest,
-                    effects,
                     executed_fx_digest,
-                    accumulator_version,
-                )| {
-                    let barrier_deps =
-                        barrier_deps_builder.process_tx(*tx_digest, txn.transaction_data());
+                    &*self.transaction_cache_reader,
+                );
+                continue;
+            }
 
-                    if let Some(executed_fx_digest) = executed_fx_digest {
-                        assert_not_forked(
-                            &ckpt_state.data.checkpoint,
-                            tx_digest,
-                            expected_fx_digest,
-                            executed_fx_digest,
-                            &*self.transaction_cache_reader,
-                        );
-                        None
-                    } else if txn.transaction_data().is_end_of_epoch_tx() {
-                        None
-                    } else {
-                        let assigned_versions = self
-                            .epoch_store
-                            .acquire_shared_version_assignments_from_effects(
-                                txn,
-                                effects,
-                                *accumulator_version,
-                                &*self.object_cache_reader,
-                            )
-                            .expect("failed to acquire shared version assignments");
+            if txn.transaction_data().is_end_of_epoch_tx() {
+                continue;
+            }
 
-                        let mut env = ExecutionEnv::new()
-                            .with_assigned_versions(assigned_versions)
-                            .with_expected_effects_digest(*expected_fx_digest)
-                            .with_barrier_dependencies(barrier_deps);
+            let assigned_versions = self
+                .epoch_store
+                .acquire_shared_version_assignments_from_effects(
+                    txn,
+                    effects,
+                    *accumulator_version,
+                    &*self.object_cache_reader,
+                )
+                .expect("failed to acquire shared version assignments");
 
-                        // Check if the expected effects indicate insufficient balance
-                        if let &ExecutionStatus::Failure(ExecutionFailure {
-                            error: ExecutionErrorKind::InsufficientFundsForWithdraw,
-                            ..
-                        }) = effects.status()
-                        {
-                            env = env.with_insufficient_funds();
-                        }
+            let mut env = ExecutionEnv::new()
+                .with_assigned_versions(assigned_versions)
+                .with_expected_effects_digest(*expected_fx_digest)
+                .with_barrier_dependencies(barrier_deps);
 
-                        Some((tx_digest, (txn.clone(), env)))
-                    }
-                },
-            ),
-        );
+            if let &ExecutionStatus::Failure(ExecutionFailure {
+                error: ExecutionErrorKind::InsufficientFundsForWithdraw,
+                ..
+            }) = effects.status()
+            {
+                env = env.with_insufficient_funds();
+            }
 
-        // Enqueue unexecuted transactions with their expected effects digests
+            all_unexecuted_digests.push(*tx_digest);
+
+            let is_settlement = txn.transaction_data().kind().is_accumulator_settle_tx();
+
+            if is_settlement {
+                settlement_digests.push(*tx_digest);
+                settlement_txns.push((txn.clone(), env));
+            } else {
+                remaining_txns.push((txn.clone(), env));
+            }
+        }
+
         self.execution_scheduler
-            .enqueue_transactions(unexecuted_txns, &self.epoch_store);
+            .enqueue_transactions(settlement_txns, &self.epoch_store);
 
-        unexecuted_tx_digests
+        (settlement_digests, remaining_txns, all_unexecuted_digests)
     }
 
     // Execute the change epoch txn

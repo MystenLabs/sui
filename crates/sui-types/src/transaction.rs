@@ -1879,6 +1879,19 @@ impl TransactionKind {
         )
     }
 
+    /// Returns true for any accumulator settlement transaction, including both
+    /// non-barrier settlements (NonExclusiveWrite) and barrier settlements (Mutable).
+    pub fn is_accumulator_settle_tx(&self) -> bool {
+        matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
+            && self.shared_input_objects().any(|obj| {
+                obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID
+                    && matches!(
+                        obj.mutability,
+                        SharedObjectMutability::Mutable | SharedObjectMutability::NonExclusiveWrite
+                    )
+            })
+    }
+
     pub fn is_accumulator_barrier_settle_tx(&self) -> bool {
         matches!(self, TransactionKind::ProgrammableSystemTransaction(_))
             && self.shared_input_objects().any(|obj| {

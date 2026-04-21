@@ -341,21 +341,23 @@ impl SequenceWatch {
 
 /// Names of the pipeline stages for CheckpointExecutor.
 pub(crate) enum PipelineStage {
-    ExecuteTransactions = 0,
-    WaitForTransactions = 1,
-    FinalizeTransactions = 2,
-    ProcessCheckpointData = 3,
-    BuildDbBatch = 4,
-    CommitTransactionOutputs = 5,
-    FinalizeCheckpoint = 6,
-    UpdateRpcIndex = 7,
-    BumpHighestExecutedCheckpoint = 8,
-    End = 9,
+    ExecuteSettlements = 0,
+    WaitForSettlements = 1,
+    ExecuteTransactions = 2,
+    WaitForTransactions = 3,
+    FinalizeTransactions = 4,
+    ProcessCheckpointData = 5,
+    BuildDbBatch = 6,
+    CommitTransactionOutputs = 7,
+    FinalizeCheckpoint = 8,
+    UpdateRpcIndex = 9,
+    BumpHighestExecutedCheckpoint = 10,
+    End = 11,
 }
 
 impl PipelineStage {
     pub const fn first() -> Self {
-        Self::ExecuteTransactions
+        Self::ExecuteSettlements
     }
 
     fn next(self) -> Self {
