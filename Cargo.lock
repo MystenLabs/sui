@@ -17684,6 +17684,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "mysten-common",
+ "prometheus",
  "rand 0.8.5",
  "sui-config",
  "sui-core",

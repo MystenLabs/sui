@@ -39,6 +39,7 @@ move-core-types.workspace = true
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true
 fastcrypto-zkp.workspace = true
+prometheus.workspace = true
 
 [dev-dependencies]
 sui-macros.workspace = true
