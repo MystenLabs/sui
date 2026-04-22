@@ -133,7 +133,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
 
     /// Resolve an adapter `Type` to its `TypeTag`, consulting (and populating) the per-tx cache.
     fn tag_from_type(&self, ty: &Type) -> Result<Rc<TypeTag>, ExecutionError> {
-        if let Some(rc) = self.per_tx_cache.lookup_tag_by_type(ty)? {
+        if let Some(rc) = self.per_tx_cache.lookup_tag(ty)? {
             return Ok(rc);
         }
         let tag: TypeTag = ty.clone().try_into().map_err(|s| {
@@ -415,7 +415,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         type_arg_idx: Option<usize>,
         ty: &Type,
     ) -> Result<vm_runtime::Type, ExecutionError> {
-        if let Some(cached) = self.per_tx_cache.lookup_vm_type_by_type(ty)? {
+        if let Some(cached) = self.per_tx_cache.lookup_vm_type(ty)? {
             return Ok((*cached).clone());
         }
         let tag = self.tag_from_type(ty)?;
