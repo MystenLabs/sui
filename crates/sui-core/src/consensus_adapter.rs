@@ -295,8 +295,7 @@ impl ConsensusAdapter {
         })
     }
 
-    pub fn submit_recovered(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
-        // Send EndOfPublish if needed.
+    pub fn recover_end_of_publish(self: &Arc<Self>, epoch_store: &Arc<AuthorityPerEpochStore>) {
         // This handles the case where the node crashed after setting reconfig lock state
         // but before the EndOfPublish message was sent to consensus.
         if epoch_store.should_send_end_of_publish() {
@@ -649,7 +648,10 @@ impl ConsensusAdapter {
         // After a user transaction or soft bundle submission,
         // send EndOfPublish if the epoch is closing.
         // EndOfPublish can also be sent during consensus commit handling, checkpoint execution and recovery.
-        if transactions[0].is_user_transaction() && epoch_store.should_send_end_of_publish() {
+        if transactions[0].is_user_transaction()
+            && epoch_store.should_send_end_of_publish()
+            && !epoch_store.protocol_config().timestamp_based_epoch_close()
+        {
             // sending message outside of any locks scope
             if let Err(err) = self.submit(
                 ConsensusTransaction::new_end_of_publish(self.authority),

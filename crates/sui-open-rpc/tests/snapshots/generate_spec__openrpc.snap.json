@@ -1439,6 +1439,7 @@
                 "soft_bundle": false,
                 "split_checkpoints_in_consensus_handler": false,
                 "throughput_aware_consensus_submission": false,
+                "timestamp_based_epoch_close": false,
                 "txn_base_cost_as_multiplier": false,
                 "type_tags_in_object_runtime": false,
                 "uncompressed_g1_group_elements": false,

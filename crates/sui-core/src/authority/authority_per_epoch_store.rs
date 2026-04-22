@@ -1404,6 +1404,14 @@ impl AuthorityPerEpochStore {
         self.epoch_start_configuration.epoch_start_state()
     }
 
+    pub fn next_reconfiguration_timestamp_ms(&self) -> u64 {
+        let epoch_start_state = self.epoch_start_state();
+        epoch_start_state
+            .epoch_start_timestamp_ms()
+            .checked_add(epoch_start_state.epoch_duration_ms())
+            .expect("Overflow calculating next_reconfiguration_timestamp_ms")
+    }
+
     pub fn previous_epoch_last_checkpoint(&self) -> CheckpointSequenceNumber {
         self.previous_epoch_last_checkpoint
     }

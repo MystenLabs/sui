@@ -323,6 +323,7 @@ const TESTNET_USDC: &str =
 // Version 122: Framework update: vector::empty is deprecated.
 //              Enable bulletproofs verification on devnet.
 //              Enable defer_unpaid_amplification on mainnet.
+//              Add timestamp_based_epoch_close feature flag and enable in tests.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -1067,6 +1068,13 @@ struct FeatureFlags {
     // If true, return early on type mismatch in receive_object.
     #[serde(skip_serializing_if = "is_false")]
     early_return_receive_object_mismatched_type: bool,
+
+    // If true, use consensus commit timestamps to determine epoch close instead of EndOfPublish voting.
+    // Each validator transitions from AcceptAllCerts to RejectAllCerts when the consensus commit
+    // timestamp exceeds the reconfiguration timestamp. EndOfPublish quorum still works as a
+    // fallback for manual epoch close.
+    #[serde(skip_serializing_if = "is_false")]
+    timestamp_based_epoch_close: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2789,6 +2797,10 @@ impl ProtocolConfig {
 
     pub fn include_special_package_amendments_as_option(&self) -> &Option<Arc<Amendments>> {
         &self.include_special_package_amendments
+    }
+
+    pub fn timestamp_based_epoch_close(&self) -> bool {
+        self.feature_flags.timestamp_based_epoch_close
     }
 }
 
@@ -4863,6 +4875,9 @@ impl ProtocolConfig {
                     cfg.gasless_max_tx_size_bytes = Some(16 * 1024);
                     cfg.gasless_max_tps = Some(300);
                     cfg.gasless_max_computation_units = Some(5_000);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.timestamp_based_epoch_close = true;
+                    }
                 }
                 // Use this template when making changes:
                 //

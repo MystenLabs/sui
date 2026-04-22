@@ -872,7 +872,9 @@ impl SuiNode {
             )
             .await?;
 
-            components.consensus_adapter.submit_recovered(&epoch_store);
+            components
+                .consensus_adapter
+                .recover_end_of_publish(&epoch_store);
 
             // Start the gRPC server
             components.validator_server_handle = components.validator_server_handle.start().await;
@@ -1490,9 +1492,7 @@ impl SuiNode {
             sender: consensus_adapter,
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
-            next_reconfiguration_timestamp_ms: epoch_start_timestamp_ms
-                .checked_add(epoch_duration_ms)
-                .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
+            next_reconfiguration_timestamp_ms: epoch_store.next_reconfiguration_timestamp_ms(),
             metrics: checkpoint_metrics.clone(),
         });
 

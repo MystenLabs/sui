@@ -1234,7 +1234,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 );
 
             let (should_accept_tx, lock, final_round) =
-                self.handle_eop(&mut state, end_of_publish_transactions);
+                self.handle_close_epoch(&mut state, &commit_info, end_of_publish_transactions);
 
             let make_checkpoint = should_accept_tx || final_round;
             if !make_checkpoint {
@@ -1288,7 +1288,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             );
 
             let (should_accept_tx, lock, final_round) =
-                self.handle_eop(&mut state, end_of_publish_transactions);
+                self.handle_close_epoch(&mut state, &commit_info, end_of_publish_transactions);
 
             let make_checkpoint = should_accept_tx || final_round;
             if !make_checkpoint {
@@ -1399,14 +1399,28 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         self.send_end_of_publish_if_needed().await;
     }
 
-    fn handle_eop(
+    fn handle_close_epoch(
         &self,
         state: &mut CommitHandlerState,
+        commit_info: &ConsensusCommitInfo,
         end_of_publish_transactions: Vec<AuthorityName>,
     ) -> (bool, Option<RwLockWriteGuard<'_, ReconfigState>>, bool) {
-        let collected_eop =
+        let timestamp_based_epoch_close = self
+            .epoch_store
+            .protocol_config()
+            .timestamp_based_epoch_close();
+        let timestamp_triggered = timestamp_based_epoch_close
+            && commit_info.timestamp >= self.epoch_store.next_reconfiguration_timestamp_ms();
+        if timestamp_triggered {
+            // close_user_certs() is only needed here when timestamp_based_epoch_close is enabled.
+            let reconfig_guard = self.epoch_store.get_reconfig_state_write_lock_guard();
+            if reconfig_guard.should_accept_user_certs() {
+                self.epoch_store.close_user_certs(reconfig_guard);
+            }
+        }
+        let collected_eop_quorum =
             self.process_end_of_publish_transactions(state, end_of_publish_transactions);
-        if collected_eop {
+        if timestamp_triggered || collected_eop_quorum {
             let (lock, final_round) = self.advance_eop_state_machine(state);
             (lock.should_accept_tx(), Some(lock), final_round)
         } else {
@@ -3144,6 +3158,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     }
 
     async fn send_end_of_publish_if_needed(&self) {
+        if self
+            .epoch_store
+            .protocol_config()
+            .timestamp_based_epoch_close()
+        {
+            return;
+        }
         if !self.epoch_store.should_send_end_of_publish() {
             return;
         }
