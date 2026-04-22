@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.m {
-    import 0x2.object;
+module 0x0::m {
+    import 0x2::object;
     struct S has key, drop {
-        id: object.UID,
+        id: object::UID,
         flag: bool
     }
 }

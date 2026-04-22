@@ -4,10 +4,10 @@
 // valid, Random by immutable reference
 
 //# publish
-module 0x0.m {
-    import 0x2.random;
+module 0x0::m {
+    import 0x2::random;
 
-    public entry yes_random_ref(l0: &random.Random) {
+    public entry yes_random_ref(l0: &random::Random) {
         label l0:
         abort 0;
     }

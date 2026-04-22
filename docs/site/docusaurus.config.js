@@ -115,6 +115,82 @@ const config = {
         },
       };
     },
+    function contentNegotiationPlugin() {
+      return {
+        name: 'content-negotiation-plugin',
+        configureWebpack(config, isServer) {
+          if (isServer) return {};
+          const fs = require('fs');
+          const grayMatter = require('gray-matter');
+          const contentDir = path.resolve(__dirname, '../content');
+
+          function cleanForMarkdown(raw) {
+            const { content } = grayMatter(raw);
+            let cleaned = content;
+            cleaned = cleaned.replace(/^\s*import\s+.*?from\s+['"].*?['"];?\s*$/gm, '');
+            cleaned = cleaned.replace(/^\s*export\s+(default\s+)?.*$/gm, '');
+            cleaned = cleaned.replace(/<\/?(?:Cards|Tabs|ToolGrid)\b[^>]*>/g, '');
+            cleaned = cleaned.replace(/<TabItem\b[^>]*label="([^"]*)"[^>]*>([\s\S]*?)<\/TabItem>/g, (_, label, inner) => `\n## ${label.trim()}\n\n${inner.trim()}\n`);
+            cleaned = cleaned.replace(/<Admonition\b[^>]*type="([^"]+)"[^>]*>([\s\S]*?)<\/Admonition>/g, (_, type, inner) => `\n:::${type}\n${inner.trim()}\n:::\n`);
+            cleaned = cleaned.replace(/<details\b[^>]*>\s*<summary>([\s\S]*?)<\/summary>([\s\S]*?)<\/details>/gi, (_, s, inner) => `\n**${s.trim()}**\n\n${inner.trim()}\n`);
+            cleaned = cleaned.replace(/<Badge\b[^>]*\btext="([^"]*)"[^>]*\/>/g, '`$1`');
+            cleaned = cleaned.replace(/<Bullet\s*\/>/g, ' ');
+            cleaned = cleaned.replace(/<style>\{`[\s\S]*?`\}<\/style>/g, '');
+            cleaned = cleaned.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+            cleaned = cleaned.replace(/<code\b[^>]*>([\s\S]*?)<\/code>/g, (_, inner) => `\`${inner.replace(/<\/?[a-z][^>]*>/gi, '')}\``);
+            cleaned = cleaned.replace(/<[A-Z][A-Za-z0-9]*\b[^>]*\/>/g, '');
+            for (let i = 0; i < 3; i++) cleaned = cleaned.replace(/<([A-Z][A-Za-z0-9]*)\b[^>]*>([\s\S]*?)<\/\1>/g, '$2');
+            cleaned = cleaned.replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+            cleaned = cleaned.replace(/^\s*\{[A-Z][A-Za-z0-9_.]*\}\s*$/gm, '');
+            cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+            return cleaned.trim() + '\n';
+          }
+
+          return {
+            devServer: {
+              setupMiddlewares(middlewares, devServer) {
+                devServer.app.use((req, res, next) => {
+                  const accept = req.headers.accept || '';
+                  if (!accept.includes('text/markdown')) return next();
+
+                  const ext = path.extname(req.path);
+                  if (ext && ext !== '.html') return next();
+
+                  let urlPath = req.path;
+                  if (urlPath.endsWith('/')) urlPath = urlPath.slice(0, -1);
+                  if (!urlPath) urlPath = '';
+
+                  const candidates = [
+                    path.join(contentDir, urlPath + '.mdx'),
+                    path.join(contentDir, urlPath + '.md'),
+                    path.join(contentDir, urlPath, 'index.mdx'),
+                    path.join(contentDir, urlPath, 'index.md'),
+                  ];
+
+                  for (const filePath of candidates) {
+                    if (fs.existsSync(filePath)) {
+                      const raw = fs.readFileSync(filePath, 'utf8');
+                      const markdown = cleanForMarkdown(raw);
+                      const byteLen = Buffer.byteLength(markdown, 'utf8');
+                      res.set({
+                        'Content-Type': 'text/markdown; charset=utf-8',
+                        'Content-Length': String(byteLen),
+                        'Vary': 'Accept',
+                        'Cache-Control': 'no-cache',
+                        'x-markdown-tokens': String(Math.ceil(markdown.length / 4)),
+                      });
+                      return res.send(markdown);
+                    }
+                  }
+                  next();
+                });
+                return middlewares;
+              },
+            },
+          };
+        },
+      };
+    },
      function aliasPlugin() {
       return {
         name: 'custom-aliases',

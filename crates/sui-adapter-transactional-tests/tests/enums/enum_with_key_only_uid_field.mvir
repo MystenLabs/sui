@@ -4,42 +4,42 @@
 //# init --addresses test=0x0
 
 //# publish
-module 0x0.f {
-    import 0x2.transfer;
-    import 0x2.object;
-    import 0x2.tx_context;
+module 0x0::f {
+    import 0x2::transfer;
+    import 0x2::object;
+    import 0x2::tx_context;
 
     enum X has key {
-        A { id: object.UID } 
+        A { id: object::UID }
     }
 
-    public transfer(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let id: object.UID;
+    public transfer(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let id: object::UID;
         label  l0:
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            transfer.transfer<Self.X>(move(x), 0x0);
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            transfer::transfer<Self::X>(move(x), 0x0);
         return;
     }
 
-    public share(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let id: object.UID;
+    public share(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let id: object::UID;
         label  l0:
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            transfer.share_object<Self.X>(move(x));
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            transfer::share_object<Self::X>(move(x));
         return;
     }
 
-    public freezer(ctx: &mut tx_context.TxContext) {
-        let x: Self.X;
-        let id: object.UID;
+    public freezer(ctx: &mut tx_context::TxContext) {
+        let x: Self::X;
+        let id: object::UID;
         label  l0:
-            id = object.new(move(ctx));
-            x = X.A { id: move(id) };
-            transfer.freeze_object<Self.X>(move(x));
+            id = object::new(move(ctx));
+            x = X::A { id: move(id) };
+            transfer::freeze_object<Self::X>(move(x));
         return;
     }
 }

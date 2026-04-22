@@ -13,7 +13,7 @@ export const config = {
 	],
 };
 
-export default function middleware(request) {
+export default async function middleware(request) {
 	const accept = request.headers.get('accept') || '';
 
 	// Check if the client prefers markdown over HTML
@@ -52,36 +52,40 @@ export default function middleware(request) {
 		path = '/index';
 	}
 
-	// Rewrite to the markdown version
-	const markdownUrl = new URL(`/markdown${path}.md`, request.url);
+	// Try the markdown version — first as a direct file, then as an index.
+	const candidates = [
+		new URL(`/markdown${path}.md`, request.url),
+		new URL(`/markdown${path}/index.md`, request.url),
+	];
 
-	return fetch(markdownUrl, {
+	const fetchOpts = {
 		headers: {
 			...Object.fromEntries(request.headers),
 			// Override accept so the downstream doesn't loop
 			accept: '*/*',
 		},
-	}).then((response) => {
-		if (!response.ok) {
-			// Markdown version doesn't exist for this path, fall through to HTML
-			return;
+	};
+
+	for (const markdownUrl of candidates) {
+		const response = await fetch(markdownUrl, fetchOpts);
+		if (response.ok) {
+			const headers = new Headers(response.headers);
+			headers.set('content-type', 'text/markdown; charset=utf-8');
+			headers.set('vary', 'Accept');
+
+			const contentLength = headers.get('content-length');
+			if (contentLength) {
+				const tokens = Math.ceil(parseInt(contentLength) / 4);
+				headers.set('x-markdown-tokens', String(tokens));
+			}
+
+			return new Response(response.body, {
+				status: 200,
+				headers,
+			});
 		}
+	}
 
-		// Return the markdown with proper headers
-		const headers = new Headers(response.headers);
-		headers.set('content-type', 'text/markdown; charset=utf-8');
-		headers.set('vary', 'Accept');
-
-		// Token count hint for agents (approximate: 1 token ≈ 4 chars)
-		const contentLength = headers.get('content-length');
-		if (contentLength) {
-			const tokens = Math.ceil(parseInt(contentLength) / 4);
-			headers.set('x-markdown-tokens', String(tokens));
-		}
-
-		return new Response(response.body, {
-			status: 200,
-			headers,
-		});
-	});
+	// Markdown version doesn't exist for this path, fall through to HTML
+	return;
 }

@@ -1,8 +1,8 @@
 //# publish
-module 0x42.M {
+module 0x42::M {
     consume(s: signer) {
     label b0:
-        Self.consume(move(s));
+        Self::consume(move(s));
         return;
     }
 
@@ -10,10 +10,10 @@ module 0x42.M {
     label b0:
         jump_if_false (move(cond)) b2;
     label b1:
-        Self.consume(move(s1));
+        Self::consume(move(s1));
     label b2:
         s1 = move(s2);
-        Self.consume(move(s1));
+        Self::consume(move(s1));
         return;
     }
 }

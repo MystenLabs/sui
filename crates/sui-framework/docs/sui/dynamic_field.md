@@ -319,6 +319,8 @@ Returns true if and only if the <code><a href="../sui/object.md#sui_object">obje
 ## Function `remove_opt`
 
 Removes the dynamic field if it exists. Returns <code>some(Value)</code> if it exists or <code>none</code> otherwise.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_remove_opt">remove_opt</a>&lt;Name: <b>copy</b>, drop, store, Value: store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Value&gt;
@@ -353,6 +355,8 @@ Removes the dynamic field if it exists. Returns <code>some(Value)</code> if it e
 Removes the existing value at <code>name</code> (if any) and adds <code>value</code> in its place.
 Returns the old value if it existed, or <code>none</code> otherwise.
 Note: the old and new value types may differ.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+<code>ValueOld</code> type.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_replace">replace</a>&lt;Name: <b>copy</b>, drop, store, ValueNew: store, ValueOld: store&gt;(<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, name: Name, value: ValueNew): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;ValueOld&gt;
@@ -416,6 +420,8 @@ Returns true if and only if the <code><a href="../sui/object.md#sui_object">obje
 
 Immutably borrows the field value, adding it with <code>$default</code> if it doesn't exist.
 Note that <code>$default</code> is evaluated only if the field does not already exist.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+type.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_or_add">borrow_or_add</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $default: $Value): &$Value
@@ -449,6 +455,8 @@ Note that <code>$default</code> is evaluated only if the field does not already 
 
 Mutably borrows the field value, adding it with <code>$default</code> if it doesn't exist.
 Note that <code>$default</code> is evaluated only if the field does not already exist.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+type.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut_or_add">borrow_mut_or_add</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $default: $Value): &<b>mut</b> $Value
@@ -482,6 +490,8 @@ Note that <code>$default</code> is evaluated only if the field does not already 
 
 If the field exists, calls <code>$f</code> on an immutable reference to the value; otherwise, does nothing.
 This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a href="../std/option.md#std_option_do">std::option::do</a></code>.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+type.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_do">get_do</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R: drop&gt;($<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $f: |&$Value| -&gt; $R)
@@ -500,7 +510,7 @@ This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a 
 ) {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) { $f(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)); }
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;$Name&gt;(o, name)) { $f(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)); }
 }
 </code></pre>
 
@@ -514,6 +524,8 @@ This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a 
 
 If the field exists, calls <code>$f</code> on a mutable reference to the value; otherwise, does nothing.
 This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then calling <code><a href="../std/option.md#std_option_do">std::option::do</a></code>.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+type.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_mut_do">get_mut_do</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R: drop&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $f: |&<b>mut</b> $Value| -&gt; $R)
@@ -532,7 +544,7 @@ This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then callin
 ) {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) { $f(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)); }
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;$Name&gt;(o, name)) { $f(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)); }
 }
 </code></pre>
 
@@ -547,6 +559,8 @@ This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then callin
 If the field exists, applies <code>$some</code> to an immutable reference to the value; otherwise, returns
 <code>$none</code>.
 This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+type.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_fold">get_fold</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R&gt;($<a href="../sui/object.md#sui_object">object</a>: &<a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $none: $R, $some: |&$Value| -&gt; $R): $R
@@ -566,7 +580,7 @@ This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a 
 ): $R {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) $some(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)) <b>else</b> $none
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;$Name&gt;(o, name)) $some(<a href="../sui/borrow.md#sui_borrow">borrow</a>(o, name)) <b>else</b> $none
 }
 </code></pre>
 
@@ -581,6 +595,8 @@ This is like getting an <code>Option&lt;&Value&gt;</code> then calling <code><a 
 If the field exists, applies <code>$some</code> to a mutable reference to the value; otherwise, returns
 <code>$none</code>.
 This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then calling <code><a href="../std/option.md#std_option_fold">std::option::fold</a></code>.
+Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">EFieldTypeMismatch</a></code> if the field exists, but the value does not have the specified
+type.
 
 
 <pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../sui/dynamic_field.md#sui_dynamic_field_get_mut_fold">get_mut_fold</a>&lt;$Name: <b>copy</b>, drop, store, $Value: store, $R&gt;($<a href="../sui/object.md#sui_object">object</a>: &<b>mut</b> <a href="../sui/object.md#sui_object_UID">sui::object::UID</a>, $name: $Name, $none: $R, $some: |&<b>mut</b> $Value| -&gt; $R): $R
@@ -600,7 +616,7 @@ This is like getting an <code>Option&lt;&<b>mut</b> Value&gt;</code> then callin
 ): $R {
     <b>let</b> o = $<a href="../sui/object.md#sui_object">object</a>;
     <b>let</b> name = $name;
-    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists_with_type">exists_with_type</a>&lt;$Name, $Value&gt;(o, name)) $some(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)) <b>else</b> $none
+    <b>if</b> (<a href="../sui/dynamic_field.md#sui_dynamic_field_exists">exists</a>&lt;$Name&gt;(o, name)) $some(<a href="../sui/dynamic_field.md#sui_dynamic_field_borrow_mut">borrow_mut</a>(o, name)) <b>else</b> $none
 }
 </code></pre>
 

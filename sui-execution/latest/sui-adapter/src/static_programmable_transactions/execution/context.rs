@@ -744,7 +744,11 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             .map(ObjectID::from)
             .collect::<BTreeSet<_>>();
 
-        let ty_linkage = ExecutableLinkage::type_linkage(&tys_addrs, env.linkable_store)?;
+        let ty_linkage = ExecutableLinkage::type_linkage(
+            env.linkage_analysis.config().clone(),
+            &tys_addrs,
+            env.linkable_store,
+        )?;
         env.vm
             .make_vm(
                 &env.linkable_store.package_store,

@@ -1,19 +1,19 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct T {v : u64}
 
-    public new(v: u64): Self.T {
+    public new(v: u64): Self::T {
     label b0:
         return T{v: move(v)};
     }
 
     // valid ==
-    public compare1 (t1: &mut Self.T, t2: &mut Self.T) : bool {
+    public compare1 (t1: &mut Self::T, t2: &mut Self::T) : bool {
     label b0:
         return move(t1) == move(t2);
     }
 
-    public compare2 (t1: &mut Self.T, t2: &mut Self.T) : bool {
+    public compare2 (t1: &mut Self::T, t2: &mut Self::T) : bool {
         let b: bool;
         let x_ref: &u64;
     label b0:

@@ -140,7 +140,6 @@ pub async fn start_service(
                         $handler,
                         SequentialConfig {
                             committer: layer.finish(committer.clone()),
-                            checkpoint_lag: 0,
                             ..Default::default()
                         },
                     )

@@ -1,11 +1,11 @@
 //# publish
 
-module 0x42.M {
+module 0x42::M {
     struct S has drop { f: u64 }
 }
 
 //# run --type-args 0x42::M::S --args 0 0 0
-module 0x6.m {
+module 0x6::m {
 entry foo<T:drop>(s: T, i: &T, m: &mut T) {
     label l0:
     return;

@@ -1,10 +1,10 @@
 //# publish
-module 0x6.M {
+module 0x6::M {
     struct S { b: bool }
 
     foo() {
         // type arg mismatch
-        let x: Self.S<u64>;
+        let x: Self::S<u64>;
     label b0:
         return;
     }

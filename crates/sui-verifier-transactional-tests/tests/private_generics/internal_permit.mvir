@@ -4,56 +4,56 @@
 // tests that internal::permit can only be called on types internal to the module
 
 //# publish
-module 0x0.t {
-    import 0x1.internal;
+module 0x0::t {
+    import 0x1::internal;
 
     struct Internal { dummy_field: bool }
 
     test_success() {
-        let permit: internal.Permit<Self.Internal>;
+        let permit: internal::Permit<Self::Internal>;
         label l0:
-        permit = internal.permit<Self.Internal>();
+        permit = internal::permit<Self::Internal>();
         abort 0;
     }
 }
 
 //# publish
-module 0x0.t {
-    import 0x1.internal;
-    import 0x1.string;
+module 0x0::t {
+    import 0x1::internal;
+    import 0x1::string;
 
     test_fail_foreign_type() {
-        let permit: internal.Permit<string.String>;
+        let permit: internal::Permit<string::String>;
         label l0:
-        permit = internal.permit<string.String>();
+        permit = internal::permit<string::String>();
         abort 0;
     }
 }
 
 //# publish
-module 0x0.t {
-    import 0x1.internal;
+module 0x0::t {
+    import 0x1::internal;
 
     struct Internal { dummy_field: bool }
 
     test_fail_permit_type() {
-        let permit: internal.Permit<internal.Permit<Self.Internal>>;
+        let permit: internal::Permit<internal::Permit<Self::Internal>>;
         label l0:
-        permit = internal.permit<internal.Permit<Self.Internal>>();
+        permit = internal::permit<internal::Permit<Self::Internal>>();
         abort 0;
     }
 }
 
 //# publish
-module 0x0.t {
-    import 0x1.internal;
+module 0x0::t {
+    import 0x1::internal;
 
     struct Internal { dummy_field: bool }
 
     test_fail_permit_type() {
-        let permit: internal.Permit<vector<Self.Internal>>;
+        let permit: internal::Permit<vector<Self::Internal>>;
         label l0:
-        permit = internal.permit<vector<Self.Internal>>();
+        permit = internal::permit<vector<Self::Internal>>();
         abort 0;
     }
 }

@@ -1,13 +1,13 @@
 //# publish
-module 0x42.VTest {
+module 0x42::VTest {
     struct T has drop {fint: u64, fv: bool}
 
-    public new(x: u64, y: bool): Self.T {
+    public new(x: u64, y: bool): Self::T {
     label b0:
         return T{fint: move(x), fv: move(y)};
     }
 
-    public t1(this: &mut Self.T) {
+    public t1(this: &mut Self::T) {
         let x: &mut u64;
     label b0:
         x = &mut move(this).T::fint;
@@ -15,7 +15,7 @@ module 0x42.VTest {
         return;
     }
 
-    public t2(this: &mut Self.T, i: u64) {
+    public t2(this: &mut Self::T, i: u64) {
         let x: &mut u64;
     label b0:
         x = &mut move(this).T::fint;
@@ -23,7 +23,7 @@ module 0x42.VTest {
         return;
     }
 
-    public t3(this: &mut Self.T) {
+    public t3(this: &mut Self::T) {
         let x: &mut bool;
     label b0:
         x = &mut move(this).T::fv;
@@ -31,7 +31,7 @@ module 0x42.VTest {
         return;
     }
 
-    public t4(this: &mut Self.T, i: bool) {
+    public t4(this: &mut Self::T, i: bool) {
         let x: &mut bool;
     label b0:
         x = &mut move(this).T::fv;
@@ -42,15 +42,15 @@ module 0x42.VTest {
 
 //# publish
 
-module 0x43.RTest {
+module 0x43::RTest {
     struct T{fint: u64, fr: bool}
 
-    public new(x: u64, y: bool): Self.T {
+    public new(x: u64, y: bool): Self::T {
     label b0:
         return T{fint: move(x), fr: move(y)};
     }
 
-    public t1(this: &mut Self.T) {
+    public t1(this: &mut Self::T) {
         let x: &mut u64;
     label b0:
         x = &mut move(this).T::fint;
@@ -58,7 +58,7 @@ module 0x43.RTest {
         return;
     }
 
-    public t2(this: &mut Self.T, i: u64) {
+    public t2(this: &mut Self::T, i: u64) {
         let x: &mut u64;
     label b0:
         x = &mut move(this).T::fint;
@@ -66,7 +66,7 @@ module 0x43.RTest {
         return;
     }
 
-    public t3(this: &mut Self.T) {
+    public t3(this: &mut Self::T) {
         let x: &mut bool;
         let z: bool;
     label b0:
@@ -76,7 +76,7 @@ module 0x43.RTest {
         return;
     }
 
-    public t4(this: &mut Self.T, i: bool) {
+    public t4(this: &mut Self::T, i: bool) {
         let x: &mut bool;
     label b0:
         x = &mut move(this).T::fr;
@@ -84,7 +84,7 @@ module 0x43.RTest {
         return;
     }
 
-    public destroy_t(t: Self.T) {
+    public destroy_t(t: Self::T) {
         let fint: u64;
         let fr: bool;
     label b0:
@@ -94,35 +94,35 @@ module 0x43.RTest {
 }
 
 //# run
-module 0x44.m {
+module 0x44::m {
 
-import 0x43.RTest;
-import 0x42.VTest;
+import 0x43::RTest;
+import 0x42::VTest;
 
 entry foo() {
-    let vt: VTest.T;
-    let vref: &mut VTest.T;
-    let rt: RTest.T;
-    let rref: &mut RTest.T;
+    let vt: VTest::T;
+    let vref: &mut VTest::T;
+    let rt: RTest::T;
+    let rref: &mut RTest::T;
 label b0:
-    vt = VTest.new(0, false);
+    vt = VTest::new(0, false);
     vref = &mut vt;
-    rt = RTest.new(0, false);
+    rt = RTest::new(0, false);
     rref = &mut rt;
 
-    VTest.t1(copy(vref));
-    RTest.t1(copy(rref));
+    VTest::t1(copy(vref));
+    RTest::t1(copy(rref));
 
-    VTest.t2(copy(vref), 0);
-    RTest.t2(copy(rref), 0);
+    VTest::t2(copy(vref), 0);
+    RTest::t2(copy(rref), 0);
 
-    VTest.t3(copy(vref));
-    RTest.t3(copy(rref));
+    VTest::t3(copy(vref));
+    RTest::t3(copy(rref));
 
-    VTest.t4(move(vref), false);
-    RTest.t4(move(rref), false);
+    VTest::t4(move(vref), false);
+    RTest::t4(move(rref), false);
 
-    RTest.destroy_t(move(rt));
+    RTest::destroy_t(move(rt));
 
     return;
 }

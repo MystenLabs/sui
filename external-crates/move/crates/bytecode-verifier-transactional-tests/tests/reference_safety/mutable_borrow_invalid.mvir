@@ -1,9 +1,9 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct S { f: u64, g: u64, h: u64 }
 
 
-    t1(root: &mut Self.S, cond: bool) {
+    t1(root: &mut Self::S, cond: bool) {
         let x: &mut u64;
     label b0:
         jump_if (move(cond)) b2;
@@ -19,11 +19,11 @@ module 0x1.M {
 }
 
 //# publish
-module 0x1.M2 {
+module 0x1::M2 {
 
     struct S { f: u64, g: u64, h: u64 }
 
-    t2(root: &mut Self.S, cond: bool) {
+    t2(root: &mut Self::S, cond: bool) {
         let x: &mut u64;
     label b0:
         jump_if (move(cond)) b2;
@@ -33,7 +33,7 @@ module 0x1.M2 {
     label b2:
         x = &mut copy(root).S::f;
     label b3:
-        Self.foo(move(x), &mut copy(root).S::f); // INVALID x and &mut root.f overlap
+        Self::foo(move(x), &mut copy(root).S::f); // INVALID x and &mut root::f overlap
         return;
     }
 

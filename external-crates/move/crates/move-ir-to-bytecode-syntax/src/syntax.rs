@@ -165,20 +165,6 @@ fn parse_name_begin_ty(tokens: &mut Lexer) -> Result<Symbol, ParseError<Loc, any
     Ok(Symbol::from(name))
 }
 
-fn parse_dot_name<'input>(
-    tokens: &mut Lexer<'input>,
-) -> Result<&'input str, ParseError<Loc, anyhow::Error>> {
-    if tokens.peek() != Tok::DotNameValue {
-        return Err(ParseError::InvalidToken {
-            location: current_token_loc(tokens),
-            message: "expected Tok::DotNameValue".to_string(),
-        });
-    }
-    let name = tokens.content();
-    tokens.advance()?;
-    Ok(name)
-}
-
 // AccountAddress: AccountAddress = {
 //     < s: r"0[xX][0-9a-fA-F]+" > => { ... }
 // };
@@ -245,9 +231,7 @@ fn parse_field(tokens: &mut Lexer) -> Result<Field, ParseError<Loc, anyhow::Erro
 fn parse_field_ident(tokens: &mut Lexer) -> Result<FieldIdent, ParseError<Loc, anyhow::Error>> {
     let start_loc = tokens.start_loc();
     let (name, type_actuals) = parse_name_and_type_actuals(tokens)?;
-    // For now, the lexer produces 2 ':' tokens instead of a single '::' token.
-    consume_token(tokens, Tok::Colon)?;
-    consume_token(tokens, Tok::Colon)?;
+    consume_token(tokens, Tok::ColonColon)?;
     let field = parse_field(tokens)?;
     let end_loc = tokens.previous_end_loc();
     Ok(spanned(
@@ -458,7 +442,7 @@ fn parse_rhs_of_binary_exp(
 
 // QualifiedFunctionName : FunctionCall = {
 //     <f: Builtin> => FunctionCall::Builtin(f),
-//     <module_dot_name: DotName> <type_actuals: TypeActuals> =>? { ... }
+//     <m: Name> "::" <n: Name> <type_actuals: TypeActuals> =>? { ... }
 // }
 
 fn parse_qualified_function_name(
@@ -484,14 +468,13 @@ fn parse_qualified_function_name(
             let f = parse_builtin(tokens)?;
             FunctionCall_::Builtin(f)
         }
-        Tok::DotNameValue => {
-            let module_dot_name = parse_dot_name(tokens)?;
-            let type_actuals = parse_type_actuals(tokens)?;
-            let v: Vec<&str> = module_dot_name.split('.').collect();
-            assert!(v.len() == 2);
+        Tok::NameValue => {
+            let module = ModuleName(parse_name(tokens)?);
+            consume_token(tokens, Tok::ColonColon)?;
+            let (name, type_actuals) = parse_name_and_type_actuals(tokens)?;
             FunctionCall_::ModuleFunctionCall {
-                module: ModuleName(Symbol::from(v[0])),
-                name: FunctionName(Symbol::from(v[1])),
+                module,
+                name: FunctionName(name),
                 type_actuals,
             }
         }
@@ -526,20 +509,27 @@ fn parse_borrow_field_(
     // only a simple name token is allowed, and it must not be
     // the start of a pack expression.
     let e = if tokens.peek() == Tok::NameValue {
-        if tokens.lookahead()? != Tok::LBrace {
-            let var = parse_var(tokens)?;
-            return Ok(Exp_::BorrowLocal(mutable, var));
+        match tokens.lookahead()? {
+            Tok::LBrace => {
+                let start_loc = tokens.start_loc();
+                let name = parse_name(tokens)?;
+                let end_loc = tokens.previous_end_loc();
+                let type_actuals: Vec<Type> = vec![];
+                spanned(
+                    tokens.file_hash(),
+                    start_loc,
+                    end_loc,
+                    parse_pack_(tokens, name, type_actuals)?,
+                )
+            }
+            // Module-qualified expression like `M::foo(...)` — parse as a
+            // general expression so field borrow applies to the call result.
+            Tok::ColonColon => parse_unary_exp(tokens)?,
+            _ => {
+                let var = parse_var(tokens)?;
+                return Ok(Exp_::BorrowLocal(mutable, var));
+            }
         }
-        let start_loc = tokens.start_loc();
-        let name = parse_name(tokens)?;
-        let end_loc = tokens.previous_end_loc();
-        let type_actuals: Vec<Type> = vec![];
-        spanned(
-            tokens.file_hash(),
-            start_loc,
-            end_loc,
-            parse_pack_(tokens, name, type_actuals)?,
-        )
     } else {
         parse_unary_exp(tokens)?
     };
@@ -608,6 +598,27 @@ fn parse_call(
 // }
 
 fn parse_call_or_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error>> {
+    let is_module_call = tokens.peek() == Tok::NameValue && tokens.lookahead()? == Tok::ColonColon;
+    if is_module_call {
+        let f = parse_qualified_function_name(tokens)?;
+        return if tokens.peek() == Tok::LBrace {
+            let FunctionCall_::ModuleFunctionCall {
+                module: ModuleName(enum_name),
+                name: FunctionName(variant_name),
+                type_actuals,
+            } = f.value
+            else {
+                return Err(ParseError::InvalidToken {
+                    location: f.loc,
+                    message: "Invalid variant pack call".to_string(),
+                });
+            };
+            parse_variant_pack_(tokens, enum_name, variant_name, type_actuals)
+        } else {
+            let exp = parse_call_or_term(tokens)?;
+            Ok(Exp_::FunctionCall(f, Box::new(exp)))
+        };
+    }
     match tokens.peek() {
         Tok::VecPack(_)
         | Tok::VecLen
@@ -627,26 +638,6 @@ fn parse_call_or_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyho
             let f = parse_qualified_function_name(tokens)?;
             let exp = parse_call_or_term(tokens)?;
             Ok(Exp_::FunctionCall(f, Box::new(exp)))
-        }
-        Tok::DotNameValue => {
-            let f = parse_qualified_function_name(tokens)?;
-            if tokens.peek() == Tok::LBrace {
-                let FunctionCall_::ModuleFunctionCall {
-                    module: ModuleName(enum_name),
-                    name: FunctionName(variant_name),
-                    type_actuals,
-                } = f.value
-                else {
-                    return Err(ParseError::InvalidToken {
-                        location: f.loc,
-                        message: "Invalid variant pack call".to_string(),
-                    });
-                };
-                parse_variant_pack_(tokens, enum_name, variant_name, type_actuals)
-            } else {
-                let exp = parse_call_or_term(tokens)?;
-                Ok(Exp_::FunctionCall(f, Box::new(exp)))
-            }
         }
         _ => parse_term_(tokens),
     }
@@ -768,19 +759,17 @@ fn parse_term_(tokens: &mut Lexer) -> Result<Exp_, ParseError<Loc, anyhow::Error
     }
 }
 
-// QualifiedStructIdent : QualifiedStructIdent = {
-//     <module_dot_struct: DotName> =>? { ... }
+// QualifiedStructIdent : (QualifiedStructIdent, Vec<Type>) = {
+//     <m: Name> "::" <n_and_tys: NameAndTypeActuals> =>? { ... }
 // }
 
 fn parse_qualified_struct_ident(
     tokens: &mut Lexer,
-) -> Result<QualifiedDatatypeIdent, ParseError<Loc, anyhow::Error>> {
-    let module_dot_struct = parse_dot_name(tokens)?;
-    let v: Vec<&str> = module_dot_struct.split('.').collect();
-    assert!(v.len() == 2);
-    let m: ModuleName = ModuleName(Symbol::from(v[0]));
-    let n: DatatypeName = DatatypeName(Symbol::from(v[1]));
-    Ok(QualifiedDatatypeIdent::new(m, n))
+) -> Result<(QualifiedDatatypeIdent, Vec<Type>), ParseError<Loc, anyhow::Error>> {
+    let m = ModuleName(parse_name(tokens)?);
+    consume_token(tokens, Tok::ColonColon)?;
+    let (n_sym, tys) = parse_name_and_type_actuals(tokens)?;
+    Ok((QualifiedDatatypeIdent::new(m, DatatypeName(n_sym)), tys))
 }
 
 // ModuleName: ModuleName = {
@@ -1072,13 +1061,42 @@ fn parse_statement_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, an
             ))
         }
         Tok::NameValue => {
-            // This could be either an LValue for an assignment or
-            // NameAndTypeActuals (with no type_actuals) for an unpack.
-            if tokens.lookahead()? == Tok::LBrace {
-                let name = parse_name(tokens)?;
-                parse_unpack_(tokens, name, vec![])
-            } else {
-                parse_assign_(tokens)
+            // This could be: an LValue for an assignment, a NameAndTypeActuals
+            // (with no type_actuals) for an unpack, or a module-qualified
+            // function call / variant unpack of the form `M::foo(...)` /
+            // `M::Variant { ... } = e`.
+            match tokens.lookahead()? {
+                Tok::LBrace => {
+                    let name = parse_name(tokens)?;
+                    parse_unpack_(tokens, name, vec![])
+                }
+                Tok::ColonColon => {
+                    let start_loc = tokens.start_loc();
+                    let f = parse_qualified_function_name(tokens)?;
+                    if tokens.peek() == Tok::LBrace {
+                        let FunctionCall_::ModuleFunctionCall {
+                            module: ModuleName(enum_name),
+                            name: FunctionName(variant_name),
+                            type_actuals,
+                        } = f.value
+                        else {
+                            return Err(ParseError::InvalidToken {
+                                location: f.loc,
+                                message: "Invalid variant unpack call".to_string(),
+                            });
+                        };
+                        parse_variant_unpack_(
+                            tokens,
+                            enum_name,
+                            variant_name,
+                            type_actuals,
+                            UnpackType::ByValue,
+                        )
+                    } else {
+                        Ok(Statement_::Exp(Box::new(parse_call(tokens, f, start_loc)?)))
+                    }
+                }
+                _ => parse_assign_(tokens),
             }
         }
         Tok::Return => {
@@ -1116,32 +1134,10 @@ fn parse_statement_(tokens: &mut Lexer) -> Result<Statement_, ParseError<Loc, an
         | Tok::ToU32
         | Tok::ToU64
         | Tok::ToU128
-        | Tok::DotNameValue
         | Tok::ToU256 => {
             let start_loc = tokens.start_loc();
             let f = parse_qualified_function_name(tokens)?;
-            if tokens.peek() == Tok::LBrace {
-                let FunctionCall_::ModuleFunctionCall {
-                    module: ModuleName(enum_name),
-                    name: FunctionName(variant_name),
-                    type_actuals,
-                } = f.value
-                else {
-                    return Err(ParseError::InvalidToken {
-                        location: f.loc,
-                        message: "Invalid variant unpack call".to_string(),
-                    });
-                };
-                parse_variant_unpack_(
-                    tokens,
-                    enum_name,
-                    variant_name,
-                    type_actuals,
-                    UnpackType::ByValue,
-                )
-            } else {
-                Ok(Statement_::Exp(Box::new(parse_call(tokens, f, start_loc)?)))
-            }
+            Ok(Statement_::Exp(Box::new(parse_call(tokens, f, start_loc)?)))
         }
         x @ (Tok::Amp | Tok::AmpMut) => {
             let start_loc = current_token_loc(tokens);
@@ -1375,11 +1371,6 @@ fn parse_type(tokens: &mut Lexer) -> Result<Type, ParseError<Loc, anyhow::Error>
             consume_token(tokens, Tok::Greater)?;
             Type_::Vector(Box::new(ty))
         }
-        Tok::DotNameValue => {
-            let s = parse_qualified_struct_ident(tokens)?;
-            let tys = parse_type_actuals(tokens)?;
-            Type_::Datatype(s, tys)
-        }
         Tok::Amp => {
             tokens.advance()?;
             Type_::Reference(false, Box::new(parse_type(tokens)?))
@@ -1387,6 +1378,10 @@ fn parse_type(tokens: &mut Lexer) -> Result<Type, ParseError<Loc, anyhow::Error>
         Tok::AmpMut => {
             tokens.advance()?;
             Type_::Reference(true, Box::new(parse_type(tokens)?))
+        }
+        Tok::NameValue if tokens.lookahead()? == Tok::ColonColon => {
+            let (s, tys) = parse_qualified_struct_ident(tokens)?;
+            Type_::Datatype(s, tys)
         }
         Tok::NameValue => Type_::TypeParameter(TypeVar_(parse_name(tokens)?)),
         t => {
@@ -1810,20 +1805,12 @@ fn parse_variant_decl(
 }
 
 // ModuleIdent: ModuleIdent = {
-//     <a: AccountAddress> "." <m: ModuleName> => ModuleIdent::new(m, a),
+//     <a: AccountAddress> "::" <m: ModuleName> => ModuleIdent::new(m, a),
 // }
 
 fn parse_module_ident(tokens: &mut Lexer) -> Result<ModuleIdent, ParseError<Loc, anyhow::Error>> {
-    if tokens.peek() == Tok::DotNameValue {
-        let start_loc = current_token_loc(tokens);
-        let module_dot_name = parse_dot_name(tokens)?;
-        let v: Vec<&str> = module_dot_name.split('.').collect();
-        assert!(v.len() == 2);
-        let address = parse_address_literal(tokens, v[0], start_loc)?;
-        return Ok(ModuleIdent::new(ModuleName(Symbol::from(v[1])), address));
-    }
     let a = parse_account_address(tokens)?;
-    consume_token(tokens, Tok::Period)?;
+    consume_token(tokens, Tok::ColonColon)?;
     let m = parse_module_name(tokens)?;
     Ok(ModuleIdent::new(m, a))
 }

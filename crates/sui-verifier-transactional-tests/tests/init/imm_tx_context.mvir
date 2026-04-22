@@ -4,9 +4,9 @@
 // TxContext can be immutable, even for init
 
 //# publish
-module 0x0.m {
-    import 0x2.tx_context;
-    init(ctx: &tx_context.TxContext) {
+module 0x0::m {
+    import 0x2::tx_context;
+    init(ctx: &tx_context::TxContext) {
         label l0:
         abort 0;
     }

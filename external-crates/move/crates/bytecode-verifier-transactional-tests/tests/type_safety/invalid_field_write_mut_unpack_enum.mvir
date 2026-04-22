@@ -1,16 +1,16 @@
 //# publish
-module 0x42.Test {
+module 0x42::Test {
     enum T{V { fr: bool} }
 
-    public new(): Self.T {
+    public new(): Self::T {
     label b0:
-        return T.V{fr: false};
+        return T::V{fr: false};
     }
 
-    public no(this: &mut Self.T) {
+    public no(this: &mut Self::T) {
         let x: &mut bool;
     label b0:
-        &mut T.V {fr: x} = move(this);
+        &mut T::V {fr: x} = move(this);
         // type mismatch on assignment/mutation
         *move(x) = 0;
         return;
@@ -18,18 +18,18 @@ module 0x42.Test {
 }
 
 //# publish
-module 0x42.Test {
+module 0x42::Test {
     enum T<B> {V { fr: B } }
 
-    public new(): Self.T<bool> {
+    public new(): Self::T<bool> {
     label b0:
-        return T.V<bool> {fr: false};
+        return T::V<bool> {fr: false};
     }
 
-    public no(this: &mut Self.T<bool>) {
+    public no(this: &mut Self::T<bool>) {
         let x: &mut bool;
     label b0:
-        &mut T.V<bool> {fr: x} = move(this);
+        &mut T::V<bool> {fr: x} = move(this);
         // type mismatch on assignment/mutation
         *move(x) = 0;
         return;

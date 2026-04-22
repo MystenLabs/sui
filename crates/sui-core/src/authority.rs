@@ -2402,13 +2402,13 @@ impl AuthorityState {
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
 
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    &inner_temp_store,
-                    self.get_backing_package_store(),
-                )));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(PackageStoreWithFallback::new(
+                &inner_temp_store,
+                self.get_backing_package_store(),
+            )),
+        );
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let object_changes = Vec::new();
 
@@ -2956,13 +2956,13 @@ impl AuthorityState {
             vec![]
         };
 
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    &inner_temp_store,
-                    self.get_backing_package_store(),
-                )));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(PackageStoreWithFallback::new(
+                &inner_temp_store,
+                self.get_backing_package_store(),
+            )),
+        );
 
         DevInspectResults::new(
             effects,
@@ -3129,13 +3129,13 @@ impl AuthorityState {
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<ObjectIndexChanges> {
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    inner_temporary_store,
-                    backing_package_store,
-                )));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(PackageStoreWithFallback::new(
+                inner_temporary_store,
+                backing_package_store,
+            )),
+        );
 
         let modified_at_version = effects
             .modified_at_versions()
@@ -3576,13 +3576,13 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         inner_temporary_store: &InnerTemporaryStore,
     ) -> SuiResult<SuiTransactionBlockEvents> {
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    inner_temporary_store,
-                    backing_package_store,
-                )));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(PackageStoreWithFallback::new(
+                inner_temporary_store,
+                backing_package_store,
+            )),
+        );
         SuiTransactionBlockEvents::try_from(
             transaction_events,
             digest,
@@ -3655,10 +3655,14 @@ impl AuthorityState {
         let layout = if let (LayoutGenerationOption::Generate, Some(move_obj)) =
             (request.generate_layout, object.data.try_as_move())
         {
+            let epoch_store = self.load_epoch_store_one_call_per_task();
             Some(into_struct_layout(
-                self.load_epoch_store_one_call_per_task()
+                epoch_store
                     .executor()
-                    .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
+                    .type_layout_resolver(
+                        epoch_store.protocol_config(),
+                        Box::new(self.get_backing_package_store().as_ref()),
+                    )
                     .get_annotated_layout(&move_obj.type_().clone().into())?,
             )?)
         } else {
@@ -4084,9 +4088,10 @@ impl AuthorityState {
 
         let mut new_owners = vec![];
         let mut new_dynamic_fields = vec![];
-        let mut layout_resolver = epoch_store
-            .executor()
-            .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(self.get_backing_package_store().as_ref()),
+        );
         for o in genesis_objects.iter() {
             match o.owner {
                 Owner::AddressOwner(addr) | Owner::ConsensusAddressOwner { owner: addr, .. } => {
@@ -4810,11 +4815,15 @@ impl AuthorityState {
             .data
             .try_as_move()
             .map(|object| {
+                let epoch_store = self.load_epoch_store_one_call_per_task();
                 into_struct_layout(
-                    self.load_epoch_store_one_call_per_task()
+                    epoch_store
                         .executor()
                         // TODO(cache) - must read through cache
-                        .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
+                        .type_layout_resolver(
+                            epoch_store.protocol_config(),
+                            Box::new(self.get_backing_package_store().as_ref()),
+                        )
                         .get_annotated_layout(&object.type_().clone().into())?,
                 )
             })
@@ -5431,7 +5440,7 @@ impl AuthorityState {
         let backing_store = self.get_backing_package_store().as_ref();
         let mut layout_resolver = epoch_store
             .executor()
-            .type_layout_resolver(Box::new(backing_store));
+            .type_layout_resolver(epoch_store.protocol_config(), Box::new(backing_store));
         let mut events = vec![];
         for (e, tx_digest, event_seq, timestamp) in stored_events.into_iter() {
             events.push(SuiEvent::try_from(

@@ -23,7 +23,6 @@ indexmap.workspace = true
 lasso.workspace = true
 lru.workspace = true
 parking_lot.workspace = true
-petgraph.workspace = true
 quick_cache.workspace = true
 serde.workspace = true
 sha2.workspace = true
@@ -38,7 +37,6 @@ move-bytecode-verifier = { path = "../move-bytecode-verifier" }
 move-core-types.workspace = true
 move-trace-format.workspace = true
 move-vm-config.workspace = true
-move-vm-profiler.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

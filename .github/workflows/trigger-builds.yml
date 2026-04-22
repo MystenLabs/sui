@@ -16,19 +16,6 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref_name }}
 
 jobs:
-  release-binaries:
-    name: Trigger Release binaries builds
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch Release binaries builds in MystenLabs/sui-operations
-        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
-        with:
-          repository: MystenLabs/sui-operations
-          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
-          event-type: build-release-binaries
-          client-payload: '{"sui_commit": "${{ github.sha }}", "build_with_tidehunter": true}'
-
   # Tag all sui images with branch name, so that they can be easily found
   tag-docker-hub-images:
     name: Tag sui docker images in DockerHub

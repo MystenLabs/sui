@@ -17,7 +17,6 @@ lru.workspace = true
 mysten-common.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 serde.workspace = true
-sui-config.workspace = true
 sui-types.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true

@@ -1,5 +1,5 @@
 //# publish
-module 0x5.M {
+module 0x5::M {
 
     public new(): vector<u64> {
         let v: vector<u64>;
@@ -23,14 +23,14 @@ module 0x5.M {
 }
 
 //# publish
-module 0x6.test {
-    import 0x5.M;
+module 0x6::test {
+    import 0x5::M;
     public test() {
         let v: vector<u64>;
     label b0:
-        v = M.new();
-        M.borrow_and_modify(&mut v);
-        M.verify_effects(& v);
+        v = M::new();
+        M::borrow_and_modify(&mut v);
+        M::verify_effects(& v);
         return;
     }
 }

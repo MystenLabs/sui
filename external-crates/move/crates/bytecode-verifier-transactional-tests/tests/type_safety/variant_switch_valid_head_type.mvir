@@ -1,8 +1,8 @@
 //# publish
-module 0x2.A {
+module 0x2::A {
     enum Foo<T: drop> has drop { V { x: T } }
 
-    foo(x: Self.Foo<u64>) {
+    foo(x: Self::Foo<u64>) {
     label b0:
         // valid
         variant_switch Foo (&x) {
@@ -14,10 +14,10 @@ module 0x2.A {
 }
 
 //# publish
-module 0x2.B {
+module 0x2::B {
     enum Foo<T> { V { x: T } }
 
-    foo(x: &Self.Foo<u64>) {
+    foo(x: &Self::Foo<u64>) {
     label b0:
         // valid
         variant_switch Foo copy(x) {
@@ -29,10 +29,10 @@ module 0x2.B {
 }
 
 //# publish
-module 0x2.C {
+module 0x2::C {
     enum Foo<T> { V { x: T } }
 
-    foo(x: &mut Self.Foo<u64>) {
+    foo(x: &mut Self::Foo<u64>) {
     label b0:
         // mut ref is not allowed
         variant_switch Foo freeze(copy(x)) {

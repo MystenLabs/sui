@@ -1,5 +1,5 @@
 //# publish
-module 0x6.A {
+module 0x6::A {
     two(): u8 * u8{
     label b0:
         return 0u8, 255u8;
@@ -8,14 +8,14 @@ module 0x6.A {
     pop() {
     label b0:
         // balance stack, equal pops and values
-        _, _  = Self.two();
+        _, _  = Self::two();
         return;
     }
 }
 
 
 //# publish
-module 0x7.B {
+module 0x7::B {
     two(): u16 * u16{
     label b0:
         return 0u16, 65535u16;
@@ -24,13 +24,13 @@ module 0x7.B {
     pop() {
     label b0:
         // balance stack, equal pops and values
-        _, _ = Self.two();
+        _, _ = Self::two();
         return;
     }
 }
 
 //# publish
-module 0x8.C {
+module 0x8::C {
     two(): u32 * u32{
     label b0:
         return 0u32, 4294967295u32;
@@ -39,13 +39,13 @@ module 0x8.C {
     pop() {
     label b0:
         // balance stack, equal pops and values
-        _, _ = Self.two();
+        _, _ = Self::two();
         return;
     }
 }
 
 //# publish
-module 0x9.D {
+module 0x9::D {
     two(): u64 * u64{
     label b0:
         return 0u64, 18446744073709551615u64;
@@ -54,13 +54,13 @@ module 0x9.D {
     pop() {
     label b0:
         // balance stack, equal pops and values
-        _, _ = Self.two();
+        _, _ = Self::two();
         return;
     }
 }
 
 //# publish
-module 0xa.E {
+module 0xa::E {
     two(): u128 * u128{
     label b0:
         return 0u128, 340282366920938463463374607431768211455u128;
@@ -69,13 +69,13 @@ module 0xa.E {
     pop() {
     label b0:
         // balance stack, equal pops and values
-        _, _ = Self.two();
+        _, _ = Self::two();
         return;
     }
 }
 
 //# publish
-module 0xb.F {
+module 0xb::F {
     two(): u256 * u256{
     label b0:
         return 0u256, 115792089237316195423570985008687907853269984665640564039457584007913129639935u256;
@@ -84,7 +84,7 @@ module 0xb.F {
     pop() {
     label b0:
         // balance stack, equal pops and values
-        _, _ = Self.two();
+        _, _ = Self::two();
         return;
     }
 }

@@ -12,19 +12,12 @@ move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true
 move-ir-types.workspace = true
 move-core-types.workspace = true
-move-disassembler.workspace = true
-move-command-line-common.workspace = true
 move-symbol-pool.workspace = true
 indexmap = { workspace = true, features = ["serde"] }
 
 anyhow.workspace = true
-bcs.workspace = true
-codespan-reporting.workspace = true
-codespan.workspace = true
-num.workspace = true
 pretty_simple.workspace = true
 serde.workspace = true
-vfs.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

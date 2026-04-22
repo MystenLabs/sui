@@ -1,9 +1,9 @@
 //# publish
 
-module 0x6.M {
+module 0x6::M {
     struct Box<T> { x: T }
 
-    unbox<T>(b: Self.Box<T>): T {
+    unbox<T>(b: Self::Box<T>): T {
         let x: T;
     label b0:
         Box<T> { x: x } = move(b);
@@ -14,7 +14,7 @@ module 0x6.M {
     label b0:
         jump_if (copy(n) == 0) b2;
     label b1:
-        return Self.unbox<T>(Self.f<Self.Box<T>>(copy(n) - 1, Box<T> { x: move(x) }));
+        return Self::unbox<T>(Self::f<Self::Box<T>>(copy(n) - 1, Box<T> { x: move(x) }));
     label b2:
         return move(x);
     }

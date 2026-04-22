@@ -1,17 +1,17 @@
 //# publish
-module 0x1.woo {
+module 0x1::woo {
     enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
     // This loop is fine since `y`'s reference does escape the loop, but then is killed off right before the write.
-    h(e: &mut Self.X) {
+    h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let counter: &u64;
         label b0:
-            &mut X.Two { x: x, y: y} = copy(e);
+            &mut X::Two { x: x, y: y} = copy(e);
             *move(x) = 1;
             *copy(y) = 3;
             counter = freeze(move(y));
@@ -24,12 +24,12 @@ module 0x1.woo {
             return;
         label c2:
             _ = move(counter);
-            *copy(e) = X.One { x: 2 };
+            *copy(e) = X::One { x: 2 };
         label c3:
-            &mut X.One { x: x } = copy(e);
+            &mut X::One { x: x } = copy(e);
             *move(x) = 10;
         label c4:
-            &mut X.Two { x: x, y: y} = copy(e);
+            &mut X::Two { x: x, y: y} = copy(e);
             *move(x) = 1;
             *copy(y) = *copy(y) - 1;
             counter = freeze(move(y));
@@ -39,19 +39,19 @@ module 0x1.woo {
 }
 
 //# publish
-module 0x1.o {
+module 0x1::o {
     enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
     // This loop is fine since `y`'s reference does not escape the loop
-    h(e: &mut Self.X) {
+    h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let counter: u64;
         label b0:
-            &mut X.Two { x: x, y: y} = copy(e);
+            &mut X::Two { x: x, y: y} = copy(e);
             *move(x) = 1;
             *copy(y) = 3;
             counter = *move(y);
@@ -63,12 +63,12 @@ module 0x1.o {
         label c1:
             return;
         label c2:
-            *copy(e) = X.One { x: 2 };
+            *copy(e) = X::One { x: 2 };
         label c3:
-            &mut X.One { x: x } = copy(e);
+            &mut X::One { x: x } = copy(e);
             *move(x) = 10;
         label c4:
-            &mut X.Two { x: x, y: y} = copy(e);
+            &mut X::Two { x: x, y: y} = copy(e);
             *move(x) = 1;
             *copy(y) = *copy(y) - 1;
             counter = *move(y);
@@ -78,18 +78,18 @@ module 0x1.o {
 }
 
 //# publish
-module 0x1.k {
+module 0x1::k {
     enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
     // Valid since we don't write to `e` in the loop.
-    h(e: &mut Self.X) {
+    h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         label b0:
-            &mut X.Two { x: x, y: y} = copy(e);
+            &mut X::Two { x: x, y: y} = copy(e);
             *move(x) = 1;
             *copy(y) = 3;
         label looper:
@@ -99,10 +99,10 @@ module 0x1.k {
         label c1:
             return;
         label c3:
-            &mut X.One { x: x } = copy(e);
+            &mut X::One { x: x } = copy(e);
             *move(x) = 10;
         label c4:
-            &mut X.Two { x: x, y: y} = copy(e);
+            &mut X::Two { x: x, y: y} = copy(e);
             *move(x) = 1;
             *copy(y) = *copy(y) - 1;
             jump looper;

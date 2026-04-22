@@ -1,8 +1,8 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct S { f: u64 }
 
-    t1(root: &mut Self.S, cond: bool) {
+    t1(root: &mut Self::S, cond: bool) {
         let u: u64;
         let x: &u64;
     label b0:

@@ -7,7 +7,6 @@ publish = false
 edition = "2024"
 
 [dependencies]
-async-trait.workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 fastcrypto.workspace = true
@@ -15,25 +14,16 @@ move-binary-format.workspace = true
 prost.workspace = true
 zstd.workspace = true
 move-core-types.workspace = true
-once_cell.workspace = true
 rand.workspace = true
-serde.workspace = true
-tracing.workspace = true
 prometheus.workspace = true
-futures.workspace = true
 sui-core.workspace = true
 
 move-bytecode-utils.workspace = true
-shared-crypto.workspace = true
 sui-config.workspace = true
-sui-framework.workspace = true
 sui-framework-snapshot.workspace = true
-sui-keys.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc.workspace = true
-sui-storage.workspace = true
 sui-types.workspace = true
-sui-genesis-builder.workspace = true
 sui-execution.workspace = true
 sui-swarm-config.workspace = true
 sui-transaction-checks.workspace = true

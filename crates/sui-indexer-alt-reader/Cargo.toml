@@ -21,7 +21,6 @@ futures.workspace = true
 http.workspace = true
 prost-types.workspace = true
 prometheus.workspace = true
-serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tonic = { workspace = true, features = ["tls-native-roots"] }
@@ -40,7 +39,6 @@ sui-kvstore.workspace = true
 sui-package-resolver.workspace = true
 sui-pg-db.workspace = true
 sui-rpc.workspace = true
-sui-rpc-api.workspace = true
 sui-sdk-types.workspace = true
 sui-sql-macro.workspace = true
 sui-types.workspace = true

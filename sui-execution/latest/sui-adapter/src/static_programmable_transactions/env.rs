@@ -151,6 +151,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         })?;
         let objects = tag.all_addresses();
         let tag_linkage = ExecutableLinkage::type_linkage(
+            self.linkage_analysis.config().clone(),
             objects.into_iter().map(ObjectID::from),
             self.linkable_store,
         )?;
@@ -168,6 +169,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         })?;
         let objects = tag.all_addresses();
         let tag_linkage = ExecutableLinkage::type_linkage(
+            self.linkage_analysis.config().clone(),
             objects.into_iter().map(ObjectID::from),
             self.linkable_store,
         )?;
@@ -424,6 +426,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         let objects = tag.all_addresses();
 
         let tag_linkage = ExecutableLinkage::type_linkage(
+            self.linkage_analysis.config().clone(),
             objects.iter().map(|a| ObjectID::from(*a)),
             self.linkable_store,
         )?;

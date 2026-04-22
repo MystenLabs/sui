@@ -1,12 +1,12 @@
 //# publish
-module 0x1.test {
+module 0x1::test {
     struct HotPotato { value: u64 }
-    public get_hot_potato(): Self.HotPotato {
+    public get_hot_potato(): Self::HotPotato {
         label l0:
         return HotPotato { value: 42 };
     }
 
-    public destroy_hot_potato(potato: Self.HotPotato) {
+    public destroy_hot_potato(potato: Self::HotPotato) {
         label l0:
         HotPotato {} = move(potato);
         _ = ();
@@ -15,12 +15,12 @@ module 0x1.test {
 }
 
 //# run
-module 0x42.m {
-import 0x1.test;
+module 0x42::m {
+import 0x1::test;
 // check valid breaks in control flow check
 entry foo() {
-    let hot_potato_1: test.HotPotato;
-    let hot_potato_2: test.HotPotato;
+    let hot_potato_1: test::HotPotato;
+    let hot_potato_2: test::HotPotato;
 label start:
     jump end;
     return; return; return; return; return; return; return; return; return; return; return; return;
@@ -5485,10 +5485,10 @@ label start:
     return; return; return; return; return; return; return; return; return; return; return; return;
     return; return; return; return;
 label code:
-    hot_potato_1 = test.get_hot_potato();
-    hot_potato_2 = test.get_hot_potato();
+    hot_potato_1 = test::get_hot_potato();
+    hot_potato_2 = test::get_hot_potato();
     hot_potato_1 = move(hot_potato_2);
-    test.destroy_hot_potato(move(hot_potato_1));
+    test::destroy_hot_potato(move(hot_potato_1));
     return;
 label end:
     jump code;
