@@ -4,10 +4,11 @@
 use std::sync::Arc;
 
 use prometheus::{
-    Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    exponential_buckets, register_histogram_vec_with_registry, register_histogram_with_registry,
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
+    GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    exponential_buckets, register_gauge_vec_with_registry, register_histogram_vec_with_registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
+    register_int_gauge_with_registry,
 };
 
 use crate::network::metrics::NetworkMetrics;
@@ -168,6 +169,9 @@ pub(crate) struct NodeMetrics {
     pub(crate) quorum_receive_latency: Histogram,
     pub(crate) block_receive_delay: IntCounterVec,
     pub(crate) reputation_scores: IntGaugeVec,
+    pub(crate) leader_schedule_total_scores: IntGaugeVec,
+    pub(crate) leader_schedule_normalized_scores: GaugeVec,
+    pub(crate) leader_schedule_last_num_leaders: IntGauge,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
     pub(crate) block_suspensions: IntCounterVec,
@@ -617,6 +621,23 @@ impl NodeMetrics {
                 "reputation_scores",
                 "Reputation scores for each authority",
                 &["authority"],
+                registry,
+            ).unwrap(),
+            leader_schedule_total_scores: register_int_gauge_vec_with_registry!(
+                "leader_schedule_total_scores",
+                "LeaderScheduleV3 running total score per authority over the scoring window",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            leader_schedule_normalized_scores: register_gauge_vec_with_registry!(
+                "leader_schedule_normalized_scores",
+                "LeaderScheduleV3 per-authority total score divided by total leader stake in the scoring window",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            leader_schedule_last_num_leaders: register_int_gauge_with_registry!(
+                "leader_schedule_last_num_leaders",
+                "LeaderScheduleV3 number of leader-round blocks in the most recently scored commit",
                 registry,
             ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(

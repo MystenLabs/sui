@@ -38,6 +38,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     leader_schedule::LeaderSchedule,
+    leader_schedule_v3::LeaderScheduleV3,
     proposer::{Proposer, ValidatorProposer},
     round_tracker::RoundTracker,
     transaction::TransactionConsumer,
@@ -64,6 +65,8 @@ pub(crate) struct Core {
     /// The consensus leader schedule to be used to resolve the leader for a
     /// given round.
     leader_schedule: Arc<LeaderSchedule>,
+    /// Scores validators using the DAG and schedules leader for next commit, in a sliding-window.
+    leader_schedule_v3: Option<LeaderScheduleV3>,
     /// The commit observer is responsible for observing the commits and collecting
     /// + sending subdags over the consensus output channel.
     commit_observer: CommitObserver,
@@ -93,6 +96,16 @@ impl Core {
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
         let number_of_leaders = context.protocol_config.num_leaders_per_round().unwrap_or(1);
+
+        let leader_schedule_v3 = if context.protocol_config.enable_v3() {
+            Some(LeaderScheduleV3::from_store(
+                context.clone(),
+                dag_state.clone(),
+            ))
+        } else {
+            None
+        };
+
         let committer = Arc::new(
             UniversalCommitterBuilder::new(
                 context.clone(),
@@ -157,6 +170,7 @@ impl Core {
             last_signaled_round,
             last_decided_leader,
             leader_schedule,
+            leader_schedule_v3,
             block_manager,
             committer,
             commit_observer,
@@ -178,6 +192,16 @@ impl Core {
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
         let number_of_leaders = context.protocol_config.num_leaders_per_round().unwrap_or(1);
+
+        let leader_schedule_v3 = if context.protocol_config.enable_v3() {
+            Some(LeaderScheduleV3::from_store(
+                context.clone(),
+                dag_state.clone(),
+            ))
+        } else {
+            None
+        };
+
         let committer = Arc::new(
             UniversalCommitterBuilder::new(
                 context.clone(),
@@ -197,6 +221,7 @@ impl Core {
             last_signaled_round,
             last_decided_leader,
             leader_schedule,
+            leader_schedule_v3,
             block_manager,
             committer,
             commit_observer,
@@ -706,6 +731,14 @@ impl Core {
                 committed_block_refs,
                 self.dag_state.read().gc_round(),
             );
+        }
+
+        // Only enabled in v3: use v3 leader schedule to score validators.
+        if let Some(schedule) = self.leader_schedule_v3.as_mut() {
+            for sub_dag in &committed_sub_dags {
+                schedule.add_commit(sub_dag.clone());
+            }
+            schedule.next_commit_leader_schedule();
         }
 
         Ok(committed_sub_dags)
