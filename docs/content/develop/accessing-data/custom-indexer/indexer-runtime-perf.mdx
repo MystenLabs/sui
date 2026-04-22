@@ -5,13 +5,13 @@ description: Learn how to optimize Sui custom indexer performance through runtim
 keywords: [ sui indexer performance, indexer optimization, tokio console debugging, prometheus metrics, database tuning, checkpoint ingestion, data pruning, indexer configuration, performance monitoring, sui blockchain indexing ]
 ---
 
-Proper configuration and resource monitoring delivers the most performant custom indexer possible. For example:
+Configuration and resource monitoring deliver performant custom indexers. For example:
 
 - Runtime configuration options for ingestion, database connections, and pipeline selection, as well as purposeful use of debugging tools like `tokio_console` help dial in your indexer performance. 
 
-- A sensible strategy targeting efficient data pruning for your tables keeps them performant over time. 
+- Efficient data pruning keeps your tables performant over time. 
 
-- Following best practices for exposing and extending Prometheus metrics helps you keep track of indexer performance. 
+- Expose and extend Prometheus metrics to track indexer performance. 
 
 Together, these techniques help you run indexers that are fast, resource-efficient, and easier to monitor in both development and production.
 
@@ -82,13 +82,13 @@ let db_args = DbArgs {
 
 **Tuning guidelines:**
 
-- `db_connection_pool_size`: Size based on `write_concurrency` across all pipelines.
+- `db_connection_pool_size`: Set size based on `write_concurrency` across all pipelines.
 - `db_connection_timeout_ms`: Reduce for faster failure detection in high-load scenarios.
 - `db_statement_timeout_ms`: Set based on expected query complexity and database performance.
 
 ### Command-line arguments
 
-Include the following command-line arguments to help focus processing. These values are for demonstration. Use values that make sense to your environment and goals. 
+Use the following command-line arguments to focus processing. These values are for demonstration. Use values that match your environment and goals. 
 
 ```sh
 # Checkpoint range control
@@ -130,7 +130,7 @@ The Tokio console is particularly useful for:
 
 ### Setup instructions
 
-Consult the [README](https://github.com/tokio-rs/console/blob/main/README.md) in the Tokio GitHub repo for additional information.
+Read the [README](https://github.com/tokio-rs/console/blob/main/README.md) in the Tokio GitHub repo for additional information.
 
 1. Add dependencies
 
@@ -190,7 +190,7 @@ For detailed information about the console dashboard, available views, warnings,
 
 ### Production considerations
 
-`tokio-console` introduces runtime overhead and should be used carefully in production. While it's safe to use regularly during development and staging, production usage requires careful evaluation. Before enabling in production, you should run performance benchmarks with and without Tokio console enabled to measure the impact on your specific workload. Consider enabling only during maintenance windows or targeted troubleshooting sessions while monitoring system resources.
+`tokio-console` introduces runtime overhead. Use it carefully in production. Use it regularly during development and staging. Production usage requires careful evaluation. Before enabling in production, run performance benchmarks with and without Tokio console enabled to measure the impact on your specific workload. Consider enabling only during maintenance windows or targeted troubleshooting sessions while monitoring system resources.
 
 ## Metrics
 
@@ -211,7 +211,7 @@ Key metric categories include:
 
 By default, metrics are served on `0.0.0.0:9184/metrics` in [Prometheus format](https://prometheus.io/docs/develop/sui-architecture/object-model). You can override this address:
 
-- Via the command line:
+- Through the command line:
 
     ```sh
     $ cargo run --metrics-address "0.0.0.0:8080"
