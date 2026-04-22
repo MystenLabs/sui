@@ -5,7 +5,6 @@ keywords: [ programmable transaction blocks, transaction blocks, program transac
 ---
 
 Transactions on Sui are composed of groups of commands that execute on inputs to define the result of the transaction. Referred to as **programmable transaction blocks (PTBs)**, these groups of commands define all user transactions on Sui. PTBs allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction without publishing a new Move package. Designed with automation and transaction builders in mind, PTBs are a lightweight and flexible way of generating transactions. 
-Transactions on Sui are composed of groups of commands that execute on inputs to define the result of the transaction. Referred to as **programmable transaction blocks (PTBs)**, these groups of commands define all user transactions on Sui. PTBs allow a user to call multiple Move functions, manage their objects, and manage their coins in a single transaction without publishing a new Move package. Designed with automation and transaction builders in mind, PTBs are a lightweight and flexible way of generating transactions. 
 
 However, more intricate programming patterns, such as loops, are not supported. In such cases, you must publish a new Move package.
 
@@ -74,7 +73,7 @@ The `Argument` enum has 4 variants:
 - `GasCoin`: References the SUI coin used to pay for gas. When using address balance gas payment (empty gas payment list), `GasCoin` references a synthetic coin created from the sender or sponsor address balance. **This is separate from other inputs because it has special restrictions**:
 
     - `&mut` or `&` usage anywhere.
-    - Only by value through `TransferObjects` or new `sui::coin::send_funds`
+    - Only by value through `TransferObjects` or `sui::coin::send_funds`
         - If you need an owned `Coin<SUI>` from the `GasCoin`, first use `SplitCoins`.
 
 - `NestedResult(u16, u16)`: References a result from a previous command. The first index specifies the command, the second specifies which result from that command. For example, if command 1 returns `[Value1, Value2]`, use `NestedResult(1, 0)` for `Value1` and `NestedResult(1, 1)` for `Value2`.
@@ -308,7 +307,6 @@ Any remaining SUI deducted from the gas coin at the beginning of execution is re
 
 The total effects (created, mutated, and deleted objects) are then passed out of the execution layer and applied by the Sui network.
 
-## Execution example 
 ## Execution example 
 
 By following each command's execution, you can see how inputs flow through commands, how results accumulate, and how the final transaction effects are determined.
