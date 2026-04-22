@@ -13,6 +13,7 @@ use sui_indexer_alt_framework::ingestion::{IngestConcurrencyConfig, IngestionCon
 use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
+use tracing::warn;
 
 use crate::pipeline::Pipeline;
 
@@ -129,10 +130,23 @@ pub struct IngestionLayer {
     pub streaming_backoff_max_batch_size: Option<usize>,
     pub streaming_connection_timeout_ms: Option<u64>,
     pub streaming_statement_timeout_ms: Option<u64>,
+
+    /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
+    /// per-pipeline `ingestion.subscriber_channel_size`.
+    #[serde(default)]
+    pub checkpoint_buffer_size: Option<usize>,
 }
 
 impl IngestionLayer {
     pub fn finish(self, base: IngestionConfig) -> IngestionConfig {
+        if self.checkpoint_buffer_size.is_some() {
+            warn!(
+                "Config field `checkpoint_buffer_size` is deprecated and ignored. Remove it from \
+                 your config; set `subscriber_channel_size` under each pipeline's `ingestion` \
+                 section if you need to override the default."
+            );
+        }
+
         IngestionConfig {
             ingest_concurrency: self.ingest_concurrency.unwrap_or(base.ingest_concurrency),
             retry_interval_ms: self.retry_interval_ms.unwrap_or(base.retry_interval_ms),
