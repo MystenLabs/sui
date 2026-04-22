@@ -24,7 +24,7 @@ const outputFile = flags["output"] ?? path.join(scriptDir, "../../../static/llms
 const baseUrl = flags["base-url"] ?? "https://docs.sui.io";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const TARGET_CHARS = 49_000;
+const TARGET_CHARS = 80_000;
 const PINNED_SECTIONS = ["Move", "Top Level Navigation", "Sui Developer Skills"];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
