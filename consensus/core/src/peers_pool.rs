@@ -235,8 +235,8 @@ mod tests {
     use super::*;
     use consensus_config::{AuthorityIndex, NetworkKeyPair};
 
-    #[test]
-    fn test_peers_pool_basic() {
+    #[tokio::test]
+    async fn test_peers_pool_basic() {
         let (mut context, _) = Context::new_for_test(4);
         context.own_index = AuthorityIndex::new_for_test(0);
         // This is a validator node (own_index is within committee range)
@@ -267,8 +267,8 @@ mod tests {
         assert_eq!(observer_peers.len(), 2);
     }
 
-    #[test]
-    fn test_peers_pool_remove() {
+    #[tokio::test]
+    async fn test_peers_pool_remove() {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let pool = PeersPool::new(context.clone());
@@ -285,8 +285,8 @@ mod tests {
         assert!(!pool.is_peer_known(&observer_peer));
     }
 
-    #[test]
-    fn test_get_known_peers_as_validator() {
+    #[tokio::test]
+    async fn test_get_known_peers_as_validator() {
         let (mut context, _) = Context::new_for_test(3);
         context.own_index = AuthorityIndex::new_for_test(1);
         // This is a validator node (own_index is within committee range)
@@ -305,8 +305,8 @@ mod tests {
         assert!(!peers.contains(&PeerId::Validator(AuthorityIndex::new_for_test(1))));
     }
 
-    #[test]
-    fn test_get_known_peers_as_observer() {
+    #[tokio::test]
+    async fn test_get_known_peers_as_observer() {
         let (mut context, _) = Context::new_for_test(3);
         // Set own_index to a value outside committee range to simulate an observer node
         context.own_index = AuthorityIndex::new_for_test(10);
@@ -331,8 +331,8 @@ mod tests {
         assert!(!peers.contains(&PeerId::Validator(AuthorityIndex::new_for_test(2))));
     }
 
-    #[test]
-    fn test_compatible_server_filtering() {
+    #[tokio::test]
+    async fn test_compatible_server_filtering() {
         let (mut context, _) = Context::new_for_test(3);
         // Set as an observer node
         context.own_index = AuthorityIndex::new_for_test(10);
@@ -371,8 +371,8 @@ mod tests {
         assert!(observer_peers.contains(&PeerId::Observer(observer)));
     }
 
-    #[test]
-    fn test_server_filtering() {
+    #[tokio::test]
+    async fn test_server_filtering() {
         let (mut context, _) = Context::new_for_test(4);
         context.own_index = AuthorityIndex::new_for_test(0);
         // This is a validator node (own_index is within committee range)
