@@ -1,4 +1,3 @@
-use std::fmt::{Debug, Display, Formatter};
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::keytool::Key;
@@ -7,16 +6,40 @@ use clap::*;
 use json_to_table::{Orientation, json_to_table};
 use serde::Serialize;
 use serde_json::json;
-use sui_keys::external::External;
+use std::fmt::{Debug, Display, Formatter};
+use sui_keys::external::{External, ProvisionMode};
 use sui_keys::keystore::{AccountKeystore, GenerateOptions, GeneratedKey, Keystore};
 use tracing::info;
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+#[clap(rename_all = "kebab-case")]
+pub enum ProvisionModeArg {
+    RecoverableAssumed,
+    MnemonicBacked,
+    NonRecoverable,
+}
+
+impl From<ProvisionModeArg> for ProvisionMode {
+    fn from(value: ProvisionModeArg) -> Self {
+        match value {
+            ProvisionModeArg::RecoverableAssumed => ProvisionMode::RecoverableAssumed,
+            ProvisionModeArg::MnemonicBacked => ProvisionMode::MnemonicBacked,
+            ProvisionModeArg::NonRecoverable => ProvisionMode::NonRecoverable,
+        }
+    }
+}
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum ExternalKeysCommand {
     /// Generate a new key for an external signer
-    Generate { signer: String },
+    Generate {
+        signer: String,
+        /// Provisioning mode to request when creating a new signer key.
+        #[clap(long, value_enum)]
+        provision_mode: Option<ProvisionModeArg>,
+    },
     /// List all keys available for an external signer
     ListKeys { signer: String },
     /// Add an existing key to the sui cli for an existing external signer key
@@ -46,7 +69,10 @@ impl ExternalKeysCommand {
         external_keys: Option<&mut Keystore>,
     ) -> Result<CommandOutput, anyhow::Error> {
         match self {
-            ExternalKeysCommand::Generate { signer } => {
+            ExternalKeysCommand::Generate {
+                signer,
+                provision_mode,
+            } => {
                 let Some(external_keys) = external_keys else {
                     return Err(anyhow!("Keystore is not configured for external signer"));
                 };
@@ -54,7 +80,13 @@ impl ExternalKeysCommand {
                     return Err(anyhow!("Keystore is not configured for external signer"));
                 };
                 let GeneratedKey { public_key, .. } = external_keys
-                    .generate(None, GenerateOptions::ExternalSigner(signer))
+                    .generate(
+                        None,
+                        GenerateOptions::ExternalSigner {
+                            signer,
+                            provision_mode: provision_mode.map(Into::into),
+                        },
+                    )
                     .await?;
                 let key = Key::from(public_key);
                 external_keys.save().await?;
@@ -132,4 +164,39 @@ fn get_external_keystore(keystore: Option<&mut Keystore>) -> Result<&mut Externa
         return Err(anyhow!("Keystore is not configured for external signer"));
     };
     Ok(external_keystore)
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::{ExternalKeysCommand, ProvisionModeArg};
+    use crate::sui_commands::SuiCommand;
+
+    #[test]
+    fn test_external_keys_generate_parses_provision_mode() {
+        let command = SuiCommand::try_parse_from([
+            "sui",
+            "external-keys",
+            "generate",
+            "yubikey",
+            "--provision-mode",
+            "mnemonic-backed",
+        ])
+        .unwrap();
+
+        let SuiCommand::ExternalKeys { cmd, .. } = command else {
+            panic!("expected external-keys command");
+        };
+        let ExternalKeysCommand::Generate {
+            signer,
+            provision_mode,
+        } = cmd
+        else {
+            panic!("expected external-keys generate command");
+        };
+
+        assert_eq!(signer, "yubikey");
+        assert_eq!(provision_mode, Some(ProvisionModeArg::MnemonicBacked));
+    }
 }

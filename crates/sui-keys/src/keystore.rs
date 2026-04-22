@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub use crate::external::External;
+use crate::external::ProvisionMode;
 use crate::key_derive::{derive_key_pair_from_path, generate_new_key};
 use crate::key_identity::KeyIdentity;
 use crate::random_names::{random_name, random_names};
@@ -55,9 +56,13 @@ pub enum GenerateOptions {
     /// File or InMem keystore
     Local(LocalGenerate),
     /// Signer
-    ExternalSigner(String),
+    ExternalSigner {
+        signer: String,
+        provision_mode: Option<ProvisionMode>,
+    },
 }
 
+#[derive(Debug)]
 pub struct GeneratedKey {
     pub address: SuiAddress,
     pub public_key: PublicKey,
@@ -78,7 +83,7 @@ pub trait AccountKeystore: Send + Sync {
             GenerateOptions::Local(opts) => {
                 (opts.key_scheme, opts.derivation_path, opts.word_length)
             }
-            GenerateOptions::ExternalSigner(_) => {
+            GenerateOptions::ExternalSigner { .. } => {
                 return Err(anyhow!(
                     "Generating new keypair is not supported for this keystore type"
                 ));

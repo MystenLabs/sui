@@ -27,6 +27,7 @@ base64.workspace = true
 jsonrpc.workspace = true
 tokio = { workspace = true, features = ["process"] }
 async-trait.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

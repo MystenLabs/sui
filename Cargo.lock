@@ -15906,6 +15906,7 @@ dependencies = [
  "slip10_ed25519",
  "sui-types",
  "tempfile",
+ "thiserror 1.0.69",
  "tiny-bip39",
  "tokio",
 ]

@@ -13,7 +13,8 @@ use base64;
 use base64::{Engine as _, engine::general_purpose};
 use bcs;
 use fastcrypto::traits::{EncodeDecodeBase64, VerifyingKey};
-use jsonrpc::client::Endpoint;
+use jsonrpc::client::{Endpoint, JsonRpcError};
+use jsonrpc::types::RemoteError;
 use mockall::{automock, predicate::*};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Value as JsonValue, json};
@@ -25,6 +26,26 @@ use std::process::Stdio;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{PublicKey, Signature, SuiKeyPair, SuiSignature, SuiSignatureInner};
 use tokio::process::Command;
+
+const PROVISION_MODE_NOT_SUPPORTED_ERROR_CODE: i32 = -32012;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ExternalExecError {
+    #[error(transparent)]
+    JsonRpc(#[from] JsonRpcError),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+    #[error("Command failed with status: {0}")]
+    CommandFailed(std::process::ExitStatus),
+    #[error("Command returned null result")]
+    NullResult,
+}
+
+impl From<RemoteError> for ExternalExecError {
+    fn from(error: RemoteError) -> Self {
+        JsonRpcError::from(error).into()
+    }
+}
 
 #[derive(Debug)]
 /// External keystore for managing keys and aliases with an external signer.
@@ -53,6 +74,23 @@ pub struct ExternalKey {
     pub key_id: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// Provision mode requested when creating a key on an external signer.
+pub enum ProvisionMode {
+    /// Creates a recoverable key without surfacing recovery material in this flow.
+    #[default]
+    RecoverableAssumed,
+    /// Creates a recoverable key and returns recovery material immediately.
+    MnemonicBacked,
+    /// Creates a device-bound key with no recovery path.
+    NonRecoverable,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CreateKeyParams {
+    pub mode: ProvisionMode,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct KeysResponse {
     pub keys: Vec<ExternalKey>,
@@ -78,7 +116,7 @@ pub struct SignResponse {
 #[async_trait]
 pub trait CommandRunner: Send + Sync + Debug {
     async fn run(&self, command: &str, method: &str, params: JsonValue)
-    -> Result<JsonValue, Error>;
+    -> Result<JsonValue, ExternalExecError>;
 }
 
 #[derive(Debug)]
@@ -90,7 +128,7 @@ impl CommandRunner for StdCommandRunner {
         command: &str,
         method: &str,
         params: JsonValue,
-    ) -> Result<JsonValue, Error> {
+    ) -> Result<JsonValue, ExternalExecError> {
         let mut cmd = Command::new(command)
             .arg("call")
             .stdin(Stdio::piped())
@@ -104,23 +142,13 @@ impl CommandRunner for StdCommandRunner {
 
         let res: JsonValue = endpoint.call(method, params).await?;
         if res.is_null() {
-            return Err(anyhow!("Command returned null result"));
+            return Err(ExternalExecError::NullResult);
         }
 
-        let output = cmd
-            .wait_with_output()
-            .await
-            .map_err(|e| anyhow!("Failed to wait for command to finish: {}", e))?;
+        let output = cmd.wait_with_output().await?;
 
         if !output.status.success() {
-            return Err(Error::msg(format!(
-                "Command failed with status: {}",
-                output.status
-            )));
-        }
-
-        if !res["error"].is_null() {
-            return Err(anyhow!("Command failed with error: {:?}", res["error"]));
+            return Err(ExternalExecError::CommandFailed(output.status));
         }
 
         Ok(res)
@@ -203,7 +231,7 @@ impl External {
         command: &str,
         method: &str,
         params: JsonValue,
-    ) -> Result<JsonValue, Error> {
+    ) -> Result<JsonValue, ExternalExecError> {
         self.command_runner.run(command, method, params).await
     }
 
@@ -384,22 +412,56 @@ impl AccountKeystore for External {
         alias: Option<String>,
         opts: GenerateOptions,
     ) -> Result<GeneratedKey, Error> {
-        let GenerateOptions::ExternalSigner(ext_signer) = opts else {
+        let GenerateOptions::ExternalSigner {
+            signer: ext_signer,
+            provision_mode,
+        } = opts
+        else {
             return Err(anyhow!("Signer must be provided for external keys."));
         };
+        let create_key_params = provision_mode
+            .map(|mode| {
+                serde_json::to_value(CreateKeyParams { mode })
+                    .map_err(|e| anyhow!("Failed to serialize create key params: {}", e))
+            })
+            .transpose()?
+            .unwrap_or(JsonValue::Null);
 
-        // Attempt to generate, fallback to adding an existing key.
-        let stored_key = match self.exec(&ext_signer, "create_key", json![null]).await {
+        // Attempt to generate, fallback to indexing the first unindexed key.
+        let stored_key = match self.exec(&ext_signer, "create_key", create_key_params).await {
             Ok(res) => serde_json::from_value(res)
                 .map(|k: ExternalKey| StoredKey {
                     public_key: k.public_key,
                     ext_signer: ext_signer.clone(),
                     key_id: k.key_id,
                 })
-                .map_err(|e| anyhow!("Failed to parse key response from external signer: {}", e)),
-            Err(_) => self.add_first_unindexed_key(ext_signer).await,
-        }
-        .map_err(|e| anyhow!("Failed to generate or add a key: {}", e))?;
+                .map_err(|e| anyhow!("Failed to parse key response from external signer: {}", e))?,
+            Err(create_error) => {
+                let provision_mode_error = match &create_error {
+                    ExternalExecError::JsonRpc(JsonRpcError::RemoteError(error))
+                        if error.code == PROVISION_MODE_NOT_SUPPORTED_ERROR_CODE =>
+                    {
+                        Some(error.message.as_str())
+                    }
+                    _ => None,
+                };
+
+                match self.add_first_unindexed_key(ext_signer.clone()).await {
+                    Ok(stored_key) => stored_key,
+                    Err(add_error) => {
+                        let error = match provision_mode_error {
+                            Some(message) => anyhow!(
+                                "{message}. Also failed to add the first unindexed key: {add_error}"
+                            ),
+                            None => anyhow!(
+                                "Failed to create a new key on the external signer: {create_error}. Also failed to add the first unindexed key: {add_error}"
+                            ),
+                        };
+                        return Err(error);
+                    }
+                }
+            }
+        };
 
         let address: SuiAddress = (&stored_key.public_key).into();
         let public_key = stored_key.public_key.clone();
@@ -677,13 +739,17 @@ impl AccountKeystore for External {
 
 #[cfg(test)]
 mod tests {
-    use super::{External, MockCommandRunner, StdCommandRunner, StoredKey};
+    use super::{External, ExternalExecError, MockCommandRunner, StdCommandRunner, StoredKey};
+    use crate::external::{
+        PROVISION_MODE_NOT_SUPPORTED_ERROR_CODE, ProvisionMode,
+    };
     use crate::key_identity::KeyIdentity;
     use crate::keystore::{ALIASES_FILE_EXTENSION, AccountKeystore, GenerateOptions, GeneratedKey};
-    use anyhow::anyhow;
     use fastcrypto::ed25519::Ed25519KeyPair;
     use fastcrypto::secp256k1::Secp256k1KeyPair;
     use fastcrypto::traits::{EncodeDecodeBase64, KeyPair, ToFromBytes};
+    use jsonrpc::client::JsonRpcError;
+    use jsonrpc::types::RemoteError;
     use mockall::predicate::eq;
     use rand::prelude::StdRng;
     use rand::{SeedableRng, thread_rng};
@@ -701,6 +767,17 @@ mod tests {
     const PUBLIC_KEY: &str = "ALJ0GaLcBTTwTTh5dvyc6xaxwrjkG1spQzlL+W4CGLqG";
     const UNTAGGED_PUBLIC_KEY: &str = "snQZotwFNPBNOHl2/JzrFrHCuOQbWylDOUv5bgIYuoY=";
     const ADDRESS: &str = "0x9219616732544c54259b3f5aeef5ec078535e322ee63f7de2ca8a197fd2a4f6f";
+    const PROVISION_MODE_NOT_SUPPORTED_MESSAGE: &str =
+        "Provision mode is not supported by yubikey-signer";
+
+    fn unsupported_action_error(method: &str) -> ExternalExecError {
+        RemoteError {
+            code: -32601,
+            message: format!("Unsupported action {method}"),
+            data: None,
+        }
+        .into()
+    }
 
     fn load_external_keystore() -> External {
         let cargo_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
@@ -838,7 +915,7 @@ mod tests {
         let mut mock = MockCommandRunner::new();
         let key_id = "key-123";
         mock.expect_run()
-            .with(eq("signer"), eq("create_key"), eq(json![null]))
+            .with(eq("signer"), eq("create_key"), eq(JsonValue::Null))
             .returning(move |_, _, _| {
                 Ok(json!({
                     "key_id": key_id,
@@ -849,7 +926,13 @@ mod tests {
             });
         let mut external = External::new_for_test(Box::new(mock), None);
         let result = external
-            .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
+            .generate(
+                None,
+                GenerateOptions::ExternalSigner {
+                    signer: "signer".to_string(),
+                    provision_mode: None,
+                },
+            )
             .await;
         assert!(result.is_ok());
         let GeneratedKey {
@@ -869,7 +952,7 @@ mod tests {
 
         let mut mock = MockCommandRunner::new();
         mock.expect_run()
-            .with(eq("signer"), eq("create_key"), eq(json![null]))
+            .with(eq("signer"), eq("create_key"), eq(JsonValue::Null))
             .returning(move |_, _, _| {
                 Ok(json!({
                     "key_id": key_id,
@@ -879,10 +962,49 @@ mod tests {
 
         let mut external = External::new_for_test(Box::new(mock), None);
         let result = external
-            .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
+            .generate(
+                None,
+                GenerateOptions::ExternalSigner {
+                    signer: "signer".to_string(),
+                    provision_mode: None,
+                },
+            )
             .await;
         let GeneratedKey { scheme, .. } = result.unwrap();
         assert_eq!(scheme, Secp256k1);
+    }
+
+    #[tokio::test]
+    async fn test_generate_with_provision_mode() {
+        let mut mock = MockCommandRunner::new();
+        let key_id = "key-123";
+        mock.expect_run()
+            .with(
+                eq("signer"),
+                eq("create_key"),
+                eq(json!({ "mode": "MnemonicBacked" })),
+            )
+            .returning(move |_, _, _| {
+                Ok(json!({
+                    "key_id": key_id,
+                    "public_key": {
+                        "Ed25519": UNTAGGED_PUBLIC_KEY
+                    }
+                }))
+            });
+
+        let mut external = External::new_for_test(Box::new(mock), None);
+        let result = external
+            .generate(
+                None,
+                GenerateOptions::ExternalSigner {
+                    signer: "signer".to_string(),
+                    provision_mode: Some(ProvisionMode::MnemonicBacked),
+                },
+            )
+            .await;
+
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -917,10 +1039,8 @@ mod tests {
         let mut mock = MockCommandRunner::new();
         let key_id = "key-123";
         mock.expect_run().returning(move |_, method, params| {
-            if method == "create_key" && params == json![null] {
-                return Err(anyhow!(
-                    "Command failed with error: Unsupported action create_key"
-                ));
+            if method == "create_key" && params == JsonValue::Null {
+                return Err(unsupported_action_error("create_key"));
             }
             if method == "keys" && params == json![null] {
                 return Ok(json!({
@@ -942,7 +1062,13 @@ mod tests {
         let mut external = External::new_for_test(Box::new(mock), Some(tmp_keystore));
         external.save().await.unwrap();
         let result = external
-            .generate(None, GenerateOptions::ExternalSigner("signer".to_string()))
+            .generate(
+                None,
+                GenerateOptions::ExternalSigner {
+                    signer: "signer".to_string(),
+                    provision_mode: None,
+                },
+            )
             .await;
         assert!(result.is_ok());
         let GeneratedKey {
@@ -953,6 +1079,45 @@ mod tests {
         assert_eq!(scheme, ED25519);
         assert_eq!(address, SuiAddress::from_str(ADDRESS).unwrap());
         assert_eq!(public_key.encode_base64(), PUBLIC_KEY);
+    }
+
+    #[tokio::test]
+    async fn test_generate_fallback_preserves_provision_mode_error() {
+        let mut mock = MockCommandRunner::new();
+        mock.expect_run().returning(move |_, method, params| {
+            if method == "create_key" && params == JsonValue::Null {
+                return Err(RemoteError {
+                    code: PROVISION_MODE_NOT_SUPPORTED_ERROR_CODE,
+                    message: PROVISION_MODE_NOT_SUPPORTED_MESSAGE.to_string(),
+                    data: None,
+                }
+                .into());
+            }
+            if method == "keys" && params == json![null] {
+                return Err(ExternalExecError::Io(std::io::Error::other(
+                    "No available key found for external signer signer",
+                )));
+            }
+            panic!("Unexpected method called: {}", method);
+        });
+
+        let tmp_dir = TempDir::new().unwrap();
+        let tmp_keystore = tmp_dir.path().join("external.keystore");
+        let mut external = External::new_for_test(Box::new(mock), Some(tmp_keystore));
+        external.save().await.unwrap();
+        let result = external
+            .generate(
+                None,
+                GenerateOptions::ExternalSigner {
+                    signer: "signer".to_string(),
+                    provision_mode: None,
+                },
+            )
+            .await;
+
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains(PROVISION_MODE_NOT_SUPPORTED_MESSAGE));
+        assert!(error.contains("Also failed to add the first unindexed key"));
     }
 
     #[tokio::test]
@@ -996,9 +1161,7 @@ mod tests {
         mock.expect_run().returning(move |_, method, _| {
             // Simulate lack of "public_key" method support
             if method == "public_key" {
-                return Err(anyhow!(
-                    "Command failed with error: Unsupported action public_key"
-                ));
+                return Err(unsupported_action_error("public_key"));
             }
             if method == "keys" {
                 return Ok(json!({
@@ -1055,10 +1218,23 @@ mod tests {
     #[tokio::test]
     async fn test_exec_error_propagation() {
         let mut mock = MockCommandRunner::new();
-        mock.expect_run().returning(|_, _, _| Err(anyhow!("fail")));
+        mock.expect_run().returning(|_, _, _| {
+            Err(RemoteError {
+                code: -32601,
+                message: "Unsupported action method".to_string(),
+                data: None,
+            }
+            .into())
+        });
         let external = External::new_for_test(Box::new(mock), None);
         let result = external.exec("cmd", "method", json!([1, 2, 3])).await;
-        assert!(result.is_err());
+        match result {
+            Err(ExternalExecError::JsonRpc(JsonRpcError::RemoteError(error))) => {
+                assert_eq!(error.code, -32601);
+                assert_eq!(error.message, "Unsupported action method");
+            }
+            other => panic!("expected remote JSON-RPC error, got {other:?}"),
+        }
     }
 
     #[tokio::test]
