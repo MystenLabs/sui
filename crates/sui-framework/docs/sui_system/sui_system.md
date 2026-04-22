@@ -85,6 +85,7 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `active_validator_addresses`](#sui_system_sui_system_active_validator_addresses)
 -  [Function `active_validator_addresses_ref`](#sui_system_sui_system_active_validator_addresses_ref)
 -  [Function `active_validator_voting_powers`](#sui_system_sui_system_active_validator_voting_powers)
+-  [Function `active_validator_stake_amount`](#sui_system_sui_system_active_validator_stake_amount)
 -  [Function `calculate_rewards`](#sui_system_sui_system_calculate_rewards)
 -  [Function `advance_epoch`](#sui_system_sui_system_advance_epoch)
 -  [Function `load_system_state`](#sui_system_sui_system_load_system_state)
@@ -1506,6 +1507,31 @@ Getter returns the voting power of the active validators, values are voting powe
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): VecMap&lt;<b>address</b>, u64&gt; {
     wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>().<a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_voting_powers">active_validator_voting_powers</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_active_validator_stake_amount"></a>
+
+## Function `active_validator_stake_amount`
+
+Getter returns the total stake amount of a given validator.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_stake_amount">active_validator_stake_amount</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>, validator_addr: <b>address</b>): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_active_validator_stake_amount">active_validator_stake_amount</a>(wrapper: &<a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>, validator_addr: <b>address</b>): u64 {
+    wrapper.<a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_ref">load_system_state_ref</a>().validator_stake_amount(validator_addr)
 }
 </code></pre>
 
