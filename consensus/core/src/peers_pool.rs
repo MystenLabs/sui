@@ -119,7 +119,7 @@ impl PeersPool {
     pub(crate) fn register_observer(&self, node_id: NodeId) {
         let mut peers = self.registered_peers.write();
         peers.insert(
-            PeerId::Observer(node_id),
+            PeerId::Observer(Box::new(node_id)),
             PeerInfo {
                 supported_services: vec![PeerService::Observer].into_iter().collect(),
             },
@@ -250,8 +250,8 @@ mod tests {
         pool.register_observer(observer2.clone());
 
         // Check they're known
-        assert!(pool.is_peer_known(&PeerId::Observer(observer1.clone())));
-        assert!(pool.is_peer_known(&PeerId::Observer(observer2.clone())));
+        assert!(pool.is_peer_known(&PeerId::Observer(Box::new(observer1.clone()))));
+        assert!(pool.is_peer_known(&PeerId::Observer(Box::new(observer2.clone()))));
 
         // Validators should be known (except our own)
         assert!(!pool.is_peer_known(&PeerId::Validator(AuthorityIndex::new_for_test(0))));
@@ -274,7 +274,7 @@ mod tests {
         let pool = PeersPool::new(context.clone());
 
         let observer = NetworkKeyPair::generate(&mut rand::thread_rng()).public();
-        let observer_peer = PeerId::Observer(observer.clone());
+        let observer_peer = PeerId::Observer(Box::new(observer.clone()));
 
         // Register and verify known
         pool.register_observer(observer);
@@ -301,7 +301,7 @@ mod tests {
         assert_eq!(peers.len(), 3);
         assert!(peers.contains(&PeerId::Validator(AuthorityIndex::new_for_test(0))));
         assert!(peers.contains(&PeerId::Validator(AuthorityIndex::new_for_test(2))));
-        assert!(peers.contains(&PeerId::Observer(observer)));
+        assert!(peers.contains(&PeerId::Observer(Box::new(observer))));
         assert!(!peers.contains(&PeerId::Validator(AuthorityIndex::new_for_test(1))));
     }
 
@@ -324,7 +324,7 @@ mod tests {
         let peers = pool.get_known_peers();
         // As an observer, should only see peers that support Observer server
         assert_eq!(peers.len(), 2);
-        assert!(peers.contains(&PeerId::Observer(observer1)));
+        assert!(peers.contains(&PeerId::Observer(Box::new(observer1))));
         assert!(peers.contains(&PeerId::Validator(AuthorityIndex::new_for_test(1))));
 
         // Should not see validators that only support Validator server
@@ -355,7 +355,7 @@ mod tests {
         let known_peers = pool.get_known_peers();
         assert_eq!(known_peers.len(), 2); // The validator with Observer server and the observer
         assert!(known_peers.contains(&PeerId::Validator(AuthorityIndex::new_for_test(0))));
-        assert!(known_peers.contains(&PeerId::Observer(observer.clone())));
+        assert!(known_peers.contains(&PeerId::Observer(Box::new(observer.clone()))));
 
         // Direct filtering for Validator server should still return the peers that support it,
         // but this doesn't check compatibility
@@ -368,7 +368,7 @@ mod tests {
         let observer_peers = pool.get_known_peers_for_services(&[PeerService::Observer]);
         assert_eq!(observer_peers.len(), 2); // The validator with Observer server and the observer
         assert!(observer_peers.contains(&PeerId::Validator(AuthorityIndex::new_for_test(0))));
-        assert!(observer_peers.contains(&PeerId::Observer(observer)));
+        assert!(observer_peers.contains(&PeerId::Observer(Box::new(observer))));
     }
 
     #[tokio::test]
@@ -403,8 +403,8 @@ mod tests {
         let observer_peers = pool.get_known_peers_for_services(&[PeerService::Observer]);
         // Should get: observer1, observer2, and validator 1
         assert_eq!(observer_peers.len(), 3);
-        assert!(observer_peers.contains(&PeerId::Observer(observer1)));
-        assert!(observer_peers.contains(&PeerId::Observer(observer2)));
+        assert!(observer_peers.contains(&PeerId::Observer(Box::new(observer1))));
+        assert!(observer_peers.contains(&PeerId::Observer(Box::new(observer2))));
         assert!(observer_peers.contains(&PeerId::Validator(AuthorityIndex::new_for_test(1))));
     }
 }

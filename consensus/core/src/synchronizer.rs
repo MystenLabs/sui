@@ -170,7 +170,7 @@ impl InflightBlocksMap {
 enum Command {
     FetchBlocks {
         missing_block_refs: BTreeSet<BlockRef>,
-        peer: Box<PeerId>,
+        peer: PeerId,
         result: oneshot::Sender<Result<(), ConsensusError>>,
     },
     FetchOwnLastBlock,
@@ -194,7 +194,7 @@ impl SynchronizerHandle {
         self.commands_sender
             .send(Command::FetchBlocks {
                 missing_block_refs,
-                peer: Box::new(peer),
+                peer,
                 result: sender,
             })
             .await
@@ -388,7 +388,7 @@ where
                                 .take(self.context.parameters.max_blocks_per_sync)
                                 .collect();
 
-                            let blocks_guard = self.inflight_blocks_map.lock_blocks(missing_block_refs, (*peer).clone());
+                            let blocks_guard = self.inflight_blocks_map.lock_blocks(missing_block_refs, peer.clone());
                             let Some(blocks_guard) = blocks_guard else {
                                 result.send(Ok(())).ok();
                                 continue;

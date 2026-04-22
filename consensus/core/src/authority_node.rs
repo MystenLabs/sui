@@ -486,7 +486,7 @@ where
                 {
                     PeerId::Validator(index)
                 } else {
-                    PeerId::Observer(peer_record.public_key.clone())
+                    PeerId::Observer(Box::new(peer_record.public_key.clone()))
                 };
 
                 info!("Observer subscribing to peer: {:?}", peer_id);

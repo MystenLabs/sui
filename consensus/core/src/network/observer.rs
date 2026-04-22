@@ -148,7 +148,7 @@ impl ChannelPool {
                 .authority(authority)
                 .network_key
                 .clone(),
-            PeerId::Observer(node_id) => node_id.clone(),
+            PeerId::Observer(node_id) => (*node_id).clone(),
         };
 
         // Check if the peer is in the observer peers pool. If not return an error.

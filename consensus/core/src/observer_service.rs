@@ -258,7 +258,7 @@ impl ObserverNetworkService for ObserverService {
             );
 
         let live_stream = BroadcastStream::<(VerifiedBlock, CommitIndex)>::new(
-            PeerId::Observer(peer),
+            PeerId::Observer(Box::new(peer)),
             self.rx_accepted_block_broadcast.resubscribe(),
             self.subscription_counter.clone(),
         )
