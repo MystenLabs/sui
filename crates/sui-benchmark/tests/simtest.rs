@@ -53,14 +53,17 @@ mod test {
     use sui_simulator::{SimConfig, configs::*};
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
+    use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
     use sui_types::base_types::{
         AuthorityName, ConciseableName, ObjectID, SequenceNumber, SuiAddress,
     };
     use sui_types::committee::CommitteeTrait;
     use sui_types::digests::TransactionDigest;
+    use sui_types::effects::TransactionEffectsAPI;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
+    use sui_types::transaction::{TransactionDataAPI, TransactionKind};
     use test_cluster::{TestCluster, TestClusterBuilder};
     use tracing::{error, info, trace};
     use typed_store::traits::Map;
@@ -1547,6 +1550,48 @@ mod test {
         test_cluster.wait_for_epoch(None).await;
     }
 
+    /// Scans every executed checkpoint on the test cluster's fullnode, finds
+    /// accumulator settlement transactions (ProgrammableSystemTransactions that
+    /// take the accumulator root as a shared input), and returns the total
+    /// number of objects deleted across their effects. A settlement transaction
+    /// only deletes an object when an accumulator it updates reaches zero, so
+    /// any non-zero count is direct evidence that accumulators were deleted.
+    fn count_settlement_deletions(test_cluster: &Arc<TestCluster>) -> usize {
+        test_cluster.fullnode_handle.sui_node.with(|node| {
+            let state = node.state();
+            let checkpoint_store = state.get_checkpoint_store();
+            let highest = checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("checkpoint store read failed")
+                .expect("no executed checkpoints");
+
+            let mut deletions = 0usize;
+            for seq in 0..=highest {
+                let Some(contents) = checkpoint_store
+                    .get_full_checkpoint_contents_by_sequence_number(seq)
+                    .expect("checkpoint contents read failed")
+                else {
+                    continue;
+                };
+                for exec_data in contents.iter() {
+                    let kind = exec_data.transaction.transaction_data().kind();
+                    if !is_accumulator_settlement_tx(kind) {
+                        continue;
+                    }
+                    deletions += exec_data.effects.deleted().len();
+                }
+            }
+            deletions
+        })
+    }
+
+    fn is_accumulator_settlement_tx(kind: &TransactionKind) -> bool {
+        matches!(kind, TransactionKind::ProgrammableSystemTransaction(_))
+            && kind
+                .shared_input_objects()
+                .any(|obj| obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+    }
+
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
@@ -1594,6 +1639,7 @@ mod test {
         .with_probability(AuthenticatedEventEmit::NAME, 0.1)
         .with_probability(CoinReservationWithdraw::NAME, 0.3);
 
+        let test_cluster_for_scan = test_cluster.clone();
         test_simulated_load_with_test_config(
             test_cluster,
             60,
@@ -1632,19 +1678,20 @@ mod test {
                 "expected at least one accumulator balance read"
             );
 
-            // Verify the coin reservation round-trip pattern works: an account achieving
-            // >= 2 successful withdrawals proves funds flowed back from its partner
-            // (first success drains seeded balance; second requires partner to have deposited).
-            let max_coin_res_successes = metrics.max_coin_reservation_success_count();
+            // Verify accumulators are actually being deleted by scanning all checkpoints
+            // for settlement transactions with object deletions. A settlement transaction
+            // only deletes an object when an accumulator it updates reaches zero and is
+            // removed. This is a direct, on-chain signal of the coin-reservation round-trip
+            // draining an account's accumulator, rather than relying on the workload's
+            // own success counters.
+            let accumulator_deletions = count_settlement_deletions(&test_cluster_for_scan);
             info!(
-                "coin reservation max successes per account: {}",
-                max_coin_res_successes
+                "settlement transaction accumulator deletions: {}",
+                accumulator_deletions
             );
             assert!(
-                max_coin_res_successes >= 2,
-                "expected at least one account to complete the coin reservation round-trip \
-                 (>= 2 withdrawals), but max was {}",
-                max_coin_res_successes
+                accumulator_deletions > 0,
+                "expected at least one accumulator to be deleted by a settlement transaction"
             );
         } else {
             assert!(metrics_sum.success_count > 150);

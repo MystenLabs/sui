@@ -148,11 +148,6 @@ pub struct OperationSetStats {
 #[derive(Debug)]
 pub struct CompositionMetrics {
     stats: HashMap<OperationSet, OperationSetStats>,
-    /// Counts successful coin reservation withdrawals per account address.
-    /// Used to verify that paired accounts successfully transfer back and forth:
-    /// a count >= 2 for any account proves the round-trip works (first success drains
-    /// the seeded balance, second success requires the partner to have deposited back).
-    coin_reservation_success_count: HashMap<SuiAddress, u64>,
 }
 
 impl Default for CompositionMetrics {
@@ -165,7 +160,6 @@ impl CompositionMetrics {
     pub fn new() -> Self {
         Self {
             stats: HashMap::new(),
-            coin_reservation_success_count: HashMap::new(),
         }
     }
 
@@ -279,25 +273,6 @@ impl CompositionMetrics {
         self.stats
             .iter()
             .map(|(op_set, stats)| (op_set.clone(), stats))
-    }
-
-    /// Records a successful coin reservation withdraw for the given account.
-    pub fn record_coin_reservation_success(&mut self, sender: SuiAddress) {
-        *self
-            .coin_reservation_success_count
-            .entry(sender)
-            .or_insert(0) += 1;
-    }
-
-    /// Returns the maximum number of successful coin reservation withdrawals any single
-    /// account has achieved. A value >= 2 proves the round-trip deposit pattern works:
-    /// the first success drains seeded balance, the second requires the partner to deposit.
-    pub fn max_coin_reservation_success_count(&self) -> u64 {
-        self.coin_reservation_success_count
-            .values()
-            .copied()
-            .max()
-            .unwrap_or(0)
     }
 }
 
@@ -1083,10 +1058,6 @@ impl Payload for CompositePayload {
                         metrics.record_insufficient_funds(tx_info.op_set.clone());
                     } else if effects.is_ok() {
                         metrics.record_success(tx_info.op_set.clone());
-                        // Track successful coin reservation withdrawals for timeout checking
-                        if tx_info.op_set.contains(CoinReservationWithdraw::NAME) {
-                            metrics.record_coin_reservation_success(gas.1);
-                        }
                     } else {
                         metrics.record_abort(tx_info.op_set.clone());
                     }
