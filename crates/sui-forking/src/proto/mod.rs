@@ -3,8 +3,9 @@
 
 //! Generated protobuf / tonic types for the forking service.
 
-#[path = "generated/sui.forking.rs"]
 #[allow(clippy::all)]
-pub(crate) mod forking;
+pub(crate) mod forking {
+    include!("generated/sui.forking.rs");
+}
 
 pub(crate) const FILE_DESCRIPTOR_SET: &[u8] = include_bytes!("generated/forking_descriptor.bin");
