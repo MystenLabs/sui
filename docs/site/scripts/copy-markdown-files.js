@@ -365,6 +365,37 @@ function stripFrontmatter(content, outputPath, filePath) {
   return cleaned;
 }
 
+function stripMultilineExports(content) {
+  const lines = content.split('\n');
+  const result = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (/^\s*export\s+(const|let|var|function|class)\b/.test(line)) {
+      // Track brace/paren depth to find the end of the block
+      let depth = 0;
+      let foundOpen = false;
+      while (i < lines.length) {
+        const current = lines[i];
+        for (const ch of current) {
+          if (ch === '{' || ch === '(') { depth++; foundOpen = true; }
+          if (ch === '}' || ch === ')') { depth--; }
+        }
+        i++;
+        if (foundOpen && depth <= 0) break;
+        // Single-line export with no braces
+        if (!foundOpen && (current.endsWith(';') || i >= lines.length)) break;
+      }
+      continue;
+    }
+    result.push(line);
+    i++;
+  }
+
+  return result.join('\n');
+}
+
 function cleanMdxComponents(content, filePath) {
   let cleaned = content;
 

@@ -100,9 +100,14 @@ function serveMarkdown(res, pathname) {
     mdPath = '/index';
   }
 
-  const filePath = path.join(BUILD_DIR, 'markdown', mdPath + '.md');
+  // Try direct file first, then index file
+  const candidates = [
+    path.join(BUILD_DIR, 'markdown', mdPath + '.md'),
+    path.join(BUILD_DIR, 'markdown', mdPath, 'index.md'),
+  ];
+  const filePath = candidates.find(f => fs.existsSync(f));
 
-  if (fs.existsSync(filePath)) {
+  if (filePath) {
     const content = fs.readFileSync(filePath, 'utf-8');
     const tokens = Math.ceil(content.length / 4);
     const byteLength = Buffer.byteLength(content, 'utf-8');
@@ -146,9 +151,13 @@ const server = http.createServer((req, res) => {
   // Handle .md URL requests (mimics Vercel rewrite: /path.md → /markdown/path.md)
   if (pathname.endsWith('.md') && !pathname.startsWith('/markdown/')) {
     const mdPath = pathname.replace(/\.md$/, '');
-    const filePath = path.join(BUILD_DIR, 'markdown', mdPath + '.md');
+    const mdCandidates = [
+      path.join(BUILD_DIR, 'markdown', mdPath + '.md'),
+      path.join(BUILD_DIR, 'markdown', mdPath, 'index.md'),
+    ];
+    const filePath = mdCandidates.find(f => fs.existsSync(f));
 
-    if (fs.existsSync(filePath)) {
+    if (filePath) {
       const content = fs.readFileSync(filePath, 'utf-8');
       const tokens = Math.ceil(content.length / 4);
       const byteLength = Buffer.byteLength(content, 'utf-8');
