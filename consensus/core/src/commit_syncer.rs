@@ -392,17 +392,17 @@ where
     }
 
     fn try_start_fetches(&mut self) {
-        // Cap parallel fetches based on configured limit and available peers, to avoid overloading the network.
+        // Cap parallel fetches based on configured limit and known peers, to avoid overloading the network.
         // Also when there are too many fetched blocks that cannot be sent to Core before an earlier fetch
         // has not finished, reduce parallelism so the earlier fetch can retry on a better host and succeed.
         // For validators, use committee size for the calculation. For observers, don't apply the 2/3 limit.
-        let available_peers_count = self.inner.peers_pool.get_available_peers().len();
+        let known_peers_count = self.inner.peers_pool.get_known_peers().len();
         let target_parallel_fetches = if self.inner.context.is_validator() {
             self.inner
                 .context
                 .parameters
                 .commit_sync_parallel_fetches
-                .min(available_peers_count * 2 / 3)
+                .min(known_peers_count * 2 / 3)
                 .min(
                     self.inner
                         .context
@@ -413,7 +413,7 @@ where
                 .max(1)
         } else {
             // For observers, currently the node is probably connected only to another peer. In the future probably more observer peers might be available
-            // to sync from. That's why we do not cap the number of parallel fetches by the number of available peers.
+            // to sync from. That's why we do not cap the number of parallel fetches by the number of known peers.
             self.inner
                 .context
                 .parameters
@@ -475,7 +475,7 @@ where
         info!("Starting to fetch commits in {commit_range:?} ...",);
         loop {
             // Attempt to fetch commits and blocks through min(available peers count, MAX_NUM_TARGETS) peers.
-            let mut target_peers = inner.peers_pool.get_available_peers();
+            let mut target_peers = inner.peers_pool.get_known_peers();
             target_peers.shuffle(&mut ThreadRng::default());
             target_peers.truncate(MAX_NUM_TARGETS);
             // Increase timeout multiplier for each loop until MAX_TIMEOUT_MULTIPLIER.
@@ -914,7 +914,7 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{BlockStream, CommitSyncerClient, ObserverNetworkClient, ValidatorNetworkClient},
-        peers_pool::{PeerServer, PeersPool},
+        peers_pool::{PeerService, PeersPool},
         round_tracker::RoundTracker,
         storage::mem_store::MemStore,
         transaction_vote_tracker::TransactionVoteTracker,
@@ -1054,7 +1054,7 @@ mod tests {
         peers_pool
             .register_validator(
                 AuthorityIndex::new_for_test(0),
-                vec![PeerServer::Validator, PeerServer::Observer],
+                vec![PeerService::Validator, PeerService::Observer],
             )
             .unwrap();
 
@@ -1135,19 +1135,19 @@ mod tests {
         peers_pool
             .register_validator(
                 AuthorityIndex::new_for_test(0),
-                vec![PeerServer::Validator, PeerServer::Observer],
+                vec![PeerService::Validator, PeerService::Observer],
             )
             .unwrap();
         peers_pool
             .register_validator(
                 AuthorityIndex::new_for_test(1),
-                vec![PeerServer::Validator, PeerServer::Observer],
+                vec![PeerService::Validator, PeerService::Observer],
             )
             .unwrap();
         peers_pool
             .register_validator(
                 AuthorityIndex::new_for_test(2),
-                vec![PeerServer::Validator, PeerServer::Observer],
+                vec![PeerService::Validator, PeerService::Observer],
             )
             .unwrap();
 
@@ -1189,12 +1189,9 @@ mod tests {
         // Observer with 4 peers (3 validators + 1 observer) should be able to
         // fetch from multiple peers in parallel, not limited by 2/3 rule
         let inflight = commit_syncer.inflight_fetches.len();
-        let available_peers = peers_pool.get_available_peers().len();
+        let known_peers = peers_pool.get_known_peers().len();
 
-        assert_eq!(
-            available_peers, 4,
-            "Should have 3 validators + 1 observer peer"
-        );
+        assert_eq!(known_peers, 4, "Should have 3 validators + 1 observer peer");
 
         // Observer should be able to use full parallelism up to configured limit
         // Not restricted by the validator's 2/3 limitation
