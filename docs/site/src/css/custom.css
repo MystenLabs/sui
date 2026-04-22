@@ -2246,8 +2246,8 @@ html[data-theme='dark'] .protoGridTitle {
 }
 
 .protoKey {
-  grid-column: span 2;
-  padding: 12px 24px;
+  grid-column: span 3;
+  padding: 10px 16px;
   font-size: 14px;
   font-weight: 600;
   border-right: 1px solid rgba(120, 120, 120, 0.14);
@@ -2256,14 +2256,26 @@ html[data-theme='dark'] .protoGridTitle {
 }
 
 .protoVal {
-  grid-column: span 4;
-  padding: 12px 24px;
-  font-size: 14px;
+  grid-column: span 3;
+  padding: 10px 16px;
+  font-size: 13px;
   border-bottom: 1px solid rgba(120, 120, 120, 0.14);
+  min-height: 0;
+}
+
+/* Collapse empty description cells */
+.protoVal:empty {
+  padding: 0;
+  border-bottom: none;
+}
+
+/* When val is empty, let the key span the full row */
+.protoKey:has(+ .protoVal:empty) {
+  grid-column: 1 / -1;
+  border-right: none;
 }
 
 .protoValMuted {
-  margin-top: 8px;
   font-size: 13px;
   opacity: 0.85;
   line-height: 1.5;
@@ -2701,12 +2713,25 @@ html[data-theme='dark'] .protoUnionNote {
   background: rgba(120, 120, 120, 0.08);
 }
  
-/* Method signatures: allow long type names to wrap gracefully */
+/* Method signatures: name on top, types below */
 .protoMethodSig {
   overflow-wrap: anywhere;
   word-break: break-word;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
- 
+
+.protoMethodName {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.protoMethodTypes {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
 /* Arrow between request → response in service methods */
 .protoArrow {
   margin: 0 4px;
