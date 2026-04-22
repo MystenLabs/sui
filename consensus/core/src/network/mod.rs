@@ -56,16 +56,40 @@ impl Display for PeerId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             PeerId::Validator(authority) => write!(f, "[{}]", authority),
-            PeerId::Observer(node_id) => write!(f, "[{:?}]", node_id),
+            PeerId::Observer(node_id) => {
+                let bytes = node_id.to_bytes();
+                write!(
+                    f,
+                    "[Observer:{:02x}{:02x}{:02x}{:02x}]",
+                    bytes[0], bytes[1], bytes[2], bytes[3]
+                )
+            }
         }
     }
 }
 
 impl PeerId {
+    /// Returns a human-readable name suitable for logging. For observers, prints
+    /// the first 8 hex digits of the public key.
     pub(crate) fn hostname(&self, context: &Context) -> String {
         match self {
             PeerId::Validator(index) => context.committee.authority(*index).hostname.to_string(),
-            PeerId::Observer(_) => format!("[Observer]{:?}", self),
+            PeerId::Observer(node_id) => {
+                let bytes = node_id.to_bytes();
+                format!(
+                    "[Observer]{:02x}{:02x}{:02x}{:02x}",
+                    bytes[0], bytes[1], bytes[2], bytes[3]
+                )
+            }
+        }
+    }
+
+    /// Returns a short label suitable for use in metrics. Does not include
+    /// full public keys to avoid high-cardinality metric labels.
+    pub(crate) fn labelname(&self, context: &Context) -> String {
+        match self {
+            PeerId::Validator(index) => context.committee.authority(*index).hostname.to_string(),
+            PeerId::Observer(_) => "observer".to_string(),
         }
     }
 }

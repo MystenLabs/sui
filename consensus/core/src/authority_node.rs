@@ -831,7 +831,7 @@ mod tests {
             let mut expected_transactions = submitted_transactions.clone();
             loop {
                 let committed_subdag =
-                    tokio::time::timeout(Duration::from_secs(3), receiver.recv())
+                    tokio::time::timeout(Duration::from_secs(1), receiver.recv())
                         .await
                         .unwrap()
                         .unwrap();

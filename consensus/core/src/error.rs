@@ -97,7 +97,7 @@ pub enum ConsensusError {
     #[error("Peer {0} is unavailable")]
     PeerUnavailable(String),
 
-    #[error("Peer {0} not found")]
+    #[error("Peer not found for block synchronization: {0}")]
     PeerNotFound(String),
 
     #[error("Block {block_ref:?} rejected: {reason}")]
