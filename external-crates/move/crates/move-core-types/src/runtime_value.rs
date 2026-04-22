@@ -12,7 +12,7 @@ use crate::{
 use anyhow::{Result as AResult, anyhow};
 use move_proc_macros::test_variant_order;
 use serde::{
-    Deserialize, Serialize,
+    Deserialize,
     de::Error as DeError,
     ser::{SerializeSeq, SerializeTuple},
 };
@@ -58,13 +58,13 @@ pub enum MoveValue {
     Variant(MoveVariant),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct MoveStructLayout(pub Box<Vec<MoveTypeLayout>>);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct MoveEnumLayout(pub Box<Vec<Vec<MoveTypeLayout>>>);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum MoveDatatypeLayout {
     Struct(Box<MoveStructLayout>),
     Enum(Box<MoveEnumLayout>),
@@ -79,34 +79,22 @@ impl MoveDatatypeLayout {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 #[test_variant_order(src/unit_tests/staged_enum_variant_order/move_type_layout.yaml)]
 pub enum MoveTypeLayout {
-    #[serde(rename(serialize = "bool", deserialize = "bool"))]
     Bool,
-    #[serde(rename(serialize = "u8", deserialize = "u8"))]
     U8,
-    #[serde(rename(serialize = "u64", deserialize = "u64"))]
     U64,
-    #[serde(rename(serialize = "u128", deserialize = "u128"))]
     U128,
-    #[serde(rename(serialize = "address", deserialize = "address"))]
     Address,
-    #[serde(rename(serialize = "vector", deserialize = "vector"))]
     Vector(Box<MoveTypeLayout>),
-    #[serde(rename(serialize = "struct", deserialize = "struct"))]
     Struct(Box<MoveStructLayout>),
-    #[serde(rename(serialize = "signer", deserialize = "signer"))]
     Signer,
 
     // NOTE: Added in bytecode version v6, do not reorder!
-    #[serde(rename(serialize = "u16", deserialize = "u16"))]
     U16,
-    #[serde(rename(serialize = "u32", deserialize = "u32"))]
     U32,
-    #[serde(rename(serialize = "u256", deserialize = "u256"))]
     U256,
-    #[serde(rename(serialize = "enum", deserialize = "enum"))]
     Enum(Box<MoveEnumLayout>),
 }
 
