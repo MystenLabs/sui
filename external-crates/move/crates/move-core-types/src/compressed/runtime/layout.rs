@@ -14,6 +14,11 @@ use std::fmt;
 /// `RuntimeBoxPoolBuilder`) — call sites are otherwise identical.
 pub use crate::compressed::backend::DefaultRuntimeBuilder as MoveTypeLayoutBuilder;
 
+/// Handle returned by [`MoveTypeLayoutBuilder`] for nodes interned into the
+/// default backend. Type alias over the builder's `Root` so consumers can
+/// traffic in a single name without naming the backend's internal ref type.
+pub type LayoutHandle = <MoveTypeLayoutBuilder as BackendBuilder>::Root;
+
 // =============================================================================
 // Trait: TypeLayout
 // =============================================================================

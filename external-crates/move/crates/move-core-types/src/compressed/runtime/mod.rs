@@ -5,6 +5,7 @@ mod layout;
 mod serde_impl;
 
 pub use layout::{
-    BackendBuilder, MoveEnumLayout, MoveFieldsLayout, MoveLayoutView, MoveStructLayout,
-    MoveTypeLayout, MoveTypeLayoutBuilder, MoveTypeLayoutRef, TypeLayout, VariantLayout,
+    BackendBuilder, LayoutHandle, MoveEnumLayout, MoveFieldsLayout, MoveLayoutView,
+    MoveStructLayout, MoveTypeLayout, MoveTypeLayoutBuilder, MoveTypeLayoutRef, TypeLayout,
+    VariantLayout,
 };
