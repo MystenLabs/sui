@@ -184,10 +184,7 @@ impl<'pc> PerTxCache<'pc> {
         Ok(self.borrow()?.tag_to_type.get(tag).cloned())
     }
 
-    pub(super) fn lookup_tag_by_type(
-        &self,
-        ty: &Type,
-    ) -> Result<Option<Rc<TypeTag>>, ExecutionError> {
+    pub(super) fn lookup_tag(&self, ty: &Type) -> Result<Option<Rc<TypeTag>>, ExecutionError> {
         gated!(self.protocol_config, None);
         Ok(self.borrow()?.type_to_tag.get(ty).cloned())
     }
@@ -225,7 +222,7 @@ impl<'pc> PerTxCache<'pc> {
         Ok(self.borrow()?.vm_to_type.get(vm_type).cloned())
     }
 
-    pub(super) fn lookup_vm_type_by_type(
+    pub(super) fn lookup_vm_type(
         &self,
         ty: &Type,
     ) -> Result<Option<Rc<vm_runtime::Type>>, ExecutionError> {
