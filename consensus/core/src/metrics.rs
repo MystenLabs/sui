@@ -123,6 +123,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
     pub(crate) core_skipped_proposals: IntCounterVec,
+    pub(crate) core_certified_commits_processed: IntCounterVec,
     pub(crate) handler_received_block_missing_ancestors: IntCounterVec,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
     pub(crate) highest_accepted_round: IntGauge,
@@ -361,6 +362,12 @@ impl NodeMetrics {
                 "core_skipped_proposals",
                 "Number of proposals skipped in the Core, per reason",
                 &["reason"],
+                registry,
+            ).unwrap(),
+            core_certified_commits_processed: register_int_counter_vec_with_registry!(
+                "core_certified_commits_processed",
+                "Number of certified commits processed by the Core",
+                &["result"],
                 registry,
             ).unwrap(),
             handler_received_block_missing_ancestors: register_int_counter_vec_with_registry!(

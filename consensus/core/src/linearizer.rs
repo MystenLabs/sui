@@ -246,7 +246,7 @@ impl Linearizer {
     // We consider a block as pruned when it is an ancestor of a block that has been committed as part of the provided `sub_dag`, but
     // it has not been committed as part of previous commits. Right now we measure this via checking that highest committed round for the authority
     // as we don't an efficient look up functionality to check if a block has been committed or not.
-    fn update_blocks_pruned_metric(&self, sub_dag: &CommittedSubDag) {
+    pub(crate) fn update_blocks_pruned_metric(&self, sub_dag: &CommittedSubDag) {
         let (last_committed_rounds, gc_round) = {
             let dag_state = self.dag_state.read();
             (dag_state.last_committed_rounds(), dag_state.gc_round())

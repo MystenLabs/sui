@@ -32,11 +32,13 @@ use crate::{
     block_manager::BlockManager,
     commit::{
         CertifiedCommit, CertifiedCommits, CommitAPI, CommittedSubDag, DecidedLeader, Decision,
+        TrustedCommit,
     },
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
+    flex_committer::FlexCommitter,
     leader_schedule::LeaderSchedule,
     leader_schedule_v3::LeaderScheduleV3,
     leader_scoring::ReputationScores,
@@ -71,6 +73,10 @@ pub(crate) struct Core {
     /// The commit observer is responsible for observing the commits and collecting
     /// + sending subdags over the consensus output channel.
     commit_observer: CommitObserver,
+    /// The v3 commit pipeline helper. Set when `enable_v3` is on. Owns both
+    /// the local decision rule via `try_commit` and the certified-commit
+    /// sub-dag construction via `handle_certified_commit`.
+    flex_committer: Option<FlexCommitter>,
     /// Sender of outgoing signals from Core.
     signals: CoreSignals,
     /// Keeping track of state of the DAG, including blocks, commits and last committed rounds.
@@ -103,6 +109,12 @@ impl Core {
                 context.clone(),
                 dag_state.clone(),
             ))
+        } else {
+            None
+        };
+
+        let flex_committer = if context.protocol_config.enable_v3() {
+            Some(FlexCommitter::new(context.clone(), dag_state.clone()))
         } else {
             None
         };
@@ -181,6 +193,7 @@ impl Core {
             block_manager,
             committer,
             commit_observer,
+            flex_committer,
             signals,
             dag_state,
             proposer,
@@ -217,6 +230,12 @@ impl Core {
             None
         };
 
+        let flex_committer = if context.protocol_config.enable_v3() {
+            Some(FlexCommitter::new(context.clone(), dag_state.clone()))
+        } else {
+            None
+        };
+
         let committer = Arc::new(
             UniversalCommitterBuilder::new(
                 context.clone(),
@@ -240,6 +259,7 @@ impl Core {
             block_manager,
             committer,
             commit_observer,
+            flex_committer,
             signals,
             dag_state,
             proposer: None,
@@ -257,7 +277,11 @@ impl Core {
             .start_timer();
 
         // Try to commit, since they may not have run after the last storage write.
-        self.try_commit(vec![]).unwrap();
+        if self.context.protocol_config.enable_v3() {
+            self.try_commit_v3().unwrap();
+        } else {
+            self.try_commit(vec![]).unwrap();
+        }
 
         self.try_signal_new_round();
 
@@ -274,7 +298,11 @@ impl Core {
             .start_timer();
 
         // Try to commit and propose, since they may not have run after the last storage write.
-        self.try_commit(vec![]).unwrap();
+        if self.context.protocol_config.enable_v3() {
+            self.try_commit_v3().unwrap();
+        } else {
+            self.try_commit(vec![]).unwrap();
+        }
 
         let last_proposed_block = if let Some(last_proposed_block) = self.try_propose(true).unwrap()
         {
@@ -380,7 +408,11 @@ impl Core {
             );
 
             // Try to commit the new blocks if possible.
-            self.try_commit(vec![])?;
+            if self.context.protocol_config.enable_v3() {
+                self.try_commit_v3()?;
+            } else {
+                self.try_commit(vec![])?;
+            }
 
             // Try to propose now since there are new blocks accepted.
             self.try_propose(false)?;
@@ -401,10 +433,10 @@ impl Core {
         Ok(missing_block_refs)
     }
 
-    // Adds the certified commits that have been synced via the commit syncer. We are using the commit info in order to skip running the decision
-    // rule and immediately commit the corresponding leaders and sub dags. Pay attention that no block acceptance is happening here, but rather
-    // internally in the `try_commit` method which ensures that everytime only the blocks corresponding to the certified commits that are about to
-    // be committed are accepted.
+    /// Adds certified commits synced from peers via the commit syncer. Local commit rule is
+    /// skipped and the corresponding leaders and sub dags are committed directly. Blocks of
+    /// the certified commits themselves are accepted inside `try_commit()` or
+    /// `process_certified_commits()`.
     #[tracing::instrument(skip_all)]
     pub(crate) fn add_certified_commits(
         &mut self,
@@ -422,8 +454,12 @@ impl Core {
         // commits when helping peers sync commits.
         let (_, missing_block_refs) = self.accept_blocks(votes);
 
-        // Try to commit the new blocks. Take into account the trusted commit that has been provided.
-        self.try_commit(commits)?;
+        if self.context.protocol_config.enable_v3() {
+            self.process_certified_commits(commits)?;
+            self.try_commit_v3()?;
+        } else {
+            self.try_commit(commits)?;
+        }
 
         // Try to propose now since there are new blocks accepted.
         self.try_propose(false)?;
@@ -530,6 +566,12 @@ impl Core {
                 if commit.index() > last_commit_index {
                     true
                 } else {
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .core_certified_commits_processed
+                        .with_label_values(&["skipped"])
+                        .inc();
                     tracing::debug!(
                         "Skip commit for index {} as it is already committed with last commit index {}",
                         commit.index(),
@@ -568,7 +610,11 @@ impl Core {
             fail_point!("consensus-after-propose");
 
             // The new block may help commit.
-            self.try_commit(vec![])?;
+            if self.context.protocol_config.enable_v3() {
+                self.try_commit_v3()?;
+            } else {
+                self.try_commit(vec![])?;
+            }
             return Ok(Some(extended_block.block));
         }
         Ok(None)
@@ -707,7 +753,7 @@ impl Core {
             // TODO: refcount subdags
             let subdags = self
                 .commit_observer
-                .handle_commit(sequenced_leaders, local)?;
+                .handle_committed_leaders(sequenced_leaders, local)?;
 
             // Try to unsuspend blocks if gc_round has advanced.
             self.block_manager
@@ -744,6 +790,167 @@ impl Core {
         }
 
         Ok(committed_sub_dags)
+    }
+
+    // Processes certified commits that have been synced from peers. Each commit
+    // is already quorum-certified, so the decision rule is skipped and the
+    // corresponding leaders and sub dags are committed directly. Blocks for the
+    // decided certified commits are accepted inside this function to avoid
+    // flushing blocks that belong to certified commits which end up not being
+    // linearized (see the comment on `accept_committed_blocks` below).
+    fn process_certified_commits(
+        &mut self,
+        certified_commits: Vec<CertifiedCommit>,
+    ) -> ConsensusResult<Vec<CommittedSubDag>> {
+        if certified_commits.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::process_certified_commits"])
+            .start_timer();
+        info!(
+            "Processing certified commits: {:?}",
+            certified_commits
+                .iter()
+                .map(|c| (c.index(), c.leader()))
+                .collect::<Vec<_>>()
+        );
+
+        let num_certified = certified_commits.len();
+        let mut subdags = Vec::with_capacity(num_certified);
+        for cert in certified_commits {
+            // Accept blocks belonging to this commit before building its sub dag — the
+            // sub dag is reconstructed by reading the commit's blocks from DagState.
+            // Accepting per commit (rather than up front) keeps the read-after-write
+            // coupling local and obvious.
+            self.accept_committed_blocks(cert.blocks().to_vec());
+
+            let commit: TrustedCommit = (*cert).clone();
+
+            // Certified commits are not decided locally — mark blocks
+            // committed and build the sub-dag in one shot.
+            let subdag = self
+                .flex_committer
+                .as_ref()
+                .unwrap_or_else(|| panic!("FlexCommitter must be initialized on the v3 path"))
+                .handle_certified_commit(&commit);
+
+            self.post_commit(commit, subdag.clone())?;
+            subdags.push(subdag);
+
+            fail_point!("consensus-after-handle-commit");
+        }
+
+        self.context
+            .metrics
+            .node_metrics
+            .core_certified_commits_processed
+            .with_label_values(&["committed"])
+            .inc_by(num_certified as u64);
+
+        Ok(subdags)
+    }
+
+    // Runs the local commit decision rule on the current DAG and linearizes any
+    // newly-decided sub dags. Does not process certified commits — see
+    // `Self::process_certified_commits` for that path. Used when
+    // `ConsensusProtocolConfig::enable_v3()` is enabled; otherwise the legacy
+    // `try_commit` is used.
+    fn try_commit_v3(&mut self) -> ConsensusResult<Vec<CommittedSubDag>> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["Core::try_commit"])
+            .start_timer();
+
+        let mut committed_sub_dags = Vec::new();
+        loop {
+            let next_commit_leaders = self
+                .leader_schedule_v3
+                .as_ref()
+                .expect("LeaderScheduleV3 must be initialized on the v3 path")
+                .next_commit_leader_schedule();
+            let Some((commit, subdag)) = self
+                .flex_committer
+                .as_mut()
+                .expect("FlexCommitter must be initialized on the v3 path")
+                .try_commit(next_commit_leaders)
+            else {
+                break;
+            };
+
+            self.post_commit(commit, subdag.clone())?;
+            committed_sub_dags.push(subdag);
+
+            fail_point!("consensus-after-handle-commit");
+        }
+
+        Ok(committed_sub_dags)
+    }
+
+    // Post-processing for a single committed subdag on the v3 path: persists the
+    // commit, forwards to the finalizer, updates bookkeeping, unsuspends blocks,
+    // notifies the proposer about own blocks, and feeds v3 leader
+    // scoring.
+    fn post_commit(
+        &mut self,
+        commit: TrustedCommit,
+        subdag: CommittedSubDag,
+    ) -> ConsensusResult<()> {
+        self.dag_state.write().add_commit(commit);
+
+        self.commit_observer.send_to_finalizer(subdag.clone())?;
+
+        self.last_decided_leader = subdag.leader.into();
+        self.context
+            .metrics
+            .node_metrics
+            .last_decided_leader_round
+            .set(self.last_decided_leader.round as i64);
+
+        self.block_manager
+            .try_unsuspend_blocks_for_latest_gc_round();
+
+        let committed_block_refs = subdag
+            .blocks
+            .iter()
+            .filter_map(|block| {
+                (block.author() == self.context.own_index).then_some(block.reference())
+            })
+            .collect::<Vec<_>>();
+        if let Some(proposer) = &self.proposer {
+            proposer.notify_own_blocks_committed(
+                committed_block_refs,
+                self.dag_state.read().gc_round(),
+            );
+        }
+
+        if let Some(schedule) = self.leader_schedule_v3.as_mut() {
+            schedule.add_commit(subdag);
+            let next = schedule.next_commit_leader_schedule();
+            debug!(
+                "Next v3 commit leaders: index={} min_round={} num={} allowed={:?}",
+                next.next_commit_index,
+                next.min_next_leader_round,
+                next.num_leaders(),
+                next.allowed_leaders,
+            );
+            // Push the refreshed schedule into the proposer so its
+            // `allowed_leaders` waiting list tracks current scoring instead
+            // of being frozen at the epoch-start (all-zero-scores) shuffle.
+            if let Some(proposer) = self.proposer.as_mut() {
+                proposer.set_next_commit_leader_schedule(next);
+            }
+        }
+
+        Ok(())
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
