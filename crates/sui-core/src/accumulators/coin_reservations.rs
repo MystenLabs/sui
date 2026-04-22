@@ -19,7 +19,7 @@ use sui_types::{
 /// of (owner, type_tag) for each accumulator object ID.
 pub struct CachingCoinReservationResolver {
     inner: CoinReservationResolver,
-    cache: MokaCache<ObjectID, Result<(SuiAddress, TypeTag), UserInputError>>,
+    cache: MokaCache<ObjectID, (SuiAddress, TypeTag)>,
 }
 
 impl CachingCoinReservationResolver {
@@ -35,12 +35,23 @@ impl CachingCoinReservationResolver {
         object_id: ObjectID,
         accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<(SuiAddress, TypeTag)> {
-        // Owner and type_tag never change, so the cache is always coherent.
-        // On cache miss, use MVCC to read at the specified version.
-        self.cache.get_with(object_id, || {
-            self.inner
-                .get_owner_and_type_for_object(object_id, accumulator_version)
-        })
+        // Owner and type_tag never change once the object exists, so successful
+        // lookups are always coherent.
+        //
+        // Don't cache errors — the only expected error is "not found", which is
+        // transient: the accumulator object may not exist on this node yet but
+        // will appear once the settlement transaction executes. Caching a
+        // transient not-found would poison the cache for all subsequent lookups.
+        if let Some(value) = self.cache.get(&object_id) {
+            return Ok(value);
+        }
+        let result = self
+            .inner
+            .get_owner_and_type_for_object(object_id, accumulator_version);
+        if let Ok(value) = &result {
+            self.cache.insert(object_id, value.clone());
+        }
+        result
     }
 
     pub fn resolve_funds_withdrawal(
