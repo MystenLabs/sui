@@ -83,18 +83,16 @@ impl ObserverNetworkService for ObserverService {
 
         // Create owned strings for observer peer names to avoid borrowing issues
         let observer_name;
-        let (peer_name, peer_type) = match &peer {
-            PeerId::Validator(authority) => (
-                self.context
-                    .committee
-                    .authority(*authority)
-                    .hostname
-                    .as_str(),
-                "validator",
-            ),
+        let peer_name = match &peer {
+            PeerId::Validator(authority) => self
+                .context
+                .committee
+                .authority(*authority)
+                .hostname
+                .as_str(),
             PeerId::Observer(node_id) => {
                 observer_name = format!("{:?}", node_id);
-                (observer_name.as_str(), "observer")
+                observer_name.as_str()
             }
         };
 
@@ -108,7 +106,7 @@ impl ObserverNetworkService for ObserverService {
                     .metrics
                     .node_metrics
                     .invalid_blocks
-                    .with_label_values(&[peer_name, "handle_send_block", e.name(), peer_type])
+                    .with_label_values(&[peer_name, "handle_send_block", e.name()])
                     .inc();
                 tracing::info!("Invalid block from {}: {}", peer.clone(), e);
             })?;

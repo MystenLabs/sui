@@ -493,7 +493,7 @@ impl NodeMetrics {
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
-                &["authority", "source", "error", "node_type"],
+                &["authority", "source", "error"],
                 registry,
             ).unwrap(),
             rejected_blocks: register_int_counter_vec_with_registry!(
