@@ -427,10 +427,13 @@ impl MoveTypeLayoutBuilder {
         self.add_node(MoveTypeNode::Struct(MoveStructNode { fields: field_refs }))
     }
 
-    pub fn enum_layout(&mut self, variants: &[Option<&[LayoutHandle]>]) -> AResult<LayoutHandle> {
+    pub fn enum_layout(
+        &mut self,
+        variants: Vec<Option<Vec<LayoutHandle>>>,
+    ) -> AResult<LayoutHandle> {
         let variant_refs: Box<[Option<Box<[LayoutRef]>>]> = variants
-            .iter()
-            .map(|v| v.map(|fields| fields.iter().map(|h| h.0).collect()))
+            .into_iter()
+            .map(|v_opt| v_opt.map(|v| v.iter().map(|h| h.0).collect::<Box<[LayoutRef]>>()))
             .collect();
         self.add_node(MoveTypeNode::Enum(MoveEnumNode {
             variants: variant_refs,
@@ -470,11 +473,10 @@ impl MoveTypeLayoutBuilder {
                             v.iter()
                                 .map(|f| self.from_tree(f))
                                 .collect::<AResult<Vec<_>>>()
+                                .map(Some)
                         })
                         .collect::<AResult<Vec<_>>>()?;
-                let variant_refs: Vec<Option<&[LayoutHandle]>> =
-                    variant_handles.iter().map(|v| Some(v.as_slice())).collect();
-                self.enum_layout(&variant_refs)?
+                self.enum_layout(variant_handles)?
             }
         })
     }

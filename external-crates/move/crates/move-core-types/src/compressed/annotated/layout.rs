@@ -676,8 +676,8 @@ impl MoveTypeLayoutBuilder {
     /// `fields` is a list of (field_name, field_layout) pairs.
     pub fn struct_layout(
         &mut self,
-        type_tag: &StructTag,
-        fields: &[(&Identifier, LayoutHandle)],
+        type_tag: StructTag,
+        fields: Vec<(Identifier, LayoutHandle)>,
     ) -> AResult<LayoutHandle> {
         let fields: Box<[AnnotatedFieldEntry]> = fields
             .iter()
@@ -687,7 +687,7 @@ impl MoveTypeLayoutBuilder {
             })
             .collect();
         self.add_node(MoveTypeNode::Struct(MoveStructNode {
-            type_: type_tag.clone(),
+            type_: type_tag,
             fields,
         }))
     }
@@ -697,17 +697,17 @@ impl MoveTypeLayoutBuilder {
     /// `None` for unknown layout or `Some(&[(field_name, layout)])` for known.
     pub fn enum_layout(
         &mut self,
-        type_tag: &StructTag,
-        variants: &[(
-            &Identifier,
+        type_tag: StructTag,
+        variants: Vec<(
+            Identifier,
             VariantTag,
-            Option<&[(&Identifier, LayoutHandle)]>,
-        )],
+            Option<Vec<(Identifier, LayoutHandle)>>,
+        )>,
     ) -> AResult<LayoutHandle> {
         let variant_entries: Box<[AnnotatedVariantEntry]> = variants
-            .iter()
-            .map(|(vn, tag, fields)| {
-                let field_entries = fields.map(|fields| {
+            .into_iter()
+            .map(|(vn, tag, fields_opt)| {
+                let fields = fields_opt.map(|fields| {
                     fields
                         .iter()
                         .map(|(fn_name, h)| AnnotatedFieldEntry {
@@ -717,14 +717,14 @@ impl MoveTypeLayoutBuilder {
                         .collect()
                 });
                 AnnotatedVariantEntry {
-                    name: (*vn).clone(),
-                    tag: *tag,
-                    fields: field_entries,
+                    name: vn,
+                    tag,
+                    fields,
                 }
             })
             .collect();
         self.add_node(MoveTypeNode::Enum(MoveEnumNode {
-            type_: type_tag.clone(),
+            type_: type_tag,
             variants: variant_entries,
         }))
     }
@@ -751,31 +751,23 @@ impl MoveTypeLayoutBuilder {
                 let fields = s
                     .fields
                     .iter()
-                    .map(|f| Ok((&f.name, self.from_tree(&f.layout)?)))
+                    .map(|f| Ok((f.name.clone(), self.from_tree(&f.layout)?)))
                     .collect::<AResult<Vec<_>>>()?;
-                self.struct_layout(&s.type_, &fields)?
+                self.struct_layout(s.type_.clone(), fields)?
             }
             AV::MoveTypeLayout::Enum(e) => {
                 let variants = e
                     .variants
                     .iter()
                     .map(|((variant_name, tag), field_layouts)| {
-                        let fields: Vec<(&Identifier, LayoutHandle)> = field_layouts
+                        let fields: Vec<(Identifier, LayoutHandle)> = field_layouts
                             .iter()
-                            .map(|f| Ok((&f.name, self.from_tree(&f.layout)?)))
+                            .map(|f| Ok((f.name.clone(), self.from_tree(&f.layout)?)))
                             .collect::<AResult<_>>()?;
-                        Ok((variant_name, *tag, fields))
+                        Ok((variant_name.clone(), *tag, Some(fields)))
                     })
                     .collect::<AResult<Vec<_>>>()?;
-                let variant_refs: Vec<(
-                    &Identifier,
-                    VariantTag,
-                    Option<&[(&Identifier, LayoutHandle)]>,
-                )> = variants
-                    .iter()
-                    .map(|(vn, tag, fields)| (*vn, *tag, Some(fields.as_slice())))
-                    .collect();
-                self.enum_layout(&e.type_, &variant_refs)?
+                self.enum_layout(e.type_.clone(), variants)?
             }
         })
     }

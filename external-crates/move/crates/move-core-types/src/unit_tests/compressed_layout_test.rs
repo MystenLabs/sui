@@ -425,7 +425,7 @@ fn runtime_unknown_variant_inflate_fails() {
     let mut b = RC::MoveTypeLayoutBuilder::new();
     let u64_h = b.u64();
     // variant 0: known (one u64 field), variant 1: unknown
-    let handle = b.enum_layout(&[Some(&[u64_h]), None]).unwrap();
+    let handle = b.enum_layout(vec![Some(vec![u64_h]), None]).unwrap();
     let layout = b.build(handle);
 
     let err = layout.inflate().unwrap_err();
@@ -440,7 +440,7 @@ fn runtime_unknown_variant_deser_fails() {
     let mut b = RC::MoveTypeLayoutBuilder::new();
     let u64_h = b.u64();
     // variant 0: known, variant 1: unknown
-    let handle = b.enum_layout(&[Some(&[u64_h]), None]).unwrap();
+    let handle = b.enum_layout(vec![Some(vec![u64_h]), None]).unwrap();
     let layout = b.build(handle);
 
     // BCS for variant tag=1, followed by a u64
@@ -459,7 +459,7 @@ fn runtime_unknown_variant_known_variant_deser_succeeds() {
     let mut b = RC::MoveTypeLayoutBuilder::new();
     let u64_h = b.u64();
     // variant 0: known (one u64 field), variant 1: unknown
-    let handle = b.enum_layout(&[Some(&[u64_h]), None]).unwrap();
+    let handle = b.enum_layout(vec![Some(vec![u64_h]), None]).unwrap();
     let layout = b.build(handle);
 
     // BCS for variant tag=0 with one u64 field — should succeed
@@ -484,10 +484,10 @@ fn annotated_unknown_variant_inflate_fails() {
     // variant 0 "Some": known, variant 1 "None": unknown
     let handle = b
         .enum_layout(
-            &test_struct_tag("MyEnum"),
-            &[
-                (&some_name, 0, Some(&[(&value_name, u64_h)])),
-                (&none_name, 1, None),
+            test_struct_tag("MyEnum"),
+            vec![
+                (some_name, 0, Some(vec![(value_name, u64_h)])),
+                (none_name, 1, None),
             ],
         )
         .unwrap();
@@ -510,10 +510,10 @@ fn annotated_unknown_variant_deser_fails() {
     // variant 0 "Some": known, variant 1 "None": unknown
     let handle = b
         .enum_layout(
-            &test_struct_tag("MyEnum"),
-            &[
-                (&some_name, 0, Some(&[(&value_name, u64_h)])),
-                (&none_name, 1, None),
+            test_struct_tag("MyEnum"),
+            vec![
+                (some_name, 0, Some(vec![(value_name, u64_h)])),
+                (none_name, 1, None),
             ],
         )
         .unwrap();
@@ -540,10 +540,10 @@ fn annotated_unknown_variant_known_variant_deser_succeeds() {
     // variant 0 "Some": known, variant 1 "None": unknown
     let handle = b
         .enum_layout(
-            &test_struct_tag("MyEnum"),
-            &[
-                (&some_name, 0, Some(&[(&value_name, u64_h)])),
-                (&none_name, 1, None),
+            test_struct_tag("MyEnum"),
+            vec![
+                (some_name, 0, Some(vec![(value_name, u64_h)])),
+                (none_name, 1, None),
             ],
         )
         .unwrap();
