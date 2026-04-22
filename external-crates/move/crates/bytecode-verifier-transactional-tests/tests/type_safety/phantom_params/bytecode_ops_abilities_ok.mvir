@@ -4,7 +4,7 @@
 // are not considered when deriving the abilities for a struct/enum by checking against
 // abilities required for specific bytecode operatiosn.
 
-module 0x1.M {
+module 0x1::M {
     struct NoAbilities { a: bool }
     struct HasDrop<phantom T1, T2> has drop { a: bool }
     struct HasCopy<phantom T1, T2> has copy { a : bool }
@@ -13,39 +13,39 @@ module 0x1.M {
     struct RequireStore<T: store> { a: bool }
 
     // `WriteRef` requires drop
-    f1(ref: &mut Self.HasDrop<Self.NoAbilities, u64>) {
+    f1(ref: &mut Self::HasDrop<Self::NoAbilities, u64>) {
     label b0:
-        *move(ref) = HasDrop<Self.NoAbilities, u64> { a: true };
+        *move(ref) = HasDrop<Self::NoAbilities, u64> { a: true };
         return;
     }
 
     // `Pop` requires drop
     f2() {
     label b0:
-        _ = HasDrop<Self.NoAbilities, u64> { a: true };
+        _ = HasDrop<Self::NoAbilities, u64> { a: true };
         return;
     }
 
     // Leaving value in local requires drop
-    f3(x: Self.HasDrop<Self.NoAbilities, u64>) {
+    f3(x: Self::HasDrop<Self::NoAbilities, u64>) {
     label b0:
         return;
     }
 
     // `CopyLoc` requires copy
-    f4(x: Self.HasCopy<Self.NoAbilities, u64>): Self.HasCopy<Self.NoAbilities, u64> * Self.HasCopy<Self.NoAbilities, u64> {
+    f4(x: Self::HasCopy<Self::NoAbilities, u64>): Self::HasCopy<Self::NoAbilities, u64> * Self::HasCopy<Self::NoAbilities, u64> {
     label b0:
         return (copy(x), move(x));
     }
 
-    f8(): Self.RequireStore<Self.HasStore<Self.NoAbilities, u64>> {
+    f8(): Self::RequireStore<Self::HasStore<Self::NoAbilities, u64>> {
     label b0:
-        return RequireStore<Self.HasStore<Self.NoAbilities, u64>> { a: true };
+        return RequireStore<Self::HasStore<Self::NoAbilities, u64>> { a: true };
     }
 }
 
 //# publish
-module 0x2.M {
+module 0x2::M {
     enum NoAbilities { V{ a: bool } }
     enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
     enum HasCopy<phantom T1, T2> has copy { V{ a : bool }}
@@ -54,33 +54,33 @@ module 0x2.M {
     enum RequireStore<T: store> { V{ a: bool }}
 
     // `WriteRef` requires drop
-    f1(ref: &mut Self.HasDrop<Self.NoAbilities, u64>) {
+    f1(ref: &mut Self::HasDrop<Self::NoAbilities, u64>) {
     label b0:
-        *move(ref) = HasDrop.V<Self.NoAbilities, u64> { a: true };
+        *move(ref) = HasDrop::V<Self::NoAbilities, u64> { a: true };
         return;
     }
 
     // `Pop` requires drop
     f2() {
     label b0:
-        _ = HasDrop.V<Self.NoAbilities, u64> { a: true };
+        _ = HasDrop::V<Self::NoAbilities, u64> { a: true };
         return;
     }
 
     // Leaving value in local requires drop
-    f3(x: Self.HasDrop<Self.NoAbilities, u64>) {
+    f3(x: Self::HasDrop<Self::NoAbilities, u64>) {
     label b0:
         return;
     }
 
     // `CopyLoc` requires copy
-    f4(x: Self.HasCopy<Self.NoAbilities, u64>): Self.HasCopy<Self.NoAbilities, u64> * Self.HasCopy<Self.NoAbilities, u64> {
+    f4(x: Self::HasCopy<Self::NoAbilities, u64>): Self::HasCopy<Self::NoAbilities, u64> * Self::HasCopy<Self::NoAbilities, u64> {
     label b0:
         return (copy(x), move(x));
     }
 
-    f8(): Self.RequireStore<Self.HasStore<Self.NoAbilities, u64>> {
+    f8(): Self::RequireStore<Self::HasStore<Self::NoAbilities, u64>> {
     label b0:
-        return RequireStore.V<Self.HasStore<Self.NoAbilities, u64>> { a: true };
+        return RequireStore::V<Self::HasStore<Self::NoAbilities, u64>> { a: true };
     }
 }

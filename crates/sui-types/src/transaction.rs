@@ -3900,6 +3900,22 @@ impl SenderSignedData {
             .into()
         );
 
+        if context.config.enable_gasless() && tx_data.is_gasless_transaction() {
+            let gasless_max = context.config.get_gasless_max_tx_size_bytes();
+            fp_ensure!(
+                tx_size as u64 <= gasless_max,
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::SizeLimitExceeded {
+                        limit: format!(
+                            "serialized gasless transaction size exceeded maximum of {gasless_max}"
+                        ),
+                        value: tx_size.to_string(),
+                    }
+                }
+                .into()
+            );
+        }
+
         tx_data.validity_check(context)?;
 
         Ok(tx_size)

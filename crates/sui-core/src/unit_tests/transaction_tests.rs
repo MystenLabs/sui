@@ -1777,4 +1777,66 @@ mod gasless_input_tests {
             result
         );
     }
+
+    #[sim_test]
+    async fn test_gasless_tx_within_size_limit_succeeds() {
+        let (authority, sender, keypair, chain) = setup_gasless_authority(|_| {}).await;
+
+        let inputs = vec![
+            CallArg::Pure(bcs::to_bytes(&100u64).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&SuiAddress::ZERO).unwrap()),
+        ];
+        let pt = build_pt_with_inputs(inputs, vec![send_funds_call(test_token())]);
+        let tx_data = build_gasless_transaction(sender, pt, chain);
+        let tx = to_sender_signed_transaction(tx_data, &keypair);
+
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
+        let result = tx.validity_check(&epoch_store.tx_validity_check_context());
+
+        assert!(
+            result.is_ok(),
+            "Small gasless tx should pass size check, got: {:?}",
+            result
+        );
+    }
+
+    #[sim_test]
+    async fn test_gasless_tx_exceeding_size_limit_rejected() {
+        let (authority, sender, keypair, chain) = setup_gasless_authority(|_| {}).await;
+
+        // Build a valid gasless tx that exceeds 16 KiB: ~110 send_funds calls
+        // (each ~150 bytes serialized) pushes past the limit.
+        let num_sends = 110;
+        let token = test_token();
+        let mut inputs: Vec<CallArg> = Vec::new();
+        let mut commands: Vec<Command> = Vec::new();
+
+        for i in 0..num_sends {
+            let amount_idx = (i * 2) as u16;
+            let recipient_idx = (i * 2 + 1) as u16;
+            inputs.push(CallArg::Pure(bcs::to_bytes(&100u64).unwrap()));
+            inputs.push(CallArg::Pure(bcs::to_bytes(&SuiAddress::ZERO).unwrap()));
+            commands.push(Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package: SUI_FRAMEWORK_PACKAGE_ID,
+                module: "balance".to_string(),
+                function: "send_funds".to_string(),
+                type_arguments: vec![TypeInput::from(token.clone())],
+                arguments: vec![Argument::Input(amount_idx), Argument::Input(recipient_idx)],
+            })));
+        }
+
+        let pt = build_pt_with_inputs(inputs, commands);
+        let tx_data = build_gasless_transaction(sender, pt, chain);
+        let tx = to_sender_signed_transaction(tx_data, &keypair);
+
+        let epoch_store = authority.load_epoch_store_one_call_per_task();
+        let result = tx.validity_check(&epoch_store.tx_validity_check_context());
+
+        assert!(result.is_err(), "Oversized gasless tx should be rejected");
+        let err_str = result.unwrap_err().to_string();
+        assert!(
+            err_str.contains("gasless transaction size exceeded"),
+            "Expected gasless size limit error, got: {err_str}"
+        );
+    }
 }

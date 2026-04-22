@@ -37,7 +37,6 @@ sui-simulator.workspace = true
 sui-protocol-config.workspace = true
 object_store.workspace = true
 url.workspace = true
-backoff.workspace = true
 prost.workspace = true
 zstd.workspace = true
 sui-rpc.workspace = true

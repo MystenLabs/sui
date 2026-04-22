@@ -433,24 +433,19 @@ fun get_do_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let id = scenario.new_object();
-    let mut called = false;
-    dynamic_object_field::get_do!(&id, 0u64, |_v: &Counter| { called = true; assert!(false) });
-    assert!(!called);
+    dynamic_object_field::get_do!(&id, 0u64, |_v: &Counter| assert!(false));
     scenario.end();
     id.delete();
 }
 
-#[test]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
 fun get_do_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     add(&mut id, 0u64, new(&mut scenario));
-    let mut called = false;
-    dynamic_object_field::get_do!(&id, 0u64, |_v: &Fake| { called = true; assert!(false) });
-    assert!(!called);
-    scenario.end();
-    id.delete();
+    dynamic_object_field::get_do!(&id, 0u64, |_v: &Fake| assert!(false));
+    abort
 }
 
 #[test]
@@ -471,30 +466,19 @@ fun get_mut_do_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    let mut called = false;
-    dynamic_object_field::get_mut_do!(&mut id, 0u64, |_v: &mut Counter| {
-        called = true;
-        assert!(false)
-    });
-    assert!(!called);
+    dynamic_object_field::get_mut_do!(&mut id, 0u64, |_v: &mut Counter| assert!(false));
     scenario.end();
     id.delete();
 }
 
-#[test]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
 fun get_mut_do_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     add(&mut id, 0u64, new(&mut scenario));
-    let mut called = false;
-    dynamic_object_field::get_mut_do!(&mut id, 0u64, |_v: &mut Fake| {
-        called = true;
-        assert!(false)
-    });
-    assert!(!called);
-    scenario.end();
-    id.delete();
+    dynamic_object_field::get_mut_do!(&mut id, 0u64, |_v: &mut Fake| assert!(false));
+    abort
 }
 
 #[test]
@@ -521,16 +505,14 @@ fun get_fold_missing() {
     id.delete();
 }
 
-#[test]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
 fun get_fold_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     add(&mut id, 0u64, new(&mut scenario));
-    let result: u64 = dynamic_object_field::get_fold!(&id, 0u64, 99u64, |_: &Fake| abort 0);
-    assert_eq!(result, 99);
-    scenario.end();
-    id.delete();
+    let _result: u64 = dynamic_object_field::get_fold!(&id, 0u64, 99u64, |_: &Fake| abort 0);
+    abort
 }
 
 #[test]
@@ -565,21 +547,14 @@ fun get_mut_fold_missing() {
     id.delete();
 }
 
-#[test]
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
 fun get_mut_fold_wrong_type() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     add(&mut id, 0u64, new(&mut scenario));
-    let result: u64 = dynamic_object_field::get_mut_fold!(
-        &mut id,
-        0u64,
-        99u64,
-        |_: &mut Fake| abort 0,
-    );
-    assert_eq!(result, 99);
-    scenario.end();
-    id.delete();
+    dynamic_object_field::get_mut_fold!(&mut id, 0u64, 99u64, |_: &mut Fake| abort 0);
+    abort
 }
 
 // === Deprecated Tests ===

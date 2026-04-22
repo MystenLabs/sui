@@ -2801,6 +2801,20 @@ html[data-theme='dark'] .protoUnionNote {
   border-left-color: #5CA9FF !important;
 }
 
+/* Hide top-level section cards from category index pages */
+.docCardListScopeExclude .col:has(a[href="/getting-started"]),
+.docCardListScopeExclude .col:has(a[href="/getting-started/"]),
+.docCardListScopeExclude .col:has(a[href="/onchain-finance/"]),
+.docCardListScopeExclude .col:has(a[href="/onchain-finance"]),
+.docCardListScopeExclude .col:has(a[href="/develop/"]),
+.docCardListScopeExclude .col:has(a[href="/develop"]),
+.docCardListScopeExclude .col:has(a[href="/references/"]),
+.docCardListScopeExclude .col:has(a[href="/references"]),
+.docCardListScopeExclude .col:has(a[href="/sui-stack/"]),
+.docCardListScopeExclude .col:has(a[href="/sui-stack"]) {
+  display: none !important;
+}
+
 /* No highlight on dropdown trigger labels */
 .navbar .dropdown > .navbar__link,
 .navbar .dropdown > .navbar__link.navbar__link--active {

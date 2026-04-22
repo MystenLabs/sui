@@ -1,20 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_types::block::BlockRef;
 use futures::{StreamExt as _, stream};
 use parking_lot::RwLock;
+use sui_macros::fail_point_async;
+use tap::TapFallible;
 use tokio::sync::broadcast;
 
 use crate::{
+    BlockVerifier, TransactionVoteTracker,
     authority_service::{BroadcastStream, SubscriptionCounter},
     block::{BlockAPI as _, SignedBlock, VerifiedBlock},
     commit::{CommitIndex, CommitRange, TrustedCommit},
+    commit_vote_monitor::CommitVoteMonitor,
     context::Context,
+    core_thread::CoreThreadDispatcher,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
@@ -22,27 +27,43 @@ use crate::{
     },
 };
 
+// Is used to calculate the threshold for blocking blocks when the commit index is lagging too far from the quorum commit index.
+// This is a multiplier of the commit_sync_batch_size.
+pub(crate) const COMMIT_LAG_MULTIPLIER: u32 = 5;
+
 /// Serves observer requests from observer or validator peers. It is the server-side
 /// counterpart to `ObserverNetworkClient`.
 pub(crate) struct ObserverService {
     context: Arc<Context>,
+    core_dispatcher: Arc<dyn CoreThreadDispatcher>,
     dag_state: Arc<RwLock<DagState>>,
     rx_accepted_block_broadcast: broadcast::Receiver<(VerifiedBlock, CommitIndex)>,
     subscription_counter: Arc<SubscriptionCounter>,
+    block_verifier: Arc<dyn BlockVerifier>,
+    commit_vote_monitor: Arc<CommitVoteMonitor>,
+    transaction_vote_tracker: TransactionVoteTracker,
 }
 
 impl ObserverService {
     pub(crate) fn new(
         context: Arc<Context>,
+        core_dispatcher: Arc<dyn CoreThreadDispatcher>,
         dag_state: Arc<RwLock<DagState>>,
         rx_accepted_block_broadcast: broadcast::Receiver<(VerifiedBlock, CommitIndex)>,
+        block_verifier: Arc<dyn BlockVerifier>,
+        commit_vote_monitor: Arc<CommitVoteMonitor>,
+        transaction_vote_tracker: TransactionVoteTracker,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
             context,
+            core_dispatcher,
             dag_state,
             rx_accepted_block_broadcast,
             subscription_counter,
+            block_verifier,
+            commit_vote_monitor,
+            transaction_vote_tracker,
         }
     }
 }
@@ -51,29 +72,142 @@ impl ObserverService {
 impl ObserverNetworkService for ObserverService {
     async fn handle_block(
         &self,
-        _peer: PeerId,
+        peer: PeerId,
         item: ObserverBlockStreamItem,
     ) -> ConsensusResult<()> {
-        // TODO: implement block processing for observers.
-        // This should validate and add blocks to DagState, similar to how validators
-        // handle blocks in AuthorityService::handle_send_block.
+        fail_point_async!("consensus-rpc-response");
+
+        // TODO: dedup block verifications, here and with fetched blocks.
         let signed_block: SignedBlock =
             bcs::from_bytes(&item.block).map_err(ConsensusError::MalformedBlock)?;
 
-        tracing::info!(
-            "Observer received round {}, author {} at timestamp: {}",
-            signed_block.round(),
-            signed_block.author(),
-            signed_block.timestamp_ms()
-        );
+        // Create owned strings for observer peer names to avoid borrowing issues
+        let observer_name;
+        let peer_name = match &peer {
+            PeerId::Validator(authority) => self
+                .context
+                .committee
+                .authority(*authority)
+                .hostname
+                .as_str(),
+            PeerId::Observer(node_id) => {
+                observer_name = format!("{:?}", node_id);
+                observer_name.as_str()
+            }
+        };
 
-        // TODO: we do a dummy increment here to allow us confirm that end to end flow in tests.
+        // Reject blocks failing parsing and validations.
+        // Of Observer nodes we don't care about the transaction votes.
+        let (verified_block, _reject_txn_votes) = self
+            .block_verifier
+            .verify_and_vote(signed_block, item.block)
+            .tap_err(|e| {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[peer_name, "handle_send_block", e.name()])
+                    .inc();
+                tracing::info!("Invalid block from {}: {}", peer.clone(), e);
+            })?;
+
+        let block_author_hostname = &self
+            .context
+            .committee
+            .authority(verified_block.author())
+            .hostname;
+        let block_ref = verified_block.reference();
+        tracing::debug!("Received block {} via send block.", block_ref);
+
         self.context
             .metrics
             .node_metrics
             .verified_blocks
-            .with_label_values(&["observer"])
+            .with_label_values(&[block_author_hostname])
             .inc();
+
+        let now = self.context.clock.timestamp_utc_ms();
+        let forward_time_drift =
+            Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
+
+        self.context
+            .metrics
+            .node_metrics
+            .block_timestamp_drift_ms
+            .with_label_values(&[block_author_hostname.as_str(), "handle_send_block"])
+            .inc_by(forward_time_drift.as_millis() as u64);
+
+        // Observe the block for the commit votes. When local commit is lagging too much,
+        // commit sync loop will trigger fetching.
+        self.commit_vote_monitor.observe_block(&verified_block);
+
+        // Reject blocks when local commit index is lagging too far from quorum commit index,
+        // to avoid the memory overhead from suspended blocks.
+        //
+        // IMPORTANT: this must be done after observing votes from the block, otherwise
+        // observed quorum commit will no longer progress.
+        //
+        // Since the main issue with too many suspended blocks is memory usage not CPU,
+        // it is ok to reject after block verifications instead of before.
+        let last_commit_index = self.dag_state.read().last_commit_index();
+        let quorum_commit_index = self.commit_vote_monitor.quorum_commit_index();
+        // The threshold to ignore block should be larger than commit_sync_batch_size,
+        // to avoid excessive block rejections and synchronizations.
+        if last_commit_index
+            + self.context.parameters.commit_sync_batch_size * COMMIT_LAG_MULTIPLIER
+            < quorum_commit_index
+        {
+            self.context
+                .metrics
+                .node_metrics
+                .rejected_blocks
+                .with_label_values(&["commit_lagging"])
+                .inc();
+            tracing::debug!(
+                "Block {:?} is rejected because last commit index is lagging quorum commit index too much ({} < {})",
+                block_ref,
+                last_commit_index,
+                quorum_commit_index,
+            );
+            return Err(ConsensusError::BlockRejected {
+                block_ref,
+                reason: format!(
+                    "Last commit index is lagging quorum commit index too much ({} < {})",
+                    last_commit_index, quorum_commit_index,
+                ),
+            });
+        }
+
+        // Add the block to the transaction vote tracker. No "own" votes are recorded for observer nodes.
+        if self.context.protocol_config.transaction_voting_enabled() {
+            self.transaction_vote_tracker
+                .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
+        }
+
+        // Send the block to Core to try accepting it into the DAG.
+        let missing_ancestors = self
+            .core_dispatcher
+            .add_blocks(vec![verified_block.clone()])
+            .await
+            .map_err(|_| ConsensusError::Shutdown)?;
+
+        // TODO: Schedule fetching missing ancestors from this peer in the background.
+        // This requires the refactored synchronizer that supports PeerId (from the
+        // consensus-synchronizer-peers-pool branch). For now, just record metrics.
+        if !missing_ancestors.is_empty() {
+            self.context
+                .metrics
+                .node_metrics
+                .handler_received_block_missing_ancestors
+                .with_label_values(&[block_author_hostname])
+                .inc_by(missing_ancestors.len() as u64);
+
+            tracing::debug!(
+                "Block has {} missing ancestors that need to be fetched",
+                missing_ancestors.len()
+            );
+        }
+
         Ok(())
     }
 
@@ -163,7 +297,10 @@ mod tests {
     use super::*;
     use crate::{
         block::{TestBlock, VerifiedBlock},
+        block_verifier::NoopBlockVerifier,
+        commit_vote_monitor::CommitVoteMonitor,
         context::Context,
+        core_thread::MockCoreThreadDispatcher,
         storage::mem_store::MemStore,
     };
 
@@ -179,7 +316,22 @@ mod tests {
         let (tx_accepted_block, rx_accepted_block) =
             broadcast::channel::<(VerifiedBlock, CommitIndex)>(100);
 
-        let observer_service = ObserverService::new(context.clone(), dag_state, rx_accepted_block);
+        // Create mock dependencies
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let block_verifier = Arc::new(NoopBlockVerifier);
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+
+        let observer_service = ObserverService::new(
+            context.clone(),
+            core_dispatcher,
+            dag_state,
+            rx_accepted_block,
+            block_verifier,
+            commit_vote_monitor,
+            transaction_vote_tracker,
+        );
 
         // Observer starts with no blocks seen
         let highest_round_per_authority = vec![0u64; context.committee.size()];
@@ -234,7 +386,22 @@ mod tests {
         let (_tx_accepted_block, rx_accepted_block) =
             broadcast::channel::<(VerifiedBlock, CommitIndex)>(100);
 
-        let observer_service = ObserverService::new(context.clone(), dag_state, rx_accepted_block);
+        // Create mock dependencies
+        let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
+        let block_verifier = Arc::new(NoopBlockVerifier);
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
+
+        let observer_service = ObserverService::new(
+            context.clone(),
+            core_dispatcher,
+            dag_state,
+            rx_accepted_block,
+            block_verifier,
+            commit_vote_monitor,
+            transaction_vote_tracker,
+        );
 
         let peer = keys[0].0.public().clone();
 

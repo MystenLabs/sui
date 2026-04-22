@@ -1,24 +1,24 @@
 // Tests that if taking a mutable enum that the variant inside cane be mutated.
 
 //# print-bytecode
-module 0x6.PolymorphicEnums {
+module 0x6::PolymorphicEnums {
     enum EnumWithTwoVariants<T> has drop {
         One { x: T },
         Two { x: T, y: T }
     }
 
-    public f(t: u64): Self.EnumWithTwoVariants<u64> {
+    public f(t: u64): Self::EnumWithTwoVariants<u64> {
         label b0:
-            return EnumWithTwoVariants.One<u64> { x: move(t) };
+            return EnumWithTwoVariants::One<u64> { x: move(t) };
     }
 
-    public mutate(e: &mut Self.EnumWithTwoVariants<u64>, x: u64, y: u64) {
+    public mutate(e: &mut Self::EnumWithTwoVariants<u64>, x: u64, y: u64) {
         label b0:
-            *(move(e)) = EnumWithTwoVariants.Two<u64> { x: move(x), y: move(y) };
+            *(move(e)) = EnumWithTwoVariants::Two<u64> { x: move(x), y: move(y) };
             return;
     }
 
-    public is_variant_two(e: &Self.EnumWithTwoVariants<u64>): bool {
+    public is_variant_two(e: &Self::EnumWithTwoVariants<u64>): bool {
         let x: &u64;
         let u: &u64;
         label b0:
@@ -34,24 +34,24 @@ module 0x6.PolymorphicEnums {
 }
 
 //# publish
-module 0x6.PolymorphicEnums {
+module 0x6::PolymorphicEnums {
     enum EnumWithTwoVariants<T> has drop {
         One { x: T },
         Two { x: T, y: T }
     }
 
-    public f(t: u64): Self.EnumWithTwoVariants<u64> {
+    public f(t: u64): Self::EnumWithTwoVariants<u64> {
         label b0:
-            return EnumWithTwoVariants.One<u64> { x: move(t) };
+            return EnumWithTwoVariants::One<u64> { x: move(t) };
     }
 
-    public mutate(e: &mut Self.EnumWithTwoVariants<u64>, x: u64, y: u64) {
+    public mutate(e: &mut Self::EnumWithTwoVariants<u64>, x: u64, y: u64) {
         label b0:
-            *(move(e)) = EnumWithTwoVariants.Two<u64> { x: move(x), y: move(y) };
+            *(move(e)) = EnumWithTwoVariants::Two<u64> { x: move(x), y: move(y) };
             return;
     }
 
-    public is_variant_two(e: &Self.EnumWithTwoVariants<u64>): bool {
+    public is_variant_two(e: &Self::EnumWithTwoVariants<u64>): bool {
         let x: &u64;
         let u: &u64;
         label b0:
@@ -67,17 +67,17 @@ module 0x6.PolymorphicEnums {
 }
 
 //# run
-module 0x7.m {
-import 0x6.PolymorphicEnums;
+module 0x7::m {
+import 0x6::PolymorphicEnums;
 entry foo() {
-    let x: PolymorphicEnums.EnumWithTwoVariants<u64>;
+    let x: PolymorphicEnums::EnumWithTwoVariants<u64>;
     let y: bool;
     label b0:
-        x = PolymorphicEnums.f(42);
-        y = PolymorphicEnums.is_variant_two(&x);
+        x = PolymorphicEnums::f(42);
+        y = PolymorphicEnums::is_variant_two(&x);
         assert(!move(y), 100);
-        PolymorphicEnums.mutate(&mut x, 43, 42);
-        y = PolymorphicEnums.is_variant_two(&x);
+        PolymorphicEnums::mutate(&mut x, 43, 42);
+        y = PolymorphicEnums::is_variant_two(&x);
         assert(move(y), 101);
         return;
 }

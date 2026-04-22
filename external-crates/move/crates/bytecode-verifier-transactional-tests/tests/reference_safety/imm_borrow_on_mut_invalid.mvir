@@ -1,11 +1,11 @@
 //# publish
-module 0x1.Tester {
+module 0x1::Tester {
 
     struct Initializer has key { x: u64, y: u64 }
     struct Point { x: u64, y: u64 }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
-    set_and_pick(init: &mut Self.Initializer, p: &mut Self.Point): &mut u64 {
+    set_and_pick(init: &mut Self::Initializer, p: &mut Self::Point): &mut u64 {
     label b0:
         *&mut copy(p).Point::x = *&copy(init).Initializer::x;
         *&mut copy(p).Point::y = *&move(init).Initializer::y;
@@ -22,7 +22,7 @@ module 0x1.Tester {
         return freeze(move(u));
     }
 
-    larger_field_1(init: &mut Self.Initializer, point_ref: &mut Self.Point): &u64 {
+    larger_field_1(init: &mut Self::Initializer, point_ref: &mut Self::Point): &u64 {
         let field_ref: &mut u64;
         let returned_ref: &u64;
         let x_val: u64;
@@ -30,10 +30,10 @@ module 0x1.Tester {
         assert(*&copy(point_ref).Point::x == 0, 42);
         assert(*&copy(point_ref).Point::y == 0, 42);
 
-        field_ref = Self.set_and_pick(move(init), copy(point_ref));
+        field_ref = Self::set_and_pick(move(init), copy(point_ref));
         // this borrow is invalid because of field_ref
         x_val = *freeze(&mut move(point_ref).Point::x);
-        returned_ref = Self.bump_and_give(move(field_ref));
+        returned_ref = Self::bump_and_give(move(field_ref));
 
         // imagine some more interesting check than this assert
         assert(
@@ -46,13 +46,13 @@ module 0x1.Tester {
 }
 
 //# publish
-module 0x1.Tester2 {
+module 0x1::Tester2 {
 
     struct Initializer has key { x: u64, y: u64 }
     struct Point { x: u64, y: u64 }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
-    set_and_pick(init: &mut Self.Initializer, p: &mut Self.Point): &mut u64 {
+    set_and_pick(init: &mut Self::Initializer, p: &mut Self::Point): &mut u64 {
     label b0:
         *&mut copy(p).Point::x = *&copy(init).Initializer::x;
         *&mut copy(p).Point::y = *&move(init).Initializer::y;
@@ -69,7 +69,7 @@ module 0x1.Tester2 {
         return freeze(move(u));
     }
 
-    larger_field_2(init: &mut Self.Initializer, point_ref: &mut Self.Point): &u64 {
+    larger_field_2(init: &mut Self::Initializer, point_ref: &mut Self::Point): &u64 {
         let field_ref: &mut u64;
         let returned_ref: &u64;
         let x_val: u64;
@@ -77,10 +77,10 @@ module 0x1.Tester2 {
         assert(*&copy(point_ref).Point::x == 0, 42);
         assert(*&copy(point_ref).Point::y == 0, 42);
 
-        field_ref = Self.set_and_pick(move(init), copy(point_ref));
+        field_ref = Self::set_and_pick(move(init), copy(point_ref));
         // this freeze is invalid because of field_ref
         x_val = *(&freeze(move(point_ref)).Point::x);
-        returned_ref = Self.bump_and_give(move(field_ref));
+        returned_ref = Self::bump_and_give(move(field_ref));
 
         // imagine some more interesting check than this assert
         assert(

@@ -1,5 +1,5 @@
 //# print-bytecode --syntax=mvir
-module 0x42.M {
+module 0x42::M {
 entry foo<T, U>() {
 label b0:
     return;

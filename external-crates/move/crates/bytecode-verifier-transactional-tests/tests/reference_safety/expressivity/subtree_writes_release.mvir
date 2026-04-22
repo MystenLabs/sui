@@ -2,14 +2,14 @@
 
 //# publish
 
-module 0x2.extension_after_join {
+module 0x2::extension_after_join {
 
-struct Tree has copy, drop, store { l: Self.Sub1, r: Self.Sub1 }
-struct Sub1 has copy, drop, store { l: Self.Sub2, r: Self.Sub2 }
+struct Tree has copy, drop, store { l: Self::Sub1, r: Self::Sub1 }
+struct Sub1 has copy, drop, store { l: Self::Sub2, r: Self::Sub2 }
 struct Sub2 has copy, drop, store { l: u64, r: u64 }
 
-t(cond: bool, root: &mut Self.Tree) {
-    let x: &mut Self.Sub1;
+t(cond: bool, root: &mut Self::Tree) {
+    let x: &mut Self::Sub1;
     let y: &mut u64;
 label l0:
     jump_if (move(cond)) l2;

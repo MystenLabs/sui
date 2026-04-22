@@ -1,18 +1,18 @@
 //# publish
-module 0x42.Tester {
+module 0x42::Tester {
     struct T has drop {v: u64}
 
-    public new(v: u64): Self.T  {
+    public new(v: u64): Self::T  {
     label b0:
         return T{v: move(v)};
     }
 
-    public replace(t: &mut Self.T) {
+    public replace(t: &mut Self::T) {
         let t_v: &mut u64;
-        let new_t: Self.T;
+        let new_t: Self::T;
     label b0:
         t_v = &mut copy(t).T::v;
-        new_t = Self.new(1);
+        new_t = Self::new(1);
         // cannot mutate, still borrowed
         *move(t) = move(new_t);
 

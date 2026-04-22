@@ -1,116 +1,116 @@
 //# publish
-module 0x2.ByValue {
+module 0x2::ByValue {
     enum Foo<T> { V { x: T } }
 
-    foo(y: Self.Foo<u64>) {
+    foo(y: Self::Foo<u64>) {
         let x: u64;
     label b0:
         // invalid
-        Foo.V<bool> { x }  = move(y);
+        Foo::V<bool> { x }  = move(y);
         return;
     }
 }
 
 //# publish
-module 0x2.ByImmRef {
+module 0x2::ByImmRef {
     enum Foo<T> { V { x: T } }
 
-    foo(y: Self.Foo<u64>) {
+    foo(y: Self::Foo<u64>) {
         let x: u64;
     label b0:
         // invalid
-        &Foo.V<bool> { x } = move(y);
+        &Foo::V<bool> { x } = move(y);
         return;
     }
 }
 
 //# publish
-module 0x2.ByMutRef {
+module 0x2::ByMutRef {
     enum Foo<T> { V { x: T } }
 
-    foo(y: Self.Foo<u64>) {
+    foo(y: Self::Foo<u64>) {
         let x: u64;
     label b0:
         // invalid
-        &mut Foo.V<bool> { x } = move(y);
+        &mut Foo::V<bool> { x } = move(y);
         return;
     }
 }
 
 //# publish
-module 0x2.ByValue {
+module 0x2::ByValue {
     enum Foo<T> { V { x: T } }
 
-    foo(y: &Self.Foo<u64>) {
+    foo(y: &Self::Foo<u64>) {
         let x: u64;
     label b0:
         // invalid
-        Foo.V<bool> { x }  = move(y);
+        Foo::V<bool> { x }  = move(y);
         return;
     }
 }
 
 //# publish
-module 0x2.ByImmRef {
+module 0x2::ByImmRef {
     enum Foo<T> { V { x: T } }
 
-    foo(y: &Self.Foo<u64>) {
+    foo(y: &Self::Foo<u64>) {
         let x: u64;
     label b0:
         // invalid
-        &Foo.V<bool> { x } = move(y);
+        &Foo::V<bool> { x } = move(y);
         return;
     }
 }
 
 //# publish
-module 0x2.ByMutRef {
+module 0x2::ByMutRef {
     enum Foo<T> { V { x: T } }
 
-    foo(y: &Self.Foo<u64>) {
+    foo(y: &Self::Foo<u64>) {
         let x: u64;
     label b0:
         // invalid
-        &mut Foo.V<bool> { x } = move(y);
+        &mut Foo::V<bool> { x } = move(y);
         return;
     }
 }
 
 //# publish
-module 0x2.ByValue {
+module 0x2::ByValue {
     enum Foo<T> { V { x: T } }
 
-    foo(y: &mut Self.Foo<u64>) {
+    foo(y: &mut Self::Foo<u64>) {
         let x: u64;
     label b0:
         // invalid
-        Foo.V<bool> { x }  = move(y);
+        Foo::V<bool> { x }  = move(y);
         return;
     }
 }
 
 //# publish
-module 0x2.ByImmRef {
+module 0x2::ByImmRef {
     enum Foo<T> { V { x: T } }
 
-    foo(y: &mut Self.Foo<u64>) {
+    foo(y: &mut Self::Foo<u64>) {
         let x: u64;
     label b0:
         // invalid
-        &Foo.V<bool> { x } = move(y);
+        &Foo::V<bool> { x } = move(y);
         return;
     }
 }
 
 //# publish
-module 0x2.ByMutRef {
+module 0x2::ByMutRef {
     enum Foo<T> { V { x: T } }
 
-    foo(y: &mut Self.Foo<u64>) {
+    foo(y: &mut Self::Foo<u64>) {
         let x: u64;
     label b0:
         // invalid
-        &mut Foo.V<bool> { x } = move(y);
+        &mut Foo::V<bool> { x } = move(y);
         return;
     }
 }

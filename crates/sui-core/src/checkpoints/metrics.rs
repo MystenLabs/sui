@@ -8,6 +8,7 @@ use prometheus::{
     register_int_counter_with_registry, register_int_gauge_vec_with_registry,
     register_int_gauge_with_registry,
 };
+use std::convert::TryFrom;
 use std::sync::Arc;
 
 pub struct CheckpointMetrics {
@@ -35,6 +36,9 @@ pub struct CheckpointMetrics {
     pub last_certified_checkpoint_age: Histogram,
     // TODO: delete once users are migrated to non-Mysten histogram.
     pub last_certified_checkpoint_age_ms: MystenHistogram,
+    pub accumulator_accounts_created: IntCounter,
+    pub accumulator_accounts_deleted: IntCounter,
+    pub accumulator_accounts_live: IntGauge,
 }
 
 impl CheckpointMetrics {
@@ -167,11 +171,43 @@ impl CheckpointMetrics {
                 registry
             )
             .unwrap(),
+            accumulator_accounts_created: register_int_counter_with_registry!(
+                "accumulator_accounts_created",
+                "Total number of accumulator account objects created by settlement transactions",
+                registry
+            )
+            .unwrap(),
+            accumulator_accounts_deleted: register_int_counter_with_registry!(
+                "accumulator_accounts_deleted",
+                "Total number of accumulator account objects deleted by settlement transactions",
+                registry
+            )
+            .unwrap(),
+            accumulator_accounts_live: register_int_gauge_with_registry!(
+                "accumulator_accounts_live",
+                "Current number of live accumulator account objects after settlement processing",
+                registry
+            )
+            .unwrap(),
         };
         Arc::new(this)
     }
 
     pub fn new_for_tests() -> Arc<Self> {
         Self::new(&Registry::new())
+    }
+
+    pub fn initialize_accumulator_accounts_live(&self, live_accounts: u64) {
+        self.accumulator_accounts_live
+            .set(i64::try_from(live_accounts).expect("accumulator account count exceeds i64"));
+    }
+
+    pub fn report_accumulator_account_changes(&self, created: u64, deleted: u64) {
+        self.accumulator_accounts_created.inc_by(created);
+        self.accumulator_accounts_deleted.inc_by(deleted);
+
+        let created = i64::try_from(created).expect("created accumulator accounts exceeds i64");
+        let deleted = i64::try_from(deleted).expect("deleted accumulator accounts exceeds i64");
+        self.accumulator_accounts_live.add(created - deleted);
     }
 }

@@ -10,6 +10,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::{IngestConcurrencyConfig, IngestionConfig};
+use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 
@@ -108,7 +109,7 @@ impl CommitterLayer {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SequentialLayer {
     pub committer: Option<CommitterLayer>,
-    pub checkpoint_lag: Option<u64>,
+    pub ingestion: Option<PipelineIngestionLayer>,
     pub fanout: Option<ConcurrencyConfig>,
     pub min_eager_rows: Option<usize>,
     pub max_batch_checkpoints: Option<usize>,
@@ -116,8 +117,12 @@ pub struct SequentialLayer {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PipelineIngestionLayer {
+    pub subscriber_channel_size: Option<usize>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct IngestionLayer {
-    pub checkpoint_buffer_size: Option<usize>,
     pub ingest_concurrency: Option<IngestConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
     pub streaming_backoff_initial_batch_size: Option<usize>,
@@ -129,9 +134,6 @@ pub struct IngestionLayer {
 impl IngestionLayer {
     pub fn finish(self, base: IngestionConfig) -> IngestionConfig {
         IngestionConfig {
-            checkpoint_buffer_size: self
-                .checkpoint_buffer_size
-                .unwrap_or(base.checkpoint_buffer_size),
             ingest_concurrency: self.ingest_concurrency.unwrap_or(base.ingest_concurrency),
             retry_interval_ms: self.retry_interval_ms.unwrap_or(base.retry_interval_ms),
             streaming_backoff_initial_batch_size: self
@@ -158,11 +160,25 @@ impl SequentialLayer {
             } else {
                 base.committer
             },
-            checkpoint_lag: self.checkpoint_lag.unwrap_or(base.checkpoint_lag),
+            ingestion: if let Some(i) = self.ingestion {
+                i.finish(base.ingestion)
+            } else {
+                base.ingestion
+            },
             fanout: self.fanout.or(base.fanout),
             min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
             max_batch_checkpoints: self.max_batch_checkpoints.or(base.max_batch_checkpoints),
             processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
+        }
+    }
+}
+
+impl PipelineIngestionLayer {
+    pub fn finish(self, base: pipeline::IngestionConfig) -> pipeline::IngestionConfig {
+        pipeline::IngestionConfig {
+            subscriber_channel_size: self
+                .subscriber_channel_size
+                .or(base.subscriber_channel_size),
         }
     }
 }

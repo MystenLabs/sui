@@ -1,6 +1,6 @@
 //# publish
 
-module 0x42.Tests {
+module 0x42::Tests {
 
     public test<T: copy + drop>(x: T) {
         let v: vector<T>;

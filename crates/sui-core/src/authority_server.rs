@@ -212,6 +212,7 @@ pub struct ValidatorServiceMetrics {
     client_id_source_config_mismatch: IntCounter,
     x_forwarded_for_num_hops: Gauge,
     pub gasless_rate_limited_count: IntCounter,
+    pub gasless_submission_outcomes: IntCounterVec,
 }
 
 impl ValidatorServiceMetrics {
@@ -399,6 +400,13 @@ impl ValidatorServiceMetrics {
             gasless_rate_limited_count: register_int_counter_with_registry!(
                 "validator_service_gasless_rate_limited_count",
                 "Number of gasless transactions rejected by rate limiter",
+                registry,
+            )
+            .unwrap(),
+            gasless_submission_outcomes: register_int_counter_vec_with_registry!(
+                "validator_service_gasless_submission_outcomes",
+                "Number of valid gasless transaction submissions by outcome",
+                &["outcome"],
                 registry,
             )
             .unwrap(),
@@ -737,14 +745,18 @@ impl ValidatorService {
 
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
-
-            if transaction
+            let is_gasless = transaction
                 .data()
                 .transaction_data()
-                .is_gasless_transaction()
-            {
+                .is_gasless_transaction();
+
+            if is_gasless {
                 // Gasless transactions count for traffic control, since they have no economic cost.
                 spam_weight = Weight::one();
+                metrics
+                    .gasless_submission_outcomes
+                    .with_label_values(&["attempted"])
+                    .inc();
             }
 
             let overload_check_res = state.check_system_overload(
@@ -757,19 +769,26 @@ impl ValidatorService {
                     .num_rejected_tx_during_overload
                     .with_label_values(&[error.as_ref()])
                     .inc();
+                if is_gasless {
+                    metrics
+                        .gasless_submission_outcomes
+                        .with_label_values(&["rejected_overload"])
+                        .inc();
+                }
                 results[idx] = Some(SubmitTxResult::Rejected { error });
                 continue;
             }
 
-            if transaction
-                .data()
-                .transaction_data()
-                .is_gasless_transaction()
+            if is_gasless
                 && !self
                     .gasless_limiter
                     .try_acquire(epoch_store.protocol_config())
             {
                 metrics.gasless_rate_limited_count.inc();
+                metrics
+                    .gasless_submission_outcomes
+                    .with_label_values(&["rejected_rate_limited"])
+                    .inc();
                 results[idx] = Some(SubmitTxResult::Rejected {
                     error: SuiErrorKind::ValidatorOverloadedRetryAfter {
                         retry_after_secs: 1,
@@ -930,6 +949,12 @@ impl ValidatorService {
                 &state.name,
                 tx_with_claims,
             ));
+            if is_gasless {
+                metrics
+                    .gasless_submission_outcomes
+                    .with_label_values(&["submitted"])
+                    .inc();
+            }
 
             transaction_indexes.push(idx);
             tx_digests.push(tx_digest);

@@ -17,6 +17,7 @@ use crate::config::ConcurrencyConfig;
 use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
+use crate::pipeline::IngestionConfig;
 use crate::pipeline::Processor;
 use crate::pipeline::WatermarkPart;
 use crate::pipeline::concurrent::collector::collector;
@@ -118,6 +119,9 @@ pub trait Handler: Processor {
 pub struct ConcurrentConfig {
     /// Configuration for the writer, that makes forward progress.
     pub committer: CommitterConfig,
+
+    /// Per-pipeline ingestion overrides.
+    pub ingestion: IngestionConfig,
 
     /// Configuration for the pruner, that deletes old data.
     pub pruner: Option<PrunerConfig>,
@@ -249,6 +253,7 @@ pub(crate) fn pipeline<H: Handler>(
 
     let ConcurrentConfig {
         committer: committer_config,
+        ingestion: _,
         pruner: pruner_config,
         fanout,
         min_eager_rows,
@@ -362,7 +367,7 @@ mod tests {
     use super::*;
 
     const TEST_TIMEOUT: Duration = Duration::from_secs(60);
-    const TEST_CHECKPOINT_BUFFER_SIZE: usize = 3; // Critical for back-pressure testing calculations
+    const TEST_SUBSCRIBER_CHANNEL_SIZE: usize = 3; // Critical for back-pressure testing calculations
 
     #[derive(Clone, Debug, FieldCount)]
     struct TestValue {
@@ -451,7 +456,7 @@ mod tests {
 
     impl TestSetup {
         async fn new(config: ConcurrentConfig, store: MockStore, next_checkpoint: u64) -> Self {
-            let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_CHECKPOINT_BUFFER_SIZE);
+            let (checkpoint_tx, checkpoint_rx) = mpsc::channel(TEST_SUBSCRIBER_CHANNEL_SIZE);
             let metrics = IndexerMetrics::new(None, &Registry::default());
 
             let pipeline = pipeline(
@@ -731,7 +736,7 @@ mod tests {
         // Configuration: MAX_PENDING_ROWS=4, fanout=2
         //
         // Channel and task breakdown:
-        // - Checkpoint->Processor channel: 3 slots (TEST_CHECKPOINT_BUFFER_SIZE)
+        // - Checkpoint->Processor channel: 3 slots (TEST_SUBSCRIBER_CHANNEL_SIZE)
         // - Processor tasks: 2 tasks (fanout=2)
         // - Processor->Collector channel: 7 slots (processor_channel_size=7)
         // - Collector pending: 2 checkpoints × 2 values = 4 values (hits MAX_PENDING_ROWS=4)
@@ -800,7 +805,7 @@ mod tests {
         // Configuration: fanout=2, write_concurrency=1
         //
         // Channel and task breakdown:
-        // - Checkpoint->Processor channel: 3 slots (TEST_CHECKPOINT_BUFFER_SIZE)
+        // - Checkpoint->Processor channel: 3 slots (TEST_SUBSCRIBER_CHANNEL_SIZE)
         // - Processor tasks: 2 tasks (fanout=2)
         // - Processor->Collector channel: 7 slots (processor_channel_size=7)
         // - Collector->Committer channel: 6 slots (collector_channel_size=6)

@@ -14,6 +14,7 @@ use crate::config::ConcurrencyConfig;
 use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
+use crate::pipeline::IngestionConfig;
 use crate::pipeline::Processor;
 use crate::pipeline::processor::processor;
 use crate::pipeline::sequential::committer::committer;
@@ -34,11 +35,9 @@ mod committer;
 /// available, the pipeline will attempt to combine their writes taking advantage of batching to
 /// avoid emitting redundant writes.
 ///
-/// Back-pressure is handled by setting a high watermark on the ingestion service: The pipeline
-/// notifies the ingestion service of the checkpoint it last successfully wrote to the database
-/// for, and in turn the ingestion service will only run ahead by its buffer size. This guarantees
-/// liveness and limits the amount of memory the pipeline can consume, by bounding the number of
-/// checkpoints that can be received before the next checkpoint.
+/// Back-pressure is handled by the bounded subscriber channel from the ingestion service, the
+/// same as concurrent pipelines: the channel blocks broadcaster sends when full, and the adaptive
+/// ingestion controller cuts fetch concurrency as the channel fills up.
 #[async_trait]
 pub trait Handler: Processor {
     type Store: SequentialStore;
@@ -82,8 +81,8 @@ pub struct SequentialConfig {
     /// Configuration for the writer, that makes forward progress.
     pub committer: CommitterConfig,
 
-    /// How many checkpoints to hold back writes for.
-    pub checkpoint_lag: u64,
+    /// Per-pipeline ingestion overrides.
+    pub ingestion: IngestionConfig,
 
     /// Processor concurrency. Defaults to adaptive scaling up to the number of CPUs.
     pub fanout: Option<ConcurrencyConfig>,
@@ -111,15 +110,7 @@ pub struct SequentialConfig {
 /// [Handler::commit] is not chunked up, so the handler must perform this step itself, if
 /// necessary.
 ///
-/// The pipeline can optionally be configured to lag behind the ingestion service by a fixed number
-/// of checkpoints (configured by `checkpoint_lag`).
-///
-/// Watermarks are also shared with the ingestion service, which is guaranteed to bound the
-/// checkpoint height it pre-fetches to some constant additive factor above the pipeline's
-/// watermark.
-///
-/// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, watermark updates
-/// are communicated to the ingestion service through the `watermark_tx` channel and internal
+/// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, and internal
 /// channels are created to communicate between its various components. The pipeline will shutdown
 /// if any of its input or output channels close, any of its independent tasks fail, or if it is
 /// signalled to shutdown through the returned service handle.
@@ -129,7 +120,6 @@ pub(crate) fn pipeline<H: Handler>(
     config: SequentialConfig,
     store: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
-    commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     info!(
@@ -170,7 +160,6 @@ pub(crate) fn pipeline<H: Handler>(
         config,
         next_checkpoint,
         committer_rx,
-        commit_hi_tx,
         store,
         metrics.clone(),
         min_eager_rows,

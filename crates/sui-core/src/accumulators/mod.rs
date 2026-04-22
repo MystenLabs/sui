@@ -478,16 +478,7 @@ pub fn build_accumulator_barrier_tx(
 ) -> TransactionKind {
     let num_settlements = settlement_effects.len() as u64;
 
-    let (objects_created, objects_destroyed) = settlement_effects
-        .iter()
-        .flat_map(|effects| effects.object_changes())
-        .fold((0u64, 0u64), |(created, destroyed), change| {
-            match change.id_operation {
-                IDOperation::Created => (created + 1, destroyed),
-                IDOperation::Deleted => (created, destroyed + 1),
-                IDOperation::None => (created, destroyed),
-            }
-        });
+    let (objects_created, objects_destroyed) = count_accumulator_object_changes(settlement_effects);
 
     let mut builder = ProgrammableTransactionBuilder::new();
     let root = builder
@@ -519,6 +510,21 @@ pub fn build_accumulator_barrier_tx(
     );
 
     TransactionKind::ProgrammableSystemTransaction(builder.finish())
+}
+
+pub(crate) fn count_accumulator_object_changes(
+    settlement_effects: &[TransactionEffects],
+) -> (u64, u64) {
+    settlement_effects
+        .iter()
+        .flat_map(|effects| effects.object_changes())
+        .fold((0u64, 0u64), |(created, destroyed), change| {
+            match change.id_operation {
+                IDOperation::Created => (created + 1, destroyed),
+                IDOperation::Deleted => (created, destroyed + 1),
+                IDOperation::None => (created, destroyed),
+            }
+        })
 }
 
 #[cfg(test)]

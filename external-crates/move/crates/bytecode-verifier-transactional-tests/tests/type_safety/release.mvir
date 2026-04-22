@@ -1,7 +1,7 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct Coin { value: u64 }
-    t(): Self.Coin {
+    t(): Self::Coin {
     label b0:
         // cannot pop without the drop ability
         _ = Coin { value: 0 };
@@ -10,12 +10,12 @@ module 0x1.M {
 }
 
 //# publish
-module 0x2.M {
+module 0x2::M {
     enum Coin { V { value: u64 } }
-    t(): Self.Coin {
+    t(): Self::Coin {
     label b0:
         // cannot pop without the drop ability
-        _ = Coin.V { value: 0 };
+        _ = Coin::V { value: 0 };
         return;
     }
 }

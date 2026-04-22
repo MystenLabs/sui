@@ -2,7 +2,7 @@
 
 //# publish
 
-module 0x2.alias_after_join_reborrow {
+module 0x2::alias_after_join_reborrow {
 
 t(cond: bool) {
     let a: u64;

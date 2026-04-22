@@ -1,13 +1,13 @@
 //# publish
-module 0x42.VTest {
+module 0x42::VTest {
     struct T has drop {fint: u64, fv: bool}
 
-    public new(x: u64, y: bool): Self.T {
+    public new(x: u64, y: bool): Self::T {
     label b0:
         return T{fint: move(x), fv: move(y)};
     }
 
-    public t1(this: &Self.T): u64 {
+    public t1(this: &Self::T): u64 {
         let x: &u64;
     label b0:
         x = &copy(this).T::fint;
@@ -15,7 +15,7 @@ module 0x42.VTest {
         return *move(x);
     }
 
-    public t2(this: &Self.T): u64 {
+    public t2(this: &Self::T): u64 {
         let x: &u64;
     label b0:
         x = &copy(this).T::fint;
@@ -23,7 +23,7 @@ module 0x42.VTest {
         return *move(x);
     }
 
-    public t3(this: &Self.T): bool {
+    public t3(this: &Self::T): bool {
         let x: &bool;
     label b0:
         x = &copy(this).T::fv;
@@ -34,15 +34,15 @@ module 0x42.VTest {
 
 //# publish
 
-module 0x43.RTest {
+module 0x43::RTest {
     struct T{fint: u64, fv: bool}
 
-    public new(x: u64, y: bool): Self.T {
+    public new(x: u64, y: bool): Self::T {
     label b0:
         return T{fint: move(x), fv: move(y)};
     }
 
-    public t1(this: &Self.T): u64 {
+    public t1(this: &Self::T): u64 {
         let x: &u64;
     label b0:
         x = &copy(this).T::fint;
@@ -50,7 +50,7 @@ module 0x43.RTest {
         return *move(x);
     }
 
-    public t2(this: &Self.T): u64 {
+    public t2(this: &Self::T): u64 {
         let x: &u64;
     label b0:
         x = &copy(this).T::fint;
@@ -58,7 +58,7 @@ module 0x43.RTest {
         return *move(x);
     }
 
-    public t3(this: &Self.T): bool {
+    public t3(this: &Self::T): bool {
         let x: &bool;
     label b0:
         x = &copy(this).T::fv;
@@ -66,7 +66,7 @@ module 0x43.RTest {
         return *move(x);
     }
 
-    public destroy_t(t: Self.T) {
+    public destroy_t(t: Self::T) {
         let fint: u64;
         let fv: bool;
     label b0:
@@ -77,15 +77,15 @@ module 0x43.RTest {
 
 //# run
 
-module 0x44.m {
-import 0x43.RTest;
-import 0x42.VTest;
+module 0x44::m {
+import 0x43::RTest;
+import 0x42::VTest;
 
 entry foo() {
-    let vt: VTest.T;
-    let vref: &VTest.T;
-    let rt: RTest.T;
-    let rref: &RTest.T;
+    let vt: VTest::T;
+    let vref: &VTest::T;
+    let rt: RTest::T;
+    let rref: &RTest::T;
     let r1: u64;
     let r2: u64;
     let r3: u64;
@@ -93,21 +93,21 @@ entry foo() {
     let r5: bool;
     let r6: bool;
 label b0:
-    vt = VTest.new(0, false);
+    vt = VTest::new(0, false);
     vref = &vt;
-    rt = RTest.new(0, false);
+    rt = RTest::new(0, false);
     rref = &rt;
 
-    r1 = VTest.t1(copy(vref));
-    r2 = RTest.t1(copy(rref));
+    r1 = VTest::t1(copy(vref));
+    r2 = RTest::t1(copy(rref));
 
-    r3 = VTest.t2(copy(vref));
-    r4 = RTest.t2(copy(rref));
+    r3 = VTest::t2(copy(vref));
+    r4 = RTest::t2(copy(rref));
 
-    r5 = VTest.t3(move(vref));
-    r6 = RTest.t3(move(rref));
+    r5 = VTest::t3(move(vref));
+    r6 = RTest::t3(move(rref));
 
-    RTest.destroy_t(move(rt));
+    RTest::destroy_t(move(rt));
 
     return;
 }

@@ -1,5 +1,5 @@
 //# publish
-module 0x1.Token {
+module 0x1::Token {
     struct T has key { b: bool }
 
     public test() {
@@ -11,13 +11,13 @@ module 0x1.Token {
 }
 
 //# publish
-module 0x2.Token {
+module 0x2::Token {
     enum T has key { V { b: bool } }
 
     public test() {
         let no: bool;
     label b0:
-        no = T.V{ b: true } == T.V{ b: true }; // == requires drop
+        no = T::V{ b: true } == T::V{ b: true }; // == requires drop
         return;
     }
 }

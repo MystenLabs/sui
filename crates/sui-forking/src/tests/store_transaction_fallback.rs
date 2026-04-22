@@ -10,7 +10,7 @@ use serde_json::json;
 use sui_types::full_checkpoint_content::ExecutedTransaction;
 use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 use sui_types::transaction::{Transaction as SuiTransaction, VerifiedTransaction};
-use wiremock::matchers::{method, path};
+use wiremock::matchers::{body_partial_json, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
@@ -31,6 +31,35 @@ fn signed_transaction(executed: &ExecutedTransaction) -> VerifiedTransaction {
         executed.transaction.clone(),
         executed.signatures.clone(),
     ))
+}
+
+fn empty_events_response() -> serde_json::Value {
+    json!({
+        "data": {
+            "transaction": {
+                "effects": {
+                    "events": {
+                        "nodes": [],
+                        "pageInfo": {
+                            "hasNextPage": false,
+                            "endCursor": null
+                        }
+                    }
+                }
+            }
+        }
+    })
+}
+
+/// Mount a wiremock mock for the events query (any POST containing `"events"` in the query).
+async fn mount_events_mock(server: &MockServer) {
+    // The events query has an `$after` variable that the txn query does not.
+    Mock::given(method("POST"))
+        .and(path("/"))
+        .and(body_partial_json(json!({ "variables": { "first": 50 } })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(empty_events_response()))
+        .mount(server)
+        .await;
 }
 
 fn transaction_response(executed: &ExecutedTransaction, checkpoint: u64) -> serde_json::Value {
@@ -102,6 +131,10 @@ async fn remote_fallback_caches_pre_fork_transaction() {
     let digest = *verified.digest();
     let digest_str = digest.base58_encode();
 
+    // Events mock must be mounted first — wiremock matches in reverse order,
+    // so the more-specific events mock (with `"first": 50`) is tried before
+    // the catch-all transaction mock.
+    mount_events_mock(&server).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200).set_body_json(transaction_response(&executed, 5)))
@@ -143,6 +176,9 @@ async fn remote_fallback_rejects_post_fork_transaction() {
     let digest = *verified.digest();
 
     // Remote reports this tx was executed at checkpoint 42, but the fork is pinned at 10.
+    // The post-fork guard rejects before reaching the events fetch, but mount
+    // the events mock anyway for robustness.
+    mount_events_mock(&server).await;
     Mock::given(method("POST"))
         .and(path("/"))
         .respond_with(ResponseTemplate::new(200).set_body_json(transaction_response(&executed, 42)))

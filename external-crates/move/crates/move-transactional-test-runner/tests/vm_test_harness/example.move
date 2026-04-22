@@ -41,11 +41,11 @@ module 0x6::m {
 
 //# run --args 42 --syntax=mvir
 
-module 0x7.m {
-import 0x42.N;
+module 0x7::m {
+import 0x42::N;
 entry foo(v: u64) {
 label b0:
-    _ = N.take(N.make(move(v)));
+    _ = N::take(N::make(move(v)));
     return;
 }
 }

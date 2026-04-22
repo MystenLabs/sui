@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0xE.Expressions {
+module 0xE::Expressions {
     binary_add() {
         let x: u64;
         let y: u64;

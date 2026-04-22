@@ -1,8 +1,8 @@
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct S<T> { s: T }
-    t(s: signer): Self.S<signer> {
-        let x: Self.S<signer>;
+    t(s: signer): Self::S<signer> {
+        let x: Self::S<signer>;
     label b0:
         x = S<signer> { s: move(s) };
         // cannot copy signer
@@ -11,10 +11,10 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct S<T> { s: T }
     t(s: signer): signer {
-        let x: Self.S<signer>;
+        let x: Self::S<signer>;
     label b0:
         x = S<signer> { s: move(s) };
         // cannot copy signer

@@ -6,10 +6,10 @@
 //# init --protocol-version 106
 
 //# publish
-module 0x0.m {
-    import 0x2.clock;
+module 0x0::m {
+    import 0x2::clock;
 
-    public entry no_clock_val(l0: clock.Clock) {
+    public entry no_clock_val(l0: clock::Clock) {
         label l0:
         abort 0;
     }

@@ -5,13 +5,13 @@ description: Learn how to optimize Sui custom indexer performance through runtim
 keywords: [ sui indexer performance, indexer optimization, tokio console debugging, prometheus metrics, database tuning, checkpoint ingestion, data pruning, indexer configuration, performance monitoring, sui blockchain indexing ]
 ---
 
-Proper configuration and resource monitoring delivers the most performant custom indexer possible. For example:
+Configuration and resource monitoring deliver performant custom indexers. For example:
 
 - Runtime configuration options for ingestion, database connections, and pipeline selection, as well as purposeful use of debugging tools like `tokio_console` help dial in your indexer performance. 
 
-- A sensible strategy targeting efficient data pruning for your tables keeps them performant over time. 
+- Efficient data pruning keeps your tables performant over time. 
 
-- Following best practices for exposing and extending Prometheus metrics helps you keep track of indexer performance. 
+- Expose and extend Prometheus metrics to track indexer performance. 
 
 Together, these techniques help you run indexers that are fast, resource-efficient, and easier to monitor in both development and production.
 
@@ -27,12 +27,9 @@ Control how checkpoint data is fetched and distributed:
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 
 let ingestion_config = IngestionConfig {
-    // Buffer size across all downstream workers (default: 5000)
-    checkpoint_buffer_size: 10000,
-
     // Concurrency for checkpoint fetches.
     // Adaptive by default: starts at 1 and scales up to 500 based on
-    // downstream channel pressure.
+    // the slowest subscriber's channel fill fraction.
     ingest_concurrency: ConcurrencyConfig::Adaptive {
         initial: 1,
         min: 1,
@@ -61,8 +58,7 @@ let ingestion_config = IngestionConfig {
 
 **Tuning guidelines:**
 
-- `checkpoint_buffer_size`: Increase for high-throughput scenarios, decrease to reduce memory usage.
-- `ingest_concurrency`: Controls how many checkpoint fetches run concurrently. By default this is adaptive: it starts at 1 and scales up to 500 based on how full the downstream broadcast channel is. The controller uses a dead band (60%–85% fill) to avoid oscillation, increasing concurrency when the channel is draining fast and decreasing when it backs up. You can override with `ConcurrencyConfig::Fixed` for a static limit or customize the adaptive bounds. The adaptive controller also exposes a `dead_band` parameter to override the fill-fraction thresholds, but the defaults should work well for most workloads.
+- `ingest_concurrency`: How many checkpoint fetches run concurrently. Adaptive by default (scales 1 → 500 based on the slowest subscriber's fill fraction, 60%–85% dead band). Use `ConcurrencyConfig::Fixed` to pin it, or tune the adaptive bounds / `dead_band` if the defaults don't fit. Per-subscriber channel capacity is set per-pipeline on `{Sequential,Concurrent}Config::ingestion`.
 - `retry_interval_ms`: Lower values reduce latency for live data, higher values reduce unnecessary retries.
 - `streaming_backoff_initial_batch_size`: Number of checkpoints to process through polling after the initial streaming failure. Lower values restore streaming faster, higher values reduce connection attempts.
 - `streaming_backoff_max_batch_size`: Maximum checkpoints to process through polling after repeated failures. The batch size increases exponentially from the initial size up to this maximum. Higher values reduce connection attempts during prolonged outages.
@@ -86,13 +82,13 @@ let db_args = DbArgs {
 
 **Tuning guidelines:**
 
-- `db_connection_pool_size`: Size based on `write_concurrency` across all pipelines.
+- `db_connection_pool_size`: Set size based on `write_concurrency` across all pipelines.
 - `db_connection_timeout_ms`: Reduce for faster failure detection in high-load scenarios.
 - `db_statement_timeout_ms`: Set based on expected query complexity and database performance.
 
 ### Command-line arguments
 
-Include the following command-line arguments to help focus processing. These values are for demonstration. Use values that make sense to your environment and goals. 
+Use the following command-line arguments to focus processing. These values are for demonstration. Use values that match your environment and goals. 
 
 ```sh
 # Checkpoint range control
@@ -134,7 +130,7 @@ The Tokio console is particularly useful for:
 
 ### Setup instructions
 
-Consult the [README](https://github.com/tokio-rs/console/blob/main/README.md) in the Tokio GitHub repo for additional information.
+Read the [README](https://github.com/tokio-rs/console/blob/main/README.md) in the Tokio GitHub repo for additional information.
 
 1. Add dependencies
 
@@ -194,7 +190,7 @@ For detailed information about the console dashboard, available views, warnings,
 
 ### Production considerations
 
-`tokio-console` introduces runtime overhead and should be used carefully in production. While it's safe to use regularly during development and staging, production usage requires careful evaluation. Before enabling in production, you should run performance benchmarks with and without Tokio console enabled to measure the impact on your specific workload. Consider enabling only during maintenance windows or targeted troubleshooting sessions while monitoring system resources.
+`tokio-console` introduces runtime overhead. Use it carefully in production. Use it regularly during development and staging. Production usage requires careful evaluation. Before enabling in production, run performance benchmarks with and without Tokio console enabled to measure the impact on your specific workload. Consider enabling only during maintenance windows or targeted troubleshooting sessions while monitoring system resources.
 
 ## Metrics
 
@@ -215,7 +211,7 @@ Key metric categories include:
 
 By default, metrics are served on `0.0.0.0:9184/metrics` in [Prometheus format](https://prometheus.io/docs/develop/sui-architecture/object-model). You can override this address:
 
-- Via the command line:
+- Through the command line:
 
     ```sh
     $ cargo run --metrics-address "0.0.0.0:8080"

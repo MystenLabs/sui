@@ -1,5 +1,5 @@
 //# run
-module 0x42.m {
+module 0x42::m {
 
 // tests multiple type mismatches for int operations
 // !!!! generated file, do NOT edit manually !!!!
@@ -13,7 +13,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -24,7 +24,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -35,7 +35,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -46,7 +46,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -57,7 +57,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -68,7 +68,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -79,7 +79,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -90,7 +90,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -101,7 +101,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -112,7 +112,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -123,7 +123,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -134,7 +134,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -144,7 +144,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -154,7 +154,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     h() {
     label b0:
@@ -167,7 +167,7 @@ module 0x42.M {
 
 // operator -
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -178,7 +178,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -189,7 +189,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -200,7 +200,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -211,7 +211,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -222,7 +222,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -233,7 +233,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -244,7 +244,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -255,7 +255,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -266,7 +266,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -277,7 +277,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -288,7 +288,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -299,7 +299,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -309,7 +309,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -319,7 +319,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     h() {
     label b0:
@@ -332,7 +332,7 @@ module 0x42.M {
 
 // operator *
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -343,7 +343,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -354,7 +354,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -365,7 +365,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -376,7 +376,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -387,7 +387,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -398,7 +398,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -409,7 +409,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -420,7 +420,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -431,7 +431,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -442,7 +442,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -453,7 +453,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -464,7 +464,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -474,7 +474,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -484,7 +484,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     h() {
     label b0:
@@ -497,7 +497,7 @@ module 0x42.M {
 
 // operator /
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -508,7 +508,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -519,7 +519,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -530,7 +530,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -541,7 +541,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -552,7 +552,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -563,7 +563,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -574,7 +574,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -585,7 +585,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -596,7 +596,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -607,7 +607,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -618,7 +618,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -629,7 +629,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -639,7 +639,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -649,7 +649,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     h() {
     label b0:
@@ -662,7 +662,7 @@ module 0x42.M {
 
 // operator &
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -673,7 +673,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -684,7 +684,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -695,7 +695,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -706,7 +706,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -717,7 +717,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -728,7 +728,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -739,7 +739,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -750,7 +750,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -761,7 +761,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -772,7 +772,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -783,7 +783,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -794,7 +794,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -804,7 +804,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -814,7 +814,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     h() {
     label b0:
@@ -827,7 +827,7 @@ module 0x42.M {
 
 // operator |
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -838,7 +838,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -849,7 +849,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -860,7 +860,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -871,7 +871,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -882,7 +882,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -893,7 +893,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -904,7 +904,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -915,7 +915,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -926,7 +926,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -937,7 +937,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -948,7 +948,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -959,7 +959,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -969,7 +969,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -979,7 +979,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     h() {
     label b0:
@@ -992,7 +992,7 @@ module 0x42.M {
 
 // operator ^
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1003,7 +1003,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1014,7 +1014,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1025,7 +1025,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1036,7 +1036,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1047,7 +1047,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1058,7 +1058,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1069,7 +1069,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1080,7 +1080,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1091,7 +1091,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1102,7 +1102,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1113,7 +1113,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1124,7 +1124,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -1134,7 +1134,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -1144,7 +1144,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     h() {
     label b0:
@@ -1157,7 +1157,7 @@ module 0x42.M {
 
 // operator ==
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1168,7 +1168,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1179,7 +1179,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1190,7 +1190,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1201,7 +1201,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1212,7 +1212,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1223,7 +1223,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1234,7 +1234,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1245,7 +1245,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1256,7 +1256,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1267,7 +1267,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -1277,7 +1277,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -1289,7 +1289,7 @@ module 0x42.M {
 
 // operator !=
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1300,7 +1300,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1311,7 +1311,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1322,7 +1322,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1333,7 +1333,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1344,7 +1344,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1355,7 +1355,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1366,7 +1366,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1377,7 +1377,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1388,7 +1388,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1399,7 +1399,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -1409,7 +1409,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -1422,7 +1422,7 @@ module 0x42.M {
 
 // operator <
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1433,7 +1433,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1444,7 +1444,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1455,7 +1455,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1466,7 +1466,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1477,7 +1477,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1488,7 +1488,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1499,7 +1499,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1510,7 +1510,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1521,7 +1521,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1533,7 +1533,7 @@ label b0:
 
 // operator >
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1544,7 +1544,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1555,7 +1555,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1566,7 +1566,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1577,7 +1577,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1588,7 +1588,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1599,7 +1599,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1610,7 +1610,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1621,7 +1621,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1632,7 +1632,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1644,7 +1644,7 @@ label b0:
 
 // operator <=
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1655,7 +1655,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1666,7 +1666,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1677,7 +1677,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1688,7 +1688,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1699,7 +1699,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1710,7 +1710,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1721,7 +1721,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1732,7 +1732,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1743,7 +1743,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1755,7 +1755,7 @@ label b0:
 
 // operator >=
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1766,7 +1766,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1777,7 +1777,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1788,7 +1788,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1799,7 +1799,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1810,7 +1810,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1821,7 +1821,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1832,7 +1832,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1843,7 +1843,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1854,7 +1854,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1866,7 +1866,7 @@ label b0:
 
 // operator <<
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1877,7 +1877,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1888,7 +1888,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1899,7 +1899,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1910,7 +1910,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1921,7 +1921,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1932,7 +1932,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1943,7 +1943,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1954,7 +1954,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -1964,7 +1964,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -1974,7 +1974,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     h() {
     label b0:
@@ -1987,7 +1987,7 @@ module 0x42.M {
 
 // operator >>
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -1998,7 +1998,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -2009,7 +2009,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -2020,7 +2020,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -2031,7 +2031,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -2042,7 +2042,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -2053,7 +2053,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -2064,7 +2064,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -2075,7 +2075,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     f() {
     label b0:
@@ -2085,7 +2085,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     g() {
     label b0:
@@ -2095,7 +2095,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct R { x: bool }
     h() {
     label b0:

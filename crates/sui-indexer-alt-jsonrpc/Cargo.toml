@@ -23,7 +23,6 @@ bin-version.workspace = true
 clap.workspace = true
 const-str.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
-diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 fastcrypto.workspace = true
 futures.workspace = true
 http.workspace = true

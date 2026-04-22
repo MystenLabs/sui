@@ -4,18 +4,18 @@
 // invalid, otw type instantiated
 
 //# publish
-module 0x0.m {
-    import 0x2.tx_context;
+module 0x0::m {
+    import 0x2::tx_context;
 
     struct M has drop { dummy: bool }
 
-    init(_otw: Self.M, _ctx: &mut tx_context.TxContext) {
+    init(_otw: Self::M, _ctx: &mut tx_context::TxContext) {
         label l0:
         return;
     }
 
 
-    pack(): Self.M {
+    pack(): Self::M {
         label l0:
         (false);
         (M {});

@@ -1,5 +1,5 @@
 //# publish
-module 0x42.M {
+module 0x42::M {
     public max(a: u64, b: u64): u64 {
     label b0:
         jump_if (copy(a) > copy(b)) b2;
@@ -18,8 +18,8 @@ module 0x42.M {
 }
 
 //# run
-module 0x43.m {
-import 0x42.M;
+module 0x43::m {
+import 0x42::M;
 
 entry foo() {
     let a: u64;
@@ -29,8 +29,8 @@ entry foo() {
 label b0:
     a = 10;
     b = 2;
-    c = M.max(copy(a), copy(b));
-    d = M.sum(copy(a), copy(b));
+    c = M::max(copy(a), copy(b));
+    d = M::sum(copy(a), copy(b));
     assert(copy(c) == 10, 42);
     assert(copy(d) == 12, 42);
     return;

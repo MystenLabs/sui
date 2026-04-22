@@ -13,19 +13,20 @@ chrono.workspace = true
 cynic.workspace = true
 fastcrypto.workspace = true
 itertools.workspace = true
+move-core-types.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, features = ["json"] }
 roaring.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
 bin-version.workspace = true
 simulacrum.workspace = true
 sui-protocol-config.workspace = true
+sui-rpc-api.workspace = true
 sui-swarm-config.workspace = true
 sui-types.workspace = true
 

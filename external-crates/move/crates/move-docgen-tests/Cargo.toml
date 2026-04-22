@@ -9,25 +9,9 @@ license = "Apache-2.0"
 move-docgen.workspace = true
 move-package-alt.workspace = true
 move-package-alt-compilation.workspace = true
-move-binary-format.workspace = true
-move-compiler.workspace = true
-move-model-2.workspace = true
-move-core-types.workspace = true
-move-ir-types.workspace = true
-move-symbol-pool.workspace = true
 move-command-line-common.workspace = true
 
-codespan.workspace = true
-codespan-reporting.workspace = true
-itertools.workspace = true
-log.workspace = true
-num.workspace = true
-regex.workspace = true
-anyhow.workspace = true
-serde.workspace = true
 tempfile.workspace = true
-insta.workspace = true
-tokio.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

@@ -386,13 +386,13 @@ where
         let (subscriber, round_prober_handle) = if context.is_validator() {
             let authority_service = Arc::new(AuthorityService::new(
                 context.clone(),
-                block_verifier,
-                commit_vote_monitor,
+                block_verifier.clone(),
+                commit_vote_monitor.clone(),
                 round_tracker.clone(),
                 synchronizer.clone(),
                 core_dispatcher.clone(),
                 signals_receivers.block_broadcast_receiver(),
-                transaction_vote_tracker,
+                transaction_vote_tracker.clone(),
                 dag_state.clone(),
                 store.clone(),
             ));
@@ -419,7 +419,7 @@ where
             let round_prober_handle = Some(
                 RoundProber::new(
                     context.clone(),
-                    core_dispatcher,
+                    core_dispatcher.clone(),
                     round_tracker.clone(),
                     dag_state.clone(),
                     validator_client,
@@ -431,8 +431,12 @@ where
             if context.parameters.observer.is_server_enabled() {
                 let observer_service = Arc::new(ObserverService::new(
                     context.clone(),
+                    core_dispatcher.clone(),
                     dag_state.clone(),
                     signals_receivers.accepted_block_broadcast_receiver(),
+                    block_verifier,
+                    commit_vote_monitor.clone(),
+                    transaction_vote_tracker.clone(),
                 ));
                 network_manager
                     .start_observer_server(observer_service)
@@ -445,16 +449,24 @@ where
             let observer_client = network_manager.observer_client();
             let observer_service = Arc::new(ObserverService::new(
                 context.clone(),
+                core_dispatcher.clone(),
                 dag_state.clone(),
                 signals_receivers.accepted_block_broadcast_receiver(),
+                block_verifier,
+                commit_vote_monitor.clone(),
+                transaction_vote_tracker.clone(),
             ));
 
             let observer_subscriber = ObserverSubscriber::new(
                 context.clone(),
                 observer_client,
-                observer_service,
+                observer_service.clone(),
                 dag_state.clone(),
             );
+
+            network_manager
+                .start_observer_server(observer_service)
+                .await;
 
             // Subscribe to peers specified in the configuration
             // For now get the first peer from the list to connect to.
@@ -897,14 +909,18 @@ mod tests {
 
         authority_0_total_verified_blocks += authority_0_total_proposed_blocks;
 
-        // Get the observer's received_blocks_observer metric
-        let observer_received_blocks_metric = observer_context
-            .metrics
-            .node_metrics
-            .verified_blocks
-            .get_metric_with_label_values(&["observer"])
-            .unwrap();
-        let observer_received_blocks = observer_received_blocks_metric.get();
+        // Sum verified_blocks from all authorities as seen by the observer
+        let mut observer_received_blocks = 0;
+        for (_, authority_info) in committee.authorities() {
+            if let Ok(metric) = observer_context
+                .metrics
+                .node_metrics
+                .verified_blocks
+                .get_metric_with_label_values(&[&authority_info.hostname])
+            {
+                observer_received_blocks += metric.get();
+            }
+        }
 
         // Compare the values - they should be related but might not be exactly equal
         // due to timing and the observer connecting mid-stream

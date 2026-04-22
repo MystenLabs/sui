@@ -60,6 +60,8 @@ const TX_DATA_FILE: &str = "data";
 const TX_EFFECTS_FILE: &str = "effects";
 /// Filename for the BCS-encoded transaction events within a transaction directory.
 const TX_EVENTS_FILE: &str = "events";
+/// Filename for the checkpoint sequence number within a transaction directory.
+const TX_CHECKPOINT_FILE: &str = "checkpoint";
 /// Filename for the BCS-encoded checkpoint summary within a checkpoint sequence directory.
 const CHECKPOINT_SUMMARY_FILE: &str = "summary";
 /// Subdirectory for content-addressed checkpoint contents files.
@@ -70,6 +72,7 @@ const CHECKPOINT_DIGEST_INDEX_FILE: &str = "digest_index";
 const LATEST_FILE: &str = "latest";
 
 /// Local filesystem-backed store for Sui data.
+#[derive(Clone)]
 pub(crate) struct FilesystemStore {
     root: PathBuf,
 }
@@ -181,6 +184,39 @@ impl FilesystemStore {
             return Ok(None);
         }
         self.read_bcs_file(&path).map(Some)
+    }
+
+    /// Persist the checkpoint sequence number that finalized a transaction.
+    pub(crate) fn write_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<(), Error> {
+        let path = self.tx_dir(digest).join(TX_CHECKPOINT_FILE);
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        }
+        fs::write(&path, checkpoint.to_string())
+            .with_context(|| format!("Failed to write checkpoint file: {}", path.display()))
+    }
+
+    /// Read the checkpoint sequence number for a previously persisted transaction.
+    pub(crate) fn get_transaction_checkpoint(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<CheckpointSequenceNumber>, Error> {
+        let path = self.tx_dir(digest).join(TX_CHECKPOINT_FILE);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read checkpoint file: {}", path.display()))?;
+        let seq = content
+            .trim()
+            .parse::<u64>()
+            .with_context(|| format!("Failed to parse checkpoint file: {}", path.display()))?;
+        Ok(Some(seq))
     }
 
     /// Read previously persisted transaction events. Returns `None` if not on disk.

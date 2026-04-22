@@ -1,13 +1,13 @@
 // can borrow imm fields after a mut borrow, but if the mut is a parent, it won't be writable
 
 //# publish
-module 0x2.field {
+module 0x2::field {
 
     struct S has copy, drop { f: u64 }
 
-    t(s: Self.S) {
-        let s_imm: &Self.S;
-        let s_mut: &mut Self.S;
+    t(s: Self::S) {
+        let s_imm: &Self::S;
+        let s_mut: &mut Self::S;
         let f_imm: &u64;
     label b0:
         s_imm = &s;
@@ -18,13 +18,13 @@ module 0x2.field {
 }
 
 //# publish
-module 0x3.field {
+module 0x3::field {
 
     struct S has copy, drop { f: u64 }
 
-    t(s: Self.S) {
-        let s_imm: &Self.S;
-        let s_mut: &mut Self.S;
+    t(s: Self::S) {
+        let s_imm: &Self::S;
+        let s_mut: &mut Self::S;
         let f_imm: &u64;
     label b0:
         // not really after, but also allowed
@@ -36,13 +36,13 @@ module 0x3.field {
 }
 
 //# publish
-module 0x4.invalid_write {
+module 0x4::invalid_write {
 
     struct S has copy, drop { f: u64 }
 
-    t(s: Self.S) {
-        let s_imm: &Self.S;
-        let s_mut: &mut Self.S;
+    t(s: Self::S) {
+        let s_imm: &Self::S;
+        let s_mut: &mut Self::S;
         let f_imm: &u64;
     label b0:
         s_imm = &s;

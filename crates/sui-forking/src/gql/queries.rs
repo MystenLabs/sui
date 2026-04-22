@@ -168,6 +168,169 @@ pub(crate) mod txn_query {
     }
 }
 
+pub(crate) mod available_range_query {
+    use super::*;
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct AvailableRangeArgs {
+        pub type_name: String,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "AvailableRangeArgs")]
+    pub(crate) struct Query {
+        service_config: ServiceConfig,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "AvailableRangeArgs")]
+    pub(crate) struct ServiceConfig {
+        #[arguments(type: $type_name)]
+        available_range: AvailableRange,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct AvailableRange {
+        first: Option<Checkpoint>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct Checkpoint {
+        sequence_number: u64,
+    }
+
+    /// Query the lowest available checkpoint sequence number for a given type
+    /// (e.g., "Checkpoint" or "Transaction").
+    pub(crate) async fn query(type_name: &str, client: &GraphQLClient) -> Result<u64, Error> {
+        let operation = Query::build(AvailableRangeArgs {
+            type_name: type_name.to_owned(),
+        });
+        let response = client.run_query(&operation).await.context(format!(
+            "Failed to query availableRange for type '{}'",
+            type_name,
+        ))?;
+        let data = response
+            .data
+            .ok_or_else(|| anyhow!("No data in availableRange response for '{}'", type_name))?;
+        Ok(data
+            .service_config
+            .available_range
+            .first
+            .map(|c| c.sequence_number)
+            .unwrap_or(0))
+    }
+}
+
+pub(crate) mod events_query {
+    use super::*;
+    use sui_types::effects::TransactionEvents;
+    use sui_types::event::Event;
+
+    const PAGE_SIZE: i32 = 50;
+
+    #[derive(cynic::Scalar, Debug, Clone)]
+    #[cynic(graphql_type = "Base64")]
+    pub(crate) struct Base64(pub String);
+
+    #[derive(cynic::QueryVariables)]
+    pub(crate) struct EventsArgs {
+        pub digest: String,
+        pub first: Option<i32>,
+        pub after: Option<String>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "EventsArgs")]
+    pub(crate) struct Query {
+        #[arguments(digest: $digest)]
+        transaction: Option<Transaction>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "EventsArgs")]
+    pub(crate) struct Transaction {
+        effects: Option<TransactionEffects>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(variables = "EventsArgs")]
+    pub(crate) struct TransactionEffects {
+        #[arguments(first: $first, after: $after)]
+        events: Option<EventConnection>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct EventConnection {
+        nodes: Vec<EventNode>,
+        page_info: PageInfo,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    #[cynic(graphql_type = "Event")]
+    pub(crate) struct EventNode {
+        event_bcs: Option<Base64>,
+    }
+
+    #[derive(cynic::QueryFragment)]
+    pub(crate) struct PageInfo {
+        has_next_page: bool,
+        end_cursor: Option<String>,
+    }
+
+    /// Fetch all events for a transaction by paginating through the GraphQL
+    /// events connection. Returns `None` if the transaction doesn't exist.
+    /// Returns an empty `TransactionEvents` if the transaction has no events.
+    pub(crate) async fn query(
+        digest: &str,
+        client: &GraphQLClient,
+    ) -> Result<Option<TransactionEvents>, Error> {
+        let mut all_events: Vec<Event> = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        loop {
+            let operation = Query::build(EventsArgs {
+                digest: digest.to_owned(),
+                first: Some(PAGE_SIZE),
+                after: cursor,
+            });
+            let response = client
+                .run_query(&operation)
+                .await
+                .context("Failed to run events query")?;
+
+            let Some(connection) = response
+                .data
+                .and_then(|q| q.transaction)
+                .and_then(|tx| tx.effects)
+                .and_then(|fx| fx.events)
+            else {
+                if all_events.is_empty() {
+                    return Ok(Some(TransactionEvents { data: vec![] }));
+                }
+                break;
+            };
+
+            for node in connection.nodes {
+                let Some(bcs_str) = node.event_bcs else {
+                    continue;
+                };
+                let bytes = FastCryptoBase64::decode(&bcs_str.0)
+                    .context(format!("Event BCS does not decode for tx {}", digest))?;
+                let event: Event = bcs::from_bytes(&bytes)
+                    .context(format!("Cannot deserialize event for tx {}", digest))?;
+                all_events.push(event);
+            }
+
+            if !connection.page_info.has_next_page {
+                break;
+            }
+            cursor = connection.page_info.end_cursor;
+        }
+
+        Ok(Some(TransactionEvents { data: all_events }))
+    }
+}
+
 pub(crate) mod object_query {
     use sui_types::object::Object;
 

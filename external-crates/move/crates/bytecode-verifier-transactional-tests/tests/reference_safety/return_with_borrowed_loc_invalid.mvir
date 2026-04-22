@@ -1,6 +1,6 @@
 //# publish
-module 0x1.M {
-    struct X has drop { y: Self.Y }
+module 0x1::M {
+    struct X has drop { y: Self::Y }
     struct Y has drop { u: u64 }
 
     t1(): &u64 {
@@ -15,8 +15,8 @@ module 0x1.M {
 }
 
 //# publish
-module 0x1.M2 {
-    struct X has drop { y: Self.Y }
+module 0x1::M2 {
+    struct X has drop { y: Self::Y }
     struct Y has drop { u: u64 }
     t2(): &u64 {
         let x: u64;
@@ -30,13 +30,13 @@ module 0x1.M2 {
 }
 
 //# publish
-module 0x1.M3 {
-    struct X has drop { y: Self.Y }
+module 0x1::M3 {
+    struct X has drop { y: Self::Y }
     struct Y has drop { u: u64 }
     t3(): &u64 {
-        let s: Self.X;
-        let x: &Self.X;
-        let y: &Self.Y;
+        let s: Self::X;
+        let x: &Self::X;
+        let y: &Self::Y;
         let u: &u64;
     label b0:
         s = X { y: Y { u: 0 } };
@@ -49,13 +49,13 @@ module 0x1.M3 {
 }
 
 //# publish
-module 0x1.M4 {
-    struct X has drop { y: Self.Y }
+module 0x1::M4 {
+    struct X has drop { y: Self::Y }
     struct Y has drop { u: u64 }
     t4(): &u64 {
-        let s: Self.X;
-        let x: &Self.X;
-        let y: &Self.Y;
+        let s: Self::X;
+        let x: &Self::X;
+        let y: &Self::Y;
         let u: &u64;
     label b0:
         s = X { y: Y { u: 0 } };

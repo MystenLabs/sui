@@ -45,7 +45,9 @@ done
 ## Generate markdown, llms.txt, and check relative link files 
 node scripts/copy-markdown-files.js || { echo "❌ copy-markdown-files failed"; exit 1; }
 node src/shared/js/generate-llmstxt.mjs build/markdown/ --sitemap build/sitemap.xml --build-dir build --output static/llms.txt || { echo "❌ generate-llmstxt failed"; exit 1; }
-node src/shared/js/check-links.mjs ../content || { echo "❌ generate-llmstxt failed"; exit 1; }
+cp static/llms.txt build/llms.txt
+node scripts/create-markdown-index-duplicates.js || { echo "❌ create-markdown-index-duplicates failed"; exit 1; }
+node src/shared/js/check-links.mjs ../content || { echo "❌ check-links failed"; exit 1; }
 
 BUILD_EXIT=${PIPESTATUS[0]}
 

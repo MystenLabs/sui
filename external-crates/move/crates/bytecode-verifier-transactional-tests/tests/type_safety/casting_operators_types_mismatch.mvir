@@ -1,5 +1,5 @@
 //# run
-module 0x42.m {
+module 0x42::m {
 // tests bad casts/integer conversions
 entry foo() {
 label b0:
@@ -9,7 +9,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -19,7 +19,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -29,7 +29,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -39,7 +39,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -49,7 +49,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -60,7 +60,7 @@ label b0:
 }
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -70,7 +70,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -80,7 +80,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -90,7 +90,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -100,7 +100,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -110,7 +110,7 @@ label b0:
 
 }
 //# run
-module 0x42.m {
+module 0x42::m {
 
 entry foo() {
 label b0:
@@ -121,7 +121,7 @@ label b0:
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct S { x: bool }
     f() {
     label b0:
@@ -131,7 +131,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct S { x: bool }
     g() {
     label b0:
@@ -141,7 +141,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct S { x: bool }
     h() {
     label b0:
@@ -151,7 +151,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct S { x: bool }
     f() {
     label b0:
@@ -161,7 +161,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct S { x: bool }
     g() {
     label b0:
@@ -171,7 +171,7 @@ module 0x42.M {
 }
 
 //# publish
-module 0x42.M {
+module 0x42::M {
     struct S { x: bool }
     h() {
     label b0:

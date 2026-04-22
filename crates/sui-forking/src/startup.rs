@@ -1,11 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::net::SocketAddr;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
 use prometheus::Registry;
 use rand::rngs::OsRng;
+use sui_rpc_api::{RpcService, ServerVersion};
+use sui_types::storage::RpcStateReader;
 use tracing::info;
 
 use simulacrum::Simulacrum;
@@ -29,7 +33,7 @@ pub async fn initialize(
 ) -> Result<Context> {
     // 1. Create DataStore — empty local cache, GraphQL wired up.
     let data_store = DataStore::new(node.clone(), forked_at_checkpoint, version).await?;
-    let chain_identifier = data_store.get_chain_identifier();
+    let chain_identifier = data_store.chain();
 
     // 2. Download and persist the startup checkpoint (summary + contents),
     //    then read the summary back through the cache-aware getter.
@@ -79,12 +83,34 @@ pub async fn initialize(
     Ok(Context::new(simulacrum, chain_identifier))
 }
 
-/// Run the forked network
-/// context.
-pub async fn run(context: Context) -> Result<()> {
+/// Run the forked network. Spawns a `sui-rpc-api` gRPC server bound to
+/// `rpc_addr` on top of the context's `DataStore`, then blocks on Ctrl+C.
+pub async fn run(context: Context, rpc_addr: SocketAddr, version: &'static str) -> Result<()> {
+    let reader: Arc<dyn RpcStateReader> = {
+        let sim = context.simulacrum().read().await;
+        Arc::new(sim.store().clone())
+    };
+    let mut service = RpcService::new(reader);
+    service.with_server_version(ServerVersion::new("sui-forking", version));
+
+    info!("starting sui-rpc-api server on {rpc_addr}");
+    let server_handle = tokio::spawn(async move { service.start_service(rpc_addr).await });
+
     info!("forked network running, waiting for shutdown signal (Ctrl+C)");
-    tokio::signal::ctrl_c().await?;
-    info!("shutdown signal received, stopping forked network");
+    tokio::select! {
+        res = tokio::signal::ctrl_c() => {
+            res?;
+            info!("shutdown signal received, stopping forked network");
+        }
+        // If the RPC server task aborts unexpectedly, surface that as an
+        // error rather than blocking on Ctrl+C indefinitely.
+        join = server_handle => {
+            if let Err(e) = join {
+                return Err(anyhow!("rpc server task panicked: {e}"));
+            }
+            return Err(anyhow!("rpc server task exited unexpectedly"));
+        }
+    }
     Ok(())
 }
 

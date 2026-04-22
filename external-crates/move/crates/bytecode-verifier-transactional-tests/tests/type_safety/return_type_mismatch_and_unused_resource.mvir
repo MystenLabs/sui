@@ -1,11 +1,11 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct R { flag: bool }
 
     // Type checking is done before memory safety checks
     // wrong return type
     t1(): bool {
-        let c: Self.R;
+        let c: Self::R;
     label b0:
         c = R { flag: false };
         return 0;
@@ -13,7 +13,7 @@ module 0x1.M {
 }
 
 //# publish
-module 0x1.M2 {
+module 0x1::M2 {
     // Type checking is done before memory safety checks
     // wrong return type
     t2(): bool {
@@ -27,11 +27,11 @@ module 0x1.M2 {
 }
 
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct R { flag: bool }
 
     t1(): u64 {
-        let c: Self.R;
+        let c: Self::R;
     label b0:
         c = R { flag: false };
         // unused resource
@@ -40,7 +40,7 @@ module 0x1.M {
 }
 
 //# publish
-module 0x1.M2 {
+module 0x1::M2 {
     t2(): &u64 {
         let u: u64;
         let r: &u64;
@@ -53,27 +53,27 @@ module 0x1.M2 {
 }
 
 //# publish
-module 0x2.M {
+module 0x2::M {
     enum R { V { flag: bool } }
 
     // Type checking is done before memory safety checks
     // wrong return type
     t1(): bool {
-        let c: Self.R;
+        let c: Self::R;
     label b0:
-        c = R.V { flag: false };
+        c = R::V { flag: false };
         return 0;
     }
 }
 
 //# publish
-module 0x2.M {
+module 0x2::M {
     enum R { V { flag: bool } }
 
     t1(): u64 {
-        let c: Self.R;
+        let c: Self::R;
     label b0:
-        c = R.V { flag: false };
+        c = R::V { flag: false };
         // unused resource
         return 0;
     }

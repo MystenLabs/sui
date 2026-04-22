@@ -2,21 +2,21 @@
 
 //# publish
 
-module 0x1.Tester {
+module 0x1::Tester {
     struct T has copy { f: u64, g: u64, h: u64 }
 
-    borrow(s1: &mut Self.T): &mut u64 * &mut u64 * &u64 * &u64 {
+    borrow(s1: &mut Self::T): &mut u64 * &mut u64 * &u64 * &u64 {
     label b0:
         return (&mut copy(s1).T::f, &mut copy(s1).T::g, &copy(s1).T::h, &copy(s1).T::h);
     }
 
-    t(s: &mut Self.T): &mut u64 * &mut u64 * &u64 * &u64 {
+    t(s: &mut Self::T): &mut u64 * &mut u64 * &u64 * &u64 {
         let m1: &mut u64;
         let m2: &mut u64;
         let i3: &u64;
         let i4: &u64;
     label b0:
-        m1, m2, i3, i4 = Self.borrow(copy(s));
+        m1, m2, i3, i4 = Self::borrow(copy(s));
         // all are readable
         _ = *copy(m1);
         _ = *copy(m2);

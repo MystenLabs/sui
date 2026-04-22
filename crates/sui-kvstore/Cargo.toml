@@ -17,7 +17,6 @@ clap.workspace = true
 futures.workspace = true
 governor.workspace = true
 http.workspace = true
-num_cpus.workspace = true
 gcp_auth.workspace = true
 prometheus.workspace = true
 rand.workspace = true

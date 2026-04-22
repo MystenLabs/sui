@@ -2,22 +2,22 @@
 
 //# publish
 
-module 0x1.Tester {
+module 0x1::Tester {
     struct T has copy { f: u64 }
 
-    f1(s: &Self.T, f: &mut u64) {
+    f1(s: &Self::T, f: &mut u64) {
     label b0:
         abort 0;
     }
 
     // reject call, f extends i
-    t_f1(s: &mut Self.T) {
-        let i: &Self.T;
+    t_f1(s: &mut Self::T) {
+        let i: &Self::T;
         let f: &mut u64;
     label l0:
         i = freeze(copy(s));
         f = &mut copy(s).T::f;
-        Self.f1(move(i), move(f));
+        Self::f1(move(i), move(f));
         return;
     }
 
@@ -25,22 +25,22 @@ module 0x1.Tester {
 
 //# publish
 
-module 0x1.Tester {
+module 0x1::Tester {
     struct T has copy { f: u64 }
 
-    f2(f: &mut u64, s: &Self.T) {
+    f2(f: &mut u64, s: &Self::T) {
     label b0:
         abort 0;
     }
 
     // reject call, f extends i
-    t_f1(s: &mut Self.T) {
-        let i: &Self.T;
+    t_f1(s: &mut Self::T) {
+        let i: &Self::T;
         let f: &mut u64;
     label l0:
         i = freeze(copy(s));
         f = &mut copy(s).T::f;
-        Self.f2(move(f), move(i));
+        Self::f2(move(f), move(i));
         return;
     }
 

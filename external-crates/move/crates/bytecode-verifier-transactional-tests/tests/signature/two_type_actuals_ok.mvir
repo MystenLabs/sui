@@ -1,11 +1,11 @@
 //# publish
-module 0x1.M {
+module 0x1::M {
     struct R has key { b: bool}
     struct S<T1: key, T2: copy + drop> { b: bool }
 
     foo() {
         // satisfy constraints
-        let x: Self.S<Self.R, bool>;
+        let x: Self::S<Self::R, bool>;
     label b0:
         return;
     }

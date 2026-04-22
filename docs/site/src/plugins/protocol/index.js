@@ -5,14 +5,12 @@
 
 import path from "path";
 import fs from "fs";
-//import Protocol from "@site/src/components/Protocol";
 
 const PROTOCOL_PATH = path.join(
   __dirname,
   "../../../../content/documentation.json",
 );
-const MDX_FILENAME = "fullnode-protocol";
-const MDX_TEST = new RegExp(`${MDX_FILENAME}\\.mdx$`);
+const MDX_TEST = /fullnode-protocol(?:-types)?\.mdx$/;
 const SPEC_MD = fs.readFileSync(PROTOCOL_PATH, "utf-8");
 
 const fullnodeProtocolPlugin = (context, options) => {

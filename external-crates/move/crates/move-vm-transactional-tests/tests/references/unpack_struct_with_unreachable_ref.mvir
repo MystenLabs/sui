@@ -1,13 +1,13 @@
 // Struct unpack with an unreachable field reference due to control flow.
 
 //# run
-module 0x42.m {
+module 0x42::m {
 
 struct S has drop { f: u64 }
 
 entry foo() {
-    let s: Self.S;
-    let sr: &Self.S;
+    let s: Self::S;
+    let sr: &Self::S;
     let fr: &u64;
     let val: u64;
 label b0:

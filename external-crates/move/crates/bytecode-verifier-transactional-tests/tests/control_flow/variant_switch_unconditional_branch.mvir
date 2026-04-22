@@ -1,8 +1,8 @@
 //# publish
-module 0x42.m { 
+module 0x42::m { 
     enum X { V1 { x: u64 }, V2 { } }
 
-    entry foo(x: Self.X) {
+    entry foo(x: Self::X) {
         let y: u64;
     label bv:
         variant_switch X (&x) {
@@ -16,14 +16,14 @@ module 0x42.m {
     label fallthrough:
         return;
     label b0:
-        X.V1 { x: y } = move(x);
+        X::V1 { x: y } = move(x);
         jump_if (move(y) > 42) b3;
     label b1:
         return;
     label b3:
         return;
     label b4: 
-        X.V2 {} = move(x);
+        X::V2 {} = move(x);
         abort 0;
     } 
 }
