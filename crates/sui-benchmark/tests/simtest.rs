@@ -1595,6 +1595,7 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
         let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
@@ -1735,6 +1736,49 @@ mod test {
                 "expected at least one authenticated event emit"
             );
         }
+    }
+
+    /// Regression test for a panic at transaction_rewriting.rs where a coin-reservation
+    /// transaction executes before the settlement transaction that creates the accumulator
+    /// object it depends on. Uses execution delays to create adversarial scheduling.
+    #[sim_test(config = "test_config()")]
+    async fn test_coin_reservation_checkpoint_replay() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        register_fail_point_async("transaction_execution_delay", move || async move {
+            if thread_rng().gen_range(0..10u64) == 0 {
+                let delay = thread_rng().gen_range(0..1000u64);
+                tokio::time::sleep(Duration::from_millis(delay)).await;
+            }
+        });
+
+        let test_cluster = build_test_cluster(4, 10000, 1).await;
+
+        use sui_benchmark::workloads::composite::*;
+        let composite_config = CompositeWorkloadConfig {
+            num_shared_counters: 2,
+            shared_counter_hotness: 0.95,
+            address_balance_amount: 1000,
+            address_balance_gas_probability: 0.5,
+            conflicting_transaction_probability: 0.1,
+            ..Default::default()
+        }
+        .with_probability(SharedCounterIncrement::NAME, 0.1)
+        .with_probability(AddressBalanceDeposit::NAME, 0.1)
+        .with_probability(AddressBalanceWithdraw::NAME, 0.1)
+        .with_probability(AddressBalanceOverdraw::NAME, 0.3)
+        .with_probability(CoinReservationWithdraw::NAME, 0.3);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            60,
+            SimulatedLoadConfig::composite_only(composite_config),
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
