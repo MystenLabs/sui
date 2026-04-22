@@ -295,6 +295,7 @@ fn attribute(
         PA::Allow { allow_set } => KA::Diagnostic(A::DiagnosticAttribute::Allow { allow_set }),
         PA::Deny { deny_set } => KA::Diagnostic(A::DiagnosticAttribute::Deny { deny_set }),
         PA::Expect { expect_set } => KA::Diagnostic(A::DiagnosticAttribute::Expect { expect_set }),
+        PA::Warn { warn_set } => KA::Diagnostic(A::DiagnosticAttribute::Warn { warn_set }),
         PA::LintAllow { allow_set } => {
             KA::Diagnostic(A::DiagnosticAttribute::LintAllow { allow_set })
         }

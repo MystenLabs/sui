@@ -1657,6 +1657,12 @@ fn warning_filter_(
         add_filter_entries(context, &mut filter_entries, FilterKind::Allow, allow_set);
     }
 
+    if let Some(DiagnosticAttribute::Warn { warn_set }) =
+        get_diagnostic_attribute(context, attributes, known_attributes::AttributeKind_::Warn)
+    {
+        add_filter_entries(context, &mut filter_entries, FilterKind::Warn, warn_set);
+    }
+
     if let Some(DiagnosticAttribute::Deny { deny_set }) =
         get_diagnostic_attribute(context, attributes, known_attributes::AttributeKind_::Deny)
     {
@@ -1714,34 +1720,46 @@ fn add_filter_entries(
             context.add_diag(diag!(Attributes::ValueWarning, (name_loc, msg)));
             continue;
         };
-        let conflict = filters.iter().find_map(|id| {
-            let existing = filter_entries.get(id)?;
-            (existing.value != filter_kind).then_some(existing)
-        });
-        if let Some(sp!(prev_loc, _)) = conflict {
-            let filter_name = format_allow_attr(prefix, name);
-            let (fst_loc, snd_loc) = if *prev_loc > name_loc {
-                (*prev_loc, name_loc)
-            } else {
-                (name_loc, *prev_loc)
-            };
-            context.add_diag(diag!(
-                Attributes::AmbiguousAttributeValue,
-                (
-                    snd_loc,
-                    format!(
-                        "Conflicting filter for '{filter_name}' specified in the same attribute"
-                    )
-                ),
-                (
-                    fst_loc,
-                    format!("Conflicting filter for '{filter_name}' specified here")
-                )
-            ));
-            continue;
-        }
         for id in filters {
-            filter_entries.insert(id, sp(name_loc, filter_kind));
+            use std::collections::btree_map::Entry;
+            match filter_entries.entry(id) {
+                Entry::Vacant(e) => {
+                    e.insert(sp(name_loc, filter_kind));
+                }
+                Entry::Occupied(e) if e.get().value == filter_kind => {
+                    // Same kind, no conflict — keep the existing entry.
+                }
+                Entry::Occupied(mut e) => {
+                    let sp!(prev_loc, prev_kind) = *e.get();
+                    let filter_name = format_allow_attr(prefix, name);
+                    let (fst_loc, snd_loc) = if prev_loc > name_loc {
+                        (prev_loc, name_loc)
+                    } else {
+                        (name_loc, prev_loc)
+                    };
+                    context.add_diag(diag!(
+                        Attributes::AmbiguousAttributeValue,
+                        (
+                            snd_loc,
+                            format!(
+                                "Conflicting filter for '{filter_name}' \
+                                 specified in the same attribute"
+                            )
+                        ),
+                        (
+                            fst_loc,
+                            format!("Conflicting filter for '{filter_name}' specified here")
+                        )
+                    ));
+                    let winner = FilterKind::resolve_conflict(prev_kind, filter_kind);
+                    let winner_loc = if winner == filter_kind {
+                        name_loc
+                    } else {
+                        prev_loc
+                    };
+                    e.insert(sp(winner_loc, winner));
+                }
+            }
         }
     }
 }

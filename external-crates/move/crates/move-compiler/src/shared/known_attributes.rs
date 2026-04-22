@@ -42,6 +42,7 @@ pub enum AttributeKind_ {
     Deprecation,
     Error,
     Expect,
+    Warn,
     ExpectedFailure,
     External,
     LintAllow,
@@ -82,6 +83,9 @@ pub enum DiagnosticAttribute {
     },
     Expect {
         expect_set: BTreeSet<(Option<Name>, Name)>,
+    },
+    Warn {
+        warn_set: BTreeSet<(Option<Name>, Name)>,
     },
     LintAllow {
         allow_set: BTreeSet<Name>,
@@ -210,6 +214,7 @@ impl AttributeKind_ {
             AttributeKind_::Deprecation => DeprecationAttribute::DEPRECATED,
             AttributeKind_::Error => ErrorAttribute::ERROR,
             AttributeKind_::Expect => DiagnosticAttribute::EXPECT,
+            AttributeKind_::Warn => DiagnosticAttribute::WARN,
             AttributeKind_::ExpectedFailure => TestingAttribute::EXPECTED_FAILURE,
             AttributeKind_::External => ExternalAttribute::EXTERNAL,
             AttributeKind_::Mode => ModeAttribute::MODE,
@@ -337,6 +342,7 @@ impl DiagnosticAttribute {
     pub const ALLOW: &'static str = "allow";
     pub const DENY: &'static str = "deny";
     pub const EXPECT: &'static str = "expect";
+    pub const WARN: &'static str = "warn";
     pub const LINT_ALLOW: &'static str = "lint_allow";
     pub const LINT: &'static str = "lint";
     pub const LINT_SYMBOL: Symbol = symbol!("lint");
@@ -346,6 +352,7 @@ impl DiagnosticAttribute {
             DiagnosticAttribute::Allow { .. } => Self::ALLOW,
             DiagnosticAttribute::Deny { .. } => Self::DENY,
             DiagnosticAttribute::Expect { .. } => Self::EXPECT,
+            DiagnosticAttribute::Warn { .. } => Self::WARN,
             DiagnosticAttribute::LintAllow { .. } => Self::LINT_ALLOW,
         }
     }
@@ -369,6 +376,7 @@ impl DiagnosticAttribute {
             DiagnosticAttribute::Allow { .. } => AttributeKind_::Allow,
             DiagnosticAttribute::Deny { .. } => AttributeKind_::Deny,
             DiagnosticAttribute::Expect { .. } => AttributeKind_::Expect,
+            DiagnosticAttribute::Warn { .. } => AttributeKind_::Warn,
             DiagnosticAttribute::LintAllow { .. } => AttributeKind_::LintAllow,
         }
     }
@@ -815,6 +823,9 @@ impl AstDebug for DiagnosticAttribute {
             }
             DiagnosticAttribute::Expect { expect_set } => {
                 print_diag_list(w, &mut first, expect_set);
+            }
+            DiagnosticAttribute::Warn { warn_set } => {
+                print_diag_list(w, &mut first, warn_set);
             }
             DiagnosticAttribute::LintAllow { allow_set } => {
                 for name in allow_set {

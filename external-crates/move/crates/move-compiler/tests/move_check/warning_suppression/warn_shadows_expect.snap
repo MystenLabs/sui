@@ -1,0 +1,31 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10009]: unfulfilled '#[expect(...)]'
+  ┌─ tests/move_check/warning_suppression/warn_shadows_expect.move:3:10
+  │
+3 │ #[expect(unused_variable)]
+  │          ^^^^^^^^^^^^^^^ Expected this warning to be emitted, but it was not
+  │
+  = The '#[expect(...)]' attribute will only suppress a warning that actually occurs. Remove the attribute if the warning is intentionally fixed.
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/warn_shadows_expect.move:6:13
+  │
+5 │     #[warn(unused_variable)]
+  │            --------------- the lint level is defined here
+6 │     fun foo(a: u64) {
+  │             ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/warn_shadows_expect.move:7:13
+  │
+5 │     #[warn(unused_variable)]
+  │            --------------- the lint level is defined here
+6 │     fun foo(a: u64) {
+7 │         let x;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'

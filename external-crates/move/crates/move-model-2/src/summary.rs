@@ -1049,6 +1049,18 @@ fn attribute(k: &KA::KnownAttribute) -> Attribute {
                 }
                 Attribute::Parameterized(KA::DiagnosticAttribute::EXPECT.into(), inner)
             }
+            KA::DiagnosticAttribute::Warn { warn_set } => {
+                let mut inner = Vec::new();
+                for (prefix_opt, name) in warn_set {
+                    if let Some(pref) = prefix_opt {
+                        let grp = vec![Attribute::Name(name.value)];
+                        inner.push(Attribute::Parameterized(pref.value, grp));
+                    } else {
+                        inner.push(Attribute::Name(name.value));
+                    }
+                }
+                Attribute::Parameterized(KA::DiagnosticAttribute::WARN.into(), inner)
+            }
             KA::DiagnosticAttribute::LintAllow { allow_set } => {
                 let inner = allow_set
                     .iter()

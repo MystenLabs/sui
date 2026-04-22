@@ -78,6 +78,9 @@ pub const FILTER_LITERAL_ENFORCEMENT: &str = "untyped_literal";
 pub enum FilterKind {
     /// Suppress the diagnostic but retain it in `filtered_source_diagnostics`.
     Allow,
+    /// Emit the diagnostic as a warning (the default level). Overrides `Allow`/`Deny`/`Expect`
+    /// from an outer scope, restoring normal warning behavior.
+    Warn,
     /// Upgrade the diagnostic's severity to `NonblockingError`.
     Deny,
     /// Suppress the diagnostic and mark this filter entry as fulfilled. Unfulfilled `Expect`
@@ -87,10 +90,19 @@ pub enum FilterKind {
     Drop,
 }
 
+impl FilterKind {
+    /// When two different filter kinds target the same diagnostic at the same scope, pick the
+    /// stricter one. Variant ordering defines strictness: Allow < Warn < Deny < Expect < Drop.
+    pub fn resolve_conflict(self, other: Self) -> Self {
+        std::cmp::max(self, other)
+    }
+}
+
 impl std::fmt::Display for FilterKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FilterKind::Allow => write!(f, "allow"),
+            FilterKind::Warn => write!(f, "warn"),
             FilterKind::Deny => write!(f, "deny"),
             FilterKind::Expect => write!(f, "expect"),
             FilterKind::Drop => write!(f, "drop"),
@@ -514,6 +526,13 @@ impl FilterStack {
             _ if diag.severity() > Severity::Warning => FilterResult::Emit(diag),
             FilterKind::Drop => FilterResult::Discarded,
             FilterKind::Allow => FilterResult::Filtered(diag),
+            FilterKind::Warn => {
+                diag = diag.set_severity(Severity::Warning);
+                if resolved.loc != Loc::invalid() {
+                    diag.add_secondary_label((resolved.loc, "the lint level is defined here"));
+                }
+                FilterResult::Emit(diag)
+            }
             FilterKind::Deny => {
                 diag = diag.set_severity(Severity::NonblockingError);
                 if resolved.loc != Loc::invalid() {

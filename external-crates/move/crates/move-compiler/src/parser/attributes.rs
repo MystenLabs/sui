@@ -43,6 +43,7 @@ pub(crate) fn to_known_attributes(
         KA::DiagnosticAttribute::ALLOW => parse_allow(context, attribute),
         KA::DiagnosticAttribute::DENY => parse_deny(context, attribute),
         KA::DiagnosticAttribute::EXPECT => parse_expect(context, attribute),
+        KA::DiagnosticAttribute::WARN => parse_warn(context, attribute),
         KA::DiagnosticAttribute::LINT_ALLOW => parse_lint_allow(context, attribute),
         // -- error attribtue ------------
         KA::ErrorAttribute::ERROR => {
@@ -300,6 +301,12 @@ fn parse_deny(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribut
 fn parse_expect(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
     parse_diagnostic_filter_attr(context, attribute, KA::DiagnosticAttribute::EXPECT, |set| {
         Attribute_::Expect { expect_set: set }
+    })
+}
+
+fn parse_warn(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+    parse_diagnostic_filter_attr(context, attribute, KA::DiagnosticAttribute::WARN, |set| {
+        Attribute_::Warn { warn_set: set }
     })
 }
 
