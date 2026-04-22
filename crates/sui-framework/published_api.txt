@@ -1054,6 +1054,9 @@ active_validator_addresses_ref
 active_validator_voting_powers
 	public fun
 	0x3::sui_system
+active_validator_stake_amount
+	public fun
+	0x3::sui_system
 calculate_rewards
 	public(package) fun
 	0x3::sui_system
