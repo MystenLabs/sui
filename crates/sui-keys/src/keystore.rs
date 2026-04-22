@@ -67,6 +67,7 @@ pub struct GeneratedKey {
     pub address: SuiAddress,
     pub public_key: PublicKey,
     pub scheme: SignatureScheme,
+    pub mnemonic: Option<String>,
 }
 
 #[async_trait]
@@ -98,6 +99,7 @@ pub trait AccountKeystore: Send + Sync {
             address,
             public_key,
             scheme,
+            mnemonic: None,
         })
     }
 

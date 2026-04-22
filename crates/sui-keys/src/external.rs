@@ -74,6 +74,13 @@ pub struct ExternalKey {
     pub key_id: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CreateKeyResponse {
+    pub public_key: PublicKey,
+    pub key_id: String,
+    pub mnemonic: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
 /// Provision mode requested when creating a key on an external signer.
 pub enum ProvisionMode {
@@ -428,12 +435,17 @@ impl AccountKeystore for External {
             .unwrap_or(JsonValue::Null);
 
         // Attempt to generate, fallback to indexing the first unindexed key.
-        let stored_key = match self.exec(&ext_signer, "create_key", create_key_params).await {
+        let (stored_key, mnemonic) = match self.exec(&ext_signer, "create_key", create_key_params).await {
             Ok(res) => serde_json::from_value(res)
-                .map(|k: ExternalKey| StoredKey {
-                    public_key: k.public_key,
-                    ext_signer: ext_signer.clone(),
-                    key_id: k.key_id,
+                .map(|k: CreateKeyResponse| {
+                    (
+                        StoredKey {
+                            public_key: k.public_key,
+                            ext_signer: ext_signer.clone(),
+                            key_id: k.key_id,
+                        },
+                        k.mnemonic,
+                    )
                 })
                 .map_err(|e| anyhow!("Failed to parse key response from external signer: {}", e))?,
             Err(create_error) => {
@@ -447,7 +459,7 @@ impl AccountKeystore for External {
                 };
 
                 match self.add_first_unindexed_key(ext_signer.clone()).await {
-                    Ok(stored_key) => stored_key,
+                    Ok(stored_key) => (stored_key, None),
                     Err(add_error) => {
                         let error = match provision_mode_error {
                             Some(message) => anyhow!(
@@ -480,6 +492,7 @@ impl AccountKeystore for External {
             address,
             scheme: public_key.scheme(),
             public_key,
+            mnemonic,
         })
     }
 
@@ -939,10 +952,12 @@ mod tests {
             address,
             public_key,
             scheme,
+            mnemonic,
         } = result.unwrap();
         assert_eq!(scheme, ED25519);
         assert_eq!(address, SuiAddress::from_str(ADDRESS).unwrap());
         assert_eq!(public_key.encode_base64(), PUBLIC_KEY);
+        assert_eq!(mnemonic, None);
         assert!(external.keys.contains_key(&address));
 
         // With a different signature scheme
@@ -978,6 +993,7 @@ mod tests {
     async fn test_generate_with_provision_mode() {
         let mut mock = MockCommandRunner::new();
         let key_id = "key-123";
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         mock.expect_run()
             .with(
                 eq("signer"),
@@ -989,7 +1005,8 @@ mod tests {
                     "key_id": key_id,
                     "public_key": {
                         "Ed25519": UNTAGGED_PUBLIC_KEY
-                    }
+                    },
+                    "mnemonic": mnemonic
                 }))
             });
 
@@ -1005,6 +1022,7 @@ mod tests {
             .await;
 
         assert!(result.is_ok());
+        assert_eq!(result.unwrap().mnemonic, Some(mnemonic.to_string()));
     }
 
     #[tokio::test]
@@ -1075,10 +1093,12 @@ mod tests {
             address,
             public_key,
             scheme,
+            mnemonic,
         } = result.unwrap();
         assert_eq!(scheme, ED25519);
         assert_eq!(address, SuiAddress::from_str(ADDRESS).unwrap());
         assert_eq!(public_key.encode_base64(), PUBLIC_KEY);
+        assert_eq!(mnemonic, None);
     }
 
     #[tokio::test]
