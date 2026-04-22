@@ -150,7 +150,7 @@ impl<'pc> PerTxCache<'pc> {
         Ok(())
     }
 
-    pub(super) fn lookup_type_by_input(
+    pub(super) fn lookup_type_input(
         &self,
         input: &TypeInput,
     ) -> Result<Option<Type>, ExecutionError> {
@@ -169,16 +169,13 @@ impl<'pc> PerTxCache<'pc> {
             "TypeInput cannot represent a reference type: {:?}",
             ty
         );
-        let mut c = self.borrow_mut()?;
-        if let Some(existing) = c.type_input_to_type.get(&input) {
-            assert_invariant!(
-                existing == &ty,
-                "cache inconsistency on type_input_to_type: existing {:?} vs new {:?}",
-                existing,
-                ty
-            );
-        }
-        c.type_input_to_type.insert(input, ty);
+
+        let previous = self.borrow_mut()?.type_input_to_type.insert(input, ty);
+        assert_invariant!(
+            previous.is_none(),
+            "duplicate insert into type_input_to_type"
+        );
+
         Ok(())
     }
 
@@ -201,31 +198,22 @@ impl<'pc> PerTxCache<'pc> {
         ty: Type,
     ) -> Result<(Rc<TypeTag>, Type), ExecutionError> {
         let tag = Rc::new(tag);
+
         gated!(self.protocol_config, (tag, ty));
         assert_invariant!(
             !matches!(ty, Type::Reference(_, _)),
             "TypeTag cannot represent a reference type: {:?}",
             ty
         );
+
         let mut c = self.borrow_mut()?;
-        if let Some(existing) = c.tag_to_type.get(&tag) {
-            assert_invariant!(
-                existing == &ty,
-                "cache inconsistency on tag_to_type: existing {:?} vs new {:?}",
-                existing,
-                ty
-            );
-        }
-        if let Some(existing) = c.type_to_tag.get(&ty) {
-            assert_invariant!(
-                existing == &tag,
-                "cache inconsistency on type_to_tag: existing {:?} vs new {:?}",
-                existing,
-                tag
-            );
-        }
-        c.tag_to_type.insert(tag.clone(), ty.clone());
-        c.type_to_tag.insert(ty.clone(), tag.clone());
+
+        let previous_tag = c.tag_to_type.insert(tag.clone(), ty.clone());
+        assert_invariant!(previous_tag.is_none(), "duplicate insert into tag_to_type");
+
+        let previous_type = c.type_to_tag.insert(ty.clone(), tag.clone());
+        assert_invariant!(previous_type.is_none(), "duplicate insert into type_to_tag");
+
         Ok((tag, ty))
     }
 
@@ -251,31 +239,25 @@ impl<'pc> PerTxCache<'pc> {
         ty: Type,
     ) -> Result<(Rc<vm_runtime::Type>, Type), ExecutionError> {
         let vm_type = Rc::new(vm_type);
+
         gated!(self.protocol_config, (vm_type, ty));
         assert_invariant!(
             !matches!(vm_type.as_ref(), vm_runtime::Type::TyParam(_)),
             "cannot cache unresolved TyParam: {:?}",
             vm_type
         );
+
         let mut c = self.borrow_mut()?;
-        if let Some(existing) = c.vm_to_type.get(&vm_type) {
-            assert_invariant!(
-                existing == &ty,
-                "cache inconsistency on vm_to_type: existing {:?} vs new {:?}",
-                existing,
-                ty
-            );
-        }
-        if let Some(existing) = c.type_to_vm.get(&ty) {
-            assert_invariant!(
-                existing == &vm_type,
-                "cache inconsistency on type_to_vm: existing {:?} vs new {:?}",
-                existing,
-                vm_type
-            );
-        }
-        c.vm_to_type.insert(vm_type.clone(), ty.clone());
-        c.type_to_vm.insert(ty.clone(), vm_type.clone());
+
+        let previous_vm_type = c.vm_to_type.insert(vm_type.clone(), ty.clone());
+        assert_invariant!(
+            previous_vm_type.is_none(),
+            "duplicate insert into vm_to_type"
+        );
+
+        let previous_type = c.type_to_vm.insert(ty.clone(), vm_type.clone());
+        assert_invariant!(previous_type.is_none(), "duplicate insert into type_to_vm");
+
         Ok((vm_type, ty))
     }
 
@@ -293,21 +275,11 @@ impl<'pc> PerTxCache<'pc> {
         function: Rc<LoadedFunction>,
     ) -> Result<(), ExecutionError> {
         gated!(self.protocol_config, ());
-        let mut c = self.borrow_mut()?;
-        if let Some(existing) = c.function_cache.get(&key) {
-            // Structural drift check: the fields that the key pins down should match. Anything
-            // derived (visibility / is_entry / instruction_length / definition_index / signature)
-            // is a pure function of those inputs, so if the key agrees the result must too.
-            assert_invariant!(
-                existing.version_mid == function.version_mid
-                    && existing.original_mid == function.original_mid
-                    && existing.is_entry == function.is_entry
-                    && existing.visibility == function.visibility,
-                "function_cache drift for key {:?}",
-                key
-            );
-        }
-        c.function_cache.insert(key, function);
+        let previous_function = self.borrow_mut()?.function_cache.insert(key, function);
+        assert_invariant!(
+            previous_function.is_none(),
+            "duplicate insert into function_cache"
+        );
         Ok(())
     }
 }

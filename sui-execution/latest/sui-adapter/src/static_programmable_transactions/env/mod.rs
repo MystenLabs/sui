@@ -280,7 +280,7 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
     }
 
     pub fn load_type_input(&self, idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
-        if let Some(cached) = self.per_tx_cache.lookup_type_by_input(&ty)? {
+        if let Some(cached) = self.per_tx_cache.lookup_type_input(&ty)? {
             return Ok(cached);
         }
         let vm_type = self.load_vm_type_from_type_input(idx, ty.clone())?;
