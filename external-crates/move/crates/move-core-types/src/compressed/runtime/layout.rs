@@ -489,6 +489,15 @@ impl MoveTypeLayoutBuilder {
             root: root.0,
         }
     }
+
+    pub fn with_builder<F, E>(f: F) -> Result<MoveTypeLayout, E>
+    where
+        F: FnOnce(&mut Self) -> Result<LayoutHandle, E>,
+    {
+        let mut builder = Self::new();
+        let result = f(&mut builder)?;
+        Ok(builder.build(result))
+    }
 }
 
 impl Default for MoveTypeLayoutBuilder {
