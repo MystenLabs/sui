@@ -51,6 +51,20 @@ pub(crate) struct EventCursor {
 
 pub(crate) type CEvent = JsonCursor<EventCursor>;
 
+#[cfg(feature = "staging")]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Clone, Debug, PartialOrd, Ord, Copy)]
+pub(crate) struct ScanEventCursor {
+    #[serde(rename = "c")]
+    pub cp_sequence_number: u64,
+    #[serde(rename = "t")]
+    pub tx_sequence_number: u64,
+    #[serde(rename = "e")]
+    pub ev_sequence_number: u64,
+}
+
+#[cfg(feature = "staging")]
+pub(crate) type CScanEvent = JsonCursor<ScanEventCursor>;
+
 #[derive(Clone)]
 pub(crate) struct Event {
     pub(crate) scope: Scope,
