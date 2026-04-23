@@ -211,6 +211,10 @@ pub struct IngestionConfig {
     pub streaming_backoff_max_batch_size: usize,
     pub streaming_connection_timeout_ms: u64,
     pub streaming_statement_timeout_ms: u64,
+
+    /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
+    /// per-pipeline `ingestion.subscriber-channel-size`.
+    pub checkpoint_buffer_size: Option<usize>,
 }
 
 impl Default for IngestionConfig {
@@ -228,12 +232,21 @@ impl From<framework::ingestion::IngestionConfig> for IngestionConfig {
             streaming_backoff_max_batch_size: config.streaming_backoff_max_batch_size,
             streaming_connection_timeout_ms: config.streaming_connection_timeout_ms,
             streaming_statement_timeout_ms: config.streaming_statement_timeout_ms,
+            checkpoint_buffer_size: None,
         }
     }
 }
 
 impl From<IngestionConfig> for framework::ingestion::IngestionConfig {
     fn from(config: IngestionConfig) -> Self {
+        if config.checkpoint_buffer_size.is_some() {
+            warn!(
+                "Config field `checkpoint-buffer-size` is deprecated and ignored. Remove it from \
+                 your config; set `subscriber-channel-size` under each pipeline's `ingestion` \
+                 section if you need to override the default."
+            );
+        }
+
         framework::ingestion::IngestionConfig {
             ingest_concurrency: config.ingest_concurrency,
             retry_interval_ms: config.retry_interval_ms,

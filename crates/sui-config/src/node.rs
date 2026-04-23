@@ -1364,6 +1364,31 @@ pub struct AuthorityOverloadConfig {
     // is above the threshold.
     #[serde(default = "default_max_transaction_manager_per_object_queue_length")]
     pub max_transaction_manager_per_object_queue_length: usize,
+
+    // Fraction of max_pending_transactions that determines the admission queue
+    // capacity. During congestion, the queue evicts the lowest gas price entries
+    // to make room for higher ones. Capacity = max_pending_transactions * fraction.
+    #[serde(default = "default_admission_queue_capacity_fraction")]
+    pub admission_queue_capacity_fraction: f64,
+
+    // Fraction of max_pending_transactions below which the admission queue is
+    // bypassed (transactions are submitted directly to consensus). Above this
+    // threshold, transactions go through the priority queue.
+    #[serde(default = "default_admission_queue_bypass_fraction")]
+    pub admission_queue_bypass_fraction: f64,
+
+    // Enables use of a gas-price-based priority queue for load shedding of
+    // transactions at admission time. If false, when consensus is saturated, transactions
+    // are rejected with TooManyTransactionsPendingConsensus.
+    #[serde(default = "default_admission_queue_enabled")]
+    pub admission_queue_enabled: bool,
+
+    // Failover timeout for the admission queue. If the queue has not made forward
+    // progress (draining an entry or observing an empty queue) within this window,
+    // it is presumed stuck and new transactions bypass it (using the same saturation
+    // reject behavior as when the queue is disabled) until progress resumes.
+    #[serde(default = "default_admission_queue_failover_timeout")]
+    pub admission_queue_failover_timeout: Duration,
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
@@ -1406,6 +1431,22 @@ fn default_max_transaction_manager_per_object_queue_length() -> usize {
     2000
 }
 
+fn default_admission_queue_capacity_fraction() -> f64 {
+    0.5
+}
+
+fn default_admission_queue_bypass_fraction() -> f64 {
+    0.9
+}
+
+fn default_admission_queue_enabled() -> bool {
+    false
+}
+
+fn default_admission_queue_failover_timeout() -> Duration {
+    Duration::from_secs(30)
+}
+
 impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
@@ -1422,6 +1463,10 @@ impl Default for AuthorityOverloadConfig {
             max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),
+            admission_queue_capacity_fraction: default_admission_queue_capacity_fraction(),
+            admission_queue_bypass_fraction: default_admission_queue_bypass_fraction(),
+            admission_queue_enabled: default_admission_queue_enabled(),
+            admission_queue_failover_timeout: default_admission_queue_failover_timeout(),
         }
     }
 }

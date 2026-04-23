@@ -25,6 +25,9 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use sui_core::admission_queue::{
+    AdmissionQueueContext, AdmissionQueueManager, AdmissionQueueMetrics,
+};
 use sui_core::authority::ExecutionEnv;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
@@ -165,6 +168,7 @@ pub struct ValidatorComponents {
     consensus_adapter: Arc<ConsensusAdapter>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
+    admission_queue: Option<AdmissionQueueContext>,
 }
 pub struct P2pComponents {
     p2p_network: Network,
@@ -1254,6 +1258,7 @@ impl SuiNode {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
         let client = Arc::new(UpdatableConsensusClient::new());
+        let inflight_slot_freed_notify = Arc::new(tokio::sync::Notify::new());
         let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
             &committee,
             consensus_config,
@@ -1261,6 +1266,7 @@ impl SuiNode {
             &registry_service.default_registry(),
             client.clone(),
             checkpoint_store.clone(),
+            inflight_slot_freed_notify.clone(),
         ));
         let consensus_manager = Arc::new(ConsensusManager::new(
             &config,
@@ -1280,11 +1286,13 @@ impl SuiNode {
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
-        let validator_server_handle = Self::start_grpc_validator_service(
+        let (validator_server_handle, admission_queue) = Self::start_grpc_validator_service(
             &config,
             state.clone(),
             consensus_adapter.clone(),
+            epoch_store.clone(),
             &registry_service.default_registry(),
+            inflight_slot_freed_notify,
         )
         .await?;
 
@@ -1323,6 +1331,7 @@ impl SuiNode {
             checkpoint_metrics,
             sui_node_metrics,
             sui_tx_validator_metrics,
+            admission_queue,
         )
         .await
     }
@@ -1344,6 +1353,7 @@ impl SuiNode {
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
+        admission_queue: Option<AdmissionQueueContext>,
     ) -> Result<ValidatorComponents> {
         let checkpoint_service = Self::build_checkpoint_service(
             config,
@@ -1441,6 +1451,10 @@ impl SuiNode {
             );
         }
 
+        if let Some(ctx) = &admission_queue {
+            ctx.rotate_for_epoch(epoch_store);
+        }
+
         Ok(ValidatorComponents {
             validator_server_handle,
             validator_overload_monitor_handle,
@@ -1449,6 +1463,7 @@ impl SuiNode {
             consensus_adapter,
             checkpoint_metrics,
             sui_tx_validator_metrics,
+            admission_queue,
         })
     }
 
@@ -1507,6 +1522,7 @@ impl SuiNode {
         prometheus_registry: &Registry,
         consensus_client: Arc<dyn ConsensusClient>,
         checkpoint_store: Arc<CheckpointStore>,
+        inflight_slot_freed_notify: Arc<tokio::sync::Notify>,
     ) -> ConsensusAdapter {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
@@ -1518,6 +1534,7 @@ impl SuiNode {
             consensus_config.max_pending_transactions(),
             consensus_config.max_pending_transactions() * 2 / committee.num_members(),
             ca_metrics,
+            inflight_slot_freed_notify,
         )
     }
 
@@ -1525,13 +1542,28 @@ impl SuiNode {
         config: &NodeConfig,
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         prometheus_registry: &Registry,
-    ) -> Result<SpawnOnce> {
+        inflight_slot_freed_notify: Arc<tokio::sync::Notify>,
+    ) -> Result<(SpawnOnce, Option<AdmissionQueueContext>)> {
+        let overload_config = &config.authority_overload_config;
+        let admission_queue = overload_config.admission_queue_enabled.then(|| {
+            let manager = Arc::new(AdmissionQueueManager::new(
+                consensus_adapter.clone(),
+                Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
+                overload_config.admission_queue_capacity_fraction,
+                overload_config.admission_queue_bypass_fraction,
+                overload_config.admission_queue_failover_timeout,
+                inflight_slot_freed_notify,
+            ));
+            AdmissionQueueContext::spawn(manager, epoch_store)
+        });
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
             config.policy_config.clone().map(|p| p.client_id_source),
+            admission_queue.clone(),
         );
 
         let mut server_conf = mysten_network::config::Config::new();
@@ -1554,7 +1586,7 @@ impl SuiNode {
 
         let (ready_tx, ready_rx) = oneshot::channel();
 
-        Ok(SpawnOnce::new(ready_rx, async move {
+        let spawn_once = SpawnOnce::new(ready_rx, async move {
             let server = server_builder
                 .bind(&network_address, Some(tls_config))
                 .await
@@ -1566,7 +1598,8 @@ impl SuiNode {
                 info!("Server stopped: {err}");
             }
             info!("Server stopped");
-        }))
+        });
+        Ok((spawn_once, admission_queue))
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {
@@ -1780,6 +1813,7 @@ impl SuiNode {
                 consensus_adapter,
                 checkpoint_metrics,
                 sui_tx_validator_metrics,
+                admission_queue,
             }) = validator_components_lock_guard.take()
             {
                 info!("Reconfiguring the validator.");
@@ -1823,6 +1857,7 @@ impl SuiNode {
                             checkpoint_metrics,
                             self.metrics.clone(),
                             sui_tx_validator_metrics,
+                            admission_queue,
                         )
                         .await?,
                     )

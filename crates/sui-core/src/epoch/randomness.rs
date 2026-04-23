@@ -885,6 +885,7 @@ mod tests {
                 100_000,
                 100_000,
                 ConsensusAdapterMetrics::new_test(),
+                Arc::new(tokio::sync::Notify::new()),
             ));
             let epoch_store = state.epoch_store_for_testing();
             let randomness_manager = RandomnessManager::try_new(
@@ -1033,6 +1034,7 @@ mod tests {
                 100_000,
                 100_000,
                 ConsensusAdapterMetrics::new_test(),
+                Arc::new(tokio::sync::Notify::new()),
             ));
             let epoch_store = state.epoch_store_for_testing();
             let randomness_manager = RandomnessManager::try_new(

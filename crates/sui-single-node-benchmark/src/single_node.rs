@@ -61,6 +61,7 @@ impl SingleValidator {
             100_000,
             100_000,
             ConsensusAdapterMetrics::new_test(),
+            Arc::new(tokio::sync::Notify::new()),
         ));
         // TODO: for validator benchmarking purposes, we should allow for traffic control
         // to be configurable and introduce traffic control benchmarks to test
