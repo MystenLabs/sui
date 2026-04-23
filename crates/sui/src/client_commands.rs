@@ -1391,12 +1391,8 @@ impl SuiClientCommands {
                     TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid");
                 let coin_type_tag = coin_type.unwrap_or_else(|| sui_type_tag.clone());
 
-                // Compare TypeTags directly — `to_canonical_string(true)` expands the
-                // address, which never equals the short-form `SUI_COIN_TYPE` literal.
                 let is_sui = coin_type_tag == sui_type_tag;
 
-                // `get_balance` keys on the inner coin type T (e.g. `0x2::sui::SUI`),
-                // not the `Coin<T>` wrapper — that's how the rpc index stores balances.
                 let TypeTag::Struct(coin_struct_tag) = &coin_type_tag else {
                     bail!("coin type must be a struct type, got {coin_type_tag}");
                 };
