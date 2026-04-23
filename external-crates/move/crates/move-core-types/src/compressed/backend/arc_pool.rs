@@ -117,6 +117,39 @@ impl AnnotatedArcPoolBuilder {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Resolve the type tag of a previously-interned annotated layout handle.
+    /// Returns `None` if `handle` points to an out-of-bounds table index.
+    pub fn type_tag(
+        &self,
+        handle: LayoutRef,
+    ) -> Option<crate::language_storage::TypeTag> {
+        use crate::language_storage::TypeTag;
+        Some(match handle.resolve() {
+            ResolvedRef::Leaf(leaf) => match leaf {
+                LeafType::Bool => TypeTag::Bool,
+                LeafType::U8 => TypeTag::U8,
+                LeafType::U16 => TypeTag::U16,
+                LeafType::U32 => TypeTag::U32,
+                LeafType::U64 => TypeTag::U64,
+                LeafType::U128 => TypeTag::U128,
+                LeafType::U256 => TypeTag::U256,
+                LeafType::Address => TypeTag::Address,
+                LeafType::Signer => TypeTag::Signer,
+            },
+            ResolvedRef::Index(idx) => match self.0.get(idx)? {
+                annotated_nodes::MoveTypeNode::Vector(inner) => {
+                    TypeTag::Vector(Box::new(self.type_tag(*inner)?))
+                }
+                annotated_nodes::MoveTypeNode::Struct(s) => {
+                    TypeTag::Struct(Box::new(s.type_.clone()))
+                }
+                annotated_nodes::MoveTypeNode::Enum(e) => {
+                    TypeTag::Struct(Box::new(e.type_.clone()))
+                }
+            },
+        })
+    }
 }
 
 impl runtime::BackendBuilder for RuntimeArcPoolBuilder {
