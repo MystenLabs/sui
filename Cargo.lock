@@ -15603,7 +15603,6 @@ dependencies = [
  "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
  "sui-json",
- "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-name-service",
  "sui-open-rpc",
