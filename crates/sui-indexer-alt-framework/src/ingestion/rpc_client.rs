@@ -56,6 +56,8 @@ impl IngestionClientTrait for RpcClient {
         // `ByteCountMakeCallbackHandler` request layer attached in
         // `IngestionClient::with_grpc`, so it does not need to be tracked here.
         let response = response.into_inner();
+        // Proto -> Checkpoint conversion is multi-ms of CPU work; offload to the
+        // blocking pool so it doesn't stall the reactor.
         tokio::task::spawn_blocking(move || {
             Checkpoint::try_from(response.checkpoint())
                 .map_err(|e| CheckpointError::Decode(ProtoConversion(e)))

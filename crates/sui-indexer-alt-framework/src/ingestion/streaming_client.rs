@@ -110,6 +110,10 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
                             .checkpoint
                             .context("Checkpoint data missing in response")
                             .map_err(Error::StreamingError)?;
+                        // Proto -> Checkpoint conversion is multi-ms of CPU work;
+                        // offload to the blocking pool so it doesn't stall the reactor.
+                        // Combined with `.buffered(4)` below, up to 4 decodes can run
+                        // concurrently while new bytes keep flowing from gRPC.
                         tokio::task::spawn_blocking(move || {
                             Checkpoint::try_from(&checkpoint).context("Failed to parse checkpoint")
                         })
