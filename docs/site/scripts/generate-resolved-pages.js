@@ -158,7 +158,10 @@ function resolveCode(attrs) {
 
   const lang = attrs.language || guessLanguage(cleaned);
 
-  if (attrs.tag) out = utils.returnTag(out, attrs.tag);
+  if (attrs.tag) {
+    const tagResult = utils.returnTag(out, attrs.tag);
+    out = typeof tagResult === "string" ? tagResult : tagResult.content;
+  }
   if (attrs.module) out = utils.returnModules(out, attrs.module);
   if (attrs.fun)
     out = utils.returnFunctions(out, attrs.fun, lang, attrs.signatureOnly);
