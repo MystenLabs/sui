@@ -274,12 +274,25 @@ impl<'extensions> MoveVM<'extensions> {
     #[instrument(level = "trace", skip_all)]
     pub fn runtime_type_layout(&self, ty: &TypeTag) -> VMResult<runtime_value::MoveTypeLayout> {
         tracing::trace!(type_tag = %ty, "Getting runtime layout");
-        self.virtual_tables.get_type_layout(ty).map_err(|e| {
-            Self::convert_to_external_resolution_error(
-                e,
-                format!("Failed to resolve type layout for {ty}",),
-            )
-        })
+        self.virtual_tables
+            .get_type_layout(ty)
+            .and_then(|ty| {
+                ty.inflate().map_err(|e| {
+                    partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Failed to inflate type layout for {:?}: {}",
+                        ty,
+                        e
+                    )
+                    .finish(Location::Undefined)
+                })
+            })
+            .map_err(|e| {
+                Self::convert_to_external_resolution_error(
+                    e,
+                    format!("Failed to resolve type layout for {ty}",),
+                )
+            })
     }
 
     /// Resolve a `TypeTag` to an annotated type layout using the VM's virtual tables.
@@ -293,6 +306,17 @@ impl<'extensions> MoveVM<'extensions> {
         tracing::trace!(type_tag = %ty, "Getting annotated layout");
         self.virtual_tables
             .get_fully_annotated_type_layout(ty)
+            .and_then(|ty| {
+                ty.inflate().map_err(|e| {
+                    partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Failed to inflate type layout for {:?}: {}",
+                        ty,
+                        e
+                    )
+                    .finish(Location::Undefined)
+                })
+            })
             .map_err(|e| {
                 Self::convert_to_external_resolution_error(
                     e,

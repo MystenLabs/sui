@@ -253,15 +253,28 @@ impl<'b> NativeContext<'_, 'b, '_> {
     }
 
     pub fn type_tag_to_type_layout(&self, ty: &TypeTag) -> Option<R::MoveTypeLayout> {
-        self.vtables.get_type_layout(ty).ok()
+        self.vtables.get_type_layout(ty).ok()?.inflate().ok()
     }
 
     pub fn type_tag_to_annotated_type_layout(&self, ty: &TypeTag) -> Option<A::MoveTypeLayout> {
-        self.vtables.get_fully_annotated_type_layout(ty).ok()
+        self.vtables
+            .get_fully_annotated_type_layout(ty)
+            .ok()
+            .and_then(|ty| ty.inflate().ok())
     }
 
     pub fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<Option<R::MoveTypeLayout>> {
-        match self.vtables.type_to_type_layout(ty) {
+        let layout = self.vtables.type_to_type_layout(ty).and_then(|ty| {
+            ty.inflate().map_err(|e| {
+                partial_vm_error!(
+                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    "Failed to inflate type layout for {:?}: {}",
+                    ty,
+                    e
+                )
+            })
+        });
+        match layout {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
             Err(_) => Ok(None),
@@ -276,7 +289,20 @@ impl<'b> NativeContext<'_, 'b, '_> {
         &self,
         ty: &Type,
     ) -> PartialVMResult<Option<A::MoveTypeLayout>> {
-        match self.vtables.type_to_fully_annotated_layout(ty) {
+        let layout = self
+            .vtables
+            .type_to_fully_annotated_layout(ty)
+            .and_then(|ty| {
+                ty.inflate().map_err(|e| {
+                    partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Failed to inflate type layout for {:?}: {}",
+                        ty,
+                        e
+                    )
+                })
+            });
+        match layout {
             Ok(ty_layout) => Ok(Some(ty_layout)),
             Err(e) if e.major_status().status_type() == StatusType::InvariantViolation => Err(e),
             Err(_) => Ok(None),

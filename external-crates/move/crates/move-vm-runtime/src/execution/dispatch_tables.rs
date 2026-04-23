@@ -29,12 +29,10 @@ use move_binary_format::{
     partial_vm_error,
 };
 use move_core_types::{
-    annotated_value,
     compressed::annotated as CA,
     compressed::runtime as CR,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
-    runtime_value,
 };
 use move_vm_config::runtime::VMConfig;
 
@@ -959,61 +957,41 @@ impl VMDispatchTables {
         )
     }
 
-    pub(crate) fn type_to_type_layout(
-        &self,
-        ty: &Type,
-    ) -> PartialVMResult<runtime_value::MoveTypeLayout> {
+    pub(crate) fn type_to_type_layout(&self, ty: &Type) -> PartialVMResult<CR::MoveTypeLayout> {
         let mut builder = CR::MoveTypeLayoutBuilder::new();
         let root_handle = self.type_to_type_layout_impl(
             ty,
             &mut builder,
             &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
         )?;
-        builder.build(root_handle).inflate().map_err(|e| {
-            partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Failed to inflate type layout for {:?}: {}",
-                ty,
-                e
-            )
-        })
+        Ok(builder.build(root_handle))
     }
 
     pub(crate) fn arena_type_to_fully_annotated_layout(
         &self,
         ty: &ArenaType,
-    ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
+    ) -> PartialVMResult<CA::MoveTypeLayout> {
         self.type_to_fully_annotated_layout(&ty.to_type()?)
     }
 
     pub(crate) fn type_to_fully_annotated_layout(
         &self,
         ty: &Type,
-    ) -> PartialVMResult<annotated_value::MoveTypeLayout> {
+    ) -> PartialVMResult<CA::MoveTypeLayout> {
         let mut builder = CA::MoveTypeLayoutBuilder::new();
         let root_handle = self.type_to_fully_annotated_layout_impl(
             ty,
             &mut builder,
             &mut TypeSize::from_vm_config_for_value_depth(&self.vm_config),
         )?;
-        builder.build(root_handle).inflate().map_err(|e| {
-            partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Failed to inflate fully annotated type layout for {:?}: {}",
-                ty,
-                e
-            )
-        })
+        Ok(builder.build(root_handle))
     }
 
     // -------------------------------------------
     // Public APIs for type layout retrieval.
     // -------------------------------------------
 
-    pub(crate) fn get_type_layout(
-        &self,
-        type_tag: &TypeTag,
-    ) -> VMResult<runtime_value::MoveTypeLayout> {
+    pub(crate) fn get_type_layout(&self, type_tag: &TypeTag) -> VMResult<CR::MoveTypeLayout> {
         let ty = self.load_type(type_tag)?;
         self.type_to_type_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
@@ -1022,7 +1000,7 @@ impl VMDispatchTables {
     pub(crate) fn get_fully_annotated_type_layout(
         &self,
         type_tag: &TypeTag,
-    ) -> VMResult<annotated_value::MoveTypeLayout> {
+    ) -> VMResult<CA::MoveTypeLayout> {
         let ty = self.load_type(type_tag)?;
         self.type_to_fully_annotated_layout(&ty)
             .map_err(|e| e.finish(Location::Undefined))
