@@ -693,20 +693,11 @@ where
                 .verify_and_vote(signed_block, serialized_block)
                 .tap_err(|e| {
                     let peer_label = peer.labelname(context);
-                    let peer_type = match &peer {
-                        PeerId::Validator(_) => "validator",
-                        PeerId::Observer(_) => "observer",
-                    };
                     context
                         .metrics
                         .node_metrics
                         .invalid_blocks
-                        .with_label_values(&[
-                            peer_label.as_str(),
-                            "synchronizer",
-                            e.clone().name(),
-                            peer_type,
-                        ])
+                        .with_label_values(&[peer_label.as_str(), "synchronizer", e.clone().name()])
                         .inc();
                     info!("Invalid block received from {}: {}", peer, e);
                 })?;
@@ -833,7 +824,7 @@ where
                                 .metrics
                                 .node_metrics
                                 .invalid_blocks
-                                .with_label_values(&[hostname.as_str(), "synchronizer_own_block", err.clone().name(), "validator"])
+                                .with_label_values(&[hostname.as_str(), "synchronizer_own_block", err.clone().name()])
                                 .inc();
                             warn!("Invalid block received from {}: {}", authority_index, err);
                         })?;
