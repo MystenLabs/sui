@@ -780,6 +780,33 @@ impl MoveTypeLayoutBuilder {
             root: root.0,
         }
     }
+
+    pub fn type_tag(&self, handle: LayoutHandle) -> Option<TypeTag> {
+        self.type_tag_of_ref(handle.0)
+    }
+
+    fn type_tag_of_ref(&self, r: LayoutRef) -> Option<TypeTag> {
+        Some(match r.resolve() {
+            ResolvedRef::Leaf(leaf) => match leaf {
+                LeafType::Bool => TypeTag::Bool,
+                LeafType::U8 => TypeTag::U8,
+                LeafType::U16 => TypeTag::U16,
+                LeafType::U32 => TypeTag::U32,
+                LeafType::U64 => TypeTag::U64,
+                LeafType::U128 => TypeTag::U128,
+                LeafType::U256 => TypeTag::U256,
+                LeafType::Address => TypeTag::Address,
+                LeafType::Signer => TypeTag::Signer,
+            },
+            ResolvedRef::Index(idx) => match self.nodes.get_index(idx)? {
+                MoveTypeNode::Vector(inner) => {
+                    TypeTag::Vector(Box::new(self.type_tag_of_ref(*inner)?))
+                }
+                MoveTypeNode::Struct(s) => TypeTag::Struct(Box::new(s.type_.clone())),
+                MoveTypeNode::Enum(e) => TypeTag::Struct(Box::new(e.type_.clone())),
+            },
+        })
+    }
 }
 
 impl Default for MoveTypeLayoutBuilder {
