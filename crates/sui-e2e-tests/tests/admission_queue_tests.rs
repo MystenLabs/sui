@@ -153,6 +153,12 @@ async fn test_admission_queue_eviction_and_rejection() {
         }
     });
 
+    // Wait for the high-gas tx to reach the queue and evict a fill
+    // before re-enabling drain. Without this, the scheduler may drain
+    // both fills (now that drain_disabled is false) before the high-gas
+    // InsertCommand arrives, so no eviction occurs.
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
     // Re-enable draining so all accepted transactions complete.
     drain_disabled.store(false, Ordering::SeqCst);
 
