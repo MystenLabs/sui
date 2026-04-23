@@ -704,18 +704,17 @@ async fn test_client_pagination_limit_forward_progress() {
     let sender = test_cluster.wallet.config.keystore.addresses()[0];
     let stream_id = SuiAddress::from(package_id);
 
-    let config = sui_light_client::authenticated_events::ClientConfig::new(
-        5,                                     /* page_size */
-        std::time::Duration::from_millis(100), /* poll_interval */
-        2,                                     /* max_pagination_iterations */
-        std::time::Duration::from_secs(30),    /* rpc_timeout */
-    )
-    .unwrap();
+    let config = sui_light_client::authenticated_events::ClientConfig::default()
+        .with_page_size(5)
+        .with_poll_interval(std::time::Duration::from_millis(100))
+        .with_max_pagination_iterations(2)
+        .with_rpc_timeout(std::time::Duration::from_secs(30));
 
     let genesis_committee = get_genesis_committee(&test_cluster).await;
     let client = Arc::new(
         AuthenticatedEventsClient::new_with_config(
             test_cluster.rpc_url(),
+            None,
             genesis_committee,
             config,
         )

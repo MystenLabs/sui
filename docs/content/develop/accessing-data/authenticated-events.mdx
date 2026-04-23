@@ -204,17 +204,17 @@ The inclusion proof verifies that the EventStreamHead was written at the specifi
 ### Client Configuration
 
 ```rust
-let config = ClientConfig::new(
-    page_size,                    // Events per RPC call (max 1000)
-    poll_interval,                // How often to poll for new events
-    max_pagination_iterations,    // Max pages before forcing checkpoint boundary
-    rpc_timeout,                  // RPC call timeout
-)?;
+let config = ClientConfig::default()
+    .with_page_size(page_size)                       // Events per RPC call (max 1000)
+    .with_poll_interval(poll_interval)               // How often to poll for new events
+    .with_max_pagination_iterations(max_iters)       // Max pages before forcing checkpoint boundary
+    .with_rpc_timeout(rpc_timeout);                  // RPC call timeout
 
 let client = AuthenticatedEventsClient::new_with_config(
     rpc_url,
+    Some(archive_url),  // or None; e.g. "https://checkpoints.testnet.sui.io"
     genesis_committee,
-    config
+    config,
 ).await?;
 ```
 
