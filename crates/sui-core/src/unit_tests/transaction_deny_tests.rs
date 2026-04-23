@@ -24,8 +24,8 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    CallArg, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData, TransactionKind,
-    VerifiedTransaction,
+    CallArg, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData, TransactionDataAPI,
+    TransactionKind, VerifiedTransaction,
 };
 use sui_types::utils::get_zklogin_user_address;
 use sui_types::utils::{
@@ -488,6 +488,95 @@ async fn test_certificate_deny() {
             ..
         })
     ));
+}
+
+/// Test that the address deny list also checks the actual signing key's address,
+/// not just the declared sender/sponsor. With address aliases, the actual signer
+/// may differ from the declared sender, so both must be checked.
+#[tokio::test]
+async fn test_actual_signer_denied_via_alias() {
+    let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
+    let accounts = get_accounts_and_coins(&network_config, &state);
+
+    // accounts[0] is the declared sender, accounts[1] is the actual signer (alias).
+    // Deny accounts[1]'s address (the actual signer), but NOT accounts[0] (the sender).
+    let state = reload_state_with_new_deny_config(
+        &network_config,
+        state,
+        TransactionDenyConfigBuilder::new()
+            .add_denied_address(accounts[1].0)
+            .build(),
+    )
+    .await;
+
+    // Construct a transaction with sender=accounts[0], but signed by accounts[1]'s key.
+    // This simulates the alias scenario where accounts[1] signs on behalf of accounts[0].
+    let rgp = state.reference_gas_price_for_testing().unwrap();
+    let data = TransactionData::new_transfer_sui_allow_sponsor(
+        accounts[0].0,
+        accounts[0].0,
+        None,
+        accounts[0].2[0],
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * rgp,
+        rgp,
+        accounts[0].0,
+    );
+    // Sign with accounts[1]'s key instead of accounts[0]'s key.
+    let tx = to_sender_signed_transaction(data, &accounts[1].1);
+
+    // Directly call the deny check (skipping signature verification, since alias-aware
+    // verification would accept this signature at that layer).
+    let tx_data = tx.data().transaction_data();
+    let result = sui_transaction_checks::deny::check_transaction_for_signing(
+        tx_data,
+        tx.data().tx_signatures(),
+        &tx_data.input_objects().unwrap(),
+        &tx_data.receiving_objects(),
+        &state.config.transaction_deny_config,
+        state.get_backing_package_store().as_ref(),
+    );
+    assert_denied(&result);
+}
+
+/// Verify that when the actual signer is NOT denied, the transaction passes.
+#[tokio::test]
+async fn test_non_denied_actual_signer_allowed() {
+    let (network_config, state) = setup_test(TransactionDenyConfigBuilder::new().build()).await;
+    let accounts = get_accounts_and_coins(&network_config, &state);
+
+    // Deny accounts[2], but neither accounts[0] (sender) nor accounts[1] (signer).
+    let state = reload_state_with_new_deny_config(
+        &network_config,
+        state,
+        TransactionDenyConfigBuilder::new()
+            .add_denied_address(accounts[2].0)
+            .build(),
+    )
+    .await;
+
+    // Transaction sender=accounts[0], signed by accounts[1] (neither is denied).
+    let rgp = state.reference_gas_price_for_testing().unwrap();
+    let data = TransactionData::new_transfer_sui_allow_sponsor(
+        accounts[0].0,
+        accounts[0].0,
+        None,
+        accounts[0].2[0],
+        TEST_ONLY_GAS_UNIT_FOR_TRANSFER * rgp,
+        rgp,
+        accounts[0].0,
+    );
+    let tx = to_sender_signed_transaction(data, &accounts[1].1);
+
+    let tx_data = tx.data().transaction_data();
+    let result = sui_transaction_checks::deny::check_transaction_for_signing(
+        tx_data,
+        tx.data().tx_signatures(),
+        &tx_data.input_objects().unwrap(),
+        &tx_data.receiving_objects(),
+        &state.config.transaction_deny_config,
+        state.get_backing_package_store().as_ref(),
+    );
+    assert!(result.is_ok());
 }
 
 // Dynamic transaction checks of the above
