@@ -110,6 +110,11 @@ pub(crate) struct WriteRow {
     pub max_ts_ms: u64,
     pub oldest_unwritten_cp: u64,
     pub emit_version: u64,
+    /// True iff `seal_fn(bucket_id) <= tx_hi` at emit time — this write
+    /// reflects the bitmap's terminal (fully-populated) contents for its
+    /// bucket. Used only to gate the `*_size_bytes` histograms so they
+    /// measure only final-size writes.
+    pub sealed: bool,
 }
 
 /// Row identifier returned to the owning shard after a successful write.
@@ -272,12 +277,29 @@ pub(crate) struct BitmapIndexMetrics {
     pub write_chunk_latency: Histogram,
     pub watermark_lag_ms: Histogram,
     pub remerge_count: IntCounter,
+    /// Size of a row_key in bytes, observed only on sealed-bucket
+    /// `WriteRow`s (i.e. `seal_fn(bucket_id) <= tx_hi` at emit time).
+    /// Intermediate writes of not-yet-sealed buckets are skipped.
+    pub row_key_size_bytes: Histogram,
+    /// Serialized size in bytes of the RoaringBitmap actually written to
+    /// BigTable, observed only on sealed-bucket `WriteRow`s — the
+    /// terminal, fully-populated bitmap for its bucket. Intermediate
+    /// writes are skipped.
+    pub serialized_bitmap_size_bytes: Histogram,
 }
 
 impl BitmapIndexMetrics {
     pub(crate) fn new(pipeline: &'static str, registry: &Registry) -> Arc<Self> {
         let latency_buckets = prometheus::exponential_buckets(0.0005, 2.0, 18).unwrap();
         let lag_buckets = prometheus::exponential_buckets(1.0, 2.0, 18).unwrap();
+        // 8B → ~16KB. Row keys are `v{version}#{dim_key}#{bucket_id:010}` —
+        // typically tens of bytes (short dim tags + 32B address) but can
+        // reach hundreds for struct-tag dimensions.
+        let row_key_size_buckets = prometheus::exponential_buckets(8.0, 2.0, 12).unwrap();
+        // 8B → ~8MB. Empty RoaringBitmap serializes to a few bytes; a dense
+        // bitmap at BUCKET_SIZE = 2^20 tops out around ~128KB. The wide
+        // range accommodates experimentation with larger bucket sizes.
+        let bitmap_size_buckets = prometheus::exponential_buckets(8.0, 2.0, 21).unwrap();
         Arc::new(Self {
             commit_queue_depth: register_int_gauge_with_registry!(
                 format!("bitmap_commit_queue_depth_{pipeline}"),
@@ -339,6 +361,20 @@ impl BitmapIndexMetrics {
             remerge_count: register_int_counter_with_registry!(
                 format!("bitmap_remerge_count_total_{pipeline}"),
                 "Rows routed from write loop back to shards after write failure",
+                registry,
+            )
+            .unwrap(),
+            row_key_size_bytes: register_histogram_with_registry!(
+                format!("bitmap_row_key_size_bytes_{pipeline}"),
+                "Size in bytes of a row_key emitted by the processor",
+                row_key_size_buckets,
+                registry,
+            )
+            .unwrap(),
+            serialized_bitmap_size_bytes: register_histogram_with_registry!(
+                format!("bitmap_serialized_bitmap_size_bytes_{pipeline}"),
+                "Serialized-size in bytes of a bitmap emitted by the processor",
+                bitmap_size_buckets,
                 registry,
             )
             .unwrap(),
@@ -802,6 +838,12 @@ async fn write_loop(
                 let entries: Vec<_> = chunk
                     .iter()
                     .map(|r| {
+                        if r.sealed {
+                            metrics.row_key_size_bytes.observe(r.row_key.len() as f64);
+                            metrics
+                                .serialized_bitmap_size_bytes
+                                .observe(r.serialized.len() as f64);
+                        }
                         tables::make_entry(
                             r.row_key.clone(),
                             [(column, r.serialized.clone())],

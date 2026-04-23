@@ -155,10 +155,11 @@ impl AccumulatedRow {
     }
 
     /// Serialize the current bitmap into a fresh WriteRow, setting
-    /// `emit_pending = true`. Caller must pass the row_key and the
+    /// `emit_pending = true`. Caller must pass the row_key, the
     /// `oldest_unwritten_cp` to tag (for inline re-emit cases this may
-    /// differ from the current field).
-    fn emit_into(&mut self, row_key: Bytes, oldest_cp: u64) -> WriteRow {
+    /// differ from the current field), and whether the bucket is sealed
+    /// at emit time.
+    fn emit_into(&mut self, row_key: Bytes, oldest_cp: u64, sealed: bool) -> WriteRow {
         let mut bm = std::mem::take(&mut self.bitmap);
         bm.optimize();
         let needed = bm.serialized_size();
@@ -178,6 +179,7 @@ impl AccumulatedRow {
             max_ts_ms: self.max_ts_ms,
             oldest_unwritten_cp: oldest_cp,
             emit_version: self.version,
+            sealed,
         }
     }
 }
@@ -464,7 +466,8 @@ impl ShardState {
             }
 
             let oldest_cp = row.oldest_unwritten_cp.expect("eligibility implies Some");
-            let wr = row.emit_into(key.clone(), oldest_cp);
+            let sealed = seal_fn(row.bucket_id) <= tx_hi;
+            let wr = row.emit_into(key.clone(), oldest_cp, sealed);
             emitted_oldest_cps.push(oldest_cp);
             if rows_tx.send(wr).await.is_err() {
                 warn!(table = self.table, "Write loop closed during shard emit");
@@ -494,7 +497,8 @@ impl ShardState {
                 if seal_fn(row.bucket_id) > tx_hi {
                     continue;
                 }
-                let wr = row.emit_into(key, oldest_cp);
+                // Guarded by `seal_fn(row.bucket_id) <= tx_hi` above.
+                let wr = row.emit_into(key, oldest_cp, true);
                 emitted_oldest_cps.push(oldest_cp);
                 if rows_tx.send(wr).await.is_err() {
                     warn!(
@@ -533,7 +537,12 @@ impl ShardState {
                 );
                 continue;
             };
-            let write_row = row.emit_into(key.clone(), oldest_cp);
+            // Re-emit after a failed write: use the latest persisted tx_hi
+            // as the sealed-ness reference. Once sealed, always sealed;
+            // using the persisted snapshot avoids stale false-negatives.
+            let sealed = (self.seal_fn)(row.bucket_id)
+                <= self.latest_persisted_tx_hi.load(Ordering::Relaxed);
+            let write_row = row.emit_into(key.clone(), oldest_cp, sealed);
             if rows_tx.send(write_row).await.is_err() {
                 warn!(table = self.table, "Write loop closed during Remerge send");
                 return;
@@ -615,7 +624,8 @@ impl ShardState {
             if let Some(new_cp) = row.next_oldest_unwritten_cp.take() {
                 let old_cp = d.oldest_unwritten_cp;
                 row.oldest_unwritten_cp = Some(new_cp);
-                let wr = row.emit_into(d.row_key.clone(), new_cp);
+                let sealed = seal_fn(row.bucket_id) <= persisted_snapshot;
+                let wr = row.emit_into(d.row_key.clone(), new_cp, sealed);
                 if rows_tx.send(wr).await.is_err() {
                     warn!(table, "Write loop closed during inline re-emit");
                     return;
@@ -662,7 +672,8 @@ impl ShardState {
                 }
             } else {
                 let old_cp = d.oldest_unwritten_cp;
-                let wr = row.emit_into(d.row_key.clone(), old_cp);
+                let sealed = seal_fn(row.bucket_id) <= persisted_snapshot;
+                let wr = row.emit_into(d.row_key.clone(), old_cp, sealed);
                 if rows_tx.send(wr).await.is_err() {
                     warn!(table, "Write loop closed during version-bump re-emit");
                     return;
