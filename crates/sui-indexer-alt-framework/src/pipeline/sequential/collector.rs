@@ -41,8 +41,8 @@ pub(super) struct BatchedRows<H: Handler> {
 /// expected checkpoint has arrived.
 ///
 /// Backpressure: when `committer_tx` is full (bounded by `pipeline_depth`), the collector
-/// blocks on send, stops draining `pending`, and `pending_rows` rises — signalling upstream
-/// ingestion to slow down.
+/// blocks on send and stops reading `rx`, so the processor→collector channel fills and the
+/// adaptive fanout / ingest controllers cut upstream concurrency.
 pub(super) fn collector<H: Handler>(
     handler: Arc<H>,
     config: SequentialConfig,
@@ -194,9 +194,10 @@ pub(super) fn collector<H: Handler>(
                         .set(watermark.timestamp_ms_hi_inclusive as i64);
 
                     // Hand the assembled batch off to the committer. When `committer_tx` is full,
-                    // this blocks — natural backpressure: the collector stops draining `pending`,
-                    // `pending_rows` rises, and the adaptive ingestion controller cuts fetch
-                    // concurrency.
+                    // this blocks — natural backpressure: the collector stops reading `rx`, the
+                    // processor→collector channel fills, the adaptive `fanout` controller cuts
+                    // processor concurrency, and the broadcaster→processor channel eventually
+                    // fills as well, signalling the ingest controller to throttle fetches.
                     let batched = BatchedRows {
                         batch: std::mem::take(&mut batch),
                         watermark,
