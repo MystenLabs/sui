@@ -259,7 +259,7 @@ Even though the `Coin` created in command 1 was not directly involved in the fla
 
 #### Pure value type checking
 
-Pure values are not type checked until they are used. The first time a pure value appears as an argument expecting type `T`, the system checks that `T` is a valid pure type (see the [Inputs section](/guides/developer/transactions/ptbs/inputs-and-results)) and that the bytes deserialize to `T`. Each distinct type creates a separate typed copy of the bytes, so the same pure input can be used at multiple types as long as the bytes are valid for each. For example, you can use the same bytes as an ASCII string `std::ascii::String` and as a UTF-8 string `std::string::String`. Each typed copy is treated as its own input, so mutations affect only that type's value, not all values created from the same bytes.
+Pure values are not type checked until they are used. The first time a pure value appears as an argument expecting type `T`, the system checks that `T` is a valid pure type (see the [Inputs section](/develop/transactions/ptbs/inputs-and-results)) and that the bytes deserialize to `T`. Each distinct type creates a separate typed copy of the bytes, so the same pure input can be used at multiple types as long as the bytes are valid for each. For example, you can use the same bytes as an ASCII string `std::ascii::String` and as a UTF-8 string `std::string::String`. Each typed copy is treated as its own input, so mutations affect only that type's value, not all values created from the same bytes.
 
 #### Publish and upgrade rules
 
