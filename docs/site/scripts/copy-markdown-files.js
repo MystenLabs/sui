@@ -637,7 +637,18 @@ function copyMarkdownFiles(dir, baseDir = dir) {
 
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
-    const cleanContent = stripFrontmatter(content, outputPath, filePath);
+    let cleanContent = stripFrontmatter(content, outputPath, filePath);
+
+    // Truncate pages over 95K so they stay under the 100K agent truncation limit.
+    const MAX_MD_CHARS = 95_000;
+    if (cleanContent.length > MAX_MD_CHARS) {
+      const cut = cleanContent.slice(0, MAX_MD_CHARS);
+      const lastH2 = cut.lastIndexOf('\n## ');
+      const cutAt = lastH2 > MAX_MD_CHARS * 0.5 ? lastH2 : MAX_MD_CHARS;
+      cleanContent = cut.slice(0, cutAt).trimEnd() +
+        '\n\n---\n*Content truncated for size. See the full page on the documentation site.*\n';
+    }
+
     fs.writeFileSync(outputPath, cleanContent, 'utf8');
   }
 }

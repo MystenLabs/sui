@@ -1,6 +1,5 @@
 ---
 source: crates/sui-swarm-config/tests/snapshot_tests.rs
-assertion_line: 136
 expression: network_config
 ---
 validator_configs:
@@ -152,6 +151,12 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
+      admission-queue-enabled: false
+      admission-queue-failover-timeout:
+        secs: 30
+        nanos: 0
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -324,6 +329,12 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
+      admission-queue-enabled: false
+      admission-queue-failover-timeout:
+        secs: 30
+        nanos: 0
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -496,6 +507,12 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
+      admission-queue-enabled: false
+      admission-queue-failover-timeout:
+        secs: 30
+        nanos: 0
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -668,6 +685,12 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
+      admission-queue-enabled: false
+      admission-queue-failover-timeout:
+        secs: 30
+        nanos: 0
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -840,6 +863,12 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
+      admission-queue-enabled: false
+      admission-queue-failover-timeout:
+        secs: 30
+        nanos: 0
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1012,6 +1041,12 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
+      admission-queue-enabled: false
+      admission-queue-failover-timeout:
+        secs: 30
+        nanos: 0
     execution-cache:
       writeback-cache:
         max_cache_size: ~
@@ -1184,6 +1219,12 @@ validator_configs:
       check-system-overload-at-signing: true
       max-transaction-manager-queue-length: 100000
       max-transaction-manager-per-object-queue-length: 2000
+      admission-queue-capacity-fraction: 0.5
+      admission-queue-bypass-fraction: 0.9
+      admission-queue-enabled: false
+      admission-queue-failover-timeout:
+        secs: 30
+        nanos: 0
     execution-cache:
       writeback-cache:
         max_cache_size: ~

@@ -11,7 +11,6 @@ use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
-use crate::consensus_adapter::ConsensusOverloadChecker;
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
@@ -1288,7 +1287,6 @@ impl AuthorityState {
 
     pub(crate) fn check_system_overload(
         &self,
-        consensus_overload_checker: &(impl ConsensusOverloadChecker + ?Sized),
         tx_data: &SenderSignedData,
         do_authority_overload_check: bool,
     ) -> SuiResult {
@@ -1302,11 +1300,7 @@ impl AuthorityState {
             .tap_err(|_| {
                 self.update_overload_metrics("execution_pending");
             })?;
-        consensus_overload_checker
-            .check_consensus_overload()
-            .tap_err(|_| {
-                self.update_overload_metrics("consensus");
-            })?;
+        // Consensus overload is handled by the admission queue in authority_server.rs.
 
         let pending_tx_count = self
             .get_cache_commit()
@@ -1333,7 +1327,7 @@ impl AuthorityState {
         overload_monitor_accept_tx(load_shedding_percentage, tx_data.digest())
     }
 
-    fn update_overload_metrics(&self, source: &str) {
+    pub(crate) fn update_overload_metrics(&self, source: &str) {
         self.metrics
             .transaction_overload_sources
             .with_label_values(&[source])

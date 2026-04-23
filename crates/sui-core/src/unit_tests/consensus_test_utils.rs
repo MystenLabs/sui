@@ -284,6 +284,7 @@ pub fn make_consensus_adapter_for_test(
         100_000,
         100_000,
         metrics,
+        Arc::new(tokio::sync::Notify::new()),
     ))
 }
 

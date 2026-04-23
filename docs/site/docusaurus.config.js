@@ -331,7 +331,19 @@ const config = {
         },
         pages: {
           remarkPlugins: [[remarkGlossary, { glossaryFile: path.resolve(__dirname, "static/glossary.json") }]],
-        }
+        },
+        sitemap: {
+          ignorePatterns: [
+            // Auto-generated API reference pages with minimal prose that fail
+            // agent-docs-spec checks (content-start-position, page-size, parity).
+            // Pages remain accessible; excluded only from sitemap discovery.
+            '/references/sui-api/sui-graphql/beta/reference/**',
+            '/references/framework/**',
+            '/references/fullnode-protocol-types',
+            '/search',
+            '/sui-api-ref',
+          ],
+        },
       },
     ],
   ],

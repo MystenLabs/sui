@@ -9,6 +9,7 @@ use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::PrunerConfig;
 use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
+use tracing::warn;
 
 /// Trait for merging configuration structs together.
 pub trait Merge: Sized {
@@ -55,6 +56,10 @@ pub struct IngestionLayer {
     pub streaming_backoff_max_batch_size: Option<usize>,
     pub streaming_connection_timeout_ms: Option<u64>,
     pub streaming_statement_timeout_ms: Option<u64>,
+
+    /// Deprecated: accepted (and ignored) so old configs don't fail to parse. Replaced by
+    /// per-pipeline `ingestion.subscriber-channel-size`.
+    pub checkpoint_buffer_size: Option<usize>,
 }
 
 #[DefaultConfig]
@@ -185,6 +190,14 @@ impl IndexerConfig {
 
 impl IngestionLayer {
     pub fn finish(self, base: IngestionConfig) -> anyhow::Result<IngestionConfig> {
+        if self.checkpoint_buffer_size.is_some() {
+            warn!(
+                "Config field `checkpoint-buffer-size` is deprecated and ignored. Remove it from \
+                 your config; set `subscriber-channel-size` under each pipeline's `ingestion` \
+                 section if you need to override the default."
+            );
+        }
+
         Ok(IngestionConfig {
             ingest_concurrency: self.ingest_concurrency.unwrap_or(base.ingest_concurrency),
             retry_interval_ms: self.retry_interval_ms.unwrap_or(base.retry_interval_ms),
@@ -348,6 +361,7 @@ impl Merge for IngestionLayer {
             streaming_statement_timeout_ms: other
                 .streaming_statement_timeout_ms
                 .or(self.streaming_statement_timeout_ms),
+            checkpoint_buffer_size: other.checkpoint_buffer_size.or(self.checkpoint_buffer_size),
         })
     }
 }
@@ -469,6 +483,7 @@ impl From<IngestionConfig> for IngestionLayer {
             streaming_backoff_max_batch_size: Some(config.streaming_backoff_max_batch_size),
             streaming_connection_timeout_ms: Some(config.streaming_connection_timeout_ms),
             streaming_statement_timeout_ms: Some(config.streaming_statement_timeout_ms),
+            checkpoint_buffer_size: None,
         }
     }
 }
@@ -817,5 +832,18 @@ mod tests {
             err.to_string().contains("i_dont_exist"),
             "Unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn deprecated_checkpoint_buffer_size_parses() {
+        let config: IndexerConfig = toml::from_str(
+            r#"
+            [ingestion]
+            checkpoint-buffer-size = 5000
+            "#,
+        )
+        .expect("deprecated `checkpoint-buffer-size` must deserialize without error");
+
+        assert_eq!(config.ingestion.checkpoint_buffer_size, Some(5000));
     }
 }

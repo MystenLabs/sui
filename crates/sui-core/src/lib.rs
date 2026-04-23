@@ -5,6 +5,7 @@
 extern crate core;
 
 pub mod accumulators;
+pub mod admission_queue;
 pub mod authority;
 pub mod authority_aggregator;
 pub mod authority_client;

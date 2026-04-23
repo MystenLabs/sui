@@ -339,9 +339,12 @@ const protocolInject = async function (source) {
           for (const method of service.methods) {
             content.push(
               `<div class="${cellKey} protoMethodSig">` +
+              `<span class="protoMethodName">${method.name}</span>` +
+              `<div class="protoMethodTypes">` +
               `<a href="fullnode-protocol-types#${createId(method.requestFullType)}">${method.requestType}</a>` +
               `<span class="protoArrow">&#8594;</span>` +
-              `<span>${method.responseType}</span>` +
+              `<a href="fullnode-protocol-types#${createId(method.responseFullType)}">${method.responseType}</a>` +
+              `</div>` +
               `</div>`,
             );
 
