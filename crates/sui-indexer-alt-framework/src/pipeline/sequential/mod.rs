@@ -49,6 +49,13 @@ pub trait Handler: Processor {
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
 
+    /// Soft cap: once this many rows are pending, the collector stops eagerly draining
+    /// its input channel and yields to the flush phase. Receive is never hard-gated — unlike
+    /// concurrent pipelines, a missing predecessor may be buried in the input channel, and
+    /// blocking receive would risk deadlock. The cap only bounds receive-to-flush latency in
+    /// the happy path.
+    const MAX_PENDING_ROWS: usize = 5000;
+
     /// Maximum number of checkpoints to try and write in a single batch. The larger this number
     /// is, the more chances the pipeline has to merge redundant writes, but the longer each write
     /// transaction is likely to be.
@@ -93,6 +100,9 @@ pub struct SequentialConfig {
 
     /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
     pub min_eager_rows: Option<usize>,
+
+    /// Override for `Handler::MAX_PENDING_ROWS` (soft cap).
+    pub max_pending_rows: Option<usize>,
 
     /// Override for `Handler::MAX_BATCH_CHECKPOINTS` (checkpoints per write batch).
     pub max_batch_checkpoints: Option<usize>,
@@ -145,6 +155,7 @@ pub(crate) fn pipeline<H: Handler>(
             dead_band: None,
         });
     let min_eager_rows = config.min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
+    let max_pending_rows = config.max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
     let max_batch_checkpoints = config
         .max_batch_checkpoints
         .unwrap_or(H::MAX_BATCH_CHECKPOINTS);
@@ -179,6 +190,7 @@ pub(crate) fn pipeline<H: Handler>(
         collector_rx,
         metrics.clone(),
         min_eager_rows,
+        max_pending_rows,
         max_batch_checkpoints,
         collector_tx,
         pending_rows.clone(),
@@ -254,6 +266,9 @@ mod tests {
         let metrics = IndexerMetrics::new(None, &Registry::default());
 
         let min_eager_rows = config.min_eager_rows.unwrap_or(TestHandler::MIN_EAGER_ROWS);
+        let max_pending_rows = config
+            .max_pending_rows
+            .unwrap_or(TestHandler::MAX_PENDING_ROWS);
         let max_batch_checkpoints = config
             .max_batch_checkpoints
             .unwrap_or(TestHandler::MAX_BATCH_CHECKPOINTS);
@@ -276,6 +291,7 @@ mod tests {
             checkpoint_rx,
             metrics.clone(),
             min_eager_rows,
+            max_pending_rows,
             max_batch_checkpoints,
             collector_tx,
             pending_rows.clone(),

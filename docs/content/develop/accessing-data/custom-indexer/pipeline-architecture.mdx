@@ -228,7 +228,7 @@ Sequential pipelines have two pipeline-specific components in addition to the sh
 
 #### `Collector` {#seq-collector}
 
-The sequential `Collector` receives out-of-order processed data from the `Processor`, orders it by checkpoint sequence, and assembles batches using your `batch()` logic. The `Collector` dispatches a batch when either `collect_interval_ms` elapses or `MIN_EAGER_ROWS` have accumulated and the next expected checkpoint has arrived. The `Collector` also bounds how many checkpoints contribute to a single batch (`MAX_BATCH_CHECKPOINTS`).
+The sequential `Collector` receives out-of-order processed data from the `Processor`, orders it by checkpoint sequence, and assembles batches using your `batch()` logic. The `Collector` dispatches a batch when either `collect_interval_ms` elapses or `MIN_EAGER_ROWS` have accumulated and the next expected checkpoint has arrived. The `Collector` also bounds how many checkpoints contribute to a single batch (`MAX_BATCH_CHECKPOINTS`). `MAX_PENDING_ROWS` is a soft cap: when exceeded, the `Collector` yields from eagerly draining its input channel to flush what it can. Receive itself is never hard-gated, because a missing predecessor for the next commit may still be sitting in the input channel and blocking receive would risk deadlock.
 
 `batch()`: Data merging logic.
 
@@ -286,6 +286,7 @@ let config = SequentialConfig {
     // }),
 
     min_eager_rows: None,
+    max_pending_rows: None,
     max_batch_checkpoints: None,
     processor_channel_size: None, // defaults to num_cpus / 2
     pipeline_depth: None,         // defaults to max(num_cpus / 2, 4)
@@ -304,6 +305,7 @@ let config = SequentialConfig {
 - `ingestion.subscriber_channel_size`: Capacity of the bounded broadcaster-to-processor channel. Defaults to `max(num_cpus / 2, 4)` when `None`. A pipeline that occasionally sees bursts can raise its own capacity, but note that a larger value makes this pipeline appear "less full" to the shared controller, so it triggers throttling later than its peers.
 - `processor_channel_size`: Controls the size of the channel between the processor and the collector. Defaults to `num_cpus / 2`. This channel is also the signal that drives the adaptive concurrency controller.
 - `pipeline_depth`: Controls the size of the channel between the collector and the committer. Defaults to `max(num_cpus / 2, 4)`. Larger values let the collector stay further ahead of a slow committer (absorbing bursts); `1` means one batch can be staged while another is committing.
+- `max_pending_rows`: Soft cap on how many rows the collector buffers before yielding to the flush phase. Unlike the concurrent pipeline's `MAX_PENDING_ROWS`, this is not a hard backpressure gate — receive is never blocked on it, because a missing predecessor for the next commit may still be sitting in the input channel. It only bounds receive-to-flush latency in the happy path.
 
 ## Concurrent pipeline architecture {#concurrent-pipeline-architecture}
 
