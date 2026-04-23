@@ -103,6 +103,15 @@ impl MoveValue {
         Ok(bcs::from_bytes_seed(ty, blob)?)
     }
 
+    // TODO(compressed-layouts): look at removing this and only using the visitor-based
+    // deserialization.
+    pub fn simple_deserialize_compressed(
+        blob: &[u8],
+        ty: &crate::compressed::runtime::MoveTypeLayout,
+    ) -> AResult<Self> {
+        Ok(bcs::from_bytes_seed(ty, blob)?)
+    }
+
     /// Deserialize `blob` as a Move value with the given `ty`-pe layout, and visit its
     /// sub-structure with the given `visitor`. The visitor dictates the return value that is built
     /// up during deserialization.

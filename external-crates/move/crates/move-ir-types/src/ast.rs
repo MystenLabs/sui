@@ -862,6 +862,12 @@ impl ImportDefinition {
     }
 }
 
+impl Type_ {
+    pub fn make_type(self) -> Type {
+        Spanned::unsafe_no_loc(self)
+    }
+}
+
 impl StructDefinition_ {
     /// Creates a new StructDefinition from the abilities, the string representation of the name,
     /// and the user specified fields, a map from their names to their types
