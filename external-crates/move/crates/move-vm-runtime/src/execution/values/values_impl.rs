@@ -3752,18 +3752,18 @@ impl Value {
     }
 }
 
-use move_core_types::annotated_value::{
-    MoveEnumLayout as AnnEnumLayout, MoveStruct as AnnStruct, MoveTypeLayout as AnnTypeLayout,
-    MoveValue as AnnValue, MoveVariant as AnnVariant,
+use move_core_types::{
+    annotated_value::{MoveStruct as AnnStruct, MoveValue as AnnValue, MoveVariant as AnnVariant},
+    compressed::annotated as CA,
 };
 
 impl Value {
     /// Converts the value to an annotated move value. This is only needed for tracing and care
     /// should be taken when using this function as it can possibly inflate the size of the value.
-    pub fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
-        use AnnTypeLayout as L;
+    pub fn as_annotated_move_value(&self, layout: &CA::MoveTypeLayout) -> Option<AnnValue> {
         use AnnValue as AV;
-        match (layout, self) {
+        use CA::MoveLayoutView as L;
+        match (layout.as_view(), self) {
             (L::U8, Value::U8(x)) => Some(AnnValue::U8(*x)),
             (L::U16, Value::U16(x)) => Some(AnnValue::U16(*x)),
             (L::U32, Value::U32(x)) => Some(AnnValue::U32(*x)),
@@ -3773,41 +3773,48 @@ impl Value {
             (L::Bool, Value::Bool(x)) => Some(AnnValue::Bool(*x)),
             (L::Address, Value::Address(x)) => Some(AnnValue::Address(**x)),
             (L::Enum(e_layout), Value::Variant(var_box)) => {
-                let AnnEnumLayout { type_, variants } = e_layout.as_ref();
                 let (tag, values) = var_box.as_ref();
                 let tag = *tag;
-                let ((name, _), field_layouts) = variants.iter().find(|((_, t), _)| *t == tag)?;
+                let CA::VariantLayout::Known {
+                    name,
+                    tag: _v_tag,
+                    fields: field_layouts,
+                } = e_layout.variant(tag as usize)?
+                else {
+                    return None;
+                };
+                debug_assert_eq!(*_v_tag, tag);
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(field_layouts) {
+                for (v, (field_name, field_layout)) in values.iter().zip(field_layouts.fields()) {
                     fields.push((
-                        field_layout.name.clone(),
-                        v.borrow().as_annotated_move_value(&field_layout.layout)?,
+                        field_name.clone(),
+                        v.borrow().as_annotated_move_value(&field_layout)?,
                     ));
                 }
                 Some(AV::Variant(AnnVariant {
                     tag,
                     fields,
-                    type_: type_.clone(),
+                    type_: e_layout.type_().clone(),
                     variant_name: name.clone(),
                 }))
             }
             (L::Struct(struct_layout), Value::Struct(values)) => {
                 let mut fields = vec![];
-                for (v, field_layout) in values.iter().zip(struct_layout.fields.iter()) {
+                for (v, (field_name, field_layout)) in values.iter().zip(struct_layout.fields()) {
                     fields.push((
-                        field_layout.name.clone(),
-                        v.borrow().as_annotated_move_value(&field_layout.layout)?,
+                        field_name.clone(),
+                        v.borrow().as_annotated_move_value(&field_layout)?,
                     ));
                 }
                 Some(AV::Struct(AnnStruct::new(
-                    struct_layout.type_.clone(),
+                    struct_layout.type_().clone(),
                     fields,
                 )))
             }
             (L::Vector(inner_layout), Value::Vec(vec)) => {
                 let result: Option<Vec<_>> = vec
                     .iter()
-                    .map(|mb| mb.borrow().as_annotated_move_value(inner_layout))
+                    .map(|mb| mb.borrow().as_annotated_move_value(&inner_layout))
                     .collect();
                 Some(AV::Vector(result?))
             }
@@ -3817,7 +3824,7 @@ impl Value {
                         Some(AV::Vector($xs.iter().map(|x| AV::$ctor(*x)).collect()))
                     };
                 }
-                match (inner_layout.as_ref(), values) {
+                match (inner_layout.as_view(), values) {
                     (L::U8, PrimVec::VecU8(xs)) => make_vec!(xs, U8),
                     (L::U16, PrimVec::VecU16(xs)) => make_vec!(xs, U16),
                     (L::U32, PrimVec::VecU32(xs)) => make_vec!(xs, U32),
@@ -3838,16 +3845,16 @@ impl Value {
                     _ => None,
                 }
             }
-            (layout, Value::Reference(ref_)) => ref_.as_annotated_move_value(layout),
+            (_layout_view, Value::Reference(ref_)) => ref_.as_annotated_move_value(layout),
             (_, _) => None,
         }
     }
 }
 
 impl Reference {
-    pub fn as_annotated_move_value(&self, layout: &AnnTypeLayout) -> Option<AnnValue> {
+    pub fn as_annotated_move_value(&self, layout: &CA::MoveTypeLayout) -> Option<AnnValue> {
         use AnnValue as AV;
-        use move_core_types::annotated_value::MoveTypeLayout as L;
+        use CA::MoveLayoutView as L;
         match self {
             // If the reference is a direct reference, delegate to the inner Value.
             Reference::Value(mem_box) => mem_box.borrow().as_annotated_move_value(layout),
@@ -3865,8 +3872,8 @@ impl Reference {
                     Value::PrimVec(prim_vec) => {
                         // We require that the layout is for a vector; then we inspect
                         // the inner layout and the PrimVec variant.
-                        match layout {
-                            L::Vector(inner_layout) => match (inner_layout.as_ref(), prim_vec) {
+                        match layout.as_view() {
+                            L::Vector(inner_layout) => match (inner_layout.as_view(), prim_vec) {
                                 (L::U8, PrimVec::VecU8(xs)) => {
                                     Some(AV::Vector(xs.iter().map(|u| AV::U8(*u)).collect()))
                                 }
