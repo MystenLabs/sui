@@ -373,46 +373,28 @@ async fn send_checkpoint(
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeSet;
+    use std::ops::Range;
     use std::sync::Arc;
     use std::time::Duration;
 
-    use async_trait::async_trait;
-    use sui_types::digests::ChainIdentifier;
-    use sui_types::messages_checkpoint::CheckpointDigest;
     use tokio::time::timeout;
 
     use crate::ingestion::IngestionConfig;
-    use crate::ingestion::decode;
-    use crate::ingestion::ingestion_client::CheckpointResult;
-    use crate::ingestion::ingestion_client::IngestionClientTrait;
+    use crate::ingestion::ingestion_client::tests::MockIngestionClient;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
-    use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::tests::test_ingestion_metrics;
 
     use super::*;
 
-    /// Create a mock IngestionClient for tests
-    fn mock_client(metrics: Arc<IngestionMetrics>) -> IngestionClient {
-        struct MockClient;
-
-        #[async_trait]
-        impl IngestionClientTrait for MockClient {
-            async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
-                Ok(CheckpointDigest::new([1; 32]).into())
-            }
-
-            async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
-                // Return mock checkpoint data for any checkpoint number
-                let bytes = test_checkpoint_data(checkpoint);
-                Ok(decode::checkpoint(&bytes).unwrap())
-            }
-
-            async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-                Ok(0)
-            }
-        }
-
-        IngestionClient::new_impl(Arc::new(MockClient), metrics)
+    /// Create a mock `IngestionClient` that serves synthetic checkpoints for the given
+    /// sequence-number range.
+    fn mock_client_with_range(
+        checkpoints: Range<u64>,
+        metrics: Arc<IngestionMetrics>,
+    ) -> IngestionClient {
+        let mock = MockIngestionClient::default();
+        mock.insert_checkpoints(checkpoints);
+        IngestionClient::new_impl(Arc::new(mock), metrics)
     }
 
     /// Create a test config
@@ -500,7 +482,7 @@ mod tests {
             cps,
             None,
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..5, metrics.clone()),
             subscriber_dest,
             metrics,
         );
@@ -522,7 +504,7 @@ mod tests {
             0..,
             None,
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics,
         );
@@ -545,7 +527,7 @@ mod tests {
             0..,
             None,
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics,
         );
@@ -571,7 +553,7 @@ mod tests {
             0..,
             None,
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..20, metrics.clone()),
             subscribers,
             metrics,
         );
@@ -609,7 +591,7 @@ mod tests {
             0..5, // Bounded range
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..5, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -638,7 +620,7 @@ mod tests {
             0..60,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..60, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -673,7 +655,7 @@ mod tests {
             0..30,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..30, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -704,7 +686,7 @@ mod tests {
             30..100,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(30..100, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -742,7 +724,7 @@ mod tests {
             0..20,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -777,7 +759,7 @@ mod tests {
             0..10,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..10, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -816,7 +798,7 @@ mod tests {
             0..15,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..15, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -856,7 +838,7 @@ mod tests {
             0..20,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -890,7 +872,7 @@ mod tests {
                 streaming_backoff_initial_batch_size: 5,
                 ..test_config()
             },
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -930,7 +912,7 @@ mod tests {
                 streaming_backoff_initial_batch_size: 5,
                 ..test_config()
             },
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -967,7 +949,7 @@ mod tests {
             0..50,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..50, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -1003,7 +985,7 @@ mod tests {
             0..50,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..50, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -1061,7 +1043,7 @@ mod tests {
             0..20,
             Some(streaming_service),
             config,
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -1104,7 +1086,7 @@ mod tests {
             0..20,
             Some(streaming_client),
             config,
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..20, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );
@@ -1142,7 +1124,7 @@ mod tests {
             0..15,
             Some(streaming_client),
             test_config(),
-            mock_client(metrics.clone()),
+            mock_client_with_range(0..15, metrics.clone()),
             subscriber_dest,
             metrics.clone(),
         );

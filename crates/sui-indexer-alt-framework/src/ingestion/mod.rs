@@ -265,38 +265,25 @@ mod tests {
     use wiremock::MockServer;
     use wiremock::Request;
 
-    use crate::ingestion::ingestion_client::CheckpointResult;
-    use crate::ingestion::ingestion_client::IngestionClientTrait;
+    use crate::ingestion::ingestion_client::tests::MockIngestionClient;
     use crate::ingestion::store_client::tests::respond_with;
     use crate::ingestion::store_client::tests::respond_with_chain_id;
     use crate::ingestion::store_client::tests::status;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::IngestionMetrics;
-    use crate::types::digests::ChainIdentifier;
 
     use super::*;
 
     const FALLBACK: u64 = 99;
 
-    struct MockLatestCheckpoint(u64);
-
-    #[async_trait::async_trait]
-    impl IngestionClientTrait for MockLatestCheckpoint {
-        async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
-            unimplemented!()
-        }
-        async fn checkpoint(&self, _: u64) -> CheckpointResult {
-            unimplemented!()
-        }
-        async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-            Ok(self.0)
-        }
-    }
-
     fn mock_ingestion_client(latest_checkpoint: u64) -> IngestionClient {
         let metrics = IngestionMetrics::new(None, &Registry::new());
-        IngestionClient::new_impl(Arc::new(MockLatestCheckpoint(latest_checkpoint)), metrics)
+        let mock = MockIngestionClient {
+            latest_checkpoint,
+            ..Default::default()
+        };
+        IngestionClient::new_impl(Arc::new(mock), metrics)
     }
 
     async fn test_ingestion(uri: String, ingest_concurrency: usize) -> IngestionService {

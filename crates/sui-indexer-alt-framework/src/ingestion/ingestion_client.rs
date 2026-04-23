@@ -449,7 +449,7 @@ where
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -487,18 +487,33 @@ mod tests {
         ingestion: IngestionClientArgs,
     }
 
-    /// Mock implementation of IngestionClientTrait for testing
+    /// Mock implementation of IngestionClientTrait for testing.
+    ///
+    /// - `checkpoints`: pre-inserted checkpoints returned by `checkpoint()`. Sequences not
+    ///   in the map return `CheckpointError::NotFound`.
+    /// - `not_found_failures` / `fetch_failures` / `decode_failures`: number of times to
+    ///   return the corresponding error for a given sequence number before succeeding.
+    /// - `latest_checkpoint`: value returned by `latest_checkpoint_number()`.
     #[derive(Default)]
-    struct MockIngestionClient {
-        checkpoints: DashMap<u64, Checkpoint>,
-        not_found_failures: DashMap<u64, usize>,
-        fetch_failures: DashMap<u64, usize>,
-        decode_failures: DashMap<u64, usize>,
+    pub(crate) struct MockIngestionClient {
+        pub checkpoints: DashMap<u64, Checkpoint>,
+        pub not_found_failures: DashMap<u64, usize>,
+        pub fetch_failures: DashMap<u64, usize>,
+        pub decode_failures: DashMap<u64, usize>,
+        pub latest_checkpoint: u64,
     }
 
     impl MockIngestionClient {
-        fn mock_chain_id() -> ChainIdentifier {
+        pub(crate) fn mock_chain_id() -> ChainIdentifier {
             CheckpointDigest::new([1; 32]).into()
+        }
+
+        /// Populate `checkpoints` with synthetic test checkpoints for the given sequence
+        /// numbers.
+        pub(crate) fn insert_checkpoints(&self, range: impl IntoIterator<Item = u64>) {
+            for seq in range {
+                self.checkpoints.insert(seq, test_checkpoint(seq));
+            }
         }
     }
 
@@ -509,7 +524,6 @@ mod tests {
         }
 
         async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
-            // Check for not found failures
             if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint)
                 && *remaining > 0
             {
@@ -517,7 +531,6 @@ mod tests {
                 return Err(CheckpointError::NotFound);
             }
 
-            // Check for fetch errors
             if let Some(mut remaining) = self.fetch_failures.get_mut(&checkpoint)
                 && *remaining > 0
             {
@@ -525,7 +538,6 @@ mod tests {
                 return Err(CheckpointError::Fetch(anyhow::anyhow!("Mock fetch error")));
             }
 
-            // Check for decode errors
             if let Some(mut remaining) = self.decode_failures.get_mut(&checkpoint)
                 && *remaining > 0
             {
@@ -535,7 +547,6 @@ mod tests {
                 )));
             }
 
-            // Return the checkpoint data if it exists
             self.checkpoints
                 .get(&checkpoint)
                 .as_deref()
@@ -544,7 +555,7 @@ mod tests {
         }
 
         async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-            Ok(0)
+            Ok(self.latest_checkpoint)
         }
     }
 
