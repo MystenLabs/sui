@@ -313,7 +313,7 @@ pub async fn start_rpc(
     rpc.add_module(Transactions(context.clone()))?;
 
     if let Some(_fullnode_client) = fullnode_client {
-        rpc.add_module(Governance(context.clone()))?;
+        rpc.add_module(Governance::new(context.clone()))?;
         rpc.add_module(Write::new(context.clone()))?;
     } else {
         warn!("No fullnode grpc url provided, Write and Governance modules will not be added.");

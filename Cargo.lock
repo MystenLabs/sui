@@ -15581,6 +15581,7 @@ dependencies = [
  "futures",
  "http 1.3.1",
  "jsonrpsee",
+ "lru 0.10.1",
  "move-binary-format",
  "move-core-types",
  "mysten-common",

@@ -100,7 +100,6 @@ impl WriteTestCluster {
                 ..Default::default()
             },
             NodeArgs {
-                fullnode_rpc_url: None,
                 fullnode_grpc_url: Some(fullnode_grpc_url),
             },
             SystemPackageTaskArgs::default(),

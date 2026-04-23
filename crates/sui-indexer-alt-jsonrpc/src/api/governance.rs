@@ -4,6 +4,8 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::Infallible;
+use std::num::NonZeroUsize;
+use std::sync::Mutex;
 
 use anyhow::Context as _;
 use diesel::ExpressionMethods;
@@ -11,6 +13,7 @@ use diesel::QueryDsl;
 use futures::future;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
+use lru::LruCache;
 use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_reader::consistent_reader::proto::owner::OwnerKind;
 use sui_indexer_alt_reader::governance::RewardsKey;
@@ -82,27 +85,41 @@ trait GovernanceApi {
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys>;
 }
 
-pub(crate) struct Governance(pub Context);
+pub(crate) struct Governance {
+    ctx: Context,
+    /// Caches the most recent `getValidatorsApy` response, keyed by epoch. APY inputs are fixed for
+    /// the duration of an epoch, so a capacity-1 cache evicts automatically on epoch advance.
+    apy_cache: Mutex<LruCache<u64, ValidatorApys>>,
+}
+
+impl Governance {
+    pub fn new(ctx: Context) -> Self {
+        Self {
+            ctx,
+            apy_cache: Mutex::new(LruCache::new(NonZeroUsize::new(1).unwrap())),
+        }
+    }
+}
 
 #[async_trait::async_trait]
 impl GovernanceApiServer for Governance {
     async fn get_reference_gas_price(&self) -> RpcResult<BigInt<u64>> {
-        Ok(rgp_response(&self.0).await?)
+        Ok(rgp_response(&self.ctx).await?)
     }
 
     async fn get_latest_sui_system_state(&self) -> RpcResult<SuiSystemStateSummary> {
-        Ok(latest_sui_system_state_response(&self.0).await?)
+        Ok(latest_sui_system_state_response(&self.ctx).await?)
     }
 
     async fn get_stakes_by_ids(
         &self,
         staked_sui_ids: Vec<ObjectID>,
     ) -> RpcResult<Vec<DelegatedStake>> {
-        Ok(delegated_stakes_response(&self.0, staked_sui_ids).await?)
+        Ok(delegated_stakes_response(&self.ctx, staked_sui_ids).await?)
     }
 
     async fn get_stakes(&self, owner: SuiAddress) -> RpcResult<Vec<DelegatedStake>> {
-        let Self(ctx) = self;
+        let ctx = &self.ctx;
         let config = &ctx.config().objects;
 
         let tag = StructTag {
@@ -141,11 +158,23 @@ impl GovernanceApiServer for Governance {
             }
         }
 
-        Ok(delegated_stakes_response(&self.0, all_stake_ids).await?)
+        Ok(delegated_stakes_response(ctx, all_stake_ids).await?)
     }
 
     async fn get_validators_apy(&self) -> RpcResult<ValidatorApys> {
-        Ok(validators_apy_response(&self.0).await?)
+        let ctx = &self.ctx;
+        let epoch = latest_epoch(ctx)
+            .await
+            .context("Failed to fetch latest epoch for APY cache lookup")
+            .map_err(RpcError::<Infallible>::from)?;
+
+        if let Some(hit) = self.apy_cache.lock().unwrap().get(&epoch).cloned() {
+            return Ok(hit);
+        }
+
+        let apys = validators_apy_response(ctx).await?;
+        self.apy_cache.lock().unwrap().put(epoch, apys.clone());
+        Ok(apys)
     }
 }
 
