@@ -16,7 +16,7 @@ keywords:
 
 Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This supplements the `Coin<T>` model with direct address-owned balances, simplifying transaction construction and eliminating coin selection complexity.
 
-For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md). For implementation details on sending, withdrawing, and paying gas from address balances, see [Using Address Balances](/guides/developer/digital-assets/address-balances/using-address-balances).
+For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md). For implementation details on sending, withdrawing, and paying gas from address balances, see [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
 
 ## Read this first
 
@@ -35,7 +35,7 @@ Initially, this should not happen often because most of the ecosystem will conti
 User funds can also become split across both coins and address balances. Balance queries (through JSON-RPC, gRPC, or GraphQL) show the combined total. To send funds that include the address balance portion, you must either:
 
 - Use `coinWithBalance` from the TypeScript SDK (v2+), which automatically draws from both sources.
-- Implement manual withdrawal logic as described in [Using Address Balances](/guides/developer/digital-assets/address-balances/using-address-balances).
+- Implement manual withdrawal logic as described in [Using Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances).
 
 ## Changes to balance queries
 
@@ -133,4 +133,4 @@ A JSON-RPC compatibility layer presents synthetic coin objects representing addr
 
 ## Converting existing coins to address balances
 
-Migration is optional. The SDK automatically selects coins or address balances as needed. To consolidate existing coin objects into an address balance, see [Converting Existing Coins to Address Balances](/guides/developer/digital-assets/address-balances/using-address-balances#converting-existing-coins-to-address-balances) in the usage guide.
+Migration is optional. The SDK automatically selects coins or address balances as needed. To consolidate existing coin objects into an address balance, see [Converting Existing Coins to Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#converting-existing-coins-to-address-balances) in the usage guide.
