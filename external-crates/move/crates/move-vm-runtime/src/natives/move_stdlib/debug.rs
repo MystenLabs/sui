@@ -201,11 +201,11 @@ mod testing {
     };
     use move_binary_format::{
         errors::{PartialVMError, PartialVMResult},
-        partial_vm_error,
+        partial_vm_error, safe_unwrap,
     };
     use move_core_types::{
-        account_address::AccountAddress, annotated_value as A, language_storage::TypeTag,
-        runtime_value as R,
+        account_address::AccountAddress, annotated_value as A, compressed::runtime as CR,
+        language_storage::TypeTag, runtime_value as R,
     };
     use std::{fmt, fmt::Write};
 
@@ -327,6 +327,7 @@ mod testing {
     ) -> PartialVMResult<()> {
         // get type layout in VM format
         let ty_layout = context.type_to_type_layout(&ty)?.unwrap();
+        let compressed_ty_layout = safe_unwrap!(CR::MoveTypeLayout::try_from(&ty_layout));
 
         match &ty_layout {
             R::MoveTypeLayout::Vector(_) => {
@@ -382,7 +383,9 @@ mod testing {
                     // vector<T> to a MoveValue and print it.
                     _ => {
                         let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
-                        let mv = val.as_move_value(&ty_layout)?.decorate(&ann_ty_layout);
+                        let mv = val
+                            .as_move_value(compressed_ty_layout.as_ref())?
+                            .decorate(&ann_ty_layout);
                         print_move_value(
                             out,
                             mv,
@@ -397,7 +400,7 @@ mod testing {
             }
             // For a struct, we convert it to a MoveValue annotated with its field names and types and print it
             R::MoveTypeLayout::Struct(_) => {
-                let move_struct = match val.as_move_value(&ty_layout)? {
+                let move_struct = match val.as_move_value(compressed_ty_layout.as_ref())? {
                     R::MoveValue::Struct(s) => s,
                     _ => {
                         return Err(partial_vm_error!(
@@ -428,7 +431,7 @@ mod testing {
                 )?;
             }
             R::MoveTypeLayout::Enum(_) => {
-                let move_struct = match val.as_move_value(&ty_layout)? {
+                let move_struct = match val.as_move_value(compressed_ty_layout.as_ref())? {
                     R::MoveValue::Variant(v) => v,
                     _ => {
                         return Err(partial_vm_error!(
@@ -463,7 +466,8 @@ mod testing {
                 let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
                 print_move_value(
                     out,
-                    val.as_move_value(&ty_layout)?.decorate(&ann_ty_layout),
+                    val.as_move_value(compressed_ty_layout.as_ref())?
+                        .decorate(&ann_ty_layout),
                     move_std_addr,
                     depth,
                     canonicalize,

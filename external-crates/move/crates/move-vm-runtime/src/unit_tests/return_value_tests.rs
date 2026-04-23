@@ -16,6 +16,7 @@ use crate::{
 use move_binary_format::errors::VMResult;
 use move_core_types::{
     account_address::AccountAddress,
+    compressed::runtime::MoveTypeLayout,
     identifier::Identifier,
     language_storage::{ModuleId, TypeTag},
     runtime_value::MoveValue,
@@ -140,9 +141,8 @@ fn return_signer_ref() {
         panic!("Expected reference return");
     };
     let inner_val = inner.borrow();
-    let ret_move_val = inner_val
-        .as_move_value(&move_core_types::runtime_value::MoveTypeLayout::Signer)
-        .unwrap();
+    let signer_layout = MoveTypeLayout::signer();
+    let ret_move_val = inner_val.as_move_value(signer_layout.as_ref()).unwrap();
     let expected = MoveValue::Signer(TEST_ADDR);
     assert_eq!(ret_move_val, expected);
 }

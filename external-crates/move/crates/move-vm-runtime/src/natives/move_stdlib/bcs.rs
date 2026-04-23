@@ -14,6 +14,7 @@ use crate::{
 };
 use move_binary_format::{errors::PartialVMResult, safe_unwrap};
 use move_core_types::{
+    compressed::runtime::MoveTypeLayout,
     gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
     vm_status::sub_status::NFE_BCS_SERIALIZATION_FAILURE,
 };
@@ -67,7 +68,14 @@ fn native_to_bytes(
     };
     // serialize value
     let val = ref_to_val.read_ref()?;
-    let serialized_value = match val.typed_serialize(&layout) {
+    let layout = MoveTypeLayout::try_from(&layout).map_err(|e| {
+        move_binary_format::partial_vm_error!(
+            UNKNOWN_INVARIANT_VIOLATION_ERROR,
+            "Failed to convert type layout for serialization: {:?}",
+            e
+        )
+    })?;
+    let serialized_value = match val.typed_serialize(layout.as_ref()) {
         Some(serialized_value) => serialized_value,
         None => {
             // If we run out of gas when charging for failure, we don't want the `OUT_OF_GAS` error

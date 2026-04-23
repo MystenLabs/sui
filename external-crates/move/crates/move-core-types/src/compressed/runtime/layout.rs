@@ -225,6 +225,18 @@ pub trait BackendBuilder: Sized {
         let pool = self.finalize(root.clone());
         MoveTypeLayout::from_parts(pool, root)
     }
+
+    /// Construct a [`MoveTypeLayout`] by running a closure that builds up a
+    /// root handle. Returns the closure's error verbatim.
+    fn with_builder<F>(f: F) -> Result<MoveTypeLayout<Self::Output>, Self::Error>
+    where
+        Self: Default,
+        F: FnOnce(&mut Self) -> Result<Self::Root, Self::Error>,
+    {
+        let mut b = Self::default();
+        let root = f(&mut b)?;
+        Ok(b.build(root))
+    }
 }
 
 // =============================================================================

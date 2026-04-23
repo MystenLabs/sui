@@ -147,16 +147,7 @@ fn deserialize_value(
     ty: &Type,
     arg: impl Borrow<[u8]>,
 ) -> PartialVMResult<Value> {
-    let layout = vtables.type_to_type_layout(ty).and_then(|ty| {
-        ty.inflate().map_err(|e| {
-            partial_vm_error!(
-                UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                "Failed to inflate type layout for {:?}: {}",
-                ty,
-                e
-            )
-        })
-    });
+    let layout = vtables.type_to_type_layout(ty);
     let layout = match layout {
         Ok(layout) => layout,
         Err(_err) => {
@@ -165,7 +156,7 @@ fn deserialize_value(
         }
     };
 
-    match Value::simple_deserialize(arg.borrow(), &layout) {
+    match Value::simple_deserialize(arg.borrow(), layout.as_ref()) {
         Some(val) => Ok(val),
         None => {
             warn!("[VM] failed to deserialize argument");
