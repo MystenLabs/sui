@@ -35,7 +35,6 @@ use tracing::{debug, info, instrument, warn};
 use crate::{
     authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
     checkpoints::CheckpointServiceNotify,
-    consensus_adapter::{ConsensusOverloadChecker, NoopConsensusOverloadChecker},
 };
 
 /// Validates transactions from consensus and votes on whether to execute the transactions
@@ -44,7 +43,6 @@ use crate::{
 pub struct SuiTxValidator {
     authority_state: Arc<AuthorityState>,
     epoch_store: Arc<AuthorityPerEpochStore>,
-    consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
@@ -60,12 +58,9 @@ impl SuiTxValidator {
             "SuiTxValidator constructed for epoch {}",
             epoch_store.epoch()
         );
-        // Intentionally do not check consensus overload, because this is validating transactions already in consensus.
-        let consensus_overload_checker = Arc::new(NoopConsensusOverloadChecker {});
         Self {
             authority_state,
             epoch_store,
-            consensus_overload_checker,
             checkpoint_service,
             metrics,
         }
@@ -264,7 +259,6 @@ impl SuiTxValidator {
         inner_tx.validity_check(&epoch_store.tx_validity_check_context())?;
 
         self.authority_state.check_system_overload(
-            &*self.consensus_overload_checker,
             inner_tx.data(),
             self.authority_state.check_system_overload_at_signing(),
         )?;

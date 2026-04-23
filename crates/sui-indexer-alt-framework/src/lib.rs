@@ -302,13 +302,10 @@ impl<S: Store> Indexer<S> {
 
         let mut service = self
             .ingestion_service
-            .run(
-                (
-                    Bound::Included(start),
-                    end.map_or(Bound::Unbounded, Bound::Included),
-                ),
-                self.next_sequential_checkpoint,
-            )
+            .run((
+                Bound::Included(start),
+                end.map_or(Bound::Unbounded, Bound::Included),
+            ))
             .await
             .context("Failed to start ingestion service")?;
 
@@ -395,13 +392,17 @@ impl<S: ConcurrentStore> Indexer<S> {
             return Ok(());
         };
 
+        let checkpoint_rx = self
+            .ingestion_service
+            .subscribe_bounded(config.ingestion.subscriber_channel_size());
+
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
             next_checkpoint,
             config,
             self.store.clone(),
             self.task.clone(),
-            self.ingestion_service.subscribe().0,
+            checkpoint_rx,
             self.metrics.clone(),
         ));
 
@@ -417,9 +418,6 @@ impl<T: SequentialStore> Indexer<T> {
     /// required to handle pipelines that modify data in-place (where each update is not an insert,
     /// but could be a modification of an existing row, where ordering between updates is
     /// important).
-    ///
-    /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
-    /// number of checkpoints (configured by `checkpoint_lag`).
     pub async fn sequential_pipeline<H: sequential::Handler<Store = T>>(
         &mut self,
         handler: H,
@@ -443,7 +441,9 @@ impl<T: SequentialStore> Indexer<T> {
                 .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
         );
 
-        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe();
+        let checkpoint_rx = self
+            .ingestion_service
+            .subscribe_bounded(config.ingestion.subscriber_channel_size());
 
         self.pipelines.push(sequential::pipeline::<H>(
             handler,
@@ -451,7 +451,6 @@ impl<T: SequentialStore> Indexer<T> {
             config,
             self.store.clone(),
             checkpoint_rx,
-            commit_hi_tx,
             self.metrics.clone(),
         ));
 

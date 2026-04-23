@@ -784,6 +784,7 @@ async fn test_authority_txn_validation_pushback() {
         100_000,
         100_000,
         ConsensusAdapterMetrics::new_test(),
+        Arc::new(tokio::sync::Notify::new()),
     ));
     let validator_service = Arc::new(ValidatorService::new_for_tests(
         authority_state.clone(),

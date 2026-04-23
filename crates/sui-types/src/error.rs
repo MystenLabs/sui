@@ -430,6 +430,11 @@ pub enum SuiErrorKind {
     TooManyTransactionsPendingConsensus,
 
     #[error(
+        "Transaction was outbid by higher-gas-price transactions in the admission queue (current minimum gas price required: {min_gas_price})"
+    )]
+    TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: u64 },
+
+    #[error(
         "Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}"
     )]
     TooManyTransactionsPendingOnObject {
@@ -1036,6 +1041,7 @@ impl SuiErrorKind {
             SuiErrorKind::TooManyTransactionsPendingOnObject { .. } => true,
             SuiErrorKind::TooOldTransactionPendingOnObject { .. } => true,
             SuiErrorKind::TooManyTransactionsPendingConsensus => true,
+            SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. } => true,
             SuiErrorKind::ValidatorOverloadedRetryAfter { .. } => true,
 
             // Non retryable error
@@ -1078,6 +1084,7 @@ impl SuiErrorKind {
                 | SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
                 | SuiErrorKind::TooOldTransactionPendingOnObject { .. }
                 | SuiErrorKind::TooManyTransactionsPendingConsensus
+                | SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. }
         )
     }
 
@@ -1127,6 +1134,7 @@ impl SuiErrorKind {
             | SuiErrorKind::TooManyTransactionsPendingOnObject { .. }
             | SuiErrorKind::TooOldTransactionPendingOnObject { .. }
             | SuiErrorKind::TooManyTransactionsPendingConsensus
+            | SuiErrorKind::TransactionRejectedDueToOutbiddingDuringCongestion { .. }
             | SuiErrorKind::ValidatorOverloadedRetryAfter { .. } => {
                 ErrorCategory::ValidatorOverloaded
             }

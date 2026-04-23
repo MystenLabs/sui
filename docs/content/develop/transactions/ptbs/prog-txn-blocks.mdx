@@ -73,7 +73,7 @@ The `Argument` enum has 4 variants:
 - `GasCoin`: References the SUI coin used to pay for gas. When using address balance gas payment (empty gas payment list), `GasCoin` references a synthetic coin created from the sender or sponsor address balance. **This is separate from other inputs because it has special restrictions**:
 
     - `&mut` or `&` usage anywhere.
-    - Only by value through `TransferObjects` or new `sui::coin::send_funds`
+    - Only by value through `TransferObjects` or `sui::coin::send_funds`
         - If you need an owned `Coin<SUI>` from the `GasCoin`, first use `SplitCoins`.
 
 - `NestedResult(u16, u16)`: References a result from a previous command. The first index specifies the command, the second specifies which result from that command. For example, if command 1 returns `[Value1, Value2]`, use `NestedResult(1, 0)` for `Value1` and `NestedResult(1, 1)` for `Value2`.
@@ -146,7 +146,7 @@ Shared objects have restrictions on by value usage to ensure they remain shared 
 
 #### Move call rules
 
-PTBs can call any `public` function and any `entry` function, whether private (`entry fun f()`), or `public(package)` (`public(package) entry fun f()`). Non-entry private and `public(package)` functions cannot be called from PTBs. As a result, there is no reason to add `entry` to a `public` function.
+PTBs can call any `public` function and any `entry` function, whether private (`entry fun f()`), or `public(package)` (`public(package) entry fun f()`). Non-entry private and `public(package)` functions cannot be called from PTBs. Note that in this way, there is no reason to add `entry` to a `public` function.
 
 :::info
 
@@ -158,7 +158,7 @@ Previously, `entry` functions had signature restrictions that limited their para
 Move calls cannot return references (`&T` or `&mut T`). However, this restriction will be lifted in the future.
 
 **Private generics:**
-Some framework functions have type parameters that can only be instantiated with types defined in the same module. Because PTBs are not modules, they cannot supply these types and therefore cannot call these functions directly. For example, certain `sui::transfer` functions like `transfer` and `share_object` require a type defined in the calling module, and as such cannot be called from a PTB. Instead, use the `public_transfer` and `public_share_object` variants.
+Some framework functions have type parameters that can only be instantiated with types defined in the same module. Since PTBs are not modules, they cannot supply these types and therefore cannot call these functions directly. For example, certain `sui::transfer` functions like `transfer` and `share_object` require a type defined in the calling module, and as such cannot be called from a PTB. Instead, use the `public_transfer` and `public_share_object` variants.
 
 **`TxContext` handling:**
 `TxContext` parameters (`&TxContext` or `&mut TxContext`) are automatically injected by the runtime; callers do not supply them. `TxContext` can appear at any position in the parameter list, and a function can have multiple `TxContext` parameters as long as they are immutable (`&TxContext`). These parameters are not counted toward the user-supplied argument count for indexing purposes.
@@ -167,7 +167,7 @@ Some framework functions have type parameters that can only be instantiated with
 
 A non-public `entry` function is a function declared with `entry` that is **not** `public`. It is either private (`entry fun f()`) or `public(package)` (`public(package) entry fun f()`). These functions can be called directly in PTBs but not from other packages.
 
-Non-public `entry` functions have a single restriction: their arguments cannot be in a hot clique (see below) when the function is called. The intuition behind this restriction is to ensure that arguments to non-public `entry` functions are not entangled with outstanding [hot potato](https://move-book.com/programmability/hot-potato-pattern) values that could force behavior after the function executes.
+Non-public `entry` functions have a single restriction: their arguments cannot be in a "hot" clique (see below) when the function is called. The intuition behind this restriction is to ensure that arguments to non-public `entry` functions are not entangled with outstanding [hot potato](https://move-book.com/programmability/hot-potato-pattern) values that could force behavior after the function executes.
 
 **Hot potato values**
 
@@ -175,7 +175,7 @@ A value is a hot potato if its type has neither the `drop` nor the `store` abili
 
 **Cliques**
 
-The system tracks which values are entangled using cliques. As described above, the intuition behind to goal is to prevent hot potato values from forcing behavior outside of the call to the non-public `entry` function. The cliques provide a modeling of this entanglement by keeping a count of how many hot potato values are live and which values they have interacted with:
+The system tracks which values are entangled using cliques. As described above, the intuition behind to goal is to prevent hot potato values from forcing behavior outside of the call to the non-public `entry` function. The cliques provide a modeling of this "entanglement" by keeping a count of how many hot potato values are live and which values they have interacted with:
 
 - Each PTB input starts in its own clique with a hot count of 0.
 - When values are used together as arguments in a command, their cliques merge. The hot counts add together.
@@ -187,7 +187,7 @@ A non-public `entry` function can consume hot potato values, but they must be th
 
 **Shared objects consumed by value**
 
-Consuming a shared object by value permanently marks its clique as always hot. Because shared objects cannot be wrapped (they must be re-shared or deleted) consuming one by value is treated similarly to a hot potato that can never be resolved. A non-public `entry` function can receive a shared object by value directly, but it cannot receive a value whose clique previously interacted with a shared object consumed by value.
+Consuming a shared object by value permanently marks its clique as "always hot." Since shared objects cannot be wrapped (they must be re-shared or deleted) consuming one by value is treated similarly to a hot potato that can never be resolved. A non-public `entry` function can receive a shared object by value directly, but it cannot receive a value whose clique previously interacted with a shared object consumed by value.
 
 **Examples**
 

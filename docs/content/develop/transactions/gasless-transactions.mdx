@@ -1,0 +1,36 @@
+---
+draft: true
+title: Gasless Transactions
+description: Gasless transactions on Sui enable peer-to-peer payments of qualified stablecoins to execute without paying gas fees in SUI.
+keywords: [ usdc, stable coins, sui dollar, usdy, ausd, fdusd, buck, ysld, usdt, gasless, free tier, free ]
+---
+
+Chain-specific gas fees can introduce several points of friction to end users and introduce complications for instritutional compliance of asset trading or payments. Eliminating chain-specific gas is a major simplification for regulated institutions to conduct payments without the burden of holding digital assets that might fluctuate in value.
+
+Gasless transactions on Sui enable peer-to-peer payments of qualified stablecoins to execute without paying gas fees in SUI. The sender of the transaction does not need to hold SUI in their wallet. However, when the network is congested, transactions that pay gas fees will be prioritized over gasless transactions. 
+
+Stablecoins qualified for gasless transactions include: 
+
+- USDC
+
+- Sui Dollar (coming soon)
+
+- eSui Dollar / SuiUSDe
+
+- USDY (Ondo)
+
+- FdUSD (First Digital)
+
+- AUSD (Agora)
+
+- BUCK (Bucket Protocol)
+
+- YLSD (Figure)
+
+- USDT (coming soon)
+
+Sui gasless transactions are an extension of the [Address Balances](/guides/developer/digital-assets/address-balances/migrate-address-balances) feature, enabled by calling the Address Balances Move API `send_funds()` with `gas=0` and `gas_budget=0`.
+
+THe TypeScript SDK automatically detects gasless transactions when using the gRPC or GraphQL transports. [Learn more in the TypeScript SDK documentation](https://sdk.mystenlabs.com/sui/transactions/coins-and-balances#sdk-support-grpc-and-graphql).
+
+Gasless transactions are limited to the Move functions `withdrawal_split`, `redeem_funds`, and `send_funds`. Gasless transactions cannot be used to write any object.
