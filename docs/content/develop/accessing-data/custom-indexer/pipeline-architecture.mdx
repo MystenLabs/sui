@@ -4,7 +4,7 @@ description: The `sui-indexer-alt-framework` provides two distinct pipeline arch
 keywords: [ indexer, index data, sui-indexer, custom indexer, sequential pipeline, concurrent pipeline ]
 ---
 
-The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understanding their differences is crucial for choosing the right approach.
+The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Understand their differences to choose the right approach.
 
 ## Sequential versus concurrent pipelines
 
@@ -14,7 +14,7 @@ The `sui-indexer-alt-framework` provides two distinct pipeline architectures. Un
 
 ## When to use each pipeline
 
-Both pipeline types can handle updates in place, aggregations, and complex business logic. While sequential pipelines have throughput limitations compared to concurrent, the decision to use one over the other is primarily about engineering complexity rather than performance needs.
+Both pipeline types can handle updates in place, aggregations, and complex business logic. While sequential pipelines have throughput limitations compared to concurrent, base your decision primarily on engineering complexity rather than performance needs.
 
 ### Recommended: Sequential pipeline
 
@@ -37,19 +37,19 @@ Consider implementing a concurrent pipeline when:
 <li><span className="text-sui-success-dark">✓</span> Your team is willing to handle the additional implementation complexity for the performance benefits.</li>
 </ul>
 
-Supporting out-of-order commits introduces a few additional complexities to your pipeline:
+Out-of-order commits introduce a few additional complexities to your pipeline:
 
-- Watermark-aware queries: All reads must check which data the pipeline fully committed. See [the watermark system](#watermark-system) section for details.
-- Complex application logic: You must commit data in pieces rather than handle complete checkpoints.
+- Watermark-aware queries: Check which data the pipeline fully committed in all reads. See [the watermark system](#watermark-system) section for details.
+- Complex application logic: Commit data in pieces rather than handle complete checkpoints.
 
 ## Decision framework
 
-If you are unsure of which pipeline to choose for your project, start with a sequential pipeline as it is easier to implement and debug. Then, measure performance under a realistic load. If the sequential pipeline cannot meet your project's requirements, then switch to a concurrent pipeline.
+If you are unsure of which pipeline to choose for your project, start with a sequential pipeline as it is easier to implement and debug. Then, measure performance under a realistic load. If the sequential pipeline cannot meet your project's requirements, switch to a concurrent pipeline.
 
 While not an exhaustive list, some specific scenarios where a sequential pipeline might not meet requirements include:
 
-- Your pipeline produces data in each checkpoint that benefits from chunking and out-of-order commits. Individual checkpoints can produce lots of data or individual writes that might add latency.
-- You are producing a lot of data that needs pruning. In this case, you must use a concurrent pipeline.
+- Your pipeline benefits from chunking and out-of-order commits for data produced in each checkpoint. Individual checkpoints can produce lots of data or individual writes that might add latency.
+- You produce a lot of data that needs pruning. In this case, you must use a concurrent pipeline.
 
 Beyond the decision of which pipeline to use, you also need to consider scaling. If you are indexing multiple kinds of data, then consider using multiple pipelines and watermarks.
 
@@ -97,7 +97,7 @@ This watermark system is what makes concurrent pipelines both high-performance a
 
 ### Scenario 1: Basic watermark (no pruning)
 
-With pruning disabled, the indexer reports each pipeline committer `checkpoint_hi_inclusive` only. Consider the following timeline, where a number of checkpoints are being processed and some are committed out of order.
+With pruning disabled, the indexer reports only each pipeline committer `checkpoint_hi_inclusive`. Consider the following timeline, where a number of checkpoints are being processed and some are committed out of order.
 
 ```sh
 Checkpoint Processing Timeline:
@@ -111,7 +111,7 @@ Checkpoint Processing Timeline:
 ✗ = Not Committed (processing or failed)
 ```
 
-In this scenario, the `checkpoint_hi_inclusive` is at 1001, even though checkpoint 1003 is committed, because there is still a gap at 1002. The indexer must report the high watermark at 1001 to satisfy the guarantee that all data from start to `checkpoint_hi_inclusive` is available.
+In this scenario, the `checkpoint_hi_inclusive` is at 1001, even though checkpoint 1003 is committed, because there is still a gap at 1002. The indexer reports the high watermark at 1001 to satisfy the guarantee that all data from start to `checkpoint_hi_inclusive` is available.
 
 After you commit checkpoint 1002, you can safely read data up to 1003.
 
@@ -124,7 +124,7 @@ After you commit checkpoint 1002, you can safely read data up to 1003.
 
 ### Scenario 2: Pruning enabled
 
-You enable pruning for pipelines configured with a retention policy. For example, if your table is growing too large and you want to keep only the last 4 checkpoints, then `retention = 4`. This means that the indexer periodically updates `reader_lo` as the difference between `checkpoint_hi_inclusive` and the configured retention. A separate pruning task is responsible for pruning data between `[pruner_hi, reader_lo]`.
+You enable pruning for pipelines configured with a retention policy. For example, if your table is growing too large and you want to keep only the last 4 checkpoints, then `retention = 4`. This means that the indexer periodically updates `reader_lo` as the difference between `checkpoint_hi_inclusive` and the configured retention. A separate pruning task prunes data between `[pruner_hi, reader_lo]`.
 
 ```sh
 [998] [999] [1000] [1001] [1002] [1003] [1004] [1005] [1006]
@@ -199,11 +199,11 @@ A separate reader watermark update task (running periodically, configurable) adv
         pruner_hi = 1001
 ```
 
-Because `pruner_hi` (1000) < `reader_lo` (1001), the pruner detects checkpoints outside the retention window. It cleans up all elements up to `reader_lo` (deleting checkpoint 1000) and updates `pruner_hi` to `reader_lo` (1001).
+When `pruner_hi` (1000) < `reader_lo` (1001), the pruner detects checkpoints outside the retention window, cleans up all elements up to `reader_lo` (deleting checkpoint 1000), and updates `pruner_hi` to `reader_lo` (1001).
 
 
 :::info
-Checkpoints older than `reader_lo` might still temporarily exist because of:
+Checkpoints older than `reader_lo` might still temporarily exist because:
 - Intentional delay protecting in-flight queries
 - Pruner not completing cleanup yet
 :::
@@ -220,7 +220,7 @@ The sequential pipeline is significantly simpler than the concurrent pipeline's 
 
 The `Broadcaster` and `Processor` components use identical backpressure mechanisms, adaptive parallel processing, and `processor()` implementations to the concurrent pipeline. The `Processor` component is described in detail in the [Common pipeline components](#processor) section.
 
-The `Collector` orders out-of-order checkpoints, assembles them into batches via your `batch()` logic, and hands those batches to the `Committer`, which writes them to the database in strict checkpoint order via your `commit()` logic. The two stages run as independent tasks connected by a bounded channel (`pipeline_depth`), so the `Collector` can prepare the next batch while the `Committer` flushes the current one. Concurrent pipelines share the same `Collector` + `Committer` split but additionally have `CommitterWatermark`, `ReaderWatermark`, and `Pruner` components — none of which are required in the sequential pipeline because commits and watermark updates happen in a single transaction and there is no pruning.
+The `Collector` orders out-of-order checkpoints, assembles them into batches through your `batch()` logic, and hands those batches to the `Committer`, which writes them to the database in strict checkpoint order through your `commit()` logic. The two stages run as independent tasks connected by a bounded channel (`pipeline_depth`), so the `Collector` can prepare the next batch while the `Committer` flushes the current one. Concurrent pipelines share the same `Collector` + `Committer` split but additionally have `CommitterWatermark`, `ReaderWatermark`, and `Pruner` components. None of those extra components are required in the sequential pipeline because commits and watermark updates happen in a single transaction and there is no pruning.
 
 ### Sequential pipeline components {#sequential-components}
 
@@ -228,7 +228,7 @@ Sequential pipelines have two pipeline-specific components in addition to the sh
 
 #### `Collector` {#seq-collector}
 
-The sequential `Collector` receives out-of-order processed data from the `Processor`, orders it by checkpoint sequence, and assembles batches using your `batch()` logic. A batch is dispatched when either `collect_interval_ms` elapses or `MIN_EAGER_ROWS` have accumulated and the next expected checkpoint has arrived. The `Collector` is also responsible for bounding how many checkpoints contribute to a single batch (`MAX_BATCH_CHECKPOINTS`).
+The sequential `Collector` receives out-of-order processed data from the `Processor`, orders it by checkpoint sequence, and assembles batches using your `batch()` logic. The `Collector` dispatches a batch when either `collect_interval_ms` elapses or `MIN_EAGER_ROWS` have accumulated and the next expected checkpoint has arrived. The `Collector` also bounds how many checkpoints contribute to a single batch (`MAX_BATCH_CHECKPOINTS`).
 
 `batch()`: Data merging logic.
 
@@ -300,7 +300,7 @@ let config = SequentialConfig {
 
 - `collect_interval_ms`: Higher values allow more checkpoints per batch, improving efficiency.
 - `write_concurrency`: Not applicable to sequential pipelines (always single-threaded writes).
-- `fanout`: By default, processor concurrency is adaptive: it starts at 1 and scales up to the number of CPUs based on downstream channel pressure. The controller monitors the fill fraction of the processor-to-collector channel and adjusts concurrency using a dead band between 60% and 85% fill. You can override this with fixed concurrency (`ConcurrencyConfig::Fixed`) or customize the adaptive bounds (`ConcurrencyConfig::Adaptive`). The default max of `num_cpus` assumes your processor is CPU-bound. If your processor performs IO (for example, fetching data from an external service), you might want a higher max. The adaptive controller also exposes a `dead_band` parameter to override the fill-fraction thresholds, but the defaults should work well for most workloads.
+- `fanout`: By default, processor concurrency is adaptive: it starts at 1 and scales up to the number of CPUs based on downstream channel pressure. The controller monitors the fill fraction of the processor-to-collector channel and adjusts concurrency using a dead band between 60% and 85% fill. You can override this with fixed concurrency (`ConcurrencyConfig::Fixed`) or customize the adaptive bounds (`ConcurrencyConfig::Adaptive`). The default max of `num_cpus` is for CPU-bound processors. If your processor performs IO (for example, fetching data from an external service), you might want a higher max. The adaptive controller also exposes a `dead_band` parameter to override the fill-fraction thresholds, but the defaults should work well for most workloads.
 - `ingestion.subscriber_channel_size`: Capacity of the bounded broadcaster-to-processor channel. Defaults to `max(num_cpus / 2, 4)` when `None`. A pipeline that occasionally sees bursts can raise its own capacity, but note that a larger value makes this pipeline appear "less full" to the shared controller, so it triggers throttling later than its peers.
 - `processor_channel_size`: Controls the size of the channel between the processor and the collector. Defaults to `num_cpus / 2`. This channel is also the signal that drives the adaptive concurrency controller.
 - `pipeline_depth`: Controls the size of the channel between the collector and the committer. Defaults to `max(num_cpus / 2, 4)`. Larger values let the collector stay further ahead of a slow committer (absorbing bursts); `1` means one batch can be staged while another is committing.
