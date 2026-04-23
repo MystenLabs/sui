@@ -12,16 +12,17 @@ use crate::{
 };
 use move_binary_format::{
     checked_as,
+    constant::constant_sig_token_to_layout,
     errors::*,
-    file_format::{Constant, SignatureToken, VariantTag},
+    file_format::{Constant, VariantTag},
     partial_vm_error, safe_unwrap,
 };
 use move_core_types::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
     compressed::runtime::{
-        BackendBuilder as _, LayoutHandle, MoveEnumLayout, MoveFieldsLayout, MoveLayoutView,
-        MoveStructLayout, MoveTypeLayout, MoveTypeLayoutBuilder, MoveTypeLayoutRef, VariantLayout,
+        MoveEnumLayout, MoveFieldsLayout, MoveLayoutView, MoveStructLayout, MoveTypeLayout,
+        MoveTypeLayoutRef, VariantLayout,
     },
     u256,
     vm_status::sub_status::NFE_VECTOR_ERROR_BASE,
@@ -3239,41 +3240,8 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveRuntimeVariantFieldLayout<'_> {
 **************************************************************************************/
 
 impl Value {
-    fn constant_sig_token_to_layout(constant_signature: &SignatureToken) -> Option<MoveTypeLayout> {
-        use SignatureToken as S;
-
-        fn constant_sig_token_to_layout_inner(
-            builder: &mut MoveTypeLayoutBuilder,
-            constant_signature: &SignatureToken,
-        ) -> Option<LayoutHandle> {
-            Some(match constant_signature {
-                S::Bool => builder.bool(),
-                S::U8 => builder.u8(),
-                S::U16 => builder.u16(),
-                S::U32 => builder.u32(),
-                S::U64 => builder.u64(),
-                S::U128 => builder.u128(),
-                S::U256 => builder.u256(),
-                S::Address => builder.address(),
-                S::Signer => return None,
-                S::Vector(inner) => {
-                    let inner = constant_sig_token_to_layout_inner(builder, inner)?;
-                    builder.vector(inner).ok()?
-                }
-                // Not yet supported
-                S::Datatype(_) | S::DatatypeInstantiation(_) => return None,
-                // Not allowed/Not meaningful
-                S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) => return None,
-            })
-        }
-
-        let mut builder = MoveTypeLayoutBuilder::new();
-        constant_sig_token_to_layout_inner(&mut builder, constant_signature)
-            .map(|handle| builder.build(handle))
-    }
-
     pub fn deserialize_constant(constant: &Constant) -> Option<Value> {
-        let layout = Self::constant_sig_token_to_layout(&constant.type_)?;
+        let layout = constant_sig_token_to_layout(&constant.type_)?;
         Value::simple_deserialize(&constant.data, layout.as_ref())
     }
 }

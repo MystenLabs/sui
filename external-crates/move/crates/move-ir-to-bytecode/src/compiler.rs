@@ -5,6 +5,7 @@
 use crate::context::{CompiledDependency, Context, MaterializedPools, TABLE_MAX_SIZE};
 use anyhow::{Result, bail, format_err};
 use move_binary_format::{
+    constant::constant_sig_token_to_layout,
     file_format::{
         Ability, AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant,
         ConstantPoolIndex, DatatypeHandleIndex, DatatypeTyParameter, EnumDefinition,
@@ -19,7 +20,7 @@ use move_bytecode_source_map::source_map::SourceMap;
 use move_command_line_common::{
     env::get_bytecode_version_from_env, error_bitset::ErrorBitsetBuilder,
 };
-use move_core_types::runtime_value::{MoveTypeLayout, MoveValue};
+use move_core_types::runtime_value::MoveValue;
 use move_ir_types::{
     ast::{self, Bytecode as IRBytecode, Bytecode_ as IRBytecode_, *},
     sp,
@@ -350,7 +351,7 @@ fn constant_name_as_constant_value_index(
 ) -> Result<ConstantPoolIndex> {
     let name_constant = compile_constant(
         context,
-        &MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
+        &Type_::Vector(Box::new(Type_::U8.make_type())).make_type(),
         MoveValue::vector_u8(const_name.to_string().into_bytes()),
     )?;
     context.constant_index(name_constant)
@@ -418,11 +419,7 @@ pub fn compile_module<'a>(
             constant_name_as_constant_value_index(&mut context, &ir_constant.name)?;
         }
 
-        let constant = compile_constant(
-            &mut context,
-            &type_to_constant_type_layout(ir_constant.signature)?,
-            ir_constant.value,
-        )?;
+        let constant = compile_constant(&mut context, &ir_constant.signature, ir_constant.value)?;
         context.declare_constant(ir_constant.name.clone(), constant.clone())?;
         let const_idx = context.constant_index(constant)?;
         record_src_loc!(const_decl: context, const_idx, ir_constant.name);
@@ -1312,7 +1309,8 @@ fn compile_expression(
         Exp_::Value(cv) => match cv.value {
             CopyableVal_::Address(address) => {
                 let address_value = MoveValue::Address(address);
-                let constant = compile_constant(context, &MoveTypeLayout::Address, address_value)?;
+                let constant =
+                    compile_constant(context, &Type_::Address.make_type(), address_value)?;
                 let idx = context.constant_index(constant)?;
                 push_instr!(exp.loc, Bytecode::LdConst(idx));
                 function_frame.push()?;
@@ -1343,7 +1341,7 @@ fn compile_expression(
             }
             CopyableVal_::ByteArray(buf) => {
                 let vec_value = MoveValue::vector_u8(buf);
-                let ty = MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8));
+                let ty = Type_::Vector(Box::new(Type_::U8.make_type())).make_type();
                 let constant = compile_constant(context, &ty, vec_value)?;
                 let idx = context.constant_index(constant)?;
                 push_instr!(exp.loc, Bytecode::LdConst(idx));
@@ -1714,38 +1712,12 @@ fn compile_call(
     Ok(())
 }
 
-fn type_to_constant_type_layout(ty: Type) -> Result<MoveTypeLayout> {
-    Ok(match ty.value {
-        Type_::Address => MoveTypeLayout::Address,
-        Type_::Signer => MoveTypeLayout::Signer,
-        Type_::U8 => MoveTypeLayout::U8,
-        Type_::U16 => MoveTypeLayout::U16,
-        Type_::U32 => MoveTypeLayout::U32,
-        Type_::U64 => MoveTypeLayout::U64,
-        Type_::U128 => MoveTypeLayout::U128,
-        Type_::U256 => MoveTypeLayout::U256,
-        Type_::Bool => MoveTypeLayout::Bool,
-        Type_::Vector(inner_type) => {
-            MoveTypeLayout::Vector(Box::new(type_to_constant_type_layout(*inner_type)?))
-        }
-        Type_::Reference(_, _) => {
-            bail!("References are not supported in constant type layouts")
-        }
-        Type_::TypeParameter(_) => {
-            bail!("Type parameters are not supported in constant type layouts")
-        }
-        Type_::Datatype(_ident, _tys) => {
-            bail!("TODO Structs are not *yet* supported in constant type layouts")
-        }
-    })
-}
-
-fn compile_constant(
-    _context: &mut Context,
-    layout: &MoveTypeLayout,
-    value: MoveValue,
-) -> Result<Constant> {
-    Constant::serialize_constant(layout, &value)
+fn compile_constant(context: &mut Context, ty: &Type, value: MoveValue) -> Result<Constant> {
+    let const_sig_token = compile_type(context, &HashMap::new(), ty)?;
+    let Some(layout) = constant_sig_token_to_layout(&const_sig_token) else {
+        bail!("Unsupported constant type: {:?}", ty);
+    };
+    Constant::serialize_constant(layout.as_ref(), &value)
         .ok_or_else(|| format_err!("Could not serialize constant"))
 }
 
@@ -1856,7 +1828,7 @@ fn compile_bytecode(
         IRBytecode_::LdTrue => Bytecode::LdTrue,
         IRBytecode_::LdFalse => Bytecode::LdFalse,
         IRBytecode_::LdConst(ty, v) => {
-            let constant = compile_constant(context, &type_to_constant_type_layout(ty)?, v)?;
+            let constant = compile_constant(context, &ty, v)?;
             Bytecode::LdConst(context.constant_index(constant)?)
         }
         IRBytecode_::LdNamedConst(c) => Bytecode::LdConst(context.named_constant_index(&c)?),
