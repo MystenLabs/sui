@@ -322,6 +322,7 @@ const TESTNET_USDC: &str =
 // Version 121: Re-enable defer_unpaid_amplification (devnet + testnet).
 // Version 122: Framework update: vector::empty is deprecated.
 //              Enable bulletproofs verification on devnet.
+//              Enable defer_unpaid_amplification on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4845,6 +4846,8 @@ impl ProtocolConfig {
                         .early_return_receive_object_mismatched_type = true;
                 }
                 122 => {
+                    // Enable unpaid amplification deferral on mainnet
+                    cfg.feature_flags.defer_unpaid_amplification = true;
                     // Enable bulletproofs range proofs on devnet
                     cfg.verify_bulletproofs_ristretto255_base_cost = Some(30000);
                     cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(6500);
