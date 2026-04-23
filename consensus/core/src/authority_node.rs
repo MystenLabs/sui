@@ -270,7 +270,7 @@ where
         let store_path = context.parameters.db_path.as_path().to_str().unwrap();
         let use_fifo_compaction = context.parameters.use_fifo_compaction
             && (context.protocol_config.chain() != ChainType::Mainnet
-                || context.own_index.value().is_multiple_of(10));
+                || context.own_index.value().is_multiple_of(2));
         let store = Arc::new(RocksDBStore::new(store_path, use_fifo_compaction));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
