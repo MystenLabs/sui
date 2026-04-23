@@ -1839,8 +1839,10 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
         }
 
         Tok::NumValue => {
-            // Check if this is a ModuleIdent (in a ModuleAccess).
-            if context.tokens.lookahead()? == Tok::ColonColon {
+            // Check if this is a ModuleIdent (in a ModuleAccess). If lookahead encounters a
+            // lexing error further ahead, fall back to parsing the current number literal so that
+            // we still make progress and surface the lexer diagnostic during `parse_value`.
+            if let Ok(Tok::ColonColon) = context.tokens.lookahead() {
                 parse_name_exp(context)?
             } else {
                 Exp_::Value(parse_value(context)?)
