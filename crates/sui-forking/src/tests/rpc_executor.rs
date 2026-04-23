@@ -223,10 +223,10 @@ async fn test_bad_signature_returns_submission_error() {
 #[tokio::test]
 async fn test_include_input_and_output_objects() {
     let harness = TestHarness::new();
-    let signed_tx = harness.build_transfer_tx(1_000);
+    let transaction = harness.build_transfer_tx(1_000);
 
     let request = ExecuteTransactionRequestV3 {
-        transaction: signed_tx.into(),
+        transaction,
         include_events: false,
         include_input_objects: true,
         include_output_objects: true,

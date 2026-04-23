@@ -56,9 +56,9 @@ impl TransactionExecutor for ForkedTransactionExecutor {
         // concurrent reads aren't blocked.
         let (effects, exec_error, checkpoint_seq) = {
             let mut sim = self.context.simulacrum().write().await;
-            let (effects, exec_error) =
-                sim.execute_transaction(request.transaction)
-                    .map_err(into_submission_error)?;
+            let (effects, exec_error) = sim
+                .execute_transaction(request.transaction)
+                .map_err(into_submission_error)?;
             let checkpoint = sim.create_checkpoint();
             let checkpoint_seq = checkpoint.data().sequence_number;
             (effects, exec_error, checkpoint_seq)
@@ -142,12 +142,10 @@ fn into_submission_error(e: anyhow::Error) -> TransactionSubmissionError {
         Ok(sui_error) if is_signature_error(&sui_error) => {
             TransactionSubmissionError::InvalidUserSignature(sui_error)
         }
-        Ok(sui_error) => {
-            TransactionSubmissionError::TransactionDriverInternalError(sui_error)
-        }
-        Err(other) => TransactionSubmissionError::TransactionDriverInternalError(
-            SuiError::from(format!("forked execution failed: {other}")),
-        ),
+        Ok(sui_error) => TransactionSubmissionError::TransactionDriverInternalError(sui_error),
+        Err(other) => TransactionSubmissionError::TransactionDriverInternalError(SuiError::from(
+            format!("forked execution failed: {other}"),
+        )),
     }
 }
 
