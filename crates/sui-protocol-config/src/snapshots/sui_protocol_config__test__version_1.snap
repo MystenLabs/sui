@@ -3,9 +3,7 @@ source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
 version: 1
-feature_flags:
-  enable_coin_reservation_obj_refs: true
-  convert_withdrawal_compatibility_ptb_arguments: true
+feature_flags: {}
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_serialized_tx_effects_size_bytes: 524288
@@ -160,4 +158,3 @@ hash_keccak256_data_cost_per_block: 2
 hmac_hmac_sha3_256_cost_base: 52
 hmac_hmac_sha3_256_input_cost_per_byte: 2
 hmac_hmac_sha3_256_input_cost_per_block: 2
-execution_version: 4
