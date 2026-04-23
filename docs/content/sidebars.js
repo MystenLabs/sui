@@ -277,7 +277,6 @@ export default {
               'onchain-finance/asset-custody/address-balances/migrate-address-balances',
             ],
           },
-          'onchain-finance/asset-custody/address-balance-migration',
           {
             type: 'category',
             label: 'Wallets',

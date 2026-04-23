@@ -12,7 +12,6 @@ keywords:
     fungible assets,
     sponsored transactions,
   ]
-draft: true
 ---
 
 Address balances provide a canonical balance for each coin type tied directly to a Sui address. Funds sent through `sui::coin::send_funds` and `sui::balance::send_funds` merge automatically into a single balance per coin type, with no object management required. For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
@@ -258,7 +257,7 @@ Requirements for address balance gas payments:
 - Timestamp-based expiration is not currently supported.
 - The transaction kind must be `ProgrammableTransaction`.
 
-The `nonce` field differentiates otherwise identical transactions. Unlike EVM chains, the nonce has no semantic requirements. It does not need to be sequential, and there is no nonce gap problem. It allows you to submit two transactions that would otherwise have the same digest. For most use cases, generate the nonce randomly or use an incrementing counter in your application:
+The `nonce` field differentiates otherwise identical transactions. Unlike EVM chains, the nonce has no semantic requirements. It does not need to be sequential, and there is no nonce gap problem. It simply allows you to submit two transactions that would otherwise have the same digest. For most use cases, generate the nonce randomly or use an incrementing counter in your application:
 
 ```rust
 // Random nonce
@@ -343,8 +342,6 @@ const result = await client.executeTransaction({
 Both sender and sponsor must sign. Storage rebates are credited to the sponsor address balance.
 
 ## Querying balances
-
-You can query address balances using the TypeScript SDK, gRPC, or GraphQL.
 
 ### TypeScript SDK
 

@@ -13,7 +13,7 @@ Stablecoins qualified for gasless transactions include:
 
 - USDC
 
-- Sui Dollar (Coming soon)
+- USDsui
 
 - eSui Dollar (SuiUSDe)
 
@@ -27,10 +27,10 @@ Stablecoins qualified for gasless transactions include:
 
 - YLSD (Figure)
 
-- USDT (Coming soon)
-
 ## Supporting gasless transactions 
 
-Sui gasless transactions are an extension of the [Address Balances](/onchain-finance/asset-custody/address-balance-migration) feature, enabled by calling the Address Balances Move API `send_funds()` with `gas=0` and `gas_budget=0`.
+Sui gasless transactions are an extension of the [Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances) feature, enabled by calling the Address Balances Move API `send_funds()` with `gas=0` and `gas_budget=0`.
+
+The TypeScript SDK automatically detects gasless transactions when using the gRPC or GraphQL transports. [Learn more in the TypeScript SDK documentation](https://sdk.mystenlabs.com/sui/transactions/coins-and-balances#sdk-support-grpc-and-graphql).
 
 Gasless transactions are limited to the Move functions `withdrawal_split`, `redeem_funds`, and `send_funds`. Gasless transactions cannot be used to write any object.

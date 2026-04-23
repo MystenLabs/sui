@@ -1402,7 +1402,7 @@
     },
     {
       "source": "/guides/developer/address-balances-migration",
-      "destination": "/onchain-finance/asset-custody/address-balance-migration",
+      "destination": "/onchain-finance/asset-custody/address-balances/using-address-balances",
       "permanent": true
     },
     {

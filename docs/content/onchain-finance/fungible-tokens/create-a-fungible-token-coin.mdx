@@ -74,7 +74,7 @@ Key advantages of address balances:
 
 The TypeScript SDK (v2+) uses address balances by default. When you use `coinWithBalance`, the SDK draws from address balances first and falls back to coin objects only when needed. For gas payment, pass an empty array to `setGasPayment` to pay from your address balance.
 
-See [Address Balances Migration Guide](/onchain-finance/asset-custody/address-balance-migration) for the full reference on using address balances, including withdrawal patterns, gas payment, sponsored transactions, and balance queries.
+See [Address Balances Migration Guide](/onchain-finance/asset-custody/address-balances/using-address-balances) for the full reference on using address balances, including withdrawal patterns, gas payment, sponsored transactions, and balance queries.
 
 ## Coin objects
 
@@ -94,7 +94,7 @@ For explicit coin manipulation within a PTB, use the `mergeCoins` command to com
 
 It is common to accumulate many coin objects over time, especially if you receive frequent transfers. Some scenarios require merging coins into a single object. For example, if no single coin holds enough value to cover a transaction, you must merge coins first.
 
-You can convert coin objects into an address balance at any time by calling `coin::send_funds` with your own address as the recipient. See [Converting Existing Coins to Address Balances](/onchain-finance/asset-custody/address-balance-migration#converting-existing-coins-to-address-balances) for instructions.
+You can convert coin objects into an address balance at any time by calling `coin::send_funds` with your own address as the recipient. See [Converting Existing Coins to Address Balances](/onchain-finance/asset-custody/address-balances/using-address-balances#converting-existing-coins-to-address-balances) for instructions.
 
 ## Gas smashing
 
