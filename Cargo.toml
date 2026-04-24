@@ -357,9 +357,9 @@ dashmap = "5.5.3"
 datatest-stable = { git = "https://github.com/nextest-rs/datatest-stable.git", rev = "72db7f6d1bbe36a5407e96b9488a581f763e106f" }
 derive-syn-parse = "0.1.5"
 derive_more = "1.0.0"
-diesel = "2.2"
-diesel_migrations = "2.2"
-diesel-async = "0.5"
+diesel = "2.3"
+diesel_migrations = "2.3"
+diesel-async = "0.8"
 dirs = "4.0.0"
 duration-str = "0.5.0"
 ed25519 = { version = "2", features = ["pkcs8", "alloc", "zeroize"] }
