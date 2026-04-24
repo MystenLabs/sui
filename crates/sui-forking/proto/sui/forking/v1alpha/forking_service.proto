@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 syntax = "proto3";
-package sui.forking;
+package sui.forking.v1alpha;
 
 // Administrative service for controlling a forked Sui network.
 service ForkingService {

@@ -21,7 +21,7 @@ fn main() {
 
     fs::create_dir_all(&out_dir).expect("create proto out dir");
 
-    let proto_files = vec![proto_dir.join("forking_service.proto")];
+    let proto_files = vec![proto_dir.join("sui/forking/v1alpha/forking_service.proto")];
     let file_descriptors =
         protox::compile(proto_files, [&proto_dir]).expect("compile forking_service.proto");
 
