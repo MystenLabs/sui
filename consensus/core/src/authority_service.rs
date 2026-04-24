@@ -27,8 +27,8 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{
-        BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream, ObserverBlockStreamItem,
-        ObserverNetworkService, PeerId, ValidatorNetworkService,
+        BlockStream, ExtendedSerializedBlock, NodeId, ObserverBlockStream, ObserverNetworkService,
+        PeerId, ValidatorNetworkService,
     },
     round_tracker::RoundTracker,
     synchronizer::SynchronizerHandle,
@@ -465,11 +465,7 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
 
 #[async_trait]
 impl<C: CoreThreadDispatcher> ObserverNetworkService for AuthorityService<C> {
-    async fn handle_block(
-        &self,
-        _peer: PeerId,
-        _item: ObserverBlockStreamItem,
-    ) -> ConsensusResult<()> {
+    async fn handle_block(&self, _peer: PeerId, _block: Bytes) -> ConsensusResult<()> {
         // TODO: implement observer block handling, similar to validator block handling.
         Err(ConsensusError::NetworkRequest(
             "Observer block handling not yet implemented".to_string(),
