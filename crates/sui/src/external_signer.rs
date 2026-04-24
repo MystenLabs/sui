@@ -178,7 +178,7 @@ mod tests {
     use async_trait::async_trait;
     use clap::Parser;
     use serde_json::{Value, json};
-    use sui_keys::external::{CommandRunner, ExternalExecError};
+    use sui_keys::external::{CommandRunner, ExternalExecError, ProvisionMode};
     use sui_keys::keystore::Keystore;
     use tempfile::TempDir;
 

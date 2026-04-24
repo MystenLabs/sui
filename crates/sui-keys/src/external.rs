@@ -27,7 +27,9 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{PublicKey, Signature, SuiKeyPair, SuiSignature, SuiSignatureInner};
 use tokio::process::Command;
 
-const PROVISION_MODE_NOT_SUPPORTED_ERROR_CODE: i32 = -32012;
+// TODO create specific error code or some metadata method to improve on this.
+/// Ledgers do not support key generation, so we use the JSON RPC method not found error code to identify when create is not supported by the signer.
+const JSON_RPC_METHOD_NOT_FOUND_ERROR_CODE: i32 = -32601;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExternalExecError {
@@ -74,14 +76,16 @@ pub struct ExternalKey {
     pub key_id: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CreateKeyResponse {
     pub public_key: PublicKey,
     pub key_id: String,
+    #[serde(skip_serializing)]
     pub mnemonic: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 /// Provision mode requested when creating a key on an external signer.
 pub enum ProvisionMode {
     /// Creates a recoverable key without surfacing recovery material in this flow.
@@ -122,8 +126,12 @@ pub struct SignResponse {
 #[automock]
 #[async_trait]
 pub trait CommandRunner: Send + Sync + Debug {
-    async fn run(&self, command: &str, method: &str, params: JsonValue)
-    -> Result<JsonValue, ExternalExecError>;
+    async fn run(
+        &self,
+        command: &str,
+        method: &str,
+        params: JsonValue,
+    ) -> Result<JsonValue, ExternalExecError>;
 }
 
 #[derive(Debug)]
@@ -435,7 +443,10 @@ impl AccountKeystore for External {
             .unwrap_or(JsonValue::Null);
 
         // Attempt to generate, fallback to indexing the first unindexed key.
-        let (stored_key, mnemonic) = match self.exec(&ext_signer, "create_key", create_key_params).await {
+        let (stored_key, mnemonic) = match self
+            .exec(&ext_signer, "create_key", create_key_params)
+            .await
+        {
             Ok(res) => serde_json::from_value(res)
                 .map(|k: CreateKeyResponse| {
                     (
@@ -449,27 +460,25 @@ impl AccountKeystore for External {
                 })
                 .map_err(|e| anyhow!("Failed to parse key response from external signer: {}", e))?,
             Err(create_error) => {
-                let provision_mode_error = match &create_error {
+                let create_not_supported = matches!(
+                    &create_error,
                     ExternalExecError::JsonRpc(JsonRpcError::RemoteError(error))
-                        if error.code == PROVISION_MODE_NOT_SUPPORTED_ERROR_CODE =>
-                    {
-                        Some(error.message.as_str())
-                    }
-                    _ => None,
-                };
+                        if error.code == JSON_RPC_METHOD_NOT_FOUND_ERROR_CODE
+                );
+
+                // return here if we failed to create a key for a reason other than the method not being found, otherwise attempt to fallback to adding an existing key.
+                if !create_not_supported {
+                    return Err(anyhow!(
+                        "Failed to create a new key on the external signer: {create_error}"
+                    ));
+                }
 
                 match self.add_first_unindexed_key(ext_signer.clone()).await {
                     Ok(stored_key) => (stored_key, None),
                     Err(add_error) => {
-                        let error = match provision_mode_error {
-                            Some(message) => anyhow!(
-                                "{message}. Also failed to add the first unindexed key: {add_error}"
-                            ),
-                            None => anyhow!(
-                                "Failed to create a new key on the external signer: {create_error}. Also failed to add the first unindexed key: {add_error}"
-                            ),
-                        };
-                        return Err(error);
+                        return Err(anyhow!(
+                            "Failed to create a new key on the external signer: {create_error}. Also failed to add the first unindexed key: {add_error}"
+                        ));
                     }
                 }
             }
@@ -753,9 +762,7 @@ impl AccountKeystore for External {
 #[cfg(test)]
 mod tests {
     use super::{External, ExternalExecError, MockCommandRunner, StdCommandRunner, StoredKey};
-    use crate::external::{
-        PROVISION_MODE_NOT_SUPPORTED_ERROR_CODE, ProvisionMode,
-    };
+    use crate::external::ProvisionMode;
     use crate::key_identity::KeyIdentity;
     use crate::keystore::{ALIASES_FILE_EXTENSION, AccountKeystore, GenerateOptions, GeneratedKey};
     use fastcrypto::ed25519::Ed25519KeyPair;
@@ -780,6 +787,7 @@ mod tests {
     const PUBLIC_KEY: &str = "ALJ0GaLcBTTwTTh5dvyc6xaxwrjkG1spQzlL+W4CGLqG";
     const UNTAGGED_PUBLIC_KEY: &str = "snQZotwFNPBNOHl2/JzrFrHCuOQbWylDOUv5bgIYuoY=";
     const ADDRESS: &str = "0x9219616732544c54259b3f5aeef5ec078535e322ee63f7de2ca8a197fd2a4f6f";
+    const PROVISION_MODE_NOT_SUPPORTED_ERROR_CODE: i32 = -32012;
     const PROVISION_MODE_NOT_SUPPORTED_MESSAGE: &str =
         "Provision mode is not supported by yubikey-signer";
 
@@ -998,7 +1006,7 @@ mod tests {
             .with(
                 eq("signer"),
                 eq("create_key"),
-                eq(json!({ "mode": "MnemonicBacked" })),
+                eq(json!({ "mode": "mnemonic-backed" })),
             )
             .returning(move |_, _, _| {
                 Ok(json!({
@@ -1102,7 +1110,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_generate_fallback_preserves_provision_mode_error() {
+    async fn test_generate_does_not_fallback_on_provision_mode_error() {
         let mut mock = MockCommandRunner::new();
         mock.expect_run().returning(move |_, method, params| {
             if method == "create_key" && params == JsonValue::Null {
@@ -1114,9 +1122,7 @@ mod tests {
                 .into());
             }
             if method == "keys" && params == json![null] {
-                return Err(ExternalExecError::Io(std::io::Error::other(
-                    "No available key found for external signer signer",
-                )));
+                panic!("keys should not be queried after a provision mode error");
             }
             panic!("Unexpected method called: {}", method);
         });
@@ -1137,7 +1143,7 @@ mod tests {
 
         let error = result.unwrap_err().to_string();
         assert!(error.contains(PROVISION_MODE_NOT_SUPPORTED_MESSAGE));
-        assert!(error.contains("Also failed to add the first unindexed key"));
+        assert!(!error.contains("Also failed to add the first unindexed key"));
     }
 
     #[tokio::test]
