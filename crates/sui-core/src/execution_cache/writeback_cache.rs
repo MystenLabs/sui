@@ -1389,11 +1389,34 @@ impl AccountFundsRead for WritebackCache {
         // can therefore observe state from a newer settlement than the root version we
         // captured, producing an inconsistent snapshot. Using an MVCC read at the captured
         // root version makes settlement appear atomic to the reader.
-        let root_version = ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-            .unwrap()
-            .version();
-        let value = self.get_account_amount_at_version(account_id, root_version);
-        (value, root_version)
+        //
+        // We also need the root version to remain stable across the MVCC read: if the
+        // root advances during the read, pruning may remove the version we're reading at
+        // and produce a stale or missing value. We retry until pre and post observations
+        // of the root version agree, which guarantees no pruning happened in between.
+        let mut loop_iter = 0;
+        loop {
+            let pre_root_version =
+                ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                    .unwrap()
+                    .version();
+            let value = self.get_account_amount_at_version(account_id, pre_root_version);
+            let post_root_version =
+                ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                    .unwrap()
+                    .version();
+            if pre_root_version == post_root_version {
+                return (value, pre_root_version);
+            }
+            debug!(
+                "Root version changed from {} to {} during MVCC read, retrying",
+                pre_root_version, post_root_version
+            );
+            loop_iter += 1;
+            if loop_iter >= 3 {
+                debug_fatal!("Unable to get a stable version after 3 iterations");
+            }
+        }
     }
 
     fn get_account_amount_at_version(
