@@ -17,7 +17,7 @@ use crate::{
     authority_service::{BroadcastStream, SubscriptionCounter},
     block::{BlockAPI as _, SignedBlock, VerifiedBlock},
     block_sync_service::BlockSyncService,
-    commit::{CommitIndex, CommitRange, TrustedCommit},
+    commit::{CommitRange, TrustedCommit},
     commit_vote_monitor::CommitVoteMonitor,
     context::Context,
     core_thread::CoreThreadDispatcher,
@@ -37,7 +37,7 @@ pub(crate) struct ObserverService {
     context: Arc<Context>,
     core_dispatcher: Arc<dyn CoreThreadDispatcher>,
     dag_state: Arc<RwLock<DagState>>,
-    rx_accepted_block_broadcast: broadcast::Receiver<(VerifiedBlock, CommitIndex)>,
+    rx_accepted_block_broadcast: broadcast::Receiver<VerifiedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
     block_verifier: Arc<dyn BlockVerifier>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
@@ -51,7 +51,7 @@ impl ObserverService {
         context: Arc<Context>,
         core_dispatcher: Arc<dyn CoreThreadDispatcher>,
         dag_state: Arc<RwLock<DagState>>,
-        rx_accepted_block_broadcast: broadcast::Receiver<(VerifiedBlock, CommitIndex)>,
+        rx_accepted_block_broadcast: broadcast::Receiver<VerifiedBlock>,
         block_verifier: Arc<dyn BlockVerifier>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         transaction_vote_tracker: TransactionVoteTracker,
@@ -250,12 +250,12 @@ impl ObserverNetworkService for ObserverService {
                 .map(move |block| block.serialized().clone()),
         );
 
-        let live_stream = BroadcastStream::<(VerifiedBlock, CommitIndex)>::new(
+        let live_stream = BroadcastStream::<VerifiedBlock>::new(
             PeerId::Observer(Box::new(peer)),
             self.rx_accepted_block_broadcast.resubscribe(),
             self.subscription_counter.clone(),
         )
-        .map(|(block, _commit_index)| block.serialized().clone());
+        .map(|block| block.serialized().clone());
 
         Ok(Box::pin(past_stream.chain(live_stream)))
     }
@@ -319,8 +319,7 @@ mod tests {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let (tx_accepted_block, rx_accepted_block) =
-            broadcast::channel::<(VerifiedBlock, CommitIndex)>(100);
+        let (tx_accepted_block, rx_accepted_block) = broadcast::channel::<VerifiedBlock>(100);
 
         // Create mock dependencies
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
@@ -360,9 +359,9 @@ mod tests {
         let block2 = VerifiedBlock::new_for_test(TestBlock::new(10, 1).build());
         let block3 = VerifiedBlock::new_for_test(TestBlock::new(15, 2).build());
 
-        tx_accepted_block.send((block1.clone(), 1)).unwrap();
-        tx_accepted_block.send((block2.clone(), 2)).unwrap();
-        tx_accepted_block.send((block3.clone(), 3)).unwrap();
+        tx_accepted_block.send(block1.clone()).unwrap();
+        tx_accepted_block.send(block2.clone()).unwrap();
+        tx_accepted_block.send(block3.clone()).unwrap();
 
         // Verify observer receives all three blocks in order
         let block1 = stream.next().await.unwrap();
@@ -393,8 +392,7 @@ mod tests {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
-        let (_tx_accepted_block, rx_accepted_block) =
-            broadcast::channel::<(VerifiedBlock, CommitIndex)>(100);
+        let (_tx_accepted_block, rx_accepted_block) = broadcast::channel::<VerifiedBlock>(100);
 
         // Create mock dependencies
         let core_dispatcher = Arc::new(MockCoreThreadDispatcher::default());
