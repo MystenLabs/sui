@@ -2639,18 +2639,6 @@ checksum = "55248b47b0caf0546f7988906588779981c43bb1bc9d0c44087278f80cdb44ba"
 
 [[package]]
 name = "bb8"
-version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b10cf871f3ff2ce56432fddc2615ac7acc3aa22ca321f8fea800846fbb32f188"
-dependencies = [
- "async-trait",
- "futures-util",
- "parking_lot 0.12.3",
- "tokio",
-]
-
-[[package]]
-name = "bb8"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "457d7ed3f888dfd2c7af56d4975cade43c622f74bdcddfed6d4352f57acc6310"
@@ -2663,12 +2651,11 @@ dependencies = [
 
 [[package]]
 name = "bb8-postgres"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56ac82c42eb30889b5c4ee4763a24b8c566518171ebea648cd7e3bc532c60680"
+checksum = "e570e6557cd0f88d28d32afa76644873271a70dc22656df565b2021c4036aa9c"
 dependencies = [
- "async-trait",
- "bb8 0.8.5",
+ "bb8",
  "tokio",
  "tokio-postgres",
 ]
@@ -4808,7 +4795,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b95864e58597509106f1fddfe0600de7e589e1fddddd87f54eee0a49fd111bbc"
 dependencies = [
- "bb8 0.9.1",
+ "bb8",
  "diesel",
  "futures-core",
  "futures-util",
@@ -16241,7 +16228,7 @@ version = "1.72.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "bb8 0.9.1",
+ "bb8",
  "chrono",
  "clap",
  "diesel",
@@ -16556,7 +16543,7 @@ name = "sui-rpc-benchmark"
 version = "1.72.0"
 dependencies = [
  "anyhow",
- "bb8 0.8.5",
+ "bb8",
  "bb8-postgres",
  "chrono",
  "clap",
