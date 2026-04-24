@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
 
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -157,10 +156,6 @@ pub(crate) fn pipeline<H: Handler>(
         .unwrap_or_else(|| (num_cpus::get() / 2).max(4));
     let (collector_tx, committer_rx) = mpsc::channel::<BatchedRows<H>>(pipeline_depth);
 
-    // Shared counter for rows in the reorder buffer (including the batch being assembled).
-    // Owned by the collector; the committer only reads it for its `pending = ...` log field.
-    let pending_rows = Arc::new(AtomicUsize::new(0));
-
     let handler = Arc::new(handler);
 
     let s_processor = processor(
@@ -181,10 +176,9 @@ pub(crate) fn pipeline<H: Handler>(
         min_eager_rows,
         max_batch_checkpoints,
         collector_tx,
-        pending_rows.clone(),
     );
 
-    let s_committer = committer::<H>(handler, store, metrics.clone(), committer_rx, pending_rows);
+    let s_committer = committer::<H>(handler, store, metrics.clone(), committer_rx);
 
     s_processor.merge(s_collector).merge(s_committer)
 }
@@ -264,7 +258,6 @@ mod tests {
         let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
         let (collector_tx, committer_rx) =
             mpsc::channel::<BatchedRows<TestHandler>>(pipeline_depth);
-        let pending_rows = Arc::new(AtomicUsize::new(0));
 
         let store_clone = store.clone();
         let handler = Arc::new(TestHandler);
@@ -278,9 +271,8 @@ mod tests {
             min_eager_rows,
             max_batch_checkpoints,
             collector_tx,
-            pending_rows.clone(),
         );
-        let s_committer = committer(handler, store_clone, metrics, committer_rx, pending_rows);
+        let s_committer = committer(handler, store_clone, metrics, committer_rx);
 
         TestSetup {
             store,

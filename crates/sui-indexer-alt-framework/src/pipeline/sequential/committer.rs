@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering as AtomicOrdering;
 use std::time::Duration;
 
 use backoff::ExponentialBackoff;
@@ -34,7 +32,6 @@ pub(super) fn committer<H: Handler>(
     store: H::Store,
     metrics: Arc<IndexerMetrics>,
     mut rx: mpsc::Receiver<BatchedRows<H>>,
-    pending_rows: Arc<AtomicUsize>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         info!(pipeline = H::NAME, "Starting committer");
@@ -91,7 +88,6 @@ pub(super) fn committer<H: Handler>(
                             pipeline = H::NAME,
                             elapsed_ms = elapsed * 1000.0,
                             committed = batch_rows,
-                            pending = pending_rows.load(AtomicOrdering::Relaxed),
                             "Error writing batch: {e}",
                         );
                         metrics
@@ -109,7 +105,6 @@ pub(super) fn committer<H: Handler>(
                 pipeline = H::NAME,
                 affected,
                 committed = batch_rows,
-                pending = pending_rows.load(AtomicOrdering::Relaxed),
                 "Wrote batch",
             );
             logger.log::<H>(&watermark, elapsed);

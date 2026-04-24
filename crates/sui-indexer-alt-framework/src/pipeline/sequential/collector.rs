@@ -4,8 +4,6 @@
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering as AtomicOrdering;
 
 use sui_futures::service::Service;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
@@ -52,7 +50,6 @@ pub(super) fn collector<H: Handler>(
     min_eager_rows: usize,
     max_batch_checkpoints: usize,
     committer_tx: mpsc::Sender<BatchedRows<H>>,
-    pending_rows: Arc<AtomicUsize>,
 ) -> Service {
     Service::new().spawn_aborting(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
@@ -75,6 +72,7 @@ pub(super) fn collector<H: Handler>(
         // Data for checkpoint that haven't been written yet. Note that `pending_rows` includes
         // rows in `batch`.
         let mut pending: BTreeMap<u64, IndexedCheckpoint<H>> = BTreeMap::new();
+        let mut pending_rows: usize = 0;
 
         info!(pipeline = H::NAME, "Starting collector");
 
@@ -139,7 +137,7 @@ pub(super) fn collector<H: Handler>(
                                     .inc();
 
                                 let indexed = entry.remove();
-                                pending_rows.fetch_sub(indexed.len(), AtomicOrdering::Relaxed);
+                                pending_rows -= indexed.len();
                             }
                         }
                     }
@@ -150,7 +148,7 @@ pub(super) fn collector<H: Handler>(
                         pipeline = H::NAME,
                         elapsed_ms = elapsed * 1000.0,
                         rows = batch_rows,
-                        pending = pending_rows.load(AtomicOrdering::Relaxed),
+                        pending = pending_rows,
                         "Gathered batch",
                     );
 
@@ -208,7 +206,7 @@ pub(super) fn collector<H: Handler>(
                         break;
                     }
 
-                    pending_rows.fetch_sub(batch_rows, AtomicOrdering::Relaxed);
+                    pending_rows -= batch_rows;
                     batch_checkpoints = 0;
                     batch_rows = 0;
 
@@ -228,16 +226,14 @@ pub(super) fn collector<H: Handler>(
                         .with_label_values(&[H::NAME])
                         .inc_by(indexed.len() as u64);
 
-                    let new_pending =
-                        pending_rows.fetch_add(indexed.len(), AtomicOrdering::Relaxed)
-                            + indexed.len();
+                    pending_rows += indexed.len();
                     pending.insert(indexed.checkpoint(), indexed);
 
                     // Once data has been inserted, check if we need to schedule a write before the
                     // next polling interval. This is appropriate if there are a minimum number of
                     // rows to write, and they are already in the batch, or we can process the next
                     // checkpoint to extract them.
-                    if new_pending < min_eager_rows {
+                    if pending_rows < min_eager_rows {
                         continue;
                     }
 
