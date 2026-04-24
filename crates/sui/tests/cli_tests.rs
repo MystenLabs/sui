@@ -21,7 +21,7 @@ use sui::client_commands::{
 use sui::client_ptb::ptb::PTB;
 use sui::sui_commands::RpcArgs;
 use sui_keys::key_identity::KeyIdentity;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_rpc_api::Client;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::effects::TransactionEffectsAPI;
@@ -3496,6 +3496,13 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
 async fn test_send_funds_sui() -> Result<(), anyhow::Error> {
     let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
         test_cluster_helper().await;
+    let protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::max(),
+        test_cluster.get_chain_identifier().chain(),
+    );
+    if !protocol_config.enable_address_balance_gas_payments() {
+        return Ok(());
+    }
     let recipient1 = &recipients[0];
     let address2 = addresses[0];
     let context = &mut test_cluster.wallet;
