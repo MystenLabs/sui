@@ -100,7 +100,6 @@ fn build_tonic_services(out_dir: &Path) {
                 .output_type("crate::network::observer::BlockStreamResponse")
                 .codec_path(codec_path)
                 .server_streaming()
-                .client_streaming()
                 .build(),
         )
         .method(

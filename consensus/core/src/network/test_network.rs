@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
@@ -17,7 +15,6 @@ use crate::{
     network::{
         BlockStream, NodeId, ObserverBlockStream, ObserverBlockStreamItem, ObserverNetworkService,
         PeerId, ValidatorNetworkService,
-        observer::{StartBlockStream, block_stream_request::Command},
     },
 };
 
@@ -29,7 +26,6 @@ pub(crate) struct TestService {
     pub(crate) handle_subscribe_blocks: Vec<(AuthorityIndex, Round)>,
     pub(crate) handle_fetch_commits: Vec<(AuthorityIndex, CommitRange)>,
     pub(crate) handle_stream_blocks: Vec<NodeId>,
-    pub(crate) stream_commands_received: Arc<Mutex<Vec<Command>>>,
     pub(crate) own_blocks: Vec<ExtendedSerializedBlock>,
     pub(crate) highest_commit_index: u64,
 }
@@ -42,7 +38,6 @@ impl TestService {
             handle_subscribe_blocks: Vec::new(),
             handle_fetch_commits: Vec::new(),
             handle_stream_blocks: Vec::new(),
-            stream_commands_received: Arc::new(Mutex::new(Vec::new())),
             own_blocks: Vec::new(),
             highest_commit_index: 0,
         }
@@ -144,12 +139,6 @@ impl ObserverNetworkService for Mutex<TestService> {
         {
             let mut state = self.lock();
             state.handle_stream_blocks.push(peer);
-            state
-                .stream_commands_received
-                .lock()
-                .push(Command::Start(StartBlockStream {
-                    highest_round_per_authority: highest_round_per_authority.clone(),
-                }));
         }
 
         let (blocks_to_send, highest_commit_index) = {

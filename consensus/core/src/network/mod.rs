@@ -250,11 +250,6 @@ pub(crate) struct ObserverBlockStreamItem {
 pub(crate) type ObserverBlockStream =
     Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send + 'static>>;
 
-/// Observer block request stream type for bidirectional streaming.
-#[allow(dead_code)]
-pub(crate) type BlockRequestStream =
-    Pin<Box<dyn Stream<Item = crate::network::observer::BlockStreamRequest> + Send + 'static>>;
-
 /// Observer network service for handling requests from observer nodes.
 /// Unlike ValidatorNetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
 /// to identify peers since observers are not part of the committee.
