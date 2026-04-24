@@ -201,11 +201,11 @@ mod testing {
     };
     use move_binary_format::{
         errors::{PartialVMError, PartialVMResult},
-        partial_vm_error, safe_unwrap,
+        partial_vm_error,
     };
     use move_core_types::{
-        account_address::AccountAddress, annotated_value as A, compressed::runtime as CR,
-        language_storage::TypeTag, runtime_value as R,
+        account_address::AccountAddress, annotated_value as A, compressed::annotated as CA,
+        compressed::runtime as CR, language_storage::TypeTag, runtime_value as R,
     };
     use std::{fmt, fmt::Write};
 
@@ -233,20 +233,14 @@ mod testing {
     fn get_annotated_struct_layout(
         context: &NativeContext,
         ty: &Type,
-    ) -> PartialVMResult<A::MoveDatatypeLayout> {
+    ) -> PartialVMResult<CA::MoveDatatypeLayout> {
         let annotated_type_layout = context.type_to_fully_annotated_layout(ty)?.unwrap();
-        match annotated_type_layout {
-            A::MoveTypeLayout::Struct(annotated_struct_layout) => {
-                Ok(A::MoveDatatypeLayout::Struct(annotated_struct_layout))
-            }
-            A::MoveTypeLayout::Enum(annotated_enum_layout) => {
-                Ok(A::MoveDatatypeLayout::Enum(annotated_enum_layout))
-            }
-            _ => Err(partial_vm_error!(
+        CA::MoveDatatypeLayout::new(annotated_type_layout).ok_or_else(|| {
+            partial_vm_error!(
                 INTERNAL_TYPE_ERROR,
                 "Could not convert Type to fully-annotated MoveTypeLayout via NativeContext"
-            )),
-        }
+            )
+        })
     }
 
     fn get_vector_inner_type(ty: &Type) -> PartialVMResult<&Type> {
@@ -327,22 +321,20 @@ mod testing {
     ) -> PartialVMResult<()> {
         // get type layout in VM format
         let ty_layout = context.type_to_type_layout(&ty)?.unwrap();
-        let compressed_ty_layout = safe_unwrap!(CR::MoveTypeLayout::try_from(&ty_layout));
 
-        match &ty_layout {
-            R::MoveTypeLayout::Vector(_) => {
+        match &ty_layout.as_view() {
+            CR::MoveLayoutView::Vector(inner_tyl) => {
                 // get the inner type T of a vector<T>
                 let inner_ty = get_vector_inner_type(&ty)?;
-                let inner_tyl = context.type_to_type_layout(inner_ty)?.unwrap();
 
-                match inner_tyl {
+                match inner_tyl.as_view() {
                     // We cannot simply convert a `Value` (of type vector) to a `MoveValue` because
                     // there might be a struct in the vector that needs to be "decorated" using the
                     // logic in this function. Instead, we recursively "unpack" the vector until we
                     // get down to either (1) a primitive type, which we can forward to
                     // `print_move_value`, or (2) a struct type, which we can decorate and forward
                     // to `print_move_value`.
-                    R::MoveTypeLayout::Vector(_) | R::MoveTypeLayout::Struct(_) => {
+                    CR::MoveLayoutView::Vector(_) | CR::MoveLayoutView::Struct(_) => {
                         // `val` is either a `Vec<Vec<Value>>`, a `Vec<Struct>`,  or a `Vec<signer>`, so we cast `val` as a `Vec<Value>` and call ourselves recursively
                         let vec = VMValueCast::<Vec<Value>>::cast(val)?;
 
@@ -384,8 +376,8 @@ mod testing {
                     _ => {
                         let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
                         let mv = val
-                            .as_move_value(compressed_ty_layout.as_ref())?
-                            .decorate(&ann_ty_layout);
+                            .as_move_value(ty_layout.as_ref())?
+                            .decorate_compressed(&ann_ty_layout);
                         print_move_value(
                             out,
                             mv,
@@ -399,8 +391,8 @@ mod testing {
                 };
             }
             // For a struct, we convert it to a MoveValue annotated with its field names and types and print it
-            R::MoveTypeLayout::Struct(_) => {
-                let move_struct = match val.as_move_value(compressed_ty_layout.as_ref())? {
+            CR::MoveLayoutView::Struct(_) => {
+                let move_struct = match val.as_move_value(ty_layout.as_ref())? {
                     R::MoveValue::Struct(s) => s,
                     _ => {
                         return Err(partial_vm_error!(
@@ -410,15 +402,15 @@ mod testing {
                     }
                 };
 
-                let A::MoveDatatypeLayout::Struct(annotated_struct_layout) =
-                    get_annotated_struct_layout(context, &ty)?
+                let CA::MoveLayoutView::Struct(annotated_struct_layout) =
+                    get_annotated_struct_layout(context, &ty)?.as_view()
                 else {
                     return Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
                         "Expected MoveDatatypeLayout::Struct"
                     ));
                 };
-                let decorated_struct = move_struct.decorate(&annotated_struct_layout);
+                let decorated_struct = move_struct.decorate_compressed(&annotated_struct_layout);
 
                 print_move_value(
                     out,
@@ -430,8 +422,8 @@ mod testing {
                     include_int_types,
                 )?;
             }
-            R::MoveTypeLayout::Enum(_) => {
-                let move_struct = match val.as_move_value(compressed_ty_layout.as_ref())? {
+            CR::MoveLayoutView::Enum(_) => {
+                let move_struct = match val.as_move_value(ty_layout.as_ref())? {
                     R::MoveValue::Variant(v) => v,
                     _ => {
                         return Err(partial_vm_error!(
@@ -441,15 +433,15 @@ mod testing {
                     }
                 };
 
-                let A::MoveDatatypeLayout::Enum(annotated_enum_layout) =
-                    get_annotated_struct_layout(context, &ty)?
+                let CA::MoveLayoutView::Enum(annotated_enum_layout) =
+                    get_annotated_struct_layout(context, &ty)?.as_view()
                 else {
                     return Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
                         "Expected MoveDatatypeLayout::Enum"
                     ));
                 };
-                let decorated_struct = move_struct.decorate(&annotated_enum_layout);
+                let decorated_struct = move_struct.decorate_compressed(&annotated_enum_layout);
 
                 print_move_value(
                     out,
@@ -466,8 +458,8 @@ mod testing {
                 let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
                 print_move_value(
                     out,
-                    val.as_move_value(compressed_ty_layout.as_ref())?
-                        .decorate(&ann_ty_layout),
+                    val.as_move_value(ty_layout.as_ref())?
+                        .decorate_compressed(&ann_ty_layout),
                     move_std_addr,
                     depth,
                     canonicalize,
