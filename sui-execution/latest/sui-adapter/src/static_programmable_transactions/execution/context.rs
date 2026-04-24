@@ -29,6 +29,7 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
+    compressed::runtime as CR,
     identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
     u256::U256,
@@ -640,7 +641,7 @@ where
             )?;
             let abilities = ty.abilities();
             let has_public_transfer = abilities.has_store();
-            let Some(bytes) = value.typed_serialize(&layout) else {
+            let Some(bytes) = value.typed_serialize(layout.as_ref()) else {
                 invariant_violation!("Failed to serialize already deserialized Move value");
             };
             // safe because has_public_transfer has been determined by the abilities
@@ -715,7 +716,7 @@ where
                 let layout = vm
                     .runtime_type_layout(&type_tag)
                     .map_err(|e| self.env.convert_linked_vm_error(e, linkage))?;
-                let Some(bytes) = value.typed_serialize(&layout) else {
+                let Some(bytes) = value.typed_serialize(layout.as_ref()) else {
                     invariant_violation!("Failed to serialize Move event");
                 };
                 let TypeTag::Struct(tag) = type_tag else {
@@ -772,7 +773,7 @@ where
         vm: &MoveVM,
         linkage: &ExecutableLinkage,
         tag: StructTag,
-    ) -> Result<(Type, move_core_types::runtime_value::MoveTypeLayout), Mode::Error> {
+    ) -> Result<(Type, CR::MoveTypeLayout), Mode::Error> {
         let type_tag = TypeTag::Struct(Box::new(tag));
         let vm_type = vm
             .load_type(&type_tag)
@@ -1452,7 +1453,7 @@ where
             }
         };
         let layout = self.env.runtime_layout(&ty)?;
-        let Some(bytes) = value.typed_serialize(&layout) else {
+        let Some(bytes) = value.typed_serialize(layout.as_ref()) else {
             invariant_violation!("Failed to serialize Move value");
         };
         let arg = match location {
@@ -1517,7 +1518,7 @@ where
             _ => (result, ty),
         };
         let layout = self.env.runtime_layout(&ty)?;
-        let Some(bytes) = v.typed_serialize(&layout) else {
+        let Some(bytes) = v.typed_serialize(layout.as_ref()) else {
             invariant_violation!("Failed to serialize Move value");
         };
         let Ok(tag): Result<TypeTag, _> = ty.try_into() else {

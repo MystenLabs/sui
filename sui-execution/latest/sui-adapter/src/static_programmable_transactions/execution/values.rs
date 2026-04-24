@@ -9,7 +9,7 @@ use crate::{
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::account_address::AccountAddress;
-use move_core_types::runtime_value::MoveTypeLayout;
+use move_core_types::compressed::runtime as CR;
 use move_core_types::u256::U256;
 use move_vm_runtime::execution::interpreter::locals::{BaseHeap as VMBaseHeap, BaseHeapId};
 use move_vm_runtime::shared::views::ValueVisitor;
@@ -187,7 +187,7 @@ impl Value {
         ty: Type,
     ) -> Result<Value, Mode::Error> {
         let layout = env.runtime_layout(&ty)?;
-        let Some(value) = VMValue::simple_deserialize(bytes, &layout) else {
+        let Some(value) = VMValue::simple_deserialize(bytes, layout.as_ref()) else {
             // we already checked the layout of pure bytes during typing
             // and objects should already be valid
             invariant_violation!("unable to deserialize value to type {ty:?}")
@@ -195,7 +195,7 @@ impl Value {
         Ok(Value(value))
     }
 
-    pub fn typed_serialize(&self, layout: &MoveTypeLayout) -> Option<Vec<u8>> {
+    pub fn typed_serialize(&self, layout: CR::MoveTypeLayoutRef<'_>) -> Option<Vec<u8>> {
         self.0.typed_serialize(layout)
     }
 
