@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use futures::StreamExt;
+use move_core_types::account_address::AccountAddress;
 use sui_futures::service::Service;
 use sui_indexer_alt_reader::kv_loader::TransactionContents as NativeTransactionContents;
 use sui_package_resolver::Package;
@@ -32,6 +33,7 @@ use sui_types::object::Object as NativeObject;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
 use tokio::sync::broadcast;
+use tokio::sync::mpsc::UnboundedSender;
 use tonic::Streaming;
 use tonic::transport::Endpoint;
 use tonic::transport::Uri;
@@ -40,7 +42,6 @@ use tracing::info;
 use crate::config::SubscriptionConfig;
 use crate::scope::ExecutionObjectMap;
 
-use super::EvictionQueue;
 use super::StreamingPackageStore;
 use super::SubscriptionReadiness;
 use super::processed_checkpoint::ProcessedCheckpoint;
@@ -102,7 +103,7 @@ pub(crate) struct CheckpointStreamTask {
     sender: broadcast::Sender<Arc<ProcessedCheckpoint>>,
     broadcaster: CheckpointBroadcaster,
     streaming_packages: Arc<StreamingPackageStore>,
-    eviction_queue: Arc<EvictionQueue>,
+    package_eviction_tx: UnboundedSender<(u64, Vec<AccountAddress>)>,
     readiness: Arc<SubscriptionReadiness>,
 }
 
@@ -111,7 +112,7 @@ impl CheckpointStreamTask {
         uri: Uri,
         config: &SubscriptionConfig,
         streaming_packages: Arc<StreamingPackageStore>,
-        eviction_queue: Arc<EvictionQueue>,
+        package_eviction_tx: UnboundedSender<(u64, Vec<AccountAddress>)>,
         readiness: Arc<SubscriptionReadiness>,
     ) -> Self {
         let (sender, broadcaster) = broadcast::channel(config.broadcast_buffer);
@@ -120,7 +121,7 @@ impl CheckpointStreamTask {
             sender,
             broadcaster,
             streaming_packages,
-            eviction_queue,
+            package_eviction_tx,
             readiness,
         }
     }
@@ -174,8 +175,9 @@ impl CheckpointStreamTask {
                         self.streaming_packages
                             .index_packages(sequence_number, &packages);
                         let ids = packages.iter().map(|p| p.storage_id()).collect();
-                        self.eviction_queue
-                            .record_checkpoint_packages_mapping(sequence_number, ids);
+                        // Send errors only if the eviction task has exited — at that
+                        // point nothing will drain the store, but we keep serving.
+                        let _ = self.package_eviction_tx.send((sequence_number, ids));
                     }
                     let processed = process_checkpoint(checkpoint)?;
                     // Ignore send errors — no active subscribers is a normal state

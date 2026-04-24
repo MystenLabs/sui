@@ -167,7 +167,7 @@ impl WatermarkTask {
 
     /// Receiver for observing watermark updates. Use `wait_for` with a predicate to await
     /// specific pipeline conditions.
-    pub(crate) fn watermarks_receiver(&self) -> watch::Receiver<Arc<Watermarks>> {
+    pub(crate) fn watermarks_rx(&self) -> watch::Receiver<Arc<Watermarks>> {
         self.watermarks_tx.subscribe()
     }
 
@@ -242,6 +242,9 @@ impl WatermarkTask {
                 );
 
                 let w = Arc::new(w);
+                // TODO: `WatermarksLock` is effectively a broadcast channel here — redundant
+                // with `watermarks_tx`. Follow-up to unify on `watch::Receiver<Arc<Watermarks>>`
+                // across request handlers and middleware.
                 *watermarks.write().await = w.clone();
                 let _ = watermarks_tx.send(w);
             }

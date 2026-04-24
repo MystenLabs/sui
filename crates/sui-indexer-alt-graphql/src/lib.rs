@@ -368,26 +368,27 @@ pub async fn start_rpc(
     );
 
     let streaming_setup = subscription_args.checkpoint_stream_url.map(|uri| {
-        let lru = task::streaming::LruPackageStore::new(
+        let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
             package_store.clone(),
-            config.subscription.package_lru_capacity,
-        );
-        let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(lru));
-        let eviction_queue = task::streaming::EvictionQueue::new();
-        let readiness =
-            task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_receiver());
+        ));
+        // Unbounded is intentional: if `kv_packages` lags long enough for this queue to
+        // grow without bound, the indexer infrastructure itself has a bigger problem and
+        // OOM on this service is one failure mode among many. Monitor via metrics.
+        #[allow(clippy::disallowed_methods)]
+        let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
+        let readiness = task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
         let stream_task = task::streaming::CheckpointStreamTask::new(
             uri,
             &config.subscription,
             streaming_packages.clone(),
-            eviction_queue.clone(),
+            package_eviction_tx,
             readiness.clone(),
         );
         let eviction_task = task::streaming::PackageEvictionTask::new(
             streaming_packages.clone(),
-            eviction_queue,
+            package_eviction_rx,
             watermark_task.watermarks(),
-            Duration::from_millis(config.subscription.eviction_interval_ms),
+            Duration::from_millis(config.subscription.package_eviction_interval_ms),
         );
         (stream_task, eviction_task, streaming_packages, readiness)
     });
@@ -421,26 +422,37 @@ pub async fn start_rpc(
     let subscriptions_enabled = streaming_setup.is_some();
     rpc = rpc.layer(SubscriptionsEnabled(subscriptions_enabled));
 
-    if let Some((ref stream_task, _, ref streaming_packages, ref readiness)) = streaming_setup {
-        rpc = rpc
-            .data(stream_task.broadcaster())
-            .data(streaming_packages.clone())
-            .data(readiness.clone());
-    }
-
-    let s_rpc = rpc.run().await?;
     let s_system_package_task = system_package_task.run();
     let s_watermark = watermark_task.run();
+
+    // Spawn the streaming tasks and wait for subscriptions to be ready before
+    // binding the listener, so the schema is only advertised once `kv_packages`
+    // has caught up to the first streamed checkpoint.
+    let streaming_handles = if let Some((
+        stream_task,
+        eviction_task,
+        streaming_packages,
+        readiness,
+    )) = streaming_setup
+    {
+        rpc = rpc.data(stream_task.broadcaster()).data(streaming_packages);
+        let s_stream = stream_task.run();
+        let s_eviction = eviction_task.run();
+        readiness.wait_for_ready().await?;
+        Some((s_stream, s_eviction))
+    } else {
+        None
+    };
+
+    let s_rpc = rpc.run().await?;
 
     let mut service = s_rpc
         .attach(s_chain_id)
         .attach(s_system_package_task)
         .attach(s_watermark);
 
-    if let Some((stream_task, eviction_task, _, _)) = streaming_setup {
-        service = service
-            .attach(stream_task.run())
-            .attach(eviction_task.run());
+    if let Some((s_stream, s_eviction)) = streaming_handles {
+        service = service.attach(s_stream).attach(s_eviction);
     }
 
     Ok(service)

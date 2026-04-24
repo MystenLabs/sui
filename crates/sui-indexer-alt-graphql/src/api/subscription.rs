@@ -13,7 +13,6 @@ use crate::error::RpcError;
 use crate::scope::Scope;
 use crate::task::streaming::CheckpointBroadcaster;
 use crate::task::streaming::StreamingPackageStore;
-use crate::task::streaming::SubscriptionReadiness;
 
 #[derive(Default)]
 pub struct Subscription;
@@ -31,13 +30,8 @@ impl Subscription {
         let limits: &Limits = ctx.data()?;
         let resolver_limits = limits.package_resolver();
         let broadcaster: &CheckpointBroadcaster = ctx.data()?;
-        let readiness = ctx.data::<Arc<SubscriptionReadiness>>()?.clone();
 
         Ok(async_stream::stream! {
-            if let Err(e) = readiness.wait_for_ready().await {
-                yield Err(e.into());
-                return;
-            }
             let mut receiver = broadcaster.resubscribe();
             loop {
                 match receiver.recv().await {

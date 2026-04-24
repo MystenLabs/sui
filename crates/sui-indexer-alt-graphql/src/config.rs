@@ -235,24 +235,16 @@ pub struct SubscriptionConfig {
     /// Subscribers that fall behind by this many checkpoints receive a lagged error.
     pub broadcast_buffer: usize,
 
-    /// Capacity of the LRU layer in the streaming package pipeline.
-    ///
-    /// Sits between the streaming index (for packages not yet in the DB) and the shared
-    /// PackageCache → DB. Caches frequently accessed packages to avoid DB round-trips.
-    /// Eviction here is harmless — the DB always has these packages.
-    pub package_lru_capacity: u64,
-
     /// How often (in milliseconds) the eviction task checks the `kv_packages` watermark
     /// and evicts indexed packages from the streaming index.
-    pub eviction_interval_ms: u64,
+    pub package_eviction_interval_ms: u64,
 }
 
 impl Default for SubscriptionConfig {
     fn default() -> Self {
         Self {
             broadcast_buffer: 256,
-            package_lru_capacity: 1024,
-            eviction_interval_ms: 300_000,
+            package_eviction_interval_ms: 300_000,
         }
     }
 }
@@ -262,20 +254,16 @@ impl Default for SubscriptionConfig {
 #[serde(deny_unknown_fields)]
 pub struct SubscriptionLayer {
     pub broadcast_buffer: Option<usize>,
-    pub package_lru_capacity: Option<u64>,
-    pub eviction_interval_ms: Option<u64>,
+    pub package_eviction_interval_ms: Option<u64>,
 }
 
 impl SubscriptionLayer {
     pub(crate) fn finish(self, base: SubscriptionConfig) -> SubscriptionConfig {
         SubscriptionConfig {
             broadcast_buffer: self.broadcast_buffer.unwrap_or(base.broadcast_buffer),
-            package_lru_capacity: self
-                .package_lru_capacity
-                .unwrap_or(base.package_lru_capacity),
-            eviction_interval_ms: self
-                .eviction_interval_ms
-                .unwrap_or(base.eviction_interval_ms),
+            package_eviction_interval_ms: self
+                .package_eviction_interval_ms
+                .unwrap_or(base.package_eviction_interval_ms),
         }
     }
 }
@@ -548,8 +536,7 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
     fn from(value: SubscriptionConfig) -> Self {
         Self {
             broadcast_buffer: Some(value.broadcast_buffer),
-            package_lru_capacity: Some(value.package_lru_capacity),
-            eviction_interval_ms: Some(value.eviction_interval_ms),
+            package_eviction_interval_ms: Some(value.package_eviction_interval_ms),
         }
     }
 }

@@ -22,7 +22,7 @@ pub(crate) struct StreamedPackageStore<S> {
     /// Primary index: packages from streamed checkpoints not yet in the DB.
     packages: DashMap<AccountAddress, IndexedPackage>,
 
-    /// Fallback store (typically LruPackageStore → PackageCache → DB).
+    /// Fallback store (typically the shared PackageCache → DB).
     inner: S,
 }
 

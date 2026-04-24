@@ -4,7 +4,7 @@
 use std::sync::Arc;
 use std::sync::OnceLock;
 
-use anyhow::anyhow;
+use anyhow::Context;
 use tokio::sync::watch;
 
 use crate::task::watermark::KV_PACKAGES_PIPELINE;
@@ -49,7 +49,8 @@ impl SubscriptionReadiness {
                     .is_some_and(|p| p.hi().checkpoint() >= target)
             })
             .await
-            .map_err(|_| anyhow!("Watermark task shut down before subscriptions became ready"))?;
+            .ok()
+            .context("Watermark task shut down before subscriptions became ready")?;
         Ok(())
     }
 }
