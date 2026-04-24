@@ -310,6 +310,7 @@ impl CompositeWorkloadConfig {
         probabilities.insert(ObjectBalanceOverdraw::NAME, 0.1);
         probabilities.insert(AuthenticatedEventEmit::NAME, 0.1);
         probabilities.insert(ImmutableObjectRead::NAME, 0.2);
+        probabilities.insert(CoinReservationWithdraw::NAME, 0.1);
         Self {
             probabilities,
             alias_tx_probability: 0.3,
