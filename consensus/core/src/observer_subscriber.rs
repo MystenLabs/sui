@@ -260,7 +260,7 @@ mod tests {
         commit::{CommitRange, TrustedCommit},
         context::Context,
         error::ConsensusResult,
-        network::{NodeId, ObserverBlockStream, ObserverBlockStreamItem},
+        network::{NodeId, ObserverBlockStream},
         storage::mem_store::MemStore,
     };
 
@@ -288,11 +288,7 @@ mod tests {
 
             let block_stream = stream::unfold(block_value, move |val| async move {
                 sleep(Duration::from_millis(1)).await;
-                let item = ObserverBlockStreamItem {
-                    block: Bytes::from(vec![val; 8]),
-                    highest_commit_index: 42,
-                };
-                Some((item, val))
+                Some((Bytes::from(vec![val; 8]), val))
             })
             .take(10);
             Ok(Box::pin(block_stream))
@@ -320,7 +316,7 @@ mod tests {
     }
 
     struct ObserverSubscriberTestService {
-        handle_block_calls: Mutex<Vec<(PeerId, ObserverBlockStreamItem)>>,
+        handle_block_calls: Mutex<Vec<(PeerId, Bytes)>>,
     }
 
     impl ObserverSubscriberTestService {
@@ -333,12 +329,8 @@ mod tests {
 
     #[async_trait]
     impl ObserverNetworkService for ObserverSubscriberTestService {
-        async fn handle_block(
-            &self,
-            peer: PeerId,
-            item: ObserverBlockStreamItem,
-        ) -> ConsensusResult<()> {
-            self.handle_block_calls.lock().push((peer, item));
+        async fn handle_block(&self, peer: PeerId, block: Bytes) -> ConsensusResult<()> {
+            self.handle_block_calls.lock().push((peer, block));
             Ok(())
         }
 
@@ -403,10 +395,9 @@ mod tests {
         // blocks eventually.
         let calls = observer_service.handle_block_calls.lock();
         assert!(calls.len() >= 100);
-        for (p, item) in calls.iter() {
+        for (p, block) in calls.iter() {
             assert_eq!(*p, peer);
-            assert_eq!(item.block, Bytes::from(vec![3u8; 8])); // Peer index 2 + 1 = 3
-            assert_eq!(item.highest_commit_index, 42);
+            assert_eq!(*block, Bytes::from(vec![3u8; 8])); // Peer index 2 + 1 = 3
         }
     }
 
@@ -437,9 +428,9 @@ mod tests {
             let calls = observer_service.handle_block_calls.lock();
             assert!(!calls.is_empty(), "Should have received blocks from peer1");
             // Verify blocks are from peer1 (value = 0 + 1 = 1)
-            for (p, item) in calls.iter() {
+            for (p, block) in calls.iter() {
                 assert_eq!(*p, peer1);
-                assert_eq!(item.block, Bytes::from(vec![1u8; 8]));
+                assert_eq!(*block, Bytes::from(vec![1u8; 8]));
             }
         }
 
@@ -456,10 +447,10 @@ mod tests {
             let calls = observer_service.handle_block_calls.lock();
             assert!(!calls.is_empty(), "Should have received blocks from peer2");
             // Verify ALL blocks are from peer2 (value = 2 + 1 = 3), none from peer1
-            for (p, item) in calls.iter() {
+            for (p, block) in calls.iter() {
                 assert_eq!(*p, peer2, "All blocks should be from peer2 after override");
                 assert_eq!(
-                    item.block,
+                    *block,
                     Bytes::from(vec![3u8; 8]),
                     "Block content should match peer2"
                 );

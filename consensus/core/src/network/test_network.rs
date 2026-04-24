@@ -13,8 +13,8 @@ use crate::{
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{
-        BlockStream, NodeId, ObserverBlockStream, ObserverBlockStreamItem, ObserverNetworkService,
-        PeerId, ValidatorNetworkService,
+        BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService, PeerId,
+        ValidatorNetworkService,
     },
 };
 
@@ -27,7 +27,6 @@ pub(crate) struct TestService {
     pub(crate) handle_fetch_commits: Vec<(AuthorityIndex, CommitRange)>,
     pub(crate) handle_stream_blocks: Vec<NodeId>,
     pub(crate) own_blocks: Vec<ExtendedSerializedBlock>,
-    pub(crate) highest_commit_index: u64,
 }
 
 impl TestService {
@@ -39,18 +38,12 @@ impl TestService {
             handle_fetch_commits: Vec::new(),
             handle_stream_blocks: Vec::new(),
             own_blocks: Vec::new(),
-            highest_commit_index: 0,
         }
     }
 
     #[cfg_attr(msim, allow(dead_code))]
     pub(crate) fn add_own_blocks(&mut self, blocks: Vec<ExtendedSerializedBlock>) {
         self.own_blocks.extend(blocks);
-    }
-
-    #[cfg_attr(msim, allow(dead_code))]
-    pub(crate) fn set_highest_commit_index(&mut self, index: u64) {
-        self.highest_commit_index = index;
     }
 }
 
@@ -121,11 +114,7 @@ impl ValidatorNetworkService for Mutex<TestService> {
 
 #[async_trait]
 impl ObserverNetworkService for Mutex<TestService> {
-    async fn handle_block(
-        &self,
-        _peer: PeerId,
-        _block: ObserverBlockStreamItem,
-    ) -> ConsensusResult<()> {
+    async fn handle_block(&self, _peer: PeerId, _block: Bytes) -> ConsensusResult<()> {
         unimplemented!("ObserverNetworkService handle_block not implemented for TestService")
     }
 
@@ -141,7 +130,7 @@ impl ObserverNetworkService for Mutex<TestService> {
             state.handle_stream_blocks.push(peer);
         }
 
-        let (blocks_to_send, highest_commit_index) = {
+        let blocks_to_send = {
             let state = self.lock();
             let min_round = highest_round_per_authority
                 .iter()
@@ -149,22 +138,19 @@ impl ObserverNetworkService for Mutex<TestService> {
                 .copied()
                 .unwrap_or(0);
 
-            let blocks = state
+            state
                 .own_blocks
                 .iter()
                 .skip(min_round as usize + 1)
                 .cloned()
-                .collect::<Vec<_>>();
-
-            (blocks, state.highest_commit_index)
+                .collect::<Vec<_>>()
         };
 
-        let block_stream = stream::iter(blocks_to_send.into_iter().map(move |extended_block| {
-            ObserverBlockStreamItem {
-                block: extended_block.block,
-                highest_commit_index,
-            }
-        }));
+        let block_stream = stream::iter(
+            blocks_to_send
+                .into_iter()
+                .map(|extended_block| extended_block.block),
+        );
 
         Ok(Box::pin(block_stream))
     }
