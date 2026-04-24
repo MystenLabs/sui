@@ -1170,14 +1170,13 @@ async fn test_transaction_cache_race() {
     t2.join().unwrap();
 }
 
-// Regression test for a race between settlement-written accumulator updates and the
-// barrier bumping the root accumulator version. Settlement writes the accumulator
-// objects (including tombstones for drained accounts) before the barrier bumps the
-// root. A reader that hits `get_latest_account_amount` in between can observe the
-// post-settlement accumulator state (None, because it was just deleted) while still
-// seeing the pre-settlement root version — previously this returned (0, V) for an
-// account that actually held a non-zero balance at V. The MVCC fix makes settlement
-// appear atomic to readers.
+// Regression test for the race described in Mark's original report: an account at
+// version V is deleted by a settlement tx that writes a tombstone at V+1, but the
+// barrier tx that bumps the root from V to V+1 has not yet run. In that window a
+// reader observes (live object at V, tombstone at V+1, root at V). Before the MVCC
+// fix, `get_latest_account_amount` would read the latest account (the tombstone),
+// fall through to re-read the root (still V), and return (0, V) — even though the
+// correct balance at V was non-zero.
 #[tokio::test]
 async fn test_get_latest_account_amount_race_with_pending_settlement() {
     use crate::accumulators::funds_read::AccountFundsRead;
@@ -1199,22 +1198,17 @@ async fn test_get_latest_account_amount_race_with_pending_settlement() {
         BackpressureManager::new_for_tests(),
     ));
 
-    // Pre-settlement root is at V.
-    let root_version = SequenceNumber::from_u64(10);
+    // Pre-settlement state: root and live account are both at V.
+    let v = SequenceNumber::from_u64(10);
     let root_object = Object::with_id_owner_version_for_testing(
         SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-        root_version,
+        v,
         Owner::Shared {
             initial_shared_version: SequenceNumber::from_u64(1),
         },
     );
-    cache.write_object_entry(
-        &SUI_ACCUMULATOR_ROOT_OBJECT_ID,
-        root_version,
-        root_object.into(),
-    );
+    cache.write_object_entry(&SUI_ACCUMULATOR_ROOT_OBJECT_ID, v, root_object.into());
 
-    // Account object holds `expected_balance` at a version <= root_version.
     let (owner, _) = deterministic_random_account_key();
     let balance_type_tag: sui_types::TypeTag = Balance::type_(GAS::type_tag()).into();
     let expected_balance: u64 = 1_000;
@@ -1222,33 +1216,25 @@ async fn test_get_latest_account_amount_race_with_pending_settlement() {
         AccumulatorValue::create_for_testing(owner, balance_type_tag.clone(), expected_balance);
     let account_id = AccumulatorValue::get_field_id(owner, &balance_type_tag).unwrap();
     assert_eq!(account.id(), *account_id.inner());
-    let account_version = SequenceNumber::from_u64(8);
     let mut account_inner = account.into_inner();
     account_inner
         .data
         .try_as_move_mut()
         .unwrap()
-        .increment_version_to(account_version);
+        .increment_version_to(v);
     let account: Object = account_inner.into();
-    cache.write_object_entry(account_id.inner(), account_version, account.into());
+    cache.write_object_entry(account_id.inner(), v, account.into());
 
-    // Sanity check: reading the balance when root and account are consistent returns
-    // the expected balance at the root version.
+    // Simulate partial settlement: the settlement tx has written a tombstone for the
+    // account at V+1 (deleting it), but the barrier has NOT yet bumped the root from
+    // V to V+1.
+    cache.write_object_entry(account_id.inner(), v.next(), ObjectEntry::Deleted);
+
+    // The read must observe the pre-settlement balance at V: settlement must appear
+    // atomic to readers. Before the fix this returned (0, V) because the latest
+    // account read produced None (the tombstone at V+1) while the root had not
+    // advanced past V.
     let (balance, version) = AccountFundsRead::get_latest_account_amount(&*cache, &account_id);
-    assert_eq!(version, root_version);
-    assert_eq!(balance, expected_balance as u128);
-
-    // Simulate partial settlement: a settlement tx has written a tombstone for the
-    // account at root_version + 1, but the barrier has NOT yet bumped the root.
-    let settled_version = root_version.next();
-    cache.write_object_entry(account_id.inner(), settled_version, ObjectEntry::Deleted);
-
-    // Reading now should still observe the pre-settlement balance at the
-    // pre-settlement root version — settlement must appear atomic to readers. Before
-    // the fix, `get_latest_account_amount` returned (0, root_version) here because
-    // the latest account read produced None (the tombstone) while the root had not
-    // advanced.
-    let (balance, version) = AccountFundsRead::get_latest_account_amount(&*cache, &account_id);
-    assert_eq!(version, root_version);
+    assert_eq!(version, v);
     assert_eq!(balance, expected_balance as u128);
 }
