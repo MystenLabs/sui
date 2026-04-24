@@ -221,7 +221,9 @@ Your `src/schema.rs` file should now look like the following:
 After running the previous commands, your project is set up for the next steps:
 
 - PostgreSQL now has a `transaction_digests` table with the defined columns.
+
 - `src/schema.rs` contains automatically generated Rust code that represents this table structure.
+
 - You can now write type-safe Rust code that talks to this specific table.
 
 The Diesel's migration system evolves the database schema over time in a structured and version-controlled way. For a complete walkthrough, see the official Diesel [Getting Started guide](https://diesel.rs/guides/getting-started).
