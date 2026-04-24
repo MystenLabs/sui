@@ -41,11 +41,9 @@ wiremock.workspace = true
 
 [build-dependencies]
 cynic-codegen.workspace = true
-protox.workspace = true
-tonic-prost-build.workspace = true
 
 [lints]
 workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["cynic-codegen", "prost", "protox", "tonic-prost", "tonic-prost-build"]
+ignored = ["cynic-codegen", "prost", "tonic-prost"]
