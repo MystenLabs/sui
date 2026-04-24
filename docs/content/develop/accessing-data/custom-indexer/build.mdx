@@ -302,7 +302,7 @@ How sequential batching works:
 1. `batch()` accumulates values from multiple checkpoints.
 1. `commit()` writes the batch when framework reaches limits (`H::MAX_BATCH_CHECKPOINTS`).
 
-<ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/committer.rs" mode="code" tag="batch" />
+<ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/collector.rs" mode="code" tag="batch" />
 
 :::tip
 
