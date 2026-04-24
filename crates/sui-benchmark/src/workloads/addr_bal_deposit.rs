@@ -207,7 +207,7 @@ impl Workload<dyn Payload> for AddrBalDepositWorkload {
             let tx = tx_builder.build_and_sign(keypair.as_ref());
             let proxy_ref = execution_proxy.clone();
             futures.push(async move {
-                let (_, result) = proxy_ref.execute_transaction_block(tx).await;
+                let result = proxy_ref.execute_transaction_block(tx).await;
                 let effects = result.expect("Seed deposit should succeed");
                 (idx, effects)
             });

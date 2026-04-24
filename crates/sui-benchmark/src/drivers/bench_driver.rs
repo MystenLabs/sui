@@ -160,7 +160,7 @@ impl BenchMetrics {
             num_submitted: register_int_counter_vec_with_registry!(
                 "num_submitted",
                 "Total number of transaction submitted to sui",
-                &["workload", "client_type"],
+                &["workload"],
                 registry,
             )
             .unwrap(),
@@ -174,7 +174,7 @@ impl BenchMetrics {
             latency_s: register_histogram_vec_with_registry!(
                 "latency_s",
                 "Total time in seconds to return a response",
-                &["workload", "client_type"],
+                &["workload"],
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -825,7 +825,7 @@ async fn run_bench_worker(
                 let square_latency_ms = latency.as_secs_f64().powf(2.0);
                 metrics
                     .latency_s
-                    .with_label_values(&[payload_str.as_str(), "transaction_driver"])
+                    .with_label_values(&[payload_str.as_str()])
                     .observe(latency.as_secs_f64());
                 metrics
                     .latency_squared_s
@@ -1024,7 +1024,7 @@ async fn run_bench_worker(
                         .execute_transaction_block(tx.clone())
                         .then(|res| async move  {
                             let payload_str = payload.to_string();
-                            metrics.num_submitted.with_label_values(&[payload_str.as_str(), "transaction_driver"]).inc();
+                            metrics.num_submitted.with_label_values(&[payload_str.as_str()]).inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee)
                         }).count_in_flight(num_in_flight_metric);
                     futures.push(Box::pin(res));
@@ -1133,7 +1133,7 @@ async fn run_bench_worker(
                                 proxy.execute_transaction_block(tx.clone()).await
                             };
                             let payload_str = payload.to_string();
-                            metrics.num_submitted.with_label_values(&[payload_str.as_str(), "transaction_driver"]).inc();
+                            metrics.num_submitted.with_label_values(&[payload_str.as_str()]).inc();
                             handle_execute_transaction_response(res, start, tx, payload, committee)
                         }.count_in_flight(num_in_flight_metric);
                         futures.push(Box::pin(res));
