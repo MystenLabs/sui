@@ -115,7 +115,7 @@ impl TransactionExecutor for ForkedTransactionExecutor {
                 effects,
                 // The forked network is single-node with no consensus; we
                 // report the effects as executed within their embedded epoch.
-                finality_info: EffectsFinalityInfo::QuorumExecuted(executed_epoch),
+                finality_info: EffectsFinalityInfo::Checkpointed(executed_epoch, checkpoint_seq),
             },
             events,
             input_objects,
