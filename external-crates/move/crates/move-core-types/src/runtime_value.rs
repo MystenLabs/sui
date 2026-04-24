@@ -5,7 +5,9 @@
 use crate::{
     VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
-    annotated_value as A, fmt_list,
+    annotated_value as A,
+    compressed::annotated as CA,
+    fmt_list,
     runtime_visitor::{Error as VError, ValueDriver, Visitor, visit_struct, visit_value},
     u256,
 };
@@ -205,6 +207,32 @@ impl MoveValue {
             _ => panic!("Invalid decoration"),
         }
     }
+
+    pub fn decorate_compressed(self, layout: &CA::MoveTypeLayout) -> A::MoveValue {
+        match (self, layout.as_view()) {
+            (MoveValue::Struct(s), CA::MoveLayoutView::Struct(l)) => {
+                A::MoveValue::Struct(s.decorate_compressed(&l))
+            }
+            (MoveValue::Variant(s), CA::MoveLayoutView::Enum(l)) => {
+                A::MoveValue::Variant(s.decorate_compressed(&l))
+            }
+            (MoveValue::Vector(vals), CA::MoveLayoutView::Vector(t)) => A::MoveValue::Vector(
+                vals.into_iter()
+                    .map(|v| v.decorate_compressed(&t))
+                    .collect(),
+            ),
+            (MoveValue::U8(a), _) => A::MoveValue::U8(a),
+            (MoveValue::U64(u), _) => A::MoveValue::U64(u),
+            (MoveValue::U128(u), _) => A::MoveValue::U128(u),
+            (MoveValue::Bool(b), _) => A::MoveValue::Bool(b),
+            (MoveValue::Address(a), _) => A::MoveValue::Address(a),
+            (MoveValue::Signer(a), _) => A::MoveValue::Signer(a),
+            (MoveValue::U16(u), _) => A::MoveValue::U16(u),
+            (MoveValue::U32(u), _) => A::MoveValue::U32(u),
+            (MoveValue::U256(u), _) => A::MoveValue::U256(u),
+            _ => panic!("Invalid decoration"),
+        }
+    }
 }
 
 pub fn serialize_values<'a, I>(vals: I) -> Vec<Vec<u8>>
@@ -259,6 +287,18 @@ impl MoveStruct {
         }
     }
 
+    pub fn decorate_compressed(self, layout: &CA::MoveStructLayout) -> A::MoveStruct {
+        let MoveStruct(vals) = self;
+        A::MoveStruct {
+            type_: layout.type_().clone(),
+            fields: vals
+                .into_iter()
+                .zip(layout.fields())
+                .map(|(v, l)| (l.0.clone(), v.decorate_compressed(&l.1)))
+                .collect(),
+        }
+    }
+
     pub fn fields(&self) -> &[MoveValue] {
         &self.0
     }
@@ -287,6 +327,28 @@ impl MoveVariant {
                 .into_iter()
                 .zip(v_layout.iter())
                 .map(|(v, l)| (l.name.clone(), v.decorate(&l.layout)))
+                .collect(),
+            variant_name: v_name.clone(),
+        }
+    }
+
+    pub fn decorate_compressed(self, layout: &CA::MoveEnumLayout) -> A::MoveVariant {
+        let MoveVariant { tag, fields } = self;
+        let Some(CA::VariantLayout::Known {
+            name: v_name,
+            tag: _,
+            fields: field_layouts,
+        }) = layout.variant(tag as usize)
+        else {
+            panic!("Unknown variant tag {tag} in compressed layout")
+        };
+        A::MoveVariant {
+            type_: layout.type_().clone(),
+            tag,
+            fields: fields
+                .into_iter()
+                .zip(field_layouts.fields())
+                .map(|(v, l)| (l.0.clone(), v.decorate_compressed(&l.1)))
                 .collect(),
             variant_name: v_name.clone(),
         }
