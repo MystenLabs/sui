@@ -4,10 +4,7 @@
 use std::ops::DerefMut;
 
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::{
-    gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes},
-    language_storage::ModuleId,
-};
+use move_core_types::gas_algebra::{AbstractMemorySize, InternalGas, NumArgs, NumBytes};
 use move_vm_runtime::{
     execution::Type,
     shared::{
@@ -170,8 +167,6 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_call(
         &mut self,
-        _module_id: &ModuleId,
-        _func_name: &str,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
@@ -188,8 +183,6 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
 
     fn charge_call_generic(
         &mut self,
-        _module_id: &ModuleId,
-        _func_name: &str,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
         _num_locals: NumArgs,
     ) -> PartialVMResult<()> {
