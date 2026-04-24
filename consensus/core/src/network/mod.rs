@@ -28,6 +28,7 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
+use fastcrypto::encoding::{Encoding, Hex};
 use futures::Stream;
 use mysten_network::{Multiaddr, multiaddr::Protocol};
 
@@ -39,7 +40,6 @@ use crate::{
 };
 
 /// Identifies an observer node by its network public key.
-#[allow(unused)]
 pub(crate) type NodeId = NetworkPublicKey;
 
 /// Identifies a peer in the network, which can be either a validator or an observer.
@@ -60,11 +60,8 @@ impl Display for PeerId {
             PeerId::Validator(authority) => write!(f, "[{}]", authority),
             PeerId::Observer(node_id) => {
                 let bytes = node_id.to_bytes();
-                write!(
-                    f,
-                    "[Observer:{:02x}{:02x}{:02x}{:02x}]",
-                    bytes[0], bytes[1], bytes[2], bytes[3]
-                )
+                let s = Hex::encode(bytes.get(0..4).ok_or(std::fmt::Error)?);
+                write!(f, "o#{}..", s)
             }
         }
     }
