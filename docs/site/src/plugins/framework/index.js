@@ -309,7 +309,7 @@ function convertInlineCodeToSpan(md) {
 function insertLineBreaks(md) {
   const lines = md.split("\n");
   const result = [];
-  const isBlockLine = /^\s*(<\/?(h[1-6]|pre|code|ul|ol|li|table|tr|td|th|thead|tbody|dl|dt|dd|details|summary|div|hr|blockquote)\b|<!--|#{1,6}\s|---|\*\*\*|___|-\s+\[)/;
+  const isBlockLine = /^\s*(<\/?(h[1-6]|pre|code|ul|ol|li|table|tr|td|th|thead|tbody|dl|dt|dd|details|summary|div|hr|blockquote)\b|<!--|#{1,6}\s|---|\*\*\*|___|-\s+\[|```)/;
   const isInlineOnlyLine =
     /^\s*(?:<span(?:\s+class="code-inline"|\s[^>]*)?>[^<\n]*<\/span>|<code>(?:[^<]|<[^>]*>)*?<\/code>|<a\s[^>]*>[^<\n]*<\/a>)\s*[.,;:!?)]*\s*$/;
   const isBlank = /^\s*$/;

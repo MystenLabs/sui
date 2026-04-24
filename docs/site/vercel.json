@@ -2593,7 +2593,7 @@
   ],
   "rewrites": [
     {
-      "source": "/:path((?!markdown|_next|api|static|img|fonts|doc|paper|display-preview|llms\\.txt|robots\\.txt|sitemap\\.xml|\\.well-known).*)",
+      "source": "/:path((?!markdown|_next|api|static|img|fonts|doc|paper|display-preview|llms\\.txt|llms-full\\.txt|robots\\.txt|sitemap\\.xml|\\.well-known).*)",
       "has": [
         {
           "type": "header",
@@ -2604,7 +2604,7 @@
       "destination": "/markdown/:path.md"
     },
     {
-      "source": "/:path((?!markdown|_next|api|static|img|fonts|doc|paper|display-preview|llms\\.txt|robots\\.txt|sitemap\\.xml|\\.well-known).*)",
+      "source": "/:path((?!markdown|_next|api|static|img|fonts|doc|paper|display-preview|llms\\.txt|llms-full\\.txt|robots\\.txt|sitemap\\.xml|\\.well-known).*)",
       "has": [
         {
           "type": "header",
@@ -2643,6 +2643,15 @@
     },
     {
       "source": "/llms.txt",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/llms-full.txt",
       "headers": [
         {
           "key": "Cache-Control",

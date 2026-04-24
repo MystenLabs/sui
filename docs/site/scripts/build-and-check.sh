@@ -46,6 +46,7 @@ done
 node scripts/copy-markdown-files.js || { echo "❌ copy-markdown-files failed"; exit 1; }
 node src/shared/js/generate-llmstxt.mjs build/markdown/ --sitemap build/sitemap.xml --build-dir build --output static/llms.txt || { echo "❌ generate-llmstxt failed"; exit 1; }
 cp static/llms.txt build/llms.txt
+cp static/llms-full.txt build/llms-full.txt
 node scripts/create-markdown-index-duplicates.js || { echo "❌ create-markdown-index-duplicates failed"; exit 1; }
 node src/shared/js/check-links.mjs ../content || { echo "❌ check-links failed"; exit 1; }
 

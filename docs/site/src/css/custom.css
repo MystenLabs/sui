@@ -2712,7 +2712,20 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 html[data-theme='dark'] .protoUnionNote {
   background: rgba(120, 120, 120, 0.08);
 }
- 
+
+.protoTruncNote {
+  grid-column: 1 / -1;
+  padding: 10px 24px;
+  font-size: 13px;
+  font-style: italic;
+  opacity: 0.7;
+  border-top: 1px dashed rgba(120, 120, 120, 0.2);
+}
+
+.protoTruncNote a {
+  font-style: normal;
+}
+
 /* Method signatures: name on top, types below */
 .protoMethodSig {
   overflow-wrap: anywhere;

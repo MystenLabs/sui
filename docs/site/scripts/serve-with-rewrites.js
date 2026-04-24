@@ -176,9 +176,9 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  // Handle llms.txt with special cache headers
-  if (pathname === '/llms.txt') {
-    const filePath = path.join(BUILD_DIR, 'llms.txt');
+  // Handle llms.txt and llms-full.txt with special cache headers
+  if (pathname === '/llms.txt' || pathname === '/llms-full.txt') {
+    const filePath = path.join(BUILD_DIR, pathname.slice(1));
     if (fs.existsSync(filePath)) {
       serveFile(res, filePath, {
         'Cache-Control': 'public, max-age=0, must-revalidate',
@@ -191,9 +191,17 @@ const server = http.createServer((req, res) => {
   let filePath = path.join(BUILD_DIR, pathname);
 
   if (!fs.existsSync(filePath)) {
-    filePath = path.join(BUILD_DIR, pathname, 'index.html');
-    if (!fs.existsSync(filePath)) {
-      filePath = path.join(BUILD_DIR, 'index.html');
+    const indexPath = path.join(BUILD_DIR, pathname, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      filePath = indexPath;
+    } else {
+      // Return 404 instead of falling back to root index.html
+      res.writeHead(404, {
+        'Content-Type': 'text/plain',
+        'Cache-Control': 'public, max-age=300',
+      });
+      res.end('404 Not Found');
+      return;
     }
   } else if (fs.statSync(filePath).isDirectory()) {
     filePath = path.join(filePath, 'index.html');

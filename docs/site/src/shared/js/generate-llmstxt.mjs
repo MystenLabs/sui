@@ -24,7 +24,7 @@ const outputFile = flags["output"] ?? path.join(scriptDir, "../../../static/llms
 const baseUrl = flags["base-url"] ?? "https://docs.sui.io";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const TARGET_CHARS = 80_000;
+const TARGET_CHARS = 45_000;
 const PINNED_SECTIONS = ["Move", "Top Level Navigation", "Sui Developer Skills"];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -304,7 +304,7 @@ function sortPages(pages) {
 
 // ── Build output ─────────────────────────────────────────────────────────────
 
-function build(ratio = 1) {
+function build(ratio = 1, { includeFull = false } = {}) {
   const lines = [];
 
   // Static header (LLM optimized)
@@ -315,6 +315,13 @@ function build(ratio = 1) {
     "Designed for efficient retrieval and grounding by large language models.",
     ""
   );
+
+  if (includeFull) {
+    lines.push(
+      `> For the complete, unabridged page index see [llms-full.txt](${baseUrl}/llms-full.txt).`,
+      ""
+    );
+  }
 
   const sections = sortSections(Object.keys(grouped));
 
@@ -354,22 +361,29 @@ function build(ratio = 1) {
   return lines.join("\n");
 }
 
-// ── Trim passes ──────────────────────────────────────────────────────────────
+// ── Build full listing ───────────────────────────────────────────────────────
 
-let output = build(1);
+const fullOutput = build(1);
+
+// ── Build trimmed listing for llms.txt (under TARGET_CHARS) ─────────────────
+
+let output = build(1, { includeFull: true });
 
 if (output.length > TARGET_CHARS) {
   const ratio = TARGET_CHARS / output.length;
-  output = build(ratio);
+  output = build(ratio, { includeFull: true });
 }
 
 if (output.length > TARGET_CHARS) {
   output = output.slice(0, TARGET_CHARS);
 }
 
-// ── Write file ───────────────────────────────────────────────────────────────
+// ── Write files ──────────────────────────────────────────────────────────────
 
 fs.mkdirSync(path.dirname(outputFile), { recursive: true });
 fs.writeFileSync(outputFile, output, "utf8");
-
 console.log(`✓ Generated ${outputFile} (${output.length.toLocaleString()} chars)`);
+
+const fullOutputFile = outputFile.replace(/llms\.txt$/, "llms-full.txt");
+fs.writeFileSync(fullOutputFile, fullOutput, "utf8");
+console.log(`✓ Generated ${fullOutputFile} (${fullOutput.length.toLocaleString()} chars)`);

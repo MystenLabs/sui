@@ -72,6 +72,7 @@ const references = [
 				label: 'gRPC',
 				items: [
 					'references/fullnode-protocol',
+					'references/fullnode-protocol-messages',
 					'references/fullnode-protocol-types',
 				],
 			},

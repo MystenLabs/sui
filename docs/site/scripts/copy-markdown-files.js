@@ -110,6 +110,38 @@ function extractStruct(content, structName) {
   return match ? match[1] : null;
 }
 
+function extractTrait(content, traitName) {
+  const names = traitName.split(',').map((n) => n.trim());
+  const results = [];
+
+  for (const name of names) {
+    const re = new RegExp(
+      `((?:pub(?:\\(crate\\))?\\s+)?trait\\s+${name}\\b[\\s\\S]*?\\n\\})`,
+      'm',
+    );
+    const match = content.match(re);
+    if (match) results.push(match[1]);
+  }
+
+  return results.length ? results.join('\n\n') : null;
+}
+
+function extractImpl(content, implName) {
+  const names = implName.split(',').map((n) => n.trim());
+  const results = [];
+
+  for (const name of names) {
+    const re = new RegExp(
+      `(impl(?:<[^>]*>)?\\s+${name}\\b[\\s\\S]*?\\n\\})`,
+      'm',
+    );
+    const match = content.match(re);
+    if (match) results.push(match[1]);
+  }
+
+  return results.length ? results.join('\n\n') : null;
+}
+
 function guessLanguage(source) {
   const ext = path.extname(source).toLowerCase();
   const langMap = {
@@ -144,6 +176,8 @@ function expandImportContent(fullMatch) {
   const mode = getAttr('mode');
   const fun = getAttr('fun');
   const struct = getAttr('struct');
+  const trait = getAttr('trait');
+  const impl = getAttr('impl');
   const lines = getAttr('lines');
   const style = getAttr('style');
   const org = getAttr('org');
@@ -172,6 +206,12 @@ function expandImportContent(fullMatch) {
       if (extracted) content = extracted;
     } else if (struct) {
       const extracted = extractStruct(content, struct);
+      if (extracted) content = extracted;
+    } else if (trait) {
+      const extracted = extractTrait(content, trait);
+      if (extracted) content = extracted;
+    } else if (impl) {
+      const extracted = extractImpl(content, impl);
       if (extracted) content = extracted;
     }
 
@@ -259,18 +299,32 @@ function formatDirName(name) {
 
 // ── Protocol handler ────────────────────────────────────────────────────────
 
-function expandProtocol() {
+function expandProtocol(sourceFilePath) {
   const jsonPath = path.join(contentDir, 'documentation.json');
   if (!fs.existsSync(jsonPath)) return '\n<!-- Protocol specification not available -->\n';
+
+  // Determine page type from the source file name
+  const basename = sourceFilePath ? path.basename(sourceFilePath) : '';
+  const isMessagesPage = basename.includes('fullnode-protocol-messages');
+  const isTypesPage = basename.includes('fullnode-protocol-types');
+  // If neither, it's the services page
 
   try {
     const spec = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
     const lines = [];
     lines.push('\n## Protocol Reference\n');
 
-    // Extract files, messages, services, enums from the spec
-    const files = spec.files || [];
+    const files = (spec.files || []).filter(f => !f.name.startsWith('google/'));
     for (const file of files) {
+      const hasMessages = (file.messages || []).length > 0;
+      const hasEnums = (file.enums || []).length > 0;
+      const hasServices = (file.services || []).length > 0;
+
+      // Filter files based on page type
+      if (isMessagesPage && !hasMessages) continue;
+      if (isTypesPage && !hasEnums) continue;
+      if (!isMessagesPage && !isTypesPage && !hasServices) continue;
+
       if (file.name) {
         lines.push(`### ${file.name}\n`);
       }
@@ -278,40 +332,44 @@ function expandProtocol() {
         lines.push(file.description + '\n');
       }
 
-      // Messages
-      const messages = file.messages || [];
-      for (const msg of messages) {
-        lines.push(`#### ${msg.longName || msg.name}\n`);
-        if (msg.description) lines.push(msg.description + '\n');
-        if (msg.fields && msg.fields.length) {
-          lines.push('| Field | Type | Description |');
-          lines.push('|---|---|---|');
-          for (const f of msg.fields) {
-            const desc = (f.description || '').replace(/\n/g, ' ').replace(/\|/g, '\\|');
-            lines.push(`| ${f.name} | ${f.type || f.fullType || ''} | ${desc} |`);
+      // Messages (messages page only)
+      if (isMessagesPage) {
+        const messages = file.messages || [];
+        for (const msg of messages) {
+          lines.push(`#### ${msg.longName || msg.name}\n`);
+          if (msg.description) lines.push(msg.description + '\n');
+          if (msg.fields && msg.fields.length) {
+            lines.push('| Field | Type | Description |');
+            lines.push('|---|---|---|');
+            for (const f of msg.fields) {
+              const desc = (f.description || '').replace(/\n/g, ' ').replace(/\|/g, '\\|');
+              lines.push(`| ${f.name} | ${f.type || f.fullType || ''} | ${desc} |`);
+            }
+            lines.push('');
           }
-          lines.push('');
         }
       }
 
-      // Services
-      const services = file.services || [];
-      for (const svc of services) {
-        lines.push(`#### Service: ${svc.name}\n`);
-        if (svc.description) lines.push(svc.description + '\n');
-        if (svc.methods && svc.methods.length) {
-          lines.push('| Method | Request | Response | Description |');
-          lines.push('|---|---|---|---|');
-          for (const m of svc.methods) {
-            const desc = (m.description || '').replace(/\n/g, ' ').replace(/\|/g, '\\|');
-            lines.push(`| ${m.name} | ${m.requestType || ''} | ${m.responseType || ''} | ${desc} |`);
+      // Services (services page only)
+      if (!isMessagesPage && !isTypesPage) {
+        const services = file.services || [];
+        for (const svc of services) {
+          lines.push(`#### Service: ${svc.name}\n`);
+          if (svc.description) lines.push(svc.description + '\n');
+          if (svc.methods && svc.methods.length) {
+            lines.push('| Method | Request | Response | Description |');
+            lines.push('|---|---|---|---|');
+            for (const m of svc.methods) {
+              const desc = (m.description || '').replace(/\n/g, ' ').replace(/\|/g, '\\|');
+              lines.push(`| ${m.name} | ${m.requestType || ''} | ${m.responseType || ''} | ${desc} |`);
+            }
+            lines.push('');
           }
-          lines.push('');
         }
       }
 
-      // Enums
-      const enums = file.enums || [];
+      // Enums (types page only)
+      const enums = (isTypesPage) ? (file.enums || []) : [];
       for (const en of enums) {
         lines.push(`#### ${en.longName || en.name}\n`);
         if (en.description) lines.push(en.description + '\n');
@@ -327,8 +385,8 @@ function expandProtocol() {
       }
     }
 
-    // Scalar types
-    if (spec.scalarValueTypes && spec.scalarValueTypes.length) {
+    // Scalar types (types page only)
+    if (isTypesPage && spec.scalarValueTypes && spec.scalarValueTypes.length) {
       lines.push('### Scalar Value Types\n');
       lines.push('| Type | Notes |');
       lines.push('|---|---|');
@@ -427,7 +485,7 @@ function cleanMdxComponents(content, filePath) {
   );
 
   // ── Expand Protocol component ──────────────────────────────────────────
-  cleaned = cleaned.replace(/<Protocol\b[^>]*\/?>/g, () => expandProtocol());
+  cleaned = cleaned.replace(/<Protocol\b[^>]*\/?>/g, () => expandProtocol(filePath));
 
   // Convert common self-closing cards to markdown links.
   cleaned = cleaned.replace(
@@ -503,6 +561,16 @@ function cleanMdxComponents(content, filePath) {
   cleaned = cleaned.replace(/<style>\{`[\s\S]*?`\}<\/style>/g, '');
   cleaned = cleaned.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
 
+  // Convert <pre><code>...</code></pre> to fenced code blocks BEFORE the
+  // inline <code> converter runs, so it doesn't destroy the <code> tags first.
+  cleaned = cleaned.replace(
+    /<pre><code>([\s\S]*?)<\/code><\/pre>/g,
+    (_, inner) => {
+      const plain = inner.replace(/<\/?[a-z][^>]*>/gi, '');
+      return `\n\`\`\`\n${plain.trim()}\n\`\`\`\n`;
+    },
+  );
+
   // Convert inline JSX <code> with style attributes to backtick code.
   // Handle nested HTML (e.g. <b>) inside <code> by stripping inner tags.
   cleaned = cleaned.replace(
@@ -543,16 +611,6 @@ function cleanMdxComponents(content, filePath) {
   cleaned = cleaned.replace(
     /<span\s+class="code-inline">([^<]*)<\/span>/g,
     '`$1`',
-  );
-
-  // Convert <pre><code>...</code></pre> to fenced code blocks.
-  cleaned = cleaned.replace(
-    /<pre><code>([\s\S]*?)<\/code><\/pre>/g,
-    (_, inner) => {
-      // Strip HTML tags inside code blocks for readability
-      const plain = inner.replace(/<\/?[a-z][^>]*>/gi, '');
-      return `\n\`\`\`\n${plain.trim()}\n\`\`\`\n`;
-    },
   );
 
   // Convert <h2 id="...">text</h2> etc. to markdown headings
@@ -632,20 +690,50 @@ function copyMarkdownFiles(dir, baseDir = dir) {
     }
 
     const content = fs.readFileSync(filePath, 'utf8');
+
+    // Skip draft pages — they are not built to HTML by Docusaurus.
+    const { data: frontmatter } = matter(content);
+    if (frontmatter.draft === true) continue;
+
     const relativePath = path.relative(baseDir, filePath);
-    const outputPath = path.join(outputDir, relativePath.replace(/\.mdx?$/, '.md'));
+
+    // When a file has the same name as its parent directory (e.g.
+    // deepbook-margin/deepbook-margin.mdx), Docusaurus treats it as the
+    // category index page and routes it to the directory root.  Mirror that
+    // by exporting it as index.md so the markdown URL matches the HTML URL.
+    const stem = path.basename(filePath, path.extname(filePath));
+    const parentDir = path.basename(path.dirname(filePath));
+    const isCategoryIndex = stem === parentDir;
+
+    const outputPath = isCategoryIndex
+      ? path.join(outputDir, path.dirname(relativePath), 'index.md')
+      : path.join(outputDir, relativePath.replace(/\.mdx?$/, '.md'));
 
     fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 
     let cleanContent = stripFrontmatter(content, outputPath, filePath);
 
-    // Truncate pages over 95K so they stay under the 100K agent truncation limit.
-    const MAX_MD_CHARS = 95_000;
+    // Truncate pages over 48K so they stay under the 50K recommended limit.
+    const MAX_MD_CHARS = 48_000;
     if (cleanContent.length > MAX_MD_CHARS) {
-      const cut = cleanContent.slice(0, MAX_MD_CHARS);
+      let cut = cleanContent.slice(0, MAX_MD_CHARS);
+
+      // Prefer cutting at a section boundary
       const lastH2 = cut.lastIndexOf('\n## ');
       const cutAt = lastH2 > MAX_MD_CHARS * 0.5 ? lastH2 : MAX_MD_CHARS;
-      cleanContent = cut.slice(0, cutAt).trimEnd() +
+      cut = cut.slice(0, cutAt);
+
+      // Ensure we don't cut inside an open code fence.  Count triple-backtick
+      // lines; if odd, we're inside a fence — back up to before the opener.
+      const fencePattern = /^```/gm;
+      const fences = [...cut.matchAll(fencePattern)];
+      if (fences.length % 2 !== 0) {
+        // Odd number of fences — cut before the last (unclosed) opener
+        const lastFence = fences[fences.length - 1];
+        cut = cut.slice(0, lastFence.index);
+      }
+
+      cleanContent = cut.trimEnd() +
         '\n\n---\n*Content truncated for size. See the full page on the documentation site.*\n';
     }
 
