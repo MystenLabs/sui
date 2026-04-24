@@ -3493,6 +3493,43 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
+async fn test_send_funds_sui() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+    let amount = 1_000_000_000u64;
+
+    let send_funds = SuiClientCommands::SendFunds {
+        to: recipient1.clone(),
+        amount: Some(amount),
+        all_coins: false,
+        coin_type: None,
+        stateless: false,
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = send_funds else {
+        panic!("SendFunds test failed");
+    };
+    assert!(response.effects.status().is_ok());
+
+    // `send-funds` deposits into the recipient's address balance, not a Coin<T>.
+    let balance = client.get_balance(address2, &GAS::type_()).await?;
+    assert_eq!(balance.address_balance(), amount);
+    assert_eq!(balance.coin_balance(), 0);
+
+    Ok(())
+}
+
+#[sim_test]
 async fn test_transfer() -> Result<(), anyhow::Error> {
     let (mut test_cluster, client, rgp, objects, recipients, addresses) =
         test_cluster_helper().await;
