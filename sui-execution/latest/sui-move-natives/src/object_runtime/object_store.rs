@@ -3,7 +3,9 @@
 
 use crate::object_runtime::{fingerprint::ObjectFingerprint, get_all_uids};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{annotated_value as A, runtime_value as R, vm_status::StatusCode};
+use move_core_types::{
+    compressed::annotated as CA, compressed::runtime as CR, vm_status::StatusCode,
+};
 use move_vm_runtime::execution::values::{GlobalValue, StructRef, Value};
 use std::{
     collections::{BTreeMap, btree_map},
@@ -311,8 +313,8 @@ impl Inner<'_> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_ty_layout: &R::MoveTypeLayout,
-        child_ty_fully_annotated_layout: &A::MoveTypeLayout,
+        child_ty_layout: &CR::MoveTypeLayout,
+        child_ty_fully_annotated_layout: &CA::MoveTypeLayout,
         child_move_type: &MoveObjectType,
     ) -> PartialVMResult<
         ObjectResult<CacheMetadata<(MoveObjectType, GlobalValue, ObjectFingerprint)>>,
@@ -386,7 +388,7 @@ impl Inner<'_> {
 
 fn deserialize_move_object(
     obj: &MoveObject,
-    child_ty_layout: &R::MoveTypeLayout,
+    child_ty_layout: &CR::MoveTypeLayout,
     child_move_type: MoveObjectType,
 ) -> PartialVMResult<ObjectResult<(MoveObjectType, Value)>> {
     let child_id = obj.id();
@@ -439,8 +441,8 @@ impl<'a> ChildObjectStore<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_version: SequenceNumber,
-        child_layout: &R::MoveTypeLayout,
-        child_fully_annotated_layout: &A::MoveTypeLayout,
+        child_layout: &CR::MoveTypeLayout,
+        child_fully_annotated_layout: &CA::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<LoadedWithMetadataResult<ObjectResult<CacheMetadata<Value>>>> {
         let (cache_info, Some((obj, obj_meta))) =
@@ -516,8 +518,8 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         parent: ObjectID,
         child: ObjectID,
-        child_layout: &R::MoveTypeLayout,
-        child_fully_annotated_layout: &A::MoveTypeLayout,
+        child_layout: &CR::MoveTypeLayout,
+        child_fully_annotated_layout: &CA::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<CacheMetadata<&mut ChildObject>>> {
         let store_entries_count = self.store.len() as u64;
@@ -658,7 +660,7 @@ impl<'a> ChildObjectStore<'a> {
         &mut self,
         config_id: ObjectID,
         name_df_id: ObjectID,
-        field_setting_layout: &R::MoveTypeLayout,
+        field_setting_layout: &CR::MoveTypeLayout,
         field_setting_object_type: &MoveObjectType,
     ) -> PartialVMResult<ObjectResult<Option<Value>>> {
         let parent = config_id;

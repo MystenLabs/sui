@@ -4,7 +4,7 @@
 use crate::{legacy_test_cost, types::is_otw_struct};
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::safe_unwrap;
-use move_core_types::{gas_algebra::InternalGas, runtime_value::MoveTypeLayout};
+use move_core_types::{compressed::runtime as CR, gas_algebra::InternalGas};
 use move_vm_runtime::execution::values::Struct;
 use move_vm_runtime::execution::{Type, values::Value};
 use move_vm_runtime::natives::functions::{NativeContext, NativeResult};
@@ -23,7 +23,9 @@ pub fn create_one_time_witness(
     let type_tag = context.type_to_type_tag(&ty)?;
     let type_layout = context.type_to_type_layout(&ty)?;
 
-    let Some(MoveTypeLayout::Struct(struct_layout)) = type_layout else {
+    let Some(CR::MoveLayoutView::Struct(struct_layout)) =
+        type_layout.map(|layout| layout.as_view())
+    else {
         return Ok(NativeResult::err(InternalGas::new(1), 0));
     };
 

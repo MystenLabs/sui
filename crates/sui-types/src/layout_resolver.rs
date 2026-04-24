@@ -20,11 +20,11 @@ pub fn get_layout_from_struct_tag(
     resolver: &impl GetModule,
 ) -> Result<A::MoveDatatypeLayout, SuiError> {
     let type_ = TypeTag::Struct(Box::new(struct_tag));
-    let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
-        SuiErrorKind::ObjectSerializationError {
+    let layout = TypeLayoutBuilder::build_with_types(&type_, resolver)
+        .and_then(|compressed| compressed.inflate())
+        .map_err(|e| SuiErrorKind::ObjectSerializationError {
             error: e.to_string(),
-        }
-    })?;
+        })?;
     match layout {
         A::MoveTypeLayout::Struct(l) => Ok(A::MoveDatatypeLayout::Struct(l)),
         A::MoveTypeLayout::Enum(e) => Ok(A::MoveDatatypeLayout::Enum(e)),

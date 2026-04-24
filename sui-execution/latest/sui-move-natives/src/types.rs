@@ -4,9 +4,7 @@
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::safe_unwrap;
 use move_core_types::{
-    gas_algebra::InternalGas,
-    language_storage::TypeTag,
-    runtime_value::{MoveStructLayout, MoveTypeLayout},
+    compressed::runtime as CR, gas_algebra::InternalGas, language_storage::TypeTag,
 };
 use move_vm_runtime::{
     execution::Type, execution::values::Value, natives::functions::NativeResult,
@@ -18,11 +16,18 @@ use std::collections::VecDeque;
 use crate::{NativesCostTable, get_extension};
 
 pub(crate) fn is_otw_struct(
-    struct_layout: &MoveStructLayout,
+    struct_layout: &CR::MoveStructLayout,
     type_tag: &TypeTag,
     hardened_check: bool,
 ) -> bool {
-    let has_one_bool_field = matches!(struct_layout.0.as_slice(), [MoveTypeLayout::Bool]);
+    let has_one_bool_field = matches!(
+        struct_layout
+            .fields()
+            .map(|f| f.as_view())
+            .collect::<Vec<_>>()
+            .as_slice(),
+        [CR::MoveLayoutView::Bool]
+    );
 
     // If a struct type has the same name as the module that defines it but capitalized, and it has
     // a single field of type bool, it means that it's a one-time witness type. The remaining
@@ -87,7 +92,9 @@ pub fn is_one_time_witness(
     let type_layout = context.type_to_type_layout(&ty)?;
 
     let cost = context.gas_used();
-    let Some(MoveTypeLayout::Struct(struct_layout)) = type_layout else {
+    let Some(CR::MoveLayoutView::Struct(struct_layout)) =
+        type_layout.map(|layout| layout.as_view())
+    else {
         return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)]));
     };
 
