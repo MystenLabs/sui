@@ -11,7 +11,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 chrono.workspace = true
-clap.workspace = true
+clap = { workspace = true, features = ["derive", "env"] }
 cynic.workspace = true
 fastcrypto.workspace = true
 itertools.workspace = true

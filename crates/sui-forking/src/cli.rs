@@ -4,7 +4,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use tracing::info;
@@ -13,6 +13,7 @@ use crate::{
     AdvanceCheckpointRequest, AdvanceClockRequest, ForkingServiceClient, GetStatusRequest,
     GraphQLClient, Node,
 };
+use reqwest::Url;
 
 /// Default bind address for the RPC server.
 pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9000";
@@ -41,7 +42,7 @@ enum Command {
         checkpoint: Option<u64>,
 
         /// Base directory for on-disk storage (overrides FORKING_DATA_STORE env var)
-        #[arg(long)]
+        #[arg(long, env = "FORKING_DATA_STORE")]
         data_dir: Option<PathBuf>,
 
         /// Address to bind the RPC server to
@@ -53,7 +54,7 @@ enum Command {
     AdvanceClock {
         /// RPC server address to connect to
         #[arg(long, default_value = DEFAULT_RPC_ADDR)]
-        rpc_addr: SocketAddr,
+        rpc_addr: Url,
 
         /// Duration in milliseconds to advance the clock (defaults to 1)
         #[arg(long)]
@@ -64,14 +65,14 @@ enum Command {
     AdvanceCheckpoint {
         /// RPC server address to connect to
         #[arg(long, default_value = DEFAULT_RPC_ADDR)]
-        rpc_addr: SocketAddr,
+        rpc_addr: Url,
     },
 
     /// Get the current status of the forked network
     Status {
         /// RPC server address to connect to
         #[arg(long, default_value = DEFAULT_RPC_ADDR)]
-        rpc_addr: SocketAddr,
+        rpc_addr: Url,
     },
 }
 
@@ -140,7 +141,7 @@ fn print_output<T: Serialize + std::fmt::Display>(value: &T, json_output: bool) 
     if json_output {
         println!(
             "{}",
-            serde_json::to_string(value).expect("serialization cannot fail")
+            serde_json::to_string_pretty(value).expect("serialization cannot fail")
         );
     } else {
         println!("{value}");
@@ -162,7 +163,7 @@ async fn cmd_start(
         None => GraphQLClient::new(node.clone(), version)?
             .get_latest_checkpoint_sequence_number()
             .await?
-            .ok_or_else(|| anyhow::anyhow!("no checkpoints found for {}", network_name))?,
+            .with_context(|| format!("failed to get latest checkpoint for {}", network_name))?,
     };
 
     let context = crate::startup::initialize(node, checkpoint, version, data_dir).await?;
@@ -186,7 +187,7 @@ async fn cmd_start(
 }
 
 async fn cmd_advance_clock(
-    rpc_addr: SocketAddr,
+    rpc_addr: Url,
     duration_ms: Option<u64>,
     json_output: bool,
 ) -> Result<()> {
@@ -205,7 +206,7 @@ async fn cmd_advance_clock(
     Ok(())
 }
 
-async fn cmd_advance_checkpoint(rpc_addr: SocketAddr, json_output: bool) -> Result<()> {
+async fn cmd_advance_checkpoint(rpc_addr: Url, json_output: bool) -> Result<()> {
     let mut client = ForkingServiceClient::connect(format!("http://{rpc_addr}")).await?;
     let resp = client
         .advance_checkpoint(AdvanceCheckpointRequest {})
@@ -221,7 +222,7 @@ async fn cmd_advance_checkpoint(rpc_addr: SocketAddr, json_output: bool) -> Resu
     Ok(())
 }
 
-async fn cmd_status(rpc_addr: SocketAddr, json_output: bool) -> Result<()> {
+async fn cmd_status(rpc_addr: Url, json_output: bool) -> Result<()> {
     let mut client = ForkingServiceClient::connect(format!("http://{rpc_addr}")).await?;
     let resp = client.get_status(GetStatusRequest {}).await?.into_inner();
 
