@@ -1394,12 +1394,12 @@ impl AccountFundsRead for WritebackCache {
         // root advances during the read, pruning may remove the version we're reading at
         // and produce a stale or missing value. We retry until pre and post observations
         // of the root version agree, which guarantees no pruning happened in between.
+        let mut pre_root_version =
+            ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+                .unwrap()
+                .version();
         let mut loop_iter = 0;
         loop {
-            let pre_root_version =
-                ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
-                    .unwrap()
-                    .version();
             let value = self.get_account_amount_at_version(account_id, pre_root_version);
             let post_root_version =
                 ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
@@ -1412,6 +1412,7 @@ impl AccountFundsRead for WritebackCache {
                 "Root version changed from {} to {} during MVCC read, retrying",
                 pre_root_version, post_root_version
             );
+            pre_root_version = post_root_version;
             loop_iter += 1;
             if loop_iter >= 3 {
                 debug_fatal!("Unable to get a stable version after 3 iterations");
