@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 122;
+const MAX_PROTOCOL_VERSION: u64 = 123;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -323,7 +323,7 @@ const TESTNET_USDC: &str =
 // Version 122: Framework update: vector::empty is deprecated.
 //              Enable bulletproofs verification on devnet.
 //              Enable defer_unpaid_amplification on mainnet.
-//              Add timestamp_based_epoch_close feature flag and enable in tests.
+// Version 123: Add timestamp_based_epoch_close feature flag and enable in tests.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4875,6 +4875,8 @@ impl ProtocolConfig {
                     cfg.gasless_max_tx_size_bytes = Some(16 * 1024);
                     cfg.gasless_max_tps = Some(300);
                     cfg.gasless_max_computation_units = Some(5_000);
+                }
+                123 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.timestamp_based_epoch_close = true;
                     }
