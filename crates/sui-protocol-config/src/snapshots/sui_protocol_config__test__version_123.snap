@@ -252,7 +252,7 @@ obj_access_cost_delete_per_byte: 40
 obj_access_cost_verify_per_byte: 200
 max_type_to_layout_nodes: 512
 max_ptb_value_size: 1048576
-gas_model_version: 11
+gas_model_version: 12
 obj_data_cost_refundable: 100
 obj_metadata_cost_non_refundable: 50
 storage_rebate_rate: 9900
