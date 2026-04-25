@@ -653,6 +653,7 @@ async fn test_address_balance_gas_v3_accumulator_sign() {
         .with_proto_override_cb(Box::new(|_, mut cfg| {
             cfg.enable_address_balance_gas_payments_for_testing();
             cfg.set_execution_version_for_testing(3);
+            cfg.set_gas_model_version_for_testing(11);
             cfg
         }))
         .build()

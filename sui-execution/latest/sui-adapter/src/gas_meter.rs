@@ -16,7 +16,10 @@ use move_vm_runtime::{
     },
 };
 use sui_types::gas_model::{
-    gas_predicates::{native_function_threshold_exceeded, use_legacy_abstract_size},
+    gas_predicates::{
+        legacy_charge_native_pops_args, native_function_threshold_exceeded,
+        use_legacy_abstract_size,
+    },
     tables::{GasStatus, REFERENCE_SIZE, STRUCT_SIZE, VEC_SIZE},
 };
 
@@ -148,18 +151,21 @@ impl<G: DerefMut<Target = GasStatus>> GasMeter for SuiGasMeter<G> {
         &mut self,
         mut args: impl ExactSizeIterator<Item = impl ValueView>,
     ) -> PartialVMResult<()> {
-        // Determine the number of pops that are going to be needed for this function call, and
-        // charge for them.
-        let pops = args.len() as u64;
-        // Calculate the size decrease of the stack from the above pops.
-        let stack_reduction_size = args.try_fold(
-            AbstractMemorySize::new(pops),
-            |acc, elem| -> PartialVMResult<_> { Ok(acc + abstract_memory_size(&self.0, elem)?) },
-        )?;
-        // Track that this is going to be popping from the operand stack. We also increment the
-        // instruction count as we need to account for the `Call` bytecode that initiated this
-        // native call.
-        self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
+        if legacy_charge_native_pops_args(self.0.gas_model_version) {
+            // Legacy: pop args again (double-pop, masked by saturating_sub).
+            let pops = args.len() as u64;
+            let stack_reduction_size = args.try_fold(
+                AbstractMemorySize::new(pops),
+                |acc, elem| -> PartialVMResult<_> {
+                    Ok(acc + abstract_memory_size(&self.0, elem)?)
+                },
+            )?;
+            self.0.charge(1, 0, pops, 0, stack_reduction_size.into())
+        } else {
+            // The args were already popped by charge_call/charge_call_generic.
+            // Only charge the instruction cost, not the pops.
+            self.0.charge(1, 0, 0, 0, 0)
+        }
     }
 
     fn charge_call(

@@ -324,6 +324,7 @@ const TESTNET_USDC: &str =
 //              Enable bulletproofs verification on devnet.
 //              Enable defer_unpaid_amplification on mainnet.
 // Version 123: Add timestamp_based_epoch_close feature flag and enable in tests.
+//              Fix native call double-pop in gas meter stack height tracking (gas_model v12).
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4880,6 +4881,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.timestamp_based_epoch_close = true;
                     }
+                    cfg.gas_model_version = Some(12);
                 }
                 // Use this template when making changes:
                 //
