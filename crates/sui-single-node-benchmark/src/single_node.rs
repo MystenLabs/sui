@@ -81,6 +81,10 @@ impl SingleValidator {
         self.validator_service.validator_state()
     }
 
+    pub fn get_epoch(&self) -> u64 {
+        self.epoch_store.epoch()
+    }
+
     /// Publish a package, returns the package object and the updated gas object.
     pub async fn publish_package(
         &self,

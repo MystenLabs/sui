@@ -110,6 +110,25 @@ async fn benchmark_publish_from_source() {
 }
 
 #[sim_test]
+async fn benchmark_send_funds_smoke_test() {
+    for component in Component::iter() {
+        run_benchmark(
+            Workload::new(
+                10,
+                WorkloadKind::SendFunds {
+                    seed_amount: 100_000_000_000,
+                    transfer_amount: 1000,
+                },
+            ),
+            component,
+            1000,
+            false,
+        )
+        .await;
+    }
+}
+
+#[sim_test]
 async fn benchmark_publish_from_bytecode() {
     // This test makes sure that the benchmark runs.
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
