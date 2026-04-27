@@ -42,26 +42,65 @@ mod file_exporter;
 pub mod span_latency_prom;
 mod test_layer;
 
-/// Global filter layer that rejects spans above a given level at callsite registration time.
+/// Global filter layer that rejects callsites above the configured levels at registration time.
 ///
 /// Without this, per-layer filtering causes the Registry to return `Interest::always()` for
 /// every callsite. That means trace-level `#[instrument]` spans are allocated in the slab,
 /// have their per-layer filters walked, and are immediately discarded — all at significant cost.
+/// The same applies to events below the env filter threshold.
 ///
-/// By rejecting high-verbosity span callsites globally, `Span::new` short-circuits to
-/// `Span::none()` for free.
-///
-/// Events are always passed through so that per-layer log filters work as before.
-struct SpanLevelGlobalFilter {
+/// By rejecting high-verbosity callsites globally, `Span::new` short-circuits to
+/// `Span::none()` and event macros short-circuit before formatting arguments.
+struct GlobalLevelFilter {
     max_span_level: Level,
+    /// The maximum event level any layer will accept. Loaded from the EnvFilter's
+    /// max_level_hint and updated via a shared atomic when the filter is reloaded.
+    max_event_level: Arc<std::sync::atomic::AtomicU8>,
 }
 
-impl<S: tracing::Subscriber> Layer<S> for SpanLevelGlobalFilter {
+impl GlobalLevelFilter {
+    fn load_max_event_level(&self) -> LevelFilter {
+        level_filter_from_u8(self.max_event_level.load(Ordering::Relaxed))
+    }
+
+    fn exceeds_max_level(&self, metadata: &tracing::Metadata<'_>) -> bool {
+        if metadata.is_span() {
+            *metadata.level() > self.max_span_level
+        } else {
+            let max = self.load_max_event_level();
+            !max.eq(&LevelFilter::OFF) && LevelFilter::from_level(*metadata.level()) > max
+        }
+    }
+}
+
+fn level_filter_to_u8(lf: LevelFilter) -> u8 {
+    match lf {
+        LevelFilter::OFF => 0,
+        LevelFilter::ERROR => 1,
+        LevelFilter::WARN => 2,
+        LevelFilter::INFO => 3,
+        LevelFilter::DEBUG => 4,
+        LevelFilter::TRACE => 5,
+    }
+}
+
+fn level_filter_from_u8(v: u8) -> LevelFilter {
+    match v {
+        0 => LevelFilter::OFF,
+        1 => LevelFilter::ERROR,
+        2 => LevelFilter::WARN,
+        3 => LevelFilter::INFO,
+        4 => LevelFilter::DEBUG,
+        _ => LevelFilter::TRACE,
+    }
+}
+
+impl<S: tracing::Subscriber> Layer<S> for GlobalLevelFilter {
     fn register_callsite(
         &self,
         metadata: &'static tracing::Metadata<'static>,
     ) -> tracing::subscriber::Interest {
-        if metadata.is_span() && *metadata.level() > self.max_span_level {
+        if self.exceeds_max_level(metadata) {
             tracing::subscriber::Interest::never()
         } else {
             tracing::subscriber::Interest::always()
@@ -73,7 +112,13 @@ impl<S: tracing::Subscriber> Layer<S> for SpanLevelGlobalFilter {
         metadata: &tracing::Metadata<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) -> bool {
-        !metadata.is_span() || *metadata.level() <= self.max_span_level
+        !self.exceeds_max_level(metadata)
+    }
+
+    fn max_level_hint(&self) -> Option<LevelFilter> {
+        let span = LevelFilter::from_level(self.max_span_level);
+        let event = self.load_max_event_level();
+        Some(std::cmp::max(span, event))
     }
 }
 
@@ -154,17 +199,26 @@ impl Drop for TelemetryGuards {
 }
 
 #[derive(Clone, Debug)]
-pub struct FilterHandle(reload::Handle<EnvFilter, Registry>);
+pub struct FilterHandle {
+    reload: reload::Handle<EnvFilter, Registry>,
+    /// Shared with GlobalLevelFilter so that reloading the env filter also
+    /// updates the global event-level gate.
+    max_event_level: Option<Arc<std::sync::atomic::AtomicU8>>,
+}
 
 impl FilterHandle {
     pub fn update<S: AsRef<str>>(&self, directives: S) -> Result<(), BoxError> {
         let filter = EnvFilter::try_new(directives)?;
-        self.0.reload(filter)?;
+        if let Some(ref max_level) = self.max_event_level {
+            let hint = filter.max_level_hint().unwrap_or(LevelFilter::TRACE);
+            max_level.store(level_filter_to_u8(hint), Ordering::Relaxed);
+        }
+        self.reload.reload(filter)?;
         Ok(())
     }
 
     pub fn get(&self) -> Result<String, BoxError> {
-        self.0
+        self.reload
             .with_current(|filter| filter.to_string())
             .map_err(Into::into)
     }
@@ -452,8 +506,14 @@ impl TelemetryConfig {
         }
         let env_filter =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(directives));
+        let max_event_level = Arc::new(std::sync::atomic::AtomicU8::new(level_filter_to_u8(
+            env_filter.max_level_hint().unwrap_or(LevelFilter::TRACE),
+        )));
         let (log_filter, reload_handle) = reload::Layer::new(env_filter);
-        let log_filter_handle = FilterHandle(reload_handle);
+        let log_filter_handle = FilterHandle {
+            reload: reload_handle,
+            max_event_level: Some(max_event_level.clone()),
+        };
 
         // Separate span level filter.
         // This is a dumb filter for now - allows all spans that are below a given level.
@@ -547,7 +607,10 @@ impl TelemetryConfig {
 
             let trace_env_filter = EnvFilter::try_from_env("TRACE_FILTER").unwrap();
             let (trace_env_filter, reload_handle) = reload::Layer::new(trace_env_filter);
-            trace_filter_handle = Some(FilterHandle(reload_handle));
+            trace_filter_handle = Some(FilterHandle {
+                reload: reload_handle,
+                max_event_level: None,
+            });
 
             layers.push(telemetry.with_filter(trace_env_filter).boxed());
         }
@@ -609,12 +672,14 @@ impl TelemetryConfig {
             None
         };
 
-        // Global span-level filter: rejects span callsites above span_level at
-        // registration time, preventing the Registry from allocating spans that
-        // every per-layer filter would immediately discard.
+        // Global level filter: rejects span callsites above span_level and event
+        // callsites above the env filter's max level at registration time, preventing
+        // the Registry from dispatching callsites that every per-layer filter would
+        // immediately discard.
         layers.push(
-            SpanLevelGlobalFilter {
+            GlobalLevelFilter {
                 max_span_level: span_level,
+                max_event_level,
             }
             .boxed(),
         );
