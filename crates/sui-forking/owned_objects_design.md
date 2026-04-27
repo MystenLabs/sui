@@ -15,11 +15,11 @@ This is enough for object-by-id reads, but it is not enough to support:
 - RPC `get_balance`
 - RPC `list_balances`
 
-There is one current limitation in the existing implementation:
+The current implementation has one limitation:
 
-1. `update_objects()` ignores deleted objects.
-   New versions are written, but there is no persisted representation of an object leaving the live
-   set, so the store cannot reconstruct current ownership or balances correctly.
+`update_objects()` ignores deleted objects. New versions are written, but there is no persisted
+representation of an object leaving the live set, so the store cannot reconstruct current ownership
+or balances correctly.
 
 This document proposes a design for owned objects and balances for data created locally after the
 fork starts, while fitting the filesystem model that already exists today.
@@ -41,13 +41,13 @@ fork starts, while fitting the filesystem model that already exists today.
 
 ## High-level approach
 
-Treat owned objects and balances as derived live indexes over the locally materialized live object
-set.
+The approach is to treat owned objects and balances as derived indexes over the locally materialized
+live object set.
 
 The source of truth remains:
 
 - `objects/<object_id>/<version>` for object contents
-- per-object live metadata that identifies which version, if any, is currently live
+- per-object metadata identifying which version, if any, is currently live
 
 The derived state is maintained in memory:
 
@@ -86,36 +86,15 @@ We should either:
 - replace `latest` with `live`, or
 - keep `latest` for cache/debug purposes and introduce `live` for correctness
 
-This design assumes `live` is the authoritative live marker.
-
-## Alternative: filesystem-only live scans
-
-The simplest alternative is to use the filesystem as both the source of truth and the query path.
-
-Under this model:
-
-- object versions are still stored under `objects/<object_id>/<version>`
-- liveness is still represented by `objects/<object_id>/live`
-- there is no in-memory owner index
-- there is no in-memory balance index
-
-Instead, each owned-object or balance query scans the live object set on demand:
-
-1. iterate `objects/*/live`
-2. load the referenced live object
-3. inspect its owner and type
-4. for balance queries, inspect whether it is a `Coin<T>` and extract its value
-5. sort and paginate the filtered results as needed
-
-The write path is smaller in this design:
-
-- write object versions
-- update `live` markers
-- handle deletions by removing `live`
-
-No additional in-process state needs to be updated.
+This design treats the `live` file as the authoritative liveness marker.
 
 ## In-memory indexes
+
+The owner and balance indexes live inside `DataStore` as plain fields. `DataStore` derives `Clone`,
+but the indexes do not need interior mutability or `Arc` wrapping — all access goes through
+`Context`'s existing `Arc<RwLock<Simulacrum<OsRng, DataStore>>>`, which serializes reads and writes.
+Cloning `DataStore` outside of that path is not expected; if it happens, the clone gets a snapshot
+of the indexes at that point in time.
 
 ### Owner index
 
@@ -205,10 +184,16 @@ This can be added independently of the owner index.
 The core rule is:
 
 - object files are written first
-- live metadata and in-memory indexes are updated from transaction effects
+- live metadata is updated atomically via write-to-temp + rename
+- in-memory indexes are updated from transaction effects
 
 For every locally executed transaction, `update_objects()` should process both deleted and written
 objects.
+
+All `live` marker updates must be atomic: write the new contents to a temporary file in the same
+directory, then `rename()` it to `live`. On POSIX systems `rename()` is atomic within a single
+filesystem, so a crash can never leave a half-written `live` file. For deletions, `unlink()` the
+`live` file directly — this is also atomic.
 
 ### Deleted / wrapped objects
 
@@ -217,7 +202,7 @@ For each `(object_id, old_version, _)` in `deleted_objects`:
 1. Load the old live object from `objects/<id>/live`.
 2. Remove the object's contribution from the owner index if it was address-owned.
 3. Remove the object's contribution from the balance index if it was an address-owned coin.
-4. Remove `objects/<id>/live`.
+4. Atomically remove `objects/<id>/live` (unlink).
 
 This should also apply to wrapped objects if they appear in the deleted set exposed by effects.
 
@@ -227,8 +212,8 @@ For each written object:
 
 1. If the object already has a live version, load that old live object and remove its old index
    contributions first.
-2. Write `objects/<id>/<new_version>`.
-3. Write `objects/<id>/live = <new_version>`.
+2. Write `objects/<id>/<new_version>` (the BCS object file must be fully on disk before step 3).
+3. Atomically update `objects/<id>/live` to `<new_version>` (write to a temp file, then rename).
 4. Add the new owner's contribution to the owner index if the object is address-owned.
 5. Add the new coin contribution to the balance index if the object is an address-owned `Coin<T>`.
 
@@ -240,6 +225,18 @@ This uniformly handles:
 - unwrap to address ownership
 - change of object type
 - change of coin balance
+
+### Crash recovery
+
+Because `live` updates are atomic, a crash at any point leaves the filesystem in one of two
+consistent states:
+
+- `live` still points to the old version (crash before rename): rebuild sees the old state. The
+  new BCS file may exist on disk as an orphan, which is harmless.
+- `live` points to the new version (crash after rename): rebuild sees the new state.
+
+In-memory indexes are always rebuilt from disk on startup, so they are never stale after a crash.
+No WAL is required.
 
 ## Rebuild on startup
 
@@ -256,9 +253,9 @@ This keeps the design simple:
 
 - no separate on-disk owner table
 - no separate on-disk balance table
-- no WAL required for correctness
 
-The filesystem object store remains the only durable state we need.
+The filesystem object store remains the only durable state we need. See "Crash recovery" above for
+why no WAL is required.
 
 ## Tradeoffs
 
@@ -266,10 +263,15 @@ There are three realistic options for owned-object and balance support in `sui-f
 
 ### Option A: filesystem-only live scans
 
+Use the filesystem as both the source of truth and the query path. Each owned-object or balance
+query scans the live object set on demand: iterate `objects/*/live`, load each referenced object,
+inspect its owner and type, and sort/paginate the filtered results. No in-memory indexes are
+maintained, so the write path only needs to update object files and `live` markers.
+
 Pros:
 
 - smallest implementation
-- no secondary state to keep in sync in process
+- no secondary state to keep in sync in-process
 - correctness comes entirely from object files and `live` markers
 
 Cons:
@@ -342,7 +344,7 @@ This avoids scanning all live objects on every query.
 
 ### RPC `list_owned_objects`
 
-The in-memory owner index should be ordered exactly to support RPC pagination:
+The in-memory owner index should be ordered to match RPC pagination requirements:
 
 - owner prefix scan
 - optional type filter
@@ -363,29 +365,22 @@ Iterate the balance map over the `(owner, coin_type)` prefix.
 
 This design is intentionally scoped to local post-fork execution and locally materialized objects.
 
+Pre-fork remote fetches (e.g. `get_latest_object` pulling from a remote fullnode) must NOT create
+`live` markers. Remote fetches populate version files for use as execution inputs, but they do not
+carry ownership information — the historical query path does not return owner or type metadata
+needed for the owner and balance indexes. Only local transaction execution effects establish or
+remove liveness, because effects are the authoritative source of ownership transitions.
+
 Implications:
 
-- if a pre-fork object has been fetched or seeded locally and is still live, it will be included
-  after rebuild
-- if an address has pre-fork owned objects that were never seeded or materialized locally, they
+- pre-fork objects only enter the live set when they appear in the written set of a locally
+  executed transaction's effects
+- if an address has pre-fork owned objects that were never involved in a local transaction, they
   will not appear in owned-object enumeration
+- the `latest` marker (used by the remote fetch cache path) remains independent of `live`
 
-That is acceptable for `sui-forking`, because explicit seeding is already the mechanism for making
-the fork aware of external state.
-
-## Why not store a separate owner table on disk immediately
-
-We could store durable owner and balance indexes on disk, but that is likely unnecessary as a
-first step.
-
-Reasons to avoid that initially:
-
-- the object filesystem is already authoritative
-- the indexes are fully derivable from live objects
-- a restart rebuild is straightforward
-- it avoids keeping multiple durable structures in sync while the feature is still evolving
-
-Only add durable owner/balance tables if rebuild cost becomes a practical issue.
+That is acceptable for `sui-forking`, because explicit seeding followed by local execution is the
+mechanism for making the fork aware of external state.
 
 ## Historical queries
 
@@ -438,5 +433,3 @@ local write path.
 2. Do we want balance support to include address-balance accumulators in the first version?
 3. Do we want rebuild-on-startup only, or should we also persist derived indexes for faster
    startup?
-4. Should pre-fork remote fetches ever update live markers, or should they only populate version
-   files unless explicitly seeded as live state?
