@@ -70,6 +70,8 @@ pub struct TelemetryConfig {
     pub crash_on_panic: bool,
     /// Optional Prometheus registry - if present, all enabled span latencies are measured
     pub prom_registry: Option<prometheus::Registry>,
+    /// Disable the PrometheusSpanLatencyLayer even when a prom_registry is set.
+    pub disable_span_latency: bool,
     pub sample_rate: f64,
     /// Add directive to include trace logs with provided target
     pub trace_target: Option<Vec<String>>,
@@ -284,6 +286,7 @@ impl TelemetryConfig {
             panic_hook: true,
             crash_on_panic: false,
             prom_registry: None,
+            disable_span_latency: false,
             sample_rate: 1.0,
             trace_target: None,
             user_info_target: Vec::new(),
@@ -315,6 +318,11 @@ impl TelemetryConfig {
 
     pub fn with_prom_registry(mut self, registry: &prometheus::Registry) -> Self {
         self.prom_registry = Some(registry.clone());
+        self
+    }
+
+    pub fn with_disable_span_latency(mut self, disable: bool) -> Self {
+        self.disable_span_latency = disable;
         self
     }
 
@@ -430,9 +438,11 @@ impl TelemetryConfig {
         }
 
         if let Some(registry) = config.prom_registry {
-            let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
-                .expect("Could not initialize span latency layer");
-            layers.push(span_lat_layer.with_filter(span_filter.clone()).boxed());
+            if !config.disable_span_latency {
+                let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
+                    .expect("Could not initialize span latency layer");
+                layers.push(span_lat_layer.with_filter(span_filter.clone()).boxed());
+            }
         }
 
         let mut trace_filter_handle = None;
