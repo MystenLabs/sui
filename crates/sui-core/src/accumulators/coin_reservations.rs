@@ -19,7 +19,7 @@ use sui_types::{
 /// of (owner, type_tag) for each accumulator object ID.
 pub struct CachingCoinReservationResolver {
     inner: CoinReservationResolver,
-    cache: MokaCache<ObjectID, (SuiAddress, TypeTag)>,
+    cache: MokaCache<ObjectID, UserInputResult<(SuiAddress, TypeTag)>>,
 }
 
 impl CachingCoinReservationResolver {
@@ -36,22 +36,33 @@ impl CachingCoinReservationResolver {
         accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<(SuiAddress, TypeTag)> {
         // Owner and type_tag never change once the object exists, so successful
-        // lookups are always coherent.
+        // lookups are always coherent. Errors other than "not found" (e.g. the
+        // object exists but is not a balance accumulator field) are also
+        // permanent for a given object_id and so safe to cache.
         //
-        // Don't cache errors — the only expected error is "not found", which is
-        // transient: the accumulator object may not exist on this node yet but
-        // will appear once the settlement transaction executes. Caching a
-        // transient not-found would poison the cache for all subsequent lookups.
-        if let Some(value) = self.cache.get(&object_id) {
-            return Ok(value);
+        // Don't cache "not found": the accumulator object may not exist on this
+        // node yet but will appear once the settlement transaction executes.
+        // Caching a transient not-found would poison the cache for all
+        // subsequent lookups of that id.
+        if let Some(cached) = self.cache.get(&object_id) {
+            return cached;
         }
-        let result = self
+        match self
             .inner
-            .get_owner_and_type_for_object(object_id, accumulator_version);
-        if let Ok(value) = &result {
-            self.cache.insert(object_id, value.clone());
+            .get_owner_and_type_for_object(object_id, accumulator_version)
+        {
+            Ok(Some(value)) => {
+                self.cache.insert(object_id, Ok(value.clone()));
+                Ok(value)
+            }
+            Ok(None) => Err(UserInputError::InvalidWithdrawReservation {
+                error: format!("coin reservation object id {} not found", object_id),
+            }),
+            Err(e) => {
+                self.cache.insert(object_id, Err(e.clone()));
+                Err(e)
+            }
         }
-        result
     }
 
     pub fn resolve_funds_withdrawal(
