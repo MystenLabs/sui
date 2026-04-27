@@ -1749,6 +1749,11 @@ async fn download_package_and_deps_under(
         type_origins.insert(*original_id, package.type_origin_table().clone());
     }
 
+    type_origins.insert(
+        root_package.original_package_id(),
+        root_package.type_origin_table().clone(),
+    );
+
     let package_path = path.join(
         root_package
             .id()
