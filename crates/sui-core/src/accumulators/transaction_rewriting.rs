@@ -12,6 +12,10 @@ use sui_types::transaction::{CallArg, ObjectArg, ProgrammableTransaction, Transa
 /// Returns `Some(rewritten_inputs)` if any inputs were rewritten, where each bool indicates whether
 /// the corresponding input was converted from a coin reservation. Returns `None` if nothing
 /// was rewritten.
+///
+/// `accumulator_version` is the version of the accumulator root object to use for MVCC lookup.
+/// This is required during checkpoint replay to read the accumulator state at the correct version,
+/// before any settlement transactions have modified it.
 pub fn rewrite_transaction_for_coin_reservations(
     chain_identifier: ChainIdentifier,
     coin_reservation_resolver: &dyn CoinReservationResolverTrait,
@@ -57,6 +61,8 @@ fn rewrite_programmable_transaction_for_coin_reservations(
             // 2. The scheduler reserves funds before allowing the transaction to execute. If the
             //    accumulator were deleted (balance dropped to 0), the reservation would fail and
             //    the transaction would not enter execution.
+            // 3. During checkpoint replay with MVCC, we read the accumulator at the version before
+            //    any settlement transactions have modified it.
             let withdraw = coin_reservation_resolver
                 .resolve_funds_withdrawal(sender, parsed, accumulator_version)
                 .unwrap();
