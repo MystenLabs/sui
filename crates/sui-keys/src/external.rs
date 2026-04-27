@@ -76,20 +76,21 @@ pub struct ExternalKey {
     pub key_id: String,
 }
 
+// No debug display for CreateKeyResponse as it may contain sensitive mnemonic.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CreateKeyResponse {
     pub public_key: PublicKey,
     pub key_id: String,
+    /// Only used for display, do not persist to file
     #[serde(skip_serializing)]
     pub mnemonic: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// Provision mode requested when creating a key on an external signer.
 pub enum ProvisionMode {
     /// Creates a recoverable key without surfacing recovery material in this flow.
-    #[default]
     RecoverableAssumed,
     /// Creates a recoverable key and returns recovery material immediately.
     MnemonicBacked,
@@ -148,6 +149,7 @@ impl CommandRunner for StdCommandRunner {
             .arg("call")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
+            .kill_on_drop(true)
             .spawn()?;
 
         let mut endpoint = Endpoint::new(
@@ -292,27 +294,16 @@ impl External {
         Ok(key)
     }
 
-    pub async fn add_first_unindexed_key(
+    pub async fn get_first_unindexed_key(
         &mut self,
         ext_signer: String,
     ) -> Result<StoredKey, Error> {
         let keys = self.signer_available_keys(ext_signer.clone()).await?;
 
-        let key: StoredKey = keys
+        Ok(keys
             .into_iter()
             .find(|k| !self.is_indexed(k))
-            .ok_or_else(|| anyhow!("No available key found for external signer {}", ext_signer))?;
-
-        self.keys.insert((&key.public_key).into(), key.clone());
-        self.aliases.insert(
-            (&key.public_key).into(),
-            Alias {
-                alias: self.create_alias(None)?,
-                public_key_base64: key.public_key.encode_base64(),
-            },
-        );
-        self.save().await?;
-        Ok(key)
+            .ok_or_else(|| anyhow!("No available key found for external signer {}", ext_signer))?)
     }
 
     /// Get the public key for a given key ID from an external signer.
@@ -473,7 +464,7 @@ impl AccountKeystore for External {
                     ));
                 }
 
-                match self.add_first_unindexed_key(ext_signer.clone()).await {
+                match self.get_first_unindexed_key(ext_signer.clone()).await {
                     Ok(stored_key) => (stored_key, None),
                     Err(add_error) => {
                         return Err(anyhow!(
@@ -1053,7 +1044,7 @@ mod tests {
         let tmp_keystore = tmp_dir.path().join("external.keystore");
         let mut external = External::new_for_test(Box::new(mock), Some(tmp_keystore));
         external.save().await.unwrap();
-        let stored_key = external.add_first_unindexed_key("signer".to_string()).await;
+        let stored_key = external.get_first_unindexed_key("signer".to_string()).await;
         assert!(stored_key.is_ok());
         let stored_key = stored_key.unwrap();
         assert_eq!(stored_key.key_id, key_id);
@@ -1109,8 +1100,11 @@ mod tests {
         assert_eq!(mnemonic, None);
     }
 
+    // Yubikey returns `PROVISIONMODE_NOT_SUPPORTED_ERROR_CODE` if the create_key method is called with RecoverableAssumed (default),
+    // this test ensures the CLI does not attempt to add keys it lists from the yubikey
+    // Only ledger should use get_first_unindexed_key() since it cannot generate individual keys.
     #[tokio::test]
-    async fn test_generate_does_not_fallback_on_provision_mode_error() {
+    async fn test_generate_does_not_fallback_on_provision_mode_not_error() {
         let mut mock = MockCommandRunner::new();
         mock.expect_run().returning(move |_, method, params| {
             if method == "create_key" && params == JsonValue::Null {

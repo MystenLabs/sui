@@ -195,10 +195,13 @@ mod tests {
     impl CommandRunner for StubCommandRunner {
         async fn run(
             &self,
-            _command: &str,
-            _method: &str,
-            _params: Value,
+            command: &str,
+            method: &str,
+            params: Value,
         ) -> Result<Value, ExternalExecError> {
+            assert_eq!(command, "yubikey");
+            assert_eq!(method, "create_key");
+            assert_eq!(params, json!({ "mode": "mnemonic-backed" }));
             Ok(self.response.clone())
         }
     }
