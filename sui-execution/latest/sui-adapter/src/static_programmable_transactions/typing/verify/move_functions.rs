@@ -7,7 +7,7 @@ use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typi
 use move_binary_format::file_format::Visibility;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
-use sui_types::error::ExecutionError;
+use sui_types::error::{ExecutionError, ExecutionErrorTrait};
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_verifier::private_generics_verifier_v2;
 
@@ -18,14 +18,20 @@ use sui_verifier::private_generics_verifier_v2;
 /// - no references returned from move calls
 ///    - Can be disabled under certain execution modes
 ///    - Can be disabled via a feature flag
-pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    txn: &T::Transaction,
+) -> Result<(), Mode::Error> {
     for c in &txn.commands {
         command::<Mode>(env, c).map_err(|e| e.with_command_index(c.idx as usize))?;
     }
     Ok(())
 }
 
-fn command<Mode: ExecutionMode>(env: &Env, sp!(_, c): &T::Command) -> Result<(), ExecutionError> {
+fn command<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    sp!(_, c): &T::Command,
+) -> Result<(), Mode::Error> {
     let T::Command_ {
         command,
         result_type: _,
@@ -48,7 +54,10 @@ fn command<Mode: ExecutionMode>(env: &Env, sp!(_, c): &T::Command) -> Result<(),
 /// - valid signature (no references in return type)
 /// - valid visibility
 /// - private generics rules
-fn move_call<Mode: ExecutionMode>(env: &Env, call: &T::MoveCall) -> Result<(), ExecutionError> {
+fn move_call<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    call: &T::MoveCall,
+) -> Result<(), Mode::Error> {
     let T::MoveCall {
         function,
         arguments: _,
@@ -60,13 +69,13 @@ fn move_call<Mode: ExecutionMode>(env: &Env, call: &T::MoveCall) -> Result<(), E
 }
 
 fn check_signature<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
     function: &T::LoadedFunction,
-) -> Result<(), ExecutionError> {
-    fn check_return_type<Mode: ExecutionMode>(
+) -> Result<(), Mode::Error> {
+    fn check_return_type<Mode: ExecutionMode, E: ExecutionErrorTrait>(
         idx: usize,
         return_type: &T::Type,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), E> {
         if let Type::Reference(_, _) = return_type
             && !Mode::allow_arbitrary_values()
         {
@@ -74,7 +83,8 @@ fn check_signature<Mode: ExecutionMode>(
                 ExecutionErrorKind::InvalidPublicFunctionReturnType {
                     idx: checked_as!(idx, u16)?,
                 },
-            ));
+            )
+            .into());
         }
         Ok(())
     }
@@ -84,15 +94,15 @@ fn check_signature<Mode: ExecutionMode>(
     }
 
     for (idx, ty) in function.signature.return_.iter().enumerate() {
-        check_return_type::<Mode>(idx, ty)?;
+        check_return_type::<Mode, Mode::Error>(idx, ty)?;
     }
     Ok(())
 }
 
 fn check_visibility<Mode: ExecutionMode>(
-    _env: &Env,
+    _env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
     function: &T::LoadedFunction,
-) -> Result<(), ExecutionError> {
+) -> Result<(), Mode::Error> {
     let visibility = function.visibility;
     let is_entry = function.is_entry;
     match (visibility, is_entry) {
@@ -108,17 +118,18 @@ fn check_visibility<Mode: ExecutionMode>(
                 return Err(ExecutionError::new_with_source(
                     ExecutionErrorKind::NonEntryFunctionInvoked,
                     "Can only call `entry` or `public` functions",
-                ));
+                )
+                .into());
             }
         }
     };
     Ok(())
 }
 
-fn check_private_generics_v2(
+fn check_private_generics_v2<E: ExecutionErrorTrait>(
     callee_package: &ModuleId,
     callee_function: &IdentStr,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     let callee_address = *callee_package.address();
     let callee_module = callee_package.name();
     let callee = (callee_address, callee_module, callee_function);
@@ -146,8 +157,5 @@ fn check_private_generics_v2(
                  only be instantiated with types defined within the caller's module.{}",
         callee_package_name, callee_module, callee_function, internal_idx, help,
     );
-    Err(ExecutionError::new_with_source(
-        ExecutionErrorKind::NonEntryFunctionInvoked,
-        msg,
-    ))
+    Err(ExecutionError::new_with_source(ExecutionErrorKind::NonEntryFunctionInvoked, msg).into())
 }

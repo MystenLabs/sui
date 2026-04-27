@@ -13,6 +13,7 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::runtime::MoveRuntime;
+    use mysten_common::debug_fatal;
     use std::collections::BTreeMap;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
     use sui_types::accumulator_root::{ACCUMULATOR_ROOT_CREATE_FUNC, ACCUMULATOR_ROOT_MODULE};
@@ -855,9 +856,7 @@ mod checked {
                 rewritten_inputs,
                 pt,
                 trace_builder_opt,
-            )
-            // TODO push Mode::Error lower into the call stack and remove into()
-            .map_err(|(e, timings)| (e.into(), timings)),
+            ),
             TransactionKind::ProgrammableSystemTransaction(pt) => {
                 SPT::execute::<execution_mode::System<Mode::Error>>(
                     protocol_config,
@@ -871,8 +870,7 @@ mod checked {
                     pt,
                     trace_builder_opt,
                 )
-                // TODO push Mode::Error lower into the call stack and remove into()
-                .map_err(|(e, _)| (e.into(), vec![]))?;
+                .map_err(|(e, _)| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
@@ -1002,9 +1000,8 @@ mod checked {
             }
         }?;
         temporary_store
-            .check_execution_results_consistency()
-            // TODO push Mode::Error lower into the call stack and remove into()
-            .map_err(|e| (e.into(), vec![]))?;
+            .check_execution_results_consistency::<Mode::Error>()
+            .map_err(|e| (e, vec![]))?;
         Ok(result)
     }
 
@@ -1042,10 +1039,10 @@ mod checked {
         (storage_rewards, computation_rewards)
     }
 
-    pub fn construct_advance_epoch_pt(
+    pub fn construct_advance_epoch_pt<E: ExecutionErrorTrait>(
         mut builder: ProgrammableTransactionBuilder,
         params: &AdvanceEpochParams,
-    ) -> Result<ProgrammableTransaction, ExecutionError> {
+    ) -> Result<ProgrammableTransaction, E> {
         // Step 1: Create storage and computation rewards.
         let (storage_rewards, computation_rewards) = mint_epoch_rewards_in_pt(&mut builder, params);
 
@@ -1163,9 +1160,8 @@ mod checked {
             reward_slashing_rate: protocol_config.reward_slashing_rate(),
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
-        // TODO push Mode::Error lower into the call stack and remove (implicit) into()
-        let advance_epoch_pt = construct_advance_epoch_pt(builder, &params)?;
-        let result = SPT::execute::<execution_mode::System>(
+        let advance_epoch_pt = construct_advance_epoch_pt::<Mode::Error>(builder, &params)?;
+        let result = SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics.clone(),
             move_vm,
@@ -1317,7 +1313,7 @@ mod checked {
             );
             builder.finish()
         };
-        SPT::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics,
             move_vm,
@@ -1329,7 +1325,6 @@ mod checked {
             pt,
             trace_builder_opt,
         )
-        // TODO push Mode::Error lower into the call stack and remove (implicit) into()
         .map_err(|(e, _)| e)?;
         Ok(())
     }
@@ -1466,7 +1461,7 @@ mod checked {
             );
             builder.finish()
         };
-        SPT::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics,
             move_vm,
@@ -1539,7 +1534,7 @@ mod checked {
             );
             builder.finish()
         };
-        SPT::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics,
             move_vm,

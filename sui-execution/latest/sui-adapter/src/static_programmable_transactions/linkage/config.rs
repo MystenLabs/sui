@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 use crate::{
     data_store::PackageStore,
     static_programmable_transactions::linkage::resolution::{
-        ResolutionTable, VersionConstraint, add_and_unify,
+        add_and_unify, ResolutionTable, VersionConstraint,
     },
 };
 use move_binary_format::binary_config::BinaryConfig;
@@ -16,8 +16,8 @@ use move_vm_runtime::{
 };
 use sui_protocol_config::Amendments;
 use sui_types::{
-    MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID, base_types::ObjectID,
-    error::ExecutionError,
+    base_types::ObjectID, error::ExecutionErrorTrait, MOVE_STDLIB_PACKAGE_ID,
+    SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
 };
 
 /// These are the set of native packages in Sui -- importantly they can be used implicitly by
@@ -69,10 +69,13 @@ impl ResolutionConfig {
         &self.0.binary_config
     }
 
-    pub(crate) fn resolution_table_with_native_packages(
+    pub(crate) fn resolution_table_with_native_packages<E>(
         &self,
         store: &dyn PackageStore,
-    ) -> Result<ResolutionTable, ExecutionError> {
+    ) -> Result<ResolutionTable, E>
+    where
+        E: ExecutionErrorTrait,
+    {
         let mut resolution_table = ResolutionTable::empty(self.clone());
         if self.0.linkage_config.always_include_system_packages {
             for id in NATIVE_PACKAGE_IDS {

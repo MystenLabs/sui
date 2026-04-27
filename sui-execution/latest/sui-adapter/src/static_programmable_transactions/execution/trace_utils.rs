@@ -18,7 +18,7 @@ use move_trace_format::{
 use move_vm_runtime::execution::values::Value as VMValue;
 use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
-    error::ExecutionError,
+    error::{ExecutionError, ExecutionErrorTrait},
     ptb_trace::{
         ExtMoveValue, ExtMoveValueInfo, ExternalEvent, PTBCommandInfo, PTBEvent, SummaryEvent,
     },
@@ -47,12 +47,12 @@ pub fn trace_move_call_end(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
 
 /// Inserts transfer event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_transfer(
-    context: &mut Context,
+pub fn trace_transfer<E: ExecutionErrorTrait>(
+    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, E>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     values: &[CtxValue],
     tys: &[Type],
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     if let Some(trace_builder) = trace_builder_opt {
         let mut to_transfer = vec![];
         for (idx, (v, ty)) in values.iter().zip_debug_eq(tys).enumerate() {
@@ -77,11 +77,11 @@ pub fn trace_transfer(
 
 /// Inserts PTB summary event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_ptb_summary(
-    context: &mut Context,
+pub fn trace_ptb_summary<E: ExecutionErrorTrait>(
+    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, E>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     commands: &Commands,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     if let Some(trace_builder) = trace_builder_opt {
         let events = commands
             .iter()
@@ -138,7 +138,7 @@ pub fn trace_ptb_summary(
                     Ok(vec![PTBCommandInfo::ExternalEvent("Upgrade".to_string())])
                 }
             })
-            .collect::<Result<Vec<Vec<PTBCommandInfo>>, ExecutionError>>()?
+            .collect::<Result<Vec<Vec<PTBCommandInfo>>, E>>()?
             .into_iter()
             .flatten()
             .collect();
@@ -155,14 +155,14 @@ pub fn trace_ptb_summary(
 
 /// Inserts split coins event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_split_coins(
-    context: &mut Context,
+pub fn trace_split_coins<E: ExecutionErrorTrait>(
+    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, E>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     coin_type: &Type,
     input_coin: Vec<ExtMoveValueInfo>,
     split_coin_values: &[CtxValue],
     total_split_value: u64,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     if let Some(trace_builder) = trace_builder_opt {
         let type_tag_with_refs = adapter_type_to_type_tag_with_refs(coin_type)?;
         let layout = annotated_type_layout_for_adapter_ty(context, coin_type)?;
@@ -203,13 +203,13 @@ pub fn trace_split_coins(
 
 /// Inserts merge coins event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_merge_coins(
-    _context: &mut Context,
+pub fn trace_merge_coins<E: ExecutionErrorTrait>(
+    _context: &mut Context<'_, '_, '_, '_, '_, '_, '_, E>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     _coin_type: &Type,
     mut trace_values: Vec<ExtMoveValueInfo>,
     total_merged_value: u64,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     if let Some(trace_builder) = trace_builder_opt {
         if trace_values.is_empty() {
             invariant_violation!("Missing destination coin for tracing `MergeCoins`");
@@ -248,12 +248,12 @@ pub fn trace_merge_coins(
 
 /// Inserts make move vec event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn trace_make_move_vec(
-    context: &mut Context,
+pub fn trace_make_move_vec<E: ExecutionErrorTrait>(
+    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, E>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     values: &[CtxValue],
     type_: &Type,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     if let Some(trace_builder) = trace_builder_opt {
         let type_tag_with_refs = adapter_type_to_type_tag_with_refs(type_)?;
         let layout = annotated_type_layout_for_adapter_ty(context, type_)?;
@@ -321,13 +321,13 @@ pub fn trace_execution_error(trace_builder_opt: &mut Option<MoveTraceBuilder>, m
 /// Adds `ExtMoveValueInfo` to the mutable vector passed as an argument.
 /// As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
-pub fn add_move_value_info_from_ctx_value(
-    context: &mut Context,
+pub fn add_move_value_info_from_ctx_value<E: ExecutionErrorTrait>(
+    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, E>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     move_values: &mut Vec<ExtMoveValueInfo>,
     type_: &Type,
     value: &CtxValue,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     if trace_builder_opt.is_some()
         && let Some(move_value_info) = move_value_info_from_ctx_value(context, type_, value)?
     {
@@ -337,27 +337,27 @@ pub fn add_move_value_info_from_ctx_value(
 }
 
 /// Creates `ExtMoveValueInfo` from `Value`.
-fn move_value_info_from_ctx_value(
-    context: &mut Context,
+fn move_value_info_from_ctx_value<E: ExecutionErrorTrait>(
+    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, E>,
     type_: &Type,
     value: &CtxValue,
-) -> Result<Option<ExtMoveValueInfo>, ExecutionError> {
+) -> Result<Option<ExtMoveValueInfo>, E> {
     let layout = annotated_type_layout_for_adapter_ty(context, type_)?;
     let value = serializable_move_value_from_ctx_value(value, &layout)?;
     let type_ = adapter_type_to_type_tag_with_refs(type_)?;
     Ok(Some(ExtMoveValueInfo { type_, value }))
 }
 
-fn annotated_type_layout_for_adapter_ty(
-    context: &mut Context,
+fn annotated_type_layout_for_adapter_ty<E: ExecutionErrorTrait>(
+    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, E>,
     type_: &Type,
-) -> Result<A::MoveTypeLayout, ExecutionError> {
-    context.env.fully_annotated_layout(type_).map_err(|e| {
+) -> Result<A::MoveTypeLayout, E> {
+    Ok(context.env.fully_annotated_layout(type_).map_err(|e| {
         make_invariant_violation!(
             "Failed to get annotated type layout for adapter type: {}",
             e
         )
-    })
+    })?)
 }
 
 /// Creates a `SerializableMoveValue` (a Move value for the trace format) from a `CtxValue` and a

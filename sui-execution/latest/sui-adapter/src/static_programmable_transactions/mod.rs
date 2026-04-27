@@ -47,25 +47,25 @@ pub fn execute<Mode: ExecutionMode>(
     withdrawal_compatibility_inputs: Option<Vec<bool>>,
     txn: ProgrammableTransaction,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
-) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+) -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
     let gas_payment = gas_charger.gas_payment_amount();
     let package_store = CachedPackageStore::new(vm, TransactionPackageStore::new(package_store));
     let linkage_analysis =
-        LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
+        LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e.into(), vec![]))?;
     let ptb_type_linkage = linkage_analysis
-        .compute_input_type_resolution_linkage(&txn, &package_store, state_view)
-        .and_then(|linkage| linkage.linkage_context())
+        .compute_input_type_resolution_linkage::<Mode::Error>(&txn, &package_store, state_view)
+        .and_then(|linkage| linkage.linkage_context::<Mode::Error>())
         .map_err(|e| (e, vec![]))?;
     let resolution_vm = vm
         .make_vm(&package_store.package_store, ptb_type_linkage)
         .map_err(|e| {
             (
-                ExecutionError::new_with_source(ExecutionErrorKind::InvalidLinkage, e),
+                ExecutionError::new_with_source(ExecutionErrorKind::InvalidLinkage, e).into(),
                 vec![],
             )
         })?;
 
-    let mut env = Env::new(
+    let mut env: Env<'_, '_, '_, '_, '_, Mode::Error> = Env::new(
         protocol_config,
         vm,
         state_view,
@@ -86,10 +86,10 @@ pub fn execute<Mode: ExecutionMode>(
             gas_payment,
             txn,
         )
-        .map_err(|e| (e, vec![]))?
+        .map_err(|e| (e.into(), vec![]))?
     };
     let txn = typing::translate_and_verify::<Mode>(&mut translation_meter, &env, txn)
-        .map_err(|e| (e, vec![]))?;
+        .map_err(|e| (e.into(), vec![]))?;
     execution::interpreter::execute::<Mode>(
         &mut env,
         metrics,
@@ -98,4 +98,5 @@ pub fn execute<Mode: ExecutionMode>(
         txn,
         trace_builder_opt,
     )
+    .map_err(|(e, timings)| (e.into(), timings))
 }

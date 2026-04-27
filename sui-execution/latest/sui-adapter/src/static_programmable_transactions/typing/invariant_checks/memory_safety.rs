@@ -8,7 +8,7 @@ use crate::{
 use indexmap::IndexSet;
 use mysten_common::ZipDebugEqIteratorExt;
 use std::rc::Rc;
-use sui_types::error::ExecutionError;
+use sui_types::error::{ExecutionError, ExecutionErrorTrait};
 
 /// A dot-star like extension, but with a unique identifier. Deltas can be compared between
 /// different Deltas of the same command, otherwise they behave like .* in the regex based
@@ -291,7 +291,10 @@ impl Location {
 }
 
 impl Context {
-    fn new(_env: &Env, txn: &T::Transaction) -> anyhow::Result<Self> {
+    fn new<E: ExecutionErrorTrait>(
+        _env: &Env<'_, '_, '_, '_, '_, E>,
+        txn: &T::Transaction,
+    ) -> anyhow::Result<Self> {
         let T::Transaction {
             gas_payment,
             bytes: _,
@@ -315,28 +318,28 @@ impl Context {
                     i, u16
                 )?)))
             })
-            .collect::<Result<_, ExecutionError>>()?;
+            .collect::<Result<_, E>>()?;
         let withdrawal_inputs = (0..withdrawals.len())
             .map(|i| {
                 Ok(Location::non_ref(T::Location::WithdrawalInput(
                     checked_as!(i, u16)?,
                 )))
             })
-            .collect::<Result<_, ExecutionError>>()?;
+            .collect::<Result<_, E>>()?;
         let pure_inputs = (0..pure.len())
             .map(|i| {
                 Ok(Location::non_ref(T::Location::PureInput(checked_as!(
                     i, u16
                 )?)))
             })
-            .collect::<Result<_, ExecutionError>>()?;
+            .collect::<Result<_, E>>()?;
         let receiving_inputs = (0..receiving.len())
             .map(|i| {
                 Ok(Location::non_ref(T::Location::ReceivingInput(checked_as!(
                     i, u16
                 )?)))
             })
-            .collect::<Result<_, ExecutionError>>()?;
+            .collect::<Result<_, E>>()?;
         Ok(Self {
             tx_context,
             gas,
@@ -546,11 +549,17 @@ impl Context {
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
-pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
-    verify_(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))
+pub fn verify<E: ExecutionErrorTrait>(
+    env: &Env<'_, '_, '_, '_, '_, E>,
+    txn: &T::Transaction,
+) -> Result<(), E> {
+    Ok(verify_(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))?)
 }
 
-fn verify_(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
+fn verify_<E: ExecutionErrorTrait>(
+    env: &Env<'_, '_, '_, '_, '_, E>,
+    txn: &T::Transaction,
+) -> anyhow::Result<()> {
     let mut context = Context::new(env, txn)?;
     let T::Transaction {
         gas_payment: _,

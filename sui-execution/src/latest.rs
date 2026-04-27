@@ -14,7 +14,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorContext, ExecutionErrorTrait, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
@@ -25,8 +25,8 @@ use sui_types::{
 };
 
 use move_bytecode_verifier_meter::Meter;
-use mysten_common::debug_fatal;
 use move_vm_runtime_latest::runtime::MoveRuntime;
+use mysten_common::debug_fatal;
 use sui_adapter_latest::adapter::{new_move_runtime, run_metered_move_bytecode_verifier};
 use sui_adapter_latest::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
@@ -106,6 +106,9 @@ impl executor::Executor for Executor {
                 execution_params,
                 trace_builder_opt,
             );
+        if let Err(error) = &result {
+            log_execution_error(transaction_digest, error);
+        }
         (store_out, gas_status_out, effects, timings, result)
     }
 
@@ -131,10 +134,10 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
+        Result<(), ExecutionErrorContext>,
     ) {
         let (store_out, gas_status_out, effects, timings, result) =
-            execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
+            execute_transaction_to_effects::<execution_mode::Normal<ExecutionErrorContext>>(
                 store,
                 input_objects,
                 gas,
@@ -289,7 +292,10 @@ impl verifier::Verifier for Verifier<'_> {
     }
 }
 
-fn log_execution_error(transaction_digest: TransactionDigest, error: &ExecutionError) {
+fn log_execution_error<E>(transaction_digest: TransactionDigest, error: &E)
+where
+    E: ExecutionErrorTrait + std::error::Error,
+{
     use sui_types::execution_status::ExecutionErrorKind as K;
 
     match error.kind() {
@@ -297,7 +303,7 @@ fn log_execution_error(transaction_digest: TransactionDigest, error: &ExecutionE
             debug_fatal!(
                 "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
                 transaction_digest,
-                error.source()
+                std::error::Error::source(error)
             );
         }
         K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
@@ -305,7 +311,7 @@ fn log_execution_error(transaction_digest: TransactionDigest, error: &ExecutionE
                 kind = ?error.kind(),
                 tx_digest = ?transaction_digest,
                 "Verification Error. Source: {:?}",
-                error.source(),
+                std::error::Error::source(error),
             );
         }
         K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
@@ -313,7 +319,7 @@ fn log_execution_error(transaction_digest: TransactionDigest, error: &ExecutionE
                 kind = ?error.kind(),
                 tx_digest = ?transaction_digest,
                 "Publish/Upgrade Error. Source: {:?}",
-                error.source(),
+                std::error::Error::source(error),
             );
         }
         _ => (),
