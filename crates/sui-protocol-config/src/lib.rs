@@ -325,6 +325,7 @@ const TESTNET_USDC: &str =
 //              Enable defer_unpaid_amplification on mainnet.
 // Version 123: Add timestamp_based_epoch_close feature flag and enable in tests.
 //              Fix native call double-pop in gas meter stack height tracking (gas_model v12).
+//              Limit public inputs in groth16::prepare_verifying_key.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
