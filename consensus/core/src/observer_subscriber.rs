@@ -153,63 +153,69 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 let _scope = monitored_scope("ObserverSubscriberStreamConsumer");
 
                 match blocks.next().await {
-                    Some(block) => {
+                    Some(batch) => {
                         context
                             .metrics
                             .node_metrics
                             .observer_subscribed_blocks
-                            .inc();
+                            .inc_by(batch.len() as u64);
 
-                        // Backpressure: wait if we've hit max parallelism
-                        while active_tasks.load(Ordering::Acquire) >= max_parallel_tasks {
-                            // Block until a task completes instead of busy-waiting
-                            match tasks.join_next().await {
-                                Some(Ok(_)) => {
-                                    // Task completed successfully, counter already decremented
-                                }
-                                Some(Err(e)) => {
-                                    warn!("Task failed with error: {}", e);
-                                }
-                                None => {
-                                    // This shouldn't happen if our counter is accurate
-                                    warn!(
-                                        "No tasks to join but counter shows {} active tasks",
-                                        active_tasks.load(Ordering::Acquire)
-                                    );
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Spawn a new task to handle this block
-                        active_tasks.fetch_add(1, Ordering::AcqRel);
-                        let counter = active_tasks.clone();
-                        let observer_service = observer_service.clone();
-                        let peer_cloned = peer.clone();
-
-                        tasks.spawn(async move {
-                            let _scope = monitored_scope("ObserverSubscriberTask::handle_block");
-
-                            let result = observer_service
-                                .handle_block(peer_cloned.clone(), block)
-                                .await;
-                            if let Err(e) = result {
-                                match e {
-                                    ConsensusError::BlockRejected { block_ref, reason } => {
-                                        debug!(
-                                            "Failed to process block from peer for block {:?}: {}",
-                                            block_ref, reason
+                        for block in batch {
+                            // Backpressure: wait if we've hit max parallelism
+                            while active_tasks.load(Ordering::Acquire) >= max_parallel_tasks {
+                                // Block until a task completes instead of busy-waiting
+                                match tasks.join_next().await {
+                                    Some(Ok(_)) => {
+                                        // Task completed successfully, counter already decremented
+                                    }
+                                    Some(Err(e)) => {
+                                        warn!("Task failed with error: {}", e);
+                                    }
+                                    None => {
+                                        // This shouldn't happen if our counter is accurate
+                                        warn!(
+                                            "No tasks to join but counter shows {} active tasks",
+                                            active_tasks.load(Ordering::Acquire)
                                         );
-                                    }
-                                    _ => {
-                                        info!("Received invalid block from peer: {}", e);
+                                        break;
                                     }
                                 }
                             }
 
-                            // Decrement counter when done
-                            counter.fetch_sub(1, Ordering::AcqRel);
-                        });
+                            // Spawn a new task to handle this block
+                            active_tasks.fetch_add(1, Ordering::AcqRel);
+                            let counter = active_tasks.clone();
+                            let observer_service = observer_service.clone();
+                            let peer_cloned = peer.clone();
+
+                            tasks.spawn(async move {
+                                let _scope =
+                                    monitored_scope("ObserverSubscriberTask::handle_block");
+
+                                let result = observer_service
+                                    .handle_block(peer_cloned.clone(), block)
+                                    .await;
+                                if let Err(e) = result {
+                                    match e {
+                                        ConsensusError::BlockRejected {
+                                            block_ref,
+                                            reason,
+                                        } => {
+                                            debug!(
+                                                "Failed to process block from peer for block {:?}: {}",
+                                                block_ref, reason
+                                            );
+                                        }
+                                        _ => {
+                                            info!("Received invalid block from peer: {}", e);
+                                        }
+                                    }
+                                }
+
+                                // Decrement counter when done
+                                counter.fetch_sub(1, Ordering::AcqRel);
+                            });
+                        }
 
                         // Reset retries when a block is received and also reset the backoff.
                         retries = 0;
@@ -288,7 +294,7 @@ mod tests {
 
             let block_stream = stream::unfold(block_value, move |val| async move {
                 sleep(Duration::from_millis(1)).await;
-                Some((Bytes::from(vec![val; 8]), val))
+                Some((vec![Bytes::from(vec![val; 8])], val))
             })
             .take(10);
             Ok(Box::pin(block_stream))
