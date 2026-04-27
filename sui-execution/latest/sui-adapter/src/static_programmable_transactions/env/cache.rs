@@ -1,13 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::{
-    linkage::resolved_linkage::ExecutableLinkage,
-    loading::ast::{LoadedFunction, Type},
+use crate::{
+    data_store::PackageStore,
+    static_programmable_transactions::{
+        linkage::resolution::ResolutionTable,
+        loading::ast::{LoadedFunction, Type},
+    },
 };
 use indexmap::IndexSet;
 use move_core_types::{
-    account_address::AccountAddress, identifier::IdentStr, language_storage::TypeTag,
+    account_address::AccountAddress,
+    identifier::IdentStr,
+    language_storage::{StructTag, TypeTag},
+    resolver::IntraPackageName,
 };
 use move_vm_runtime::execution as vm_runtime;
 use std::{
@@ -16,10 +22,16 @@ use std::{
     rc::Rc,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::{Identifier, base_types::ObjectID, error::ExecutionError, type_input::TypeInput};
+use sui_types::{
+    Identifier,
+    base_types::ObjectID,
+    error::ExecutionError,
+    execution_status::{ExecutionErrorKind, TypeArgumentError},
+    type_input::{StructInput, TypeInput},
+};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(super) struct TypeLinkageCacheKey {
+pub(crate) struct TypeLinkageCacheKey {
     // NB: We use a BTreeSet here to ensure that the order of the root IDs does not affect the
     // cache key.
     root_ids: BTreeSet<AccountAddress>,
@@ -33,7 +45,7 @@ pub(super) struct LoadedFunctionKey {
     type_arguments: Vec<Type>,
 }
 
-pub(super) struct PerTxCache<'pc> {
+pub struct PerTxCache<'pc> {
     protocol_config: &'pc ProtocolConfig,
     inner: RefCell<PerTxCache_>,
 }
@@ -42,10 +54,13 @@ pub(super) struct PerTxCache<'pc> {
 ///
 /// The tables fall into four groups:
 ///
-/// 1. **Linkage resolution** (`type_linkage_cache`): computing an `ExecutableLinkage` for a set of
-///    defining-ID addresses touches every transitive dependency of those packages; the same set
-///    of roots may be queried many times within a single PTB (once per type input, once per type
-///    argument on a call, etc.). This caches that lookup.
+/// 1. **Linkage resolution** (`type_resolution_cache`): computing the transitive-dependency
+///    `ResolutionTable` for a set of root addresses touches every transitive dependency of
+///    those packages; the same set of roots may be queried many times within a single PTB
+///    (once per object input, once per type argument on a call, once per `get_type_linkage`,
+///    etc.). Caching the `ResolutionTable` (rather than the derived `ExecutableLinkage`) lets
+///    input-resolution analysis fold cached minis into the PTB-wide table without re-walking,
+///    and lets `Env::get_type_linkage` derive its `ExecutableLinkage` from the same source.
 ///
 /// 2. **TypeInput resolution** (`type_input_to_type`): user-supplied `TypeInput`s are resolved to
 ///    adapter `Type`s via a tag lookup + VM load. Kept one-way because multiple `TypeInput`s can
@@ -67,13 +82,20 @@ pub(super) struct PerTxCache<'pc> {
 /// tuples, so hashing dominates over ordered iteration, and `vm_runtime::Type` in particular
 /// only implements `Hash + Eq` (not `Ord`).
 struct PerTxCache_ {
-    /// Linkage resolutions keyed by `<defining-ID root set>`.
-    ///
-    /// NB: this can only be used for determining type linkages.
-    type_linkage_cache: HashMap<TypeLinkageCacheKey, ExecutableLinkage>,
+    /// Per-tag mini `ResolutionTable`s keyed by the root-address set walked. Used both to
+    /// fold into the PTB-wide table during input-resolution analysis and to derive the
+    /// `ExecutableLinkage` that `Env::get_type_linkage` returns on the error path.
+    type_resolution_cache: HashMap<TypeLinkageCacheKey, Rc<ResolutionTable>>,
 
     /// TypeInput -> adapter Type. One-way only.
     type_input_to_type: HashMap<TypeInput, Type>,
+
+    /// TypeInput -> defining-ID `TypeTag`. The rewrite walks each `TypeInput::Struct`,
+    /// resolves its `address` through the package's `type_origin_table` to the defining ID
+    /// for the named type, and recurses into type params. This is keyed on the raw
+    /// user-supplied `TypeInput` because the same input is queried both during input
+    /// resolution analysis (for linkage pre-warming) and during loading.
+    type_input_to_tag: HashMap<TypeInput, Rc<TypeTag>>,
 
     /// Bijective Type <-> TypeTag. Populated atomically via `insert_tag_type_pair`.
     tag_to_type: HashMap<Rc<TypeTag>, Type>,
@@ -105,12 +127,13 @@ macro_rules! gated {
 }
 
 impl<'pc> PerTxCache<'pc> {
-    pub(super) fn new(protocol_config: &'pc ProtocolConfig) -> Self {
+    pub(crate) fn new(protocol_config: &'pc ProtocolConfig) -> Self {
         Self {
             protocol_config,
             inner: RefCell::new(PerTxCache_ {
-                type_linkage_cache: HashMap::new(),
+                type_resolution_cache: HashMap::new(),
                 type_input_to_type: HashMap::new(),
+                type_input_to_tag: HashMap::new(),
                 tag_to_type: HashMap::new(),
                 type_to_tag: HashMap::new(),
                 vm_to_type: HashMap::new(),
@@ -119,6 +142,10 @@ impl<'pc> PerTxCache<'pc> {
                 defining_id_map: HashMap::new(),
             }),
         }
+    }
+
+    pub(crate) fn is_enabled(&self) -> bool {
+        self.protocol_config.enable_ptb_tx_cache()
     }
 
     fn borrow(&self) -> Result<std::cell::Ref<'_, PerTxCache_>, ExecutionError> {
@@ -137,22 +164,114 @@ impl<'pc> PerTxCache<'pc> {
         })
     }
 
-    pub(super) fn lookup_type_linkage(
-        &self,
-        key: &TypeLinkageCacheKey,
-    ) -> Result<Option<ExecutableLinkage>, ExecutionError> {
-        gated!(self.protocol_config, None);
-        Ok(self.borrow()?.type_linkage_cache.get(key).cloned())
-    }
-
-    pub(super) fn insert_type_linkage(
+    /// Look up the cached mini `ResolutionTable` for `key`, or compute and cache it via
+    /// `compute` on miss. When caching is disabled, always invokes `compute` and returns its
+    /// result wrapped in a fresh `Rc` without touching the table.
+    pub(crate) fn get_or_compute_type_resolution(
         &self,
         key: TypeLinkageCacheKey,
-        linkage: ExecutableLinkage,
-    ) -> Result<(), ExecutionError> {
-        gated!(self.protocol_config, ());
-        self.borrow_mut()?.type_linkage_cache.insert(key, linkage);
-        Ok(())
+        compute: impl FnOnce() -> Result<ResolutionTable, ExecutionError>,
+    ) -> Result<Rc<ResolutionTable>, ExecutionError> {
+        gated!(self.protocol_config, Rc::new(compute()?));
+        if let Some(cached) = self.borrow()?.type_resolution_cache.get(&key).cloned() {
+            return Ok(cached);
+        }
+        let table = Rc::new(compute()?);
+        self.borrow_mut()?
+            .type_resolution_cache
+            .insert(key, table.clone());
+        Ok(table)
+    }
+
+    /// Resolve a `TypeInput` into a `TypeTag` whose addresses are defining IDs (not the raw
+    /// user-supplied addresses), consulting (and populating) the per-tx cache. The recursion
+    /// also memoizes nested type-input fragments.
+    pub(crate) fn type_input_to_defining_tag(
+        &self,
+        ty: &TypeInput,
+        type_arg_idx: usize,
+        package_store: &dyn PackageStore,
+    ) -> Result<Rc<TypeTag>, ExecutionError> {
+        if self.protocol_config.enable_ptb_tx_cache()
+            && let Some(cached) = self.borrow()?.type_input_to_tag.get(ty).cloned()
+        {
+            return Ok(cached);
+        }
+
+        let tag = match ty {
+            TypeInput::Bool => TypeTag::Bool,
+            TypeInput::U8 => TypeTag::U8,
+            TypeInput::U16 => TypeTag::U16,
+            TypeInput::U32 => TypeTag::U32,
+            TypeInput::U64 => TypeTag::U64,
+            TypeInput::U128 => TypeTag::U128,
+            TypeInput::U256 => TypeTag::U256,
+            TypeInput::Address => TypeTag::Address,
+            TypeInput::Signer => TypeTag::Signer,
+            TypeInput::Vector(inner) => {
+                let inner_tag =
+                    self.type_input_to_defining_tag(inner, type_arg_idx, package_store)?;
+                TypeTag::Vector(Box::new((*inner_tag).clone()))
+            }
+            TypeInput::Struct(struct_input) => {
+                let StructInput {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                } = &**struct_input;
+
+                let pkg = package_store
+                    .get_package(&ObjectID::from(*address))
+                    .ok()
+                    .flatten()
+                    .ok_or_else(|| {
+                        let argument_idx = match checked_as!(type_arg_idx, u16) {
+                            Err(e) => return e,
+                            Ok(v) => v,
+                        };
+                        ExecutionError::from_kind(ExecutionErrorKind::TypeArgumentError {
+                            argument_idx,
+                            kind: TypeArgumentError::TypeNotFound,
+                        })
+                    })?;
+                let module = super::to_identifier(module.clone())?;
+                let name = super::to_identifier(name.clone())?;
+                let tid = IntraPackageName {
+                    module_name: module,
+                    type_name: name,
+                };
+                let Some(resolved_address) = pkg.type_origin_table().get(&tid).cloned() else {
+                    return Err(ExecutionError::from_kind(
+                        ExecutionErrorKind::TypeArgumentError {
+                            argument_idx: checked_as!(type_arg_idx, u16)?,
+                            kind: TypeArgumentError::TypeNotFound,
+                        },
+                    ));
+                };
+
+                let type_params = type_params
+                    .iter()
+                    .map(|tp| {
+                        self.type_input_to_defining_tag(tp, type_arg_idx, package_store)
+                            .map(|rc| (*rc).clone())
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                TypeTag::Struct(Box::new(StructTag {
+                    address: resolved_address,
+                    module: tid.module_name,
+                    name: tid.type_name,
+                    type_params,
+                }))
+            }
+        };
+
+        let tag = Rc::new(tag);
+        gated!(self.protocol_config, tag);
+        self.borrow_mut()?
+            .type_input_to_tag
+            .insert(ty.clone(), tag.clone());
+        Ok(tag)
     }
 
     pub(super) fn lookup_type_input(
@@ -323,7 +442,7 @@ impl<'pc> PerTxCache<'pc> {
 }
 
 impl TypeLinkageCacheKey {
-    pub(super) fn new(root_ids: &IndexSet<AccountAddress>) -> Self {
+    pub(crate) fn new(root_ids: &IndexSet<AccountAddress>) -> Self {
         Self {
             root_ids: root_ids.iter().copied().collect(),
         }

@@ -45,6 +45,30 @@ impl ResolutionTable {
         }
     }
 
+    /// Fold the entries from `other` into `self`, unifying constraints for any package that
+    /// already exists in `self`. Used to merge a per-tag mini `ResolutionTable` (typically
+    /// pulled from the per-tx cache) into the PTB-wide table without re-walking transitive
+    /// dependencies.
+    pub fn fold_in(&mut self, other: &ResolutionTable) -> Result<(), ExecutionError> {
+        for (original_pkg_id, constraint) in &other.resolution_table {
+            match self.resolution_table.entry(*original_pkg_id) {
+                Entry::Vacant(e) => {
+                    e.insert(constraint.clone());
+                }
+                Entry::Occupied(mut e) => {
+                    let unified = e.get().unify(constraint)?;
+                    e.insert(unified);
+                }
+            }
+        }
+        for (version_id, original_id) in &other.all_versions_resolution_table {
+            self.all_versions_resolution_table
+                .entry(*version_id)
+                .or_insert(*original_id);
+        }
+        Ok(())
+    }
+
     /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
     /// Since this linkage analysis should only be used for types, all packages are resolved
     /// "upwards" (i.e., later versions of the package are preferred).

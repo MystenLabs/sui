@@ -6,6 +6,7 @@ use crate::{
     execution_mode::ExecutionMode,
     execution_value::ExecutionState,
     static_programmable_transactions::{
+        env::cache::PerTxCache,
         linkage::{
             config::{LinkageConfig, ResolutionConfig},
             resolution::{ResolutionTable, VersionConstraint, add_and_unify, get_package},
@@ -83,12 +84,14 @@ impl LinkageAnalyzer {
         tx: &ProgrammableTransaction,
         package_store: &dyn PackageStore,
         object_store: &dyn ExecutionState,
+        cache: &PerTxCache,
     ) -> Result<ExecutableLinkage, ExecutionError> {
         input_type_resolution_analysis::compute_resolution_linkage(
             self,
             tx,
             package_store,
             object_store,
+            cache,
         )
     }
 
@@ -187,13 +190,17 @@ mod input_type_resolution_analysis {
     use crate::{
         data_store::PackageStore,
         execution_value::ExecutionState,
-        static_programmable_transactions::linkage::{
-            analysis::LinkageAnalyzer,
-            resolution::ResolutionTable,
-            resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
+        static_programmable_transactions::{
+            env::cache::{PerTxCache, TypeLinkageCacheKey},
+            linkage::{
+                analysis::LinkageAnalyzer,
+                resolution::ResolutionTable,
+                resolved_linkage::{ExecutableLinkage, ResolvedLinkage},
+            },
         },
     };
-    use move_core_types::language_storage::StructTag;
+    use indexmap::IndexSet;
+    use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
     use sui_types::{
         base_types::ObjectID,
         error::ExecutionError,
@@ -210,6 +217,7 @@ mod input_type_resolution_analysis {
         tx: &ProgrammableTransaction,
         package_store: &dyn PackageStore,
         object_store: &dyn ExecutionState,
+        cache: &PerTxCache,
     ) -> Result<ExecutableLinkage, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = tx;
 
@@ -217,11 +225,18 @@ mod input_type_resolution_analysis {
             .internal
             .resolution_table_with_native_packages(package_store)?;
         for arg in inputs.iter() {
-            input(&mut resolution_table, arg, package_store, object_store)?;
+            input(
+                analyzer,
+                &mut resolution_table,
+                arg,
+                package_store,
+                object_store,
+                cache,
+            )?;
         }
 
         for cmd in commands.iter() {
-            command(&mut resolution_table, cmd, package_store)?;
+            command(analyzer, &mut resolution_table, cmd, package_store, cache)?;
         }
 
         Ok(ExecutableLinkage::new(
@@ -229,11 +244,35 @@ mod input_type_resolution_analysis {
         ))
     }
 
+    /// Get-or-compute the mini `ResolutionTable` for `addrs` via the per-tx cache, then fold
+    /// it into `big`. When the cache has the entry from a prior call (or a previous tag in the
+    /// same PTB), no re-walking happens — the cached transitive-dependency closure is reused.
+    fn merge_type_addresses(
+        analyzer: &LinkageAnalyzer,
+        big: &mut ResolutionTable,
+        addrs: IndexSet<AccountAddress>,
+        package_store: &dyn PackageStore,
+        cache: &PerTxCache,
+    ) -> Result<(), ExecutionError> {
+        let key = TypeLinkageCacheKey::new(&addrs);
+        let mini = cache.get_or_compute_type_resolution(key, || {
+            let mut mini = ResolutionTable::empty(analyzer.config().clone());
+            mini.add_type_linkages_to_table(
+                addrs.iter().copied().map(ObjectID::from),
+                package_store,
+            )?;
+            Ok(mini)
+        })?;
+        big.fold_in(&mini)
+    }
+
     fn input(
+        analyzer: &LinkageAnalyzer,
         resolution_table: &mut ResolutionTable,
         arg: &CallArg,
         package_store: &dyn PackageStore,
         object_store: &dyn ExecutionState,
+        cache: &PerTxCache,
     ) -> Result<(), ExecutionError> {
         match arg {
             CallArg::Pure(_) | CallArg::Object(ObjectArg::Receiving(_)) => (),
@@ -250,15 +289,25 @@ mod input_type_resolution_analysis {
                 // invariant: the addresses in the type are defining addresses for the types since
                 // these are the types of the objects as stored on-chain.
                 let tag: StructTag = ty.clone().into();
-                let ids = tag.all_addresses().into_iter().map(ObjectID::from);
-                resolution_table.add_type_linkages_to_table(ids, package_store)?;
+                merge_type_addresses(
+                    analyzer,
+                    resolution_table,
+                    tag.all_addresses(),
+                    package_store,
+                    cache,
+                )?;
             }
             CallArg::FundsWithdrawal(f) => {
                 let FundsWithdrawalArg { type_arg, .. } = f;
                 match type_arg {
                     WithdrawalTypeArg::Balance(tag) => {
-                        let ids = tag.all_addresses().into_iter().map(ObjectID::from);
-                        resolution_table.add_type_linkages_to_table(ids, package_store)?;
+                        merge_type_addresses(
+                            analyzer,
+                            resolution_table,
+                            tag.all_addresses(),
+                            package_store,
+                            cache,
+                        )?;
                     }
                 }
             }
@@ -268,19 +317,51 @@ mod input_type_resolution_analysis {
     }
 
     fn command(
+        analyzer: &LinkageAnalyzer,
         resolution_table: &mut ResolutionTable,
         command: &Command,
         package_store: &dyn PackageStore,
+        cache: &PerTxCache,
     ) -> Result<(), ExecutionError> {
-        let mut add_ty_input = |ty: &TypeInput| {
-            let tag = ty.to_type_tag().map_err(|e| {
+        let mut add_ty_input = |ty: &TypeInput| -> Result<(), ExecutionError> {
+            // Merge for the raw user-supplied addresses — preserves the pre-existing behavior of
+            // contributing the user's specific package versions to the PTB-wide constraints
+            // (e.g. an "at least v2" constraint from a v2 package ID stays in the big table even
+            // if the type's defining ID is v1).
+            let raw_tag = ty.to_type_tag().map_err(|e| {
                 ExecutionError::new_with_source(
                     ExecutionErrorKind::InvalidLinkage,
                     format!("Invalid type tag in move call argument: {:?}", e),
                 )
             })?;
-            let ids = tag.all_addresses().into_iter().map(ObjectID::from);
-            resolution_table.add_type_linkages_to_table(ids, package_store)
+            merge_type_addresses(
+                analyzer,
+                resolution_table,
+                raw_tag.all_addresses(),
+                package_store,
+                cache,
+            )?;
+
+            // Also pre-warm a mini under the defining-ID key so future `Env::get_type_linkage`
+            // calls (which see defining-ID tags after type-origin rewrite) hit the cache. In the
+            // common case where raw == defining IDs, this is the same key as above and is a
+            // cheap cache hit; otherwise it walks once and caches.
+            if cache.is_enabled() {
+                // `type_arg_idx` here only feeds the error variant on failure; pre-warming is
+                // best-effort, so 0 is fine — any real failure will resurface when loading runs.
+                let defining_tag = cache.type_input_to_defining_tag(ty, 0, package_store)?;
+                let defining_addrs = defining_tag.all_addresses();
+                let key = TypeLinkageCacheKey::new(&defining_addrs);
+                cache.get_or_compute_type_resolution(key, || {
+                    let mut mini = ResolutionTable::empty(analyzer.config().clone());
+                    mini.add_type_linkages_to_table(
+                        defining_addrs.iter().copied().map(ObjectID::from),
+                        package_store,
+                    )?;
+                    Ok(mini)
+                })?;
+            }
+            Ok(())
         };
         match command {
             Command::MoveCall(pmc) => {
@@ -289,7 +370,7 @@ mod input_type_resolution_analysis {
                     type_arguments,
                     ..
                 } = &**pmc;
-                type_arguments.iter().try_for_each(add_ty_input)?;
+                type_arguments.iter().try_for_each(&mut add_ty_input)?;
                 resolution_table.add_type_linkages_to_table([*package], package_store)?;
             }
             Command::MakeMoveVec(Some(ty), _) => {
