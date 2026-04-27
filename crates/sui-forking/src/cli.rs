@@ -166,7 +166,8 @@ async fn cmd_start(
             .with_context(|| format!("failed to get latest checkpoint for {}", network_name))?,
     };
 
-    let context = crate::startup::initialize(node, checkpoint, version, data_dir).await?;
+    let (context, subscription_handle) =
+        crate::startup::initialize(node, checkpoint, version, data_dir).await?;
 
     let output = StartOutput {
         network: network_name.clone(),
@@ -180,7 +181,12 @@ async fn cmd_start(
         network_name, checkpoint, rpc_addr,
     );
 
-    let handle = tokio::spawn(crate::startup::run(context, rpc_addr, version));
+    let handle = tokio::spawn(crate::startup::run(
+        context,
+        subscription_handle,
+        rpc_addr,
+        version,
+    ));
     handle.await??;
 
     Ok(())

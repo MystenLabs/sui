@@ -10,3 +10,7 @@ pub(crate) mod forking_service;
 #[cfg(test)]
 #[path = "../tests/rpc_executor.rs"]
 mod executor_tests;
+
+#[cfg(test)]
+#[path = "../tests/subscription_e2e.rs"]
+mod subscription_tests;

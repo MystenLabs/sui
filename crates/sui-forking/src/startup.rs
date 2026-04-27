@@ -6,7 +6,9 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use anyhow::{Result, anyhow};
+use prometheus::Registry;
 use rand::rngs::OsRng;
+use sui_rpc_api::subscription::{SubscriptionService, SubscriptionServiceHandle};
 use sui_rpc_api::{RpcService, ServerVersion};
 use sui_types::storage::RpcStateReader;
 use tracing::info;
@@ -27,13 +29,15 @@ use crate::rpc::forking_service::ForkingServiceImpl;
 use crate::store::DataStore;
 
 /// Initialize a forked network by fetching state from the remote endpoint at
-/// `forked_at_checkpoint` and starting a local Simulacrum instance.
+/// `forked_at_checkpoint` and starting a local Simulacrum instance. Also
+/// builds the checkpoint subscription broker; the returned handle must be
+/// passed to [`run`] so the gRPC server exposes the streaming RPC.
 pub async fn initialize(
     node: Node,
     forked_at_checkpoint: CheckpointSequenceNumber,
     version: &str,
     data_dir: Option<std::path::PathBuf>,
-) -> Result<Context> {
+) -> Result<(Context, SubscriptionServiceHandle)> {
     // 1. Create DataStore — empty local cache, GraphQL wired up.
     let data_store = DataStore::new(node.clone(), forked_at_checkpoint, version, data_dir).await?;
     let chain_identifier = data_store.chain();
@@ -83,18 +87,33 @@ pub async fn initialize(
         rng,
     );
 
-    Ok(Context::new(simulacrum, chain_identifier))
+    // 8. Build the checkpoint subscription broker. The sender is owned by
+    //    `Context` (producers push here on `advance_checkpoint`); the handle
+    //    is wired into `RpcService` in `run` so subscribers can register.
+    let registry = Registry::new();
+    let (checkpoint_sender, subscription_handle) = SubscriptionService::build(&registry);
+
+    Ok((
+        Context::new(simulacrum, chain_identifier, checkpoint_sender),
+        subscription_handle,
+    ))
 }
 
 /// Run the forked network. Spawns a `sui-rpc-api` gRPC server bound to
 /// `rpc_addr` on top of the context's `DataStore`, then blocks on Ctrl+C.
-pub async fn run(context: Context, rpc_addr: SocketAddr, version: &'static str) -> Result<()> {
+pub async fn run(
+    context: Context,
+    subscription_handle: SubscriptionServiceHandle,
+    rpc_addr: SocketAddr,
+    version: &'static str,
+) -> Result<()> {
     let reader: Arc<dyn RpcStateReader> = {
         let sim = context.simulacrum().read().await;
         Arc::new(sim.store().clone())
     };
     let mut service = RpcService::new(reader);
     service.with_server_version(ServerVersion::new("sui-forking", version));
+    service.with_subscription_service(subscription_handle);
     let context = Arc::new(context);
     service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));
     service.with_custom_service(ForkingServiceServer::new(ForkingServiceImpl::new(

@@ -14,6 +14,7 @@ use tonic::Request;
 use tonic::Response;
 use tonic::Status;
 use tracing::info;
+use tracing::warn;
 
 use crate::context::Context;
 use crate::proto::forking::AdvanceCheckpointRequest;
@@ -64,15 +65,29 @@ impl ForkingService for ForkingServiceImpl {
         &self,
         _request: Request<AdvanceCheckpointRequest>,
     ) -> Result<Response<AdvanceCheckpointResponse>, Status> {
-        let mut sim = self.context.simulacrum().write().await;
-        let checkpoint = sim.create_checkpoint();
-        let checkpoint_sequence_number = checkpoint.data().sequence_number;
-        let timestamp_ms = checkpoint.data().timestamp_ms;
+        // Scope the write lock so it is released before `publish_checkpoint`
+        // acquires a read lock on the same simulacrum.
+        let (checkpoint_sequence_number, timestamp_ms) = {
+            let mut sim = self.context.simulacrum().write().await;
+            let checkpoint = sim.create_checkpoint();
+            (
+                checkpoint.data().sequence_number,
+                checkpoint.data().timestamp_ms,
+            )
+        };
 
         info!(
             checkpoint_sequence_number,
             timestamp_ms, "checkpoint created"
         );
+
+        if let Err(err) = self
+            .context
+            .publish_checkpoint(checkpoint_sequence_number)
+            .await
+        {
+            warn!(?err, "failed to publish checkpoint to subscribers");
+        }
 
         Ok(Response::new(AdvanceCheckpointResponse {
             checkpoint_sequence_number,

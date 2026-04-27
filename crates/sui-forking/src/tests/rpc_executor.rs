@@ -90,7 +90,11 @@ impl TestHarness {
 
         let gas_object = Self::find_gas_coin(&config, sender);
 
-        let context = Arc::new(Context::new(sim, Chain::Unknown));
+        // The executor tests do not exercise the checkpoint subscription path,
+        // so the receiver is dropped immediately — `Context::publish_checkpoint`
+        // is never invoked in this harness.
+        let (checkpoint_sender, _) = tokio::sync::mpsc::channel(1);
+        let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
         let executor = ForkedTransactionExecutor::new(context);
 
         Self {
