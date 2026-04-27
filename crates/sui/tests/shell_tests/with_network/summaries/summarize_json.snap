@@ -1,6 +1,5 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-assertion_line: 112
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -176,6 +175,678 @@ vector.json
         "module_name": "uq64_64",
         "datatype_name": "UQ64_64",
         "package": "0x0000000000000000000000000000000000000000000000000000000000000001"
+      }
+    ],
+    "0x0000000000000000000000000000000000000000000000000000000000000002": [
+      {
+        "module_name": "tx_context",
+        "datatype_name": "TxContext",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "vec_map",
+        "datatype_name": "VecMap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "vec_map",
+        "datatype_name": "Entry",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "party",
+        "datatype_name": "Party",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "party",
+        "datatype_name": "Permissions",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "object",
+        "datatype_name": "ID",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "object",
+        "datatype_name": "UID",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "transfer",
+        "datatype_name": "Receiving",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "dynamic_field",
+        "datatype_name": "Field",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "accumulator",
+        "datatype_name": "AccumulatorRoot",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "accumulator",
+        "datatype_name": "U128",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "accumulator",
+        "datatype_name": "Key",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "bag",
+        "datatype_name": "Bag",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "accumulator_metadata",
+        "datatype_name": "OwnerKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "accumulator_metadata",
+        "datatype_name": "Owner",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "accumulator_metadata",
+        "datatype_name": "MetadataKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "accumulator_metadata",
+        "datatype_name": "Metadata",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "accumulator_metadata",
+        "datatype_name": "AccumulatorObjectCountKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "bcs",
+        "datatype_name": "BCS",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "accumulator_settlement",
+        "datatype_name": "EventStreamHead",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "vec_set",
+        "datatype_name": "VecSet",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "derived_object",
+        "datatype_name": "Claimed",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "derived_object",
+        "datatype_name": "DerivedObjectKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "derived_object",
+        "datatype_name": "ClaimedStatus",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "address_alias",
+        "datatype_name": "AddressAliasState",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "address_alias",
+        "datatype_name": "AddressAliases",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "address_alias",
+        "datatype_name": "AliasKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "authenticator_state",
+        "datatype_name": "AuthenticatorState",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "authenticator_state",
+        "datatype_name": "AuthenticatorStateInner",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "authenticator_state",
+        "datatype_name": "JWK",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "authenticator_state",
+        "datatype_name": "JwkId",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "authenticator_state",
+        "datatype_name": "ActiveJwk",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "funds_accumulator",
+        "datatype_name": "Withdrawal",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "balance",
+        "datatype_name": "Supply",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "balance",
+        "datatype_name": "Balance",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "group_ops",
+        "datatype_name": "Element",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "bls12381",
+        "datatype_name": "Scalar",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "bls12381",
+        "datatype_name": "G1",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "bls12381",
+        "datatype_name": "G2",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "bls12381",
+        "datatype_name": "GT",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "bls12381",
+        "datatype_name": "UncompressedG1",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "borrow",
+        "datatype_name": "Referent",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "borrow",
+        "datatype_name": "Borrow",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "clock",
+        "datatype_name": "Clock",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "url",
+        "datatype_name": "Url",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "table",
+        "datatype_name": "Table",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "dynamic_object_field",
+        "datatype_name": "Wrapper",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "config",
+        "datatype_name": "Config",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "config",
+        "datatype_name": "Setting",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "config",
+        "datatype_name": "SettingData",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "deny_list",
+        "datatype_name": "DenyList",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "deny_list",
+        "datatype_name": "ConfigWriteCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "deny_list",
+        "datatype_name": "ConfigKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "deny_list",
+        "datatype_name": "AddressKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "deny_list",
+        "datatype_name": "GlobalPauseKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "deny_list",
+        "datatype_name": "PerTypeConfigCreated",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "deny_list",
+        "datatype_name": "PerTypeList",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin",
+        "datatype_name": "Coin",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin",
+        "datatype_name": "CoinMetadata",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin",
+        "datatype_name": "RegulatedCoinMetadata",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin",
+        "datatype_name": "TreasuryCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin",
+        "datatype_name": "DenyCapV2",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin",
+        "datatype_name": "CurrencyCreated",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin",
+        "datatype_name": "DenyCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "CoinRegistry",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "ExtraField",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "CurrencyKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "LegacyMetadataKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "MetadataCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "Borrow",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "Currency",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "CurrencyInitializer",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "SupplyState",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "RegulatedState",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "coin_registry",
+        "datatype_name": "MetadataCapState",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "package",
+        "datatype_name": "Publisher",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "package",
+        "datatype_name": "UpgradeCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "package",
+        "datatype_name": "UpgradeTicket",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "package",
+        "datatype_name": "UpgradeReceipt",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "display",
+        "datatype_name": "Display",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "display",
+        "datatype_name": "DisplayCreated",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "display",
+        "datatype_name": "VersionUpdated",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "display_registry",
+        "datatype_name": "DisplayRegistry",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "display_registry",
+        "datatype_name": "SystemMigrationCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "display_registry",
+        "datatype_name": "Display",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "display_registry",
+        "datatype_name": "DisplayCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "display_registry",
+        "datatype_name": "DisplayKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "groth16",
+        "datatype_name": "Curve",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "groth16",
+        "datatype_name": "PreparedVerifyingKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "groth16",
+        "datatype_name": "PublicProofInputs",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "groth16",
+        "datatype_name": "ProofPoints",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "sui",
+        "datatype_name": "SUI",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "transfer_policy",
+        "datatype_name": "TransferRequest",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "transfer_policy",
+        "datatype_name": "TransferPolicy",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "transfer_policy",
+        "datatype_name": "TransferPolicyCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "transfer_policy",
+        "datatype_name": "TransferPolicyCreated",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "transfer_policy",
+        "datatype_name": "TransferPolicyDestroyed",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "transfer_policy",
+        "datatype_name": "RuleKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "Kiosk",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "KioskOwnerCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "PurchaseCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "Borrow",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "Item",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "Listing",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "Lock",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "ItemListed",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "ItemPurchased",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk",
+        "datatype_name": "ItemDelisted",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk_extension",
+        "datatype_name": "Extension",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "kiosk_extension",
+        "datatype_name": "ExtensionKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "linked_table",
+        "datatype_name": "LinkedTable",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "linked_table",
+        "datatype_name": "Node",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "nitro_attestation",
+        "datatype_name": "PCREntry",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "nitro_attestation",
+        "datatype_name": "NitroAttestationDocument",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "object_bag",
+        "datatype_name": "ObjectBag",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "object_table",
+        "datatype_name": "ObjectTable",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "priority_queue",
+        "datatype_name": "PriorityQueue",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "priority_queue",
+        "datatype_name": "Entry",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "versioned",
+        "datatype_name": "Versioned",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "versioned",
+        "datatype_name": "VersionChangeCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "random",
+        "datatype_name": "Random",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "random",
+        "datatype_name": "RandomInner",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "random",
+        "datatype_name": "RandomGenerator",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "ristretto255",
+        "datatype_name": "Scalar",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "ristretto255",
+        "datatype_name": "G",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "table_vec",
+        "datatype_name": "TableVec",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "token",
+        "datatype_name": "Token",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "token",
+        "datatype_name": "TokenPolicyCap",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "token",
+        "datatype_name": "TokenPolicy",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "token",
+        "datatype_name": "ActionRequest",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "token",
+        "datatype_name": "RuleKey",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "token",
+        "datatype_name": "TokenPolicyCreated",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "zklogin_verified_id",
+        "datatype_name": "VerifiedID",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
+      },
+      {
+        "module_name": "zklogin_verified_issuer",
+        "datatype_name": "VerifiedIssuer",
+        "package": "0x0000000000000000000000000000000000000000000000000000000000000002"
       }
     ]
   }
