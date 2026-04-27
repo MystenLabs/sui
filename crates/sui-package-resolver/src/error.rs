@@ -95,4 +95,7 @@ pub enum Error {
 
     #[error("Type layout nesting exceeded limit of {0}")]
     ValueNesting(usize),
+
+    #[error("Unable to resolve type: {0}")]
+    UnableToConstructLayout(Arc<String>),
 }
