@@ -425,6 +425,35 @@ impl<'pc, 'vm, 'state, 'linkage, 'extensions> Env<'pc, 'vm, 'state, 'linkage, 'e
         Ok(vm_type)
     }
 
+    pub fn resolve_type_to_defining_id(
+        &self,
+        package: ObjectID,
+        module: &IdentStr,
+        name: &IdentStr,
+    ) -> Result<Option<ObjectID>, ExecutionError> {
+        if let Some(cached) = self
+            .per_tx_cache
+            .lookup_type_to_defining_id(package, module, name)?
+        {
+            return Ok(Some(cached));
+        }
+
+        let Ok(Some(resolved)) = self
+            .linkable_store
+            .resolve_type_to_defining_id(package, module, name)
+        else {
+            invariant_violation!(
+                "Expected to resolve defining ID for type {}::{}::{} but it was not found in the package store. This should not happen.",
+                package,
+                module,
+                name
+            );
+        };
+        self.per_tx_cache
+            .insert_type_to_defining_id(package, module, name, resolved)?;
+        Ok(Some(resolved))
+    }
+
     /// Take a type tag and returns a VM runtime Type and the linkage for it.
     fn load_vm_type_from_type_tag(
         &self,

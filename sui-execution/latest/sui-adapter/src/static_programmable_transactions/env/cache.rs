@@ -6,7 +6,9 @@ use crate::static_programmable_transactions::{
     loading::ast::{LoadedFunction, Type},
 };
 use indexmap::IndexSet;
-use move_core_types::{account_address::AccountAddress, language_storage::TypeTag};
+use move_core_types::{
+    account_address::AccountAddress, identifier::IdentStr, language_storage::TypeTag,
+};
 use move_vm_runtime::execution as vm_runtime;
 use std::{
     cell::RefCell,
@@ -86,6 +88,8 @@ struct PerTxCache_ {
     /// the version-specific package ID because private/entry functions can disappear across
     /// package versions, so different versions resolve differently.
     function_cache: HashMap<LoadedFunctionKey, Rc<LoadedFunction>>,
+
+    defining_id_map: HashMap<(ObjectID, Identifier, Identifier), ObjectID>,
 }
 
 /// Early-returns `Ok($empty)` from the enclosing method when PTB caching is disabled. The second
@@ -112,6 +116,7 @@ impl<'pc> PerTxCache<'pc> {
                 vm_to_type: HashMap::new(),
                 type_to_vm: HashMap::new(),
                 function_cache: HashMap::new(),
+                defining_id_map: HashMap::new(),
             }),
         }
     }
@@ -278,6 +283,42 @@ impl<'pc> PerTxCache<'pc> {
             "duplicate insert into function_cache"
         );
         Ok(())
+    }
+
+    pub(super) fn insert_type_to_defining_id(
+        &self,
+        package: ObjectID,
+        module: &IdentStr,
+        name: &IdentStr,
+        defining_id: ObjectID,
+    ) -> Result<(), ExecutionError> {
+        gated!(self.protocol_config, ());
+        let previous = self
+            .borrow_mut()?
+            .defining_id_map
+            .insert((package, module.to_owned(), name.to_owned()), defining_id);
+        assert_invariant!(
+            previous.is_none(),
+            "duplicate insert into defining_id_map: ({}::{}::{})",
+            package,
+            module,
+            name
+        );
+        Ok(())
+    }
+
+    pub(super) fn lookup_type_to_defining_id(
+        &self,
+        package: ObjectID,
+        module: &IdentStr,
+        name: &IdentStr,
+    ) -> Result<Option<ObjectID>, ExecutionError> {
+        gated!(self.protocol_config, None);
+        Ok(self
+            .borrow()?
+            .defining_id_map
+            .get(&(package, module.to_owned(), name.to_owned()))
+            .cloned())
     }
 }
 
