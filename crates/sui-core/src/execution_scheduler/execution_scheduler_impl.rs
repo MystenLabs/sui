@@ -5,6 +5,7 @@ use crate::{
     accumulators::funds_read::AccountFundsRead,
     authority::{
         AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
+        epoch_start_configuration::EpochStartConfigTrait,
         shared_object_version_manager::Schedulable,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
@@ -207,7 +208,7 @@ impl ExecutionScheduler {
         let input_object_kinds = tx_data
             .input_objects()
             .expect("input_objects() cannot fail");
-        let input_object_keys: Vec<_> = epoch_store
+        let mut input_object_keys: Vec<_> = epoch_store
             .get_input_object_keys(
                 &cert.key(),
                 &input_object_kinds,
@@ -215,6 +216,21 @@ impl ExecutionScheduler {
             )
             .into_iter()
             .collect();
+
+        // Coin reservation transactions need to wait for the accumulator root object
+        // to reach the assigned accumulator version. This ensures settlement transactions
+        // (which create/update accumulator account objects) execute before coin reservation
+        // transactions that depend on those objects.
+        if tx_data.kind().has_coin_reservations()
+            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version
+            && let Some(initial_shared_version) =
+                (**epoch_store.epoch_start_config()).accumulator_root_obj_initial_shared_version()
+        {
+            input_object_keys.push(InputKey::VersionedObject {
+                id: FullObjectID::new(SUI_ACCUMULATOR_ROOT_OBJECT_ID, Some(initial_shared_version)),
+                version: accumulator_version,
+            });
+        }
 
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()

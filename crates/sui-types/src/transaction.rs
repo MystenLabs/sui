@@ -2101,6 +2101,10 @@ impl TransactionKind {
         Either::Right(pt.coin_reservation_obj_refs())
     }
 
+    pub fn has_coin_reservations(&self) -> bool {
+        self.get_coin_reservation_obj_refs().next().is_some()
+    }
+
     pub fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult {
         match self {
             TransactionKind::ProgrammableTransaction(p) => p.validity_check(config)?,
