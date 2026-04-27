@@ -256,17 +256,21 @@ impl BenchmarkContext {
         );
 
         let is_consensus_tx = transactions.iter().any(|tx| tx.is_consensus_tx());
+        let mut durations: Vec<std::time::Duration>;
         if is_consensus_tx {
+            durations = Vec::with_capacity(tx_count);
             // With shared objects, we must execute each transaction in order.
             for transaction in transactions {
                 let key = transaction.key();
-                self.validator
+                let (_, dur) = self
+                    .validator
                     .execute_transaction(
                         transaction,
                         assigned_versions.get(&key).unwrap(),
                         self.benchmark_component,
                     )
                     .await;
+                durations.push(dur);
             }
         } else {
             let tasks: FuturesUnordered<_> = transactions
@@ -286,9 +290,7 @@ impl BenchmarkContext {
                 })
                 .collect();
             let results: Vec<_> = tasks.collect().await;
-            results.into_iter().for_each(|r| {
-                r.unwrap();
-            });
+            durations = results.into_iter().map(|r| r.unwrap().1).collect();
         }
 
         let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
@@ -297,6 +299,8 @@ impl BenchmarkContext {
             elapsed,
             tx_count as f64 / elapsed
         );
+
+        Self::print_per_tx_timing(&mut durations);
     }
 
     pub(crate) async fn benchmark_transaction_execution_in_memory(
@@ -330,6 +334,23 @@ impl BenchmarkContext {
             elapsed,
             tx_count as f64 / elapsed,
             in_memory_store.get_num_object_reads() as f64 / tx_count as f64
+        );
+    }
+
+    fn print_per_tx_timing(durations: &mut [std::time::Duration]) {
+        durations.sort();
+        let n = durations.len();
+        let total: std::time::Duration = durations.iter().sum();
+        let avg = total / n as u32;
+        let p50 = durations[n / 2];
+        let p90 = durations[n * 90 / 100];
+        let p99 = durations[n * 99 / 100];
+        let min = durations[0];
+        let max = durations[n - 1];
+        info!(
+            "Per-tx execution timing (try_execute_immediately wall-clock):\n  \
+             avg={:?}  min={:?}  p50={:?}  p90={:?}  p99={:?}  max={:?}",
+            avg, min, p50, p90, p99, max,
         );
     }
 

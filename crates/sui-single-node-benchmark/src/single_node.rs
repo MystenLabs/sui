@@ -149,8 +149,9 @@ impl SingleValidator {
         transaction: Transaction,
         assigned_versions: &AssignedVersions,
         component: Component,
-    ) -> TransactionEffects {
+    ) -> (TransactionEffects, std::time::Duration) {
         let executable = self.create_executable(transaction);
+        let start = std::time::Instant::now();
         let effects = match component {
             Component::Baseline => {
                 self.get_validator()
@@ -191,8 +192,9 @@ impl SingleValidator {
                 unreachable!()
             }
         };
+        let elapsed = start.elapsed();
         assert!(effects.status().is_ok());
-        effects
+        (effects, elapsed)
     }
 
     pub(crate) async fn execute_transaction_in_memory(
