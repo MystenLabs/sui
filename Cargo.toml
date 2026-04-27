@@ -287,8 +287,8 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 [workspace.dependencies]
 antithesis_sdk = "0.2.5"
 anyhow = "1.0.71"
-arrow = "54"
-arrow-array = "54"
+arrow = "57.3"
+arrow-array = "57.3"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 assert_cmd = "2.0.6"
 async-graphql = "=7.0.1"
@@ -444,7 +444,7 @@ object_store = { version = "0.13.0", features = [
 once_cell = "1.18.0"
 ouroboros = "0.17"
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
-parquet = "54"
+parquet = "57.3"
 pin-project = "1"
 pin-project-lite = "0.2.13"
 pkcs8 = { version = "0.10.0", features = ["std"] }
@@ -502,7 +502,7 @@ simple-server-timing-header = "0.1.1"
 slip10_ed25519 = "0.1.3"
 smallvec = "1.10.0"
 snap = "1.1.0"
-snowflake-api = "0.11.0"
+snowflake-api = "0.14.0"
 static_assertions = "1.1.0"
 strum = { version = "0.27.1", features = ["derive"] }
 strum_macros = "0.27.1"
