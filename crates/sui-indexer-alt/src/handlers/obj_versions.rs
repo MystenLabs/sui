@@ -10,7 +10,7 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Connection;
 use sui_indexer_alt_framework::postgres::handler::Handler;
-use sui_indexer_alt_framework::store::Connection as StoreConnection;
+use sui_indexer_alt_framework::store::ConcurrentConnection as StoreConnection;
 use sui_indexer_alt_framework::types::effects::TransactionEffectsAPI;
 use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_schema::objects::StoredObjVersion;
