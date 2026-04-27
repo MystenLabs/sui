@@ -29,7 +29,7 @@ use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
-    error::{ExecutionError, SuiResult},
+    error::{ExecutionError, ExecutionErrorTrait, SuiResult},
     gas::GasCostSummary,
     object::Object,
     object::Owner,
@@ -904,7 +904,7 @@ impl TemporaryStore<'_> {
         }
     }
 
-    pub fn check_execution_results_consistency(&self) -> Result<(), ExecutionError> {
+    pub fn check_execution_results_consistency<E: ExecutionErrorTrait>(&self) -> Result<(), E> {
         assert_invariant!(
             self.execution_results
                 .created_object_ids

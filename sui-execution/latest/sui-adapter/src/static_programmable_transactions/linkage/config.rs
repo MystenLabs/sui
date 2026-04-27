@@ -10,7 +10,7 @@ use crate::{
 use move_binary_format::binary_config::BinaryConfig;
 use sui_types::{
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID, base_types::ObjectID,
-    error::ExecutionError,
+    error::ExecutionErrorTrait,
 };
 
 /// These are the set of native packages in Sui -- importantly they can be used implicitly by
@@ -57,10 +57,13 @@ impl LinkageConfig {
         }
     }
 
-    pub(crate) fn resolution_table_with_native_packages(
+    pub(crate) fn resolution_table_with_native_packages<E>(
         &self,
         store: &dyn PackageStore,
-    ) -> Result<ResolutionTable, ExecutionError> {
+    ) -> Result<ResolutionTable, E>
+    where
+        E: ExecutionErrorTrait,
+    {
         let mut resolution_table = ResolutionTable::empty();
         if self.always_include_system_packages {
             for id in NATIVE_PACKAGE_IDS {

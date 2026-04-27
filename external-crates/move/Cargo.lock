@@ -6356,3 +6356,15 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "sui-crypto"
+version = "0.3.0"
+
+[[patch.unused]]
+name = "sui-rpc"
+version = "0.3.0"
+
+[[patch.unused]]
+name = "sui-sdk-types"
+version = "0.3.0"

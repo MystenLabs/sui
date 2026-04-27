@@ -17,7 +17,7 @@ use move_vm_runtime::{
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
-    error::ExecutionError,
+    error::{ExecutionError, ExecutionErrorTrait},
     move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
 };
 pub enum InputValue<'a> {
@@ -178,7 +178,11 @@ impl Value {
         self.0.cast().map_err(iv("cast"))
     }
 
-    pub fn deserialize(env: &Env, bytes: &[u8], ty: Type) -> Result<Value, ExecutionError> {
+    pub fn deserialize<E: ExecutionErrorTrait>(
+        env: &Env<'_, '_, '_, '_, '_, E>,
+        bytes: &[u8],
+        ty: Type,
+    ) -> Result<Value, E> {
         let layout = env.runtime_layout(&ty)?;
         let Some(value) = VMValue::simple_deserialize(bytes, &layout) else {
             // we already checked the layout of pure bytes during typing

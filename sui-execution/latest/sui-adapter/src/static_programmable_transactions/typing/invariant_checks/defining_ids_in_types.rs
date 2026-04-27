@@ -6,9 +6,12 @@ use crate::{
     sp,
     static_programmable_transactions::{env, spanned::Spanned, typing::ast as T},
 };
-use sui_types::error::ExecutionError;
+use sui_types::error::ExecutionErrorTrait;
 
-pub fn verify(env: &env::Env, tt: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify<E: ExecutionErrorTrait>(
+    env: &env::Env<'_, '_, '_, '_, '_, E>,
+    tt: &T::Transaction,
+) -> Result<(), E> {
     let check_type = |ty| ensure_type_defining_id_based(env, ty);
     let check_arg = |sp!(_, (_, ty)): &Spanned<_>| ensure_type_defining_id_based(env, ty);
 
@@ -62,7 +65,10 @@ pub fn verify(env: &env::Env, tt: &T::Transaction) -> Result<(), ExecutionError>
     })
 }
 
-fn ensure_type_defining_id_based(env: &env::Env, ty: &T::Type) -> Result<(), ExecutionError> {
+fn ensure_type_defining_id_based<E: ExecutionErrorTrait>(
+    env: &env::Env<'_, '_, '_, '_, '_, E>,
+    ty: &T::Type,
+) -> Result<(), E> {
     match ty {
         T::Type::Bool
         | T::Type::U8

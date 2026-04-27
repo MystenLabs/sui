@@ -14,7 +14,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorContext, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -24,8 +24,8 @@ use sui_types::{
 };
 
 use move_bytecode_verifier_meter::Meter;
-use mysten_common::debug_fatal;
 use move_vm_runtime_v3::move_vm::MoveVM;
+use mysten_common::debug_fatal;
 use sui_adapter_v3::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
 use sui_adapter_v3::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
@@ -139,7 +139,7 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
+        Result<(), ExecutionErrorContext>,
     ) {
         let (inner_temp_store, gas_status, effects, timings, result) =
             execute_transaction_to_effects::<execution_mode::Normal>(
@@ -162,6 +162,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(protocol_config, transaction_digest, error);
         }
+        let result = result.map_err(ExecutionErrorContext::from);
         (inner_temp_store, gas_status, effects, timings, result)
     }
 

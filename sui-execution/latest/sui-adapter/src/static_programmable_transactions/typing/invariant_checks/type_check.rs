@@ -19,7 +19,7 @@ use crate::{
     },
 };
 use sui_types::{
-    coin::RESOLVED_COIN_STRUCT, error::ExecutionError,
+    coin::RESOLVED_COIN_STRUCT, error::ExecutionErrorTrait,
     funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
 };
 
@@ -47,17 +47,18 @@ impl<'txn> Context<'txn> {
     }
 }
 
-/// Verifies the correctness of the typing on the AST
-/// - All object inputs have key
-/// - All pure inputs are valid types
-/// - All receiving inputs types have key
-/// - All commands are well formed with correct argument/result types
-/// - All dropped result values have the `drop` ability
-pub fn verify<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
-    verify_::<Mode>(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))
+pub fn verify<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    txn: &T::Transaction,
+) -> Result<(), Mode::Error> {
+    Ok(verify_::<Mode>(env, txn)
+        .map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))?)
 }
 
-fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Result<()> {
+fn verify_<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    txn: &T::Transaction,
+) -> anyhow::Result<()> {
     let context = Context::new(txn);
     let T::Transaction {
         gas_payment: _,
@@ -123,7 +124,7 @@ fn withdrawal_input(ty: &T::Type) -> anyhow::Result<()> {
 fn pure_input<Mode: ExecutionMode>(p: &T::PureInput) -> anyhow::Result<()> {
     if !Mode::allow_arbitrary_values() {
         anyhow::ensure!(
-            input_arguments::is_valid_pure_type(&p.ty)?,
+            input_arguments::is_valid_pure_type::<Mode::Error>(&p.ty)?,
             "pure type must be valid"
         );
     }
@@ -139,7 +140,7 @@ fn receiving_input(r: &T::ReceivingInput) -> anyhow::Result<()> {
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
     context: &Context,
     sp!(_, c): &T::Command,
 ) -> anyhow::Result<()> {
@@ -307,8 +308,8 @@ fn command<Mode: ExecutionMode>(
     Ok(())
 }
 
-fn argument(
-    env: &Env,
+fn argument<E: ExecutionErrorTrait>(
+    env: &Env<'_, '_, '_, '_, '_, E>,
     context: &Context,
     sp!(_, (arg__, ty)): &T::Argument,
     param: &T::Type,
@@ -372,7 +373,11 @@ fn argument(
     Ok(())
 }
 
-fn usage(env: &Env, context: &Context, u: &T::Usage) -> anyhow::Result<T::Type> {
+fn usage<E: ExecutionErrorTrait>(
+    env: &Env<'_, '_, '_, '_, '_, E>,
+    context: &Context,
+    u: &T::Usage,
+) -> anyhow::Result<T::Type> {
     match u {
         T::Usage::Move(l)
         | T::Usage::Copy {
@@ -382,7 +387,11 @@ fn usage(env: &Env, context: &Context, u: &T::Usage) -> anyhow::Result<T::Type> 
     }
 }
 
-fn location(env: &Env, context: &Context, l: T::Location) -> anyhow::Result<T::Type> {
+fn location<E: ExecutionErrorTrait>(
+    env: &Env<'_, '_, '_, '_, '_, E>,
+    context: &Context,
+    l: T::Location,
+) -> anyhow::Result<T::Type> {
     Ok(match l {
         T::Location::TxContext => env.tx_context_type()?,
         T::Location::GasCoin => env.gas_coin_type()?,
@@ -419,8 +428,8 @@ fn location(env: &Env, context: &Context, l: T::Location) -> anyhow::Result<T::T
     })
 }
 
-fn withdrawal_compatibility_conversion(
-    env: &Env,
+fn withdrawal_compatibility_conversion<E: ExecutionErrorTrait>(
+    env: &Env<'_, '_, '_, '_, '_, E>,
     context: &Context,
     withdrawal_location: T::Location,
     conv: &T::WithdrawalCompatibilityConversion,
