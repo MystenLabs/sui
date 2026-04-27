@@ -49,15 +49,11 @@ impl Summary {
         self,
         path: Option<&Path>,
         build_config: BuildConfig,
+        flavor: SuiFlavor,
         sui_package_metadata: PackageSummaryMetadata,
     ) -> anyhow::Result<()> {
         self.summary
-            .execute(
-                path,
-                build_config,
-                SuiFlavor::new(),
-                Some(&sui_package_metadata),
-            )
+            .execute(path, build_config, flavor, Some(&sui_package_metadata))
             .await
     }
 }

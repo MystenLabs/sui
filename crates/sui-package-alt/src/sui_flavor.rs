@@ -3,6 +3,7 @@
 
 use std::{collections::BTreeMap, path::PathBuf};
 
+use anyhow::Context;
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use move_compiler::editions::Edition;
@@ -20,7 +21,8 @@ use sui_package_management::system_package_versions::{
 };
 use sui_protocol_config::ProtocolVersion;
 use sui_rpc_api::Client as RpcClient;
-use sui_types::{base_types::ObjectID, is_system_package};
+use sui_sdk::types::{base_types::ObjectID, is_system_package};
+use sui_sdk::wallet_context::WalletContext;
 use tokio::sync::OnceCell;
 use tracing::warn;
 
@@ -34,7 +36,7 @@ const FLAVOR: &str = "sui";
 /// Can be constructed in offline mode ([`SuiFlavor::new`]) or connected mode
 /// ([`SuiFlavor::with_client`]). In connected mode, queries the network via gRPC to determine the
 /// protocol version for correct system dependency resolution.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct SuiFlavor {
     /// The gRPC client for the target network. `None` for offline/test usage.
     client: Option<RpcClient>,
@@ -51,33 +53,22 @@ impl std::fmt::Debug for SuiFlavor {
     }
 }
 
-impl Default for SuiFlavor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl SuiFlavor {
     /// Create a `SuiFlavor` in offline mode. Uses the latest known system packages.
     pub fn new() -> Self {
-        Self {
-            client: None,
-            protocol_version: OnceCell::new(),
-        }
+        Self::default()
     }
 
-    /// Create a `SuiFlavor` connected to the given gRPC `client`. Queries the network's protocol
-    /// version to resolve the correct system dependencies.
-    pub fn with_client(client: RpcClient) -> Self {
-        Self {
-            client: Some(client),
-            protocol_version: OnceCell::new(),
+    /// Create a `SuiFlavor` connected to the network via the gRPC client from `wallet`. Falls back
+    /// to offline mode if the client can't be created.
+    pub fn with_client(wallet: &WalletContext) -> Self {
+        match wallet.grpc_client() {
+            Ok(client) => Self {
+                client: Some(client),
+                ..Default::default()
+            },
+            Err(_) => Self::new(),
         }
-    }
-
-    /// Return the gRPC client, if configured.
-    pub fn client(&self) -> Option<&RpcClient> {
-        self.client.as_ref()
     }
 
     /// Return the protocol version for the target network. Lazily queries the gRPC endpoint if
@@ -87,16 +78,16 @@ impl SuiFlavor {
             .protocol_version
             .get_or_init(|| async {
                 if let Some(ref client) = self.client {
-                    match Self::query_protocol_version(client).await {
-                        Ok(version) => version,
-                        Err(e) => {
+                    Self::query_protocol_version(client)
+                        .await
+                        .inspect_err(|e| {
                             warn!(
                                 "Failed to query protocol version: {e}. \
-                                 Falling back to latest known version."
-                            );
-                            ProtocolVersion::MAX
-                        }
-                    }
+                                 Falling back to protocol version {}.",
+                                ProtocolVersion::MAX.as_u64()
+                            )
+                        })
+                        .unwrap_or(ProtocolVersion::MAX)
                 } else {
                     ProtocolVersion::MAX
                 }
@@ -109,10 +100,10 @@ impl SuiFlavor {
         let config = client
             .get_protocol_config(None)
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to query protocol config: {e}"))?;
+            .with_context(|| "Failed to query protocol config")?;
         let version = config
             .protocol_version_opt()
-            .ok_or_else(|| anyhow::anyhow!("Protocol config response missing protocol_version"))?;
+            .context("Protocol config response missing protocol_version")?;
         Ok(ProtocolVersion::new(version))
     }
 
@@ -192,8 +183,9 @@ impl MoveFlavor for SuiFlavor {
             Err(e) => {
                 warn!(
                     "Failed to resolve system packages for protocol version {}: {e}. \
-                     Falling back to latest.",
-                    version.as_u64()
+                     Falling back to latest known packages (protocol version {}).",
+                    version.as_u64(),
+                    ProtocolVersion::MAX.as_u64()
                 );
                 latest_system_packages()
             }
