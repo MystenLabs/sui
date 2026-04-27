@@ -300,10 +300,9 @@ impl External {
     ) -> Result<StoredKey, Error> {
         let keys = self.signer_available_keys(ext_signer.clone()).await?;
 
-        Ok(keys
-            .into_iter()
+        keys.into_iter()
             .find(|k| !self.is_indexed(k))
-            .ok_or_else(|| anyhow!("No available key found for external signer {}", ext_signer))?)
+            .ok_or_else(|| anyhow!("No available key found for external signer {}", ext_signer))
     }
 
     /// Get the public key for a given key ID from an external signer.
