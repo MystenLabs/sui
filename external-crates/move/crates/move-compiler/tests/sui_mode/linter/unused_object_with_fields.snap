@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields.move:20:32
+   │
+20 │     public fun t_3(_e: &Empty, _c: &OwnerCap) {}
+   │                                ^^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields.move:23:32
+   │
+23 │     public fun t_4(_e: &Empty, c: &OwnerCap) { let _ = c; }
+   │                                ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
