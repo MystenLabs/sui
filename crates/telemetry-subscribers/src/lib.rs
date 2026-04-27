@@ -42,6 +42,41 @@ mod file_exporter;
 pub mod span_latency_prom;
 mod test_layer;
 
+/// Global filter layer that rejects spans above a given level at callsite registration time.
+///
+/// Without this, per-layer filtering causes the Registry to return `Interest::always()` for
+/// every callsite. That means trace-level `#[instrument]` spans are allocated in the slab,
+/// have their per-layer filters walked, and are immediately discarded — all at significant cost.
+///
+/// By rejecting high-verbosity span callsites globally, `Span::new` short-circuits to
+/// `Span::none()` for free.
+///
+/// Events are always passed through so that per-layer log filters work as before.
+struct SpanLevelGlobalFilter {
+    max_span_level: Level,
+}
+
+impl<S: tracing::Subscriber> Layer<S> for SpanLevelGlobalFilter {
+    fn register_callsite(
+        &self,
+        metadata: &'static tracing::Metadata<'static>,
+    ) -> tracing::subscriber::Interest {
+        if metadata.is_span() && *metadata.level() > self.max_span_level {
+            tracing::subscriber::Interest::never()
+        } else {
+            tracing::subscriber::Interest::always()
+        }
+    }
+
+    fn enabled(
+        &self,
+        metadata: &tracing::Metadata<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
+        !metadata.is_span() || *metadata.level() <= self.max_span_level
+    }
+}
+
 /// Alias for a type-erased error type.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -573,6 +608,16 @@ impl TelemetryConfig {
         } else {
             None
         };
+
+        // Global span-level filter: rejects span callsites above span_level at
+        // registration time, preventing the Registry from allocating spans that
+        // every per-layer filter would immediately discard.
+        layers.push(
+            SpanLevelGlobalFilter {
+                max_span_level: span_level,
+            }
+            .boxed(),
+        );
 
         let subscriber = tracing_subscriber::registry().with(layers);
         let subscriber_guard = if config.set_global_default {
