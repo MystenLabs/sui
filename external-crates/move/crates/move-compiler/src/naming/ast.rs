@@ -1025,6 +1025,19 @@ impl Type_ {
     pub fn inner(&self) -> &TypeInner {
         &self.0
     }
+
+    pub fn contains_error(&self) -> bool {
+        use TypeInner as T;
+        match &*self.0 {
+            T::UnresolvedError => true,
+            T::Ref(_, inner) => inner.value.contains_error(),
+            T::Apply(_, _, tyargs) => tyargs.iter().any(|t| t.value.contains_error()),
+            T::Fun(params, ret) => {
+                params.iter().any(|t| t.value.contains_error()) || ret.value.contains_error()
+            }
+            T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::Void => false,
+        }
+    }
 }
 
 impl From<TypeInner> for Type_ {

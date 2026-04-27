@@ -5,7 +5,7 @@ use crate::{
     expansion::ast::{Fields, ModuleIdent, Mutability, Value, Value_},
     hlir::translate::Context,
     ice, ice_assert,
-    naming::ast::{self as N, BuiltinTypeName_, Type, TypeInner, UseFuns, Var},
+    naming::ast::{self as N, BuiltinTypeName_, Type, UseFuns, Var},
     parser::ast::{DatatypeName, Field, VariantName},
     shared::{
         ast_debug::{AstDebug, AstWriter},
@@ -62,18 +62,17 @@ pub(super) fn compile_match(
     arms: Spanned<Vec<T::MatchArm>>,
 ) -> T::Exp {
     let loc = arms.loc;
-    match subject.ty.value.inner() {
-        TypeInner::Anything | TypeInner::Void | TypeInner::UnresolvedError => {
-            ice_assert!(
-                context.reporter,
-                context.env.has_errors(),
-                loc,
-                "Divergent or error match subject reached match compilation without a prior error"
-            );
-            let exp_value = sp(loc, T::UnannotatedExp_::UnresolvedError);
-            return T::exp(result_type.clone(), exp_value);
-        }
-        _ => {}
+    // if the subject type contains an error, we shouldn't have made it here, but in case we did,
+    // just make the whole match an error instead of ICEing.
+    if subject.ty.value.contains_error() {
+        ice_assert!(
+            context.reporter,
+            context.env.has_errors(),
+            loc,
+            "Divergent or error match subject reached match compilation without a prior error"
+        );
+        let exp_value = sp(loc, T::UnannotatedExp_::UnresolvedError);
+        return T::exp(result_type.clone(), exp_value);
     }
     // NB: `from` also flattens `or` and converts constants into guards.
     let (pattern_matrix, arms) = PatternMatrix::from(context, loc, subject.ty.clone(), arms.value);
@@ -182,8 +181,8 @@ fn build_match_tree(
 
     if subject.ty.value.unfold_to_builtin_type_name().is_some() {
         compile_match_literal(context, subject, fringe, matrix)
-    } else {
-        let tyargs = subject.ty.value.type_arguments().unwrap().clone();
+    } else if let Some(tyargs) = subject.ty.value.type_arguments() {
+        let tyargs = tyargs.clone();
 
         let (mident, datatype_name) = subject
             .ty
@@ -213,6 +212,14 @@ fn build_match_tree(
                 datatype_name,
             )
         }
+    } else {
+        ice_assert!(
+            context.reporter,
+            context.env.has_errors(),
+            subject.var.loc,
+            "Non-datatype and non-builtin type reached match compilation without a prior error"
+        );
+        MatchTree::Failure
     }
 }
 
@@ -410,7 +417,12 @@ fn match_tree_to_exp(
     match result {
         MatchTree::Leaf(leaf) => make_leaf(context, init_subject, leaf),
         MatchTree::Failure => {
-            context.hlir_context.add_diag(ice!((context.arms_loc, "Generated a failure expression, which should not be allowed under match exhaustion.")));
+            ice_assert!(
+                context.hlir_context.reporter,
+                context.hlir_context.env.has_errors(),
+                context.arms_loc,
+                "Match failure reached match tree resolution without a prior error"
+            );
             T::exp(
                 context.output_type(),
                 sp(context.arms_loc, T::UnannotatedExp_::UnresolvedError),
