@@ -15,6 +15,7 @@ use anyhow::{Result, anyhow};
 use prometheus::Registry;
 use rand::rngs::OsRng;
 use simulacrum::Simulacrum;
+use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_protocol_config::Chain;
 use sui_rpc_api::proto::sui::rpc::v2::SubscribeCheckpointsRequest;
@@ -100,7 +101,10 @@ impl ServerHarness {
 
         // Wait for the server to come up by polling a connect.
         for _ in 0..50 {
-            if ForkingServiceClient::connect(grpc_endpoint.clone()).await.is_ok() {
+            if ForkingServiceClient::connect(grpc_endpoint.clone())
+                .await
+                .is_ok()
+            {
                 return Ok(Self {
                     server_task,
                     grpc_endpoint,
@@ -148,7 +152,9 @@ async fn subscription_streams_checkpoints_after_advance() -> Result<()> {
             .await?
             .map_err(|e| anyhow!("stream error: {e}"))?
             .ok_or_else(|| anyhow!("subscription stream closed before advance"))?;
-        let cursor = msg.cursor.ok_or_else(|| anyhow!("missing cursor on subscription message"))?;
+        let cursor = msg
+            .cursor
+            .ok_or_else(|| anyhow!("missing cursor on subscription message"))?;
         assert_eq!(cursor, expected_seq);
         assert!(
             msg.checkpoint.is_some(),

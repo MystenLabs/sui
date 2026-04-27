@@ -3,10 +3,10 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow};
 use rand::rngs::OsRng;
-use tokio::sync::mpsc;
 use tokio::sync::RwLock;
+use tokio::sync::mpsc;
 
 use simulacrum::Simulacrum;
 use sui_protocol_config::Chain;
