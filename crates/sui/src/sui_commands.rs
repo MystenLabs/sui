@@ -6,6 +6,7 @@ use std::net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io};
@@ -420,6 +421,12 @@ pub enum SuiCommand {
 
         #[command(flatten)]
         replay_config: SR2::ReplayConfigStable,
+
+        /// Network or GraphQL URL to replay against. Accepts `mainnet`, `testnet`,
+        /// or a full GraphQL URL (e.g. for devnet or a self-hosted endpoint).
+        /// When omitted, the network is derived from the active wallet env.
+        #[arg(long = "node", short = 'n')]
+        node: Option<String>,
     },
 
     /// Generate shell completion scripts for CLI
@@ -797,13 +804,18 @@ impl SuiCommand {
             SuiCommand::ReplayTransaction {
                 config,
                 replay_config,
+                node,
             } => {
                 let mut context = get_wallet_context(&config).await?;
                 if let Some(env_override) = config.env {
                     context = context.with_env_override(env_override);
                 }
 
-                let node = get_replay_node(&context).await?;
+                let node = match node {
+                    Some(s) => sui_data_store::Node::from_str(&s)
+                        .map_err(|e| anyhow!("invalid --node value: {e}"))?,
+                    None => get_replay_node(&context).await?,
+                };
                 let file_config = SR2::load_config_file()?;
                 let stable_config = SR2::merge_configs(replay_config, file_config);
                 let experimental_config = SR2::ReplayConfigExperimental {
