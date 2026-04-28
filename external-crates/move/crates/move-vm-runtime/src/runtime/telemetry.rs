@@ -3,11 +3,24 @@
 
 #![allow(clippy::cast_possible_truncation)]
 use std::{
-    sync::atomic::{AtomicU64, Ordering},
+    sync::atomic::{AtomicBool, AtomicU64, Ordering},
     time::Duration,
 };
 
 use crate::cache::move_cache::MoveCache;
+
+static TELEMETRY_ENABLED: AtomicBool = AtomicBool::new(true);
+static TELEMETRY_INIT: std::sync::Once = std::sync::Once::new();
+
+#[inline(always)]
+fn is_telemetry_enabled() -> bool {
+    TELEMETRY_INIT.call_once(|| {
+        if std::env::var("MOVE_VM_TELEMETRY_DISABLED").is_ok() {
+            TELEMETRY_ENABLED.store(false, Ordering::Relaxed);
+        }
+    });
+    TELEMETRY_ENABLED.load(Ordering::Relaxed)
+}
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -217,7 +230,9 @@ impl TelemetryContext {
     {
         let mut txn_telemetry = TransactionTelemetryContext::new();
         let result = f(&mut txn_telemetry);
-        self.record_transaction(txn_telemetry);
+        if is_telemetry_enabled() {
+            self.record_transaction(txn_telemetry);
+        }
         result
     }
 
