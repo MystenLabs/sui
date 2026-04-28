@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/let_else_type_mismatch.move:15:13
+   │
+14 │         let subject = ABC::C(42u64);
+   │                       ------------- Expected: '0x42::m::ABC<u64>'
+15 │         let Other::X(x) = subject else { return 0 };
+   │             ^^^^^^^^^^^
+   │             │
+   │             Invalid pattern
+   │             Given: '0x42::m::Other'

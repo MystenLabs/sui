@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_2024/matching/let_else_ref.move:13:13
+   │
+12 │     fun by_ref(subject: &ABC<u64>): &u64 {
+   │                                     ---- Expected a single non-reference type, but found: '&u64'
+13 │         let ABC::C(x) = subject else { abort 0 };
+   │             ^^^^^^^^^ Invalid type argument
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/let_else_ref.move:13:13
+   │
+12 │     fun by_ref(subject: &ABC<u64>): &u64 {
+   │                         --------- Expected: '&0x42::m::ABC<u64>'
+13 │         let ABC::C(x) = subject else { abort 0 };
+   │             ^^^^^^^^^
+   │             │
+   │             Invalid pattern
+   │             Given: '0x42::m::ABC<_>'

@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/matching/let_else_variant_without_else.move:10:13
+   │
+10 │         let ABC::C(x) = subject;
+   │             ^^^^^^
+   │             │
+   │             Invalid deconstructing binding. Expected a struct
+   │             But 'ABC' is an enum
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/matching/let_else_variant_without_else.move:11:9
+   │
+11 │         x
+   │         ^ Unbound variable 'x'
