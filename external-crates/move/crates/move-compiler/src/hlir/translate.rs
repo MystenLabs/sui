@@ -210,15 +210,19 @@ impl<'env> Context<'env> {
         let symbol = translate_var(v);
         // We may reuse a name if it appears on both sides of an `or` pattern
         if let Some((cur_mut, cur_t)) = self.function_locals.get(&symbol) {
-            assert!(
+            ice_assert!(
+                self,
                 cur_t == &t,
+                v.loc,
                 "{:?} changed type from {:?} to {:?}",
                 v,
                 cur_t,
                 t
             );
-            assert!(
+            ice_assert!(
+                self,
                 cur_mut == &mut_,
+                v.loc,
                 "{:?} changed mutability from {:?} to {:?}",
                 v,
                 cur_mut,
