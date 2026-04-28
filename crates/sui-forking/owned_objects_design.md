@@ -142,4 +142,3 @@ The design should be validated with tests for:
 - non-address-owned transitions removing entries
 - local deletion removing entries and blocking remote resurrection
 - RPC owned-object iteration type filtering and cursor behavior
-
