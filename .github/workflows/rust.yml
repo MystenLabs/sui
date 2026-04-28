@@ -224,7 +224,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test (sui-graphql staging)
         run: |
-          cargo nextest run --profile ci --cargo-quiet --features staging -E 'package(sui-indexer-alt-graphql)'
+          cargo nextest run --profile ci --cargo-quiet --features staging -E 'package(sui-indexer-alt-graphql) or (package(sui-indexer-alt-e2e-tests) and binary(graphql_subscription))'
       - name: doctests
         run: |
           cargo test --doc
