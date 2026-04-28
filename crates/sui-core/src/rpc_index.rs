@@ -51,7 +51,7 @@ use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
 use typed_store::rocksdb::{MergeOperands, WriteOptions, compaction_filter::Decision};
 use typed_store::traits::Map;
 
-const CURRENT_DB_VERSION: u64 = 3;
+const CURRENT_DB_VERSION: u64 = 4;
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
 const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
 
@@ -168,20 +168,18 @@ pub struct CoinIndexInfo {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct BalanceIndexInfo {
-    pub balance_delta: i128,
-}
-
-impl From<u64> for BalanceIndexInfo {
-    fn from(coin_value: u64) -> Self {
-        Self {
-            balance_delta: coin_value as i128,
-        }
-    }
+    pub coin_balance_delta: i128,
+    pub address_balance_delta: i128,
 }
 
 impl BalanceIndexInfo {
     fn merge_delta(&mut self, other: &Self) {
-        self.balance_delta += other.balance_delta;
+        self.coin_balance_delta = self
+            .coin_balance_delta
+            .saturating_add(other.coin_balance_delta);
+        self.address_balance_delta = self
+            .address_balance_delta
+            .saturating_add(other.address_balance_delta);
     }
 }
 
@@ -193,8 +191,12 @@ impl From<BalanceIndexInfo> for sui_types::storage::BalanceInfo {
         // total balances over u64::MAX. To avoid crashing the indexer, we clamp the merged value instead
         // of panicking on overflow. This has the unfortunate consequence of making bugs in the index
         // harder to detect, but is a necessary trade-off to avoid creating a DOS attack vector.
-        let balance = index_info.balance_delta.clamp(0, u64::MAX as i128) as u64;
-        sui_types::storage::BalanceInfo { balance }
+        let coin_balance = index_info.coin_balance_delta.clamp(0, u64::MAX as i128) as u64;
+        let address_balance = index_info.address_balance_delta.clamp(0, u64::MAX as i128) as u64;
+        sui_types::storage::BalanceInfo {
+            coin_balance,
+            address_balance,
+        }
     }
 }
 
@@ -269,7 +271,7 @@ fn balance_compaction_filter(_level: u32, _key: &[u8], value: &[u8]) -> Decision
         Err(_) => return Decision::Keep,
     };
 
-    if balance_info.balance_delta == 0 {
+    if balance_info.coin_balance_delta == 0 && balance_info.address_balance_delta == 0 {
         Decision::Remove
     } else {
         Decision::Keep
@@ -801,7 +803,7 @@ impl IndexStoreTables {
 
         // iterate in reverse order, process accumulator settlements first
         for (tx_idx, tx) in checkpoint.transactions.iter().enumerate().rev() {
-            let balance_changes = sui_types::balance_change::derive_balance_changes(
+            let balance_changes = sui_types::balance_change::derive_detailed_balance_changes(
                 &tx.effects,
                 &tx.input_objects,
                 &tx.output_objects,
@@ -815,7 +817,8 @@ impl IndexStoreTables {
                             coin_type: *coin_type,
                         },
                         BalanceIndexInfo {
-                            balance_delta: change.amount,
+                            coin_balance_delta: change.coin_amount,
+                            address_balance_delta: change.address_amount,
                         },
                     ))
                 } else {
@@ -1636,7 +1639,10 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
 
                 if let Some((coin_type, value)) = get_balance_and_type_if_coin(&object)? {
                     let balance_key = BalanceKey { owner, coin_type };
-                    let balance_info = BalanceIndexInfo::from(value);
+                    let balance_info = BalanceIndexInfo {
+                        coin_balance_delta: value.into(),
+                        address_balance_delta: 0,
+                    };
                     self.balance_changes
                         .entry(balance_key)
                         .or_default()
@@ -1665,7 +1671,8 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                 {
                     let balance_key = BalanceKey { owner, coin_type };
                     let balance_info = BalanceIndexInfo {
-                        balance_delta: balance,
+                        coin_balance_delta: 0,
+                        address_balance_delta: balance,
                     };
                     self.balance_changes
                         .entry(balance_key)
