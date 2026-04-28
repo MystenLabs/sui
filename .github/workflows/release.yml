@@ -122,16 +122,23 @@ jobs:
         shell: bash
         run: |
           # Pulls binaries that mp3 (sui-operations/prebuild-sui-images.yml) extracted
-          # from prebuilt sui images to s3://sui-releases/<sui_sha>/<basename>. Fails
-          # loudly if any are missing — the prebuild matrix and mp3:binary_upload_config
-          # in sui-operations/pulumi/apps/mp3 must cover this list before tagging.
+          # from prebuilt sui images. amd64 lands at s3://sui-releases/<sui_sha>/<basename>,
+          # arm64 at s3://sui-releases/arm64/<sui_sha>/<basename> — see mp3's
+          # binary_upload_config in sui-operations/pulumi/apps/mp3 (sui-{node,tools}-arm64
+          # rules). Fails loudly if any binary in binary-build-list.json release_binaries
+          # is missing so the gap surfaces before the tag publishes.
           mkdir -p ${{ env.TMP_BUILD_DIR }} ./tmp
           [ ! -f ${{ env.BINARY_LIST_FILE }} ] && echo "${{ env.BINARY_LIST_FILE }} cannot be found" && exit 1
+
+          case "${arch}" in
+            aarch64|arm64) s3_prefix="s3://sui-releases/arm64/${sui_sha}" ;;
+            *)             s3_prefix="s3://sui-releases/${sui_sha}" ;;
+          esac
 
           missing=()
           for binary in $(jq -r '.release_binaries[]' ${{ env.BINARY_LIST_FILE }}); do
             binary=$(echo "${binary}" | tr -d $'\r')
-            src="s3://sui-releases/${sui_sha}/${binary}"
+            src="${s3_prefix}/${binary}"
             dest="${{ env.TMP_BUILD_DIR }}/${binary}"
             echo "Downloading ${src}"
             if ! aws s3 cp "${src}" "${dest}"; then
@@ -142,7 +149,7 @@ jobs:
           done
 
           if [ ${#missing[@]} -ne 0 ]; then
-            echo "::error::Missing prebuilt binaries at s3://sui-releases/${sui_sha}/ — these must be produced by sui-operations/prebuild-sui-images.yml + mp3:binary_upload_config before tagging: ${missing[*]}"
+            echo "::error::Missing prebuilt binaries at ${s3_prefix}/ — these must be produced by sui-operations/prebuild-sui-images.yml + mp3:binary_upload_config before tagging: ${missing[*]}"
             exit 1
           fi
 
