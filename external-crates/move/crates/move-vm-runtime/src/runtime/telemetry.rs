@@ -183,7 +183,7 @@ pub(crate) struct Timer {
     kind: TimerKind,
     count: Option<u64>,
     reported: bool,
-    start_time: std::time::Instant,
+    start_time: quanta::Instant,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -378,7 +378,7 @@ impl TransactionTelemetryContext {
             kind,
             count: None,
             reported: false,
-            start_time: std::time::Instant::now(),
+            start_time: quanta::Instant::now(),
         }
     }
 
@@ -387,7 +387,7 @@ impl TransactionTelemetryContext {
             kind,
             count: Some(count),
             reported: false,
-            start_time: std::time::Instant::now(),
+            start_time: quanta::Instant::now(),
         }
     }
 

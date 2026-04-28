@@ -23,6 +23,7 @@ indexmap.workspace = true
 lasso.workspace = true
 lru.workspace = true
 parking_lot.workspace = true
+quanta.workspace = true
 quick_cache.workspace = true
 serde.workspace = true
 sha2.workspace = true

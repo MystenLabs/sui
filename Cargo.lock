@@ -6228,7 +6228,7 @@ dependencies = [
  "no-std-compat",
  "nonzero_ext",
  "parking_lot 0.12.3",
- "quanta",
+ "quanta 0.11.1",
  "rand 0.8.5",
  "smallvec",
 ]
@@ -9290,6 +9290,7 @@ dependencies = [
  "move-trace-format",
  "move-vm-config",
  "parking_lot 0.11.2",
+ "quanta 0.12.6",
  "quick_cache",
  "serde",
  "sha2 0.9.9",
@@ -11481,7 +11482,22 @@ dependencies = [
  "libc",
  "mach2",
  "once_cell",
- "raw-cpuid",
+ "raw-cpuid 10.6.0",
+ "wasi 0.11.0+wasi-snapshot-preview1",
+ "web-sys",
+ "winapi",
+]
+
+[[package]]
+name = "quanta"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3ab5a9d756f0d97bdc89019bd2e4ea098cf9cde50ee7564dde6b81ccc8f06c7"
+dependencies = [
+ "crossbeam-utils",
+ "libc",
+ "once_cell",
+ "raw-cpuid 11.6.0",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "web-sys",
  "winapi",
@@ -11875,6 +11891,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6823ea29436221176fe662da99998ad3b4db2c7f31e7b6f5fe43adccd6320bb"
 dependencies = [
  "bitflags 1.3.2",
+]
+
+[[package]]
+name = "raw-cpuid"
+version = "11.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186"
+dependencies = [
+ "bitflags 2.11.0",
 ]
 
 [[package]]
@@ -18788,7 +18813,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
