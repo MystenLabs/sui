@@ -928,20 +928,20 @@ impl CoreSignalsReceivers {
 pub(crate) async fn create_cores(
     context: Context,
     authorities: Vec<Stake>,
-) -> Vec<CoreTextFixture> {
+) -> Vec<CoreTestFixture> {
     let mut cores = Vec::new();
 
     for index in 0..authorities.len() {
         let own_index = AuthorityIndex::new_for_test(index as u32);
         let core =
-            CoreTextFixture::new(context.clone(), authorities.clone(), own_index, false).await;
+            CoreTestFixture::new(context.clone(), authorities.clone(), own_index, false).await;
         cores.push(core);
     }
     cores
 }
 
 #[cfg(test)]
-pub(crate) struct CoreTextFixture {
+pub(crate) struct CoreTestFixture {
     pub(crate) core: Core,
     pub(crate) transaction_vote_tracker: TransactionVoteTracker,
     pub(crate) signal_receivers: CoreSignalsReceivers,
@@ -953,7 +953,7 @@ pub(crate) struct CoreTextFixture {
 }
 
 #[cfg(test)]
-impl CoreTextFixture {
+impl CoreTestFixture {
     async fn new(
         context: Context,
         authorities: Vec<Stake>,
@@ -1248,7 +1248,7 @@ mod test {
             last_round_blocks = this_round_blocks;
         }
 
-        let mut fixture = CoreTextFixture::new_with_prepopulated_blocks(
+        let mut fixture = CoreTestFixture::new_with_prepopulated_blocks(
             context,
             vec![1, 1, 1, 1],
             AuthorityIndex::new_for_test(0),
@@ -1315,7 +1315,7 @@ mod test {
             .protocol_config
             .set_max_transactions_in_block_bytes_for_testing(2_000);
 
-        let mut fixture = CoreTextFixture::new(
+        let mut fixture = CoreTestFixture::new(
             context,
             vec![1, 1, 1, 1],
             AuthorityIndex::new_for_test(0),
@@ -1397,7 +1397,7 @@ mod test {
     async fn test_core_propose_once_receiving_a_quorum() {
         telemetry_subscribers::init_for_testing();
         let (context, _key_pairs) = Context::new_for_test(4);
-        let mut core_fixture = CoreTextFixture::new(
+        let mut core_fixture = CoreTestFixture::new(
             context.clone(),
             vec![1, 1, 1, 1],
             AuthorityIndex::new_for_test(0),
@@ -1669,7 +1669,7 @@ mod test {
         let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
         dag_builder.print();
 
-        let mut fixture = CoreTextFixture::new(
+        let mut fixture = CoreTestFixture::new(
             context,
             vec![1, 1, 1, 1],
             AuthorityIndex::new_for_test(0),
@@ -1715,7 +1715,7 @@ mod test {
             sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
         });
-        let mut fixture = CoreTextFixture::new(
+        let mut fixture = CoreTestFixture::new(
             context,
             vec![1, 1, 1, 1],
             AuthorityIndex::new_for_test(0),
@@ -2039,7 +2039,7 @@ mod test {
             ..Default::default()
         });
         let mut fixture =
-            CoreTextFixture::new(context, vec![1; 7], AuthorityIndex::new_for_test(0), true).await;
+            CoreTestFixture::new(context, vec![1; 7], AuthorityIndex::new_for_test(0), true).await;
         let min_round_delay = fixture.core.context.parameters.min_round_delay;
 
         // No new block should have been produced
@@ -2300,7 +2300,7 @@ mod test {
             sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
         });
-        let mut fixture = CoreTextFixture::new(
+        let mut fixture = CoreTestFixture::new(
             context,
             vec![1, 1, 1, 1],
             AuthorityIndex::new_for_test(0),
@@ -2356,7 +2356,7 @@ mod test {
     async fn test_core_set_propagation_delay_per_authority() {
         telemetry_subscribers::init_for_testing();
         let (context, _) = Context::new_for_test(4);
-        let mut fixture = CoreTextFixture::new(
+        let mut fixture = CoreTestFixture::new(
             context,
             vec![1, 1, 1, 1],
             AuthorityIndex::new_for_test(0),
@@ -2587,7 +2587,7 @@ mod test {
         });
 
         let authority_index = AuthorityIndex::new_for_test(0);
-        let core = CoreTextFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
+        let core = CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
         let mut core = core.core;
 
         // No new block should have been produced
@@ -2686,7 +2686,7 @@ mod test {
         });
 
         let authority_index = AuthorityIndex::new_for_test(0);
-        let core = CoreTextFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
+        let core = CoreTestFixture::new(context, vec![1, 1, 1, 1], authority_index, true).await;
         let store = core.store.clone();
         let mut core = core.core;
 
@@ -3276,7 +3276,7 @@ mod test {
 
         let authority_index = AuthorityIndex::new_for_test(0);
         let core =
-            CoreTextFixture::new(context.clone(), vec![1, 1, 1, 1], authority_index, true).await;
+            CoreTestFixture::new(context.clone(), vec![1, 1, 1, 1], authority_index, true).await;
         let mut core = core.core;
 
         let mut dag_builder = DagBuilder::new(Arc::new(context.clone()));
