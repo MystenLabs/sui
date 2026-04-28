@@ -30,8 +30,8 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::supported_protocol_versions::{Chain, SupportedProtocolVersions};
 use sui_types::node_role::NodeRole;
+use sui_types::supported_protocol_versions::{Chain, SupportedProtocolVersions};
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, get_key_pair_from_rng};
