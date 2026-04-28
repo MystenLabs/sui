@@ -43,9 +43,6 @@ echo "================================================"
 date
 
 # Phase 1 runs every (test, seed) pair in its own OS process via seed-search.py.
-# Running each iteration in a fresh process avoids the bug where a failure in
-# iteration N can be masked by intra-process state left over from iterations 1..N-1
-# (the previous `MSIM_TEST_NUM=$TEST_NUM` flow looped within a single process).
 mkdir -p "$LOG_DIR/e2e"
 
 scripts/simtest/seed-search.py \
@@ -59,6 +56,7 @@ scripts/simtest/seed-search.py \
   --exclude 'batch_verification_tests' \
   --log-dir "$LOG_DIR/e2e" \
   --no-reachability 2>&1 | tee "$LOG_FILE"
+PHASE1_EXIT=${PIPESTATUS[0]}
 
 # Clean up temp files from the e2e phase to prevent /tmp (tmpfs) from filling up.
 rm -rf /tmp/tmp.* /tmp/.tmp* /tmp/sui-* 2>/dev/null
@@ -124,7 +122,10 @@ date
 PHASE1_FAILED=0
 PHASE23_FAILED=0
 
-if [ -s "$LOG_DIR/e2e/failures.ndjson" ]; then
+# Phase 1 is failed if any individual test failed (`failures.ndjson` non-empty)
+# OR if seed-search.py itself exited non-zero (e.g. build failure, infrastructure
+# error). The pipe through tee otherwise hides that exit code.
+if [ -s "$LOG_DIR/e2e/failures.ndjson" ] || [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
   PHASE1_FAILED=1
 fi
 
@@ -146,10 +147,15 @@ echo "Failures detected, printing details..."
 if [ "$PHASE1_FAILED" -eq 1 ]; then
   echo ""
   echo "=============================="
-  echo "Phase 1 failures (failures.ndjson):"
+  echo "Phase 1 failures:"
   echo "=============================="
-  jq -r '"  \(.status) \(.binary)::\(.test) seed=\(.seed) (log: \(.log))"' \
-    "$LOG_DIR/e2e/failures.ndjson"
+  if [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
+    echo "seed-search.py exited with code $PHASE1_EXIT (build error or infrastructure failure)"
+  fi
+  if [ -s "$LOG_DIR/e2e/failures.ndjson" ]; then
+    jq -r '"  \(.status) \(.binary)::\(.test) seed=\(.seed) (log: \(.log))"' \
+      "$LOG_DIR/e2e/failures.ndjson"
+  fi
 fi
 
 if [ "$PHASE23_FAILED" -eq 1 ]; then

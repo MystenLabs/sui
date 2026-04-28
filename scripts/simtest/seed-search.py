@@ -223,11 +223,7 @@ def sanitize_for_filename(name):
     return re.sub(r'[^A-Za-z0-9_.-]', '_', name)
 
 def find_binary_by_name(name, repo_root):
-    """Look up a test binary by name in target/simulator/deps/.
-
-    Mirrors the lookup at the original `seed-search.py:274-282` and is used
-    when `--no-build` is supplied with a `--test NAME` (no slash) form.
-    """
+    """Look up a test binary by name in target/simulator/deps/."""
     direct = os.path.join(repo_root, "target/simulator/deps", name)
     if os.path.isfile(direct) and os.access(direct, os.X_OK):
         return direct
@@ -240,10 +236,12 @@ def find_binary_by_name(name, repo_root):
     return None
 
 def discover_binaries(args, repo_root):
-    """Build (if needed) and return a list of (package_name, binary_name, executable_path) tuples.
+    """Build (if needed) and return a list of (package_name, binary_name, executable_path, manifest_dir) tuples.
 
     binary_name is the binary basename with cargo's hash stripped (e.g. `batch_verification_tests`).
     package_name may be `None` when not derivable (e.g. an explicit binary path passed under `--no-build`).
+    manifest_dir is the directory containing the test crate's Cargo.toml — tests are launched
+    with this as cwd to mirror `cargo nextest`. Falls back to repo_root when not derivable.
     """
     test_paths = []
     test_names_in_build = []
@@ -286,7 +284,9 @@ def discover_binaries(args, repo_root):
                 seen.add(executable)
                 target_name = obj.get("target", {}).get("name", os.path.basename(executable))
                 package_name = parse_package_name(obj.get("package_id", ""))
-                discovered.append((package_name, target_name, executable))
+                manifest_path = obj.get("manifest_path")
+                manifest_dir = os.path.dirname(manifest_path) if manifest_path else repo_root
+                discovered.append((package_name, target_name, executable, manifest_dir))
         finally:
             process.wait()
         if process.returncode != 0:
@@ -300,22 +300,22 @@ def discover_binaries(args, repo_root):
             if binary is None:
                 safe_print(f"Error: could not find binary for --test {name} in target/simulator/deps/")
                 sys.exit(1)
-            discovered.append((None, strip_hash(os.path.basename(binary)), binary))
+            discovered.append((None, strip_hash(os.path.basename(binary)), binary, repo_root))
 
     # Explicit binary paths (always include, no build needed).
     for path in test_paths:
         if not os.path.isfile(path) or not os.access(path, os.X_OK):
             safe_print(f"Error: --test {path} is not an executable file")
             sys.exit(1)
-        discovered.append((None, strip_hash(os.path.basename(path)), path))
+        discovered.append((None, strip_hash(os.path.basename(path)), path, repo_root))
 
     return discovered
 
 def list_tests_in_binary(binary, name_filter, exact):
     """Return the list of test function names exposed by a built test binary.
 
-    Uses `<binary> --list [--exact] [filter]` (the same mechanism the original
-    code used at seed-search.py:291 to verify a filter matches at least one test).
+    Uses `<binary> --list [--exact] [filter]` to verify a filter matches at
+    least one test.
     """
     cmd = [binary, "--list"]
     if exact and name_filter:
@@ -379,6 +379,7 @@ def run_command(job):
     env_vars = job["env"]
     seed = env_vars["MSIM_TEST_SEED"]
     log_path = job.get("log_path")
+    cwd = job.get("cwd")
 
     env = os.environ.copy()
     env.update(env_vars)
@@ -398,7 +399,7 @@ def run_command(job):
             log_file = open(log_path, "wb")
             try:
                 process = subprocess.Popen(
-                    cmd, env=env,
+                    cmd, env=env, cwd=cwd,
                     stdout=log_file, stderr=subprocess.STDOUT,
                     preexec_fn=os.setsid,
                 )
@@ -416,7 +417,7 @@ def run_command(job):
             exit_code = process.returncode
         else:
             process = subprocess.Popen(
-                cmd, env=env,
+                cmd, env=env, cwd=cwd,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 preexec_fn=os.setsid,
             )
@@ -506,7 +507,7 @@ if __name__ == "__main__":
     # Enumerate (binary, test) pairs.
     bin_tests = []
     total_tests = 0
-    for package_name, binary_name, binary_path in binaries:
+    for package_name, binary_name, binary_path, manifest_dir in binaries:
         tests = list_tests_in_binary(binary_path, args.testname, args.exact)
         if not tests:
             if args.testname:
@@ -518,7 +519,7 @@ if __name__ == "__main__":
             tests = [t for t in tests if not exclude_re.search(f"{binary_name}::{t}")]
             if not tests:
                 continue
-        bin_tests.append((package_name, binary_name, binary_path, tests))
+        bin_tests.append((package_name, binary_name, binary_path, manifest_dir, tests))
         total_tests += len(tests)
 
     if not bin_tests:
@@ -547,7 +548,7 @@ if __name__ == "__main__":
     simtest_static_init_move = os.path.join(repo_root, "examples/move/basics")
 
     jobs = []
-    for package_name, binary_name, binary_path, tests in bin_tests:
+    for package_name, binary_name, binary_path, manifest_dir, tests in bin_tests:
         for test_name in tests:
             for i in range(1, args.num_seeds + 1):
                 seed = args.seed_start + i
@@ -577,6 +578,7 @@ if __name__ == "__main__":
                 jobs.append({
                     "cmd": cmd,
                     "env": env_vars,
+                    "cwd": manifest_dir,
                     "package": package_name,
                     "binary_name": binary_name,
                     "binary_path": binary_path,
