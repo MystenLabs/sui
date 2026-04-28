@@ -86,8 +86,7 @@ impl AncestorStateManager {
 
         // Note: this value cannot be greater than the threshold used in leader
         // schedule to identify bad nodes.
-        let excluded_nodes_stake_threshold_percentage =
-            2 * context.protocol_config.bad_nodes_stake_threshold() / 3;
+        let excluded_nodes_stake_threshold_percentage = 20;
 
         let excluded_nodes_stake_threshold = (excluded_nodes_stake_threshold_percentage
             * context.committee.total_stake())
@@ -113,7 +112,15 @@ impl AncestorStateManager {
     }
 
     /// Updates the state of all ancestors based on the latest scores and quorum rounds
+    #[allow(unused_variables, unreachable_code)]
     pub(crate) fn update_all_ancestors_state(&mut self, accepted_quorum_rounds: &[QuorumRound]) {
+        // Disabled: ancestor exclusion fed by V3 propagation scores entered a
+        // feedback-loop limit cycle. State map stays at all-INCLUDE so the
+        // EXCLUDE arm in smart_ancestors_to_propose is unreachable. Re-enable
+        // once INCLUDE→EXCLUDE corroborates with quorum-round gating (today
+        // only EXCLUDE→INCLUDE checks the network high quorum round).
+        return;
+
         // If round prober has not run yet and we don't have network quorum round,
         // it is okay because network_high_quorum_round will be zero and we will
         // include all ancestors until we get more information.
