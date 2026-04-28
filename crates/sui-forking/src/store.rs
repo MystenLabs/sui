@@ -162,6 +162,14 @@ impl DataStore {
             .map_err(|_| anyhow!("local snapshot lock poisoned"))
     }
 
+    pub(crate) fn gql(&self) -> &GraphQLClient {
+        &self.gql
+    }
+
+    pub(crate) fn local(&self) -> &FilesystemStore {
+        &self.local
+    }
+
     /// Get a checkpoint summary by sequence number. Tries the local filesystem first. If it's a
     /// miss, then fetches it from remote if it's at or before the fork checkpoint and caches it
     /// locally for next time.
@@ -636,18 +644,24 @@ impl DataStore {
         if object.version() != entry.version {
             return None;
         }
-        if object.owner != sui_types::object::Owner::AddressOwner(entry.owner) {
-            return None;
-        }
-        let object_type = object.struct_tag()?;
-        if object_type != entry.object_type {
-            return None;
+
+        if let Some(object) = self.local.get_latest_object(&entry.object_id).ok()? {
+            if object.version() != entry.version {
+                return None;
+            }
+            if object.owner != sui_types::object::Owner::AddressOwner(entry.owner) {
+                return None;
+            }
+            let object_type = object.struct_tag()?;
+            if object_type != entry.object_type {
+                return None;
+            }
         }
 
         Some(OwnedObjectInfo {
             owner: entry.owner,
-            object_type,
-            balance: object.as_coin_maybe().map(|coin| coin.value()),
+            object_type: entry.object_type,
+            balance: entry.balance,
             object_id: entry.object_id,
             version: entry.version,
         })

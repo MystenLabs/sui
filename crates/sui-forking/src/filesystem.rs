@@ -22,6 +22,7 @@
 //!             - data                   (BCS-encoded Transaction envelope)
 //!             - effects                (BCS-encoded TransactionEffects)
 //!             - events                 (BCS-encoded TransactionEvents)
+//!     - seed_manifest.json             (JSON seed metadata for initial owned-object index)
 
 use std::fs;
 use std::io::ErrorKind;
@@ -55,6 +56,7 @@ use sui_types::transaction::Transaction;
 use sui_types::transaction::VerifiedTransaction;
 
 use crate::Node;
+use crate::seed::SeedManifest;
 
 /// Directory name appended to the configured filesystem store root.
 const DATA_STORE_DIR: &str = ".forking_data_store";
@@ -86,6 +88,8 @@ const CHECKPOINT_CONTENTS_DIR: &str = "contents";
 const CHECKPOINT_DIGEST_INDEX_FILE: &str = "digest_index";
 /// Marker file for the latest checkpoint sequence known to the store.
 const LATEST_FILE: &str = "latest";
+/// JSON file containing immutable pre-fork seed metadata.
+const SEED_MANIFEST_FILE: &str = "seed_manifest.json";
 
 /// Current-state removal kind for an object affected by local execution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -208,6 +212,11 @@ impl FilesystemStore {
     /// Return the file path for the owned-object index.
     fn owned_objects_index_path(&self) -> PathBuf {
         self.indices_dir().join(OWNED_OBJECTS_INDEX_FILE)
+    }
+
+    /// Return the path to the seed manifest for this fork directory.
+    pub(crate) fn seed_manifest_path(&self) -> PathBuf {
+        self.root.join(SEED_MANIFEST_FILE)
     }
 
     /// Persist a verified transaction to disk under `transactions/{digest}/data`. The underlying
@@ -564,6 +573,49 @@ impl FilesystemStore {
             .with_context(|| format!("Failed to write index file: {}", tmp_path.display()))?;
         fs::rename(&tmp_path, &path)
             .with_context(|| format!("Failed to replace owned-object index: {}", path.display()))
+    }
+
+    /// Return whether the immutable seed manifest exists for this fork directory.
+    pub(crate) fn seed_manifest_exists(&self) -> bool {
+        self.seed_manifest_path().exists()
+    }
+
+    /// Read the immutable seed manifest from disk.
+    pub(crate) fn read_seed_manifest(&self) -> anyhow::Result<SeedManifest> {
+        let path = self.seed_manifest_path();
+        let bytes =
+            fs::read(&path).with_context(|| format!("Failed to read file: {}", path.display()))?;
+        serde_json::from_slice(&bytes)
+            .with_context(|| format!("Failed to deserialize seed manifest: {}", path.display()))
+    }
+
+    /// Write the immutable seed manifest, failing if one already exists.
+    pub(crate) fn write_seed_manifest(&self, manifest: &SeedManifest) -> anyhow::Result<()> {
+        let path = self.seed_manifest_path();
+        if path.exists() {
+            bail!("Seed manifest already exists: {}", path.display());
+        }
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        }
+
+        let tmp_path = path.with_extension("json.tmp");
+        let bytes = serde_json::to_vec_pretty(manifest)
+            .with_context(|| format!("Failed to serialize seed manifest: {}", path.display()))?;
+        fs::write(&tmp_path, bytes)
+            .with_context(|| format!("Failed to write seed manifest: {}", tmp_path.display()))?;
+        if path.exists() {
+            fs::remove_file(&tmp_path).with_context(|| {
+                format!(
+                    "Failed to remove temporary seed manifest: {}",
+                    tmp_path.display()
+                )
+            })?;
+            bail!("Seed manifest already exists: {}", path.display());
+        }
+        fs::rename(&tmp_path, &path)
+            .with_context(|| format!("Failed to replace seed manifest: {}", path.display()))
     }
 
     /// Get the highest checkpoint sequence number available on disk.

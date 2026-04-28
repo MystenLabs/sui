@@ -26,27 +26,36 @@ use crate::context::Context;
 use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
+use crate::seed::SeedInput;
 use crate::store::DataStore;
 
-/// Initialize a forked network by fetching state from the remote endpoint at
-/// `forked_at_checkpoint` and starting a local Simulacrum instance. Also
-/// builds the checkpoint subscription broker; the returned handle must be
-/// passed to [`run`] so the gRPC server exposes the streaming RPC.
+/// Initialize a forked network by fetching the fork checkpoint from the remote
+/// endpoint when needed, applying seed metadata, and starting a local Simulacrum
+/// instance from the highest checkpoint already persisted locally. Also builds
+/// the checkpoint subscription broker; the returned handle must be passed to
+/// [`run`] so the gRPC server exposes the streaming RPC.
 pub async fn initialize(
     node: Node,
     forked_at_checkpoint: CheckpointSequenceNumber,
     version: &str,
     data_dir: Option<std::path::PathBuf>,
+    seed_input: SeedInput,
 ) -> Result<(Context, SubscriptionServiceHandle)> {
     // 1. Create DataStore — empty local cache, GraphQL wired up.
     let data_store = DataStore::new(node.clone(), forked_at_checkpoint, version, data_dir).await?;
     let chain_identifier = data_store.chain();
+    crate::seed::ensure_seed_policy(&data_store, &seed_input)?;
 
     // 2. Download and persist the startup checkpoint (summary + contents),
     //    then read the summary back through the cache-aware getter.
     data_store.download_and_persist_startup_checkpoint()?;
+    let manifest =
+        crate::seed::prepare_seed_manifest(&data_store, node.network_name(), &seed_input).await?;
+    if let Some(manifest) = &manifest {
+        crate::seed::initialize_owned_index_from_seed(&data_store, manifest)?;
+    }
     let checkpoint = data_store
-        .get_checkpoint_by_sequence_number(forked_at_checkpoint)?
+        .get_highest_verified_checkpoint()?
         .ok_or_else(|| anyhow!("checkpoint {} not found", forked_at_checkpoint))?;
 
     // 3. Read system state — fetches object 0x5 + dynamic fields from remote via ObjectStore.

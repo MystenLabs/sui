@@ -36,6 +36,29 @@ The table below summarizes when to use each option:
 | Startup cost | Higher (state bootstrap + potential object downloads) | Lower (local genesis and startup) |
 | Determinism/reproducibility | Deterministic from selected checkpoint + seeded objects | Deterministic from local genesis/configuration |
 
+## Seeding Owned Objects
+
+Owned-object enumeration can be seeded when starting the fork:
+
+```bash
+sui-forking start --checkpoint 12345678 --address 0x... --object 0x...
+```
+
+- `--address` is repeatable and seeds metadata for every object owned by that
+  address at the fork checkpoint. Address seeding requires a checkpoint in the
+  GraphQL object enumeration range.
+- `--object` is repeatable and fetches that object at the fork checkpoint. If
+  the object is address-owned, it is added to the initial owned-object index.
+- Seed metadata is written once to `seed_manifest.json` under the fork
+  directory. The manifest is immutable.
+
+When restarting with the same `--data-dir`, `--network`, and `--checkpoint`,
+omit seed flags. If a seed manifest already exists and any seed flags are
+provided, startup fails instead of overwriting or reinterpreting the local
+state. Resume starts from the highest locally persisted checkpoint and keeps
+the durable owned-object index and deleted-object markers authoritative over
+the original seed manifest.
+
 ## Limitations
 - Staking and related operations are not supported.
 - Single validator, single authority network.

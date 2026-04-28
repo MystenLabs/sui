@@ -266,6 +266,57 @@ fn test_owned_objects_removes_non_address_owned_transitions() {
 }
 
 #[test]
+fn test_seeded_owned_object_metadata_lists_without_bcs_until_deleted() {
+    let (_temp, mut store) = test_data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+
+    store
+        .local
+        .write_owned_object_entries(&[OwnedObjectEntry {
+            owner,
+            object_id,
+            version: SequenceNumber::from_u64(7),
+            object_type: GasCoin::type_(),
+            balance: Some(123),
+        }])
+        .unwrap();
+
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
+        .expect("seeded owned-object iterator should build")
+        .map(|result| result.expect("seeded entry should decode"))
+        .collect();
+    assert_eq!(infos.len(), 1);
+    assert_eq!(infos[0].object_id, object_id);
+    assert_eq!(infos[0].version, SequenceNumber::from_u64(7));
+    assert_eq!(infos[0].balance, Some(123));
+    assert!(
+        store
+            .local
+            .get_latest_object(&object_id)
+            .expect("local lookup should not fail")
+            .is_none(),
+        "seed metadata should not require local BCS",
+    );
+
+    store.update_objects(
+        BTreeMap::new(),
+        vec![(
+            object_id,
+            SequenceNumber::from_u64(8),
+            ObjectDigest::OBJECT_DIGEST_DELETED,
+        )],
+    );
+
+    assert_eq!(
+        RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should build")
+            .count(),
+        0,
+    );
+}
+
+#[test]
 fn test_local_deletion_removes_owned_object_and_blocks_remote_resurrection() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();

@@ -85,6 +85,29 @@ impl GraphQLClient {
         Self::run_query_internal(&self.client, &self.rpc, &self.version, operation).await
     }
 
+    pub(crate) async fn run_raw_query<T>(
+        &self,
+        query: &str,
+        variables: serde_json::Value,
+    ) -> Result<GraphQlResponse<T>, Error>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        self.client
+            .post(self.rpc.clone())
+            .header(USER_AGENT, format!("sui-forking-v{}", self.version))
+            .json(&serde_json::json!({
+                "query": query,
+                "variables": variables,
+            }))
+            .send()
+            .await
+            .context("Failed to send raw GQL query")?
+            .json::<GraphQlResponse<T>>()
+            .await
+            .context("Failed to read response in raw GQL query")
+    }
+
     async fn run_query_internal<T, V>(
         client: &reqwest::Client,
         rpc: &reqwest::Url,

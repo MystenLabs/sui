@@ -5,8 +5,16 @@
 //! `src/tests/` but is a child of the `store` module via a `#[path]` wiring
 //! in `store.rs`, so it retains `super::*` access to `pub(crate)` items.
 
+use std::num::NonZeroUsize;
+
+use rand::rngs::OsRng;
+use simulacrum::Simulacrum;
 use simulacrum::store::SimulatorStore;
+use simulacrum::store::in_mem_store::KeyStore;
+use sui_swarm_config::network_config_builder::ConfigBuilder;
+use sui_types::base_types::ObjectID;
 use sui_types::messages_checkpoint::{CheckpointContents, VerifiedCheckpoint};
+use sui_types::object::Object;
 use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
 use super::*;
@@ -76,5 +84,46 @@ fn insert_checkpoint_and_contents_are_independent() {
     assert_eq!(
         highest.data().sequence_number,
         checkpoint.data().sequence_number,
+    );
+}
+
+#[test]
+fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoint() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let mut rng = OsRng;
+    let config = ConfigBuilder::new_with_temp_dir()
+        .rng(&mut rng)
+        .deterministic_committee_size(NonZeroUsize::MIN)
+        .build();
+    let mut store = DataStore::new_for_testing(temp.path().to_path_buf());
+    let written: BTreeMap<ObjectID, Object> = config
+        .genesis
+        .objects()
+        .iter()
+        .map(|object| (object.id(), object.clone()))
+        .collect();
+    store.update_objects(written, vec![]);
+
+    let (checkpoint, contents) = build_checkpoint(5);
+    store.insert_checkpoint(checkpoint.clone());
+    store.insert_checkpoint_contents(contents);
+
+    let keystore = KeyStore::from_network_config(&config);
+    let mut sim = Simulacrum::new_from_custom_state(
+        keystore,
+        store
+            .get_highest_verified_checkpoint()
+            .expect("highest checkpoint lookup should not fail")
+            .expect("highest checkpoint should exist"),
+        config.genesis.sui_system_object(),
+        &config,
+        store,
+        rng,
+    );
+
+    let next = sim.create_checkpoint();
+    assert_eq!(
+        next.data().sequence_number,
+        checkpoint.data().sequence_number + 1,
     );
 }

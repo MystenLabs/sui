@@ -245,3 +245,40 @@ async fn subscription_fans_out_to_multiple_subscribers() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn advance_clock_creates_and_streams_checkpoint() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+
+    let mut subscriptions =
+        SubscriptionServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    let mut stream = subscriptions
+        .subscribe_checkpoints(SubscribeCheckpointsRequest::default())
+        .await?
+        .into_inner();
+
+    let mut forking = ForkingServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    let clock = forking
+        .advance_clock(AdvanceClockRequest {
+            duration_ms: Some(10),
+        })
+        .await?
+        .into_inner();
+
+    let msg = tokio::time::timeout(STREAM_RECV_TIMEOUT, stream.message())
+        .await?
+        .map_err(|e| anyhow!("stream error: {e}"))?
+        .ok_or_else(|| anyhow!("subscription stream closed before clock advance"))?;
+    let checkpoint_sequence_number = msg
+        .cursor
+        .ok_or_else(|| anyhow!("missing cursor on subscription message"))?;
+    let status = forking.get_status(GetStatusRequest {}).await?.into_inner();
+
+    assert_eq!(
+        status.checkpoint_sequence_number,
+        checkpoint_sequence_number
+    );
+    assert_eq!(status.timestamp_ms, clock.timestamp_ms);
+
+    Ok(())
+}

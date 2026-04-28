@@ -20,6 +20,9 @@ use sui_types::object::Object;
 use sui_types::object::ObjectInner;
 use sui_types::object::Owner;
 
+use crate::seed::SeedEntry;
+use crate::seed::SeedManifest;
+
 use super::*;
 
 fn test_store() -> (tempfile::TempDir, FilesystemStore) {
@@ -252,6 +255,31 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
     let entries = store.get_owned_object_entries().unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].object_id, first_id);
+}
+
+#[test]
+fn test_seed_manifest_round_trips_and_is_immutable() {
+    let (_dir, store) = test_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object = make_object_with_owner(ObjectID::random(), 1, Owner::AddressOwner(owner));
+    let manifest = SeedManifest {
+        network: "testnet".to_owned(),
+        checkpoint: 42,
+        entries: vec![SeedEntry {
+            object_id: object.id(),
+            version: object.version(),
+            digest: object.digest(),
+            owner,
+            object_type: object.struct_tag().unwrap(),
+            balance: object.as_coin_maybe().map(|coin| coin.value()),
+        }],
+    };
+
+    store.write_seed_manifest(&manifest).unwrap();
+
+    assert!(store.seed_manifest_exists());
+    assert_eq!(store.read_seed_manifest().unwrap(), manifest);
+    assert!(store.write_seed_manifest(&manifest).is_err());
 }
 
 #[test]
