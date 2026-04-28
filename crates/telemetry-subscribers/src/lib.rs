@@ -103,16 +103,15 @@ impl<S: tracing::Subscriber> Layer<S> for GlobalLevelFilter {
         if self.exceeds_max_level(metadata) {
             tracing::subscriber::Interest::never()
         } else {
+            // Return always() for passing callsites. The final interest will be
+            // determined by the Registry (which returns sometimes() when per-layer
+            // filters are present). We intentionally do NOT override enabled() —
+            // doing so would add an extra check to every enabled() walk, which the
+            // per-layer filters already handle. For dynamic env filter reloads,
+            // rebuild_interest_cache() re-calls register_callsite with our updated
+            // atomic max_event_level.
             tracing::subscriber::Interest::always()
         }
-    }
-
-    fn enabled(
-        &self,
-        metadata: &tracing::Metadata<'_>,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) -> bool {
-        !self.exceeds_max_level(metadata)
     }
 
     fn max_level_hint(&self) -> Option<LevelFilter> {
