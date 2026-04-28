@@ -676,15 +676,20 @@ impl TelemetryConfig {
         // callsites above the env filter's max level at registration time, preventing
         // the Registry from dispatching callsites that every per-layer filter would
         // immediately discard.
-        layers.push(
-            GlobalLevelFilter {
-                max_span_level: span_level,
-                max_event_level,
-            }
-            .boxed(),
-        );
-
-        let subscriber = tracing_subscriber::registry().with(layers);
+        //
+        // Must be stacked on top of `layers` via `.with()` rather than pushed into the
+        // Vec. `Vec<Layer>::register_callsite` returns the most permissive Interest
+        // across its layers, so a `never()` from this filter would be overridden by
+        // any layer (e.g. fmt+EnvFilter) returning `sometimes()`. As an outer
+        // `Layered`, `pick_interest` short-circuits to `never()` and the inner stack
+        // is never consulted.
+        let global_filter = GlobalLevelFilter {
+            max_span_level: span_level,
+            max_event_level,
+        };
+        let subscriber = tracing_subscriber::registry()
+            .with(layers)
+            .with(global_filter);
         let subscriber_guard = if config.set_global_default {
             tracing::subscriber::set_global_default(subscriber)
                 .expect("unable to initialize tracing subscriber");
