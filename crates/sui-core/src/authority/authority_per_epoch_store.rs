@@ -64,6 +64,7 @@ use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, TimestampMs,
     VersionedDkgConfirmation, check_total_jwk_size,
 };
+use sui_types::node_role::NodeRole;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -472,6 +473,10 @@ pub struct AuthorityPerEpochStore {
     /// Waiters for barrier transactions. Used by execution scheduler to wait for
     /// barrier transaction (keyed by the same AccumulatorSettlement key as settlements).
     barrier_registrations: Arc<Mutex<HashMap<TransactionKey, BarrierRegistration>>>,
+
+    /// Whether the node is configured with observer peers (static from NodeConfig).
+    /// Used together with committee membership to compute NodeRole per epoch.
+    has_observer_config: bool,
 }
 enum SettlementRegistration {
     Ready(Vec<VerifiedExecutableTransaction>),
@@ -1072,6 +1077,7 @@ impl AuthorityPerEpochStore {
         highest_executed_checkpoint: CheckpointSequenceNumber,
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
         submitted_transaction_cache_metrics: Arc<SubmittedTransactionCacheMetrics>,
+        has_observer_config: bool,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
@@ -1278,6 +1284,7 @@ impl AuthorityPerEpochStore {
             finalized_transactions_cache,
             settlement_registrations: Default::default(),
             barrier_registrations: Default::default(),
+            has_observer_config,
         });
 
         s.update_buffer_stake_metric();
@@ -1468,6 +1475,7 @@ impl AuthorityPerEpochStore {
             epoch_last_checkpoint,
             epoch_last_checkpoint,
             self.submitted_transaction_cache.metrics(),
+            self.has_observer_config,
         )
     }
 
@@ -3842,9 +3850,21 @@ impl AuthorityPerEpochStore {
             .get_observations()
     }
 
+    /// Returns the role of this node for the current epoch, computed from
+    /// committee membership and observer configuration.
+    pub fn node_role(&self) -> NodeRole {
+        if self.committee.authority_exists(&self.name) {
+            NodeRole::validator()
+        } else if self.has_observer_config {
+            NodeRole::observer()
+        } else {
+            NodeRole::fullnode()
+        }
+    }
+
     /// Whether this node is a validator in this epoch.
     pub fn is_validator(&self) -> bool {
-        self.committee.authority_exists(&self.name)
+        self.node_role().is_validator()
     }
 }
 

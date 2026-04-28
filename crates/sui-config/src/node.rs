@@ -31,6 +31,7 @@ use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::supported_protocol_versions::{Chain, SupportedProtocolVersions};
+use sui_types::node_role::NodeRole;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, get_key_pair_from_rng};
@@ -897,6 +898,34 @@ impl NodeConfig {
 
     pub fn consensus_config(&self) -> Option<&ConsensusConfig> {
         self.consensus_config.as_ref()
+    }
+
+    /// Determines the node role from static configuration.
+    /// This is a preliminary role based on config alone — the authoritative
+    /// role that also accounts for committee membership lives on
+    /// `AuthorityPerEpochStore::node_role()`.
+    pub fn node_role(&self) -> NodeRole {
+        let has_consensus_config = self.consensus_config.is_some();
+        let has_observer_peers = self
+            .consensus_config
+            .as_ref()
+            .and_then(|c| c.parameters.as_ref())
+            .map(|p| !p.observer.peers.is_empty())
+            .unwrap_or(false);
+        match (has_consensus_config, has_observer_peers) {
+            (true, false) => NodeRole::validator(),
+            (true, true) => NodeRole::observer(),
+            _ => NodeRole::fullnode(),
+        }
+    }
+
+    /// Whether this node has observer peers configured in its consensus config.
+    pub fn has_observer_config(&self) -> bool {
+        self.consensus_config
+            .as_ref()
+            .and_then(|c| c.parameters.as_ref())
+            .map(|p| !p.observer.peers.is_empty())
+            .unwrap_or(false)
     }
 
     pub fn genesis(&self) -> Result<&genesis::Genesis> {

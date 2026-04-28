@@ -11,9 +11,9 @@ use crate::authority::AuthorityState;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority_client::{AuthorityAPI, make_network_authority_clients_with_network_config};
 use crate::checkpoints::causal_order::CausalOrder;
-use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
+use crate::checkpoints::checkpoint_output::CertifiedCheckpointOutput;
 pub use crate::checkpoints::checkpoint_output::{
-    LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
+    CheckpointOutput, LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;

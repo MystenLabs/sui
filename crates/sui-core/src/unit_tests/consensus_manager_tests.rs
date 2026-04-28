@@ -79,6 +79,7 @@ async fn test_consensus_manager() {
         consensus_config,
         &registry_service,
         consensus_client,
+        true,
     );
 
     let boot_counter = *manager.boot_counter.lock().await;
@@ -162,6 +163,7 @@ async fn test_consensus_manager_address_update() {
         consensus_config,
         &registry_service,
         consensus_client,
+        true,
     ));
 
     // Start consensus

@@ -84,6 +84,7 @@ use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::layout_resolver::into_struct_layout;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
+use sui_types::node_role::NodeRole;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::InputKey;
@@ -971,12 +972,16 @@ pub struct AuthorityState {
 ///
 /// Repeating valid commands should produce no changes and return no error.
 impl AuthorityState {
+    pub fn node_role(&self, epoch_store: &AuthorityPerEpochStore) -> NodeRole {
+        epoch_store.node_role()
+    }
+
     pub fn is_validator(&self, epoch_store: &AuthorityPerEpochStore) -> bool {
-        epoch_store.committee().authority_exists(&self.name)
+        epoch_store.node_role().is_validator()
     }
 
     pub fn is_fullnode(&self, epoch_store: &AuthorityPerEpochStore) -> bool {
-        !self.is_validator(epoch_store)
+        epoch_store.node_role().is_fullnode()
     }
 
     pub fn committee_store(&self) -> &Arc<CommitteeStore> {
