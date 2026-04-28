@@ -3,6 +3,6 @@
 module 0x42::m {
     #[warn(unused)]
     fun foo() {
-        let x = 0;
+        let x = 0u64;
     }
 }

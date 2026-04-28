@@ -5,11 +5,4 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W04039]: unable to determine principal type for literal
-  ┌─ tests/move_check/warning_suppression/nested_warn_category_inner_allow_specific.move:7:17
-  │
-7 │         let x = 0;
-  │                 ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
-  │
-  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
-  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+

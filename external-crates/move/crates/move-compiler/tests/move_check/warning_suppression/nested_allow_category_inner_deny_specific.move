@@ -4,6 +4,6 @@
 module 0x42::m {
     #[deny(unused_variable)]
     fun foo() {
-        let x = 0;
+        let x = 0u64;
     }
 }
