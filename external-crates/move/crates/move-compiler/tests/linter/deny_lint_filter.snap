@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+error[Lint E04001]: constant should follow naming convention
+  ┌─ tests/linter/deny_lint_filter.move:4:5
+  │
+3 │     #[deny(lint(constant_naming))]
+  │                 --------------- the lint level is defined here
+4 │     const Another_BadName: u64 = 42;
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'Another_BadName' should be ALL_CAPS. Or for error constants, use PascalCase

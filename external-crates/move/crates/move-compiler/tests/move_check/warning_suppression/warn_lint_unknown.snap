@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/warning_suppression/warn_lint_unknown.move:3:17
+  │
+3 │     #[warn(lint(does_not_exist))]
+  │                 ^^^^^^^^^^^^^^ Unknown diagnostic filter 'lint(does_not_exist)'

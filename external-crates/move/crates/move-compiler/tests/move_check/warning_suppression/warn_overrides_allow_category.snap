@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/warn_overrides_allow_category.move:7:13
+  │
+5 │     #[warn(unused_variable)]
+  │            --------------- the lint level is defined here
+6 │     fun foo() {
+7 │         let x = 0;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/move_check/warning_suppression/warn_overrides_allow_category.move:7:17
+  │
+7 │         let x = 0;
+  │                 ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
