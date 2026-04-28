@@ -532,12 +532,12 @@ impl TelemetryConfig {
             layers.push(console_subscriber::spawn().boxed());
         }
 
-        if let Some(registry) = config.prom_registry {
-            if !config.disable_span_latency {
-                let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
-                    .expect("Could not initialize span latency layer");
-                layers.push(span_lat_layer.with_filter(span_filter.clone()).boxed());
-            }
+        if let Some(registry) = config.prom_registry
+            && !config.disable_span_latency
+        {
+            let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
+                .expect("Could not initialize span latency layer");
+            layers.push(span_lat_layer.with_filter(span_filter.clone()).boxed());
         }
 
         let mut trace_filter_handle = None;
