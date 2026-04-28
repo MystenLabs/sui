@@ -14,8 +14,9 @@ use rand::{SeedableRng, prelude::SliceRandom, rngs::StdRng};
 use crate::{
     CommitIndex, CommitRef, CommittedSubDag, DagState,
     block::{BlockAPI, GENESIS_ROUND},
-    commit::load_committed_subdag_from_store,
+    commit::{CommitRange, load_committed_subdag_from_store},
     context::Context,
+    leader_scoring::ReputationScores,
 };
 
 /// Incremental, sliding-window leader scorer over recent commits.
@@ -51,7 +52,7 @@ pub(crate) struct LeaderScheduleV3 {
 }
 
 /// This is used by the commit rule to figure out the next commit leaders.
-#[allow(unused)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct NextCommitLeaderSchedule {
     // Index of the next commit.
     pub(crate) next_commit_index: CommitIndex,
@@ -330,6 +331,17 @@ impl LeaderScheduleV3 {
         self.pending_commits.push_back(c);
 
         self.report_metrics();
+    }
+
+    /// Snapshot of the running per-authority scores.
+    pub(crate) fn current_reputation_scores(&self) -> ReputationScores {
+        let commit_range = match (self.scores_entry.front(), self.scores_entry.back()) {
+            (Some(front), Some(back)) => {
+                CommitRange::new(front.commit_ref.index..=back.commit_ref.index)
+            }
+            _ => CommitRange::default(),
+        };
+        ReputationScores::new(commit_range, self.total_scores_per_authority.clone())
     }
 
     fn report_metrics(&self) {

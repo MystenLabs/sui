@@ -39,7 +39,8 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
     leader_schedule::LeaderSchedule,
     leader_schedule_v3::LeaderScheduleV3,
-    proposer::{Proposer, ValidatorProposer},
+    leader_scoring::ReputationScores,
+    proposer::{ProposalLeaderWaiter, Proposer, ValidatorProposer},
     round_tracker::RoundTracker,
     transaction::TransactionConsumer,
     transaction_vote_tracker::TransactionVoteTracker,
@@ -143,14 +144,13 @@ impl Core {
             Some(0)
         };
 
-        let propagation_scores = leader_schedule
-            .leader_swap_table
-            .read()
-            .reputation_scores
-            .clone();
-        let mut ancestor_state_manager =
-            AncestorStateManager::new(context.clone(), dag_state.clone());
-        ancestor_state_manager.set_propagation_scores(propagation_scores);
+        // Propagation scores are pushed later once `Core` exists.
+        let ancestor_state_manager = AncestorStateManager::new(context.clone(), dag_state.clone());
+        let leader_waiter = if let Some(schedule) = leader_schedule_v3.as_ref() {
+            ProposalLeaderWaiter::V3(schedule.next_commit_leader_schedule())
+        } else {
+            ProposalLeaderWaiter::V2(committer.clone())
+        };
 
         // Create the ValidatorProposer
         let proposer = Some(Box::new(ValidatorProposer::new(
@@ -162,10 +162,10 @@ impl Core {
             last_known_proposed_round,
             ancestor_state_manager,
             round_tracker.clone(),
-            committer.clone(),
+            leader_waiter,
         )) as Box<dyn Proposer>);
 
-        Self {
+        let mut core = Self {
             context,
             last_signaled_round,
             last_decided_leader,
@@ -177,8 +177,14 @@ impl Core {
             signals,
             dag_state,
             proposer,
+        };
+
+        let propagation_scores = core.current_reputation_scores();
+        if let Some(proposer) = core.proposer.as_mut() {
+            proposer.set_propagation_scores(propagation_scores);
         }
-        .recover_validator()
+
+        core.recover_validator()
     }
 
     /// Creates a new Core instance for an observer node that only processes blocks.
@@ -609,12 +615,7 @@ impl Core {
                 self.leader_schedule
                     .update_leader_schedule_v2(&self.dag_state);
 
-                let propagation_scores = self
-                    .leader_schedule
-                    .leader_swap_table
-                    .read()
-                    .reputation_scores
-                    .clone();
+                let propagation_scores = self.current_reputation_scores();
                 if let Some(proposer) = &mut self.proposer {
                     proposer.set_propagation_scores(propagation_scores);
                 }
@@ -734,11 +735,22 @@ impl Core {
         }
 
         // Only enabled in v3: use v3 leader schedule to score validators.
+        // This is for metrics only.
         if let Some(schedule) = self.leader_schedule_v3.as_mut() {
             for sub_dag in &committed_sub_dags {
                 schedule.add_commit(sub_dag.clone());
             }
-            schedule.next_commit_leader_schedule();
+            let next_commit_leader_schedule = schedule.next_commit_leader_schedule();
+            debug!(
+                "Next v3 commit leaders: index={} min_round={} num={} allowed={:?}",
+                next_commit_leader_schedule.next_commit_index,
+                next_commit_leader_schedule.min_next_leader_round,
+                next_commit_leader_schedule.num_leaders,
+                next_commit_leader_schedule.allowed_leaders,
+            );
+            if let Some(proposer) = self.proposer.as_mut() {
+                proposer.set_next_commit_leader_schedule(next_commit_leader_schedule);
+            }
         }
 
         Ok(committed_sub_dags)
@@ -784,6 +796,19 @@ impl Core {
     /// Returns the last proposed round, or None if this is an observer node.
     pub(crate) fn last_proposed_round(&self) -> Option<Round> {
         self.proposer.as_ref().map(|p| p.last_proposed_round())
+    }
+
+    /// Returns the current `ReputationScores` from the leader schedule.
+    fn current_reputation_scores(&self) -> ReputationScores {
+        if let Some(schedule) = self.leader_schedule_v3.as_ref() {
+            schedule.current_reputation_scores()
+        } else {
+            self.leader_schedule
+                .leader_swap_table
+                .read()
+                .reputation_scores
+                .clone()
+        }
     }
 
     // Tries to select a prefix of certified commits to be committed next respecting the `limit`.
