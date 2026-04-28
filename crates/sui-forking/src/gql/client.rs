@@ -22,6 +22,7 @@ use crate::ObjectKey;
 use crate::ObjectRead;
 use crate::TransactionInfo;
 use crate::TransactionRead;
+use crate::gql::AddressOwnedObject;
 use crate::gql::queries;
 
 macro_rules! block_on {
@@ -85,29 +86,6 @@ impl GraphQLClient {
         Self::run_query_internal(&self.client, &self.rpc, &self.version, operation).await
     }
 
-    pub(crate) async fn run_raw_query<T>(
-        &self,
-        query: &str,
-        variables: serde_json::Value,
-    ) -> Result<GraphQlResponse<T>, Error>
-    where
-        T: serde::de::DeserializeOwned,
-    {
-        self.client
-            .post(self.rpc.clone())
-            .header(USER_AGENT, format!("sui-forking-v{}", self.version))
-            .json(&serde_json::json!({
-                "query": query,
-                "variables": variables,
-            }))
-            .send()
-            .await
-            .context("Failed to send raw GQL query")?
-            .json::<GraphQlResponse<T>>()
-            .await
-            .context("Failed to read response in raw GQL query")
-    }
-
     async fn run_query_internal<T, V>(
         client: &reqwest::Client,
         rpc: &reqwest::Url,
@@ -150,6 +128,16 @@ impl TransactionRead for GraphQLClient {
 }
 
 impl GraphQLClient {
+    /// Fetch address-owned object metadata at a checkpoint, paginating through
+    /// the checkpoint-scoped ownership connection.
+    pub(crate) async fn get_address_owned_objects_at_checkpoint(
+        &self,
+        address: SuiAddress,
+        checkpoint: CheckpointSequenceNumber,
+    ) -> Result<Vec<AddressOwnedObject>, Error> {
+        queries::address_owned_objects_query::query(address, checkpoint, self).await
+    }
+
     /// Get the latest checkpoint sequence number from GraphQL RPC.
     pub async fn get_latest_checkpoint_sequence_number(
         &self,

@@ -79,7 +79,11 @@ Seed resolution:
 
 ## GraphQL queries
 
-### Address-owned objects query (new)
+### Address-owned objects query
+
+`src/gql/queries.rs` owns the checkpoint-scoped address query. The seed module
+calls `GraphQLClient::get_address_owned_objects_at_checkpoint()` and does not
+construct raw GraphQL requests.
 
 Uses `Checkpoint.query` scoping (same pattern as `VersionAtCheckpointQuery`):
 
@@ -95,9 +99,11 @@ query($sequenceNumber: UInt53, $address: SuiAddress!, $first: Int, $after: Strin
             digest
             owner {
               ... on AddressOwner { address { address } }
-              ... on ConsensusAddressOwner { address { address } }
             }
-            contents { type { repr } }
+            contents {
+              type { repr }
+              json
+            }
           }
           pageInfo { hasNextPage endCursor }
         }
@@ -109,8 +115,9 @@ query($sequenceNumber: UInt53, $address: SuiAddress!, $first: Int, $after: Strin
 
 - Page size: 50
 - Paginate with cursor loop (same pattern as `events_query`)
-- Only collect `AddressOwner` entries. `ConsensusAddressOwner`, shared, immutable, and object-owned
-  objects are not usable as address-owned gas/input objects for the initial index.
+- Only collect `AddressOwner` entries. Other owner variants are handled by the
+  query fallback and skipped; they are not usable as address-owned gas/input
+  objects for the initial index.
 
 ### Individual objects (reuse existing)
 
@@ -203,8 +210,8 @@ through the durable owned-object index, object BCS files, and deleted markers.
 
 | File | Action |
 |------|--------|
-| `src/seed.rs` | New — types, resolution logic, file I/O |
-| `src/gql/queries.rs` | Modify — new `address_objects_query` module |
+| `src/seed.rs` | New — types, seed policy, manifest/index initialization |
+| `src/gql/queries.rs` | Modify — new `address_owned_objects_query` module |
 | `src/cli.rs` | Modify — three new CLI args on Start |
 | `src/startup.rs` | Modify — wire seeding into initialize() |
 | `src/filesystem.rs` | Modify — seed manifest read/write |
