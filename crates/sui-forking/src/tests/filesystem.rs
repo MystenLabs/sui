@@ -10,6 +10,7 @@ use std::fs;
 
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::SuiAddress;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
@@ -28,9 +29,13 @@ fn test_store() -> (tempfile::TempDir, FilesystemStore) {
 }
 
 fn make_object(id: ObjectID, version: u64) -> Object {
+    make_object_with_owner(id, version, Owner::Immutable)
+}
+
+fn make_object_with_owner(id: ObjectID, version: u64, owner: Owner) -> Object {
     let move_obj = MoveObject::new_gas_coin(SequenceNumber::from_u64(version), id, 1_000_000);
     ObjectInner {
-        owner: Owner::Immutable,
+        owner,
         data: sui_types::object::Data::Move(move_obj),
         previous_transaction: TransactionDigest::genesis_marker(),
         storage_rebate: 0,
@@ -102,6 +107,70 @@ fn test_latest_tracks_highest_written_version() {
     // v1 is still accessible by version
     let old = store.get_object_at_version(&id, 1).unwrap().unwrap();
     assert_eq!(old, v1);
+}
+
+#[test]
+fn test_deleted_marker_blocks_latest_but_preserves_exact_versions() {
+    let (_dir, store) = test_store();
+    let id = ObjectID::random();
+    let obj = make_object(id, 5);
+
+    store.write_object(&obj).unwrap();
+    store.mark_object_deleted(&id).unwrap();
+
+    assert!(store.is_object_deleted(&id).unwrap());
+    assert!(store.get_latest_object(&id).unwrap().is_none());
+
+    let exact = store.get_object_at_version(&id, 5).unwrap();
+    assert_eq!(exact.unwrap(), obj);
+
+    store.clear_object_deleted(&id).unwrap();
+    let latest = store.get_latest_object(&id).unwrap();
+    assert_eq!(latest.unwrap(), obj);
+}
+
+#[test]
+fn test_owned_object_index_upserts_removes_and_stays_sorted() {
+    let (_dir, store) = test_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let next_owner = SuiAddress::random_for_testing_only();
+    let first_id = ObjectID::random();
+    let second_id = ObjectID::random();
+    let first = make_object_with_owner(first_id, 1, Owner::AddressOwner(owner));
+    let second = make_object_with_owner(second_id, 1, Owner::AddressOwner(owner));
+
+    store
+        .apply_owned_object_index_updates(&[], [&second, &first])
+        .unwrap();
+    let entries = store.get_owned_object_entries().unwrap();
+    assert_eq!(entries.len(), 2);
+    assert!(
+        entries
+            .windows(2)
+            .all(|window| window[0].object_id < window[1].object_id)
+    );
+    assert!(entries.iter().all(|entry| entry.owner == owner));
+    assert!(entries.iter().all(|entry| entry.balance == Some(1_000_000)));
+
+    let transferred = make_object_with_owner(first_id, 2, Owner::AddressOwner(next_owner));
+    store
+        .apply_owned_object_index_updates(&[], [&transferred])
+        .unwrap();
+    let first_entry = store
+        .get_owned_object_entries()
+        .unwrap()
+        .into_iter()
+        .find(|entry| entry.object_id == first_id)
+        .unwrap();
+    assert_eq!(first_entry.owner, next_owner);
+    assert_eq!(first_entry.version, SequenceNumber::from_u64(2));
+
+    store
+        .apply_owned_object_index_updates(&[second_id], std::iter::empty::<&Object>())
+        .unwrap();
+    let entries = store.get_owned_object_entries().unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].object_id, first_id);
 }
 
 #[test]

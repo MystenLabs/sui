@@ -37,17 +37,25 @@ use sui_types::messages_checkpoint::VersionedFullCheckpointContents;
 use sui_types::object::Object;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::BackingStore;
+use sui_types::storage::BalanceInfo;
+use sui_types::storage::BalanceIterator;
 use sui_types::storage::ChildObjectResolver;
+use sui_types::storage::CoinInfo;
+use sui_types::storage::DynamicFieldIteratorItem;
+use sui_types::storage::EpochInfo;
 use sui_types::storage::ObjectStore;
+use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::PackageObject;
 use sui_types::storage::ParentSync;
 use sui_types::storage::ReadStore;
+use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result as StorageResult;
 use sui_types::storage::load_package_object_from_object_store;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedTransaction;
+use typed_store_error::TypedStoreError;
 
 use crate::CheckpointRead;
 use crate::GraphQLClient;
@@ -58,6 +66,7 @@ use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::VersionQuery;
 use crate::filesystem::FilesystemStore;
+use crate::filesystem::OwnedObjectEntry;
 
 /// A data store for Sui data, combining a local filesystem cache with a remote GraphQL endpoint
 /// for historical reads. Pre-fork data is fetched on demand and cached locally; post-fork data
@@ -260,6 +269,10 @@ impl DataStore {
     /// Local-first lookup for the latest known version of an object. Falls back to a remote
     /// `AtCheckpoint(forked_at_checkpoint)` query and caches the result on disk.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
+        if self.local.is_object_deleted(object_id)? {
+            return Ok(None);
+        }
+
         if let Some(object) = self.local.get_latest_object(object_id)? {
             return Ok(Some(object));
         }
@@ -452,6 +465,64 @@ impl DataStore {
             local,
         }
     }
+
+    fn owned_object_infos(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> StorageResult<Vec<OwnedObjectInfo>> {
+        let entries = self
+            .local
+            .get_owned_object_entries()
+            .map_err(|e| StorageError::custom(e.to_string()))?;
+        let cursor_object_id = cursor.map(|cursor| cursor.object_id);
+
+        Ok(entries
+            .into_iter()
+            .filter(|entry| entry.owner == owner)
+            .filter(|entry| {
+                object_type
+                    .as_ref()
+                    .is_none_or(|ty| object_type_matches(ty, &entry.object_type))
+            })
+            // `RpcIndexes` cursors are lower bounds. The v2 RPC layer stores
+            // the first not-yet-returned item in the page token and expects
+            // the next iterator to include it.
+            .filter(|entry| cursor_object_id.is_none_or(|id| entry.object_id >= id))
+            .filter_map(|entry| self.valid_owned_object_info(entry))
+            .collect())
+    }
+
+    fn valid_owned_object_info(&self, entry: OwnedObjectEntry) -> Option<OwnedObjectInfo> {
+        let object = self.local.get_latest_object(&entry.object_id).ok()??;
+        if object.version() != entry.version {
+            return None;
+        }
+        if object.owner != sui_types::object::Owner::AddressOwner(entry.owner) {
+            return None;
+        }
+        let object_type = object.struct_tag()?;
+        if object_type != entry.object_type {
+            return None;
+        }
+
+        Some(OwnedObjectInfo {
+            owner: entry.owner,
+            object_type,
+            balance: object.as_coin_maybe().map(|coin| coin.value()),
+            object_id: entry.object_id,
+            version: entry.version,
+        })
+    }
+}
+
+fn object_type_matches(filter: &StructTag, candidate: &StructTag) -> bool {
+    filter.address == candidate.address
+        && filter.module.as_ident_str() == candidate.module.as_ident_str()
+        && filter.name.as_ident_str() == candidate.name.as_ident_str()
+        && (filter.type_params.is_empty()
+            || filter.type_params.as_slice() == candidate.type_params.as_slice())
 }
 
 // ============================================================================
@@ -616,8 +687,24 @@ impl SimulatorStore for DataStore {
             .expect("clock object should deserialize")
     }
 
-    fn owned_objects(&self, _owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
-        todo!("SimulatorStore::owned_objects")
+    fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
+        let objects = match self.owned_object_infos(owner, None, None) {
+            Ok(infos) => infos
+                .into_iter()
+                .filter_map(|info| {
+                    self.local
+                        .get_latest_object(&info.object_id)
+                        .ok()
+                        .flatten()
+                        .filter(|object| object.version() == info.version)
+                })
+                .collect(),
+            Err(err) => {
+                tracing::error!(%owner, "failed to read owned-object index: {err:?}");
+                Vec::new()
+            }
+        };
+        Box::new(objects.into_iter())
     }
 
     fn insert_checkpoint(&mut self, checkpoint: VerifiedCheckpoint) {
@@ -721,13 +808,31 @@ impl SimulatorStore for DataStore {
     fn update_objects(
         &mut self,
         written_objects: BTreeMap<ObjectID, Object>,
-        _deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
+        deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
+        let deleted_object_ids: Vec<_> = deleted_objects
+            .iter()
+            .map(|(object_id, _, _)| *object_id)
+            .collect();
+
+        for object_id in &deleted_object_ids {
+            self.local
+                .mark_object_deleted(object_id)
+                .expect("failed to mark object deleted on disk");
+        }
+
         for object in written_objects.values() {
             self.local
                 .write_object(object)
                 .expect("failed to write object to disk");
+            self.local
+                .clear_object_deleted(&object.id())
+                .expect("failed to clear object deleted marker");
         }
+
+        self.local
+            .apply_owned_object_index_updates(&deleted_object_ids, written_objects.values())
+            .expect("failed to update owned-object index");
     }
 
     fn backing_store(&self) -> &dyn BackingStore {
@@ -877,7 +982,7 @@ impl RpcStateReader for DataStore {
     }
 
     fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
-        None
+        Some(self)
     }
 
     fn get_struct_layout_with_overlay(
@@ -886,6 +991,89 @@ impl RpcStateReader for DataStore {
         _overlay: &ObjectSet,
     ) -> StorageResult<Option<MoveTypeLayout>> {
         Ok(None)
+    }
+}
+
+impl RpcIndexes for DataStore {
+    fn get_epoch_info(&self, _epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
+        Ok(None)
+    }
+
+    fn owned_objects_iter(
+        &self,
+        owner: SuiAddress,
+        object_type: Option<StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
+    {
+        let infos = self.owned_object_infos(owner, object_type, cursor)?;
+        Ok(Box::new(
+            infos
+                .into_iter()
+                .map(Ok::<OwnedObjectInfo, TypedStoreError>),
+        ))
+    }
+
+    fn dynamic_field_iter(
+        &self,
+        _parent: ObjectID,
+        _cursor: Option<ObjectID>,
+    ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
+        Ok(Box::new(std::iter::empty()))
+    }
+
+    fn get_coin_info(&self, _coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
+        Ok(None)
+    }
+
+    fn get_balance(
+        &self,
+        _owner: &SuiAddress,
+        _coin_type: &StructTag,
+    ) -> StorageResult<Option<BalanceInfo>> {
+        Ok(None)
+    }
+
+    fn balance_iter(
+        &self,
+        _owner: &SuiAddress,
+        _cursor: Option<(SuiAddress, StructTag)>,
+    ) -> StorageResult<BalanceIterator<'_>> {
+        Ok(Box::new(std::iter::empty()))
+    }
+
+    fn package_versions_iter(
+        &self,
+        _original_id: ObjectID,
+        _cursor: Option<u64>,
+    ) -> StorageResult<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>>
+    {
+        Ok(Box::new(std::iter::empty()))
+    }
+
+    fn get_highest_indexed_checkpoint_seq_number(
+        &self,
+    ) -> StorageResult<Option<CheckpointSequenceNumber>> {
+        Ok(self.get_highest_checkpoint().ok())
+    }
+
+    fn authenticated_event_iter(
+        &self,
+        _stream_id: SuiAddress,
+        _start_checkpoint: u64,
+        _start_accumulator_version: Option<u64>,
+        _start_transaction_idx: Option<u32>,
+        _start_event_idx: Option<u32>,
+        _end_checkpoint: u64,
+        _limit: u32,
+    ) -> StorageResult<
+        Box<
+            dyn Iterator<
+                    Item = Result<(u64, u64, u32, u32, sui_types::event::Event), TypedStoreError>,
+                > + '_,
+        >,
+    > {
+        Ok(Box::new(std::iter::empty()))
     }
 }
 

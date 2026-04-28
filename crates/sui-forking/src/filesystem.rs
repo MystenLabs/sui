@@ -6,7 +6,10 @@
 //!     - objects/
 //!         - {object_id}/
 //!            - latest                  (text: latest persisted version number)
+//!            - deleted                 (text marker: deleted by local execution)
 //!            - {version}                (BCS-encoded Object)
+//!     - indices/
+//!         - owned_objects              (BCS-encoded Vec<OwnedObjectEntry>)
 //!     - checkpoints/
 //!         - latest                     (text: highest persisted sequence number)
 //!         - {seq}/
@@ -21,6 +24,7 @@
 //!             - events                 (BCS-encoded TransactionEvents)
 
 use std::fs;
+use std::io::ErrorKind;
 use std::io::Write as _;
 use std::path::Path;
 use std::path::PathBuf;
@@ -30,7 +34,10 @@ use anyhow::Error;
 use anyhow::anyhow;
 use anyhow::bail;
 
+use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
+use sui_types::base_types::SuiAddress;
 use sui_types::digests::CheckpointContentsDigest;
 use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
@@ -41,6 +48,7 @@ use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
+use sui_types::object::Owner;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::VerifiedTransaction;
 
@@ -50,10 +58,16 @@ use crate::Node;
 const DATA_STORE_DIR: &str = ".forking_data_store";
 /// Per-chain object storage directory.
 const OBJECTS_DIR: &str = "objects";
+/// Per-chain secondary indices directory.
+const INDICES_DIR: &str = "indices";
 /// Per-chain checkpoint storage directory.
 const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Per-chain transaction storage directory.
 const TRANSACTIONS_DIR: &str = "transactions";
+/// Filename marking an object as locally deleted.
+const DELETED_FILE: &str = "deleted";
+/// BCS-encoded owned-object index filename.
+const OWNED_OBJECTS_INDEX_FILE: &str = "owned_objects";
 /// Filename for the BCS-encoded transaction data within a transaction directory.
 const TX_DATA_FILE: &str = "data";
 /// Filename for the BCS-encoded transaction effects within a transaction directory.
@@ -70,6 +84,31 @@ const CHECKPOINT_CONTENTS_DIR: &str = "contents";
 const CHECKPOINT_DIGEST_INDEX_FILE: &str = "digest_index";
 /// Marker file for the latest checkpoint sequence known to the store.
 const LATEST_FILE: &str = "latest";
+
+/// Durable secondary index entry for a live address-owned object.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub(crate) struct OwnedObjectEntry {
+    pub(crate) owner: SuiAddress,
+    pub(crate) object_id: ObjectID,
+    pub(crate) version: SequenceNumber,
+    pub(crate) object_type: StructTag,
+    pub(crate) balance: Option<u64>,
+}
+
+impl OwnedObjectEntry {
+    fn from_object(object: &Object) -> Option<Self> {
+        let Owner::AddressOwner(owner) = &object.owner else {
+            return None;
+        };
+        Some(Self {
+            owner: *owner,
+            object_id: object.id(),
+            version: object.version(),
+            object_type: object.struct_tag()?,
+            balance: object.as_coin_maybe().map(|coin| coin.value()),
+        })
+    }
+}
 
 /// Local filesystem-backed store for Sui data.
 #[derive(Clone)]
@@ -120,6 +159,11 @@ impl FilesystemStore {
         self.root.join(OBJECTS_DIR)
     }
 
+    /// Return the directory path for secondary indices.
+    fn indices_dir(&self) -> PathBuf {
+        self.root.join(INDICES_DIR)
+    }
+
     /// Return the directory path for storing checkpoint data.
     fn checkpoints_dir(&self) -> PathBuf {
         self.root.join(CHECKPOINTS_DIR)
@@ -133,6 +177,10 @@ impl FilesystemStore {
     /// Return the directory for a specific transaction.
     fn tx_dir(&self, digest: &TransactionDigest) -> PathBuf {
         self.transactions_dir().join(digest.to_string())
+    }
+
+    fn owned_objects_index_path(&self) -> PathBuf {
+        self.indices_dir().join(OWNED_OBJECTS_INDEX_FILE)
     }
 
     /// Persist a verified transaction to disk under `transactions/{digest}/data`. The underlying
@@ -238,6 +286,10 @@ impl FilesystemStore {
 
     /// Get the latest object version available on disk for the given object ID.
     pub(crate) fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
+        if self.is_object_deleted(object_id)? {
+            return Ok(None);
+        }
+
         let object_dir = self.objects_dir().join(object_id.to_string());
 
         if !object_dir.exists() {
@@ -282,6 +334,95 @@ impl FilesystemStore {
         let latest_file = object_dir.join(LATEST_FILE);
         fs::write(latest_file, latest_version.to_string())
             .with_context(|| format!("Failed to write latest file for object {}", object.id()))
+    }
+
+    /// Mark an object as deleted by local execution. Historical version files
+    /// remain on disk and can still be read by exact version.
+    pub(crate) fn mark_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<()> {
+        let object_dir = self.objects_dir().join(object_id.to_string());
+        fs::create_dir_all(&object_dir)
+            .with_context(|| format!("Failed to create directory: {}", object_dir.display()))?;
+        fs::write(object_dir.join(DELETED_FILE), "deleted")
+            .with_context(|| format!("Failed to mark object {} deleted", object_id))
+    }
+
+    /// Clear the local deletion marker for an object that has become live again.
+    pub(crate) fn clear_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<()> {
+        let path = self
+            .objects_dir()
+            .join(object_id.to_string())
+            .join(DELETED_FILE);
+        match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err)
+                .with_context(|| format!("Failed to clear deleted marker: {}", path.display())),
+        }
+    }
+
+    /// Return whether local execution has deleted the object.
+    pub(crate) fn is_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
+        let path = self
+            .objects_dir()
+            .join(object_id.to_string())
+            .join(DELETED_FILE);
+        match fs::metadata(&path) {
+            Ok(_) => Ok(true),
+            Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
+            Err(err) => Err(err)
+                .with_context(|| format!("Failed to stat deleted marker: {}", path.display())),
+        }
+    }
+
+    /// Read the durable owned-object index. Missing index files represent an empty index.
+    pub(crate) fn get_owned_object_entries(&self) -> anyhow::Result<Vec<OwnedObjectEntry>> {
+        let path = self.owned_objects_index_path();
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+        self.read_bcs_file(&path)
+    }
+
+    /// Apply local execution ownership changes to the durable owned-object index.
+    pub(crate) fn apply_owned_object_index_updates<'a>(
+        &self,
+        deleted_object_ids: &[ObjectID],
+        written_objects: impl IntoIterator<Item = &'a Object>,
+    ) -> anyhow::Result<()> {
+        let mut entries = self.get_owned_object_entries()?;
+
+        for object_id in deleted_object_ids {
+            remove_owned_entry(&mut entries, *object_id);
+        }
+
+        for object in written_objects {
+            match OwnedObjectEntry::from_object(object) {
+                Some(entry) => upsert_owned_entry(&mut entries, entry),
+                None => remove_owned_entry(&mut entries, object.id()),
+            }
+        }
+
+        self.write_owned_object_entries(&entries)
+    }
+
+    fn write_owned_object_entries(&self, entries: &[OwnedObjectEntry]) -> anyhow::Result<()> {
+        let path = self.owned_objects_index_path();
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create directory: {}", parent.display()))?;
+        }
+
+        let tmp_path = path.with_extension("tmp");
+        let bytes = bcs::to_bytes(entries).with_context(|| {
+            format!(
+                "Failed to serialize owned-object index for: {}",
+                path.display()
+            )
+        })?;
+        fs::write(&tmp_path, bytes)
+            .with_context(|| format!("Failed to write index file: {}", tmp_path.display()))?;
+        fs::rename(&tmp_path, &path)
+            .with_context(|| format!("Failed to replace owned-object index: {}", path.display()))
     }
 
     /// Get the highest checkpoint sequence number available on disk.
@@ -475,6 +616,19 @@ impl FilesystemStore {
             .trim()
             .parse::<u64>()
             .with_context(|| format!("Failed to parse latest file: {}", latest_path.display()))
+    }
+}
+
+fn remove_owned_entry(entries: &mut Vec<OwnedObjectEntry>, object_id: ObjectID) {
+    if let Ok(index) = entries.binary_search_by_key(&object_id, |entry| entry.object_id) {
+        entries.remove(index);
+    }
+}
+
+fn upsert_owned_entry(entries: &mut Vec<OwnedObjectEntry>, entry: OwnedObjectEntry) {
+    match entries.binary_search_by_key(&entry.object_id, |existing| existing.object_id) {
+        Ok(index) => entries[index] = entry,
+        Err(index) => entries.insert(index, entry),
     }
 }
 
