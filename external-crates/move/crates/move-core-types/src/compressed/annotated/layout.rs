@@ -436,7 +436,7 @@ impl MoveLayoutView {
     }
 
     /// Check whether this layout matches the given [`TypeTag`].
-    pub fn is_type_tag(&self, t: &TypeTag) -> bool {
+    pub fn is_type(&self, t: &TypeTag) -> bool {
         match self {
             MoveLayoutView::Bool => *t == TypeTag::Bool,
             MoveLayoutView::U8 => *t == TypeTag::U8,
@@ -447,15 +447,15 @@ impl MoveLayoutView {
             MoveLayoutView::U256 => *t == TypeTag::U256,
             MoveLayoutView::Address => *t == TypeTag::Address,
             MoveLayoutView::Signer => *t == TypeTag::Signer,
-            MoveLayoutView::Struct(sv) => sv.is_type_tag(t),
+            MoveLayoutView::Struct(sv) => sv.is_type(t),
             MoveLayoutView::Vector(vv) => {
                 if let TypeTag::Vector(inner) = t {
-                    vv.as_view().is_type_tag(inner)
+                    vv.as_view().is_type(inner)
                 } else {
                     false
                 }
             }
-            MoveLayoutView::Enum(ev) => ev.is_type_tag(t),
+            MoveLayoutView::Enum(ev) => ev.is_type(t),
         }
     }
 
@@ -705,7 +705,7 @@ impl MoveStructLayout {
     }
 
     /// Check whether this struct's type tag matches the given [`TypeTag`].
-    pub fn is_type_tag(&self, t: &TypeTag) -> bool {
+    pub fn is_type(&self, t: &TypeTag) -> bool {
         matches!(t, TypeTag::Struct(s) if &**s == self.type_())
     }
 
@@ -786,7 +786,7 @@ impl MoveEnumLayout {
     }
 
     /// Check whether this enum's type tag matches the given [`TypeTag`].
-    pub fn is_type_tag(&self, t: &TypeTag) -> bool {
+    pub fn is_type(&self, t: &TypeTag) -> bool {
         matches!(t, TypeTag::Struct(s) if **s == *self.type_())
     }
 

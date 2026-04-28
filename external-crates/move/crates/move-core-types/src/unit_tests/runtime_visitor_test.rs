@@ -6,9 +6,8 @@ use std::fmt::Write;
 use crate::{
     VARIANT_COUNT_MAX, VARIANT_TAG_MAX_VALUE,
     account_address::AccountAddress,
-    runtime_value::{
-        MoveEnumLayout, MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue, MoveVariant,
-    },
+    compressed::runtime::{MoveLayoutView, MoveTypeLayout, MoveTypeLayoutBuilder},
+    runtime_value::{self as R, MoveStruct, MoveValue, MoveVariant},
     runtime_visitor::{
         self, NullTraversal, StructDriver, Traversal, ValueDriver, VariantDriver, VecDriver,
         Visitor,
@@ -25,12 +24,12 @@ pub(crate) struct PrintVisitor {
     pub output: String,
 }
 
-impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
+impl<'b> Traversal<'b> for CountingTraversal {
     type Error = runtime_visitor::Error;
 
     fn traverse_u8(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         _value: u8,
     ) -> Result<(), Self::Error> {
         self.0 += 1;
@@ -39,7 +38,7 @@ impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
 
     fn traverse_u16(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         _value: u16,
     ) -> Result<(), Self::Error> {
         self.0 += 1;
@@ -48,7 +47,7 @@ impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
 
     fn traverse_u32(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         _value: u32,
     ) -> Result<(), Self::Error> {
         self.0 += 1;
@@ -57,7 +56,7 @@ impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
 
     fn traverse_u64(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         _value: u64,
     ) -> Result<(), Self::Error> {
         self.0 += 1;
@@ -66,7 +65,7 @@ impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
 
     fn traverse_u128(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         _value: u128,
     ) -> Result<(), Self::Error> {
         self.0 += 1;
@@ -75,7 +74,7 @@ impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
 
     fn traverse_u256(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         _value: U256,
     ) -> Result<(), Self::Error> {
         self.0 += 1;
@@ -84,7 +83,7 @@ impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
 
     fn traverse_bool(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         _value: bool,
     ) -> Result<(), Self::Error> {
         self.0 += 1;
@@ -93,7 +92,7 @@ impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
 
     fn traverse_address(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         _value: AccountAddress,
     ) -> Result<(), Self::Error> {
         self.0 += 1;
@@ -102,45 +101,39 @@ impl<'b, 'l> Traversal<'b, 'l> for CountingTraversal {
 
     fn traverse_signer(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         _value: AccountAddress,
     ) -> Result<(), Self::Error> {
         self.0 += 1;
         Ok(())
     }
 
-    fn traverse_vector(&mut self, driver: &mut VecDriver<'_, 'b, 'l>) -> Result<(), Self::Error> {
+    fn traverse_vector(&mut self, driver: &mut VecDriver<'_, 'b>) -> Result<(), Self::Error> {
         self.0 += 1;
         while driver.next_element(self)?.is_some() {}
         Ok(())
     }
 
-    fn traverse_struct(
-        &mut self,
-        driver: &mut StructDriver<'_, 'b, 'l>,
-    ) -> Result<(), Self::Error> {
+    fn traverse_struct(&mut self, driver: &mut StructDriver<'_, 'b>) -> Result<(), Self::Error> {
         self.0 += 1;
         while driver.next_field(self)?.is_some() {}
         Ok(())
     }
 
-    fn traverse_variant(
-        &mut self,
-        driver: &mut VariantDriver<'_, 'b, 'l>,
-    ) -> Result<(), Self::Error> {
+    fn traverse_variant(&mut self, driver: &mut VariantDriver<'_, 'b>) -> Result<(), Self::Error> {
         self.0 += 1;
         while driver.next_field(self)?.is_some() {}
         Ok(())
     }
 }
 
-impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
+impl<'b> Visitor<'b> for PrintVisitor {
     type Value = MoveValue;
     type Error = runtime_visitor::Error;
 
     fn visit_u8(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u8,
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: u8", self.depth).unwrap();
@@ -149,7 +142,7 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_u16(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u16,
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: u16", self.depth).unwrap();
@@ -158,7 +151,7 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_u32(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u32,
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: u32", self.depth).unwrap();
@@ -167,7 +160,7 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_u64(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u64,
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: u64", self.depth).unwrap();
@@ -176,7 +169,7 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_u128(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u128,
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: u128", self.depth).unwrap();
@@ -185,7 +178,7 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_u256(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: U256,
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: u256", self.depth).unwrap();
@@ -194,7 +187,7 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_bool(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: bool,
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: bool", self.depth).unwrap();
@@ -203,7 +196,7 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_address(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: address", self.depth).unwrap();
@@ -212,17 +205,14 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_signer(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         write!(self.output, "\n[{}] {value}: signer", self.depth).unwrap();
         Ok(MoveValue::Signer(value))
     }
 
-    fn visit_vector(
-        &mut self,
-        driver: &mut VecDriver<'_, 'b, 'l>,
-    ) -> Result<Self::Value, Self::Error> {
+    fn visit_vector(&mut self, driver: &mut VecDriver<'_, 'b>) -> Result<Self::Value, Self::Error> {
         let layout = driver.element_layout();
         write!(self.output, "\n[{}] vector<{layout:#}>", self.depth).unwrap();
 
@@ -242,7 +232,7 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_struct(
         &mut self,
-        driver: &mut StructDriver<'_, 'b, 'l>,
+        driver: &mut StructDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
         let layout = driver.struct_layout();
         write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
@@ -263,7 +253,7 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
     fn visit_variant(
         &mut self,
-        driver: &mut VariantDriver<'_, 'b, 'l>,
+        driver: &mut VariantDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
         let layout = driver.enum_layout();
         write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
@@ -288,10 +278,10 @@ impl<'b, 'l> Visitor<'b, 'l> for PrintVisitor {
 
 #[test]
 fn traversal() {
-    use MoveTypeLayout as T;
     use MoveValue as V;
+    use R::MoveTypeLayout as T;
 
-    let type_layout = struct_layout_(vec![
+    let tree_layout = struct_layout_(vec![
         T::U8,
         T::U16,
         T::U32,
@@ -305,8 +295,9 @@ fn traversal() {
         struct_layout_(vec![T::U8]),
         enum_layout_(vec![vec![T::U8]]),
     ]);
+    let type_layout: MoveTypeLayout = (&tree_layout).try_into().unwrap();
 
-    let T::Struct(struct_layout) = &type_layout else {
+    let MoveLayoutView::Struct(struct_layout) = type_layout.as_view() else {
         panic!("Not a struct layout");
     };
 
@@ -328,10 +319,10 @@ fn traversal() {
     let bytes = serialize(value);
 
     let mut value_traversal = CountingTraversal::default();
-    MoveValue::visit_deserialize(&bytes, &type_layout, &mut value_traversal).unwrap();
+    MoveValue::visit_deserialize(&bytes, type_layout, &mut value_traversal).unwrap();
 
     let mut struct_traversal = CountingTraversal::default();
-    MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_traversal).unwrap();
+    MoveStruct::visit_deserialize(&bytes, *struct_layout, &mut struct_traversal).unwrap();
 
     assert_eq!(18, value_traversal.0);
     assert_eq!(18, struct_traversal.0);
@@ -340,26 +331,28 @@ fn traversal() {
 #[test]
 fn max_variant() {
     let variants = (0..VARIANT_COUNT_MAX)
-        .map(|_| vec![MoveTypeLayout::U8])
+        .map(|_| vec![R::MoveTypeLayout::U8])
         .collect();
-    let layout = enum_layout_(variants);
+    let tree_layout = enum_layout_(variants);
 
     let value = variant_value_(VARIANT_TAG_MAX_VALUE as u16, vec![MoveValue::U8(42)]);
     let bytes = serialize(value);
     let mut val_traversal = CountingTraversal::default();
-    MoveValue::simple_deserialize(&bytes, &layout).unwrap();
-    MoveValue::visit_deserialize(&bytes, &layout, &mut val_traversal).unwrap();
+    MoveValue::simple_deserialize(&bytes, &tree_layout).unwrap();
+    let layout: MoveTypeLayout = (&tree_layout).try_into().unwrap();
+    MoveValue::visit_deserialize(&bytes, layout, &mut val_traversal).unwrap();
 }
 
 #[test]
 fn unexpected_eof() {
-    use MoveTypeLayout as T;
     use MoveValue as V;
+    use R::MoveTypeLayout as T;
 
-    let type_layout = struct_layout_(vec![T::U64]);
+    let tree_layout = struct_layout_(vec![T::U64]);
     let value = struct_value_(vec![V::U64(42)]);
 
-    let T::Struct(struct_layout) = &type_layout else {
+    let type_layout: MoveTypeLayout = (&tree_layout).try_into().unwrap();
+    let MoveLayoutView::Struct(struct_layout) = type_layout.as_view() else {
         panic!("Not a struct layout");
     };
 
@@ -370,14 +363,14 @@ fn unexpected_eof() {
 
     assert_eq!(
         "unexpected end of input",
-        MoveValue::visit_deserialize(&bytes, &type_layout, &mut NullTraversal)
+        MoveValue::visit_deserialize(&bytes, type_layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
 
     assert_eq!(
         "unexpected end of input",
-        MoveStruct::visit_deserialize(&bytes, struct_layout, &mut NullTraversal)
+        MoveStruct::visit_deserialize(&bytes, *struct_layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -385,9 +378,10 @@ fn unexpected_eof() {
 
 #[test]
 fn no_enum_tag() {
-    use MoveTypeLayout as T;
     use MoveValue as V;
-    let layout = enum_layout_(vec![vec![T::U8]]);
+    use R::MoveTypeLayout as T;
+    let tree_layout = enum_layout_(vec![vec![T::U8]]);
+    let layout: MoveTypeLayout = (&tree_layout).try_into().unwrap();
     let value = variant_value_(0, vec![V::U8(42)]);
     let mut bytes = serialize(value);
 
@@ -396,7 +390,7 @@ fn no_enum_tag() {
 
     assert_eq!(
         "invalid variant tag: 42",
-        MoveValue::visit_deserialize(&bytes, &layout, &mut NullTraversal)
+        MoveValue::visit_deserialize(&bytes, layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -404,9 +398,10 @@ fn no_enum_tag() {
 
 #[test]
 fn out_of_range_enum_tag() {
-    use MoveTypeLayout as T;
     use MoveValue as V;
-    let layout = enum_layout_(vec![vec![T::U8]]);
+    use R::MoveTypeLayout as T;
+    let tree_layout = enum_layout_(vec![vec![T::U8]]);
+    let layout: MoveTypeLayout = (&tree_layout).try_into().unwrap();
     let value = variant_value_(0, vec![V::U8(42)]);
     let mut bytes = serialize(value);
 
@@ -415,7 +410,7 @@ fn out_of_range_enum_tag() {
 
     assert_eq!(
         "invalid variant tag: 127",
-        MoveValue::visit_deserialize(&bytes, &layout, &mut NullTraversal)
+        MoveValue::visit_deserialize(&bytes, layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -423,9 +418,10 @@ fn out_of_range_enum_tag() {
 
 #[test]
 fn invalid_variant_tag() {
-    use MoveTypeLayout as T;
     use MoveValue as V;
-    let layout = enum_layout_(vec![vec![T::U8]]);
+    use R::MoveTypeLayout as T;
+    let tree_layout = enum_layout_(vec![vec![T::U8]]);
+    let layout: MoveTypeLayout = (&tree_layout).try_into().unwrap();
     let value = variant_value_(0, vec![V::U8(42)]);
     let mut bytes = serialize(value);
 
@@ -434,7 +430,7 @@ fn invalid_variant_tag() {
 
     assert_eq!(
         "invalid variant tag: 1",
-        MoveValue::visit_deserialize(&bytes, &layout, &mut NullTraversal)
+        MoveValue::visit_deserialize(&bytes, layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -442,10 +438,9 @@ fn invalid_variant_tag() {
 
 #[test]
 fn bad_bool_byte() {
-    use MoveTypeLayout as T;
     assert_eq!(
         "unexpected byte: 42",
-        MoveValue::visit_deserialize(&[42], &T::Bool, &mut NullTraversal)
+        MoveValue::visit_deserialize(&[42], MoveTypeLayout::bool(), &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -453,10 +448,11 @@ fn bad_bool_byte() {
 
 #[test]
 fn bad_vector_length() {
-    use MoveTypeLayout as T;
     use MoveValue as V;
+    use R::MoveTypeLayout as T;
 
-    let layout = T::Vector(Box::new(T::U8));
+    let tree_layout = T::Vector(Box::new(T::U8));
+    let layout: MoveTypeLayout = (&tree_layout).try_into().unwrap();
     let value = V::Vector(vec![V::U8(1), V::U8(2), V::U8(3)]);
 
     let mut bytes = serialize(value);
@@ -466,7 +462,7 @@ fn bad_vector_length() {
 
     assert_eq!(
         "unexpected end of input",
-        MoveValue::visit_deserialize(&bytes, &layout, &mut NullTraversal)
+        MoveValue::visit_deserialize(&bytes, layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -474,10 +470,9 @@ fn bad_vector_length() {
 
 #[test]
 fn trailing_bytes() {
-    use MoveTypeLayout as T;
     assert_eq!(
         "trailing 1 byte(s) at the end of input",
-        MoveValue::visit_deserialize(&[42, 42], &T::U8, &mut NullTraversal)
+        MoveValue::visit_deserialize(&[42, 42], MoveTypeLayout::u8(), &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -485,15 +480,16 @@ fn trailing_bytes() {
 
 #[test]
 fn nested_datatype_visit() {
-    use MoveTypeLayout as T;
     use MoveValue as V;
+    use R::MoveTypeLayout as T;
 
-    let type_layout = struct_layout_(vec![
+    let tree_layout = struct_layout_(vec![
         struct_layout_(vec![T::U64, T::Vector(Box::new(T::U32))]),
         enum_layout_(vec![vec![T::U64]]),
     ]);
+    let type_layout: MoveTypeLayout = (&tree_layout).try_into().unwrap();
 
-    let T::Struct(struct_layout) = &type_layout else {
+    let MoveLayoutView::Struct(struct_layout) = type_layout.as_view() else {
         panic!("Not a struct layout");
     };
 
@@ -508,12 +504,11 @@ fn nested_datatype_visit() {
     let bytes = serialize(value.clone());
 
     let mut value_visitor = PrintVisitor::default();
-    let from_value =
-        MoveValue::visit_deserialize(&bytes, &type_layout, &mut value_visitor).unwrap();
+    let from_value = MoveValue::visit_deserialize(&bytes, type_layout, &mut value_visitor).unwrap();
 
     let mut struct_visitor = PrintVisitor::default();
     let from_struct =
-        MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
+        MoveStruct::visit_deserialize(&bytes, *struct_layout, &mut struct_visitor).unwrap();
 
     // This is a little strange -- even though we are deserializing a struct, we still get a value.
     // This is because the return type comes from the visitor, not the deserializer.
@@ -526,20 +521,20 @@ fn nested_datatype_visit() {
 
 #[test]
 fn peek_field_test() {
-    use MoveTypeLayout as T;
     use MoveValue as V;
+    use R::MoveTypeLayout as T;
 
     struct PeekU64Visitor<'f> {
         fields: &'f [u64],
     }
 
-    impl<'b, 'l> Visitor<'b, 'l> for PeekU64Visitor<'_> {
+    impl<'b> Visitor<'b> for PeekU64Visitor<'_> {
         type Value = Option<u64>;
         type Error = runtime_visitor::Error;
 
         fn visit_u64(
             &mut self,
-            _driver: &ValueDriver<'_, 'b, 'l>,
+            _driver: &ValueDriver<'_, 'b>,
             value: u64,
         ) -> Result<Self::Value, Self::Error> {
             Ok(self.fields.is_empty().then_some(value))
@@ -547,7 +542,7 @@ fn peek_field_test() {
 
         fn visit_struct(
             &mut self,
-            driver: &mut StructDriver<'_, 'b, 'l>,
+            driver: &mut StructDriver<'_, 'b>,
         ) -> Result<Self::Value, Self::Error> {
             let [field, fields @ ..] = self.fields else {
                 return Ok(None);
@@ -568,7 +563,7 @@ fn peek_field_test() {
 
         fn visit_variant(
             &mut self,
-            driver: &mut VariantDriver<'_, 'b, 'l>,
+            driver: &mut VariantDriver<'_, 'b>,
         ) -> Result<Self::Value, Self::Error> {
             let [field, fields @ ..] = self.fields else {
                 return Ok(None);
@@ -589,17 +584,13 @@ fn peek_field_test() {
 
         // === Empty/default cases ===
 
-        fn visit_u8(
-            &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
-            _: u8,
-        ) -> Result<Self::Value, Self::Error> {
+        fn visit_u8(&mut self, _: &ValueDriver<'_, 'b>, _: u8) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
 
         fn visit_u16(
             &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
+            _: &ValueDriver<'_, 'b>,
             _: u16,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -607,7 +598,7 @@ fn peek_field_test() {
 
         fn visit_u32(
             &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
+            _: &ValueDriver<'_, 'b>,
             _: u32,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -615,7 +606,7 @@ fn peek_field_test() {
 
         fn visit_u128(
             &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
+            _: &ValueDriver<'_, 'b>,
             _: u128,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -623,7 +614,7 @@ fn peek_field_test() {
 
         fn visit_u256(
             &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
+            _: &ValueDriver<'_, 'b>,
             _: U256,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -631,7 +622,7 @@ fn peek_field_test() {
 
         fn visit_bool(
             &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
+            _: &ValueDriver<'_, 'b>,
             _: bool,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -639,7 +630,7 @@ fn peek_field_test() {
 
         fn visit_address(
             &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
+            _: &ValueDriver<'_, 'b>,
             _: AccountAddress,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -647,7 +638,7 @@ fn peek_field_test() {
 
         fn visit_signer(
             &mut self,
-            _: &ValueDriver<'_, 'b, 'l>,
+            _: &ValueDriver<'_, 'b>,
             _: AccountAddress,
         ) -> Result<Self::Value, Self::Error> {
             Ok(None)
@@ -655,23 +646,21 @@ fn peek_field_test() {
 
         /// Field specifier doesn't support vectors, so we know we won't find the field we want
         /// under here.
-        fn visit_vector(
-            &mut self,
-            _: &mut VecDriver<'_, 'b, 'l>,
-        ) -> Result<Self::Value, Self::Error> {
+        fn visit_vector(&mut self, _: &mut VecDriver<'_, 'b>) -> Result<Self::Value, Self::Error> {
             Ok(None)
         }
     }
 
-    let type_layout = struct_layout_(vec![
+    let tree_layout = struct_layout_(vec![
         T::U64,
         T::U32,
         T::Vector(Box::new(T::U64)),
         struct_layout_(vec![T::U64]),
         enum_layout_(vec![vec![T::U64]]),
     ]);
+    let type_layout: MoveTypeLayout = (&tree_layout).try_into().unwrap();
 
-    let T::Struct(struct_layout) = &type_layout else {
+    let MoveLayoutView::Struct(struct_layout) = type_layout.as_view() else {
         panic!("Not a struct layout");
     };
 
@@ -686,12 +675,17 @@ fn peek_field_test() {
     let bytes = serialize(value);
 
     let visit_value = |fields| {
-        MoveValue::visit_deserialize(&bytes, &type_layout, &mut PeekU64Visitor { fields }).unwrap()
+        MoveValue::visit_deserialize(&bytes, type_layout.clone(), &mut PeekU64Visitor { fields })
+            .unwrap()
     };
 
     let visit_struct = |fields| {
-        MoveStruct::visit_deserialize(&bytes, struct_layout, &mut PeekU64Visitor { fields })
-            .unwrap()
+        MoveStruct::visit_deserialize(
+            &bytes,
+            (*struct_layout).clone(),
+            &mut PeekU64Visitor { fields },
+        )
+        .unwrap()
     };
 
     assert_eq!(visit_value(&[0]), Some(42));
@@ -709,18 +703,18 @@ fn peek_field_test() {
 
 #[test]
 fn byte_offset_test() {
-    use MoveTypeLayout as T;
     use MoveValue as V;
+    use R::MoveTypeLayout as T;
 
     #[derive(Default)]
     struct ByteOffsetVisitor(String);
 
-    impl<'b, 'l> Traversal<'b, 'l> for ByteOffsetVisitor {
+    impl<'b> Traversal<'b> for ByteOffsetVisitor {
         type Error = runtime_visitor::Error;
 
         fn traverse_u8(
             &mut self,
-            driver: &ValueDriver<'_, 'b, 'l>,
+            driver: &ValueDriver<'_, 'b>,
             value: u8,
         ) -> Result<(), Self::Error> {
             write!(
@@ -735,7 +729,7 @@ fn byte_offset_test() {
 
         fn traverse_u16(
             &mut self,
-            driver: &ValueDriver<'_, 'b, 'l>,
+            driver: &ValueDriver<'_, 'b>,
             value: u16,
         ) -> Result<(), Self::Error> {
             write!(
@@ -750,7 +744,7 @@ fn byte_offset_test() {
 
         fn traverse_u32(
             &mut self,
-            driver: &ValueDriver<'_, 'b, 'l>,
+            driver: &ValueDriver<'_, 'b>,
             value: u32,
         ) -> Result<(), Self::Error> {
             write!(
@@ -765,7 +759,7 @@ fn byte_offset_test() {
 
         fn traverse_u64(
             &mut self,
-            driver: &ValueDriver<'_, 'b, 'l>,
+            driver: &ValueDriver<'_, 'b>,
             value: u64,
         ) -> Result<(), Self::Error> {
             write!(
@@ -780,7 +774,7 @@ fn byte_offset_test() {
 
         fn traverse_u128(
             &mut self,
-            driver: &ValueDriver<'_, 'b, 'l>,
+            driver: &ValueDriver<'_, 'b>,
             value: u128,
         ) -> Result<(), Self::Error> {
             write!(
@@ -795,7 +789,7 @@ fn byte_offset_test() {
 
         fn traverse_u256(
             &mut self,
-            driver: &ValueDriver<'_, 'b, 'l>,
+            driver: &ValueDriver<'_, 'b>,
             value: U256,
         ) -> Result<(), Self::Error> {
             write!(
@@ -810,7 +804,7 @@ fn byte_offset_test() {
 
         fn traverse_bool(
             &mut self,
-            driver: &ValueDriver<'_, 'b, 'l>,
+            driver: &ValueDriver<'_, 'b>,
             value: bool,
         ) -> Result<(), Self::Error> {
             write!(
@@ -825,7 +819,7 @@ fn byte_offset_test() {
 
         fn traverse_address(
             &mut self,
-            driver: &ValueDriver<'_, 'b, 'l>,
+            driver: &ValueDriver<'_, 'b>,
             value: AccountAddress,
         ) -> Result<(), Self::Error> {
             write!(
@@ -841,7 +835,7 @@ fn byte_offset_test() {
 
         fn traverse_signer(
             &mut self,
-            driver: &ValueDriver<'_, 'b, 'l>,
+            driver: &ValueDriver<'_, 'b>,
             value: AccountAddress,
         ) -> Result<(), Self::Error> {
             write!(
@@ -855,10 +849,7 @@ fn byte_offset_test() {
             Ok(())
         }
 
-        fn traverse_vector(
-            &mut self,
-            driver: &mut VecDriver<'_, 'b, 'l>,
-        ) -> Result<(), Self::Error> {
+        fn traverse_vector(&mut self, driver: &mut VecDriver<'_, 'b>) -> Result<(), Self::Error> {
             write!(
                 &mut self.0,
                 "\n[{:>3} .. {:>3}] vector<{:#}>",
@@ -873,7 +864,7 @@ fn byte_offset_test() {
 
         fn traverse_struct(
             &mut self,
-            driver: &mut StructDriver<'_, 'b, 'l>,
+            driver: &mut StructDriver<'_, 'b>,
         ) -> Result<(), Self::Error> {
             write!(
                 &mut self.0,
@@ -890,7 +881,7 @@ fn byte_offset_test() {
 
         fn traverse_variant(
             &mut self,
-            driver: &mut VariantDriver<'_, 'b, 'l>,
+            driver: &mut VariantDriver<'_, 'b>,
         ) -> Result<(), Self::Error> {
             write!(
                 &mut self.0,
@@ -906,12 +897,18 @@ fn byte_offset_test() {
         }
     }
 
-    let type_layout = struct_layout_(vec![
-        struct_layout_(vec![T::U64, T::Vector(Box::new(T::U32))]),
-        enum_layout_(vec![vec![T::U64]]),
-    ]);
+    let type_layout = {
+        let mut builder = MoveTypeLayoutBuilder::new();
+        let handle = builder
+            .from_tree(&struct_layout_(vec![
+                struct_layout_(vec![T::U64, T::Vector(Box::new(T::U32))]),
+                enum_layout_(vec![vec![T::U64]]),
+            ]))
+            .unwrap();
+        builder.build(handle)
+    };
 
-    let T::Struct(struct_layout) = &type_layout else {
+    let MoveLayoutView::Struct(struct_layout) = type_layout.as_view() else {
         panic!("Not a struct layout");
     };
 
@@ -924,10 +921,10 @@ fn byte_offset_test() {
     ]));
 
     let mut value_visitor = ByteOffsetVisitor::default();
-    MoveValue::visit_deserialize(&bytes, &type_layout, &mut value_visitor).unwrap();
+    MoveValue::visit_deserialize(&bytes, type_layout, &mut value_visitor).unwrap();
 
     let mut struct_visitor = ByteOffsetVisitor::default();
-    MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
+    MoveStruct::visit_deserialize(&bytes, *struct_layout, &mut struct_visitor).unwrap();
 
     assert_eq!(value_visitor.0, struct_visitor.0);
     insta::assert_snapshot!(value_visitor.0);
@@ -939,8 +936,8 @@ pub(crate) fn struct_value_(fields: Vec<MoveValue>) -> MoveValue {
 }
 
 /// Create a struct layout for test purposes.
-pub(crate) fn struct_layout_(fields: Vec<MoveTypeLayout>) -> MoveTypeLayout {
-    MoveTypeLayout::Struct(Box::new(MoveStructLayout(Box::new(fields))))
+pub(crate) fn struct_layout_(fields: Vec<R::MoveTypeLayout>) -> R::MoveTypeLayout {
+    R::MoveTypeLayout::Struct(Box::new(R::MoveStructLayout(Box::new(fields))))
 }
 
 /// Create a variant value for test purposes.
@@ -949,8 +946,8 @@ pub(crate) fn variant_value_(tag: u16, fields: Vec<MoveValue>) -> MoveValue {
 }
 
 /// Create an enum layout for test purposes.
-pub(crate) fn enum_layout_(variants: Vec<Vec<MoveTypeLayout>>) -> MoveTypeLayout {
-    MoveTypeLayout::Enum(Box::new(MoveEnumLayout(Box::new(variants))))
+pub(crate) fn enum_layout_(variants: Vec<Vec<R::MoveTypeLayout>>) -> R::MoveTypeLayout {
+    R::MoveTypeLayout::Enum(Box::new(R::MoveEnumLayout(Box::new(variants))))
 }
 
 /// BCS encode Move value.

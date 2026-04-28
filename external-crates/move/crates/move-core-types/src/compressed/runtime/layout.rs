@@ -437,7 +437,11 @@ impl MoveDatatypeLayout {
 
 impl fmt::Display for MoveStructLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "struct {}", self.0)
+        if f.alternate() {
+            write!(f, "struct {:#}", self.0)
+        } else {
+            write!(f, "struct {}", self.0)
+        }
     }
 }
 

@@ -7,6 +7,7 @@ use crate::{
     account_address::AccountAddress,
     annotated_extractor::{Element as E, Extractor},
     annotated_value::{MoveTypeLayout, MoveValue},
+    compressed::annotated as CA,
     language_storage::TypeTag,
     unit_tests::annotated_visitor_test::{
         PrintVisitor, enum_layout_, serialize, struct_layout_, struct_value_, variant_value_,
@@ -734,9 +735,10 @@ fn enumerate_paths(components: Vec<C<'_>>) -> Vec<Vec<E<'_>>> {
 fn assert_path((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'_>>, expect: &str) {
     let bytes = serialize(value);
     let mut printer = PrintVisitor::default();
+    let layout: CA::MoveTypeLayout = (&layout).try_into().unwrap();
 
     assert!(
-        Extractor::deserialize_value(&bytes, &layout, &mut printer, path.clone())
+        Extractor::deserialize_value(&bytes, layout, &mut printer, path.clone())
             .unwrap()
             .is_some(),
         "Failed to extract value {path:?}",
@@ -752,9 +754,10 @@ fn assert_path((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'_>>, e
 fn assert_no_path((value, layout): (MoveValue, MoveTypeLayout), path: Vec<E<'_>>) {
     let bytes = serialize(value);
     let mut printer = PrintVisitor::default();
+    let layout: CA::MoveTypeLayout = (&layout).try_into().unwrap();
 
     assert!(
-        Extractor::deserialize_value(&bytes, &layout, &mut printer, path.clone())
+        Extractor::deserialize_value(&bytes, layout, &mut printer, path.clone())
             .unwrap()
             .is_none(),
         "Expected not to find something at {path:?}",

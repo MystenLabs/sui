@@ -3,7 +3,7 @@
 
 use crate::{
     account_address::AccountAddress, annotated_value as A, annotated_visitor as AV,
-    language_storage::TypeTag,
+    compressed::annotated as CA, language_storage::TypeTag,
 };
 
 /// Elements are components of paths that select values from the sub-structure of other values.
@@ -57,7 +57,7 @@ pub struct Extractor<'p, 'v, V> {
     path: &'p [Element<'p>],
 }
 
-impl<'p, 'v, 'b, 'l, V: AV::Visitor<'b, 'l>> Extractor<'p, 'v, V>
+impl<'p, 'v, 'b, V: AV::Visitor<'b>> Extractor<'p, 'v, V>
 where
     V::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -67,7 +67,7 @@ where
 
     pub fn deserialize_value(
         bytes: &'b [u8],
-        layout: &'l A::MoveTypeLayout,
+        layout: CA::MoveTypeLayout,
         inner: &'v mut V,
         path: Vec<Element<'p>>,
     ) -> Result<Option<V::Value>, V::Error> {
@@ -77,7 +77,7 @@ where
 
     pub fn deserialize_struct(
         bytes: &'b [u8],
-        layout: &'l A::MoveStructLayout,
+        layout: CA::MoveStructLayout,
         inner: &'v mut V,
         path: Vec<Element<'p>>,
     ) -> Result<Option<V::Value>, V::Error> {
@@ -86,13 +86,13 @@ where
     }
 }
 
-impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V> {
+impl<'b, V: AV::Visitor<'b>> AV::Visitor<'b> for Extractor<'_, '_, V> {
     type Value = Option<V::Value>;
     type Error = V::Error;
 
     fn visit_u8(
         &mut self,
-        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        driver: &AV::ValueDriver<'_, 'b>,
         value: u8,
     ) -> Result<Self::Value, Self::Error> {
         Ok(match &self.path {
@@ -103,7 +103,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_u16(
         &mut self,
-        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        driver: &AV::ValueDriver<'_, 'b>,
         value: u16,
     ) -> Result<Self::Value, Self::Error> {
         Ok(match &self.path {
@@ -114,7 +114,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_u32(
         &mut self,
-        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        driver: &AV::ValueDriver<'_, 'b>,
         value: u32,
     ) -> Result<Self::Value, Self::Error> {
         Ok(match &self.path {
@@ -125,7 +125,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_u64(
         &mut self,
-        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        driver: &AV::ValueDriver<'_, 'b>,
         value: u64,
     ) -> Result<Self::Value, Self::Error> {
         Ok(match &self.path {
@@ -136,7 +136,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_u128(
         &mut self,
-        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        driver: &AV::ValueDriver<'_, 'b>,
         value: u128,
     ) -> Result<Self::Value, Self::Error> {
         Ok(match &self.path {
@@ -147,7 +147,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_u256(
         &mut self,
-        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        driver: &AV::ValueDriver<'_, 'b>,
         value: crate::u256::U256,
     ) -> Result<Self::Value, Self::Error> {
         Ok(match &self.path {
@@ -158,7 +158,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_bool(
         &mut self,
-        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        driver: &AV::ValueDriver<'_, 'b>,
         value: bool,
     ) -> Result<Self::Value, Self::Error> {
         Ok(match &self.path {
@@ -169,7 +169,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_address(
         &mut self,
-        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        driver: &AV::ValueDriver<'_, 'b>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         Ok(match &self.path {
@@ -182,7 +182,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_signer(
         &mut self,
-        driver: &AV::ValueDriver<'_, 'b, 'l>,
+        driver: &AV::ValueDriver<'_, 'b>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         Ok(match &self.path {
@@ -193,7 +193,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_vector(
         &mut self,
-        driver: &mut AV::VecDriver<'_, 'b, 'l>,
+        driver: &mut AV::VecDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
         use Element as E;
         use TypeTag as T;
@@ -201,7 +201,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
         // If there is a type element, check that it is a vector type with the correct element
         // type, and remove it from the path.
         let path = if let [E::Type(t), path @ ..] = self.path {
-            if !matches!(t, T::Vector(t) if driver.element_layout().is_type(t)) {
+            if !matches!(t, T::Vector(inner) if driver.element_layout().as_view().is_type(inner)) {
                 return Ok(None);
             }
             path
@@ -232,15 +232,14 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_struct(
         &mut self,
-        driver: &mut AV::StructDriver<'_, 'b, 'l>,
+        driver: &mut AV::StructDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
         use Element as E;
-        use TypeTag as T;
 
         // If there is a type element, check that it is a struct type with the correct struct tag,
         // and remove it from the path.
         let path = if let [E::Type(t), path @ ..] = self.path {
-            if !matches!(t, T::Struct(t) if driver.struct_layout().is_type(t)) {
+            if !driver.struct_layout().is_type(t) {
                 return Ok(None);
             }
             path
@@ -256,7 +255,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
         match field {
             // Skip over mismatched fields by name.
             E::Field(f) => {
-                while matches!(driver.peek_field(), Some(l) if l.name.as_str() != *f) {
+                while matches!(driver.peek_field(), Some((name, _)) if name.as_str() != *f) {
                     driver.skip_field()?;
                 }
             }
@@ -278,15 +277,14 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
 
     fn visit_variant(
         &mut self,
-        driver: &mut AV::VariantDriver<'_, 'b, 'l>,
+        driver: &mut AV::VariantDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
         use Element as E;
-        use TypeTag as T;
 
         // If there is a type element, check that it is a struct type with the correct struct tag,
         // and remove it from the path.
         let path = if let [E::Type(t), path @ ..] = self.path {
-            if !matches!(t, T::Struct(t) if driver.enum_layout().is_type(t)) {
+            if !driver.enum_layout().is_type(t) {
                 return Ok(None);
             }
             path
@@ -312,7 +310,7 @@ impl<'b, 'l, V: AV::Visitor<'b, 'l>> AV::Visitor<'b, 'l> for Extractor<'_, '_, V
         match field {
             // Skip over mismatched fields by name.
             E::Field(f) => {
-                while matches!(driver.peek_field(), Some(l) if l.name.as_str() != *f) {
+                while matches!(driver.peek_field(), Some((name, _)) if name.as_str() != *f) {
                     driver.skip_field()?;
                 }
             }
