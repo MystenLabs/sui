@@ -52,7 +52,7 @@ mod test_layer;
 /// By rejecting high-verbosity callsites globally, `Span::new` short-circuits to
 /// `Span::none()` and event macros short-circuit before formatting arguments.
 struct GlobalLevelFilter {
-    max_span_level: Level,
+    max_span_level: LevelFilter,
     /// The maximum event level any layer will accept. Loaded from the EnvFilter's
     /// max_level_hint and updated via a shared atomic when the filter is reloaded.
     max_event_level: Arc<std::sync::atomic::AtomicU8>,
@@ -65,7 +65,7 @@ impl GlobalLevelFilter {
 
     fn exceeds_max_level(&self, metadata: &tracing::Metadata<'_>) -> bool {
         if metadata.is_span() {
-            *metadata.level() > self.max_span_level
+            LevelFilter::from_level(*metadata.level()) > self.max_span_level
         } else {
             let max = self.load_max_event_level();
             !max.eq(&LevelFilter::OFF) && LevelFilter::from_level(*metadata.level()) > max
@@ -115,9 +115,8 @@ impl<S: tracing::Subscriber> Layer<S> for GlobalLevelFilter {
     }
 
     fn max_level_hint(&self) -> Option<LevelFilter> {
-        let span = LevelFilter::from_level(self.max_span_level);
         let event = self.load_max_event_level();
-        Some(std::cmp::max(span, event))
+        Some(std::cmp::max(self.max_span_level, event))
     }
 }
 
@@ -140,9 +139,9 @@ pub struct TelemetryConfig {
     pub log_file: Option<String>,
     /// Log level to set, defaults to info
     pub log_string: Option<String>,
-    /// Span level - what level of spans should be created.  Note this is not same as logging level
-    /// If set to None, then defaults to INFO
-    pub span_level: Option<Level>,
+    /// Span level - what level of spans should be created.  Note this is not same as logging level.
+    /// If set to None, then defaults to INFO. Use LevelFilter::OFF to disable all spans.
+    pub span_level: Option<LevelFilter>,
     /// Set a panic hook
     pub panic_hook: bool,
     /// Crash on panic
@@ -395,7 +394,7 @@ impl TelemetryConfig {
     }
 
     pub fn with_span_level(mut self, span_level: Level) -> Self {
-        self.span_level = Some(span_level);
+        self.span_level = Some(LevelFilter::from_level(span_level));
         self
     }
 
@@ -469,7 +468,7 @@ impl TelemetryConfig {
 
         if let Ok(span_level) = env::var("TOKIO_SPAN_LEVEL") {
             self.span_level =
-                Some(Level::from_str(&span_level).expect("Cannot parse TOKIO_SPAN_LEVEL"));
+                Some(LevelFilter::from_str(&span_level).expect("Cannot parse TOKIO_SPAN_LEVEL"));
         }
 
         if let Ok(filepath) = env::var("RUST_LOG_FILE") {
@@ -517,9 +516,11 @@ impl TelemetryConfig {
         // Separate span level filter.
         // This is a dumb filter for now - allows all spans that are below a given level.
         // TODO: implement a sampling filter
-        let span_level = config.span_level.unwrap_or(Level::INFO);
+        let span_level = config
+            .span_level
+            .unwrap_or(LevelFilter::from_level(Level::INFO));
         let span_filter = filter::filter_fn(move |metadata| {
-            metadata.is_span() && *metadata.level() <= span_level
+            metadata.is_span() && LevelFilter::from_level(*metadata.level()) <= span_level
         });
 
         let mut layers = Vec::new();
