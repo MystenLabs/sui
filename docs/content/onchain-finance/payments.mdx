@@ -1,44 +1,42 @@
----                                                                                
-  title: Payments                                                                    
-  description: "Accept payments, manage balances, and handle transaction fees on     
-  Sui."                                                                              
-  ---                                                                                
-                                                                                     
-  Integrate payment flows into your application, from reading and managing address   
-  balances to sponsoring gasless transactions for your users.
+---
+title: Payments
+description: "Accept payments, manage balances, and handle transaction fees on Sui."
+---
 
-import DocCardList from '@theme/DocCardList';                                      
-                                                                                     
-  <DocCardList items={[                                                              
-    {
-      type: 'link',                                                                  
-      label: 'Address Balances',                                                     
-      href: '/onchain-finance/asset-custody/address-balances',
-      description: 'Overview of address balance management on Sui.',                 
-    },
-    {                                                                                
-      type: 'link',                                                                  
-      label: 'Using Address Balances',
-      href: '/onchain-finance/asset-custody/address-balances/using-address-balances',
-      description: 'How to use address balances for asset custody.',
-    },                                                                               
-    {                                                                                
-      type: 'link',
-      label: 'Migrate Address Balances',                                             
-      href: 
-  '/onchain-finance/asset-custody/address-balances/migrate-address-balances',        
-      description: 'Guide to migrating address balances.',                           
-    },
-    {                                                                                
-      type: 'link',
-      label: 'Transaction Payment',                                                  
-      href: '/develop/transaction-payment',                                          
-      description: 'Overview of transaction payment options on Sui.',
-    },                                                                               
-    {
-      type: 'link',                                                                  
-      label: 'Gasless Transactions',                                                 
-      href: '/develop/transaction-payment/gasless-transactions',
-      description: 'How to sponsor transactions so users pay no gas.',
-    },                                                                               
-  ]} />
+Integrate payment flows into your application, from reading and managing address balances to sponsoring gasless transactions for your users.
+
+import DocCardList from '@theme/DocCardList';
+ 
+<DocCardList items={[
+{
+type: 'link',
+label: 'Address Balances', 
+href: '/onchain-finance/asset-custody/address-balances',
+description: 'Overview of address balance management on Sui.', 
+},
+{
+type: 'link',
+label: 'Using Address Balances',
+href: '/onchain-finance/asset-custody/address-balances/using-address-balances',
+description: 'How to use address balances for asset custody.',
+}, 
+{
+type: 'link',
+label: 'Migrate Address Balances', 
+href: 
+'/onchain-finance/asset-custody/address-balances/migrate-address-balances',
+description: 'Guide to migrating address balances.', 
+},
+{
+type: 'link',
+label: 'Transaction Payment',
+href: '/develop/transaction-payment',
+description: 'Overview of transaction payment options on Sui.',
+}, 
+{
+type: 'link',
+label: 'Gasless Transactions', 
+href: '/develop/transaction-payment/gasless-transactions',
+description: 'How to sponsor transactions so users pay no gas.',
+}, 
+]} />
