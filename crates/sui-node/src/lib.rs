@@ -1305,7 +1305,7 @@ impl SuiNode {
             consensus_config,
             registry_service,
             client,
-            node_role.can_submit_to_consensus(),
+            node_role,
         ));
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
