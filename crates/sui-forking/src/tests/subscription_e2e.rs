@@ -62,6 +62,8 @@ impl ServerHarness {
             .map(|o| (o.id(), o.clone()))
             .collect();
         data_store.update_objects(written, vec![]);
+        data_store.insert_checkpoint(config.genesis.checkpoint());
+        data_store.insert_checkpoint_contents(config.genesis.checkpoint_contents().clone());
 
         let keystore = KeyStore::from_network_config(&config);
         let sim = Simulacrum::new_from_custom_state(
