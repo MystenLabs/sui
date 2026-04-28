@@ -264,6 +264,7 @@ pub enum SequenceItem_ {
     Seq(Box<Exp>),
     Declare(LValueList),
     Bind(LValueList, Vec<Option<Type>>, Box<Exp>),
+    BindElse(MatchPattern, Vec<(Var, Type)>, Box<Exp>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
@@ -373,7 +374,7 @@ impl SequenceItem_ {
     pub fn is_unit(&self, diags: &DiagnosticReporter) -> bool {
         match &self {
             Self::Seq(e) => e.is_unit(diags),
-            Self::Declare(_) | Self::Bind(_, _, _) => false,
+            Self::Declare(_) | Self::Bind(_, _, _) | Self::BindElse(_, _, _, _) => false,
         }
     }
 }
@@ -623,6 +624,21 @@ impl AstDebug for SequenceItem_ {
                 w.write(")");
                 w.write(" = ");
                 e.ast_debug(w);
+            }
+            I::BindElse(pat, binders, e, else_e) => {
+                w.write("let ");
+                pat.ast_debug(w);
+                w.write(": (");
+                w.comma(binders, |w, (v, ty)| {
+                    v.ast_debug(w);
+                    w.write(": ");
+                    ty.ast_debug(w);
+                });
+                w.write(")");
+                w.write(" = ");
+                e.ast_debug(w);
+                w.write(" else ");
+                else_e.ast_debug(w);
             }
         }
     }

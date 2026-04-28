@@ -444,6 +444,7 @@ pub enum SequenceItem_ {
     Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
     Bind(LValueList, Box<Exp>),
+    BindElse(MatchPattern, Box<Exp>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
@@ -1439,6 +1440,14 @@ impl AstDebug for SequenceItem_ {
                 bs.ast_debug(w);
                 w.write(" = ");
                 e.ast_debug(w);
+            }
+            I::BindElse(sp!(_, bs), e, else_e) => {
+                w.write("let ");
+                bs.ast_debug(w);
+                w.write(" = ");
+                e.ast_debug(w);
+                w.write(" else ");
+                else_e.ast_debug(w);
             }
         }
     }

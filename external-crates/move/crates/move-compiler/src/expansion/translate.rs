@@ -2895,8 +2895,8 @@ fn sequence_item(context: &mut Context, sp!(loc, pitem_): P::SequenceItem) -> E:
     use P::SequenceItem_ as PS;
     let item_ = match pitem_ {
         PS::Seq(e) => ES::Seq(exp(context, e)),
-        PS::Declare(pb, pty_opt) => {
-            let b_opt = bind_list(context, pb);
+        PS::Declare(ppat, pty_opt) => {
+            let b_opt = match_pattern_to_bind_list(context, ppat);
             let ty_opt = pty_opt.map(|t| type_(context, t));
             match b_opt {
                 None => {
@@ -2906,8 +2906,8 @@ fn sequence_item(context: &mut Context, sp!(loc, pitem_): P::SequenceItem) -> E:
                 Some(b) => ES::Declare(b, ty_opt),
             }
         }
-        PS::Bind(pb, pty_opt, pe) => {
-            let b_opt = bind_list(context, pb);
+        PS::Bind(ppat, pty_opt, pe) => {
+            let b_opt = match_pattern_to_bind_list(context, ppat);
             let ty_opt = pty_opt.map(|t| type_(context, t));
             let e_ = exp(context, pe);
             let e = match ty_opt {
@@ -2921,6 +2921,17 @@ fn sequence_item(context: &mut Context, sp!(loc, pitem_): P::SequenceItem) -> E:
                 }
                 Some(b) => ES::Bind(b, e),
             }
+        }
+        PS::BindElse(pb, pty_opt, pe, else_body) => {
+            let pat = match_pattern(context, pb);
+            let ty_opt = pty_opt.map(|t| type_(context, t));
+            let e_ = exp(context, pe);
+            let e = match ty_opt {
+                None => e_,
+                Some(ty) => Box::new(sp(e_.loc, E::Exp_::Annotate(e_, ty))),
+            };
+            let else_e = exp(context, else_body);
+            ES::BindElse(pat, e, else_e)
         }
     };
     sp(loc, item_)
@@ -3619,6 +3630,14 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                 sp(loc, EP::At(x, Box::new(match_pattern(context, *inner))))
             }
         }
+        PP::Tuple(_) => {
+            context.add_diag(diag!(
+                NameResolution::InvalidPattern,
+                (loc, "Tuple patterns are not allowed in match arms. \
+                       Tuple destructuring is only valid in 'let' bindings")
+            ));
+            error_pattern!()
+        }
     }
 }
 
@@ -3742,6 +3761,114 @@ fn named_fields<T>(
 //**************************************************************************************************
 // LValues
 //**************************************************************************************************
+
+fn match_pattern_to_bind_list(
+    context: &mut Context,
+    sp!(loc, pat_): P::MatchPattern,
+) -> Option<E::LValueList> {
+    use P::MatchPattern_ as MP;
+    match pat_ {
+        MP::Tuple(sp!(_, pats)) => {
+            let bs: Option<Vec<E::LValue>> = pats
+                .into_iter()
+                .map(|p| match_pattern_to_bind(context, p))
+                .collect();
+            Some(sp(loc, bs?))
+        }
+        _ => {
+            let b = match_pattern_to_bind(context, sp(loc, pat_))?;
+            Some(sp(loc, vec![b]))
+        }
+    }
+}
+
+fn match_pattern_to_bind(
+    context: &mut Context,
+    sp!(loc, pat_): P::MatchPattern,
+) -> Option<E::LValue> {
+    use E::LValue_ as EL;
+    use P::MatchPattern_ as MP;
+    let b_ = match pat_ {
+        MP::Name(pmut, sp!(cloc, P::NameAccessChain_::Single(entry)))
+            if entry.tyargs.is_none() && entry.is_macro.is_none() =>
+        {
+            let emut = mutability(context, loc, pmut);
+            let v = P::Var(sp(cloc, entry.name.value));
+            check_valid_local_name(context.reporter(), &v);
+            EL::Var(Some(emut), sp(loc, E::ModuleAccess_::Name(v.0)), None)
+        }
+        MP::Name(pmut, chain) => {
+            let emut = mutability(context, loc, pmut);
+            let access!(name, tys_opt, _) =
+                context.name_access_chain_to_module_access(Access::ApplyNamed, chain)?;
+            let tys_opt = optional_sp_types(context, tys_opt);
+            if tys_opt.is_some() {
+                EL::Unpack(name, tys_opt, E::FieldBindings::Named(Fields::new(), None))
+            } else {
+                EL::Var(Some(emut), name, None)
+            }
+        }
+        MP::PositionalConstructor(chain, sp!(_, pats)) => {
+            let access!(name, ptys_opt, _) =
+                context.name_access_chain_to_module_access(Access::ApplyPositional, chain)?;
+            let tys_opt = optional_sp_types(context, ptys_opt);
+            let mut fields = vec![];
+            let mut ellipsis_locs = vec![];
+            for e in pats.into_iter() {
+                match e {
+                    P::Ellipsis::Binder(inner) => {
+                        fields.push(E::Ellipsis::Binder(match_pattern_to_bind(context, inner)?))
+                    }
+                    P::Ellipsis::Ellipsis(loc) => {
+                        ellipsis_locs.push(loc);
+                        fields.push(E::Ellipsis::Ellipsis(loc))
+                    }
+                }
+            }
+            check_ellipsis_usage(context, &ellipsis_locs);
+            EL::Unpack(name, tys_opt, E::FieldBindings::Positional(fields))
+        }
+        MP::FieldConstructor(chain, sp!(_, pats)) => {
+            let access!(name, ptys_opt, _) =
+                context.name_access_chain_to_module_access(Access::ApplyNamed, chain)?;
+            let tys_opt = optional_sp_types(context, ptys_opt);
+            let mut vfields = vec![];
+            let mut ellipsis_locs = vec![];
+            for e in pats.into_iter() {
+                match e {
+                    P::Ellipsis::Binder((f, inner)) => {
+                        vfields.push((f, match_pattern_to_bind(context, inner)?))
+                    }
+                    P::Ellipsis::Ellipsis(loc) => ellipsis_locs.push(loc),
+                }
+            }
+            check_ellipsis_usage(context, &ellipsis_locs);
+            let fields =
+                named_fields(context, loc, "deconstruction binding", "binding", vfields);
+            EL::Unpack(
+                name,
+                tys_opt,
+                E::FieldBindings::Named(fields, ellipsis_locs.first().copied()),
+            )
+        }
+        pat @ (MP::Literal(_) | MP::Or(_, _) | MP::At(_, _) | MP::Tuple(_)) => {
+            let kind = match pat {
+                MP::Literal(_) => "literal",
+                MP::Or(_, _) => "or",
+                MP::At(_, _) => "at",
+                MP::Tuple(_) => "tuple",
+                _ => unreachable!(),
+            };
+            let msg = format!(
+                "Invalid 'let' binding. \
+                 {kind} patterns are only valid with 'let...else'"
+            );
+            context.add_diag(diag!(Syntax::UnexpectedToken, (loc, msg)));
+            return None;
+        }
+    };
+    Some(sp(loc, b_))
+}
 
 fn bind_list(context: &mut Context, sp!(loc, pbs_): P::BindList) -> Option<E::LValueList> {
     let bs_: Option<Vec<E::LValue>> = pbs_.into_iter().map(|pb| bind(context, pb)).collect();

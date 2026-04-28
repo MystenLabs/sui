@@ -320,6 +320,10 @@ fn sequence(context: &mut Context, (uf, seq): &mut N::Sequence) {
     for sp!(_, item_) in seq {
         match item_ {
             N::SequenceItem_::Seq(e) | N::SequenceItem_::Bind(_, e) => exp(context, e),
+            N::SequenceItem_::BindElse(_, e, else_e) => {
+                exp(context, e);
+                exp(context, else_e);
+            }
             N::SequenceItem_::Declare(_, _) => (),
         }
     }

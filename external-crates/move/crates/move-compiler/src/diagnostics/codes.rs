@@ -271,6 +271,8 @@ codes!(
         InvalidString: { msg: "invalid string after type inference", severity: NonblockingError },
         MissingLiteralType:
             { msg: "unable to determine principal type for literal", severity: Warning },
+        InvalidLetElse:
+            { msg: "'let...else' block must diverge", severity: BlockingError },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [

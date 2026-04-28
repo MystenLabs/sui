@@ -2903,6 +2903,16 @@ fn sequence_item(context: &mut Context, sp!(loc, ns_): E::SequenceItem) -> N::Se
                 Some(bind) => NS::Bind(bind, e),
             }
         }
+        ES::BindElse(pat, e, else_e) => {
+            let e = exp(context, e);
+            let else_e = exp(context, else_e);
+            let pat_binders = unique_pattern_binders(context, &pat);
+            for (_, binder) in &pat_binders {
+                context.declare_local(/* is_parameter */ false, binder.0);
+            }
+            let pat = match_pattern(context, Box::new(pat));
+            NS::BindElse(*pat, e, else_e)
+        }
     };
     sp(loc, s_)
 }
@@ -4536,6 +4546,11 @@ fn remove_unused_bindings_seq(
             N::SequenceItem_::Bind(lvalues, e) => {
                 remove_unused_bindings_lvalues(context, used, lvalues);
                 remove_unused_bindings_exp(context, used, e)
+            }
+            N::SequenceItem_::BindElse(pat, e, else_e) => {
+                remove_unused_bindings_pattern(context, used, pat);
+                remove_unused_bindings_exp(context, used, e);
+                remove_unused_bindings_exp(context, used, else_e)
             }
         }
     }

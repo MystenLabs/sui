@@ -1976,8 +1976,67 @@ fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::Se
                 declare_bind_list(context, &bindings);
                 make_assignments(context, block, sloc, H::AssignCase::Let, bindings, rhs_exp);
             }
+            S::BindElse(pattern, binders, expr, else_expr) => {
+                let match_exp =
+                    desugar_bind_else(context, sloc, pattern, binders, *expr, *else_expr);
+                statement(context, block, match_exp);
+            }
         }
     }
+}
+
+fn desugar_bind_else(
+    _context: &mut Context,
+    loc: Loc,
+    pattern: T::MatchPattern,
+    all_binders: Vec<(N::Var, N::Type)>,
+    subject: T::Exp,
+    else_body: T::Exp,
+) -> T::Exp {
+    let subject_ty = subject.ty.clone();
+
+    let rhs_binders: BTreeSet<N::Var> = all_binders.iter().map(|(v, _)| *v).collect();
+
+    let unit_ty = sp(loc, N::UNIT_TYPE.clone());
+    let unit_exp = T::exp(
+        unit_ty.clone(),
+        sp(loc, T::UnannotatedExp_::Unit { trailing: false }),
+    );
+
+    let success_arm = sp(
+        loc,
+        T::MatchArm_ {
+            pattern,
+            binders: all_binders,
+            guard: None,
+            guard_binders: UniqueMap::new(),
+            rhs_binders: rhs_binders.clone(),
+            rhs: Box::new(unit_exp.clone()),
+        },
+    );
+
+    let wildcard_pattern = T::MatchPattern {
+        ty: subject_ty.clone(),
+        pat: sp(loc, T::UnannotatedPat_::Wildcard),
+    };
+    let else_arm = sp(
+        loc,
+        T::MatchArm_ {
+            pattern: wildcard_pattern,
+            binders: vec![],
+            guard: None,
+            guard_binders: UniqueMap::new(),
+            rhs_binders: BTreeSet::new(),
+            rhs: Box::new(else_body),
+        },
+    );
+
+    let arms = sp(loc, vec![success_arm, else_arm]);
+    let match_exp = T::exp(
+        unit_ty,
+        sp(loc, T::UnannotatedExp_::Match(Box::new(subject), arms)),
+    );
+    match_exp
 }
 
 // Treat something like a value, and add a final `ignore_and_pop` at the end to consume that value.

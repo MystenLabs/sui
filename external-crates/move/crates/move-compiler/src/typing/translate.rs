@@ -856,6 +856,11 @@ mod check_valid_constant {
                 exp(context, te);
                 "'let' declarations"
             }
+            S::BindElse(_, _, te, else_e) => {
+                exp(context, te);
+                exp(context, else_e);
+                "'let...else' declarations"
+            }
         };
         let msg = format!("{} are not supported in constants", error_case);
         context.add_diag(diag!(TypeSafety::UnsupportedConstant, (*loc, msg),))
@@ -1588,6 +1593,13 @@ enum SeqCase {
         b: T::LValueList,
         e: Box<T::Exp>,
     },
+    BindElse {
+        loc: Loc,
+        pat: T::MatchPattern,
+        binders: Vec<(N::Var, Type)>,
+        e: Box<T::Exp>,
+        else_e: Box<T::Exp>,
+    },
 }
 
 #[growing_stack]
@@ -1627,6 +1639,41 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
                 let b = bind_list(context, nbind, Some(e.ty.clone()));
                 work_queue.push_front(SeqCase::Bind { loc, b, e });
             }
+            NS::BindElse(npat, nr, else_body) => {
+                let e = exp(context, nr);
+                let pat_binders = collect_pattern_binders(&npat);
+                let bind_locs: Vec<Loc> = pat_binders.iter().map(|(_, sp!(loc, _))| *loc).collect();
+                let msg = "Invalid type for pattern";
+                let bind_vars = core::make_expr_list_tvars(context, npat.loc, msg, bind_locs);
+                let rhs_binders: BTreeSet<N::Var> = pat_binders.iter().map(|(_, v)| *v).collect();
+                let binders: Vec<(N::Var, Type)> = pat_binders
+                    .into_iter()
+                    .zip(bind_vars)
+                    .map(|((mut_, x), ty)| {
+                        context.declare_local(mut_, x, ty.clone());
+                        (x, ty)
+                    })
+                    .collect();
+                let ploc = npat.loc;
+                let mut pat = match_pattern(context, npat, &None, &rhs_binders);
+                if subtype_opt(context, ploc, || "Invalid pattern", &pat.ty, &e.ty).is_none() {
+                    pat.ty = context.error_type(ploc);
+                    pat.pat.value = T::UnannotatedPat_::ErrorPat;
+                }
+                let else_e = exp(context, else_body);
+                if !core::is_type_divergent(&context.subst, &else_e.ty) {
+                    let msg = "'else' block in 'let...else' must diverge \
+                               (e.g., 'return', 'abort', or 'break')";
+                    context.add_diag(diag!(TypeSafety::InvalidLetElse, (else_e.exp.loc, msg),));
+                }
+                work_queue.push_front(SeqCase::BindElse {
+                    loc,
+                    pat,
+                    binders,
+                    e,
+                    else_e,
+                });
+            }
         }
     }
 
@@ -1639,6 +1686,13 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
                 let lvalue_ty = lvalues_expected_types(context, &b);
                 seq_items.push_front(sp(loc, TS::Bind(b, lvalue_ty, e)))
             }
+            SeqCase::BindElse {
+                loc,
+                pat,
+                binders,
+                e,
+                else_e,
+            } => seq_items.push_front(sp(loc, TS::BindElse(pat, binders, e, else_e))),
         }
     }
     let use_funs = context.pop_use_funs_scope();
@@ -1648,7 +1702,7 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
 fn sequence_type((_, seq): &T::Sequence) -> &Type {
     use T::SequenceItem_ as TS;
     match seq.back().unwrap() {
-        sp!(_, TS::Bind(_, _, _)) | sp!(_, TS::Declare(_)) => {
+        sp!(_, TS::Bind(_, _, _)) | sp!(_, TS::BindElse(_, _, _, _)) | sp!(_, TS::Declare(_)) => {
             panic!("ICE unit should have been inserted past bind/decl")
         }
         sp!(_, TS::Seq(last_e)) => &last_e.ty,
@@ -2435,6 +2489,37 @@ fn match_arm(
             rhs,
         },
     )
+}
+
+fn collect_pattern_binders(pat: &N::MatchPattern) -> Vec<(Mutability, N::Var)> {
+    let mut result = vec![];
+    collect_pattern_binders_(pat, &mut result);
+    result
+}
+
+fn collect_pattern_binders_(sp!(_, pat_): &N::MatchPattern, acc: &mut Vec<(Mutability, N::Var)>) {
+    use N::MatchPattern_ as MP;
+    match pat_ {
+        MP::Constant(_, _) | MP::Literal(_) | MP::Wildcard | MP::ErrorPat => {}
+        MP::Binder(mut_, var, _) => acc.push((*mut_, *var)),
+        MP::Variant(_, _, _, _, fields) => {
+            for (_, _, (_, inner)) in fields {
+                collect_pattern_binders_(inner, acc);
+            }
+        }
+        MP::Struct(_, _, _, fields) => {
+            for (_, _, (_, inner)) in fields {
+                collect_pattern_binders_(inner, acc);
+            }
+        }
+        MP::Or(lhs, _rhs) => {
+            collect_pattern_binders_(lhs, acc);
+        }
+        MP::At(var, _, inner) => {
+            acc.push((Mutability::Imm, *var));
+            collect_pattern_binders_(inner, acc);
+        }
+    }
 }
 
 fn match_pattern(

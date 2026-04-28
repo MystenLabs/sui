@@ -21,14 +21,8 @@ error[E04005]: expected a single type
 9 │     match (x) {
   │            ^ Invalid 'match' subject
 
-error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/matching/match_unit_type.move:9:12
-  │
-9 │     match (x) {
-  │            ^ Pattern '_' not covered
-
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/matching/match_unit_type.move:10:10
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/matching/match_unit_type.move:10:9
    │
 10 │         () => 42,
-   │          ^ Invalid pattern
+   │         ^^ Tuple patterns are not allowed in match arms. Tuple destructuring is only valid in 'let' bindings

@@ -129,7 +129,9 @@ fn inner_exp(mut e: &T::Exp) -> &T::Exp {
             E::Block((_, seq)) | E::NamedBlock(_, (_, seq)) if seq.len() == 1 => {
                 match &seq[0].value {
                     T::SequenceItem_::Seq(inner) => e = inner,
-                    T::SequenceItem_::Declare(_) | T::SequenceItem_::Bind(_, _, _) => break e,
+                    T::SequenceItem_::Declare(_)
+                    | T::SequenceItem_::Bind(_, _, _)
+                    | T::SequenceItem_::BindElse(_, _, _, _) => break e,
                 }
             }
             _ => break e,

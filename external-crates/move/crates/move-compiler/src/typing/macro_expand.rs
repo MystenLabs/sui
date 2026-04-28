@@ -503,6 +503,11 @@ fn recolor_seq(ctx: &mut Recolor, (use_funs, seq): &mut N::Sequence) {
                 recolor_lvalues(ctx, lvalues);
                 recolor_exp(ctx, e)
             }
+            N::SequenceItem_::BindElse(pat, e, else_e) => {
+                recolor_pat(ctx, pat);
+                recolor_exp(ctx, e);
+                recolor_exp(ctx, else_e)
+            }
         }
     }
 }
@@ -782,6 +787,11 @@ fn seq(context: &mut Context, (_use_funs, seq): &mut N::Sequence) {
             N::SequenceItem_::Bind(lvs, e) => {
                 lvalues(context, lvs);
                 exp(context, e)
+            }
+            N::SequenceItem_::BindElse(pattern, e, else_e) => {
+                pat(context, pattern);
+                exp(context, e);
+                exp(context, else_e)
             }
         }
     }

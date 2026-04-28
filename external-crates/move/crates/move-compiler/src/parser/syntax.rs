@@ -1571,7 +1571,7 @@ fn parse_value(context: &mut Context) -> Result<Value, Box<Diagnostic>> {
 fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let item = if match_token(context.tokens, Tok::Let)? {
-        let b = parse_bind_list(context)?;
+        let pat = parse_match_pattern_with_kind(context, "a variable or struct name")?;
         let ty_opt = if match_token(context.tokens, Tok::Colon)? {
             Some(parse_type(context)?)
         } else {
@@ -1579,9 +1579,15 @@ fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagno
         };
         if match_token(context.tokens, Tok::Equal)? {
             let e = parse_exp(context)?;
-            SequenceItem_::Bind(b, ty_opt, Box::new(e))
+            if context.tokens.peek() == Tok::Else {
+                context.tokens.advance()?;
+                let else_body = parse_exp(context)?;
+                SequenceItem_::BindElse(pat, ty_opt, Box::new(e), Box::new(else_body))
+            } else {
+                SequenceItem_::Bind(pat, ty_opt, Box::new(e))
+            }
         } else {
-            SequenceItem_::Declare(b, ty_opt)
+            SequenceItem_::Declare(pat, ty_opt)
         }
     } else {
         let e = parse_exp(context)?;
@@ -2302,20 +2308,61 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
 //   <PatField> = <Field> ( ":" <MatchPat> )?
 
 fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
-    const INVALID_PAT_ERROR_MSG: &str = "Invalid pattern";
+    parse_match_pattern_impl(context, "a pattern")
+}
+
+fn parse_match_pattern_with_kind(
+    context: &mut Context,
+    error_kind: &'static str,
+) -> Result<MatchPattern, Box<Diagnostic>> {
+    parse_match_pattern_impl(context, error_kind)
+}
+
+fn parse_match_pattern_impl(
+    context: &mut Context,
+    error_kind: &'static str,
+) -> Result<MatchPattern, Box<Diagnostic>> {
     const WILDCARD_AT_ERROR_MSG: &str = "Cannot use '_' as a binder in an '@' pattern";
 
     use MatchPattern_ as MP;
 
-    fn parse_ctor_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
+    fn parse_ctor_pattern(
+        context: &mut Context,
+        error_kind: &'static str,
+    ) -> Result<MatchPattern, Box<Diagnostic>> {
         match context.tokens.peek() {
             Tok::LParen => {
+                let start_loc = context.tokens.start_loc();
                 context.tokens.advance()?;
-                let pat = parse_match_pattern(context);
-                consume_token(context.tokens, Tok::RParen)?;
-                pat
+                if context.tokens.peek() == Tok::RParen {
+                    // Empty tuple: ()
+                    consume_token(context.tokens, Tok::RParen)?;
+                    let end_loc = context.tokens.previous_end_loc();
+                    let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
+                    Ok(sp(loc, MP::Tuple(sp(loc, vec![]))))
+                } else {
+                    let pat = parse_match_pattern_impl(context, error_kind)?;
+                    if context.tokens.peek() == Tok::Comma {
+                        let mut pats = vec![pat];
+                        while match_token(context.tokens, Tok::Comma)? {
+                            if context.tokens.peek() == Tok::RParen {
+                                break;
+                            }
+                            pats.push(parse_match_pattern_impl(context, error_kind)?);
+                        }
+                        consume_token(context.tokens, Tok::RParen)?;
+                        let end_loc = context.tokens.previous_end_loc();
+                        let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
+                        Ok(sp(loc, MP::Tuple(sp(loc, pats))))
+                    } else {
+                        consume_token(context.tokens, Tok::RParen)?;
+                        Ok(pat)
+                    }
+                }
             }
-            t @ (Tok::Mut | Tok::Identifier | Tok::NumValue)
+            t @ (Tok::Mut | Tok::Identifier | Tok::RestrictedIdentifier | Tok::NumValue
+                // carve-out for migration with new keywords
+                | Tok::Match | Tok::For | Tok::Enum | Tok::Type)
                 if !matches!(t, Tok::NumValue)
                     || matches!(context.tokens.lookahead(), Ok(Tok::ColonColon)) =>
             {
@@ -2384,9 +2431,14 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                 if let Some(value) = maybe_parse_value(context)? {
                     Ok(sp(value.loc, MP::Literal(value)))
                 } else {
+                    let msg = format!(
+                        "Unexpected '{}'. Expected {}",
+                        context.tokens.peek(),
+                        error_kind
+                    );
                     Err(Box::new(diag!(
                         Syntax::UnexpectedToken,
-                        (context.tokens.current_token_loc(), INVALID_PAT_ERROR_MSG)
+                        (context.tokens.current_token_loc(), msg)
                     )))
                 }
             }
@@ -2431,7 +2483,10 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
         Ok(Ellipsis::Binder((field, pattern)))
     }
 
-    fn parse_optional_at_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
+    fn parse_optional_at_pattern(
+        context: &mut Context,
+        error_kind: &'static str,
+    ) -> Result<MatchPattern, Box<Diagnostic>> {
         match context.tokens.peek() {
             Tok::Identifier if context.tokens.lookahead() == Ok(Tok::AtSign) => {
                 if context.tokens.content() == "_" {
@@ -2443,20 +2498,20 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
                     ok_with_loc!(context, {
                         let binder = parse_var(context)?;
                         consume_token(context.tokens, Tok::AtSign)?;
-                        let rhs = parse_ctor_pattern(context)?;
+                        let rhs = parse_ctor_pattern(context, error_kind)?;
                         MP::At(binder, Box::new(rhs))
                     })
                 }
             }
-            _ => parse_ctor_pattern(context),
+            _ => parse_ctor_pattern(context, error_kind),
         }
     }
 
     ok_with_loc!(context, {
-        let lhs = parse_optional_at_pattern(context)?;
+        let lhs = parse_optional_at_pattern(context, error_kind)?;
         if matches!(context.tokens.peek(), Tok::Pipe) {
             context.tokens.advance()?;
-            let rhs = parse_match_pattern(context)?;
+            let rhs = parse_match_pattern_impl(context, error_kind)?;
             MP::Or(Box::new(lhs), Box::new(rhs))
         } else {
             lhs.value

@@ -494,22 +494,26 @@ impl<'a> ParsingAnalysisContext<'a> {
 
         match &seq_item.value {
             I::Seq(e) => self.exp_symbols(e),
-            I::Declare(v, to) => {
-                v.value
-                    .iter()
-                    .for_each(|bind| self.bind_symbols(bind, to.is_some()));
-                if let Some(t) = to {
+            I::Declare(pat, ty_opt) => {
+                self.match_pattern_symbols(pat);
+                if let Some(t) = ty_opt {
                     self.type_symbols(t);
                 }
             }
-            I::Bind(v, to, e) => {
-                v.value
-                    .iter()
-                    .for_each(|bind| self.bind_symbols(bind, to.is_some()));
-                if let Some(t) = to {
+            I::Bind(pat, ty_opt, e) => {
+                self.match_pattern_symbols(pat);
+                if let Some(t) = ty_opt {
                     self.type_symbols(t);
                 }
                 self.exp_symbols(e);
+            }
+            I::BindElse(pat, ty_opt, e, else_e) => {
+                self.match_pattern_symbols(pat);
+                if let Some(t) = ty_opt {
+                    self.type_symbols(t);
+                }
+                self.exp_symbols(e);
+                self.exp_symbols(else_e);
             }
         }
     }
@@ -728,6 +732,9 @@ impl<'a> ParsingAnalysisContext<'a> {
             }
             MP::At(_, m) => self.match_pattern_symbols(m),
             MP::Literal(_) => (),
+            MP::Tuple(sp!(_, pats)) => {
+                pats.iter().for_each(|p| self.match_pattern_symbols(p));
+            }
         }
     }
 

@@ -195,6 +195,14 @@ fn sequence_item(context: &mut Context, item: &mut T::SequenceItem) {
             expected_types(context, tys);
             exp(context, te)
         }
+        S::BindElse(match_pat, binders, te, else_e) => {
+            pat(context, match_pat);
+            for (_, ty) in binders {
+                type_(context, ty);
+            }
+            exp(context, te);
+            exp(context, else_e)
+        }
     }
 }
 

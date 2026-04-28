@@ -343,6 +343,15 @@ pub trait TypingVisitorContext {
                         .for_each(|ty| self.visit_type(Some(ty.loc), ty));
                 }
             }
+            SI::BindElse(_pat, binders, e, else_e) => {
+                self.visit_exp(e);
+                self.visit_exp(else_e);
+                if Self::VISIT_TYPES {
+                    binders
+                        .iter()
+                        .for_each(|(_, ty)| self.visit_type(Some(ty.loc), ty));
+                }
+            }
         }
     }
 
@@ -944,6 +953,15 @@ pub trait TypingMutVisitorContext {
                         .for_each(|ty| self.visit_type(Some(ty.loc), ty));
                 }
             }
+            SI::BindElse(_pat, binders, e, else_e) => {
+                self.visit_exp(e);
+                self.visit_exp(else_e);
+                if Self::VISIT_TYPES {
+                    binders
+                        .iter_mut()
+                        .for_each(|(_, ty)| self.visit_type(Some(ty.loc), ty));
+                }
+            }
         }
     }
 
@@ -1265,6 +1283,9 @@ where
     seq.1.iter().any(|item| match &item.value {
         T::SequenceItem_::Declare(_) => false,
         T::SequenceItem_::Seq(e) | T::SequenceItem_::Bind(_, _, e) => exp_satisfies_(e, p),
+        T::SequenceItem_::BindElse(_, _, e, else_e) => {
+            exp_satisfies_(e, p) || exp_satisfies_(else_e, p)
+        }
     })
 }
 

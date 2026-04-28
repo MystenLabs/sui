@@ -14,17 +14,11 @@ error[E04005]: expected a single type
 6 │         match (x()) {
   │                ^^^ Invalid 'match' subject
 
-error[E04036]: non-exhaustive pattern
-  ┌─ tests/move_2024/matching/invalid_match_unit.move:6:16
-  │
-6 │         match (x()) {
-  │                ^^^ Pattern '_' not covered
-
-error[E01002]: unexpected token
-  ┌─ tests/move_2024/matching/invalid_match_unit.move:7:14
+error[E03019]: invalid pattern
+  ┌─ tests/move_2024/matching/invalid_match_unit.move:7:13
   │
 7 │             () => ()
-  │              ^ Invalid pattern
+  │             ^^ Tuple patterns are not allowed in match arms. Tuple destructuring is only valid in 'let' bindings
 
 error[E04005]: expected a single type
    ┌─ tests/move_2024/matching/invalid_match_unit.move:12:16
