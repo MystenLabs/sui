@@ -152,7 +152,8 @@ jobs:
         if: failure()
         run: |
           LOG_DIR=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -td ~/simtest_logs/*/ | head -1")
-          FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sed 's/\x1b\[[0-9;]*m//g' ${LOG_DIR}* 2>/dev/null | grep -E '^\s*(FAIL|TIMEOUT)\s+\[' | sed -E 's/^\s*(FAIL|TIMEOUT)\s+\[[^]]+\]\s+//' | sort -u | head -20")
+          FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
+            "cd ~/sui && ./scripts/simtest/collect-failures.sh '$LOG_DIR' | head -20")
           echo "failed_tests<<EOF" >> $GITHUB_OUTPUT
           echo "$FAILED_TESTS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
