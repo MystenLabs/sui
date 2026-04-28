@@ -20,6 +20,7 @@ async-stream.workspace = true
 async-graphql-axum.workspace = true
 async-graphql-value.workspace = true
 async-trait.workspace = true
+backoff.workspace = true
 # axum.workspace = true
 # axum-extra.workspace = true
 axum = { version = "0.7", default-features = false, features = [ "macros", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query", "ws", ] }
