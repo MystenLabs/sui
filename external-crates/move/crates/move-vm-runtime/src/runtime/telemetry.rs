@@ -224,19 +224,20 @@ impl TelemetryContext {
     /// Update the telemetry by recording the context. Note that this mutates the context in-place
     /// via atomic update operations.
     pub(crate) fn record_transaction(&self, transaction: TransactionTelemetryContext) {
+        const ORDERING: Ordering = Ordering::Relaxed;
         macro_rules! update_duration_field {
             ($duration:expr, $count:expr, $total_field:ident, $count_field:ident) => {{
                 if let Some(time) = $duration {
                     let millis = time.as_millis() as u64;
-                    self.$total_field.fetch_add(millis, Ordering::Release);
-                    self.$count_field.fetch_add($count, Ordering::Release);
+                    self.$total_field.fetch_add(millis, ORDERING);
+                    self.$count_field.fetch_add($count, ORDERING);
                 }
             }};
             ($duration:expr, $total_field:ident, $count_field:ident) => {{
                 if let Some(time) = $duration {
                     let millis = time.as_millis() as u64;
-                    self.$total_field.fetch_add(millis, Ordering::Release);
-                    self.$count_field.fetch_add(1, Ordering::Release);
+                    self.$total_field.fetch_add(millis, ORDERING);
+                    self.$count_field.fetch_add(1, ORDERING);
                 }
             }};
         }
@@ -258,10 +259,10 @@ impl TelemetryContext {
 
         let _ = self
             .max_callstack_size
-            .fetch_max(max_callstack_size, Ordering::Release);
+            .fetch_max(max_callstack_size, ORDERING);
         let _ = self
             .max_valuestack_size
-            .fetch_max(max_valuestack_size, Ordering::Release);
+            .fetch_max(max_valuestack_size, ORDERING);
 
         update_duration_field!(load_time, load_count, total_load_time, load_count);
         update_duration_field!(
@@ -276,10 +277,10 @@ impl TelemetryContext {
         update_duration_field!(interpreter_time, total_interpreter_time, interpreter_count);
 
         let total_millis = total_time.as_millis() as u64;
-        self.total_time.fetch_add(total_millis, Ordering::Release);
-        self.total_count.fetch_add(1, Ordering::Release);
+        self.total_time.fetch_add(total_millis, ORDERING);
+        self.total_count.fetch_add(1, ORDERING);
         self.redundant_compilations
-            .fetch_add(redundant_compilations, Ordering::Release);
+            .fetch_add(redundant_compilations, ORDERING);
     }
 
     /// Generate a runtime telemetry report from the telemetry data.
@@ -289,21 +290,23 @@ impl TelemetryContext {
     /// using locks (wherein an RwLock would be read-acquired for the writes and write-acquired for
     /// the read).
     pub fn to_runtime_telemetry(&self, package_cache: &MoveCache) -> MoveRuntimeTelemetry {
+        const ORDERING: Ordering = Ordering::Relaxed;
+
         // Read atomic telemetry values.
-        let total_load_time = self.total_load_time.load(Ordering::Relaxed);
-        let load_count = self.load_count.load(Ordering::Relaxed);
-        let total_validation_time = self.total_validation_time.load(Ordering::Relaxed);
-        let validation_count = self.validation_count.load(Ordering::Relaxed);
-        let total_jit_time = self.total_jit_time.load(Ordering::Relaxed);
-        let jit_count = self.jit_count.load(Ordering::Relaxed);
-        let total_execution_time = self.total_execution_time.load(Ordering::Relaxed);
-        let execution_count = self.execution_count.load(Ordering::Relaxed);
-        let total_interpreter_time = self.total_interpreter_time.load(Ordering::Relaxed);
-        let interpreter_count = self.interpreter_count.load(Ordering::Relaxed);
-        let max_callstack_size = self.max_callstack_size.load(Ordering::Relaxed);
-        let max_valuestack_size = self.max_valuestack_size.load(Ordering::Relaxed);
-        let total_time = self.total_time.load(Ordering::Relaxed);
-        let total_count = self.total_count.load(Ordering::Relaxed);
+        let total_load_time = self.total_load_time.load(ORDERING);
+        let load_count = self.load_count.load(ORDERING);
+        let total_validation_time = self.total_validation_time.load(ORDERING);
+        let validation_count = self.validation_count.load(ORDERING);
+        let total_jit_time = self.total_jit_time.load(ORDERING);
+        let jit_count = self.jit_count.load(ORDERING);
+        let total_execution_time = self.total_execution_time.load(ORDERING);
+        let execution_count = self.execution_count.load(ORDERING);
+        let total_interpreter_time = self.total_interpreter_time.load(ORDERING);
+        let interpreter_count = self.interpreter_count.load(ORDERING);
+        let max_callstack_size = self.max_callstack_size.load(ORDERING);
+        let max_valuestack_size = self.max_valuestack_size.load(ORDERING);
+        let total_time = self.total_time.load(ORDERING);
+        let total_count = self.total_count.load(ORDERING);
 
         // Retrieve package cache statistics.
         let MoveCacheTelemetry {
