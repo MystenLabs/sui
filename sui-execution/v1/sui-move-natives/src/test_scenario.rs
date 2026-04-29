@@ -8,10 +8,8 @@ use crate::{
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
-    account_address::AccountAddress,
-    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout, MoveValue},
-    annotated_visitor as AV,
-    vm_status::StatusCode,
+    account_address::AccountAddress, annotated_value::MoveValue, annotated_visitor as AV,
+    compressed::annotated as CA, vm_status::StatusCode,
 };
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
@@ -650,15 +648,15 @@ fn find_all_wrapped_objects<'a, 'i>(
     struct Traversal<'i, 'u> {
         state: LookingFor,
         ids: &'i mut BTreeSet<ObjectID>,
-        uid: &'u MoveStructLayout,
+        uid: &'u CA::MoveStructLayout,
     }
 
-    impl<'b, 'l> AV::Traversal<'b, 'l> for Traversal<'_, '_> {
+    impl<'b> AV::Traversal<'b> for Traversal<'_, '_> {
         type Error = AV::Error;
 
         fn traverse_struct(
             &mut self,
-            driver: &mut AV::StructDriver<'_, 'b, 'l>,
+            driver: &mut AV::StructDriver<'_, 'b>,
         ) -> Result<(), Self::Error> {
             match self.state {
                 // We're at the top-level of the traversal, looking for an object to recurse into.
@@ -678,8 +676,9 @@ fn find_all_wrapped_objects<'a, 'i>(
                 // We are looking for UID fields. If we find one (which we confirm by checking its
                 // layout), switch to looking for addresses in its sub-structure.
                 LookingFor::Uid => {
-                    while let Some(MoveFieldLayout { name: _, layout }) = driver.peek_field() {
-                        if matches!(layout, MoveTypeLayout::Struct(s) if s.as_ref() == self.uid) {
+                    while let Some((_, layout)) = driver.peek_field() {
+                        if matches!(layout.as_view(), CA::MoveLayoutView::Struct(s) if s.as_ref() == self.uid)
+                        {
                             driver.next_field(&mut Traversal {
                                 state: LookingFor::Address,
                                 ids: self.ids,
@@ -701,7 +700,7 @@ fn find_all_wrapped_objects<'a, 'i>(
 
         fn traverse_address(
             &mut self,
-            _: &AV::ValueDriver<'_, 'b, 'l>,
+            _: &AV::ValueDriver<'_, 'b>,
             address: AccountAddress,
         ) -> Result<(), Self::Error> {
             // If we're looking for addresses, and we found one, then save it.
@@ -712,7 +711,7 @@ fn find_all_wrapped_objects<'a, 'i>(
         }
     }
 
-    let uid = UID::layout();
+    let uid = UID::compressed_layout();
     for (_id, ty, value) in new_object_values {
         let Ok(Some(layout)) = context.type_to_type_layout(ty) else {
             debug_assert!(false);
@@ -723,15 +722,16 @@ fn find_all_wrapped_objects<'a, 'i>(
             debug_assert!(false);
             continue;
         };
+        let annotated_layout: CA::MoveTypeLayout = (&annotated_layout).try_into().unwrap();
 
         let blob = value.borrow().simple_serialize(&layout).unwrap();
         MoveValue::visit_deserialize(
             &blob,
-            &annotated_layout,
+            annotated_layout,
             &mut Traversal {
                 state: LookingFor::Wrapped,
                 ids,
-                uid: &uid,
+                uid,
             },
         )
         .unwrap();

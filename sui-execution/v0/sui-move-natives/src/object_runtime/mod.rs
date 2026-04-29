@@ -6,7 +6,8 @@ use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, annotated_value as A, annotated_visitor as AV,
-    language_storage::StructTag, runtime_value as R, vm_status::StatusCode,
+    compressed::annotated as CA, language_storage::StructTag, runtime_value as R,
+    vm_status::StatusCode,
 };
 use move_vm_types::{
     effects::Op,
@@ -637,14 +638,14 @@ pub fn get_all_uids(
     struct UIDTraversal<'i>(&'i mut BTreeSet<ObjectID>);
     struct UIDCollector<'i>(&'i mut BTreeSet<ObjectID>);
 
-    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDTraversal<'_> {
+    impl<'b> AV::Traversal<'b> for UIDTraversal<'_> {
         type Error = AV::Error;
 
         fn traverse_struct(
             &mut self,
-            driver: &mut AV::StructDriver<'_, 'b, 'l>,
+            driver: &mut AV::StructDriver<'_, 'b>,
         ) -> Result<(), Self::Error> {
-            if driver.struct_layout().type_ == UID::type_() {
+            if driver.struct_layout().type_() == &UID::type_() {
                 while driver.next_field(&mut UIDCollector(self.0))?.is_some() {}
             } else {
                 while driver.next_field(self)?.is_some() {}
@@ -653,11 +654,11 @@ pub fn get_all_uids(
         }
     }
 
-    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDCollector<'_> {
+    impl<'b> AV::Traversal<'b> for UIDCollector<'_> {
         type Error = AV::Error;
         fn traverse_address(
             &mut self,
-            _driver: &AV::ValueDriver<'_, 'b, 'l>,
+            _driver: &AV::ValueDriver<'_, 'b>,
             value: AccountAddress,
         ) -> Result<(), Self::Error> {
             self.0.insert(value.into());
@@ -665,11 +666,8 @@ pub fn get_all_uids(
         }
     }
 
-    A::MoveValue::visit_deserialize(
-        bcs_bytes,
-        fully_annotated_layout,
-        &mut UIDTraversal(&mut ids),
-    )
-    .map_err(|e| format!("Failed to deserialize. {e}"))?;
+    let layout: CA::MoveTypeLayout = fully_annotated_layout.try_into().unwrap();
+    A::MoveValue::visit_deserialize(bcs_bytes, layout, &mut UIDTraversal(&mut ids))
+        .map_err(|e| format!("Failed to deserialize. {e}"))?;
     Ok(ids)
 }

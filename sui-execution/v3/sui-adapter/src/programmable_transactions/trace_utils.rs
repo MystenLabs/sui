@@ -396,7 +396,9 @@ fn move_value_info_from_raw_bytes(
         .get_runtime()
         .type_to_fully_annotated_layout(type_)
         .map_err(|e| ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
-    let move_value = BoundedVisitor::deserialize_value(bytes, &layout)
+    let layout: move_core_types::compressed::annotated::MoveTypeLayout =
+        (&layout).try_into().unwrap();
+    let move_value = BoundedVisitor::deserialize_value(bytes, layout)
         .map_err(|e| ExecutionError::new_with_source(ExecutionErrorKind::InvariantViolation, e))?;
     let serialized_move_value = SerializableMoveValue::from(move_value);
     Ok(ExtMoveValueInfo {
