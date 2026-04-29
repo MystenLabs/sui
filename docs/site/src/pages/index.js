@@ -49,9 +49,9 @@ export default function Home() {
           <div className="w-full mt-8 mb-4 mx-auto">
             <div className={styles.heroText}>
               <h1 className="h1 center-text text-white">Sui Documentation</h1>
-              <h2 className="h2 center-text h3" style={{ color: '#89919F' }}>
-                Discover the power of Sui through examples, guides, and concepts
-              </h2>
+              <p className="center-text" style={{ color: '#89919F', maxWidth: '720px', margin: '0 auto', fontSize: '1.1rem', lineHeight: '1.6' }}>
+                Sui is a next-generation smart contract platform with high throughput, low latency, and an asset-oriented programming model powered by the Move programming language. Explore guides, references, and tutorials to start building on Sui.
+              </p>
             </div>
           </div>
           <div className="flex flex-row flex-wrap justify-center gap-2 max-w-[1066px] mx-auto pb-16 py-4">
