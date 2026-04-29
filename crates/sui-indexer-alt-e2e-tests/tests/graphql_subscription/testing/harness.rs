@@ -33,6 +33,9 @@ use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::http::Request;
 
+use super::proxy;
+use super::proxy::ProxyController;
+
 const SUBSCRIPTION_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct SubscriptionTestCluster {
@@ -53,6 +56,24 @@ impl SubscriptionTestCluster {
     /// validator + postgres DB + kv_packages indexer + GraphQL service.
     /// Waits for kv_packages to index the genesis checkpoint so subscriptions are ready.
     pub async fn new() -> Self {
+        let (cluster, _controller) = Self::new_inner(false).await;
+        cluster
+    }
+
+    /// Same as `new()`, but inserts a TCP proxy between graphql's streaming
+    /// connection and the validator's gRPC. Returns a controller that tests
+    /// can use to forcibly disconnect the streaming connection mid-test,
+    /// exercising graphql's reconnect + gap-recovery code path.
+    ///
+    /// Only the streaming connection runs through the proxy. `ledger_grpc_url`
+    /// (used by gap recovery) still points at the validator directly, so
+    /// `disconnect_all()` only severs the stream and leaves recovery reads
+    /// untouched.
+    pub async fn new_with_disruption_proxy() -> (Self, ProxyController) {
+        Self::new_inner(true).await
+    }
+
+    async fn new_inner(use_proxy: bool) -> (Self, ProxyController) {
         let ingestion_dir = tempfile::tempdir().expect("Failed to create ingestion dir");
         let validator = TestClusterBuilder::new()
             .with_num_validators(1)
@@ -96,11 +117,27 @@ impl SubscriptionTestCluster {
         let graphql_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), graphql_port);
         let rpc_url = validator.rpc_url();
 
+        let (stream_url, controller): (String, ProxyController) = if use_proxy {
+            proxy::start(rpc_url).await
+        } else {
+            (rpc_url.to_string(), ProxyController::default())
+        };
+
+        // The validator's gRPC v2 endpoint serves both `SubscriptionService` and
+        // `LedgerService`, so we point `ledger_grpc_url` at the same URL graphql streams
+        // from. Required because gap recovery makes `ledger_grpc_reader` mandatory when
+        // streaming is enabled. Note: `ledger_grpc_url` always targets the validator
+        // directly so `disconnect_all()` cannot interfere with gap-recovery reads.
+        let kv_args = KvArgs {
+            ledger_grpc_url: Some(rpc_url.parse().unwrap()),
+            ..Default::default()
+        };
+
         let service = start_graphql(
             Some(database_url),
             FullnodeArgs::new(rpc_url.parse().unwrap()),
             DbArgs::default(),
-            KvArgs::default(),
+            kv_args,
             ConsistentReaderArgs::default(),
             GraphQlArgs {
                 rpc_listen_address: graphql_listen_address,
@@ -108,7 +145,7 @@ impl SubscriptionTestCluster {
             },
             SystemPackageTaskArgs::default(),
             SubscriptionArgs {
-                checkpoint_stream_url: Some(rpc_url.parse().unwrap()),
+                checkpoint_stream_url: Some(stream_url.parse().unwrap()),
             },
             "0.0.0",
             GraphQlConfig::default(),
@@ -118,14 +155,28 @@ impl SubscriptionTestCluster {
         .await
         .expect("Failed to start GraphQL server");
 
-        Self {
-            validator,
-            db,
-            subscription_url: format!("ws://{}/graphql", graphql_listen_address),
-            service,
-            indexer,
-            ingestion_dir,
-        }
+        (
+            Self {
+                validator,
+                db,
+                subscription_url: format!("ws://{}/graphql", graphql_listen_address),
+                service,
+                indexer,
+                ingestion_dir,
+            },
+            controller,
+        )
+    }
+
+    /// Latest checkpoint sequence number produced by the validator (the
+    /// on-chain tip, not whatever graphql has currently streamed).
+    pub fn validator_checkpoint_tip(&self) -> u64 {
+        self.validator
+            .fullnode_handle
+            .sui_node
+            .state()
+            .get_latest_checkpoint_sequence_number()
+            .expect("Failed to read validator checkpoint tip")
     }
 
     /// Subscribe and return a stream of GraphQL payloads.
@@ -276,6 +327,32 @@ pub fn checkpoint_tx_digests(item: &Value) -> Vec<&str> {
         .as_array()
         .map(|nodes| nodes.iter().filter_map(|n| n["digest"].as_str()).collect())
         .unwrap_or_default()
+}
+
+/// Extract `sequenceNumber` from a top-level checkpoint subscription response.
+/// Path: data.checkpoints.sequenceNumber
+pub fn checkpoint_seq(item: &Value) -> u64 {
+    item["data"]["checkpoints"]["sequenceNumber"]
+        .as_u64()
+        .expect("checkpoint payload missing sequenceNumber")
+}
+
+/// Read checkpoint items from `stream` until it goes quiet for one second,
+/// returning the last sequence number observed. `start` is returned unchanged
+/// if the stream stalls before delivering anything. Used to assert that the
+/// streaming subscription has paused (e.g. during a forced reconnect blackout).
+pub async fn drain_checkpoints_until_stalled(
+    stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
+    start: u64,
+) -> u64 {
+    let mut last = start;
+    loop {
+        match tokio::time::timeout(Duration::from_secs(1), stream.next()).await {
+            Ok(Some(item)) => last = checkpoint_seq(&item),
+            Ok(None) => panic!("stream ended unexpectedly"),
+            Err(_) => return last,
+        }
+    }
 }
 
 /// Common snapshot redactions for GraphQL subscription tests.

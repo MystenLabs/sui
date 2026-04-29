@@ -3,5 +3,6 @@
 
 mod harness;
 pub mod object_wrapping_harness;
+pub mod proxy;
 
 pub use harness::*;

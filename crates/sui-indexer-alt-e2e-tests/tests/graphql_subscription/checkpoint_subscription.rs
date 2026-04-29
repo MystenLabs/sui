@@ -10,7 +10,9 @@ use serde_json::json;
 use tokio_stream::StreamExt;
 
 use crate::testing::SubscriptionTestCluster;
+use crate::testing::checkpoint_seq;
 use crate::testing::checkpoint_tx_digests;
+use crate::testing::drain_checkpoints_until_stalled;
 use crate::testing::graphql_redactions;
 use crate::testing::object_wrapping_harness;
 use crate::testing::transfer_coins;
@@ -27,10 +29,7 @@ async fn test_subscription_sequential() {
         .collect()
         .await;
 
-    let seqs: Vec<u64> = items
-        .iter()
-        .map(|i| i["data"]["checkpoints"]["sequenceNumber"].as_u64().unwrap())
-        .collect();
+    let seqs: Vec<u64> = items.iter().map(checkpoint_seq).collect();
     assert!(seqs.windows(2).all(|w| w[1] == w[0] + 1), "{seqs:?}");
 }
 
@@ -379,4 +378,61 @@ async fn test_subscription_object_json() {
     settings.bind(|| {
         insta::assert_json_snapshot!("subscription_object_json", [cp1, cp2, cp3, cp4]);
     });
+}
+
+// --- Gap recovery tests ---
+
+/// Forces a reconnect blackout via the proxy and asserts the subscriber sees a
+/// contiguous sequence of checkpoints across it (gap recovery filled the
+/// missing range from kv-rpc). `ledger_grpc_url` bypasses the proxy, so
+/// recovery reads aren't blocked.
+#[tokio::test]
+async fn test_subscription_recovers_from_upstream_disconnect() {
+    let (cluster, proxy) = SubscriptionTestCluster::new_with_disruption_proxy().await;
+
+    let mut stream = cluster
+        .subscribe("subscription { checkpoints { sequenceNumber } }")
+        .await;
+
+    // Healthy streaming.
+    let first = checkpoint_seq(&stream.next().await.unwrap());
+    let second = checkpoint_seq(&stream.next().await.unwrap());
+    assert_eq!(second, first + 1);
+
+    // Blackout: graphql can't reconnect.
+    proxy.block_connections();
+    proxy.disconnect_all();
+
+    // Let the validator advance so a real gap forms, then drain whatever
+    // graphql had pushed before the disconnect took effect.
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    let last_seen = drain_checkpoints_until_stalled(&mut stream, second).await;
+    let validator_tip = cluster.validator_checkpoint_tip();
+    assert!(
+        validator_tip > last_seen + 1,
+        "validator did not advance during blackout: tip={validator_tip}, last_seen={last_seen}",
+    );
+
+    // Resume.
+    proxy.allow_connections();
+
+    // First item signals reconnect + recovery have started. The validator's
+    // tip at this moment bounds the reconnect tip from above, so reading
+    // past it crosses from recovery into post-recovery live items.
+    let mut received = vec![checkpoint_seq(&stream.next().await.unwrap())];
+    let resume_tip = cluster.validator_checkpoint_tip();
+    while *received.last().unwrap() < resume_tip + 20 {
+        received.push(checkpoint_seq(&stream.next().await.unwrap()));
+    }
+
+    assert_eq!(
+        received[0],
+        last_seen + 1,
+        "non-contiguous resume: last_seen={last_seen}, first received={}",
+        received[0],
+    );
+    assert!(
+        received.windows(2).all(|w| w[1] == w[0] + 1),
+        "post-resume not contiguous: {received:?}",
+    );
 }
