@@ -15,8 +15,7 @@ use fastcrypto_tbls::dkg_v1;
 use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_zkp::bn254::zk_login::{JWK, JwkId, OIDCProvider};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
-use futures::FutureExt;
-use futures::future::{Either, join_all, select};
+use futures::future::{Either, join_all};
 use itertools::Itertools;
 use moka::sync::SegmentedCache as MokaCache;
 use move_bytecode_utils::module_cache::SyncModuleCache;
@@ -79,6 +78,7 @@ use sui_types::transaction::{
 use tap::TapOptional;
 use tokio::sync::{OnceCell, mpsc, oneshot};
 use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::DBMapUtils;
 use typed_store::Map;
@@ -389,8 +389,8 @@ pub struct AuthorityPerEpochStore {
 
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
 
-    /// This is used to notify all epoch specific tasks that epoch has ended.
-    epoch_alive_notify: NotifyOnce,
+    /// Cancellation token used to signal epoch termination to all in-flight tasks.
+    epoch_alive_token: CancellationToken,
 
     /// Used to notify all epoch specific tasks that user certs are closed.
     user_certs_closed_notify: NotifyOnce,
@@ -1081,7 +1081,7 @@ impl AuthorityPerEpochStore {
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
 
-        let epoch_alive_notify = NotifyOnce::new();
+        let epoch_alive_token = CancellationToken::new();
 
         assert_eq!(
             epoch_start_configuration.epoch_start_state().epoch(),
@@ -1233,7 +1233,7 @@ impl AuthorityPerEpochStore {
             parent_path: parent_path.to_path_buf(),
             db_options,
             reconfig_state_mem: RwLock::new(reconfig_state),
-            epoch_alive_notify,
+            epoch_alive_token,
             user_certs_closed_notify: NotifyOnce::new(),
             epoch_alive: tokio::sync::RwLock::new(true),
             consensus_notify_read: NotifyRead::new(),
@@ -3123,10 +3123,8 @@ impl AuthorityPerEpochStore {
 
     /// Notify epoch is terminated, can only be called once on epoch store
     pub async fn epoch_terminated(&self) {
-        // Notify interested tasks that epoch has ended
-        self.epoch_alive_notify
-            .notify()
-            .expect("epoch_terminated called twice on same epoch store");
+        // Signal all in-flight tasks that epoch has ended
+        self.epoch_alive_token.cancel();
         // This `write` acts as a barrier - it waits for futures executing in
         // `within_alive_epoch` to terminate before we can continue here
         info!("Epoch terminated - waiting for pending tasks to complete");
@@ -3136,7 +3134,7 @@ impl AuthorityPerEpochStore {
 
     /// Waits for the notification about epoch termination
     pub async fn wait_epoch_terminated(&self) {
-        self.epoch_alive_notify.wait().await
+        self.epoch_alive_token.cancelled().await
     }
 
     /// This function executes given future until epoch_terminated is called
@@ -3153,11 +3151,9 @@ impl AuthorityPerEpochStore {
         if !*guard {
             return Err(());
         }
-        let terminated = self.wait_epoch_terminated().boxed();
-        let f = f.boxed();
-        match select(terminated, f).await {
-            Either::Left((_, _f)) => Err(()),
-            Either::Right((result, _)) => Ok(result),
+        tokio::select! {
+            _ = self.epoch_alive_token.cancelled() => Err(()),
+            result = f => Ok(result),
         }
     }
 
