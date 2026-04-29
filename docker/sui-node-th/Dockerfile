@@ -24,13 +24,14 @@ FROM debian:bullseye-slim AS runtime
 RUN apt-get update && apt-get install -y ca-certificates curl
 ARG PROFILE=release
 WORKDIR "$WORKDIR/sui"
-# Both bench and release profiles copy from release dir
-COPY --from=builder /sui/target/tidehunter/release/sui-node /opt/sui/bin/sui-node
-# Support legacy usages of /usr/local/bin/sui-node
-COPY --from=builder /sui/target/tidehunter/release/sui-node /usr/local/bin
-# Suffixed copy lets mp3's binary_upload_config extract /opt/sui/bin/sui-node-th
-# to s3://sui-releases/{sha}/sui-node-th via {basename} substitution, matching
-# the legacy sui-release-binaries.yml S3 path so existing -th consumers keep working.
+# Only ship the tidehunter binary at a suffixed path. Intentionally no
+# /opt/sui/bin/sui-node or /usr/local/bin/sui-node aliases — the binary
+# uses the tidehunter storage backend, which is incompatible with rocksdb,
+# and silently swapping at the canonical paths would let callers run it
+# as plain sui-node and corrupt unrelated databases. K8s pod entrypoints
+# must call /opt/sui/bin/sui-node-th explicitly. mp3's binary_upload_config
+# extracts this path to s3://sui-releases/{sha}/sui-node-th via {basename}
+# substitution, matching legacy sui-release-binaries.yml naming.
 COPY --from=builder /sui/target/tidehunter/release/sui-node /opt/sui/bin/sui-node-th
 
 ARG BUILD_DATE
