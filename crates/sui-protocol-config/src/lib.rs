@@ -37,6 +37,21 @@ const MAX_PROTOCOL_VERSION: u64 = 124;
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
 
+const MAINNET_USDC: &str =
+    "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC";
+const MAINNET_USDSUI: &str =
+    "0x44f838219cf67b058f3b37907b655f226153c18e33dfcd0da559a844fea9b1c1::usdsui::USDSUI";
+const MAINNET_SUI_USDE: &str =
+    "0x41d587e5336f1c86cad50d38a7136db99333bb9bda91cea4ba69115defeb1402::sui_usde::SUI_USDE";
+const MAINNET_USDY: &str =
+    "0x960b531667636f39e85867775f52f6b1f220a058c4de786905bdf761e06a56bb::usdy::USDY";
+const MAINNET_FDUSD: &str =
+    "0xf16e6b723f242ec745dfd7634ad072c42d5c1d9ac9d62a39c381303eaa57693a::fdusd::FDUSD";
+const MAINNET_AUSD: &str =
+    "0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD";
+const MAINNET_USDB: &str =
+    "0xe14726c336e81b32328e92afc37345d159f5b550b09fa92bd43640cfdd0a0cfd::usdb::USDB";
+
 // Record history of protocol version allocations here:
 //
 // Version 1: Original version.
@@ -333,6 +348,8 @@ const TESTNET_USDC: &str =
 //              enable_object_funds_withdraw, convert_withdrawal_compatibility_ptb_arguments,
 //              split_checkpoints_in_consensus_handler, include_checkpoint_artifacts_digest_in_summary,
 //              and enable_gasless on mainnet to bring it in line with testnet.
+//              Configure mainnet gasless allowlist with stablecoin types and $0.01 minimum
+//              transfer per stable.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -4921,11 +4938,20 @@ impl ProtocolConfig {
                         .include_checkpoint_artifacts_digest_in_summary = true;
                     cfg.feature_flags.enable_gasless = true;
 
-                    // Initialize the mainnet allow-list to empty. Testnet already has
-                    // its USDC entry from v119, so only set this on mainnet to avoid
-                    // clobbering the testnet value.
+                    // Set the mainnet allow-list. Testnet already has its USDC entry
+                    // from v119, so only set this on mainnet to avoid clobbering the
+                    // testnet value. $0.01 minimum transfer per stable; all listed
+                    // tokens have 6 decimals.
                     if chain == Chain::Mainnet {
-                        cfg.gasless_allowed_token_types = Some(vec![]);
+                        cfg.gasless_allowed_token_types = Some(vec![
+                            (MAINNET_USDC.to_string(), 10_000),
+                            (MAINNET_USDSUI.to_string(), 10_000),
+                            (MAINNET_SUI_USDE.to_string(), 10_000),
+                            (MAINNET_USDY.to_string(), 10_000),
+                            (MAINNET_FDUSD.to_string(), 10_000),
+                            (MAINNET_AUSD.to_string(), 10_000),
+                            (MAINNET_USDB.to_string(), 10_000),
+                        ]);
                     }
                 }
                 // Use this template when making changes:
