@@ -2322,13 +2322,6 @@ impl ProtocolConfig {
         window_size
     }
 
-    pub fn enable_observation_chunking(&self) -> bool {
-        matches!(self.feature_flags.per_object_congestion_control_mode,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate(ref params)
-                if params.observations_chunk_size.is_some()
-        )
-    }
-
     pub fn address_aliases(&self) -> bool {
         let address_aliases = self.feature_flags.address_aliases;
         assert!(

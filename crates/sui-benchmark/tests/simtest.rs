@@ -569,7 +569,7 @@ mod test {
                     stored_observations_limit: rng.gen_range(1..=20),
                     stake_weighted_median_threshold: 0,
                     default_none_duration_for_new_keys: true,
-                    observations_chunk_size: None,
+                    observations_chunk_size: Some(18),
                 },
             );
             max_deferral_rounds = if rng.gen_bool(0.5) {
