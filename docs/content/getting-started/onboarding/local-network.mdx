@@ -1,14 +1,14 @@
 ---
 title: Connecting to a Local Network
 description: Connect to a Sui local network using the Sui CLI. Use local networks to test your applications and prepare for launching them on Devnet or Testnet. 
-keywords: [ local network, testnet, devnet, test application, deploy app locally, customize local network, configure local network, use local network, local network state, local faucet, using the local faucet, local sui faucet ]
+keywords: [ local network, Testnet, Devnet, test application, deploy app locally, customize local network, configure local network, use local network, local network state, local faucet, using the local faucet, local sui faucet ]
 ---
 
 The Sui CLI provides the `sui start` command to create and start a local instance of the Sui network. You can start services such as an indexer, a faucet, or a local instance of the GraphQL service (including the web-based GraphiQL IDE). `sui start` also includes a local faucet to get test SUI to use in the local network you create.
 
 :::info Localnet vs Devnet
 
-Localnet is a single-machine network you run yourself. Devnet is a shared public test network operated by Mysten Labs. They are different networks with separate state.
+Localnet is a single-machine network you run yourself. Devnet is a shared public test network that Mysten Labs operates. These are different networks with separate state.
 
 :::
 
@@ -41,7 +41,7 @@ This command:
 :::caution
 Each time you start the network by passing `--force-regenesis`, the local network starts from a random genesis with no previous data and does not persist the local network. If you want to persist data, do not pass the `--force-regenesis` flag. 
 
-Sui creates a temporary directory in `/tmp`, which might not work if the `/tmp` folder is mounted to `/tmpfs`. If this is the case, set `TMPDIR=./some_folder`.
+The command creates a temporary directory in `/tmp`, which might not work if the `/tmp` folder is mounted to `/tmpfs`. If this is the case, set `TMPDIR=./some_folder`.
 :::
 
 ## Customization
@@ -287,7 +287,7 @@ $ curl --location --request POST 'http://127.0.0.1:9123/gas' \
 
 ### `Package already published` error
 
-If you see this error when re-publishing, remove the environment entry from `Published.toml` and re-run the publish command. For localnet development, use `sui move test-publish` to avoid recording addresses that change after every genesis reset.
+If you see this error when re-publishing, remove the environment entry from `Published.toml` and re-run the publish command. For Localnet development, use `sui move test-publish` to avoid recording addresses that change after every genesis reset.
 
 ### Single validator is expected
 

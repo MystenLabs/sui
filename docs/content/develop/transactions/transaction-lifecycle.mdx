@@ -18,7 +18,7 @@ The following steps align with those in the diagram:
 
 1. A user with a private key creates and signs a user transaction to either mutate objects they own, [shared objects](/develop/objects/object-ownership/shared), or create new objects.
 
-1. Sui sends the transaction to each [validator](/operators/validator), often through a [full node](/operators/full-node/sui-full-node). Validators perform a series of validity and safety checks, sign it, and return the signed transaction to the client.
+1. The client sends the transaction to each [validator](/operators/validator), often through a [full node](/operators/full-node/sui-full-node). Validators perform a series of validity and safety checks, sign the transaction, and return the signed transaction to the client.
 
 1. The client collects the responses from a set of validators that account for at least 2/3 of the [validator committee](/develop/sui-architecture/consensus) to form a transaction certificate. As a result, Sui validators do not need to propagate signatures on a best-effort basis (gossip signatures) or aggregate certificates. This effort is now the responsibility of the client or gateway.
 
@@ -110,7 +110,7 @@ At this point, the transaction has reached the end of its life cycle and is incl
 
 ## Transaction finality timing
 
-The network round trip of sending a transaction and receiving a validator signature takes less than half a second to complete. At this point the sender knows the transaction is irrevocable and is going to be processed within the epoch, no matter what. The transaction has reached finality; honest validators deem any subsequent transactions using the same owned input objects during the same epoch invalid.
+The network round trip of sending a transaction and receiving a validator signature takes less than half a second to complete. At this point the sender knows the transaction is irrevocable and processes within the epoch. The transaction has reached finality; honest validators deem any subsequent transactions using the same owned input objects during the same epoch invalid.
 
 ## Settlement finality timing
 
@@ -120,9 +120,9 @@ For transactions that involve owned objects only, this happens before consensus 
 
 ## Epoch change
 
-Periodically (~24 hours), the Sui [Testnet](/develop/sui-architecture/networks) and [Mainnet](/develop/sui-architecture/networks) networks enter the process of [epoch](/develop/sui-architecture/epochs) change. During epoch change, the network calculates and distributes [staking rewards](/develop/sui-architecture/tokenomics-overview), validator metadata takes effect, and other network processes are performed. All user transactions are delayed until the new epoch begins.
+Periodically (~24 hours), the Sui [Testnet](/develop/sui-architecture/networks) and [Mainnet](/develop/sui-architecture/networks) networks enter the process of [epoch](/develop/sui-architecture/epochs) change. During epoch change, the network calculates and distributes [staking rewards](/develop/sui-architecture/tokenomics-overview), validator metadata takes effect, and other network processes are performed. The network delays all user transactions until the new epoch begins.
 
-If your transaction is submitted at epoch boundary, in rare perfect timing it is possible that a quorum of validators already decided to not accept any new transaction certificates in the current epoch. This means your transaction is not checkpointed either. For any transactions that are certified but not finalized, they are reverted if executed or its owned objects are unlocked and not yet executed.
+If your transaction is submitted at an epoch boundary, in rare timing a quorum of validators might have already decided to not accept new transaction certificates in the current epoch. This means your transaction is not checkpointed either. For any transactions that are certified but not finalized, the network reverts them if executed or unlocks their owned objects if not yet executed.
 
 In this case, the transaction certificate does not guarantee finality. In the new epoch, this transaction certificate becomes void because validator signatures are signed over epoch ID. To continue this transaction, a new transaction certificate is necessary with the new epoch ID. The standard full node implementation handles this automatically.
 

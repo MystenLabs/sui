@@ -252,7 +252,7 @@ Try using [Windows Subsystem for Linux](https://learn.microsoft.com/en-us/window
 
 #### `Fetch failed error (cause: Header Timeout)`
 
-Indicates the network does not receive a response within a certain time period. This error is not specific to Sui.
+The network does not receive a response within a certain time period. This error is not specific to Sui.
 
 ##### Solution 
 
@@ -266,7 +266,7 @@ Errors in this section relate to transactions.
 
 #### `Requires a connection to the network. Current active network is [testnet/mainnet/devnet] but failed to connect to it.`
 
-This error occurs when the network is down, unreachable due to an unstable internet connection, or there is a misconfiguration in your Sui client configuration.
+This error occurs when the network is down, your internet connection is unstable, or your Sui client configuration has an error.
 
 ##### Solution
 
@@ -300,7 +300,7 @@ If this does not resolve the error, check your internet connection or restart yo
 
 #### `Unable to process transaction. Dry run failed, could not automatically determine a budget: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }`
 
-This error occurs when a Move transaction does not have a `drop` ability, or you do not explicitly drop it. The Sui runtime system enforces resource safety that throws this error when you leave values unused at the end of a transaction. 
+A value in your transaction does not have the `drop` ability and you did not explicitly consume or transfer it. The Sui runtime enforces resource safety and returns this error when you leave values unused at the end of a transaction. 
 
 ##### Solution 
 
@@ -314,7 +314,7 @@ In Sui Move packages, you must either transfer every value that does not have th
 
 #### `Error executing transaction: VMVerificationOrDeserializationError in command 0`
 
-This is a generic error that indicates that your Move code fails either during bytecode verification or during deserialization. 
+Your Move code fails either during bytecode verification or during deserialization. 
 
 ##### Solution 
 
@@ -342,7 +342,7 @@ Some common reasons for this error include:
 
 #### `Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction. Other transactions locking these objects`
 
-Indicates that your transaction is trying to use one or more Sui objects that another transaction already uses. When you use an object in a transaction, the system locks that object to prevent multiple, possibly conflicting modifications to an object. For DeFi objects, this prevents double-spending.
+Your transaction is trying to use one or more Sui objects that another transaction already uses. When you use an object in a transaction, the system locks that object to prevent multiple, possibly conflicting modifications to an object. For DeFi objects, this prevents double-spending.
 
 ##### Solution 
 
@@ -358,7 +358,7 @@ Make sure your code does not use multiple objects simultaneously.
 
 #### `Failed to sign transaction by a quorum of validators because one or more of its objects is equivocated until the next epoch.`
 
-Indicates that an object you are trying to use is in an equivocated state, meaning the network cannot reach consensus about its state due to conflicting transactions. The system subsequently freezes the object and you cannot use it until the next epoch.
+An object you are trying to use is in an equivocated state, meaning the network cannot reach consensus about its state due to conflicting transactions. The network freezes the object and you cannot use it until the next epoch.
 
 ##### Solution 
 
@@ -372,7 +372,7 @@ Wait for the next epoch.
 
 #### `Unable to process transaction. Unexpected status code: 403`
 
-Indicates the Sui network responds to an RPC or API request with `HTTP 403: Forbidden` status. This might happen if an RPC provider:
+The Sui network responds to an RPC or API request with `HTTP 403: Forbidden` status. This might happen if an RPC provider:
 
 - Requires authentication and you do not provide any.
 
@@ -391,7 +391,7 @@ Check for rate limiting and try sending requests over a long period of time.
 
 #### `Failed to submit transaction: ErrorObject { code: ServerError(-32002), message: "Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again`
 
-Indicates the Sui network rejects a transaction due to invalid transaction inputs. 
+The Sui network rejects a transaction due to invalid transaction inputs. 
 
 ##### Solution 
 
@@ -411,7 +411,7 @@ Verify you have a sufficient gas balance and that your transaction signature is 
 
 #### `Unable to process transaction. No valid gas coins found for the transaction.`
 
-Indicates the sender address either has insufficient SUI balance or the gas coin is already used as a transaction input object.
+The sender address either has insufficient SUI balance or the gas coin is already used as a transaction input object.
 
 ##### Solution
 
@@ -433,7 +433,7 @@ Errors in this section relate to the TypeScript SDK, RPC responses, and transact
 
 #### `Invalid type: Expected Object but received Object`
 
-Indicates that you wrapped a value already returned by a transaction command (such as `tx.splitCoins()` or `tx.moveCall()`) inside `tx.object()` again. Values returned by transaction commands are already `TransactionArgument` objects.
+You wrapped a value already returned by a transaction command (such as `tx.splitCoins()` or `tx.moveCall()`) inside `tx.object()` again. Values returned by transaction commands are already `TransactionArgument` objects.
 
 ##### Solution
 
@@ -453,7 +453,7 @@ tx.transferObjects([coin], recipient); // ✅
 
 #### `Your active environment is not present in Move.toml`
 
-Indicates that the Sui CLI cannot find the environment alias you are using (such as `devnet` or `testnet`) in the `[environments]` section of your `Move.toml` file.
+The Sui CLI cannot find the environment alias you are using (such as `devnet` or `testnet`) in the `[environments]` section of your `Move.toml` file.
 
 ##### Solution
 
