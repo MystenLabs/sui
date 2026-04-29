@@ -24,8 +24,9 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    CallArg, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction, TransactionData, TransactionDataAPI,
-    TransactionKind, VerifiedTransaction,
+    CallArg, GasData, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_TRANSFER, Transaction,
+    TransactionData, TransactionDataAPI, TransactionDataV1, TransactionExpiration, TransactionKind,
+    VerifiedTransaction,
 };
 use sui_types::utils::get_zklogin_user_address;
 use sui_types::utils::{
@@ -179,6 +180,43 @@ async fn test_user_transaction_disabled() {
     .await;
     let accounts = get_accounts_and_coins(&network_config, &state);
     assert_denied(&transfer_with_account(&accounts[0], &accounts[0], &state));
+}
+
+fn submit_gasless_with_account(
+    sender_account: &Account,
+    state: &Arc<AuthorityState>,
+) -> SuiResult<()> {
+    let data = TransactionData::V1(TransactionDataV1 {
+        kind: TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+            inputs: vec![],
+            commands: vec![],
+        }),
+        sender: sender_account.0,
+        gas_data: GasData {
+            payment: vec![],
+            owner: sender_account.0,
+            price: 0,
+            budget: 0,
+        },
+        expiration: TransactionExpiration::None,
+    });
+    let tx = to_sender_signed_transaction(data, &sender_account.1);
+    let epoch_store = state.epoch_store_for_testing();
+    let verified_tx = VerifiedTransaction::new_from_verified(tx);
+    state.handle_vote_transaction(&epoch_store, verified_tx)
+}
+
+#[tokio::test]
+async fn test_gasless_transaction_disabled() {
+    let (network_config, state) = setup_test(
+        TransactionDenyConfigBuilder::new()
+            .disable_gasless()
+            .build(),
+    )
+    .await;
+    let accounts = get_accounts_and_coins(&network_config, &state);
+    assert_denied(&submit_gasless_with_account(&accounts[0], &state));
+    assert!(transfer_with_account(&accounts[0], &accounts[0], &state).is_ok());
 }
 
 #[tokio::test]
