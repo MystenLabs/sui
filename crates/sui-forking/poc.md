@@ -172,3 +172,4 @@ Shows the current checkpoint, epoch, and timestamp.
 - faucet support
 - minting any coin type
 - GraphQL RPC support
+- transfer object ownership at startup (seeding by an address and transfer all those objects to either a new address or to the active one in the wallet)
