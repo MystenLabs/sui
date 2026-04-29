@@ -955,17 +955,17 @@ impl DagState {
             .map(|info| info.round + 1)
             .unwrap_or(gc_round + 1);
         // DAG can only grow one round at a time.
+        assert!(
+            block.round() <= next_round,
+            "Attempted to update round info for block {block_ref} with round higher than next round {next_round}"
+        );
+        
         if block.round() == next_round {
             self.round_info.push_back(RoundInfo {
                 round: block.round(),
                 authorities: BTreeSet::new(),
                 total_stake: 0,
             });
-        } else {
-            assert!(
-                block.round() < next_round,
-                "Attempted to update round info for block {block_ref} with round higher than next round {next_round}"
-            );
         }
 
         // Update the RoundInfo of the block round.
