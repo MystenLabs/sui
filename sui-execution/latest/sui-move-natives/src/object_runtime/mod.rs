@@ -956,7 +956,7 @@ pub fn get_all_uids(
             &mut self,
             driver: &mut AV::StructDriver<'_, 'b, 'l>,
         ) -> Result<(), Self::Error> {
-            if driver.struct_layout().type_ == UID::type_() {
+            if driver.struct_layout().type_() == &UID::type_() {
                 while driver.next_field(&mut UIDCollector(self.0))?.is_some() {}
             } else {
                 while driver.next_field(self)?.is_some() {}
@@ -977,13 +977,9 @@ pub fn get_all_uids(
         }
     }
 
-    let fully_annotated_layout_inflated = fully_annotated_layout
-        .inflate()
-        .map_err(|e| format!("Failed to inflate layout. {e}"))?;
-
     A::MoveValue::visit_deserialize(
         bcs_bytes,
-        &fully_annotated_layout_inflated,
+        fully_annotated_layout.as_ref(),
         &mut UIDTraversal(&mut ids),
     )
     .map_err(|e| format!("Failed to deserialize. {e}"))?;
