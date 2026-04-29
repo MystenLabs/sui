@@ -275,7 +275,6 @@ where
     T: Into<SuiAddress>,
 {
     let parent: SuiAddress = parent.into();
-    let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
     tracing::trace!(
         "Deriving dynamic field ID for parent={:?}, key={:?}, key_type_tag={}",
         parent,
@@ -289,7 +288,7 @@ where
     hasher.update(parent);
     hasher.update(key_bytes.len().to_le_bytes());
     hasher.update(key_bytes);
-    hasher.update(k_tag_bytes);
+    bcs::serialize_into(&mut hasher, key_type_tag)?;
     let hash = hasher.finalize();
 
     // truncate into an ObjectID and return
