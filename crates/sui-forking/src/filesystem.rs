@@ -9,7 +9,7 @@
 //!            - deleted                 (text marker: deleted by local execution)
 //!            - {version}                (BCS-encoded Object)
 //!     - indices/
-//!         - owned_objects              (BCS-encoded Vec<OwnedObjectEntry>)
+//!         - owned_objects              (BCS-encoded `Vec<OwnedObjectEntry>`)
 //!     - checkpoints/
 //!         - latest                     (text: highest persisted sequence number)
 //!         - {seq}/
