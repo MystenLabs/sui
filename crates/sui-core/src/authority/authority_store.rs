@@ -22,7 +22,7 @@ use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
-use sui_types::error::{SuiErrorKind, UserInputError};
+use sui_types::error::UserInputError;
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -35,14 +35,10 @@ use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
 use typed_store::traits::Map;
-use typed_store::{
-    TypedStoreError,
-    rocks::{DBBatch, DBMap},
-};
+use typed_store::{TypedStoreError, rocks::DBBatch};
 
 use super::authority_store_tables::LiveObject;
 use super::{authority_store_tables::AuthorityPerpetualTables, *};
-use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::sync::notify_read::NotifyRead;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
@@ -588,26 +584,16 @@ impl AuthorityStore {
         self.insert_object_direct(object_ref, &object)
     }
 
-    /// Insert an object directly into the store, and also update relevant tables
-    /// NOTE: does not handle transaction lock.
-    /// This is used to insert genesis objects
+    /// Insert an object directly into the store.
+    /// This is used to insert genesis objects.
     fn insert_object_direct(&self, object_ref: ObjectRef, object: &Object) -> SuiResult {
         let mut write_batch = self.perpetual_tables.objects.batch();
 
-        // Insert object
         let store_object = get_store_object(object.clone());
         write_batch.insert_batch(
             &self.perpetual_tables.objects,
             std::iter::once((ObjectKey::from(object_ref), store_object)),
         )?;
-
-        // Update the index
-        if object.get_single_owner().is_some() {
-            // Only initialize lock for address owned objects.
-            if !object.is_child_object() {
-                self.initialize_live_object_markers_impl(&mut write_batch, &[object_ref], false)?;
-            }
-        }
 
         write_batch.write()?;
 
@@ -628,18 +614,6 @@ impl AuthorityStore {
             ref_and_objects
                 .iter()
                 .map(|(oref, o)| (ObjectKey::from(oref), get_store_object((*o).clone()))),
-        )?;
-
-        let non_child_object_refs: Vec<_> = ref_and_objects
-            .iter()
-            .filter(|(_, object)| !object.is_child_object())
-            .map(|(oref, _)| *oref)
-            .collect();
-
-        self.initialize_live_object_markers_impl(
-            &mut batch,
-            &non_child_object_refs,
-            false, // is_force_reset
         )?;
 
         batch.write()?;
@@ -702,14 +676,6 @@ impl AuthorityStore {
                             store_object_wrapper,
                         )),
                     )?;
-                    if !object.is_child_object() {
-                        Self::initialize_live_object_markers(
-                            &perpetual_db.live_owned_object_markers,
-                            &mut batch,
-                            &[object.compute_object_reference()],
-                            true, // is_force_reset
-                        )?;
-                    }
                 }
                 LiveObject::Wrapped(object_key) => {
                     batch.insert_batch(
@@ -791,8 +757,6 @@ impl AuthorityStore {
             written,
             events,
             unchanged_loaded_runtime_objects,
-            locks_to_delete,
-            new_locks_to_init,
             ..
         } = tx_outputs;
 
@@ -863,12 +827,6 @@ impl AuthorityStore {
             )?;
         }
 
-        self.initialize_live_object_markers_impl(write_batch, new_locks_to_init, false)?;
-
-        // Note: deletes locks for received objects as well (but not for objects that were in
-        // `Receiving` arguments which were not received)
-        self.delete_live_object_markers(write_batch, locks_to_delete)?;
-
         debug!(effects_digest = ?effects.digest(), "commit_certificate finished");
 
         Ok(())
@@ -887,20 +845,23 @@ impl AuthorityStore {
     }
 
     /// Gets ObjectLockInfo that represents state of lock on an object.
-    /// Returns UserInputError::ObjectNotFound if cannot find lock record for this object
+    /// Returns UserInputError::ObjectNotFound if no live version of the object exists.
     pub(crate) fn get_lock(
         &self,
         obj_ref: ObjectRef,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiLockResult {
-        if self
-            .perpetual_tables
-            .live_owned_object_markers
-            .get(&obj_ref)?
-            .is_none()
-        {
+        let latest_alive = self.get_latest_object_ref_if_alive(obj_ref.0)?;
+        let Some(latest_ref) = latest_alive else {
+            return Err(UserInputError::ObjectNotFound {
+                object_id: obj_ref.0,
+                version: None,
+            }
+            .into());
+        };
+        if latest_ref != obj_ref {
             return Ok(ObjectLockStatus::LockedAtDifferentVersion {
-                locked_ref: self.get_latest_live_version_for_object_id(obj_ref.0)?,
+                locked_ref: latest_ref,
             });
         }
 
@@ -919,127 +880,29 @@ impl AuthorityStore {
         }
     }
 
-    /// Returns UserInputError::ObjectNotFound if no lock records found for this object.
-    pub(crate) fn get_latest_live_version_for_object_id(
-        &self,
-        object_id: ObjectID,
-    ) -> SuiResult<ObjectRef> {
-        let mut iterator = self
-            .perpetual_tables
-            .live_owned_object_markers
-            .reversed_safe_iter_with_bounds(
-                None,
-                Some((object_id, SequenceNumber::MAX, ObjectDigest::MAX)),
-            )?;
-        Ok(iterator
-            .next()
-            .transpose()?
-            .and_then(|value| {
-                if value.0.0 == object_id {
-                    Some(value)
-                } else {
-                    None
-                }
-            })
-            .ok_or_else(|| {
-                SuiError::from(UserInputError::ObjectNotFound {
-                    object_id,
-                    version: None,
-                })
-            })?
-            .0)
-    }
-
-    /// Checks multiple object locks exist.
-    /// Returns UserInputError::ObjectNotFound if cannot find lock record for at least one of the objects.
-    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if at least one object lock is not initialized
-    ///     at the given version.
+    /// Checks that every requested ObjectRef matches the latest live version of that object.
+    /// Returns UserInputError::ObjectNotFound if any object has no live version (deleted/wrapped/missing).
+    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if the latest live version
+    /// differs from the requested ref.
     pub fn check_owned_objects_are_live(&self, objects: &[ObjectRef]) -> SuiResult {
-        let locks = self
-            .perpetual_tables
-            .live_owned_object_markers
-            .multi_get(objects)?;
-        for (lock, obj_ref) in locks.into_iter().zip_debug_eq(objects) {
-            if lock.is_none() {
-                let latest_lock = self.get_latest_live_version_for_object_id(obj_ref.0)?;
-                fp_bail!(
-                    UserInputError::ObjectVersionUnavailableForConsumption {
-                        provided_obj_ref: *obj_ref,
-                        current_version: latest_lock.1
-                    }
-                    .into()
-                );
-            }
-        }
-        Ok(())
-    }
-
-    /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
-    /// Returns SuiErrorKind::ObjectLockAlreadyInitialized if the lock already exists and is locked to a transaction
-    fn initialize_live_object_markers_impl(
-        &self,
-        write_batch: &mut DBBatch,
-        objects: &[ObjectRef],
-        is_force_reset: bool,
-    ) -> SuiResult {
-        AuthorityStore::initialize_live_object_markers(
-            &self.perpetual_tables.live_owned_object_markers,
-            write_batch,
-            objects,
-            is_force_reset,
-        )
-    }
-
-    pub fn initialize_live_object_markers(
-        live_object_marker_table: &DBMap<ObjectRef, Option<LockDetailsWrapperDeprecated>>,
-        write_batch: &mut DBBatch,
-        objects: &[ObjectRef],
-        is_force_reset: bool,
-    ) -> SuiResult {
-        trace!(?objects, "initialize_locks");
-
-        if !is_force_reset {
-            let live_object_markers = live_object_marker_table.multi_get(objects)?;
-            // If any live_object_markers exist and are not None, return errors for them
-            // Note we don't check if there is a pre-existing lock. this is because initializing the live
-            // object marker will not overwrite the lock and cause the validator to equivocate.
-            let existing_live_object_markers: Vec<ObjectRef> = live_object_markers
-                .iter()
-                .zip_debug_eq(objects)
-                .filter_map(|(lock_opt, objref)| {
-                    lock_opt.clone().flatten().map(|_tx_digest| *objref)
-                })
-                .collect();
-            if !existing_live_object_markers.is_empty() {
-                info!(
-                    ?existing_live_object_markers,
-                    "Cannot initialize live_object_markers because some exist already"
-                );
-                return Err(SuiErrorKind::ObjectLockAlreadyInitialized {
-                    refs: existing_live_object_markers,
+        for obj_ref in objects {
+            let latest_alive = self.get_latest_object_ref_if_alive(obj_ref.0)?;
+            match latest_alive {
+                None => fp_bail!(UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    version: None,
                 }
-                .into());
+                .into()),
+                Some(latest_ref) if latest_ref != *obj_ref => {
+                    fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
+                        provided_obj_ref: *obj_ref,
+                        current_version: latest_ref.1,
+                    }
+                    .into());
+                }
+                Some(_) => {}
             }
         }
-
-        write_batch.insert_batch(
-            live_object_marker_table,
-            objects.iter().map(|obj_ref| (obj_ref, None)),
-        )?;
-        Ok(())
-    }
-
-    /// Removes locks for a given list of ObjectRefs.
-    fn delete_live_object_markers(
-        &self,
-        write_batch: &mut DBBatch,
-        objects: &[ObjectRef],
-    ) -> SuiResult {
-        trace!(?objects, "delete_locks");
-        write_batch.delete_batch(
-            &self.perpetual_tables.live_owned_object_markers,
-            objects.iter(),
-        )?;
         Ok(())
     }
 
@@ -1704,50 +1567,9 @@ pub enum ObjectLockStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum LockDetailsWrapperDeprecated {
-    V1(LockDetailsV1Deprecated),
-}
-
-impl LockDetailsWrapperDeprecated {
-    pub fn migrate(self) -> Self {
-        // TODO: when there are multiple versions, we must iteratively migrate from version N to
-        // N+1 until we arrive at the latest version
-        self
-    }
-
-    // Always returns the most recent version. Older versions are migrated to the latest version at
-    // read time, so there is never a need to access older versions.
-    pub fn inner(&self) -> &LockDetailsDeprecated {
-        match self {
-            Self::V1(v1) => v1,
-
-            // can remove #[allow] when there are multiple versions
-            #[allow(unreachable_patterns)]
-            _ => panic!("lock details should have been migrated to latest version at read time"),
-        }
-    }
-    pub fn into_inner(self) -> LockDetailsDeprecated {
-        match self {
-            Self::V1(v1) => v1,
-
-            // can remove #[allow] when there are multiple versions
-            #[allow(unreachable_patterns)]
-            _ => panic!("lock details should have been migrated to latest version at read time"),
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LockDetailsV1Deprecated {
     pub epoch: EpochId,
     pub tx_digest: TransactionDigest,
 }
 
 pub type LockDetailsDeprecated = LockDetailsV1Deprecated;
-
-impl From<LockDetailsDeprecated> for LockDetailsWrapperDeprecated {
-    fn from(details: LockDetailsDeprecated) -> Self {
-        // always use latest version.
-        LockDetailsWrapperDeprecated::V1(details)
-    }
-}
