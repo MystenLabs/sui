@@ -16,7 +16,9 @@ COPY sui-execution sui-execution
 COPY external-crates external-crates
 
 ENV USE_TIDEHUNTER=1
-RUN cargo build --profile ${PROFILE} --features typed-store/tidehunter --bin sui-node --target-dir target/tidehunter
+RUN cargo build --profile ${PROFILE} --features typed-store/tidehunter \
+    --bin sui-node --bin sui --bin sui-tool --bin stress \
+    --target-dir target/tidehunter
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
@@ -24,17 +26,13 @@ FROM debian:bullseye-slim AS runtime
 RUN apt-get update && apt-get install -y ca-certificates curl
 ARG PROFILE=release
 WORKDIR "$WORKDIR/sui"
-# Only ship the tidehunter binary at a suffixed path. Intentionally no
-# /opt/sui/bin/sui-node or /usr/local/bin/sui-node aliases — the binary
-# uses the tidehunter storage backend, which is incompatible with rocksdb,
-# and silently swapping at the canonical paths would let callers run it
-# as plain sui-node and corrupt unrelated databases. K8s pod entrypoints
-# must call /opt/sui/bin/sui-node-th explicitly. mp3's binary_upload_config
-# extracts this path to s3://sui-releases/{sha}/sui-node-th via {basename}
-# substitution; that S3 location is the contract for ansible bare-metal
-# nodes (the build_with_tidehunter selector in
-# sui-operations/ansible/playbook/sui/roles/sui-node-{internal,external}).
+# Tidehunter-feature binaries ship at suffixed paths only — no canonical
+# aliases, since the storage backend is incompatible with rocksdb and a
+# silent swap at /opt/sui/bin/sui-node could corrupt unrelated databases.
 COPY --from=builder /sui/target/tidehunter/release/sui-node /opt/sui/bin/sui-node-th
+COPY --from=builder /sui/target/tidehunter/release/sui      /opt/sui/bin/sui-th
+COPY --from=builder /sui/target/tidehunter/release/sui-tool /opt/sui/bin/sui-tool-th
+COPY --from=builder /sui/target/tidehunter/release/stress   /opt/sui/bin/stress-th
 
 ARG BUILD_DATE
 ARG GIT_REVISION
