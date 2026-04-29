@@ -208,15 +208,16 @@ impl<'env> Context<'env> {
 
     pub fn bind_local(&mut self, mut_: Mutability, v: N::Var, t: H::SingleType) {
         let symbol = translate_var(v);
-        // We may reuse a name if it appears on both sides of an `or` pattern
+        // A name may be reused across `or` pattern branches; mismatches imply typing already errored.
         if let Some((cur_mut, cur_t)) = self.function_locals.get(&symbol) {
-            assert!(cur_t == &t);
             assert!(
-                cur_mut == &mut_,
-                "{:?} changed mutability from {:?} to {:?}",
+                (cur_t == &t && cur_mut == &mut_) || self.env.has_errors(),
+                "{:?} rebound with mismatched (mut, type): ({:?}, {:?}) -> ({:?}, {:?})",
                 v,
                 cur_mut,
-                mut_
+                cur_t,
+                mut_,
+                t,
             );
         } else {
             self.function_locals.add(symbol, (mut_, t)).unwrap();

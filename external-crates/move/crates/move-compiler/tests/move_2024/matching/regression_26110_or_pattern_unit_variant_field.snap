@@ -1,0 +1,45 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/matching/regression_26110_or_pattern_unit_variant_field.move:13:25
+   │    
+ 7 │         public enum E<T> {
+   │                     - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·    
+13 │             match (E::A(0)) {
+   │                    ------- The type '0x42::m::E<u64>' does not have the ability 'drop'
+   │ ╭───────────────────────────^
+   │ │ ╭─────────────────────────'
+14 │ │ │             E::C(x, (0 | 1)) | E::B(x) | E::A(x) => x,
+15 │ │ │             _ => 1,
+16 │ │ │         }
+   │ ╰─│─────────^ Invalid return
+   │   ╰─────────' The match expression takes ownership of this value but does not use it. The value does not have the 'drop' ability and must be consumed before the function returns
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/matching/regression_26110_or_pattern_unit_variant_field.move:14:32
+   │
+ 9 │         B,
+   │         - 'B' is declared here
+   ·
+14 │             E::C(x, (0 | 1)) | E::B(x) | E::A(x) => x,
+   │                                ^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '()' arguments from this pattern
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/matching/regression_26110_or_pattern_unit_variant_field.move:15:13
+   │
+ 7 │     public enum E<T> {
+   │                 - To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+13 │         match (E::A(0)) {
+   │                ------- The type '0x42::m::E<_>' does not have the ability 'drop'
+14 │             E::C(x, (0 | 1)) | E::B(x) | E::A(x) => x,
+15 │             _ => 1,
+   │             ^ Cannot ignore values without the 'drop' ability. '_' patterns discard their values

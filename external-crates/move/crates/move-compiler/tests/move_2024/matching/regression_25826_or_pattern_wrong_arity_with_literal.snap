@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/matching/regression_25826_or_pattern_wrong_arity_with_literal.move:17:39
+   │
+17 │             E::A(x) | E::C(x, _, 0) | E::C(_, x) => x,
+   │                                       ^^^^^^^^^^ Missing pattern for field '2' in '0x42::m::E::C'

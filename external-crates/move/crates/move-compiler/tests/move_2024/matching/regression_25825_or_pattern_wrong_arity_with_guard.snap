@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/matching/regression_25825_or_pattern_wrong_arity_with_guard.move:13:23
+   │
+ 8 │         A,
+   │         - 'A' is declared here
+   ·
+13 │         let subject = E::A(0);
+   │                       ^^^^^^^ Invalid variant instantiation. Empty variant declarations require empty instantiations
+   │
+   = Remove '()' arguments from this instantiation
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/matching/regression_25825_or_pattern_wrong_arity_with_guard.move:15:13
+   │
+ 8 │         A,
+   │         - 'A' is declared here
+   ·
+15 │             E::A(x) if (true) => x,
+   │             ^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '()' arguments from this pattern
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/matching/regression_25825_or_pattern_wrong_arity_with_guard.move:16:13
+   │
+ 8 │         A,
+   │         - 'A' is declared here
+   ·
+16 │             E::A(x) | E::C(x, _, 0) => x,
+   │             ^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '()' arguments from this pattern

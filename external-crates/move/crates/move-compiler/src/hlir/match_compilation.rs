@@ -183,14 +183,26 @@ fn build_match_tree(
     if subject.ty.value.unfold_to_builtin_type_name().is_some() {
         compile_match_literal(context, subject, fringe, matrix)
     } else {
-        let tyargs = subject.ty.value.type_arguments().unwrap().clone();
+        let Some(tyargs) = subject.ty.value.type_arguments().cloned() else {
+            assert!(
+                context.env.has_errors(),
+                "ICE non-parameterized type in head constructor fringe position",
+            );
+            return MatchTree::Failure;
+        };
 
-        let (mident, datatype_name) = subject
+        let Some((mident, datatype_name)) = subject
             .ty
             .value
             .unfold_to_type_name()
             .and_then(|sp!(_, name)| name.datatype_name())
-            .expect("ICE non-datatype type in head constructor fringe position");
+        else {
+            assert!(
+                context.env.has_errors(),
+                "ICE non-datatype type in head constructor fringe position",
+            );
+            return MatchTree::Failure;
+        };
 
         if context.info.is_struct(&mident, &datatype_name) {
             compile_match_struct(
@@ -410,7 +422,10 @@ fn match_tree_to_exp(
     match result {
         MatchTree::Leaf(leaf) => make_leaf(context, init_subject, leaf),
         MatchTree::Failure => {
-            context.hlir_context.add_diag(ice!((context.arms_loc, "Generated a failure expression, which should not be allowed under match exhaustion.")));
+            // Suppress the ICE when typing already produced errors; the failure is downstream of those.
+            if !context.hlir_context.env.has_errors() {
+                context.hlir_context.add_diag(ice!((context.arms_loc, "Generated a failure expression, which should not be allowed under match exhaustion.")));
+            }
             T::exp(
                 context.output_type(),
                 sp(context.arms_loc, T::UnannotatedExp_::UnresolvedError),
