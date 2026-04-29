@@ -30,6 +30,7 @@ use crate::pipeline::processor::processor;
 use crate::store::ConcurrentStore;
 use crate::store::Store;
 
+pub mod backfill; // temporarily pub to prevent xclippy dead code warning
 mod collector;
 mod commit_watermark;
 mod committer;
