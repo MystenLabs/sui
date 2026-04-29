@@ -717,12 +717,11 @@ impl OffchainCluster {
             let mut interval = interval(Duration::from_millis(200));
             loop {
                 interval.tick().await;
-                if client.get_watermark().await.is_ok_and(|wm| {
-                    wm.is_some_and(|wm| {
-                        wm.checkpoint_hi_inclusive
-                            .is_some_and(|cp| cp >= checkpoint)
-                    })
-                }) {
+                if client
+                    .get_watermark()
+                    .await
+                    .is_ok_and(|wm| wm.is_some_and(|wm| wm.checkpoint_hi_inclusive >= checkpoint))
+                {
                     break;
                 }
             }
