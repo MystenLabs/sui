@@ -22,25 +22,25 @@ const C0: u64 = 50000u64;
 
 const C1: u64 = 0u64;
 
-const C2: vector<u8> = vec![110u8, 97u8, 109u8, 101u8];
+const C2: vector<u8> = vector[110u8, 97u8, 109u8, 101u8];
 
-const C3: vector<u8> = vec![105u8, 109u8, 97u8, 103u8, 101u8, 95u8, 117u8, 114u8, 108u8];
+const C3: vector<u8> = vector[105u8, 109u8, 97u8, 103u8, 101u8, 95u8, 117u8, 114u8, 108u8];
 
-const C4: vector<u8> = vec![100u8, 101u8, 115u8, 99u8, 114u8, 105u8, 112u8, 116u8, 105u8, 111u8, 110u8];
+const C4: vector<u8> = vector[100u8, 101u8, 115u8, 99u8, 114u8, 105u8, 112u8, 116u8, 105u8, 111u8, 110u8];
 
-const C5: vector<u8> = vec![112u8, 114u8, 111u8, 106u8, 101u8, 99u8, 116u8, 95u8, 117u8, 114u8, 108u8];
+const C5: vector<u8> = vector[112u8, 114u8, 111u8, 106u8, 101u8, 99u8, 116u8, 95u8, 117u8, 114u8, 108u8];
 
-const C6: vector<u8> = vec![99u8, 114u8, 101u8, 97u8, 116u8, 111u8, 114u8];
+const C6: vector<u8> = vector[99u8, 114u8, 101u8, 97u8, 116u8, 111u8, 114u8];
 
-const C7: vector<u8> = vec![123u8, 110u8, 97u8, 109u8, 101u8, 125u8];
+const C7: vector<u8> = vector[123u8, 110u8, 97u8, 109u8, 101u8, 125u8];
 
-const C8: vector<u8> = vec![123u8, 117u8, 114u8, 108u8, 125u8];
+const C8: vector<u8> = vector[123u8, 117u8, 114u8, 108u8, 125u8];
 
-const C9: vector<u8> = vec![123u8, 100u8, 101u8, 115u8, 99u8, 114u8, 105u8, 112u8, 116u8, 105u8, 111u8, 110u8, 125u8];
+const C9: vector<u8> = vector[123u8, 100u8, 101u8, 115u8, 99u8, 114u8, 105u8, 112u8, 116u8, 105u8, 111u8, 110u8, 125u8];
 
-const C10: vector<u8> = vec![104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47u8];
+const C10: vector<u8> = vector[104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47u8];
 
-const C11: vector<u8> = vec![99u8, 97u8, 116u8];
+const C11: vector<u8> = vector[99u8, 97u8, 116u8];
 
 // -- functions -- 
 
@@ -58,8 +58,8 @@ public fun description(l0: &0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd4862
 
 fun init(l0: 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CAT_NFT, l1: &mut 0x2::tx_context::TxContext) {
     {
-        let l3 = vec![0x1::string::utf8(C2), 0x1::string::utf8(C3), 0x1::string::utf8(C4), 0x1::string::utf8(C5), 0x1::string::utf8(C6)];
-        let l5 = vec![0x1::string::utf8(C7), 0x1::string::utf8(C8), 0x1::string::utf8(C9), 0x1::string::utf8(C10), 0x1::string::utf8(C11)];
+        let l3 = vector[0x1::string::utf8(C2), 0x1::string::utf8(C3), 0x1::string::utf8(C4), 0x1::string::utf8(C5), 0x1::string::utf8(C6)];
+        let l5 = vector[0x1::string::utf8(C7), 0x1::string::utf8(C8), 0x1::string::utf8(C9), 0x1::string::utf8(C10), 0x1::string::utf8(C11)];
         let l4 = 0x2::package::claim(l0, l1);
         let l2 = 0x2::display::new_with_fields(&l4, l3, l5, l1);
         0x2::display::update_version(&mut l2);

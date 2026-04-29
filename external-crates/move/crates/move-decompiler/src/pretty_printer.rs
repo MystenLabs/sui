@@ -427,7 +427,7 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
             .concat(D::text("."))
             .concat(D::text(field_ref.field.name.as_str())),
 
-        DataOp::VecPack(_) => D::text("vec![")
+        DataOp::VecPack(_) => D::text("vector[")
             .concat(exp_list(context, args))
             .concat(D::text("]")),
 
@@ -560,7 +560,7 @@ fn value(v: &Value) -> Doc {
         Value::U128(u) => D::text(u.to_string()).concat(D::text("u128")),
         Value::U256(u) => D::text(u.to_string()).concat(D::text("u256")),
         Value::Address(a) => D::text(format!("@{:X}", a)),
-        Value::Vector(values) => D::text("vec![")
+        Value::Vector(values) => D::text("vector[")
             .concat(D::intersperse(
                 values.iter().map(value),
                 D::text(",").concat(D::space()),

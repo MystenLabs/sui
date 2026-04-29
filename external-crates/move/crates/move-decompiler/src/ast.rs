@@ -404,7 +404,7 @@ fn write_data_op(
         DataOp::ImmBorrowField(field_ref) => write!(f, "&( {} ).{}", args[0], field_ref.field.name),
         DataOp::VecPack(_) => write!(
             f,
-            "vec![{}]",
+            "vector[{}]",
             args.iter()
                 .map(|e| format!("{}", e))
                 .collect::<Vec<_>>()

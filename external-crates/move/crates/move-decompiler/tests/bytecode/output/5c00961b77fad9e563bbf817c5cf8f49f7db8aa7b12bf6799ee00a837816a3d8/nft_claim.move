@@ -18,17 +18,17 @@ public struct NFT_CLAIM has drop { dummy_field: bool }
 
 // -- constants -- 
 
-const C0: vector<u8> = vec![110u8, 97u8, 109u8, 101u8];
+const C0: vector<u8> = vector[110u8, 97u8, 109u8, 101u8];
 
-const C1: vector<u8> = vec![100u8, 101u8, 115u8, 99u8, 114u8, 105u8, 112u8, 116u8, 105u8, 111u8, 110u8];
+const C1: vector<u8> = vector[100u8, 101u8, 115u8, 99u8, 114u8, 105u8, 112u8, 116u8, 105u8, 111u8, 110u8];
 
-const C2: vector<u8> = vec![105u8, 109u8, 97u8, 103u8, 101u8, 95u8, 117u8, 114u8, 108u8];
+const C2: vector<u8> = vector[105u8, 109u8, 97u8, 103u8, 101u8, 95u8, 117u8, 114u8, 108u8];
 
-const C3: vector<u8> = vec![68u8, 69u8, 69u8, 80u8, 32u8, 67u8, 108u8, 97u8, 105u8, 109u8, 32u8, 78u8, 70u8, 84u8];
+const C3: vector<u8> = vector[68u8, 69u8, 69u8, 80u8, 32u8, 67u8, 108u8, 97u8, 105u8, 109u8, 32u8, 78u8, 70u8, 84u8];
 
-const C4: vector<u8> = vec![84u8, 104u8, 97u8, 110u8, 107u8, 32u8, 121u8, 111u8, 117u8, 32u8, 102u8, 111u8, 114u8, 32u8, 98u8, 101u8, 105u8, 110u8, 103u8, 32u8, 97u8, 32u8, 83u8, 117u8, 105u8, 32u8, 117u8, 115u8, 101u8, 114u8, 46u8, 32u8, 84u8, 104u8, 105u8, 115u8, 32u8, 101u8, 120u8, 99u8, 108u8, 117u8, 115u8, 105u8, 118u8, 101u8, 32u8, 78u8, 70u8, 84u8, 32u8, 105u8, 115u8, 32u8, 121u8, 111u8, 117u8, 114u8, 32u8, 99u8, 108u8, 97u8, 105u8, 109u8, 32u8, 116u8, 111u8, 32u8, 68u8, 69u8, 69u8, 80u8, 32u8, 116u8, 111u8, 107u8, 101u8, 110u8, 115u8, 46u8];
+const C4: vector<u8> = vector[84u8, 104u8, 97u8, 110u8, 107u8, 32u8, 121u8, 111u8, 117u8, 32u8, 102u8, 111u8, 114u8, 32u8, 98u8, 101u8, 105u8, 110u8, 103u8, 32u8, 97u8, 32u8, 83u8, 117u8, 105u8, 32u8, 117u8, 115u8, 101u8, 114u8, 46u8, 32u8, 84u8, 104u8, 105u8, 115u8, 32u8, 101u8, 120u8, 99u8, 108u8, 117u8, 115u8, 105u8, 118u8, 101u8, 32u8, 78u8, 70u8, 84u8, 32u8, 105u8, 115u8, 32u8, 121u8, 111u8, 117u8, 114u8, 32u8, 99u8, 108u8, 97u8, 105u8, 109u8, 32u8, 116u8, 111u8, 32u8, 68u8, 69u8, 69u8, 80u8, 32u8, 116u8, 111u8, 107u8, 101u8, 110u8, 115u8, 46u8];
 
-const C5: vector<u8> = vec![104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47u8, 105u8, 46u8, 105u8, 109u8, 103u8, 117u8, 114u8, 46u8, 99u8, 111u8, 109u8, 47u8, 90u8, 65u8, 100u8, 113u8, 101u8, 90u8, 75u8, 46u8, 112u8, 110u8, 103u8];
+const C5: vector<u8> = vector[104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47u8, 105u8, 46u8, 105u8, 109u8, 103u8, 117u8, 114u8, 46u8, 99u8, 111u8, 109u8, 47u8, 90u8, 65u8, 100u8, 113u8, 101u8, 90u8, 75u8, 46u8, 112u8, 110u8, 103u8];
 
 // -- functions -- 
 
@@ -50,8 +50,8 @@ public fun get_name(l0: &0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00
 
 fun init(l0: 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::NFT_CLAIM, l1: &mut 0x2::tx_context::TxContext) {
     {
-        let l3 = vec![0x1::string::utf8(C0), 0x1::string::utf8(C1), 0x1::string::utf8(C2)];
-        let l5 = vec![0x1::string::utf8(C3), 0x1::string::utf8(C4), 0x1::string::utf8(C5)];
+        let l3 = vector[0x1::string::utf8(C0), 0x1::string::utf8(C1), 0x1::string::utf8(C2)];
+        let l5 = vector[0x1::string::utf8(C3), 0x1::string::utf8(C4), 0x1::string::utf8(C5)];
         let l4 = 0x2::package::claim(l0, l1);
         let l2 = 0x2::display::new_with_fields(&l4, l3, l5, l1);
         0x2::display::update_version(&mut l2);
