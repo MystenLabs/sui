@@ -254,6 +254,15 @@ export default {
         'getting-started/onboarding/next-steps',
       ],
     },
+    {
+      type: 'category',
+      label: 'Example Apps',
+      link: { type: 'doc', id: 'getting-started/examples/index'},
+      items: [
+          'getting-started/examples/plinko',
+          'getting-started/examples/sui-chat-app',
+      ]
+    },
     'getting-started/tooling',
     'getting-started/dev-cheat-sheet',
     'getting-started/sui-for-ethereum',
