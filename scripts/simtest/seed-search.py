@@ -266,13 +266,25 @@ def discover_binaries(args, repo_root):
             cmd, stdout=subprocess.PIPE, stderr=None, text=True, cwd=repo_root
         )
         seen = set()
+        # `--message-format=json` routes ALL compiler diagnostics into stdout JSON
+        # rather than letting them flow to stderr in human-readable form, so we
+        # have to collect and re-print them ourselves on failure — otherwise a
+        # build error vanishes and there's nothing to debug from.
+        diagnostics = []
         try:
             for line in process.stdout:
                 try:
                     obj = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if obj.get("reason") != "compiler-artifact":
+                reason = obj.get("reason")
+                if reason == "compiler-message":
+                    msg = obj.get("message") or {}
+                    level = msg.get("level")
+                    if level in ("error", "warning"):
+                        diagnostics.append((level, msg.get("rendered") or ""))
+                    continue
+                if reason != "compiler-artifact":
                     continue
                 if not obj.get("profile", {}).get("test"):
                     continue
@@ -290,7 +302,11 @@ def discover_binaries(args, repo_root):
         finally:
             process.wait()
         if process.returncode != 0:
-            safe_print(f"Error: build failed with exit code {process.returncode}")
+            errors = [r for level, r in diagnostics if level == "error"]
+            safe_print(f"Error: build failed with exit code {process.returncode}; "
+                       f"{len(errors)} compiler error(s):")
+            for rendered in errors:
+                safe_print(rendered.rstrip())
             sys.exit(process.returncode)
 
     # `--no-build` with a NAME form: locate the most recent matching binary.
