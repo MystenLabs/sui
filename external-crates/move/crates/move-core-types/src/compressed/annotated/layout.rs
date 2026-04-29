@@ -9,6 +9,7 @@ use crate::identifier::Identifier;
 use crate::language_storage::{StructTag, TypeTag};
 use anyhow::Result as AResult;
 use indexmap::IndexSet;
+use std::collections::HashSet;
 use std::fmt;
 use std::sync::Arc;
 
@@ -66,10 +67,11 @@ pub(crate) type MoveTypeLayoutPool = [MoveTypeNode];
 /// Names and type tags are stored inline in nodes. Cloning is cheap — the
 /// node table is shared via `Arc`.
 ///
-/// NOTE: `Eq`/`PartialEq`/`Hash` are intentionally not derived. Two layouts
-/// representing the same type may have different pool orderings (node
-/// permutations), so structural equality on the raw fields would produce
-/// false negatives. Compare by inflating to tree form or by comparing views.
+/// NOTE: `Eq`/`PartialEq` are implemented manually (delegating to
+/// [`MoveTypeLayout::equivalent`]) rather than derived, because two layouts
+/// representing the same type may have different pool orderings or sharing
+/// patterns and structural equality on the raw fields would produce false
+/// negatives. `Hash` is intentionally not implemented (no canonical form).
 #[derive(Debug, Clone)]
 pub struct MoveTypeLayout {
     pub(crate) pool: Arc<MoveTypeLayoutPool>,
@@ -147,6 +149,7 @@ pub struct MoveFieldsLayout {
 
 /// Incrementally builds an annotated [`MoveTypeLayout`] with automatic
 /// deduplication of nodes.
+#[derive(Debug, Clone)]
 pub struct MoveTypeLayoutBuilder {
     nodes: IndexSet<MoveTypeNode>,
 }
@@ -207,6 +210,21 @@ impl MoveTypeLayout {
     pub fn inflate(&self) -> AResult<AV::MoveTypeLayout> {
         self.as_view().inflate()
     }
+
+    pub fn is_type(&self, t: &TypeTag) -> bool {
+        self.as_view().is_type(t)
+    }
+
+    /// Returns `true` iff `self` and `other` describe the same Move type
+    /// (same shape, type tags, field names, variant names+tags), regardless
+    /// of pool ordering or how subtrees are shared.
+    pub fn equivalent(&self, other: &Self) -> bool {
+        if Arc::ptr_eq(&self.pool, &other.pool) && self.root == other.root {
+            return true;
+        }
+        let mut memo = HashSet::new();
+        nodes_equivalent(&self.pool, self.root, &other.pool, other.root, &mut memo)
+    }
 }
 
 impl fmt::Display for MoveTypeLayout {
@@ -219,12 +237,67 @@ impl fmt::Display for MoveTypeLayout {
     }
 }
 
+impl PartialEq for MoveTypeLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl Eq for MoveTypeLayout {}
+
+impl PartialEq for MoveLayoutView {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl Eq for MoveLayoutView {}
+
+impl PartialEq for MoveStructLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl Eq for MoveStructLayout {}
+
+impl PartialEq for MoveEnumLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl Eq for MoveEnumLayout {}
+
+impl PartialEq for MoveFieldsLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl Eq for MoveFieldsLayout {}
+
+impl PartialEq for MoveDatatypeLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl Eq for MoveDatatypeLayout {}
+
 impl TryFrom<&AV::MoveTypeLayout> for MoveTypeLayout {
     type Error = anyhow::Error;
     fn try_from(layout: &AV::MoveTypeLayout) -> Result<Self, Self::Error> {
         let mut b = MoveTypeLayoutBuilder::new();
         let root = b.from_tree(layout)?;
         Ok(b.build(root))
+    }
+}
+
+impl TryFrom<AV::MoveTypeLayout> for MoveTypeLayout {
+    type Error = anyhow::Error;
+    fn try_from(layout: AV::MoveTypeLayout) -> Result<Self, Self::Error> {
+        (&layout).try_into()
     }
 }
 
@@ -310,6 +383,39 @@ impl MoveLayoutView {
             MoveLayoutView::Enum(ev) => ev.is_type_tag(t),
         }
     }
+
+    /// Returns `true` iff `self` and `other` describe the same Move type,
+    /// regardless of pool ordering or how subtrees are shared.
+    pub fn equivalent(&self, other: &Self) -> bool {
+        use MoveLayoutView::*;
+        match (self, other) {
+            (Bool, Bool)
+            | (U8, U8)
+            | (U16, U16)
+            | (U32, U32)
+            | (U64, U64)
+            | (U128, U128)
+            | (U256, U256)
+            | (Address, Address)
+            | (Signer, Signer) => true,
+            (Vector(a), Vector(b)) => a.equivalent(b),
+            (Struct(a), Struct(b)) => a.equivalent(b),
+            (Enum(a), Enum(b)) => a.equivalent(b),
+            _ => false,
+        }
+    }
+}
+
+impl From<&MoveTypeLayout> for TypeTag {
+    fn from(layout: &MoveTypeLayout) -> Self {
+        TypeTag::from(layout.as_view())
+    }
+}
+
+impl From<MoveTypeLayout> for TypeTag {
+    fn from(layout: MoveTypeLayout) -> Self {
+        TypeTag::from(layout.as_view())
+    }
 }
 
 impl From<MoveLayoutView> for TypeTag {
@@ -385,6 +491,12 @@ impl MoveDatatypeLayout {
     /// Create a view for navigating this layout.
     pub fn as_view(&self) -> MoveLayoutView {
         self.self_layout.as_view()
+    }
+
+    /// Returns `true` iff `self` and `other` describe the same datatype,
+    /// regardless of pool ordering.
+    pub fn equivalent(&self, other: &Self) -> bool {
+        self.self_layout.equivalent(&other.self_layout)
     }
 
     /// Inflate back into a tree-based [`AV::MoveDatatypeLayout`].
@@ -482,6 +594,23 @@ impl MoveFieldsLayout {
             )
         })
     }
+
+    /// Returns `true` iff the two field-lists describe the same fields
+    /// (same arity, pairwise-equal names, equivalent layouts), regardless
+    /// of pool ordering.
+    pub fn equivalent(&self, other: &Self) -> bool {
+        if Arc::ptr_eq(&self.pool, &other.pool) && self.fields == other.fields {
+            return true;
+        }
+        if self.fields.len() != other.fields.len() {
+            return false;
+        }
+        let mut memo = HashSet::new();
+        self.fields.iter().zip(other.fields.iter()).all(|(a, b)| {
+            a.name == b.name
+                && nodes_equivalent(&self.pool, a.layout, &other.pool, b.layout, &mut memo)
+        })
+    }
 }
 
 // --- MoveStructLayout ---
@@ -515,6 +644,12 @@ impl MoveStructLayout {
     /// Iterate over all fields as `(name, layout)` pairs.
     pub fn fields(&self) -> impl ExactSizeIterator<Item = (&Identifier, MoveTypeLayout)> {
         self.fields.fields()
+    }
+
+    /// Returns `true` iff `self` and `other` describe the same struct type,
+    /// regardless of pool ordering.
+    pub fn equivalent(&self, other: &Self) -> bool {
+        self.type_ == other.type_ && self.fields.equivalent(&other.fields)
     }
 }
 
@@ -590,6 +725,37 @@ impl MoveEnumLayout {
     /// Iterate over all variants.
     pub fn variants(&self) -> &[VariantLayout] {
         &self.variants
+    }
+
+    /// Returns `true` iff `self` and `other` describe the same enum type,
+    /// regardless of pool ordering. Variants must match positionally with
+    /// equal names+tags and equivalent fields when both are `Known`.
+    pub fn equivalent(&self, other: &Self) -> bool {
+        if self.type_ != other.type_ || self.variants.len() != other.variants.len() {
+            return false;
+        }
+        self.variants
+            .iter()
+            .zip(other.variants.iter())
+            .all(|pair| match pair {
+                (
+                    VariantLayout::Unknown { name: na, tag: ta },
+                    VariantLayout::Unknown { name: nb, tag: tb },
+                ) => na == nb && ta == tb,
+                (
+                    VariantLayout::Known {
+                        name: na,
+                        tag: ta,
+                        fields: fa,
+                    },
+                    VariantLayout::Known {
+                        name: nb,
+                        tag: tb,
+                        fields: fb,
+                    },
+                ) => na == nb && ta == tb && fa.equivalent(fb),
+                _ => false,
+            })
     }
 }
 
@@ -877,4 +1043,68 @@ fn resolve_ref(pool: &Arc<MoveTypeLayoutPool>, r: LayoutRef) -> MoveLayoutView {
             })),
         },
     }
+}
+
+/// Recursively check whether the nodes reachable from `ref_a` in `pool_a`
+/// describe the same Move type as those reachable from `ref_b` in `pool_b`.
+///
+/// `memo` records `(ref_a, ref_b)` pairs already proven equivalent — preventing
+/// exponential work on DAGs with shared subtrees, and defending against any
+/// future cyclic builder.
+fn nodes_equivalent(
+    pool_a: &MoveTypeLayoutPool,
+    ref_a: LayoutRef,
+    pool_b: &MoveTypeLayoutPool,
+    ref_b: LayoutRef,
+    memo: &mut HashSet<(LayoutRef, LayoutRef)>,
+) -> bool {
+    match (ref_a.resolve(), ref_b.resolve()) {
+        (ResolvedRef::Leaf(la), ResolvedRef::Leaf(lb)) => la == lb,
+        (ResolvedRef::Index(ia), ResolvedRef::Index(ib)) => {
+            if !memo.insert((ref_a, ref_b)) {
+                return true;
+            }
+            match (&pool_a[ia], &pool_b[ib]) {
+                (MoveTypeNode::Vector(ea), MoveTypeNode::Vector(eb)) => {
+                    nodes_equivalent(pool_a, *ea, pool_b, *eb, memo)
+                }
+                (MoveTypeNode::Struct(sa), MoveTypeNode::Struct(sb)) => {
+                    sa.type_ == sb.type_
+                        && fields_equivalent(pool_a, &sa.fields, pool_b, &sb.fields, memo)
+                }
+                (MoveTypeNode::Enum(ea), MoveTypeNode::Enum(eb)) => {
+                    ea.type_ == eb.type_
+                        && ea.variants.len() == eb.variants.len()
+                        && ea.variants.iter().zip(eb.variants.iter()).all(|(va, vb)| {
+                            va.name == vb.name
+                                && va.tag == vb.tag
+                                && match (&va.fields, &vb.fields) {
+                                    (None, None) => true,
+                                    (Some(fa), Some(fb)) => {
+                                        fields_equivalent(pool_a, fa, pool_b, fb, memo)
+                                    }
+                                    _ => false,
+                                }
+                        })
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// Compare two field lists for structural equivalence (matching arity, names,
+/// and recursively-equivalent layouts).
+fn fields_equivalent(
+    pool_a: &MoveTypeLayoutPool,
+    fields_a: &[AnnotatedFieldEntry],
+    pool_b: &MoveTypeLayoutPool,
+    fields_b: &[AnnotatedFieldEntry],
+    memo: &mut HashSet<(LayoutRef, LayoutRef)>,
+) -> bool {
+    fields_a.len() == fields_b.len()
+        && fields_a.iter().zip(fields_b.iter()).all(|(a, b)| {
+            a.name == b.name && nodes_equivalent(pool_a, a.layout, pool_b, b.layout, memo)
+        })
 }

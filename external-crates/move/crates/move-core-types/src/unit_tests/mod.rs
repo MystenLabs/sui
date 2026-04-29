@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod annotated_visitor_test;
+mod compressed_equivalence_test;
 mod compressed_layout_test;
 mod extractor_test;
 mod identifier_test;
