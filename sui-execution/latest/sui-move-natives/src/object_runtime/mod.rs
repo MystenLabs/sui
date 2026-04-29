@@ -932,14 +932,14 @@ pub fn get_all_uids(
     struct UIDTraversal<'i>(&'i mut BTreeSet<ObjectID>);
     struct UIDCollector<'i>(&'i mut BTreeSet<ObjectID>);
 
-    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDTraversal<'_> {
+    impl<'b> AV::Traversal<'b> for UIDTraversal<'_> {
         type Error = AV::Error;
 
         fn traverse_struct(
             &mut self,
-            driver: &mut AV::StructDriver<'_, 'b, 'l>,
+            driver: &mut AV::StructDriver<'_, 'b>,
         ) -> Result<(), Self::Error> {
-            if driver.struct_layout().type_ == UID::type_() {
+            if driver.struct_layout().type_() == &UID::type_() {
                 while driver.next_field(&mut UIDCollector(self.0))?.is_some() {}
             } else {
                 while driver.next_field(self)?.is_some() {}
@@ -948,11 +948,11 @@ pub fn get_all_uids(
         }
     }
 
-    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDCollector<'_> {
+    impl<'b> AV::Traversal<'b> for UIDCollector<'_> {
         type Error = AV::Error;
         fn traverse_address(
             &mut self,
-            _driver: &AV::ValueDriver<'_, 'b, 'l>,
+            _driver: &AV::ValueDriver<'_, 'b>,
             value: AccountAddress,
         ) -> Result<(), Self::Error> {
             self.0.insert(value.into());
@@ -960,13 +960,9 @@ pub fn get_all_uids(
         }
     }
 
-    let fully_annotated_layout_inflated = fully_annotated_layout
-        .inflate()
-        .map_err(|e| format!("Failed to inflate layout. {e}"))?;
-
     A::MoveValue::visit_deserialize(
         bcs_bytes,
-        &fully_annotated_layout_inflated,
+        fully_annotated_layout.clone(),
         &mut UIDTraversal(&mut ids),
     )
     .map_err(|e| format!("Failed to deserialize. {e}"))?;
