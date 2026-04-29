@@ -31,7 +31,9 @@ WORKDIR "$WORKDIR/sui"
 # as plain sui-node and corrupt unrelated databases. K8s pod entrypoints
 # must call /opt/sui/bin/sui-node-th explicitly. mp3's binary_upload_config
 # extracts this path to s3://sui-releases/{sha}/sui-node-th via {basename}
-# substitution, matching legacy sui-release-binaries.yml naming.
+# substitution; that S3 location is the contract for ansible bare-metal
+# nodes (the build_with_tidehunter selector in
+# sui-operations/ansible/playbook/sui/roles/sui-node-{internal,external}).
 COPY --from=builder /sui/target/tidehunter/release/sui-node /opt/sui/bin/sui-node-th
 
 ARG BUILD_DATE
