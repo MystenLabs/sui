@@ -204,32 +204,14 @@ pub struct ProtocolConfigData {
     pub flags: std::collections::BTreeMap<String, bool>,
 }
 
-/// Serializable watermark for per-pipeline tracking in BigTable. BCS-encoded into the `w`
-/// column. The `BigTableConnection` write paths keep this column in sync alongside the new
-/// per-field schema (see `WatermarkV1`) so existing readers continue to work.
+/// Serializable watermark for per-pipeline tracking in BigTable.
+/// Mirrors the framework's CommitterWatermark type.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WatermarkV0 {
+pub struct Watermark {
     pub epoch_hi_inclusive: u64,
     pub checkpoint_hi_inclusive: u64,
     pub tx_hi: u64,
     pub timestamp_ms_hi_inclusive: u64,
-}
-
-/// New watermark for per-pipeline tracking in BigTable. Written as per-field u64 BE cells,
-/// tagged by a schema-version cell `v = 1`.
-///
-/// `checkpoint_hi_inclusive` is `Option<u64>` so the post-`init_watermark(None)` state ("pipeline
-/// initialised but no checkpoint observed yet") can be persisted directly (the `chi` column is
-/// absent in that state).
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WatermarkV1 {
-    pub epoch_hi_inclusive: u64,
-    pub checkpoint_hi_inclusive: Option<u64>,
-    pub tx_hi: u64,
-    pub timestamp_ms_hi_inclusive: u64,
-    pub reader_lo: u64,
-    pub pruner_hi: u64,
-    pub pruner_timestamp_ms: u64,
 }
 
 #[async_trait]
@@ -249,13 +231,13 @@ pub trait KeyValueStoreReader {
     ) -> Result<Option<CheckpointData>>;
     /// Return the minimum watermark across the given pipelines, selecting the whole
     /// watermark with the lowest `checkpoint_hi_inclusive`. Returns `None` if any
-    /// pipeline is missing a watermark or has `checkpoint_hi_inclusive < reader_lo`.
+    /// pipeline is missing a watermark.
     async fn get_watermark_for_pipelines(
         &mut self,
         pipelines: &[&str],
-    ) -> Result<Option<WatermarkV1>>;
+    ) -> Result<Option<Watermark>>;
     /// Return the minimum watermark across all pipelines.
-    async fn get_watermark(&mut self) -> Result<Option<WatermarkV1>> {
+    async fn get_watermark(&mut self) -> Result<Option<Watermark>> {
         self.get_watermark_for_pipelines(&ALL_PIPELINE_NAMES).await
     }
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
@@ -483,8 +465,19 @@ impl BigTableIndexer {
     }
 }
 
-impl From<WatermarkV0> for sui_indexer_alt_framework_store_traits::CommitterWatermark {
-    fn from(w: WatermarkV0) -> Self {
+impl From<sui_indexer_alt_framework_store_traits::CommitterWatermark> for Watermark {
+    fn from(w: sui_indexer_alt_framework_store_traits::CommitterWatermark) -> Self {
+        Self {
+            epoch_hi_inclusive: w.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
+            tx_hi: w.tx_hi,
+            timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
+        }
+    }
+}
+
+impl From<Watermark> for sui_indexer_alt_framework_store_traits::CommitterWatermark {
+    fn from(w: Watermark) -> Self {
         Self {
             epoch_hi_inclusive: w.epoch_hi_inclusive,
             checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
