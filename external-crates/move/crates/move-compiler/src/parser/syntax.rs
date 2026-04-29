@@ -1327,7 +1327,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
         // carve-out for migration with new keywords
         | Tok::Match | Tok::For | Tok::Enum | Tok::Type
     ) {
-        let next_tok = context.tokens.lookahead()?;
+        let next_tok = context.tokens.lookahead();
         if !matches!(
             next_tok,
             Tok::LBrace | Tok::Less | Tok::ColonColon | Tok::LParen
@@ -1531,7 +1531,7 @@ fn maybe_parse_value(context: &mut Context) -> Result<Option<Value>, Box<Diagnos
         }
         Tok::NumValue => {
             //  If the number is followed by "::", parse it as the beginning of an address access
-            if let Ok(Tok::ColonColon) = context.tokens.lookahead() {
+            if context.tokens.lookahead() == Tok::ColonColon {
                 return Ok(None);
             }
             let num = context.tokens.content().into();
@@ -1789,7 +1789,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 
         Tok::Identifier
             if context.tokens.content() == VECTOR_IDENT
-                && matches!(context.tokens.lookahead(), Ok(Tok::Less | Tok::LBracket)) =>
+                && matches!(context.tokens.lookahead(), Tok::Less | Tok::LBracket) =>
         {
             consume_identifier(context.tokens, VECTOR_IDENT)?;
             let vec_end_loc = context.tokens.previous_end_loc();
@@ -1819,7 +1819,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
                 .env
                 .supports_feature(context.current_package, FeatureGate::Move2024Paths) =>
         {
-            if context.tokens.lookahead()? == Tok::Identifier {
+            if context.tokens.lookahead() == Tok::Identifier {
                 parse_name_exp(context)?
             } else {
                 return Err(unexpected_token_error(
@@ -1840,7 +1840,7 @@ fn parse_term(context: &mut Context) -> Result<Exp, Box<Diagnostic>> {
 
         Tok::NumValue => {
             // Check if this is a ModuleIdent (in a ModuleAccess).
-            if context.tokens.lookahead()? == Tok::ColonColon {
+            if context.tokens.lookahead() == Tok::ColonColon {
                 parse_name_exp(context)?
             } else {
                 Exp_::Value(parse_value(context)?)
@@ -2317,7 +2317,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
             }
             t @ (Tok::Mut | Tok::Identifier | Tok::NumValue)
                 if !matches!(t, Tok::NumValue)
-                    || matches!(context.tokens.lookahead(), Ok(Tok::ColonColon)) =>
+                    || matches!(context.tokens.lookahead(), Tok::ColonColon) =>
             {
                 ok_with_loc!(context, {
                     let mut_ = parse_mut_opt(context)?;
@@ -2433,7 +2433,7 @@ fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagno
 
     fn parse_optional_at_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
         match context.tokens.peek() {
-            Tok::Identifier if context.tokens.lookahead() == Ok(Tok::AtSign) => {
+            Tok::Identifier if context.tokens.lookahead() == Tok::AtSign => {
                 if context.tokens.content() == "_" {
                     Err(Box::new(diag!(
                         Syntax::UnexpectedToken,
@@ -2909,10 +2909,8 @@ fn is_quant(context: &mut Context) -> bool {
     if !matches!(context.tokens.content(), "exists" | "forall" | "choose") {
         return false;
     }
-    match context.tokens.lookahead2() {
-        Err(_) => false,
-        Ok((tok1, tok2)) => tok1 == Tok::Identifier && matches!(tok2, Tok::Colon | Tok::Identifier),
-    }
+    let (tok1, tok2) = context.tokens.lookahead2();
+    tok1 == Tok::Identifier && matches!(tok2, Tok::Colon | Tok::Identifier)
 }
 
 // Parses a quantifier expressions, assuming is_quant(context) is true.
@@ -3197,11 +3195,7 @@ fn parse_type_(
 //    OptionalTypeArgs = '<' Comma<Type> ">" | <empty>
 fn parse_optional_type_args(context: &mut Context) -> Option<Vec<Type>> {
     if context.tokens.peek() == Tok::Less {
-        if context
-            .tokens
-            .lookahead()
-            .is_ok_and(|tok| tok == Tok::Greater)
-        {
+        if context.tokens.lookahead() == Tok::Greater {
             // recognize empty type args list to differentiate it from missparsed type args list
             context.advance();
             context.advance();
@@ -3875,7 +3869,7 @@ fn parse_positional_field(context: &mut Context) -> Result<(DocComment, Type), B
     let doc = match_doc_comments(context);
     if matches!(
         (context.tokens.peek(), context.tokens.lookahead()),
-        (Tok::Identifier, Ok(Tok::Colon))
+        (Tok::Identifier, Tok::Colon)
     ) {
         let diag = diag!(
             Syntax::UnexpectedToken,
@@ -4690,11 +4684,11 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
         }
         Tok::Spec => {
             match context.tokens.lookahead() {
-                Ok(Tok::Fun) | Ok(Tok::Native) => {
+                Tok::Fun | Tok::Native => {
                     context.tokens.advance()?;
                     // Add an extra check for better error message
                     // if old syntax is used
-                    if context.tokens.lookahead2() == Ok((Tok::Identifier, Tok::LBrace)) {
+                    if context.tokens.lookahead2() == (Tok::Identifier, Tok::LBrace) {
                         context.add_diag(*unexpected_token_error(
                             context.tokens,
                             "only 'spec', drop the 'fun' keyword",

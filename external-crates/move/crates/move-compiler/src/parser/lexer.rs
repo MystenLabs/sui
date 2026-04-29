@@ -13,7 +13,7 @@ use move_ir_types::location::Loc;
 use std::{collections::BTreeSet, fmt};
 
 // This should be replaced with std::mem::variant::count::<Tok>() if it ever comes out of nightly.
-pub const TOK_COUNT: usize = 77;
+pub const TOK_COUNT: usize = 78;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Tok {
@@ -94,6 +94,11 @@ pub enum Tok {
     BlockLabel,
     MinusGreater,
     For,
+    // Sentinel returned by `lookahead`/`lookahead2` when the next token cannot be read due to a
+    // lex error. Callers that match against this token (or that would have errored on the
+    // underlying diagnostic) should treat it as "not the token I'm looking for" and let
+    // `advance` re-encounter and report the error.
+    ErrorRead,
 }
 
 impl fmt::Display for Tok {
@@ -177,6 +182,7 @@ impl fmt::Display for Tok {
             BlockLabel => "'<Identifier>",
             MinusGreater => "->",
             For => "for",
+            ErrorRead => "<ErrorRead>",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -444,49 +450,72 @@ impl<'input> Lexer<'input> {
         text
     }
 
-    // Look ahead to the next token after the current one and return it, and its starting offset,
-    // without advancing the state of the lexer.
-    pub fn lookahead(&mut self) -> Result<Tok, Box<Diagnostic>> {
-        let (text, _) =
-            self.trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)?;
+    // Look ahead to the next token after the current one without advancing the state of the
+    // lexer. Returns `Tok::EOF` if there is no more input, and `Tok::ErrorRead` if the next
+    // token could not be lexed (e.g. because of an unterminated string). The diagnostic for
+    // the lex error is suppressed here; `advance` will re-encounter and report it.
+    pub fn lookahead(&mut self) -> Tok {
+        let (text, _) = match self
+            .trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)
+        {
+            Ok(t) => t,
+            Err(_) => return Tok::ErrorRead,
+        };
+        if text.is_empty() {
+            return Tok::EOF;
+        }
         let next_start = self.text.len() - text.len();
         let (result, _) = find_token(
-            /* panic_mode */ false,
+            /* panic_mode */ true,
             self.file_hash,
             self.edition,
             text,
             next_start,
         );
-        // unwrap safe because panic_mode is false
-        result.map_err(|diag_opt| diag_opt.unwrap())
+        result.unwrap_or(Tok::ErrorRead)
     }
 
-    // Look ahead to the next two tokens after the current one and return them without advancing
-    // the state of the lexer.
-    pub fn lookahead2(&mut self) -> Result<(Tok, Tok), Box<Diagnostic>> {
-        let (text, _) =
-            self.trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)?;
+    // Look ahead to the next two tokens after the current one without advancing the state of
+    // the lexer. Each position independently returns `Tok::EOF` or `Tok::ErrorRead` as in
+    // `lookahead` if the corresponding token cannot be read.
+    pub fn lookahead2(&mut self) -> (Tok, Tok) {
+        let (text, _) = match self
+            .trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)
+        {
+            Ok(t) => t,
+            Err(_) => return (Tok::ErrorRead, Tok::ErrorRead),
+        };
+        if text.is_empty() {
+            return (Tok::EOF, Tok::EOF);
+        }
         let offset = self.text.len() - text.len();
         let (result, length) = find_token(
-            /* panic_mode */ false,
+            /* panic_mode */ true,
             self.file_hash,
             self.edition,
             text,
             offset,
         );
-        let first = result.map_err(|diag_opt| diag_opt.unwrap())?;
-        let (text2, _) = self
-            .trim_whitespace_and_comments(offset + length, /* track doc comments */ false)?;
+        let first = result.unwrap_or(Tok::ErrorRead);
+        let (text2, _) = match self
+            .trim_whitespace_and_comments(offset + length, /* track doc comments */ false)
+        {
+            Ok(t) => t,
+            Err(_) => return (first, Tok::ErrorRead),
+        };
+        if text2.is_empty() {
+            return (first, Tok::EOF);
+        }
         let offset2 = self.text.len() - text2.len();
         let (result2, _) = find_token(
-            /* panic_mode */ false,
+            /* panic_mode */ true,
             self.file_hash,
             self.edition,
             text2,
             offset2,
         );
-        let second = result2.map_err(|diag_opt| diag_opt.unwrap())?;
-        Ok((first, second))
+        let second = result2.unwrap_or(Tok::ErrorRead);
+        (first, second)
     }
 
     // Takes the doc comment of the current token, if there is one. It modifies the lexer state to
