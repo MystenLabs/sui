@@ -828,8 +828,11 @@ impl VMDispatchTables {
 
         let type_layout = match ty.datatype_info.inner_ref() {
             Datatype::Enum(enum_type) => {
-                let mut variant_layouts: Vec<(Identifier, u16, Vec<(Identifier, CA::LayoutHandle)>)> =
-                    vec![];
+                let mut variant_layouts: Vec<(
+                    Identifier,
+                    u16,
+                    Vec<(Identifier, CA::LayoutHandle)>,
+                )> = vec![];
                 for variant in enum_type.variants.iter() {
                     type_size.incr_node_count()?;
                     if variant.fields.len() != variant.field_names.len() {
@@ -861,12 +864,15 @@ impl VMDispatchTables {
                     .iter()
                     .map(|(_, _, fields)| fields.iter().map(|(n, h)| (n, *h)).collect())
                     .collect();
-                let variant_refs: Vec<(&Identifier, u16, Option<&[(&Identifier, CA::LayoutHandle)]>)> =
-                    variant_layouts
-                        .iter()
-                        .zip(variant_field_refs.iter())
-                        .map(|((name, tag, _), fields)| (name, *tag, Some(fields.as_slice())))
-                        .collect();
+                let variant_refs: Vec<(
+                    &Identifier,
+                    u16,
+                    Option<&[(&Identifier, CA::LayoutHandle)]>,
+                )> = variant_layouts
+                    .iter()
+                    .zip(variant_field_refs.iter())
+                    .map(|((name, tag, _), fields)| (name, *tag, Some(fields.as_slice())))
+                    .collect();
                 builder
                     .enum_layout(&struct_tag, &variant_refs)
                     .map_err(|e| {
@@ -896,10 +902,8 @@ impl VMDispatchTables {
                         Ok((n, l))
                     })
                     .collect::<PartialVMResult<Vec<_>>>()?;
-                let field_refs: Vec<(&Identifier, CA::LayoutHandle)> = field_layouts
-                    .iter()
-                    .map(|(n, h)| (n, *h))
-                    .collect();
+                let field_refs: Vec<(&Identifier, CA::LayoutHandle)> =
+                    field_layouts.iter().map(|(n, h)| (n, *h)).collect();
                 builder
                     .struct_layout(&struct_tag, &field_refs)
                     .map_err(|e| {

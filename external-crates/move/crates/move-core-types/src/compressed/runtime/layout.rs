@@ -222,6 +222,20 @@ pub trait BackendBuilder: Sized {
         })
     }
 
+    /// Recursively intern a tree-based struct layout, deduplicating shared
+    /// subtrees.
+    fn intern_tree_struct(
+        &mut self,
+        layout: &RV::MoveStructLayout,
+    ) -> Result<Self::Root, Self::Error> {
+        let fields = layout
+            .fields()
+            .iter()
+            .map(|f| self.intern_tree(f))
+            .collect::<Result<Vec<_>, _>>()?;
+        self.struct_layout(&fields)
+    }
+
     /// Recursively absorb an existing compressed layout (from any backend)
     /// into this builder, deduplicating shared subtrees against the builder's
     /// pool.
@@ -271,10 +285,8 @@ pub trait BackendBuilder: Sized {
                         VariantLayout::Unknown => Ok(None),
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                let variant_refs: Vec<Option<&[Self::Root]>> = variant_handles
-                    .iter()
-                    .map(|v| v.as_deref())
-                    .collect();
+                let variant_refs: Vec<Option<&[Self::Root]>> =
+                    variant_handles.iter().map(|v| v.as_deref()).collect();
                 self.enum_layout(&variant_refs)?
             }
         })
@@ -690,11 +702,13 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
         if self.variant_count() != other.variant_count() {
             return false;
         }
-        self.variants().zip(other.variants()).all(|pair| match pair {
-            (VariantLayout::Unknown, VariantLayout::Unknown) => true,
-            (VariantLayout::Known(a), VariantLayout::Known(b)) => a.equivalent(&b),
-            _ => false,
-        })
+        self.variants()
+            .zip(other.variants())
+            .all(|pair| match pair {
+                (VariantLayout::Unknown, VariantLayout::Unknown) => true,
+                (VariantLayout::Known(a), VariantLayout::Known(b)) => a.equivalent(&b),
+                _ => false,
+            })
     }
 }
 

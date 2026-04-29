@@ -613,18 +613,19 @@ impl DatatypeLayoutBuilder {
                     .unwrap_or_default()
             })
             .collect();
-        let variant_refs: Vec<(&Identifier, u16, Option<&[(&Identifier, LayoutHandle)]>)> = variants
-            .iter()
-            .zip(variant_field_refs.iter())
-            .map(|((name, tag, fields), field_refs)| {
-                let payload = if fields.is_some() {
-                    Some(field_refs.as_slice())
-                } else {
-                    None
-                };
-                (name, *tag, payload)
-            })
-            .collect();
+        let variant_refs: Vec<(&Identifier, u16, Option<&[(&Identifier, LayoutHandle)]>)> =
+            variants
+                .iter()
+                .zip(variant_field_refs.iter())
+                .map(|((name, tag, fields), field_refs)| {
+                    let payload = if fields.is_some() {
+                        Some(field_refs.as_slice())
+                    } else {
+                        None
+                    };
+                    (name, *tag, payload)
+                })
+                .collect();
         builder.enum_layout(&type_, &variant_refs)
     }
 

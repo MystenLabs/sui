@@ -9,7 +9,8 @@ use std::sync::Arc;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue};
+use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveValue};
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use mysten_common::debug_fatal;
@@ -327,30 +328,31 @@ impl MoveObject {
     /// Get a `MoveStructLayout` for `self`.
     /// The `resolver` value must contain the module that declares `self.type_` and the (transitive)
     /// dependencies of `self.type_` in order for this to succeed. Failure will result in an `ObjectSerializationError`
-    pub fn get_layout(&self, resolver: &impl GetModule) -> Result<MoveStructLayout, SuiError> {
+    pub fn get_layout(&self, resolver: &impl GetModule) -> Result<CA::MoveTypeLayout, SuiError> {
         Self::get_struct_layout_from_struct_tag(self.type_().clone().into(), resolver)
     }
 
     pub fn get_struct_layout_from_struct_tag(
         struct_tag: StructTag,
         resolver: &impl GetModule,
-    ) -> Result<MoveStructLayout, SuiError> {
+    ) -> Result<CA::MoveTypeLayout, SuiError> {
         let type_ = TypeTag::Struct(Box::new(struct_tag));
-        let layout = TypeLayoutBuilder::build_with_types(&type_, resolver)
-            .and_then(|compressed| compressed.inflate())
-            .map_err(|e| SuiErrorKind::ObjectSerializationError {
+        let layout = TypeLayoutBuilder::build_with_types(&type_, resolver).map_err(|e| {
+            SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
-            })?;
-        match layout {
-            MoveTypeLayout::Struct(l) => Ok(*l),
-            _ => unreachable!(
-                "We called build_with_types on Struct type, should get a struct layout"
-            ),
+            }
+        })?;
+        if layout.as_struct().is_none() {
+            return Err(SuiErrorKind::ObjectSerializationError {
+                error: "expected struct layout from build_with_types".to_owned(),
+            }
+            .into());
         }
+        Ok(layout)
     }
 
     /// Convert `self` to the JSON representation dictated by `layout`.
-    pub fn to_move_struct(&self, layout: &MoveStructLayout) -> Result<MoveStruct, SuiError> {
+    pub fn to_move_struct(&self, layout: CA::MoveStructLayout<'_>) -> Result<MoveStruct, SuiError> {
         BoundedVisitor::deserialize_struct(&self.contents, layout).map_err(|e| {
             SuiErrorKind::ObjectSerializationError {
                 error: e.to_string(),
@@ -364,7 +366,14 @@ impl MoveObject {
         &self,
         resolver: &impl GetModule,
     ) -> Result<MoveStruct, SuiError> {
-        self.to_move_struct(&self.get_layout(resolver)?)
+        let layout = self.get_layout(resolver)?;
+        let struct_layout =
+            layout
+                .as_struct()
+                .ok_or_else(|| SuiErrorKind::ObjectSerializationError {
+                    error: "expected struct layout from build_with_types".to_owned(),
+                })?;
+        self.to_move_struct(struct_layout)
     }
 
     pub fn to_rust<'de, T: Deserialize<'de>>(&'de self) -> Option<T> {
@@ -405,10 +414,11 @@ impl MoveObject {
             let layout = layout_resolver.get_annotated_layout(&self.type_().clone().into())?;
 
             let mut traversal = BalanceTraversal::default();
-            MoveValue::visit_deserialize(&self.contents, &layout.into_layout(), &mut traversal)
-                .map_err(|e| SuiErrorKind::ObjectSerializationError {
+            MoveValue::visit_deserialize(&self.contents, layout.as_ref(), &mut traversal).map_err(
+                |e| SuiErrorKind::ObjectSerializationError {
                     error: e.to_string(),
-                })?;
+                },
+            )?;
 
             Ok(traversal
                 .finish()
@@ -1424,7 +1434,7 @@ impl ObjectInner {
     pub fn get_layout(
         &self,
         resolver: &impl GetModule,
-    ) -> Result<Option<MoveStructLayout>, SuiError> {
+    ) -> Result<Option<CA::MoveTypeLayout>, SuiError> {
         match &self.data {
             Data::Move(m) => Ok(Some(m.get_layout(resolver)?)),
             Data::Package(_) => Ok(None),

@@ -120,10 +120,7 @@ impl AnnotatedArcPoolBuilder {
 
     /// Resolve the type tag of a previously-interned annotated layout handle.
     /// Returns `None` if `handle` points to an out-of-bounds table index.
-    pub fn type_tag(
-        &self,
-        handle: LayoutRef,
-    ) -> Option<crate::language_storage::TypeTag> {
+    pub fn type_tag(&self, handle: LayoutRef) -> Option<crate::language_storage::TypeTag> {
         use crate::language_storage::TypeTag;
         Some(match handle.resolve() {
             ResolvedRef::Leaf(leaf) => match leaf {

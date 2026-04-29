@@ -299,23 +299,23 @@ pub trait BackendBuilder: Sized {
                 let type_tag = e.type_().clone();
                 // First collect (name, tag, optional field handles) so we
                 // can build the borrowed slices in a second pass.
-                let variants: Vec<(Identifier, VariantTag, Option<Vec<(Identifier, Self::Root)>>)> =
-                    e.variants()
-                        .map(|v| match v {
-                            VariantLayout::Known { name, tag, fields } => {
-                                let fs: Vec<(Identifier, Self::Root)> = fields
-                                    .fields()
-                                    .map(|(n, l)| {
-                                        Ok((n.clone(), self.intern_view(l.as_view())?))
-                                    })
-                                    .collect::<Result<_, Self::Error>>()?;
-                                Ok((name.clone(), tag, Some(fs)))
-                            }
-                            VariantLayout::Unknown { name, tag } => {
-                                Ok((name.clone(), tag, None))
-                            }
-                        })
-                        .collect::<Result<_, Self::Error>>()?;
+                let variants: Vec<(
+                    Identifier,
+                    VariantTag,
+                    Option<Vec<(Identifier, Self::Root)>>,
+                )> = e
+                    .variants()
+                    .map(|v| match v {
+                        VariantLayout::Known { name, tag, fields } => {
+                            let fs: Vec<(Identifier, Self::Root)> = fields
+                                .fields()
+                                .map(|(n, l)| Ok((n.clone(), self.intern_view(l.as_view())?)))
+                                .collect::<Result<_, Self::Error>>()?;
+                            Ok((name.clone(), tag, Some(fs)))
+                        }
+                        VariantLayout::Unknown { name, tag } => Ok((name.clone(), tag, None)),
+                    })
+                    .collect::<Result<_, Self::Error>>()?;
                 let variant_field_refs: Vec<Option<Vec<(&Identifier, Self::Root)>>> = variants
                     .iter()
                     .map(|(_, _, fs)| {
@@ -323,12 +323,15 @@ pub trait BackendBuilder: Sized {
                             .map(|fs| fs.iter().map(|(n, h)| (n, h.clone())).collect())
                     })
                     .collect();
-                let variant_refs: Vec<(&Identifier, VariantTag, Option<&[(&Identifier, Self::Root)]>)> =
-                    variants
-                        .iter()
-                        .zip(variant_field_refs.iter())
-                        .map(|((name, tag, _), fs)| (name, *tag, fs.as_deref()))
-                        .collect();
+                let variant_refs: Vec<(
+                    &Identifier,
+                    VariantTag,
+                    Option<&[(&Identifier, Self::Root)]>,
+                )> = variants
+                    .iter()
+                    .zip(variant_field_refs.iter())
+                    .map(|((name, tag, _), fs)| (name, *tag, fs.as_deref()))
+                    .collect();
                 self.enum_layout(&type_tag, &variant_refs)?
             }
         })
@@ -472,6 +475,12 @@ impl<'a, T: TypeLayout> MoveTypeLayoutRef<'a, T> {
     /// Inflate back into a tree-based [`AV::MoveTypeLayout`].
     pub fn inflate(self) -> AResult<AV::MoveTypeLayout> {
         self.as_view().inflate()
+    }
+
+    /// Check whether this layout matches the given [`TypeTag`].
+    #[inline]
+    pub fn is_type(self, t: &TypeTag) -> bool {
+        self.as_view().is_type(t)
     }
 
     /// Returns `true` iff the two layouts describe the same Move type,
@@ -963,31 +972,27 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
         if self.variant_count() != other.variant_count() {
             return false;
         }
-        self.variants().zip(other.variants()).all(|pair| match pair {
-            (
-                VariantLayout::Unknown {
-                    name: na,
-                    tag: ta,
-                },
-                VariantLayout::Unknown {
-                    name: nb,
-                    tag: tb,
-                },
-            ) => na == nb && ta == tb,
-            (
-                VariantLayout::Known {
-                    name: na,
-                    tag: ta,
-                    fields: fa,
-                },
-                VariantLayout::Known {
-                    name: nb,
-                    tag: tb,
-                    fields: fb,
-                },
-            ) => na == nb && ta == tb && fa.equivalent(&fb),
-            _ => false,
-        })
+        self.variants()
+            .zip(other.variants())
+            .all(|pair| match pair {
+                (
+                    VariantLayout::Unknown { name: na, tag: ta },
+                    VariantLayout::Unknown { name: nb, tag: tb },
+                ) => na == nb && ta == tb,
+                (
+                    VariantLayout::Known {
+                        name: na,
+                        tag: ta,
+                        fields: fa,
+                    },
+                    VariantLayout::Known {
+                        name: nb,
+                        tag: tb,
+                        fields: fb,
+                    },
+                ) => na == nb && ta == tb && fa.equivalent(&fb),
+                _ => false,
+            })
     }
 }
 

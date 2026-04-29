@@ -2743,13 +2743,7 @@ use serde::{
 
 impl Value {
     pub fn simple_deserialize(blob: &[u8], layout: MoveTypeLayoutRef<'_>) -> Option<Value> {
-        bcs::from_bytes_seed(
-            SeedWrapper {
-                layout: &layout,
-            },
-            blob,
-        )
-        .ok()
+        bcs::from_bytes_seed(SeedWrapper { layout: &layout }, blob).ok()
     }
 
     pub fn typed_serialize(&self, layout: MoveTypeLayoutRef<'_>) -> Option<Vec<u8>> {
@@ -3774,10 +3768,7 @@ use move_core_types::{
 impl Value {
     /// Converts the value to an annotated move value. This is only needed for tracing and care
     /// should be taken when using this function as it can possibly inflate the size of the value.
-    pub fn as_annotated_move_value(
-        &self,
-        layout: CA::MoveTypeLayoutRef<'_>,
-    ) -> Option<AnnValue> {
+    pub fn as_annotated_move_value(&self, layout: CA::MoveTypeLayoutRef<'_>) -> Option<AnnValue> {
         use AnnValue as AV;
         use CA::MoveLayoutView as L;
         match (layout.as_view(), self) {
@@ -3869,10 +3860,7 @@ impl Value {
 }
 
 impl Reference {
-    pub fn as_annotated_move_value(
-        &self,
-        layout: CA::MoveTypeLayoutRef<'_>,
-    ) -> Option<AnnValue> {
+    pub fn as_annotated_move_value(&self, layout: CA::MoveTypeLayoutRef<'_>) -> Option<AnnValue> {
         use AnnValue as AV;
         use CA::MoveLayoutView as L;
         match self {

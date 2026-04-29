@@ -326,9 +326,7 @@ fn runtime_unknown_variant_equivalence() {
     let mut b3 = CR::MoveTypeLayoutBuilder::new();
     let u8_h3 = b3.u8();
     let v3_b: [CR::LayoutHandle; 1] = [u8_h3];
-    let h3 = b3
-        .enum_layout(&[Some(&[]), Some(&v3_b)])
-        .unwrap();
+    let h3 = b3.enum_layout(&[Some(&[]), Some(&v3_b)]).unwrap();
     let l3 = b3.build(h3);
     assert!(!l1.equivalent(&l3));
 }
@@ -478,10 +476,7 @@ fn annotated_unknown_variant_equivalence() {
     let h3 = b3
         .enum_layout(
             &tag,
-            &[
-                (&n_v, 0u16, Some(&[])),
-                (&n_w, 1u16, Some(&v3_w_fields)),
-            ],
+            &[(&n_v, 0u16, Some(&[])), (&n_w, 1u16, Some(&v3_w_fields))],
         )
         .unwrap();
     let l3 = b3.build(h3);

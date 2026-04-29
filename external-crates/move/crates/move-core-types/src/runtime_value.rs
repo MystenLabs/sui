@@ -216,11 +216,9 @@ impl MoveValue {
             (MoveValue::Variant(s), CA::MoveLayoutView::Enum(l)) => {
                 A::MoveValue::Variant(s.decorate_compressed(&l))
             }
-            (MoveValue::Vector(vals), CA::MoveLayoutView::Vector(t)) => A::MoveValue::Vector(
-                vals.into_iter()
-                    .map(|v| v.decorate_compressed(t))
-                    .collect(),
-            ),
+            (MoveValue::Vector(vals), CA::MoveLayoutView::Vector(t)) => {
+                A::MoveValue::Vector(vals.into_iter().map(|v| v.decorate_compressed(t)).collect())
+            }
             (MoveValue::U8(a), _) => A::MoveValue::U8(a),
             (MoveValue::U64(u), _) => A::MoveValue::U64(u),
             (MoveValue::U128(u), _) => A::MoveValue::U128(u),
