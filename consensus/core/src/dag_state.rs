@@ -358,7 +358,7 @@ impl DagState {
         if self.context.protocol_config.enable_v3() {
             // Update votes accounting in BlockInfo.
             for ancestor in block.ancestors() {
-                // Only update children when the link is potentially a leader vote.
+                // Only update children info when the link is potentially a leader vote.
                 if ancestor.round + 1 != block_ref.round || ancestor.round <= self.gc_round() {
                     continue;
                 }
@@ -524,6 +524,9 @@ impl DagState {
 
     #[cfg(test)]
     pub(crate) fn get_block_children(&self, block_ref: &BlockRef) -> Option<Vec<BlockRef>> {
+        if block_ref.round <= self.gc_round() {
+            return None;
+        }
         self.recent_blocks
             .get(block_ref)
             .map(|block_info| block_info.children.iter().cloned().collect())
@@ -534,6 +537,9 @@ impl DagState {
         &self,
         block_ref: &BlockRef,
     ) -> Option<BTreeSet<AuthorityIndex>> {
+        if block_ref.round <= self.gc_round() {
+            return None;
+        }
         self.recent_blocks
             .get(block_ref)
             .map(|block_info| block_info.children_authorities.clone())
@@ -541,6 +547,9 @@ impl DagState {
 
     #[cfg(test)]
     pub(crate) fn get_block_total_children_stake(&self, block_ref: &BlockRef) -> Option<Stake> {
+        if block_ref.round <= self.gc_round() {
+            return None;
+        }
         self.recent_blocks
             .get(block_ref)
             .map(|block_info| block_info.total_children_stake)
@@ -930,6 +939,9 @@ impl DagState {
     /// been evicted (<= gc_round) or has not been reached yet.
     #[cfg(test)] // consumed by FlexCommitter on the v3 path (next branch)
     pub(crate) fn round_info(&self, round: Round) -> Option<&RoundInfo> {
+        if round <= self.gc_round() {
+            return None;
+        }
         let front_round = self.round_info.front()?.round;
         if round < front_round {
             return None;
@@ -948,18 +960,19 @@ impl DagState {
             return;
         }
 
-        // Check if a new RoundInfo needs to be created.
+        // DAG can only grow one round at a time. Next round is at most 1 round after
+        // the current latest round.
         let next_round = self
             .round_info
             .back()
             .map(|info| info.round + 1)
+            // round_info starts empty on fresh startup or recovery.
             .unwrap_or(gc_round + 1);
         // DAG can only grow one round at a time.
         assert!(
             block.round() <= next_round,
             "Attempted to update round info for block {block_ref} with round higher than next round {next_round}"
         );
-        
         if block.round() == next_round {
             self.round_info.push_back(RoundInfo {
                 round: block.round(),
@@ -1365,13 +1378,15 @@ impl DagState {
 
 struct BlockInfo {
     block: VerifiedBlock,
+
+    /// Used in computing commits and leader schedule in Mysticeti v3.
     /// Next-round blocks which have this block as an ancestor.
-    /// Used in computing commits and leader schedule.
     children: BTreeSet<BlockRef>,
     /// Distinct authorities that have authored one of the entries in `children`.
     children_authorities: BTreeSet<AuthorityIndex>,
     /// Sum of stake across `children_authorities`.
     total_children_stake: Stake,
+
     // Whether the block has been committed
     committed: bool,
     // Whether the block has been included in the causal history of an owned proposed block.
@@ -1397,6 +1412,8 @@ impl BlockInfo {
 }
 
 /// Aggregates information about blocks accepted at a single round.
+/// Used for commit generation and leader schedule calculation in Mysticeti v3.
+/// RoundInfo is only kept for rounds above GC round.
 pub(crate) struct RoundInfo {
     pub(crate) round: Round,
     /// Distinct authorities that have authored at least one accepted block in `round`.
@@ -1915,6 +1932,29 @@ mod test {
         );
         dag_state.set_last_commit(last_commit);
         assert_eq!(dag_state.gc_round(), 2);
+
+        // Child metadata should expose logical retention immediately when the
+        // GC round advances, even before flush physically removes stale entries.
+        for block in all_blocks.iter().filter(|block| block.round() <= 2) {
+            let block_ref = block.reference();
+            assert!(
+                dag_state.get_block_children(&block_ref).is_none(),
+                "below-gc block {block_ref:?} should hide children before flush"
+            );
+            assert!(
+                dag_state
+                    .get_block_children_authorities(&block_ref)
+                    .is_none(),
+                "below-gc block {block_ref:?} should hide child authorities before flush"
+            );
+            assert!(
+                dag_state
+                    .get_block_total_children_stake(&block_ref)
+                    .is_none(),
+                "below-gc block {block_ref:?} should hide child stake before flush"
+            );
+        }
+
         dag_state.flush();
 
         // After flush: rounds 1..=2 evicted from recent_blocks → None.
@@ -2193,6 +2233,16 @@ mod test {
         );
         dag_state.set_last_commit(last_commit);
         assert_eq!(dag_state.gc_round(), 2);
+
+        // RoundInfo should expose logical retention immediately when the GC
+        // round advances, even before flush physically removes stale entries.
+        for round in 1..=2 {
+            assert!(
+                dag_state.round_info(round).is_none(),
+                "round {round} should be hidden before flush after GC advances"
+            );
+        }
+
         dag_state.flush();
 
         // Rounds 1..=2 are evicted; rounds 3..=5 remain with their aggregates.
