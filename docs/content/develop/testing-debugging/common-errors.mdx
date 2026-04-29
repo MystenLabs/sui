@@ -12,7 +12,7 @@ Errors in this section relate to Sui addresses.
 
 #### `Failed to build Move modules: Unresolved addresses found.`
 
-Indicates that you are trying to use a named address, such as `std` or similar, within your code or a dependency, but you have not assigned that address a value in the `Move.toml` file. 
+You are trying to use a named address, such as `std` or similar, within your code or a dependency, but you have not assigned that address a value in the `Move.toml` file. 
 
 ##### Solution
 
@@ -31,7 +31,7 @@ std = "0x1"
 
 #### `Invalid Sui Address`
 
-Indicates that the address you provided does not conform to a valid Sui address format. Sui addresses must:
+The address you provided does not conform to a valid Sui address format. Sui addresses must:
 
 - Be a 32-byte hex-encoded string.
 
@@ -53,7 +53,7 @@ Errors in this section relate to Move packages.
 
 #### `Invalid URL: Invalid URL: relative URL without a base`
 
-This error occurs when the system interprets a URL string as a relative URL (`/path/to/file`), but your code expects an absolute URL (`https://example.com/path/to/file`). This error originates from the `sui::url` module that provides a `Url` struct and functions to interact with URLs. Move does not validate the format of a URL itself.
+This error occurs when your code receives a relative URL (`/path/to/file`) but expects an absolute URL (`https://example.com/path/to/file`). This error originates from the `sui::url` module that provides a `Url` struct and functions to interact with URLs. Move does not validate the format of a URL itself.
 
 ##### Solution 
 
@@ -69,7 +69,7 @@ Specify the full URL path, including `http://` or `https://`.
 
 #### `Failed to build Move modules: Failed to resolve dependencies for package`
 
-Indicates that the system cannot find one or more of the dependencies you list in your Move package's `Move.toml` file. The system cannot find a dependency if:
+The system cannot find one or more of the dependencies you list in your Move package's `Move.toml` file. The system cannot find a dependency if:
 
 - Your path is incorrect, contains a typo, or does not exist.
 
@@ -89,7 +89,7 @@ Check your `Move.toml` and verify each dependency you list has the correct path,
 
 #### `Duplicate module found: 0x0000000000000000000000000000000000000000000000000000000000000002::groth16`
 
-Indicates that you have defined two or more modules with the same name or address in your project or its dependencies. You must give each module a unique name and address combination. 
+You have defined two or more modules with the same name or address in your project or its dependencies. You must give each module a unique name and address combination. 
 
 ##### Solution 
 
@@ -103,7 +103,7 @@ Verify that your source files do not use the same module name or address twice. 
 
 #### `Internal error occurred while processing request: Error resolving Move location: Linkage not found for package`
 
-Indicates that your environment or tooling cannot find a Move package at the specified address. Possible causes include:
+Your environment or tooling cannot find a Move package at the specified address. Possible causes include:
 
 - You have not published the package to the network.
 
@@ -117,7 +117,7 @@ Verify the package exists on the network at the specified address.
 
 #### `Failed to build Move modules: Compilation error.`
 
-This is a generic error that indicates that something in your Move code violates the compiler's rules and therefore the compiler cannot compile your package into bytecode. 
+Something in your Move code violates the compiler's rules and prevents compilation into bytecode. 
 
 ##### Solution 
 
@@ -143,7 +143,7 @@ Some common reasons for this error include:
 
 #### `Failed to publish the Move module(s), reason: Modules must all have 0x0 as their addresses.`
 
-Indicates that a module in your package does not have the address `0x0`. In Move, you must set all modules to have their self-address as `0x0` in the source code. When you publish the package, Sui automatically assigns it the correct address. 
+A module in your package does not have the address `0x0`. In Move, you must set all modules to have their self-address as `0x0` in the source code. When you publish the package, Sui automatically assigns it the correct address. 
 
 
 ##### Solution 
@@ -158,7 +158,7 @@ Remove any explicit address blocks from your Move source files. Do not wrap your
 
 #### `The signer only expects one signature, not two`
 
-Indicates that a function you are calling in your Move module expects 1 signer argument, yet you provided 2. On Sui, the number of signer arguments in your function's signature must match the number of signers you provide. 
+A function you are calling in your Move module expects 1 signer argument, yet you provided 2. On Sui, the number of signer arguments in your function's signature must match the number of signers you provide. 
 
 ##### Solution 
 
@@ -175,7 +175,7 @@ If you want to use 2 signers, define your function as `fun main(s1: signer, s2: 
 
 #### `destroy_zero`
 
-Indicates that you are trying to destroy a resource that has a non-zero value. 
+You are trying to destroy a resource that has a non-zero value. 
 
 ##### Solution 
 
@@ -194,7 +194,7 @@ Errors in this section relate to the system.
 
 ##### `"Segmentation fault (core dumped)"`
 
-Indicates a low-level memory crash. This is not a Move error, but rather an error with a portion of the toolchain such as the Move compiler or a dependency. 
+A low-level memory crash occurred. This is not a Move error, but rather an error with a portion of the toolchain such as the Move compiler or a dependency. 
 
 ##### Solution 
 
