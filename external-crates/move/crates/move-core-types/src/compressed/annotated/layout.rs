@@ -31,21 +31,21 @@ pub(crate) struct AnnotatedFieldEntry {
 pub(crate) struct AnnotatedVariantEntry {
     pub name: Identifier,
     pub tag: VariantTag,
-    pub fields: Option<Box<[AnnotatedFieldEntry]>>,
+    pub fields: Option<Arc<[AnnotatedFieldEntry]>>,
 }
 
 /// Annotated struct layout node with type tag and named fields inline.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct MoveStructNode {
     pub(crate) type_: StructTag,
-    pub(crate) fields: Box<[AnnotatedFieldEntry]>,
+    pub(crate) fields: Arc<[AnnotatedFieldEntry]>,
 }
 
 /// Annotated enum layout node with type tag and named variants inline.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct MoveEnumNode {
     pub(crate) type_: StructTag,
-    pub(crate) variants: Box<[AnnotatedVariantEntry]>,
+    pub(crate) variants: Arc<[AnnotatedVariantEntry]>,
 }
 
 /// A compound layout node in the annotated compressed node table.
@@ -99,7 +99,7 @@ pub enum MoveLayoutView {
 /// A compressed layout that is known to be a struct or enum (not a primitive
 /// or vector). This mirrors the tree-based [`crate::annotated_value::MoveDatatypeLayout`].
 #[derive(Debug, Clone)]
-pub(crate) enum MoveDatatypeLayout_ {
+pub enum MoveDatatypeLayout_ {
     Struct(Box<MoveStructLayout>),
     Enum(Box<MoveEnumLayout>),
 }
@@ -115,7 +115,7 @@ pub struct MoveDatatypeLayout {
 #[derive(Debug, Clone)]
 pub struct MoveEnumLayout {
     type_: StructTag,
-    pub(crate) variants: Box<[VariantLayout]>,
+    pub(crate) variants: Arc<[VariantLayout]>,
 }
 
 /// The struct layout with type tag and named fields, as a view into a shared pool.
@@ -142,7 +142,7 @@ pub enum VariantLayout {
 #[derive(Debug, Clone)]
 pub struct MoveFieldsLayout {
     pool: Arc<MoveTypeLayoutPool>,
-    fields: Box<[AnnotatedFieldEntry]>,
+    fields: Arc<[AnnotatedFieldEntry]>,
 }
 
 // --- Builder type ---
@@ -499,6 +499,14 @@ impl MoveDatatypeLayout {
         self.self_layout.equivalent(&other.self_layout)
     }
 
+    pub fn as_inner(&self) -> &MoveDatatypeLayout_ {
+        &self.inner
+    }
+
+    pub fn into_inner(self) -> MoveDatatypeLayout_ {
+        self.inner
+    }
+
     /// Inflate back into a tree-based [`AV::MoveDatatypeLayout`].
     pub fn inflate(&self) -> AResult<crate::annotated_value::MoveDatatypeLayout> {
         match &self.inner {
@@ -848,7 +856,7 @@ impl MoveTypeLayoutBuilder {
         type_tag: StructTag,
         fields: Vec<(Identifier, LayoutHandle)>,
     ) -> AResult<LayoutHandle> {
-        let fields: Box<[AnnotatedFieldEntry]> = fields
+        let fields: Arc<[AnnotatedFieldEntry]> = fields
             .iter()
             .map(|(name, h)| AnnotatedFieldEntry {
                 name: (*name).clone(),
@@ -873,7 +881,7 @@ impl MoveTypeLayoutBuilder {
             Option<Vec<(Identifier, LayoutHandle)>>,
         )>,
     ) -> AResult<LayoutHandle> {
-        let variant_entries: Box<[AnnotatedVariantEntry]> = variants
+        let variant_entries: Arc<[AnnotatedVariantEntry]> = variants
             .into_iter()
             .map(|(vn, tag, fields_opt)| {
                 let fields = fields_opt.map(|fields| {
