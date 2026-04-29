@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use dashmap::DashMap;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
@@ -388,6 +389,11 @@ pub struct AuthorityPerEpochStore {
     running_root_notify_read: NotifyRead<CheckpointSequenceNumber, GlobalStateHash>,
 
     executed_digests_notify_read: NotifyRead<TransactionKey, TransactionDigest>,
+
+    /// In-memory cache of signed effects digests. Populated from disk at startup, updated on
+    /// insert, and pruned on checkpoint finalization. Avoids disk reads on the hot execution path
+    /// where the vast majority of lookups return None.
+    signed_effects_digests_cache: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
     /// Cancellation token used to signal epoch termination to all in-flight tasks.
     epoch_alive_token: CancellationToken,
@@ -1083,6 +1089,12 @@ impl AuthorityPerEpochStore {
 
         let epoch_alive_token = CancellationToken::new();
 
+        let signed_effects_digests_cache = DashMap::new();
+        for item in tables.signed_effects_digests.safe_iter() {
+            let (tx_digest, effects_digest) = item?;
+            signed_effects_digests_cache.insert(tx_digest, effects_digest);
+        }
+
         assert_eq!(
             epoch_start_configuration.epoch_start_state().epoch(),
             epoch_id
@@ -1242,6 +1254,7 @@ impl AuthorityPerEpochStore {
             checkpoint_state_notify_read: NotifyRead::new(),
             running_root_notify_read: NotifyRead::new(),
             executed_digests_notify_read: NotifyRead::new(),
+            signed_effects_digests_cache,
             end_of_publish: Mutex::new(end_of_publish),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             version_assignment_mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
@@ -2040,6 +2053,8 @@ impl AuthorityPerEpochStore {
             [(tx_digest, effects_digest)],
         )?;
         batch.write()?;
+        self.signed_effects_digests_cache
+            .insert(*tx_digest, *effects_digest);
         Ok(())
     }
 
@@ -2081,8 +2096,7 @@ impl AuthorityPerEpochStore {
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionEffectsDigest>> {
-        let tables = self.tables()?;
-        Ok(tables.signed_effects_digests.get(tx_digest)?)
+        Ok(self.signed_effects_digests_cache.get(tx_digest).map(|r| *r))
     }
 
     pub fn get_transaction_cert_sig(
@@ -2292,6 +2306,10 @@ impl AuthorityPerEpochStore {
         let mut quarantine = self.consensus_quarantine.write();
         quarantine.update_highest_executed_checkpoint(seq, self, &mut batch)?;
         batch.write()?;
+
+        for digest in digests {
+            self.signed_effects_digests_cache.remove(digest);
+        }
 
         self.consensus_output_cache
             .remove_executed_in_epoch(digests);
@@ -3130,11 +3148,6 @@ impl AuthorityPerEpochStore {
         info!("Epoch terminated - waiting for pending tasks to complete");
         *self.epoch_alive.write().await = false;
         info!("All pending epoch tasks completed");
-    }
-
-    /// Waits for the notification about epoch termination
-    pub async fn wait_epoch_terminated(&self) {
-        self.epoch_alive_token.cancelled().await
     }
 
     /// This function executes given future until epoch_terminated is called
