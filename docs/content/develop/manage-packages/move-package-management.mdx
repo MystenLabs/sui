@@ -12,6 +12,20 @@ Version 1.63 introduced major changes to the Move package system. This document 
 
 :::
 
+:::warning Active environment not found
+
+If you see `Your active environment is not present in Move.toml`, add an `[environments]` section:
+
+```toml
+[environments]
+testnet = { chain-id = "4c78adac" }
+mainnet = { chain-id = "35834a8a" }
+```
+
+Find the chain ID for your network with `sui client chain-identifier`. For local or ephemeral deployments, use `sui move test-publish` instead.
+
+:::
+
 ## Package-related files
 
 Package authors configure their packages by providing a manifest file (`Move.toml`) in the root of the package directory. This file contains metadata about the package and its list of dependencies.
@@ -457,6 +471,61 @@ This creates a fresh publication of each of `a`'s dependencies, then publishes `
 
 The system identifies entries of an ephemeral publication file by the `source` field. These fields are pinned dependencies, so they might be different from the dependencies written in your manifest file, however they should match the `source` fields in the lockfile.
 
+
+## Local development workflow
+
+For iterative development on localnet:
+
+1. Start the local network: `sui start --with-faucet --force-regenesis`
+1. Publish with test-publish (no permanent record): `sui move test-publish`
+1. After each code change, re-run `sui move test-publish` for a fresh deployment.
+
+Use `test-publish` for localnet because it avoids polluting `Published.toml` with ephemeral addresses that change on every genesis reset.
+
+## Publishing from TypeScript
+
+To publish a package from TypeScript, first build it with the CLI, then submit the compiled modules in a transaction:
+
+```typescript
+import { execSync } from 'child_process';
+import { Transaction } from '@mysten/sui/transactions';
+
+// Build and get compiled modules + dependencies
+const { modules, dependencies } = JSON.parse(
+  execSync('sui move build --dump-bytecode-as-base64 --path ./your_package', {
+    encoding: 'utf-8',
+  }),
+);
+
+const tx = new Transaction();
+const [upgradeCap] = tx.publish({ modules, dependencies });
+tx.transferObjects([upgradeCap], tx.pure.address(senderAddress));
+```
+
+## Reading publish output
+
+After running `sui client publish --json`, the response includes:
+
+| Field              | Description                                  |
+|--------------------|----------------------------------------------|
+| `digest`           | Transaction hash.                            |
+| `effects.created`  | Array of objects created, including the package object. |
+| `objectChanges`    | Detailed list of created objects with types.  |
+| `events`           | Publication events (BCS-encoded in CLI output). |
+
+To get human-readable event data, query the transaction through the RPC with `showEvents: true`, which returns `parsedJson` instead of raw BCS.
+
+To capture only the JSON output (without build logs), redirect stderr:
+
+```sh
+$ sui client publish --json 2>/dev/null | jq '.objectChanges[] | select(.type == "published")'
+```
+
+:::info Automatic framework dependencies
+
+The `Sui` and `MoveStdlib` packages are automatically included as dependencies. You do not need to list them in `[dependencies]`.
+
+:::
 
 ## Register your package on `mvr`
 

@@ -4,6 +4,12 @@ description: The life of a transaction on the Sui network has some differences c
 keywords: [ transaction lifecycle, transaction flow, transaction finality, settlement, consensus, certification, execution ]
 ---
 
+:::info SUI units
+
+1 SUI = 1,000,000,000 MIST (10^9). All SDK and RPC amounts use MIST. Multiply your SUI amount by `1_000_000_000` before passing it to the SDK.
+
+:::
+
 At a high level, the following diagram outlines the life cycle of a transaction on the Sui blockchain.
 
 ![Transaction life cycle](./images/transaction-lifecycle_transactions_v1.png)
@@ -163,3 +169,44 @@ The purpose of this extra step is to keep the full node up to date as much as po
 When an app constructs a transaction, it typically requests that the full node choose a gas object for it. Gas objects are owned objects, meaning that if the full node is stale and not aware of the right version of the object, it could lead to invalid transactions, or worse, client equivocation if the client software does not handle it properly. Executing on full node before returning the effects certificate is one way to avoid this situation. A request can ask for such behavior by using the `WaitForLocalExecution` parameter. See [Sponsored Transactions](/develop/transaction-payment/sponsor-txn) for more on client equivocation.
 
 Using `WaitForLocalExecution` is not always the best choice, however. For this coffee payment, it adds latency without significant benefits. In this case, using the `WaitForEffects` parameter instead provides slightly shorter user-perceived latency.
+
+## Common operations
+
+### Get wallet balance
+
+```typescript
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  network: 'mainnet',
+});
+
+const balance = await client.getBalance({
+  owner: '0xYOUR_ADDRESS',
+});
+console.log(`${Number(balance.totalBalance) / 1e9} SUI`);
+```
+
+### Get current gas price
+
+```typescript
+const gasPrice = await client.getReferenceGasPrice();
+// Returns the base gas price in MIST
+```
+
+### Get checkpoint from a transaction
+
+```typescript
+const txn = await client.getTransaction({
+  digest: 'YOUR_TX_DIGEST',
+  include: { effects: true },
+});
+console.log('Checkpoint:', txn.checkpoint);
+```
+
+:::info Minimum balance
+
+Sui does not enforce a minimum wallet balance. However, you must have enough SUI to cover gas fees for any transaction you submit.
+
+:::

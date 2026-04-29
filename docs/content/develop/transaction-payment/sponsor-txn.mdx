@@ -183,3 +183,49 @@ To mitigate these risks:
 If you submit a dual-signed transaction through the sponsor or gas station rather than directly to a full node, the sponsor might delay or withhold the transaction from the network.
 
 To avoid this risk, submit transactions directly to a full node.
+
+## TypeScript example
+
+The following example shows the complete sponsored transaction flow:
+
+```typescript
+import { Transaction } from '@mysten/sui/transactions';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.testnet.sui.io:443',
+  network: 'testnet',
+});
+const user = new Ed25519Keypair();
+const sponsor = new Ed25519Keypair();
+
+// 1. User builds the transaction
+const tx = new Transaction();
+tx.setSender(user.toSuiAddress());
+tx.moveCall({ target: '0xPACKAGE::module::function' });
+
+// 2. Sponsor sets gas payment
+tx.setGasOwner(sponsor.toSuiAddress());
+tx.setGasBudget(10_000_000);
+tx.setGasPayment([{ objectId: '0x...', version: '1', digest: '...' }]);
+
+// 3. Build the transaction bytes
+const bytes = await tx.build({ client });
+
+// 4. Both parties sign
+const userSig = await user.signTransaction(bytes);
+const sponsorSig = await sponsor.signTransaction(bytes);
+
+// 5. Submit with both signatures
+const result = await client.executeTransaction({
+  transaction: bytes,
+  signatures: [userSig.signature, sponsorSig.signature],
+});
+```
+
+:::info
+
+Sponsorship is not the same as multi-sig. A sponsor pays gas but does not co-author the transaction intent. Multi-sig requires multiple parties to approve the same transaction. See [Multi-signature](/develop/transactions/transaction-auth/multisig) for details.
+
+:::

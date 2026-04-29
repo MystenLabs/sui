@@ -1,7 +1,7 @@
 ---
 title: Troubleshooting Common Errors
 description: Find solutions to common issues with addresses, transactions, and Move packages.
-keywords: [ address errors, package errors, system errors, transaction errors, troubleshooting ]
+keywords: [ address errors, package errors, system errors, transaction errors, troubleshooting, RPC errors, SDK errors, MoveAbort, gas coins ]
 ---
 
 This page provides troubleshooting solutions to common errors.
@@ -411,12 +411,134 @@ Verify you have a sufficient gas balance and that your transaction signature is 
 
 #### `Unable to process transaction. No valid gas coins found for the transaction.`
 
-Indicates you do not have enough tokens to pay the transaction gas fee. 
+Indicates the sender address either has insufficient SUI balance or the gas coin is already used as a transaction input object.
 
-##### Solution 
+##### Solution
 
-Obtain tokens.
+- Verify the wallet has enough SUI to cover the gas budget.
+- Do not pass the same coin object as both a gas payment and a transaction input.
+- If you recently sent a transaction, wait for it to finalize before submitting another one that uses the same coin.
 
 **Resources**
 
 - [Get SUI from Faucet](/getting-started/onboarding/get-coins)
+
+---
+
+## SDK and RPC errors
+
+Errors in this section relate to the TypeScript SDK, RPC responses, and transaction construction.
+
+---
+
+#### `Invalid type: Expected Object but received Object`
+
+Indicates that you wrapped a value already returned by a transaction command (such as `tx.splitCoins()` or `tx.moveCall()`) inside `tx.object()` again. Values returned by transaction commands are already `TransactionArgument` objects.
+
+##### Solution
+
+Use the return value directly without wrapping it in `tx.object()`:
+
+```typescript
+// Incorrect — double-wrapping causes this error
+const coin = tx.splitCoins(tx.gas, [1000]);
+tx.transferObjects([tx.object(coin)], recipient); // ❌
+
+// Correct — use the TransactionArgument directly
+const coin = tx.splitCoins(tx.gas, [1000]);
+tx.transferObjects([coin], recipient); // ✅
+```
+
+---
+
+#### `Your active environment is not present in Move.toml`
+
+Indicates that the Sui CLI cannot find the environment alias you are using (such as `devnet` or `testnet`) in the `[environments]` section of your `Move.toml` file.
+
+##### Solution
+
+Add an `[environments]` section to your `Move.toml` with the environment alias and chain ID:
+
+```toml
+[environments]
+mainnet = { chain-id = "35834a8a" }
+testnet = { chain-id = "4c78adac" }
+```
+
+Look up the chain ID for your network with `sui client chain-identifier`. For local or ephemeral deployments, use `sui move test-publish` instead.
+
+**Resources**
+
+- [Move Package Management](/develop/manage-packages/move-package-management)
+
+---
+
+#### RPC error codes
+
+The Sui RPC layer returns standard error codes. Use the following table to diagnose failures:
+
+| Code   | Name                        | Retryable | Common cause                              |
+|--------|-----------------------------|-----------|-------------------------------------------|
+| -32600 | Invalid Request             | No        | Malformed JSON body.                      |
+| -32601 | Method Not Found            | No        | Typo in the RPC method name.              |
+| -32602 | Invalid Params              | No        | Wrong argument types or missing fields.   |
+| -32603 | Internal Error              | Maybe     | Server-side failure; retry after backoff. |
+| -32604 | Transaction Execution Error | No        | On-chain execution failed (MoveAbort).    |
+| -32050 | Transient Error             | Yes       | Overloaded node; retry with exponential backoff. |
+| -32002 | Server Busy                 | Yes       | Rate limited; slow down request frequency. |
+
+---
+
+#### Error classification
+
+Sui errors fall into two categories:
+
+| Category          | Examples                              | Where it happens | What to do             |
+|-------------------|---------------------------------------|------------------|------------------------|
+| Transport errors  | HTTP 429/502/504, RPC -32050          | Network layer    | Retry with backoff.    |
+| Execution errors  | `MoveAbort`, `InsufficientGas`        | On-chain VM      | Fix code or parameters.|
+
+Detect the category in TypeScript:
+
+```typescript
+import { SuiGrpcClient } from '@mysten/sui/grpc';
+
+const client = new SuiGrpcClient({
+  baseUrl: 'https://fullnode.mainnet.sui.io:443',
+  network: 'mainnet',
+});
+
+try {
+  const result = await client.executeTransaction({ /* ... */ });
+  // Check execution status from the response
+  if (result.effects?.status?.status === 'failure') {
+    // On-chain execution error (MoveAbort, InsufficientGas)
+    console.error('Execution failed:', result.effects.status.error);
+  }
+} catch (error) {
+  // Transport or infrastructure error
+  console.error('RPC error:', error.code, error.message);
+}
+```
+
+---
+
+#### `getPureSerializationType` is deprecated
+
+The `getPureSerializationType` function is deprecated and might produce unexpected behavior. Using it can cause errors such as `Invalid type: Expected Object but received Object`.
+
+##### Solution
+
+Use explicit typed serialization methods instead:
+
+```typescript
+// Deprecated — do not use
+// import { getPureSerializationType } from '@mysten/sui/transactions';
+
+// Use typed methods instead
+tx.pure.u64(amount);
+tx.pure.address(addr);
+tx.pure.string(name);
+tx.pure.bool(flag);
+tx.pure.vector('u8', bytes);
+```
