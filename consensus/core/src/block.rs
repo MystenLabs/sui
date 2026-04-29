@@ -384,7 +384,7 @@ struct InnerBlockDigest([u8; consensus_config::DIGEST_LENGTH]);
 /// Computes the digest of a Block, only for signing and verifications.
 fn compute_inner_block_digest(block: &Block) -> ConsensusResult<InnerBlockDigest> {
     let mut hasher = DefaultHashFunction::new();
-    hasher.update(bcs::to_bytes(block).map_err(ConsensusError::SerializationFailure)?);
+    bcs::serialize_into(&mut hasher, block).map_err(ConsensusError::SerializationFailure)?;
     Ok(InnerBlockDigest(hasher.finalize().into()))
 }
 

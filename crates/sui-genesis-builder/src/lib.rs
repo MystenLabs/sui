@@ -691,11 +691,11 @@ fn create_genesis_digest(
 ) -> TransactionDigest {
     let mut hasher = DefaultHash::default();
     hasher.update(b"sui-genesis");
-    hasher.update(bcs::to_bytes(genesis_chain_parameters).unwrap());
-    hasher.update(bcs::to_bytes(genesis_validators).unwrap());
-    hasher.update(bcs::to_bytes(token_distribution_schedule).unwrap());
+    bcs::serialize_into(&mut hasher, genesis_chain_parameters).unwrap();
+    bcs::serialize_into(&mut hasher, genesis_validators).unwrap();
+    bcs::serialize_into(&mut hasher, token_distribution_schedule).unwrap();
     for system_package in system_packages {
-        hasher.update(bcs::to_bytes(&system_package.bytes).unwrap());
+        bcs::serialize_into(&mut hasher, &system_package.bytes).unwrap();
     }
 
     let hash = hasher.finalize();

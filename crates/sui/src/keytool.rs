@@ -864,7 +864,7 @@ impl KeyToolCommand {
                 let intent_msg = IntentMessage::new(intent, msg);
                 let raw_intent_msg: String = Base64::encode(bcs::to_bytes(&intent_msg)?);
                 let mut hasher = DefaultHash::default();
-                hasher.update(bcs::to_bytes(&intent_msg)?);
+                bcs::serialize_into(&mut hasher, &intent_msg)?;
                 let digest = hasher.finalize().digest;
                 let sui_signature = context
                     .sign_secure(&address.into(), &intent_msg.value, intent_msg.intent)
@@ -903,7 +903,7 @@ impl KeyToolCommand {
                     Base64::encode(bcs::to_bytes(&intent_msg)?)
                 );
                 let mut hasher = DefaultHash::default();
-                hasher.update(bcs::to_bytes(&intent_msg)?);
+                bcs::serialize_into(&mut hasher, &intent_msg)?;
                 let digest = hasher.finalize().digest;
                 info!("Digest to sign: {:?}", Base64::encode(digest));
 

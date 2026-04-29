@@ -145,9 +145,8 @@ impl AuthenticatorTrait for MultiSig {
         }
 
         let mut weight_sum: u16 = 0;
-        let message = bcs::to_bytes(&value).expect("Message serialization should not fail");
         let mut hasher = DefaultHash::default();
-        hasher.update(message);
+        bcs::serialize_into(&mut hasher, &value).expect("Message serialization should not fail");
         let digest = hasher.finalize().digest;
         // Verify each signature against its corresponding signature scheme and public key.
         // TODO: further optimization can be done because multiple Ed25519 signatures can be batch verified.
