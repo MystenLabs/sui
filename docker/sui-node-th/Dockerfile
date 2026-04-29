@@ -1,0 +1,39 @@
+# Build application
+#
+# Copy in all crates, Cargo.toml and Cargo.lock unmodified,
+# and build the application.
+FROM rust:1.92-bullseye AS builder
+ARG PROFILE=release
+ARG GIT_REVISION
+ENV GIT_REVISION=$GIT_REVISION
+WORKDIR "$WORKDIR/sui"
+RUN apt-get update && apt-get install -y cmake clang
+
+COPY Cargo.toml Cargo.lock ./
+COPY consensus consensus
+COPY crates crates
+COPY sui-execution sui-execution
+COPY external-crates external-crates
+
+ENV USE_TIDEHUNTER=1
+RUN cargo build --profile ${PROFILE} --features typed-store/tidehunter --bin sui-node --target-dir target/tidehunter
+
+# Production Image
+FROM debian:bullseye-slim AS runtime
+# Use jemalloc as memory allocator
+RUN apt-get update && apt-get install -y ca-certificates curl
+ARG PROFILE=release
+WORKDIR "$WORKDIR/sui"
+# Both bench and release profiles copy from release dir
+COPY --from=builder /sui/target/tidehunter/release/sui-node /opt/sui/bin/sui-node
+# Support legacy usages of /usr/local/bin/sui-node
+COPY --from=builder /sui/target/tidehunter/release/sui-node /usr/local/bin
+# Suffixed copy lets mp3's binary_upload_config extract /opt/sui/bin/sui-node-th
+# to s3://sui-releases/{sha}/sui-node-th via {basename} substitution, matching
+# the legacy sui-release-binaries.yml S3 path so existing -th consumers keep working.
+COPY --from=builder /sui/target/tidehunter/release/sui-node /opt/sui/bin/sui-node-th
+
+ARG BUILD_DATE
+ARG GIT_REVISION
+LABEL build-date=$BUILD_DATE
+LABEL git-revision=$GIT_REVISION
