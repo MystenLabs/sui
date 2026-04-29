@@ -22,17 +22,20 @@ module a::m {
     // triggered! assignment suppression is not enough
     public fun t_4(_e: &Empty, c: &OwnerCap) { let _ = c; }
 
-    // not triggered: c is passed to internal_check
-    public fun t_5(_e: &Empty, c: &OwnerCap) { internal_check(c); }
+    // triggered: returning doesn't count
+    public fun t_5(_e: &Empty, c: &OwnerCap): &OwnerCap { c }
+
+    // triggered: borrowed value is not used
+    public fun t_6(_e: &Empty, c: &OwnerCap) { let _ = c.owns; }
 
     // not triggered: c is accessed directly
-    public fun t_6(_e: &Empty, c: &OwnerCap) { assert!(c.owns == @0, ERR); }
+    public fun t_7(_e: &Empty, c: &OwnerCap) { assert!(c.owns == @0, ERR); }
 
     // not triggered: c is mutated
-    public fun t_7(_e: &Empty, c: &mut OwnerCap) { c.owns = @0; }
+    public fun t_8(_e: &Empty, c: &mut OwnerCap) { c.owns = @0; }
 
-    // not triggered: c is returned
-    public fun t_8(_e: &Empty, c: &OwnerCap): &OwnerCap { c }
+    // not triggered: c is passed to internal_check
+    public fun t_9(_e: &Empty, c: &OwnerCap) { internal_check(c); }
 
     // === Other ===
 

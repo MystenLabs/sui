@@ -12,8 +12,7 @@ use crate::{
         absint::JoinResult,
         cfg::{CFG, ImmForwardCFG},
         visitor::{
-            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain,
-            SimpleExecutionContext,
+            LocalState, SimpleAbsInt, SimpleAbsIntConstructor, SimpleDomain, SimpleExecutionContext,
         },
     },
     diag,
@@ -57,8 +56,10 @@ pub struct UnusedObjWithFieldsAI {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Value {
-    /// Tracks the original parameter variable through assignments
+    /// The object reference itself, not yet accessed through a field
     UnusedObj(Var, Loc),
+    /// A value derived from accessing a field of the tracked object
+    FieldOf(Var, Loc),
     #[default]
     Other,
 }
@@ -101,17 +102,13 @@ impl SimpleAbsIntConstructor for UnusedObjWithFieldsVerifier {
 
         let mut tracked_params = BTreeMap::new();
         for (_mutability, v, st) in &context.signature.parameters {
-            if is_qualifying_obj(
-                context.info,
-                context.pre_compiled_program.as_deref(),
-                st,
-            ) {
+            if is_qualifying_obj(context.info, context.pre_compiled_program.as_deref(), st) {
                 tracked_params.insert(*v, v.0.loc);
                 let locals = init_state.locals_mut();
-                if let Some(LocalState::Available(loc, _)) = locals.get(v) {
-                    let loc = *loc;
-                    locals.insert(*v, LocalState::Available(loc, Value::UnusedObj(*v, loc)));
-                }
+                let LocalState::Available(loc, val) = locals.get_mut(v).unwrap() else {
+                    unreachable!("parameter must be available at init")
+                };
+                *val = Value::UnusedObj(*v, *loc);
             }
         }
         if tracked_params.is_empty() {
@@ -222,13 +219,26 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         state: &mut State,
         cmd: &Command,
     ) -> bool {
-        // Returning a tracked ref marks it as used
-        if let sp!(_, C::Return { exp: e, .. }) = cmd {
-            let vals = self.exp(context, state, e);
-            self.mark_unused_values(&vals);
-            return true;
+        match &cmd.value {
+            C::Mutate(lhs, rhs) => {
+                self.exp(context, state, rhs);
+                let lhs_vals = self.exp(context, state, lhs);
+                self.mark_unused_values(&lhs_vals);
+                true
+            }
+            C::Return { exp, .. } => {
+                let vals = self.exp(context, state, exp);
+                // Only field-derived values count as usage; returning the
+                // object reference itself is just passing it through.
+                for v in &vals {
+                    if let Value::FieldOf(var, _) = v {
+                        self.used_params.borrow_mut().insert(*var);
+                    }
+                }
+                true
+            }
+            _ => false,
         }
-        false
     }
 
     fn exp_custom(
@@ -239,25 +249,29 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     ) -> Option<Vec<Value>> {
         use UnannotatedExp_ as E;
         match &e.exp.value {
-            E::BorrowLocal(_, var) => {
-                // Direct borrow of a tracked parameter
-                if self.tracked_params.contains_key(var) {
-                    self.used_params.borrow_mut().insert(*var);
-                }
-                // Transitive: the local might hold a value assigned from a tracked param
-                if let Some(LocalState::Available(_, Value::UnusedObj(orig_var, _))) =
-                    state.locals().get(var)
-                {
-                    self.used_params.borrow_mut().insert(*orig_var);
-                }
-                None
-            }
-            // Field access / deref / freeze on a ref: the default handler evaluates the
-            // inner expression but discards its abstract value. We intercept to check
-            // whether the inner value tracks an unused ref param.
-            E::Borrow(_, inner, _, _) | E::Dereference(inner) | E::Freeze(inner) => {
+            // Field access: promote UnusedObj → FieldOf to distinguish
+            // "object passed through" from "field actually accessed"
+            E::Borrow(_, inner, _, _) => {
                 let vals = self.exp(context, state, inner);
-                self.mark_unused_values(&vals);
+                Some(
+                    vals.into_iter()
+                        .map(|v| match v {
+                            Value::UnusedObj(var, loc) => Value::FieldOf(var, loc),
+                            other => other,
+                        })
+                        .collect(),
+                )
+            }
+            // The default handler discards sub-expression values for these.
+            // Propagate tracking so downstream consumers can mark usage.
+            E::Dereference(inner) | E::Freeze(inner) | E::UnaryExp(_, inner) => {
+                Some(self.exp(context, state, inner))
+            }
+            E::BinopExp(e1, _, e2) => {
+                let v1 = self.exp(context, state, e1);
+                let v2 = self.exp(context, state, e2);
+                self.mark_unused_values(&v1);
+                self.mark_unused_values(&v2);
                 Some(vec![Value::default()])
             }
             _ => None,
@@ -277,15 +291,16 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         self.mark_unused_values(&args);
         None
     }
-
-
 }
 
 impl UnusedObjWithFieldsAI {
     fn mark_unused_values(&self, values: &[Value]) {
         for v in values {
-            if let Value::UnusedObj(var, _) = v {
-                self.used_params.borrow_mut().insert(*var);
+            match v {
+                Value::UnusedObj(var, _) | Value::FieldOf(var, _) => {
+                    self.used_params.borrow_mut().insert(*var);
+                }
+                Value::Other => {}
             }
         }
     }
@@ -308,8 +323,10 @@ impl SimpleDomain for State {
 
     fn join_value(v1: &Value, v2: &Value) -> Value {
         match (v1, v2) {
-            // If used on any path, consider it used overall
             (Value::Other, _) | (_, Value::Other) => Value::Other,
+            (Value::FieldOf(var, loc), _) | (_, Value::FieldOf(var, loc)) => {
+                Value::FieldOf(*var, *loc)
+            }
             (Value::UnusedObj(var, loc), Value::UnusedObj(_, _)) => Value::UnusedObj(*var, *loc),
         }
     }
