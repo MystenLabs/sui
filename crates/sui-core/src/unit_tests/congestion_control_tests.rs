@@ -67,7 +67,7 @@ impl TestSetup {
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
                 default_none_duration_for_new_keys: false,
-                observations_chunk_size: None,
+                observations_chunk_size: Some(18),
             }),
         );
 
@@ -255,7 +255,7 @@ async fn test_congestion_control_execution_cancellation() {
                 stored_observations_limit: u64::MAX,
                 stake_weighted_median_threshold: 0,
                 default_none_duration_for_new_keys: false,
-                observations_chunk_size: None,
+                observations_chunk_size: Some(18),
             },
             false,
             false,
