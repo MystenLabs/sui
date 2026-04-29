@@ -5,6 +5,7 @@ mod bigtable;
 pub mod config;
 mod handlers;
 mod rate_limiter;
+mod store;
 pub mod tables;
 pub mod testing;
 
@@ -45,8 +46,6 @@ use sui_types::transaction::Transaction;
 
 pub use crate::bigtable::client::BigTableClient;
 pub use crate::bigtable::client::PoolConfig;
-pub use crate::bigtable::store::BigTableConnection;
-pub use crate::bigtable::store::BigTableStore;
 pub use crate::handlers::BigTableHandler;
 pub use crate::handlers::CheckpointsByDigestPipeline;
 pub use crate::handlers::CheckpointsPipeline;
@@ -59,6 +58,8 @@ pub use crate::handlers::PackagesPipeline;
 pub use crate::handlers::ProtocolConfigsPipeline;
 pub use crate::handlers::SystemPackagesPipeline;
 pub use crate::handlers::TransactionsPipeline;
+pub use crate::store::BigTableConnection;
+pub use crate::store::BigTableStore;
 pub use config::BigtablePoolLayer;
 pub use config::CommitterLayer;
 pub use config::ConcurrentLayer;

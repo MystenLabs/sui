@@ -6,4 +6,3 @@ mod metrics;
 #[cfg(test)]
 pub(crate) mod mock_server;
 pub(crate) mod proto;
-pub(crate) mod store;

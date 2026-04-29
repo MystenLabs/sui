@@ -14,9 +14,9 @@ use sui_types::full_checkpoint_content::Checkpoint;
 
 use crate::bigtable::client::PartialWriteError;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
-use crate::bigtable::store::BigTableStore;
 use crate::config::ConcurrentLayer;
 use crate::rate_limiter::CompositeRateLimiter;
+use crate::store::BigTableStore;
 
 /// BigTable's hard limit is 100k mutations per MutateRows request.
 /// We cap at half which is still very large.
@@ -164,7 +164,7 @@ mod tests {
     use super::*;
     use crate::bigtable::client::BigTableClient;
     use crate::bigtable::mock_server::{ExpectedCall, MockBigtableServer};
-    use crate::bigtable::store::BigTableStore;
+    use crate::store::BigTableStore;
     use crate::tables;
 
     /// Simple test processor for testing the handler.
