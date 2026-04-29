@@ -311,7 +311,21 @@ impl<T: TypeLayout> MoveTypeLayout<T> {
     pub fn inflate(&self) -> AResult<AV::MoveTypeLayout> {
         self.as_ref().inflate()
     }
+
+    /// Returns `true` iff `self` and `other` describe the same Move type,
+    /// regardless of pool ordering or how subtrees are shared.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveTypeLayout<U>) -> bool {
+        self.as_ref().equivalent(&other.as_ref())
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveTypeLayout<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveTypeLayout<T> {}
 
 impl<T: TypeLayout> fmt::Display for MoveTypeLayout<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -358,6 +372,12 @@ impl<'a, T: TypeLayout> MoveTypeLayoutRef<'a, T> {
     /// Inflate back into a tree-based [`AV::MoveTypeLayout`].
     pub fn inflate(self) -> AResult<AV::MoveTypeLayout> {
         self.as_view().inflate()
+    }
+
+    /// Returns `true` iff the two layouts describe the same Move type,
+    /// regardless of pool ordering or how subtrees are shared.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveTypeLayoutRef<'_, U>) -> bool {
+        (*self).as_view().equivalent(&(*other).as_view())
     }
 }
 
@@ -459,7 +479,36 @@ impl<T: TypeLayout> MoveLayoutView<'_, T> {
             MoveLayoutView::Enum(ev) => ev.is_type_tag(t),
         }
     }
+
+    /// Returns `true` iff `self` and `other` describe the same Move type,
+    /// regardless of pool ordering or how subtrees are shared.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveLayoutView<'_, U>) -> bool {
+        use MoveLayoutView::*;
+        match (self, other) {
+            (Bool, Bool)
+            | (U8, U8)
+            | (U16, U16)
+            | (U32, U32)
+            | (U64, U64)
+            | (U128, U128)
+            | (U256, U256)
+            | (Address, Address)
+            | (Signer, Signer) => true,
+            (Vector(a), Vector(b)) => a.equivalent(b),
+            (Struct(a), Struct(b)) => a.equivalent(b),
+            (Enum(a), Enum(b)) => a.equivalent(b),
+            _ => false,
+        }
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveLayoutView<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveLayoutView<'_, T> {}
 
 impl<T: TypeLayout> From<MoveLayoutView<'_, T>> for TypeTag {
     fn from(view: MoveLayoutView<'_, T>) -> TypeTag {
@@ -563,7 +612,25 @@ impl<'a, T: TypeLayout> MoveDatatypeLayout<'a, T> {
             }
         }
     }
+
+    /// Returns `true` iff `self` and `other` describe the same datatype,
+    /// regardless of pool ordering.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveDatatypeLayout<'_, U>) -> bool {
+        match (self, other) {
+            (MoveDatatypeLayout::Struct(a), MoveDatatypeLayout::Struct(b)) => a.equivalent(b),
+            (MoveDatatypeLayout::Enum(a), MoveDatatypeLayout::Enum(b)) => a.equivalent(b),
+            _ => false,
+        }
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveDatatypeLayout<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveDatatypeLayout<'_, T> {}
 
 // --- MoveFieldsLayout ---
 
@@ -616,7 +683,27 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
             )
         })
     }
+
+    /// Returns `true` iff the two field-lists describe the same fields
+    /// (same arity, pairwise-equivalent layouts, identical names),
+    /// regardless of pool ordering.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveFieldsLayout<'_, U>) -> bool {
+        if self.field_count() != other.field_count() {
+            return false;
+        }
+        self.fields()
+            .zip(other.fields())
+            .all(|((na, la), (nb, lb))| na == nb && la.equivalent(&lb))
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveFieldsLayout<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveFieldsLayout<'_, T> {}
 
 // --- MoveStructLayout ---
 
@@ -658,7 +745,21 @@ impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
     ) -> impl ExactSizeIterator<Item = (&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
         self.fields.fields()
     }
+
+    /// Returns `true` iff `self` and `other` describe the same struct type
+    /// (same type tag, same fields), regardless of pool ordering.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveStructLayout<'_, U>) -> bool {
+        self.type_ == other.type_ && self.fields.equivalent(&other.fields)
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveStructLayout<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveStructLayout<'_, T> {}
 
 impl<T: TypeLayout> fmt::Display for MoveStructLayout<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -744,7 +845,52 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
         let pool = self.pool;
         self.variants.iter().map(move |v| variant_view(pool, v))
     }
+
+    /// Returns `true` iff `self` and `other` describe the same enum type
+    /// (same type tag, same variants with matching names/tags/fields),
+    /// regardless of pool ordering.
+    pub fn equivalent<U: TypeLayout>(&self, other: &MoveEnumLayout<'_, U>) -> bool {
+        if self.type_ != other.type_ {
+            return false;
+        }
+        if self.variant_count() != other.variant_count() {
+            return false;
+        }
+        self.variants().zip(other.variants()).all(|pair| match pair {
+            (
+                VariantLayout::Unknown {
+                    name: na,
+                    tag: ta,
+                },
+                VariantLayout::Unknown {
+                    name: nb,
+                    tag: tb,
+                },
+            ) => na == nb && ta == tb,
+            (
+                VariantLayout::Known {
+                    name: na,
+                    tag: ta,
+                    fields: fa,
+                },
+                VariantLayout::Known {
+                    name: nb,
+                    tag: tb,
+                    fields: fb,
+                },
+            ) => na == nb && ta == tb && fa.equivalent(&fb),
+            _ => false,
+        })
+    }
 }
+
+impl<T: TypeLayout> PartialEq for MoveEnumLayout<'_, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.equivalent(other)
+    }
+}
+
+impl<T: TypeLayout> Eq for MoveEnumLayout<'_, T> {}
 
 #[inline]
 fn variant_view<'a, T: TypeLayout>(
