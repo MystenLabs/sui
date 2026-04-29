@@ -594,6 +594,20 @@ impl MoveTypeLayoutBuilder {
         }))
     }
 
+    /// Recursively intern a tree-based struct layout, deduplicating shared
+    /// subtrees.
+    pub fn from_tree_struct_layout(
+        &mut self,
+        layout: &RV::MoveStructLayout,
+    ) -> AResult<LayoutHandle> {
+        let fields = layout
+            .fields()
+            .iter()
+            .map(|f| self.from_tree(f))
+            .collect::<AResult<Vec<_>>>()?;
+        self.struct_layout(&fields)
+    }
+
     /// Recursively intern a tree-based layout, deduplicating shared subtrees.
     /// Tree-based enum layouts always have known variants, so all variants
     /// are wrapped in `Some`.
@@ -612,14 +626,7 @@ impl MoveTypeLayoutBuilder {
                 let inner_h = self.from_tree(inner)?;
                 self.vector(inner_h)?
             }
-            RV::MoveTypeLayout::Struct(s) => {
-                let fields = s
-                    .fields()
-                    .iter()
-                    .map(|f| self.from_tree(f))
-                    .collect::<AResult<Vec<_>>>()?;
-                self.struct_layout(&fields)?
-            }
+            RV::MoveTypeLayout::Struct(s) => self.from_tree_struct_layout(s)?,
             RV::MoveTypeLayout::Enum(e) => {
                 let variant_handles =
                     e.0.iter()

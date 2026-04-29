@@ -19,7 +19,7 @@ use crate::messages_checkpoint::{
 use crate::object::Object;
 use crate::storage::ObjectKey;
 use crate::transaction::{TransactionData, VerifiedTransaction};
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use mysten_common::ZipDebugEqIteratorExt;
@@ -638,25 +638,33 @@ pub trait RpcStateReader:
     // Get a handle to an instance of the RpcIndexes
     fn indexes(&self) -> Option<&dyn RpcIndexes>;
 
-    fn get_type_layout(&self, type_tag: &TypeTag) -> Result<Option<MoveTypeLayout>> {
+    fn get_type_layout(&self, type_tag: &TypeTag) -> Result<Option<CA::MoveTypeLayout>> {
         match type_tag {
-            TypeTag::Bool => Ok(Some(MoveTypeLayout::Bool)),
-            TypeTag::U8 => Ok(Some(MoveTypeLayout::U8)),
-            TypeTag::U64 => Ok(Some(MoveTypeLayout::U64)),
-            TypeTag::U128 => Ok(Some(MoveTypeLayout::U128)),
-            TypeTag::Address => Ok(Some(MoveTypeLayout::Address)),
-            TypeTag::Signer => Ok(Some(MoveTypeLayout::Signer)),
-            TypeTag::Vector(type_tag) => Ok(self
-                .get_type_layout(type_tag)?
-                .map(|layout| MoveTypeLayout::Vector(Box::new(layout)))),
+            TypeTag::Bool => Ok(Some(CA::MoveTypeLayout::bool())),
+            TypeTag::U8 => Ok(Some(CA::MoveTypeLayout::u8())),
+            TypeTag::U64 => Ok(Some(CA::MoveTypeLayout::u64())),
+            TypeTag::U128 => Ok(Some(CA::MoveTypeLayout::u128())),
+            TypeTag::Address => Ok(Some(CA::MoveTypeLayout::address())),
+            TypeTag::Signer => Ok(Some(CA::MoveTypeLayout::signer())),
+            TypeTag::Vector(type_tag) => {
+                let Some(inner) = self.get_type_layout(type_tag)? else {
+                    return Ok(None);
+                };
+                let layout = CA::MoveTypeLayoutBuilder::with_builder(|b| {
+                    let inner_h = b.from_layout(&inner)?;
+                    b.vector(inner_h)
+                })
+                .map_err(super::error::Error::custom)?;
+                Ok(Some(layout))
+            }
             TypeTag::Struct(struct_tag) => self.get_struct_layout(struct_tag),
-            TypeTag::U16 => Ok(Some(MoveTypeLayout::U16)),
-            TypeTag::U32 => Ok(Some(MoveTypeLayout::U32)),
-            TypeTag::U256 => Ok(Some(MoveTypeLayout::U256)),
+            TypeTag::U16 => Ok(Some(CA::MoveTypeLayout::u16())),
+            TypeTag::U32 => Ok(Some(CA::MoveTypeLayout::u32())),
+            TypeTag::U256 => Ok(Some(CA::MoveTypeLayout::u256())),
         }
     }
 
-    fn get_struct_layout(&self, struct_tag: &StructTag) -> Result<Option<MoveTypeLayout>> {
+    fn get_struct_layout(&self, struct_tag: &StructTag) -> Result<Option<CA::MoveTypeLayout>> {
         self.get_struct_layout_with_overlay(struct_tag, &ObjectSet::default())
     }
 
@@ -664,7 +672,7 @@ pub trait RpcStateReader:
         &self,
         struct_tag: &StructTag,
         overlay: &ObjectSet,
-    ) -> Result<Option<MoveTypeLayout>>;
+    ) -> Result<Option<CA::MoveTypeLayout>>;
 }
 
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;

@@ -7,6 +7,7 @@ use crate::sui_serde::Readable;
 use crate::{error::ExecutionError, execution_status::ExecutionErrorKind};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout};
+use move_core_types::compressed::annotated as CA;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -122,9 +123,9 @@ impl Balance {
         }
     }
 
-    /// Check if a struct layout represents a `Balance<T>` type with the expected field structure.
-    pub fn is_balance_layout(struct_layout: &MoveStructLayout) -> bool {
-        let ty = &struct_layout.type_;
+    /// Check if a compressed struct layout represents a `Balance<T>` type with the expected field structure.
+    pub fn is_balance_layout(struct_layout: &CA::MoveStructLayout) -> bool {
+        let ty = &struct_layout.type_();
 
         if !Self::is_balance(ty) {
             return false;
@@ -134,19 +135,19 @@ impl Balance {
             return false;
         }
 
-        if struct_layout.fields.len() != 1 {
+        if struct_layout.field_count() != 1 {
             return false;
         }
 
-        let Some(field) = struct_layout.fields.first() else {
+        let Some((field_name, field_layout)) = struct_layout.fields().next() else {
             return false;
         };
 
-        if field.name.as_str() != "value" {
+        if field_name.as_str() != "value" {
             return false;
         }
 
-        if !matches!(field.layout, MoveTypeLayout::U64) {
+        if !matches!(field_layout.as_view(), CA::MoveLayoutView::U64) {
             return false;
         }
 

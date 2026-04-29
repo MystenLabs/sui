@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::OnceLock;
+
 use crate::MoveTypeTagTrait;
 use crate::{SUI_FRAMEWORK_ADDRESS, base_types::ObjectID};
 use move_core_types::account_address::AccountAddress;
+use move_core_types::compressed::LayoutHandle;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::{
     annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
@@ -67,6 +71,21 @@ impl UID {
             )],
         }
     }
+
+    pub fn compressed_layout() -> &'static CA::MoveStructLayout {
+        static CELL: OnceLock<CA::MoveStructLayout> = OnceLock::new();
+        CELL.get_or_init(|| CA::MoveStructLayout::try_from(&Self::layout()).unwrap())
+    }
+
+    pub fn layout_for_builder(
+        builder: &mut CA::MoveTypeLayoutBuilder,
+    ) -> anyhow::Result<LayoutHandle> {
+        let id_layout = ID::layout_for_builder(builder)?;
+        builder.struct_layout(
+            Self::type_(),
+            vec![(ident_str!("id").to_owned(), id_layout)],
+        )
+    }
 }
 
 impl ID {
@@ -91,6 +110,21 @@ impl ID {
                 MoveTypeLayout::Address,
             )],
         }
+    }
+
+    pub fn compressed_layout() -> &'static CA::MoveStructLayout {
+        static CELL: OnceLock<CA::MoveStructLayout> = OnceLock::new();
+        CELL.get_or_init(|| CA::MoveStructLayout::try_from(&Self::layout()).unwrap())
+    }
+
+    pub fn layout_for_builder(
+        builder: &mut CA::MoveTypeLayoutBuilder,
+    ) -> anyhow::Result<LayoutHandle> {
+        let address_layout = builder.address();
+        builder.struct_layout(
+            Self::type_(),
+            vec![(ident_str!("bytes").to_owned(), address_layout)],
+        )
     }
 }
 

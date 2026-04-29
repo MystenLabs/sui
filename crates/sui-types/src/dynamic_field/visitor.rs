@@ -5,6 +5,7 @@ use move_core_types::{
     account_address::AccountAddress,
     annotated_value as A,
     annotated_visitor::{self, StructDriver, Visitor},
+    compressed::annotated as CA,
     language_storage::TypeTag,
     u256::U256,
     visitor_default,
@@ -19,12 +20,12 @@ use super::{DynamicFieldInfo, DynamicFieldType};
 pub struct FieldVisitor;
 
 #[derive(Debug, Clone)]
-pub struct Field<'b, 'l> {
+pub struct Field<'b> {
     pub id: ObjectID,
     pub kind: DynamicFieldType,
-    pub name_layout: &'l A::MoveTypeLayout,
+    pub name_layout: CA::MoveTypeLayout,
     pub name_bytes: &'b [u8],
-    pub value_layout: &'l A::MoveTypeLayout,
+    pub value_layout: CA::MoveTypeLayout,
     pub value_bytes: &'b [u8],
 }
 
@@ -48,22 +49,22 @@ pub enum Error {
 impl FieldVisitor {
     /// Deserialize the top-level structure from a dynamic field's `0x2::dynamic_field::Field`
     /// without having to fully deserialize its name or value.
-    pub fn deserialize<'b, 'l>(
+    pub fn deserialize<'b>(
         bytes: &'b [u8],
-        layout: &'l A::MoveTypeLayout,
-    ) -> Result<Field<'b, 'l>, Error> {
+        layout: CA::MoveTypeLayout,
+    ) -> Result<Field<'b>, Error> {
         A::MoveValue::visit_deserialize(bytes, layout, &mut FieldVisitor)
     }
 }
 
-impl Field<'_, '_> {
+impl Field<'_> {
     /// If this field is a dynamic field, returns its value's type. If it is a dynamic object
     /// field, it returns the ID of the object the value points to (which must be fetched to
     /// extract its type).
     pub fn value_metadata(&self) -> Result<ValueMetadata, Error> {
         match self.kind {
             DynamicFieldType::DynamicField => Ok(ValueMetadata::DynamicField(TypeTag::from(
-                self.value_layout,
+                &self.value_layout,
             ))),
 
             DynamicFieldType::DynamicObject => {
@@ -75,21 +76,18 @@ impl Field<'_, '_> {
     }
 }
 
-impl<'b, 'l> Visitor<'b, 'l> for FieldVisitor {
-    type Value = Field<'b, 'l>;
+impl<'b> Visitor<'b> for FieldVisitor {
+    type Value = Field<'b>;
     type Error = Error;
 
     // === Empty/default casees ===
     //
     // A dynamic field must be a struct, so if the visitor is fed anything else, it complains.
-    visitor_default! { <'b, 'l> u8, u16, u32, u64, u128, u256 = Err(Error::NotADynamicField) }
-    visitor_default! { <'b, 'l> bool, address, signer, vector, variant = Err(Error::NotADynamicField) }
+    visitor_default! { <'b> u8, u16, u32, u64, u128, u256 = Err(Error::NotADynamicField) }
+    visitor_default! { <'b> bool, address, signer, vector, variant = Err(Error::NotADynamicField) }
 
-    fn visit_struct(
-        &mut self,
-        driver: &mut StructDriver<'_, 'b, 'l>,
-    ) -> Result<Self::Value, Error> {
-        if !DynamicFieldInfo::is_dynamic_field(&driver.struct_layout().type_) {
+    fn visit_struct(&mut self, driver: &mut StructDriver<'_, 'b>) -> Result<Self::Value, Error> {
+        if !DynamicFieldInfo::is_dynamic_field(driver.struct_layout().type_()) {
             return Err(Error::NotADynamicField);
         }
 
@@ -99,14 +97,14 @@ impl<'b, 'l> Visitor<'b, 'l> for FieldVisitor {
         let mut name_parts = None;
         let mut value_parts = None;
 
-        while let Some(A::MoveFieldLayout { name, layout }) = driver.peek_field() {
+        while let Some((name, layout)) = driver.peek_field() {
             match name.as_str() {
                 "id" => {
                     let lo = driver.position();
                     driver.skip_field()?;
                     let hi = driver.position();
 
-                    if !matches!(layout, A::MoveTypeLayout::Struct(s) if s.as_ref() == &UID::layout())
+                    if !matches!(layout.as_view(), CA::MoveLayoutView::Struct(s) if s.type_() == &UID::type_())
                     {
                         return Err(Error::NotADynamicField);
                     }
@@ -157,18 +155,22 @@ impl<'b, 'l> Visitor<'b, 'l> for FieldVisitor {
 
 /// Extract the type and layout of a dynamic field name, from the layout of its `Field.name`.
 fn extract_name_layout(
-    layout: &A::MoveTypeLayout,
-) -> Result<(DynamicFieldType, &A::MoveTypeLayout), Error> {
-    let A::MoveTypeLayout::Struct(struct_) = layout else {
+    layout: CA::MoveTypeLayout,
+) -> Result<(DynamicFieldType, CA::MoveTypeLayout), Error> {
+    let CA::MoveLayoutView::Struct(struct_) = layout.as_view() else {
         return Ok((DynamicFieldType::DynamicField, layout));
     };
 
-    if !DynamicFieldInfo::is_dynamic_object_field_wrapper(&struct_.type_) {
+    if !DynamicFieldInfo::is_dynamic_object_field_wrapper(struct_.type_()) {
         return Ok((DynamicFieldType::DynamicField, layout));
     }
 
     // Wrapper contains just one field
-    let [A::MoveFieldLayout { name, layout }] = &struct_.fields[..] else {
+    if struct_.field_count() != 1 {
+        return Err(Error::NotADynamicField);
+    }
+
+    let Some((name, layout)) = struct_.fields().next() else {
         return Err(Error::NotADynamicField);
     };
 
@@ -202,8 +204,10 @@ mod tests {
         for (name, name_layout, name_bcs) in fixtures() {
             for (value, value_layout, value_bcs) in fixtures() {
                 let df = serialized_df("0x264", name.clone(), value.clone());
-                let df_layout = df_layout(name_layout.clone(), value_layout.clone());
-                let field = FieldVisitor::deserialize(&df, &df_layout)
+                let df_layout = df_layout(name_layout.clone(), value_layout.clone())
+                    .try_into()
+                    .unwrap();
+                let field = FieldVisitor::deserialize(&df, df_layout)
                     .unwrap_or_else(|e| panic!("Failed to deserialize {name} => {value}: {e}"));
 
                 assert_eq!(field.id, oid_("0x264"), "{name} => {value}");
@@ -239,8 +243,8 @@ mod tests {
 
         for (name, name_layout, name_bcs) in fixtures() {
             let df = serialized_df("0x264", name.clone(), id.clone());
-            let df_layout = dof_layout(name_layout.clone());
-            let field = FieldVisitor::deserialize(&df, &df_layout)
+            let df_layout = dof_layout(name_layout.clone()).try_into().unwrap();
+            let field = FieldVisitor::deserialize(&df, df_layout)
                 .unwrap_or_else(|e| panic!("Failed to deserialize {name}: {e}"));
 
             assert_eq!(field.id, oid_("0x264"), "{name}");
@@ -266,7 +270,7 @@ mod tests {
     #[test]
     fn test_name_from_not_dynamic_field() {
         for (value, layout, bytes) in fixtures() {
-            let Err(e) = FieldVisitor::deserialize(&bytes, &layout) else {
+            let Err(e) = FieldVisitor::deserialize(&bytes, layout.try_into().unwrap()) else {
                 panic!("Expected NotADynamicField error for {value}");
             };
 
@@ -283,7 +287,7 @@ mod tests {
     #[test]
     fn test_from_bad_type() {
         for (value, layout, bytes) in fixtures() {
-            let Err(e) = FieldVisitor::deserialize(&bytes, &layout) else {
+            let Err(e) = FieldVisitor::deserialize(&bytes, layout.try_into().unwrap()) else {
                 panic!("Expected NotADynamicField error for {value}");
             };
 
@@ -304,9 +308,11 @@ mod tests {
                 ("name", A::MoveTypeLayout::U8),
                 ("value", A::MoveTypeLayout::U8),
             ],
-        );
+        )
+        .try_into()
+        .unwrap();
 
-        let Err(e) = FieldVisitor::deserialize(&bytes, &layout) else {
+        let Err(e) = FieldVisitor::deserialize(&bytes, layout) else {
             panic!("Expected NotADynamicField error");
         };
 
@@ -319,9 +325,11 @@ mod tests {
         let layout = layout_(
             "0x2::dynamic_field::Field<u8, u8>",
             vec![("id", id_layout()), ("value", A::MoveTypeLayout::U8)],
-        );
+        )
+        .try_into()
+        .unwrap();
 
-        let Err(e) = FieldVisitor::deserialize(&bytes, &layout) else {
+        let Err(e) = FieldVisitor::deserialize(&bytes, layout) else {
             panic!("Expected NotADynamicField error");
         };
 
@@ -334,9 +342,11 @@ mod tests {
         let layout = layout_(
             "0x2::dynamic_field::Field<u8, u8>",
             vec![("id", id_layout()), ("name", A::MoveTypeLayout::U8)],
-        );
+        )
+        .try_into()
+        .unwrap();
 
-        let Err(e) = FieldVisitor::deserialize(&bytes, &layout) else {
+        let Err(e) = FieldVisitor::deserialize(&bytes, layout) else {
             panic!("Expected NotADynamicField error");
         };
 
@@ -353,9 +363,11 @@ mod tests {
                 ("name", A::MoveTypeLayout::U8),
                 ("value", A::MoveTypeLayout::U8),
             ],
-        );
+        )
+        .try_into()
+        .unwrap();
 
-        let Err(e) = FieldVisitor::deserialize(&bytes, &layout) else {
+        let Err(e) = FieldVisitor::deserialize(&bytes, layout) else {
             panic!("Expected NotADynamicField error");
         };
 
@@ -381,9 +393,11 @@ mod tests {
                 ),
                 ("value", A::MoveTypeLayout::U8),
             ],
-        );
+        )
+        .try_into()
+        .unwrap();
 
-        let Err(e) = FieldVisitor::deserialize(&bytes, &layout) else {
+        let Err(e) = FieldVisitor::deserialize(&bytes, layout) else {
             panic!("Expected NotADynamicField error");
         };
 

@@ -30,14 +30,11 @@ impl BalanceTraversal {
     }
 }
 
-impl<'b, 'l> Traversal<'b, 'l> for BalanceTraversal {
+impl<'b> Traversal<'b> for BalanceTraversal {
     type Error = annotated_visitor::Error;
 
-    fn traverse_struct(
-        &mut self,
-        driver: &mut StructDriver<'_, 'b, 'l>,
-    ) -> Result<(), Self::Error> {
-        let Some(coin_type) = is_balance(&driver.struct_layout().type_) else {
+    fn traverse_struct(&mut self, driver: &mut StructDriver<'_, 'b>) -> Result<(), Self::Error> {
+        let Some(coin_type) = is_balance(driver.struct_layout().type_()) else {
             // Not a balance, search recursively for balances among fields.
             while driver.next_field(self)?.is_some() {}
             return Ok(());
@@ -50,11 +47,11 @@ impl<'b, 'l> Traversal<'b, 'l> for BalanceTraversal {
     }
 }
 
-impl<'b, 'l> Traversal<'b, 'l> for Accumulator {
+impl<'b> Traversal<'b> for Accumulator {
     type Error = annotated_visitor::Error;
     fn traverse_u64(
         &mut self,
-        _driver: &ValueDriver<'_, 'b, 'l>,
+        _driver: &ValueDriver<'_, 'b>,
         value: u64,
     ) -> Result<(), Self::Error> {
         self.total += value;
@@ -88,7 +85,7 @@ mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout.try_into().unwrap(), &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(balances, BTreeMap::from([(type_("0x42::foo::Bar"), 42)]));
@@ -102,7 +99,7 @@ mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout.try_into().unwrap(), &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(balances, BTreeMap::from([(type_("0x42::foo::Bar"), 42)]));
@@ -119,7 +116,9 @@ mod tests {
                 ("c", coin_t("0x42::baz::Qux")),
                 ("d", T::Vector(Box::new(coin_t("0x42::quy::Frob")))),
             ],
-        );
+        )
+        .try_into()
+        .unwrap();
 
         let value = value_(
             "0xa::foo::Bar",
@@ -139,7 +138,7 @@ mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout, &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(
@@ -155,12 +154,12 @@ mod tests {
     fn test_traverse_primitive() {
         use A::MoveTypeLayout as T;
 
-        let layout = T::U64;
+        let layout = T::U64.try_into().unwrap();
         let value = A::MoveValue::U64(42);
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout, &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(balances, BTreeMap::from([]));
@@ -184,7 +183,9 @@ mod tests {
                     ),
                 ),
             ],
-        );
+        )
+        .try_into()
+        .unwrap();
 
         let value = value_(
             "0xa::foo::Bar",
@@ -204,7 +205,7 @@ mod tests {
         let bytes = serialize(value.clone());
 
         let mut visitor = BalanceTraversal::default();
-        A::MoveValue::visit_deserialize(&bytes, &layout, &mut visitor).unwrap();
+        A::MoveValue::visit_deserialize(&bytes, layout, &mut visitor).unwrap();
         let balances = visitor.finish();
 
         assert_eq!(

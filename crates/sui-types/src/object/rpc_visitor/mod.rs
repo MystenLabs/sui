@@ -21,10 +21,10 @@ use move_core_types::u256::U256;
 
 use crate::balance::Balance;
 use crate::base_types::RESOLVED_STD_OPTION;
-use crate::base_types::move_ascii_str_layout;
-use crate::base_types::move_utf8_str_layout;
-use crate::base_types::type_name_layout;
-use crate::base_types::url_layout;
+use crate::base_types::compressed_move_ascii_str_layout;
+use crate::base_types::compressed_move_utf8_str_layout;
+use crate::base_types::compressed_type_name_layout;
+use crate::base_types::compressed_url_layout;
 use crate::id::ID;
 use crate::id::UID;
 use crate::object::option_visitor as OV;
@@ -63,13 +63,13 @@ impl<F: Format, M: Meter> RpcVisitor<F, M> {
     }
 }
 
-impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
+impl<'b, F: Format, M: Meter> AV::Visitor<'b> for RpcVisitor<F, M> {
     type Value = F;
     type Error = Error;
 
     fn visit_u8(
         &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b>,
         value: u8,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::number(&mut self.meter, value as u32)?)
@@ -77,7 +77,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_u16(
         &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b>,
         value: u16,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::number(&mut self.meter, value as u32)?)
@@ -85,7 +85,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_u32(
         &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b>,
         value: u32,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::number(&mut self.meter, value)?)
@@ -93,7 +93,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_u64(
         &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b>,
         value: u64,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::string(&mut self.meter, value.to_string())?)
@@ -101,7 +101,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_u128(
         &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b>,
         value: u128,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::string(&mut self.meter, value.to_string())?)
@@ -109,7 +109,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_u256(
         &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b>,
         value: U256,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::string(&mut self.meter, value.to_string())?)
@@ -117,7 +117,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_bool(
         &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b>,
         value: bool,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::bool(&mut self.meter, value)?)
@@ -125,7 +125,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_address(
         &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::string(&mut self.meter, value.to_canonical_string(true))?)
@@ -133,7 +133,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_signer(
         &mut self,
-        _: &AV::ValueDriver<'_, 'b, 'l>,
+        _: &AV::ValueDriver<'_, 'b>,
         value: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         Ok(F::string(&mut self.meter, value.to_canonical_string(true))?)
@@ -141,7 +141,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_vector(
         &mut self,
-        driver: &mut AV::VecDriver<'_, 'b, 'l>,
+        driver: &mut AV::VecDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
         if driver.element_layout().is_type(&TypeTag::U8) {
             use base64::Engine;
@@ -174,15 +174,15 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_struct(
         &mut self,
-        driver: &mut AV::StructDriver<'_, 'b, 'l>,
+        driver: &mut AV::StructDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
-        let ty = &driver.struct_layout().type_;
         let layout = driver.struct_layout();
+        let ty = layout.type_();
 
-        if layout == &move_ascii_str_layout()
-            || layout == &move_utf8_str_layout()
-            || layout == &type_name_layout()
-            || layout == &url_layout()
+        if &layout == compressed_move_ascii_str_layout()
+            || &layout == compressed_move_utf8_str_layout()
+            || &layout == compressed_type_name_layout()
+            || &layout == compressed_url_layout()
         {
             // 0x1::ascii::String or 0x1::string::String or 0x1::type_name::TypeName or 0x2::url::Url
 
@@ -194,7 +194,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
             let bytes = &driver.bytes()[lo..hi];
             let s: String = bcs::from_bytes(bytes).map_err(|_| Error::UnexpectedType)?;
             Ok(F::string(&mut self.meter, s)?)
-        } else if layout == &UID::layout() || layout == &ID::layout() {
+        } else if &layout == UID::compressed_layout() || &layout == ID::compressed_layout() {
             // 0x2::object::UID or 0x2::object::ID
 
             let lo = driver.position();
@@ -215,7 +215,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
                 Some(value) => Ok(value),
                 None => Ok(F::null(&mut self.meter)?),
             }
-        } else if Balance::is_balance_layout(layout) {
+        } else if Balance::is_balance_layout(&layout) {
             // 0x2::balance::Balance
 
             let lo = driver.position();
@@ -237,8 +237,8 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
             {
                 let nested = self.meter.nest()?;
                 let mut visitor = RpcVisitor::<F, _>::new(nested);
-                while let Some((field, elem)) = driver.next_field(&mut visitor)? {
-                    let name = field.name.to_string();
+                while let Some(((field_name, _), elem)) = driver.next_field(&mut visitor)? {
+                    let name = field_name.to_string();
                     F::map_push_field(&mut visitor.meter, &mut map, name, elem)?;
                 }
             }
@@ -249,7 +249,7 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
 
     fn visit_variant(
         &mut self,
-        driver: &mut AV::VariantDriver<'_, 'b, 'l>,
+        driver: &mut AV::VariantDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
         let mut map = F::Map::default();
         {
@@ -259,8 +259,8 @@ impl<'b, 'l, F: Format, M: Meter> AV::Visitor<'b, 'l> for RpcVisitor<F, M> {
             F::map_push_field(&mut nested_meter, &mut map, "@variant".to_owned(), variant)?;
 
             let mut visitor = RpcVisitor::<F, _>::new(nested_meter);
-            while let Some((field, elem)) = driver.next_field(&mut visitor)? {
-                let name = field.name.to_string();
+            while let Some(((field_name, _), elem)) = driver.next_field(&mut visitor)? {
+                let name = field_name.to_string();
                 F::map_push_field(&mut visitor.meter, &mut map, name, elem)?;
             }
         }
@@ -305,7 +305,7 @@ mod tests {
     fn json<T: Serialize>(layout: A::MoveTypeLayout, data: T) -> Value {
         let bcs = bcs::to_bytes(&data).unwrap();
         let mut visitor = RpcVisitor::new(Unmetered);
-        A::MoveValue::visit_deserialize(&bcs, &layout, &mut visitor).unwrap()
+        A::MoveValue::visit_deserialize(&bcs, layout.try_into().unwrap(), &mut visitor).unwrap()
     }
 
     fn address(a: &str) -> sui_sdk_types::Address {
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn json_ascii_string() {
-        let l = A::MoveTypeLayout::Struct(Box::new(move_ascii_str_layout()));
+        let l = A::MoveTypeLayout::Struct(Box::new(crate::base_types::move_ascii_str_layout()));
         let actual = json(l, "The quick brown fox");
         let expect = json!("The quick brown fox");
         assert_eq!(expect, actual);
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn json_utf8_string() {
-        let l = A::MoveTypeLayout::Struct(Box::new(move_utf8_str_layout()));
+        let l = A::MoveTypeLayout::Struct(Box::new(crate::base_types::move_utf8_str_layout()));
         let actual = json(l, "The quick brown fox");
         let expect = json!("The quick brown fox");
         assert_eq!(expect, actual);
@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn json_type_name() {
-        let l = A::MoveTypeLayout::Struct(Box::new(type_name_layout()));
+        let l = A::MoveTypeLayout::Struct(Box::new(crate::base_types::type_name_layout()));
         let actual = json(
             l,
             "0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>",
@@ -399,7 +399,7 @@ mod tests {
 
     #[test]
     fn json_url() {
-        let l = A::MoveTypeLayout::Struct(Box::new(url_layout()));
+        let l = A::MoveTypeLayout::Struct(Box::new(crate::base_types::url_layout()));
         let actual = json(l, "https://example.com");
         let expect = json!("https://example.com");
         assert_eq!(expect, actual);
