@@ -1,5 +1,5 @@
 module a::m {
-    use sui::object::UID;
+    use sui::object::{Self, UID};
 
     const ERR: u64 = 0;
 
@@ -37,6 +37,18 @@ module a::m {
     // not triggered: c is passed to internal_check
     public fun t_9(_e: &Empty, c: &OwnerCap) { internal_check(c); }
 
+    // not triggered: field is passed to a function
+    public fun t_10(_e: &Empty, c: &OwnerCap) { assert_owner(c.owns) }
+
+    // not triggered: passed by value
+    public fun t_11(_e: &Empty, c: OwnerCap) { consume(c) }
+
+    // not triggered: passed by value (testing with unpack)
+    public fun t_12(_e: &Empty, c: OwnerCap) {
+        let OwnerCap { id, owns: _ } = c;
+        object::delete(id)
+    }
+
     // === Other ===
 
     // typical getter function, should not be affected
@@ -51,21 +63,29 @@ module a::m {
     fun internal_check(c: &OwnerCap) {
         assert!(c.owns == @0, ERR);
     }
+
+    fun assert_owner(c: address) {
+        assert!(c == @0, ERR);
+    }
+
+    fun consume<T>(_: T) { abort ERR }
 }
 
 module sui::object {
+    use sui::tx_context::TxContext;
+
     const ZERO: u64 = 0;
 
     struct UID has store, drop {
         id: address,
     }
 
-    public fun new(_: &mut sui::tx_context::TxContext): UID {
+    public fun new(_: &mut TxContext): UID {
         abort ZERO
     }
 
-    public fun delete(_: UID) {
-        abort ZERO
+    public fun delete(u: UID) {
+        let UID { id: _ } = u;
     }
 }
 
@@ -74,13 +94,5 @@ module sui::tx_context {
 
     public fun sender(_: &TxContext): address {
         @0
-    }
-}
-
-module sui::transfer {
-    const ZERO: u64 = 0;
-
-    public fun transfer<T: key>(_: T, _: address) {
-        abort ZERO
     }
 }
