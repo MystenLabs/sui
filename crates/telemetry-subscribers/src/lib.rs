@@ -504,13 +504,26 @@ impl TelemetryConfig {
         }
         let env_filter =
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(directives));
+        // When the test layer is enabled, it accepts events at any level without a
+        // per-layer filter, so global event-level filtering would hide events the
+        // test wants to capture. Disable it by pinning max_event_level to TRACE
+        // (and skip propagating env filter reloads into it).
+        let max_event_level_seed = if config.enable_test_layer {
+            LevelFilter::TRACE
+        } else {
+            env_filter.max_level_hint().unwrap_or(LevelFilter::TRACE)
+        };
         let max_event_level = Arc::new(std::sync::atomic::AtomicU8::new(level_filter_to_u8(
-            env_filter.max_level_hint().unwrap_or(LevelFilter::TRACE),
+            max_event_level_seed,
         )));
         let (log_filter, reload_handle) = reload::Layer::new(env_filter);
         let log_filter_handle = FilterHandle {
             reload: reload_handle,
-            max_event_level: Some(max_event_level.clone()),
+            max_event_level: if config.enable_test_layer {
+                None
+            } else {
+                Some(max_event_level.clone())
+            },
         };
 
         // Separate span level filter.
