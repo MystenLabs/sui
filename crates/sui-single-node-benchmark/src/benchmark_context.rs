@@ -348,7 +348,7 @@ impl BenchmarkContext {
         let min = durations[0];
         let max = durations[n - 1];
         info!(
-            "Per-tx execution timing (try_execute_immediately wall-clock):\n  \
+            "Per-tx execution timing (wall-clock, varies by component):\n  \
              avg={:?}  min={:?}  p50={:?}  p90={:?}  p99={:?}  max={:?}",
             avg, min, p50, p90, p99, max,
         );
