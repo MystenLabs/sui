@@ -3,8 +3,8 @@
 
 //! End-to-end tests for the checkpoint subscription gRPC. Spins up the full
 //! tonic stack (forking admin RPCs + the canonical sui-rpc-api streaming
-//! RPC), drives `advance_checkpoint`, and asserts subscribers see each
-//! checkpoint on the stream.
+//! RPC), drives checkpoint-producing admin calls, and asserts subscribers
+//! see each checkpoint on the stream.
 
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
@@ -32,7 +32,9 @@ use crate::proto::forking::forking_service_server::ForkingServiceServer;
 use crate::rpc::executor::ForkedTransactionExecutor;
 use crate::rpc::forking_service::ForkingServiceImpl;
 use crate::store::DataStore;
-use crate::{AdvanceCheckpointRequest, ForkingServiceClient};
+use crate::{
+    AdvanceCheckpointRequest, AdvanceClockRequest, ForkingServiceClient, GetStatusRequest,
+};
 
 /// In-process gRPC harness: builds a fresh Simulacrum from a genesis
 /// `NetworkConfig`, wires up the subscription broker, and starts a tonic
@@ -163,6 +165,45 @@ async fn subscription_streams_checkpoints_after_advance() -> Result<()> {
             "subscription message missing checkpoint payload"
         );
     }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn subscription_streams_checkpoint_after_advance_clock() -> Result<()> {
+    let harness = ServerHarness::start().await?;
+
+    let mut subscriptions =
+        SubscriptionServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    let mut stream = subscriptions
+        .subscribe_checkpoints(SubscribeCheckpointsRequest::default())
+        .await?
+        .into_inner();
+
+    let mut forking = ForkingServiceClient::connect(harness.grpc_endpoint.clone()).await?;
+    let clock = forking
+        .advance_clock(AdvanceClockRequest {
+            duration_ms: Some(1_000),
+        })
+        .await?
+        .into_inner();
+    assert!(
+        !clock.tx_digest.is_empty(),
+        "advance_clock should return the clock transaction digest",
+    );
+
+    let status = forking.get_status(GetStatusRequest {}).await?.into_inner();
+
+    let msg = tokio::time::timeout(STREAM_RECV_TIMEOUT, stream.message())
+        .await?
+        .map_err(|e| anyhow!("stream error: {e}"))?
+        .ok_or_else(|| anyhow!("subscription stream closed before advance_clock"))?;
+
+    assert_eq!(msg.cursor, Some(status.checkpoint_sequence_number));
+    assert!(
+        msg.checkpoint.is_some(),
+        "subscription message missing checkpoint payload"
+    );
 
     Ok(())
 }

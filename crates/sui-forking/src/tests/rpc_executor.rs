@@ -10,6 +10,7 @@
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use std::time::Duration;
 
 use rand::rngs::OsRng;
 
@@ -24,12 +25,13 @@ use sui_types::crypto::{AccountKeyPair, KeypairTraits, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiErrorKind;
 use sui_types::execution_status::ExecutionErrorKind;
+use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{GasData, Transaction, TransactionData, TransactionKind};
 use sui_types::transaction_driver_types::{
-    ExecuteTransactionRequestV3, TransactionSubmissionError,
+    EffectsFinalityInfo, ExecuteTransactionRequestV3, TransactionSubmissionError,
 };
 use sui_types::transaction_executor::{TransactionChecks, TransactionExecutor};
 
@@ -45,6 +47,7 @@ struct TestHarness {
     sender_key: AccountKeyPair,
     gas_object: Object,
     reference_gas_price: u64,
+    checkpoint_receiver: tokio::sync::mpsc::Receiver<Checkpoint>,
     temp: tempfile::TempDir,
 }
 
@@ -90,10 +93,7 @@ impl TestHarness {
 
         let gas_object = Self::find_gas_coin(&config, sender);
 
-        // The executor tests do not exercise the checkpoint subscription path,
-        // so the receiver is dropped immediately — `Context::publish_checkpoint`
-        // is never invoked in this harness.
-        let (checkpoint_sender, _) = tokio::sync::mpsc::channel(1);
+        let (checkpoint_sender, checkpoint_receiver) = tokio::sync::mpsc::channel(4);
         let context = Arc::new(Context::new(sim, Chain::Unknown, checkpoint_sender));
         let executor = ForkedTransactionExecutor::new(context);
 
@@ -103,6 +103,7 @@ impl TestHarness {
             sender_key,
             gas_object,
             reference_gas_price,
+            checkpoint_receiver,
             temp,
         }
     }
@@ -136,6 +137,32 @@ impl TestHarness {
         );
         Transaction::from_data_and_signer(tx_data, vec![&self.sender_key])
     }
+}
+
+#[tokio::test]
+async fn test_tx_execution_publishes_checkpoint() {
+    let mut harness = TestHarness::new();
+    let signed_tx = harness.build_transfer_tx(1_000);
+
+    let request = ExecuteTransactionRequestV3::new_v2(signed_tx);
+    let response = harness
+        .executor
+        .execute_transaction(request, None)
+        .await
+        .expect("execute_transaction should succeed");
+
+    let EffectsFinalityInfo::Checkpointed(_epoch, checkpoint_seq) = response.effects.finality_info
+    else {
+        panic!("forked execution should report checkpointed finality");
+    };
+
+    let checkpoint =
+        tokio::time::timeout(Duration::from_secs(5), harness.checkpoint_receiver.recv())
+            .await
+            .expect("timed out waiting for published checkpoint")
+            .expect("checkpoint channel closed");
+
+    assert_eq!(*checkpoint.summary.sequence_number(), checkpoint_seq);
 }
 
 #[tokio::test]
@@ -190,7 +217,7 @@ async fn test_insufficient_coin_balance() {
 
 #[tokio::test]
 async fn test_bad_signature_returns_submission_error() {
-    let harness = TestHarness::new();
+    let mut harness = TestHarness::new();
 
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -221,6 +248,10 @@ async fn test_bad_signature_returns_submission_error() {
     assert!(
         matches!(err, TransactionSubmissionError::InvalidUserSignature(_)),
         "expected InvalidUserSignature, got {err:?}",
+    );
+    assert!(
+        harness.checkpoint_receiver.try_recv().is_err(),
+        "rejected transactions must not publish checkpoints",
     );
 }
 

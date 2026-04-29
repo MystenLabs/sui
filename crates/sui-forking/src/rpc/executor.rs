@@ -32,7 +32,8 @@ use crate::context::Context;
 /// `TransactionExecutor` implementation that runs transactions against the
 /// forked network's Simulacrum. Inbound transactions must be signed by the
 /// sender (Simulacrum verifies user signatures during execution) and each
-/// successful execution is sealed into a fresh Simulacrum checkpoint.
+/// accepted execution is sealed into a fresh Simulacrum checkpoint and
+/// published to checkpoint subscribers.
 pub(crate) struct ForkedTransactionExecutor {
     context: Arc<Context>,
 }
@@ -50,19 +51,27 @@ impl TransactionExecutor for ForkedTransactionExecutor {
         request: ExecuteTransactionRequestV3,
         _client_addr: Option<SocketAddr>,
     ) -> Result<ExecuteTransactionResponseV3, TransactionSubmissionError> {
-        // Execute under the simulacrum write lock, then seal the transaction
-        // into a fresh checkpoint so downstream reads see it as finalized.
-        // The lock is dropped before reading back events/objects so
-        // concurrent reads aren't blocked.
-        let (effects, exec_error, checkpoint_seq) = {
-            let mut sim = self.context.simulacrum().write().await;
-            let (effects, exec_error) = sim
-                .execute_transaction(request.transaction)
-                .map_err(into_submission_error)?;
-            let checkpoint = sim.create_checkpoint();
-            let checkpoint_seq = checkpoint.data().sequence_number;
-            (effects, exec_error, checkpoint_seq)
-        };
+        let ExecuteTransactionRequestV3 {
+            transaction,
+            include_events,
+            include_input_objects,
+            include_output_objects,
+            include_auxiliary_data: _,
+        } = request;
+
+        // Execute under the serialized checkpoint path, then seal the
+        // transaction into a fresh checkpoint so downstream reads see it as
+        // finalized and subscribers are notified in sequence.
+        let ((effects, exec_error), checkpoint_metadata) = self
+            .context
+            .try_run_with_new_checkpoint(|sim| {
+                let (effects, exec_error) = sim
+                    .execute_transaction(transaction)
+                    .map_err(into_submission_error)?;
+                Ok((effects, exec_error))
+            })
+            .await?;
+        let checkpoint_seq = checkpoint_metadata.sequence_number;
 
         let digest = *effects.transaction_digest();
         if let Some(err) = &exec_error {
@@ -71,7 +80,7 @@ impl TransactionExecutor for ForkedTransactionExecutor {
             info!(%digest, checkpoint_seq, "forked transaction executed");
         }
 
-        let events = if request.include_events && effects.events_digest().is_some() {
+        let events = if include_events && effects.events_digest().is_some() {
             let sim = self.context.simulacrum().read().await;
             sim.store().get_transaction_events(&digest)
         } else {
@@ -85,7 +94,7 @@ impl TransactionExecutor for ForkedTransactionExecutor {
         // versions.
         let sim = self.context.simulacrum().read().await;
         let object_store = sim.store();
-        let input_objects = if request.include_input_objects {
+        let input_objects = if include_input_objects {
             Some(
                 get_transaction_input_objects(object_store, &effects).map_err(|e| {
                     TransactionSubmissionError::TransactionDriverInternalError(SuiError::from(
@@ -96,7 +105,7 @@ impl TransactionExecutor for ForkedTransactionExecutor {
         } else {
             None
         };
-        let output_objects = if request.include_output_objects {
+        let output_objects = if include_output_objects {
             Some(
                 get_transaction_output_objects(object_store, &effects).map_err(|e| {
                     TransactionSubmissionError::TransactionDriverInternalError(SuiError::from(
