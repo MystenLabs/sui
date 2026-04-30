@@ -247,18 +247,29 @@ fn balance_delta_merge_operator(
     existing_val: Option<&[u8]>,
     operands: &MergeOperands,
 ) -> Option<Vec<u8>> {
-    let mut result = existing_val
-        .map(|v| {
-            bcs::from_bytes::<BalanceIndexInfo>(v)
-                .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.")
-        })
-        .unwrap_or_default();
+    let mut result = if let Some(existing_val) = existing_val {
+        bcs::from_bytes::<BalanceIndexInfo>(existing_val)
+            .inspect_err(|e| {
+                tracing::error!(
+                    "Failed to deserialize BalanceIndexInfo from RocksDB - data corruption: {e}"
+                )
+            })
+            .ok()?
+    } else {
+        BalanceIndexInfo::default()
+    };
 
     for operand in operands.iter() {
         let delta = bcs::from_bytes::<BalanceIndexInfo>(operand)
-            .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.");
+            .inspect_err(|e| {
+                tracing::error!(
+                    "Failed to deserialize BalanceIndexInfo from RocksDB - data corruption: {e}"
+                )
+            })
+            .ok()?;
         result.merge_delta(&delta);
     }
+
     Some(
         bcs::to_bytes(&result)
             .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption."),
