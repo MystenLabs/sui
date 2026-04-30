@@ -11,7 +11,8 @@ use async_graphql::connection::Connection;
 use async_graphql::connection::Edge;
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::compressed::annotated as CA;
+use move_core_types::compressed::annotated::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::TypeTag;
@@ -576,8 +577,10 @@ impl DynamicField {
         let limits: &Limits = ctx.data()?;
         let limits = limits.display();
 
-        let root =
-            sui_display::v2::OwnedSlice::new(MoveTypeLayout::Bool, bcs::to_bytes(&false).unwrap());
+        let root = sui_display::v2::OwnedSlice::new(
+            CA::MoveTypeLayout::bool(),
+            bcs::to_bytes(&false).unwrap(),
+        );
 
         let parsed =
             sui_display::v2::Name::parse(limits, &literal).map_err(|e| bad_user_input(e.into()))?;
@@ -670,15 +673,15 @@ impl DynamicField {
                     value_layout,
                     value_bytes,
                     ..
-                } = DFV::FieldVisitor::deserialize(&value.native, &layout)
+                } = DFV::FieldVisitor::deserialize(&value.native, layout.as_ref())
                     .context("Failed to deserialize dynamic field")?;
 
                 Ok(Some(NativeField {
                     kind,
                     name_bytes: name_bytes.to_owned(),
-                    name_type: name_layout.into(),
+                    name_type: name_layout.as_view().into(),
                     value_bytes: value_bytes.to_owned(),
-                    value_type: value_layout.into(),
+                    value_type: value_layout.as_view().into(),
                     scope: self.super_.super_.super_.scope.clone(),
                 }))
             })

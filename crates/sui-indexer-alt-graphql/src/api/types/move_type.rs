@@ -9,7 +9,7 @@ use async_graphql::Object;
 use async_graphql::scalar;
 use move_binary_format::file_format::Ability;
 use move_binary_format::file_format::AbilitySet;
-use move_core_types::annotated_value as A;
+use move_core_types::compressed::annotated as CA;
 use serde::Deserialize;
 use serde::Serialize;
 use sui_package_resolver::error::Error as ResolverError;
@@ -46,7 +46,7 @@ pub(crate) struct MoveType {
 #[derive(Clone)]
 enum Native {
     Input(TypeInput),
-    Layout(A::MoveTypeLayout),
+    Layout(CA::MoveTypeLayout),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -241,6 +241,7 @@ impl MoveType {
                 | RE::EmptyPackage(_)
                 | RE::LinkageNotFound(_)
                 | RE::NoTypeOrigin(_, _, _)
+                | RE::UnableToConstructLayout(_)
                 | RE::UnexpectedReference
                 | RE::UnexpectedSigner
                 | RE::UnexpectedError(_)),
@@ -276,10 +277,10 @@ impl MoveType {
         }
     }
 
-    /// Construct a `MoveType` directly from a `A::MoveTypeLayout`. Use this when you already have
+    /// Construct a `MoveType` directly from a `CA::MoveTypeLayout`. Use this when you already have
     /// a type layout, to avoid further type resolution requests from having to call out to the
     /// package resolver.
-    pub(crate) fn from_layout(layout: A::MoveTypeLayout, scope: Scope) -> Self {
+    pub(crate) fn from_layout(layout: CA::MoveTypeLayout, scope: Scope) -> Self {
         Self {
             native: Native::Layout(layout),
             scope,
@@ -290,7 +291,7 @@ impl MoveType {
     pub(crate) fn to_type_tag(&self) -> Option<TypeTag> {
         match &self.native {
             Native::Input(input) => input.to_type_tag().ok(),
-            Native::Layout(layout) => Some(layout.into()),
+            Native::Layout(layout) => Some(layout.as_view().into()),
         }
     }
 
@@ -298,12 +299,12 @@ impl MoveType {
     pub(crate) fn to_type_input(&self) -> TypeInput {
         match &self.native {
             Native::Input(input) => input.clone(),
-            Native::Layout(layout) => TypeInput::from(TypeTag::from(layout)),
+            Native::Layout(layout) => TypeInput::from(TypeTag::from(layout.as_view())),
         }
     }
 
     /// Get the annotated type layout for this type, if it is valid.
-    pub(crate) async fn layout_impl(&self) -> Result<Option<A::MoveTypeLayout>, RpcError> {
+    pub(crate) async fn layout_impl(&self) -> Result<Option<CA::MoveTypeLayout>, RpcError> {
         let input = match &self.native {
             Native::Layout(layout) => return Ok(Some(layout.clone())),
             Native::Input(input) => input,
@@ -389,42 +390,56 @@ impl TryFrom<TypeInput> for MoveTypeSignature {
     }
 }
 
-impl TryFrom<A::MoveTypeLayout> for MoveTypeLayout {
+impl TryFrom<CA::MoveTypeLayout> for MoveTypeLayout {
     type Error = RpcError;
 
-    fn try_from(layout: A::MoveTypeLayout) -> Result<Self, RpcError> {
-        use A::MoveTypeLayout as TL;
+    fn try_from(layout: CA::MoveTypeLayout) -> Result<Self, RpcError> {
+        Self::try_from(layout.as_ref())
+    }
+}
 
-        Ok(match layout {
-            TL::Signer => return Err(anyhow!("Unexpected 'signer' type").into()),
+impl TryFrom<CA::MoveTypeLayoutRef<'_>> for MoveTypeLayout {
+    type Error = RpcError;
 
-            TL::U8 => Self::U8,
-            TL::U16 => Self::U16,
-            TL::U32 => Self::U32,
-            TL::U64 => Self::U64,
-            TL::U128 => Self::U128,
-            TL::U256 => Self::U256,
+    fn try_from(layout: CA::MoveTypeLayoutRef<'_>) -> Result<Self, RpcError> {
+        use CA::MoveLayoutView as V;
 
-            TL::Bool => Self::Bool,
-            TL::Address => Self::Address,
+        Ok(match layout.as_view() {
+            V::Signer => return Err(anyhow!("Unexpected 'signer' type").into()),
 
-            TL::Vector(v) => Self::Vector(Box::new(Self::try_from(*v)?)),
-            TL::Struct(s) => Self::Struct((*s).try_into()?),
-            TL::Enum(e) => Self::Enum((*e).try_into()?),
+            V::U8 => Self::U8,
+            V::U16 => Self::U16,
+            V::U32 => Self::U32,
+            V::U64 => Self::U64,
+            V::U128 => Self::U128,
+            V::U256 => Self::U256,
+
+            V::Bool => Self::Bool,
+            V::Address => Self::Address,
+
+            V::Vector(v) => Self::Vector(Box::new(Self::try_from(v)?)),
+            V::Struct(s) => Self::Struct(s.try_into()?),
+            V::Enum(e) => Self::Enum(e.try_into()?),
         })
     }
 }
 
-impl TryFrom<A::MoveEnumLayout> for MoveEnumLayout {
+impl TryFrom<CA::MoveEnumLayout<'_>> for MoveEnumLayout {
     type Error = RpcError;
 
-    fn try_from(layout: A::MoveEnumLayout) -> Result<Self, RpcError> {
-        let A::MoveEnumLayout { variants, .. } = layout;
+    fn try_from(layout: CA::MoveEnumLayout<'_>) -> Result<Self, RpcError> {
         let mut variant_layouts = Vec::new();
-        for ((name, _), variant_fields) in variants {
+        for variant in layout.variants() {
+            let CA::VariantLayout::Known { name, fields, .. } = variant else {
+                return Err(anyhow!("Unknown variant layout").into());
+            };
+
             let mut field_layouts = Vec::new();
-            for field in variant_fields {
-                field_layouts.push(MoveFieldLayout::try_from(field)?);
+            for (field_name, field_layout) in fields.fields() {
+                field_layouts.push(MoveFieldLayout {
+                    name: field_name.to_string(),
+                    layout: field_layout.try_into()?,
+                });
             }
             variant_layouts.push(MoveVariantLayout {
                 name: name.to_string(),
@@ -438,29 +453,19 @@ impl TryFrom<A::MoveEnumLayout> for MoveEnumLayout {
     }
 }
 
-impl TryFrom<A::MoveStructLayout> for MoveStructLayout {
+impl TryFrom<CA::MoveStructLayout<'_>> for MoveStructLayout {
     type Error = RpcError;
 
-    fn try_from(layout: A::MoveStructLayout) -> Result<Self, RpcError> {
-        Ok(Self {
-            type_: layout.type_.to_canonical_string(/* with_prefix */ true),
-            fields: layout
-                .fields
-                .into_iter()
-                .map(MoveFieldLayout::try_from)
-                .collect::<Result<_, _>>()?,
-        })
-    }
-}
-
-impl TryFrom<A::MoveFieldLayout> for MoveFieldLayout {
-    type Error = RpcError;
-
-    fn try_from(layout: A::MoveFieldLayout) -> Result<Self, RpcError> {
-        Ok(Self {
-            name: layout.name.to_string(),
-            layout: layout.layout.try_into()?,
-        })
+    fn try_from(layout: CA::MoveStructLayout<'_>) -> Result<Self, RpcError> {
+        let type_ = layout.type_().to_canonical_string(/* with_prefix */ true);
+        let mut fields = Vec::new();
+        for (name, field_layout) in layout.fields() {
+            fields.push(MoveFieldLayout {
+                name: name.to_string(),
+                layout: field_layout.try_into()?,
+            });
+        }
+        Ok(Self { type_, fields })
     }
 }
 
@@ -512,6 +517,7 @@ where
         | RE::DatatypeNotFound(_, _, _)
         | RE::TypeArityMismatch(_, _)
         | RE::TypeParamOOB(_, _)
+        | RE::UnableToConstructLayout(_)
         | RE::UnexpectedReference
         | RE::UnexpectedSigner
         | RE::UnexpectedError(_) => anyhow!(err).context(context()).into(),

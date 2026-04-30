@@ -15,6 +15,7 @@ use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::u256::U256;
 use move_core_types::visitor_default;
 use sui_types::TypeTag;
@@ -151,7 +152,7 @@ impl MoveValue {
                 conn.has_previous_page = 0 < range.start;
                 conn.has_next_page = range.end < total;
 
-                let layout = driver.element_layout().clone();
+                let layout = driver.element_layout().to_owned();
                 let type_ = MoveType::from_layout(layout, self.scope.clone());
 
                 for i in 0..total {
@@ -190,7 +191,7 @@ impl MoveValue {
             };
 
             Ok(
-                A::MoveValue::visit_deserialize(&self.native, &layout, &mut visitor)
+                A::MoveValue::visit_deserialize(&self.native, layout.as_ref(), &mut visitor)
                     .context("Failed to deserialize vector")?,
             )
         }
@@ -230,7 +231,7 @@ impl MoveValue {
             if let Some(display_v2) = display_v2.map_err(upcast)? {
                 let store = DisplayStore::new(ctx, &self.type_.scope);
 
-                let root = sui_display::v2::OwnedSlice::new(layout, self.native.clone());
+                let root = sui_display::v2::OwnedSlice::new(layout.clone(), self.native.clone());
                 let interpreter = sui_display::v2::Interpreter::new(root, store);
 
                 for (field, value) in
@@ -401,7 +402,7 @@ impl MoveValue {
             };
 
             let value = JsonVisitor::new(limits)
-                .deserialize_value(&self.native, &layout)
+                .deserialize_value(&self.native, layout)
                 .map_err(|e| match &e {
                     RV::Error::Meter(_) => resource_exhausted(e),
                     RV::Error::Visitor(_) | RV::Error::Option(_) | RV::Error::UnexpectedType => {
@@ -436,7 +437,7 @@ impl<'f, 'r> DisplayStore<'f, 'r> {
         &self,
         scope: Scope,
         id: AccountAddress,
-    ) -> anyhow::Result<Option<(A::MoveTypeLayout, Vec<u8>)>> {
+    ) -> anyhow::Result<Option<(CA::MoveTypeLayout, Vec<u8>)>> {
         // NOTE: We can't use `anyhow::Context` here because `RpcError` doesn't implement
         // `std::error::Error`.
         let object = Object::latest(self.ctx, scope, id.into())
@@ -488,11 +489,11 @@ impl JsonVisitor {
     fn deserialize_value(
         &mut self,
         bytes: &[u8],
-        layout: &A::MoveTypeLayout,
+        layout: CA::MoveTypeLayout,
     ) -> Result<serde_json::Value, RV::Error> {
         A::MoveValue::visit_deserialize(
             bytes,
-            layout,
+            layout.as_ref(),
             &mut RV::RpcVisitor::new(RV::LocalMeter::new(
                 &mut self.size_budget,
                 self.depth_budget,
@@ -506,14 +507,14 @@ impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
     async fn latest(
         &self,
         id: AccountAddress,
-    ) -> anyhow::Result<Option<(A::MoveTypeLayout, Vec<u8>)>> {
+    ) -> anyhow::Result<Option<(CA::MoveTypeLayout, Vec<u8>)>> {
         self.fetch(self.scope.without_root_bound(), id).await
     }
 
     async fn scoped(
         &self,
         id: AccountAddress,
-    ) -> anyhow::Result<Option<(A::MoveTypeLayout, Vec<u8>)>> {
+    ) -> anyhow::Result<Option<(CA::MoveTypeLayout, Vec<u8>)>> {
         self.fetch(self.scope.clone(), id).await
     }
 }
