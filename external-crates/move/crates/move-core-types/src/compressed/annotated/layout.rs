@@ -949,6 +949,58 @@ impl MoveTypeLayoutBuilder {
         })
     }
 
+    /// Recursively absorb an existing compressed layout into this builder,
+    /// deduplicating shared subtrees against the builder's pool.
+    pub fn from_layout(&mut self, layout: &MoveTypeLayout) -> AResult<LayoutHandle> {
+        self.intern_view(layout.as_view())
+    }
+
+    fn intern_view(&mut self, view: MoveLayoutView) -> AResult<LayoutHandle> {
+        Ok(match view {
+            MoveLayoutView::Bool => self.bool(),
+            MoveLayoutView::U8 => self.u8(),
+            MoveLayoutView::U16 => self.u16(),
+            MoveLayoutView::U32 => self.u32(),
+            MoveLayoutView::U64 => self.u64(),
+            MoveLayoutView::U128 => self.u128(),
+            MoveLayoutView::U256 => self.u256(),
+            MoveLayoutView::Address => self.address(),
+            MoveLayoutView::Signer => self.signer(),
+            MoveLayoutView::Vector(inner) => {
+                let inner_h = self.from_layout(&inner)?;
+                self.vector(inner_h)?
+            }
+            MoveLayoutView::Struct(s) => {
+                let fields: Vec<(Identifier, LayoutHandle)> = s
+                    .fields()
+                    .map(|(name, layout)| Ok((name.clone(), self.from_layout(&layout)?)))
+                    .collect::<AResult<_>>()?;
+                self.struct_layout(s.type_().clone(), fields)?
+            }
+            MoveLayoutView::Enum(e) => {
+                let variants: Vec<(
+                    Identifier,
+                    VariantTag,
+                    Option<Vec<(Identifier, LayoutHandle)>>,
+                )> = e
+                    .variants()
+                    .iter()
+                    .map(|v| match v {
+                        VariantLayout::Known { name, tag, fields } => {
+                            let fs: Vec<(Identifier, LayoutHandle)> = fields
+                                .fields()
+                                .map(|(n, l)| Ok((n.clone(), self.from_layout(&l)?)))
+                                .collect::<AResult<_>>()?;
+                            Ok((name.clone(), *tag, Some(fs)))
+                        }
+                        VariantLayout::Unknown { name, tag } => Ok((name.clone(), *tag, None)),
+                    })
+                    .collect::<AResult<_>>()?;
+                self.enum_layout(e.type_().clone(), variants)?
+            }
+        })
+    }
+
     /// Finalize the builder into an immutable [`MoveTypeLayout`].
     pub fn build(self, root: LayoutHandle) -> MoveTypeLayout {
         let nodes: Vec<MoveTypeNode> = self.nodes.into_iter().collect();
@@ -956,6 +1008,15 @@ impl MoveTypeLayoutBuilder {
             pool: Arc::from(nodes),
             root: root.0,
         }
+    }
+
+    pub fn with_builder<F, E>(f: F) -> Result<MoveTypeLayout, E>
+    where
+        F: FnOnce(&mut Self) -> Result<LayoutHandle, E>,
+    {
+        let mut builder = Self::new();
+        let result = f(&mut builder)?;
+        Ok(builder.build(result))
     }
 
     pub fn type_tag(&self, handle: LayoutHandle) -> Option<TypeTag> {
