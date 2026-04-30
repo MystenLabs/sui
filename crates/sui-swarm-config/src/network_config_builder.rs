@@ -602,8 +602,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     };
                     builder = builder.with_funds_withdraw_scheduler_type(scheduler_type);
                 }
-                if let Some(observer_config_fn) = &self.validator_observer_config && let Some(observer_config) = observer_config_fn(idx) {
-                        builder = builder.with_observer_config(observer_config);
+                if let Some(observer_config_fn) = &self.validator_observer_config
+                    && let Some(observer_config) = observer_config_fn(idx)
+                {
+                    builder = builder.with_observer_config(observer_config);
                 }
                 if let Some(num_unpruned_validators) = self.num_unpruned_validators
                     && idx < num_unpruned_validators

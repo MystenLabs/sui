@@ -5,8 +5,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use fastcrypto::encoding::{Encoding, Hex};
 use consensus_config::{ObserverParameters, Parameters as ConsensusParameters};
+use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use sui_config::node::{
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
@@ -164,13 +164,15 @@ impl ValidatorConfigBuilder {
         let network_address = validator.network_address;
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(key_path);
         let localhost = local_ip_utils::localhost_for_testing();
-        let observer = self.observer_config.map(|observer_config| {
-            ObserverParameters {
-                server_port: observer_config.server_port.or_else(|| Some(local_ip_utils::get_available_port(&localhost))),
+        let observer = self
+            .observer_config
+            .map(|observer_config| ObserverParameters {
+                server_port: observer_config
+                    .server_port
+                    .or_else(|| Some(local_ip_utils::get_available_port(&localhost))),
                 allowlist: observer_config.allowlist,
                 peers: observer_config.peers,
-            }
-        });
+            });
         let consensus_config = ConsensusConfig {
             db_path: consensus_db_path,
             db_retention_epochs: None,
@@ -502,24 +504,24 @@ impl FullnodeConfigBuilder {
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(&key_path);
 
         // Create consensus config, if observer config is provided.
-        let consensus_config = self.observer_config.map(|observer_config| 
-            ConsensusConfig {
-                db_path: consensus_db_path,
-                db_retention_epochs: None,
-                db_pruner_period_secs: None,
-                max_pending_transactions: None,
-                parameters: Some(ConsensusParameters {
-                    observer: ObserverParameters { 
-                        server_port: observer_config.server_port.or_else(|| Some(local_ip_utils::get_available_port(&ip))), 
-                        allowlist: observer_config.allowlist, 
-                        peers: observer_config.peers 
-                    },
-                    ..Default::default()
-                }),
-                listen_address: None,
-                external_address: None,
-            }
-        );
+        let consensus_config = self.observer_config.map(|observer_config| ConsensusConfig {
+            db_path: consensus_db_path,
+            db_retention_epochs: None,
+            db_pruner_period_secs: None,
+            max_pending_transactions: None,
+            parameters: Some(ConsensusParameters {
+                observer: ObserverParameters {
+                    server_port: observer_config
+                        .server_port
+                        .or_else(|| Some(local_ip_utils::get_available_port(&ip))),
+                    allowlist: observer_config.allowlist,
+                    peers: observer_config.peers,
+                },
+                ..Default::default()
+            }),
+            listen_address: None,
+            external_address: None,
+        });
 
         let state_sync_mode = if let Some(config) = consensus_config.as_ref() {
             if let Some(parameters) = config.parameters.as_ref() {
