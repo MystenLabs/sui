@@ -7,6 +7,7 @@ mod flatten_seq;
 mod introduce_while;
 mod loop_to_seq;
 mod remove_trailing_continue;
+mod remove_trailing_return;
 
 pub type Refinement = fn(&mut Exp) -> bool;
 
@@ -15,6 +16,7 @@ const REFINEMENTS: &[Refinement] = &[
     introduce_while::refine,
     loop_to_seq::refine,
     remove_trailing_continue::refine,
+    remove_trailing_return::refine,
 ];
 
 // -------------------------------------------------------------------------------------------------

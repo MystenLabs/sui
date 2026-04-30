@@ -3,7 +3,6 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 module funs {
     public fun f () {
-        return 
     }
 
     public fun f_s () {

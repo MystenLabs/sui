@@ -12,11 +12,9 @@ module loop_cases {
                 continue;
             }
         }
-        return 
     }
 
     public fun loop_test_10 () {
-        return 
     }
 
     public fun loop_test_2 () {
@@ -33,7 +31,6 @@ module loop_cases {
                 continue;
             }
         }
-        return 
     }
 
     public fun loop_test_3 () {
@@ -41,7 +38,6 @@ module loop_cases {
         while(!(l0 >= 10u64)) {
             l0 = l0 + 1u64;
         }
-        return 
     }
 
     public fun loop_test_4 () {
@@ -60,7 +56,6 @@ module loop_cases {
             l1 = l1 + 1u64;
             let l0 = l0 - 1u64;
         }
-        return 
     }
 
     public fun loop_test_7 () {
@@ -79,7 +74,6 @@ module loop_cases {
                 continue;
             }
         }
-        return 
     }
 
     public fun loop_test_9 () {
@@ -98,7 +92,6 @@ module loop_cases {
                 continue;
             }
         }
-        return 
     }
 
 }

@@ -19,7 +19,6 @@ module temperature {
                 let 0x0::temperature::Temperature::Celcius { pos0: reg_10 } = l2;
             },
         }
-        return 
     }
 
     public fun f () {

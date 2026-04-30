@@ -34,7 +34,7 @@ module geometry {
                 return                 *reg_9 : &u64
             },
             0x0::geometry::Shape::Triangle => {
-                abort!(Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] });
+                abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] };
             },
         }
     }
@@ -44,7 +44,7 @@ module geometry {
         let l2 = l3;
         match(l2: 0x0::geometry::Shape) {
             0x0::geometry::Shape::Square => {
-                abort!(Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] });
+                abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] };
             },
             0x0::geometry::Shape::Triangle => {
                 let 0x0::geometry::Shape::Triangle { base: reg_7, height: reg_8 } = &l2;
@@ -59,27 +59,26 @@ module geometry {
 
     public fun set_square_side () {
         let l3 = l0;
-        let l2 =         freeze(l3);
+        let l2 =         l3;
         match(l2: 0x0::geometry::Shape) {
             0x0::geometry::Shape::Square => {
                 let 0x0::geometry::Shape::Square { side: reg_8 } = &l2;
                 let 0x0::geometry::Shape::Square { side: reg_10 } = &mut l3;
                 let l4 = reg_10 : &mut u64;
                 *l4 = l1
-                return 
             },
             0x0::geometry::Shape::Triangle => {
-                abort!(Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] });
+                abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] };
             },
         }
     }
 
     public fun set_triangle_dimensions () {
         let l5 = l0;
-        let l4 =         freeze(l5);
+        let l4 =         l5;
         match(l4: 0x0::geometry::Shape) {
             0x0::geometry::Shape::Square => {
-                abort!(Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] });
+                abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] };
             },
             0x0::geometry::Shape::Triangle => {
                 let 0x0::geometry::Shape::Triangle { base: reg_8, height: reg_9 } = &l4;
@@ -89,7 +88,6 @@ module geometry {
                 let l7 = l3;
                 *l6 = l1
                 *l7 = l2
-                return 
             },
         }
     }

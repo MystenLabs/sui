@@ -1,0 +1,19 @@
+---
+source: crates/move-decompiler/tests/tests.rs
+---
+module vec {
+    public fun t () {
+        let l3 = Constant { type_: Vector(U8), data: [4, 1, 2, 3, 4] };
+        &mut l3.push_back(10u8)        if (        &l3.length() == 4u64) {
+            &mut l3.swap(0u64, 1u64)            let l2 =         &&l3[0u64];
+            let l1 = 2u8;
+            if (l2 == &l1) {
+            } else {
+                abort 1u64;
+            }
+        } else {
+            abort 0u64;
+        }
+    }
+
+}

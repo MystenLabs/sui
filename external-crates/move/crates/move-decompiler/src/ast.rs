@@ -301,7 +301,7 @@ impl std::fmt::Display for Exp {
                 }
                 Exp::Abort(exp) => {
                     indent(f, level)?;
-                    writeln!(f, "abort!({});", exp)
+                    writeln!(f, "abort {};", exp)
                 }
                 Exp::Primitive { op, args } => write_primitive_op(f, op, args),
                 Exp::Borrow(mut_, exp) => write!(f, "{}{}", if *mut_ { "&mut " } else { "&" }, exp),
@@ -397,11 +397,11 @@ fn write_data_op(
         DataOp::Unpack(_) => todo!(),
         DataOp::ReadRef => write!(f, "*{}", args[0]),
         DataOp::WriteRef => writeln!(f, "*{} = {}", args[0], args[1]),
-        DataOp::FreezeRef => write!(f, "freeze({})", args[0]),
+        DataOp::FreezeRef => write!(f, "{}", args[0]),
         DataOp::MutBorrowField(field_ref) => {
             write!(f, "&mut ({}).{}", args[0], field_ref.field.name)
         }
-        DataOp::ImmBorrowField(field_ref) => write!(f, "&( {} ).{}", args[0], field_ref.field.name),
+        DataOp::ImmBorrowField(field_ref) => write!(f, "&{}.{}", args[0], field_ref.field.name),
         DataOp::VecPack(_) => write!(
             f,
             "vector[{}]",
@@ -410,11 +410,11 @@ fn write_data_op(
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
-        DataOp::VecLen(_) => write!(f, "{}.len()", args[0]),
+        DataOp::VecLen(_) => write!(f, "{}.length()", args[0]),
         DataOp::VecImmBorrow(_) => write!(f, "&{}[{}]", args[0], args[1]),
         DataOp::VecMutBorrow(_) => write!(f, "&mut {}[{}]", args[0], args[1]),
         DataOp::VecPushBack(_) => write!(f, "{}.push_back({})", args[0], args[1]),
-        DataOp::VecPopBack(_) => write!(f, "{}.pop_back({})", args[0], args[1]),
+        DataOp::VecPopBack(_) => write!(f, "{}.pop_back()", args[0]),
         DataOp::VecUnpack(_) => unreachable!(),
         DataOp::VecSwap(_) => write!(f, "{}.swap({}, {})", args[0], args[1], args[2]),
         DataOp::PackVariant(_) => write!(f, "E::V .. fields .. args"),

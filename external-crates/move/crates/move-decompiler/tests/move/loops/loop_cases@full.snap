@@ -8,51 +8,40 @@ module loops::loop_cases;
 // -- functions -- 
 
 public fun loop_test() {
-    {
-        let l0 = 0u64;
-        loop {
-            l0 = l0 + 1u64;
-            if (l0 >= 10u64) {
-                break
-            } else {
-                continue
-            }
-        };
-        return
+    let l0 = 0u64;
+    loop {
+        l0 = l0 + 1u64;
+        if (l0 >= 10u64) {
+            break
+        } else {
+            continue
+        }
     }
 }
 
-public fun loop_test_10() {
-    return
-}
+public fun loop_test_10() {}
 
 public fun loop_test_2() {
-    {
-        let l0 = 0u64;
-        loop {
-            l0 = l0 + 1u64;
-            if (l0 % 2u64 == 1u64) {
-                continue
-            } else {
-                
-            };
-            if (l0 == 10u64) {
-                break
-            } else {
-                continue
-            }
+    let l0 = 0u64;
+    loop {
+        l0 = l0 + 1u64;
+        if (l0 % 2u64 == 1u64) {
+            continue
+        } else {
+            
         };
-        return
+        if (l0 == 10u64) {
+            break
+        } else {
+            continue
+        }
     }
 }
 
 public fun loop_test_3() {
-    {
-        let l0 = 0u64;
-        while (!(l0 >= 10u64)) {
-            l0 = l0 + 1u64;
-        };
-        return
+    let l0 = 0u64;
+    while (!(l0 >= 10u64)) {
+        l0 = l0 + 1u64;
     }
 }
 
@@ -69,13 +58,10 @@ public fun loop_test_5() {
 }
 
 public fun loop_test_6(l0: u64) {
-    {
-        let l1 = 0u64;
-        while (l0 > 10u64) {
-            l1 = l1 + 1u64;
-            let l0 = l0 - 1u64;
-        };
-        return
+    let l1 = 0u64;
+    while (l0 > 10u64) {
+        l1 = l1 + 1u64;
+        let l0 = l0 - 1u64;
     }
 }
 
@@ -84,40 +70,34 @@ public fun loop_test_7(l0: u64): u64 {
 }
 
 public fun loop_test_8() {
-    {
-        let l0 = 0u64;
-        let l1 = 5u64;
-        loop {
-            l0 = l0 + 1u64;
-            l1 = l1 * 2u64 + l0;
-            if (l0 >= 10u64) {
-                break
-            } else {
-                continue
-            }
-        };
-        return
+    let l0 = 0u64;
+    let l1 = 5u64;
+    loop {
+        l0 = l0 + 1u64;
+        l1 = l1 * 2u64 + l0;
+        if (l0 >= 10u64) {
+            break
+        } else {
+            continue
+        }
     }
 }
 
 public fun loop_test_9() {
-    {
-        let l0 = 0u64;
-        let l1 = 5u64;
-        loop {
-            l0 = l0 + 1u64;
-            l1 = l1 * 2u64 + l0;
-            if (l1 - l0 % 3u64 == 0u64) {
-                l1 = 100u64;
-            } else {
-                
-            };
-            if (l0 >= 10u64) {
-                break
-            } else {
-                continue
-            }
+    let l0 = 0u64;
+    let l1 = 5u64;
+    loop {
+        l0 = l0 + 1u64;
+        l1 = l1 * 2u64 + l0;
+        if (l1 - l0 % 3u64 == 0u64) {
+            l1 = 100u64;
+        } else {
+            
         };
-        return
+        if (l0 >= 10u64) {
+            break
+        } else {
+            continue
+        }
     }
 }
