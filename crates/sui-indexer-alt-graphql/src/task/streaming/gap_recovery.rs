@@ -20,6 +20,7 @@ use tracing::warn;
 use super::ProcessedCheckpoint;
 use super::checkpoint_stream_task::checkpoint_field_mask;
 use super::checkpoint_stream_task::process_checkpoint;
+use crate::task::watermark::KV_PACKAGES_PIPELINE;
 use crate::task::watermark::Watermarks;
 
 /// Pipeline name under which `WatermarkTask` tracks the kv-rpc / LedgerService source.
@@ -76,7 +77,7 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     while cursor <= hi {
         let chunk_hi = (cursor + chunk_size - 1).min(hi);
 
-        wait_for_ledger_grpc_high(watermarks_rx, chunk_hi).await?;
+        wait_for_pipelines_catching_up_at(chunk_hi, watermarks_rx).await?;
 
         let chunk = fetch_chunk(fetcher, &mask, cursor..=chunk_hi).await?;
 
@@ -92,22 +93,28 @@ pub(crate) async fn recover_gap<F: CheckpointFetcher>(
     Ok(())
 }
 
-/// Block until the kv-rpc indexer's high watermark reaches `target`. Hardcoded against the
-/// `ledger_grpc` pipeline name because gap recovery is currently only supported for that
-/// backend.
-async fn wait_for_ledger_grpc_high(
-    watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
+/// Block until both indexer pipelines that gap recovery depends on have caught up to
+/// `target`: `ledger_grpc` (kv-rpc, serves checkpoint contents) and `kv_packages`
+/// (Postgres, serves package resolution from the DB). Recovered checkpoints don't go
+/// through `index_and_broadcast`, so subscribers resolving their packages fall through
+/// to the DB and need `kv_packages` to be ready.
+async fn wait_for_pipelines_catching_up_at(
     target: u64,
+    watermarks_rx: &watch::Receiver<Arc<Watermarks>>,
 ) -> anyhow::Result<()> {
     let mut rx = watermarks_rx.clone();
     rx.wait_for(|w| {
-        w.per_pipeline()
-            .get(LEDGER_GRPC_PIPELINE)
-            .is_some_and(|p| p.hi().checkpoint() >= target)
+        let pipelines = w.per_pipeline();
+        let caught_up = |name| {
+            pipelines
+                .get(name)
+                .is_some_and(|p| p.hi().checkpoint() >= target)
+        };
+        caught_up(LEDGER_GRPC_PIPELINE) && caught_up(KV_PACKAGES_PIPELINE)
     })
     .await
     .ok()
-    .context("Watermark task shut down before ledger_grpc caught up")?;
+    .context("Watermark task shut down before pipelines caught up")?;
     Ok(())
 }
 
@@ -298,16 +305,16 @@ mod tests {
         MockFetcher::new(setup.iter().cloned().collect::<HashMap<_, _>>())
     }
 
-    fn ledger_grpc_watermarks(
+    fn recovery_watermarks(
         hi: u64,
     ) -> (
         watch::Sender<Arc<Watermarks>>,
         watch::Receiver<Arc<Watermarks>>,
     ) {
-        watch::channel(Arc::new(Watermarks::for_test(&[(
-            LEDGER_GRPC_PIPELINE,
-            hi,
-        )])))
+        watch::channel(Arc::new(Watermarks::for_test(&[
+            (LEDGER_GRPC_PIPELINE, hi),
+            (KV_PACKAGES_PIPELINE, hi),
+        ])))
     }
 
     fn empty_mask() -> FieldMask {
@@ -392,7 +399,7 @@ mod tests {
     #[tokio::test]
     async fn recover_gap_lo_greater_than_hi_returns_immediately() {
         let mock = fetcher(&[]);
-        let (_tx, rx) = ledger_grpc_watermarks(0);
+        let (_tx, rx) = recovery_watermarks(0);
         let (sender, _rx) = broadcast::channel(16);
         recover_gap(&mock, &rx, &sender, 5, 4, 10).await.unwrap();
         // No keys configured; if anything was fetched, MockFetcher would panic.
@@ -409,7 +416,7 @@ mod tests {
             (6, FetcherBehavior::Success),
         ]);
         // Initial watermark below the first chunk's hi (3), so recover_gap must wait.
-        let (tx, rx) = ledger_grpc_watermarks(0);
+        let (tx, rx) = recovery_watermarks(0);
         let (sender, mut receiver) = broadcast::channel(16);
 
         let mock_arc = Arc::new(mock);
@@ -424,8 +431,11 @@ mod tests {
         assert_eq!(mock_arc.calls_for(1), 0, "first chunk not yet fetched");
 
         // Advance to 3: first chunk completes (1, 2, 3).
-        tx.send(Arc::new(Watermarks::for_test(&[(LEDGER_GRPC_PIPELINE, 3)])))
-            .unwrap();
+        tx.send(Arc::new(Watermarks::for_test(&[
+            (LEDGER_GRPC_PIPELINE, 3),
+            (KV_PACKAGES_PIPELINE, 3),
+        ])))
+        .unwrap();
         tokio::time::sleep(Duration::from_millis(200)).await;
         assert_eq!(drain_broadcast(&mut receiver), vec![1, 2, 3]);
         assert_eq!(
@@ -435,13 +445,57 @@ mod tests {
         );
 
         // Advance to 6: second chunk completes (4, 5, 6) and recover_gap returns.
-        tx.send(Arc::new(Watermarks::for_test(&[(LEDGER_GRPC_PIPELINE, 6)])))
-            .unwrap();
+        tx.send(Arc::new(Watermarks::for_test(&[
+            (LEDGER_GRPC_PIPELINE, 6),
+            (KV_PACKAGES_PIPELINE, 6),
+        ])))
+        .unwrap();
         timeout(Duration::from_secs(1), task)
             .await
             .expect("recover_gap did not finish")
             .unwrap()
             .unwrap();
         assert_eq!(drain_broadcast(&mut receiver), vec![4, 5, 6]);
+    }
+
+    #[tokio::test]
+    async fn recover_gap_waits_for_both_pipelines() {
+        let mock = fetcher(&[
+            (1, FetcherBehavior::Success),
+            (2, FetcherBehavior::Success),
+            (3, FetcherBehavior::Success),
+        ]);
+        let (tx, rx) = recovery_watermarks(0);
+        let (sender, mut receiver) = broadcast::channel(16);
+
+        let mock_arc = Arc::new(mock);
+        let mock_for_task = mock_arc.clone();
+        let task =
+            tokio::spawn(async move { recover_gap(&*mock_for_task, &rx, &sender, 1, 3, 3).await });
+
+        // ledger_grpc has caught up but kv_packages is still at 0. Recovery must
+        // not progress because subscribers would resolve packages from a DB that
+        // hasn't indexed them yet.
+        tx.send(Arc::new(Watermarks::for_test(&[
+            (LEDGER_GRPC_PIPELINE, 3),
+            (KV_PACKAGES_PIPELINE, 0),
+        ])))
+        .unwrap();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert_eq!(drain_broadcast(&mut receiver), Vec::<u64>::new());
+        assert_eq!(mock_arc.calls_for(1), 0, "fetch waiting on kv_packages");
+
+        // Advance kv_packages: both pipelines caught up, recovery completes.
+        tx.send(Arc::new(Watermarks::for_test(&[
+            (LEDGER_GRPC_PIPELINE, 3),
+            (KV_PACKAGES_PIPELINE, 3),
+        ])))
+        .unwrap();
+        timeout(Duration::from_secs(1), task)
+            .await
+            .expect("recover_gap did not finish")
+            .unwrap()
+            .unwrap();
+        assert_eq!(drain_broadcast(&mut receiver), vec![1, 2, 3]);
     }
 }

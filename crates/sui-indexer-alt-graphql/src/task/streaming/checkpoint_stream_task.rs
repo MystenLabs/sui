@@ -310,10 +310,11 @@ impl CheckpointStreamTask {
         Ok(())
     }
 
-    /// Index packages from the checkpoint into the streaming store, signal eviction, then
-    /// process and broadcast. Indexing is needed because `kv_packages` may not yet have
-    /// these packages at stream time; recovered checkpoints from `recover_gap` skip this
-    /// step because the watermark gate guarantees they're already in the DB.
+    /// Index packages from the checkpoint into the streaming store, signal eviction,
+    /// then process and broadcast. Indexing exposes the checkpoint's packages to
+    /// subscribers immediately, ahead of `kv_packages`. Recovered checkpoints from
+    /// `recover_gap` skip this step because the gate already waits for both
+    /// `ledger_grpc` and `kv_packages` to catch up.
     fn index_and_broadcast(&self, checkpoint: ProtoCheckpoint, seq: u64) -> anyhow::Result<()> {
         let packages = extract_packages(&checkpoint);
         if !packages.is_empty() {
