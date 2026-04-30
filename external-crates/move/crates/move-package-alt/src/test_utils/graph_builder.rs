@@ -817,9 +817,15 @@ impl Scenario {
     pub async fn root_package_err(&self, package: impl AsRef<str>) -> String {
         match self.try_root_package(package, |cfg| cfg).await {
             Ok(_) => panic!("expected root package to fail to load"),
-            Err(err) => err
-                .to_string()
-                .replace(self.root_path.to_string_lossy().as_ref(), "<ROOT>"),
+            Err(err) => {
+                let canonical_root = self
+                    .root_path
+                    .canonicalize()
+                    .unwrap_or_else(|_| self.root_path.clone());
+                err.to_string()
+                    .replace(canonical_root.to_string_lossy().as_ref(), "<ROOT>")
+                    .replace(self.root_path.to_string_lossy().as_ref(), "<ROOT>")
+            }
         }
     }
 

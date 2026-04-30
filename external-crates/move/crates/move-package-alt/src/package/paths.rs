@@ -128,11 +128,13 @@ pub fn read_name_from_manifest(dir: impl AsRef<Path>) -> FileResult<String> {
 
 impl PackagePath {
     pub fn new(dir: PathBuf) -> PackagePathResult<Self> {
-        let path = dir.clean();
-
         if !dir.is_dir() {
             return Err(PackagePathError::InvalidDirectory { path: dir.clone() });
         }
+
+        // Canonicalize package roots so equivalent relative paths (e.g. "../a" and
+        // "../../packages/a") share a stable identity for graph/cache deduplication.
+        let path = dir.canonicalize().unwrap_or_else(|_| dir.clean());
 
         let result = Self(OutputPath(path));
 
@@ -407,6 +409,15 @@ mod tests {
     use std::fs;
     use test_log::test;
 
+    fn normalize_tempdir_path(input: String, tempdir: &std::path::Path) -> String {
+        let canonical = tempdir
+            .canonicalize()
+            .unwrap_or_else(|_| tempdir.to_path_buf());
+        input
+            .replace(canonical.to_string_lossy().as_ref(), "<TEMPDIR>")
+            .replace(tempdir.to_string_lossy().as_ref(), "<TEMPDIR>")
+    }
+
     #[test]
     fn test_new() {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -429,7 +440,10 @@ mod tests {
         let package_path = PackagePath::new(c.join(relative_path)).unwrap();
 
         // The result should be the canonicalized path to B
-        assert_eq!(package_path.0.0, b.clean());
+        assert_eq!(
+            package_path.0.0,
+            b.canonicalize().unwrap_or_else(|_| b.clean())
+        );
     }
 
     #[test]
@@ -461,7 +475,7 @@ mod tests {
         let path = PackagePath::new(tempdir.path().to_path_buf()).unwrap();
         let mtx = path.lock().unwrap();
         let error = path.read_manifest(&mtx).unwrap_err().to_string();
-        assert_snapshot!(error.replace(tempdir.path().to_string_lossy().as_ref(), "<TEMPDIR>"),
+        assert_snapshot!(normalize_tempdir_path(error, tempdir.path()),
             @r###"
         error while parsing "<TEMPDIR>/Move.toml": TOML parse error at line 1, column 2
           |
@@ -493,7 +507,7 @@ mod tests {
         let path = PackagePath::new(tempdir.path().to_path_buf()).unwrap();
         let mtx = path.lock().unwrap();
         let error = path.read_lockfile(&mtx).unwrap_err().to_string();
-        assert_snapshot!(error.replace(tempdir.path().to_string_lossy().as_ref(), "<TEMPDIR>"),
+        assert_snapshot!(normalize_tempdir_path(error, tempdir.path()),
             @r###"File "<TEMPDIR>/Move.lock" has version 5, but this CLI only supports versions up to 4; please upgrade your CLI"###
         );
     }

@@ -537,8 +537,13 @@ pkg_b = { local = "../pkg_b" }"#,
             .await
             .unwrap_err();
 
+        let project_root = project.root();
+        let project_root_canonical = project_root
+            .canonicalize()
+            .unwrap_or_else(|_| project_root.clone());
         let message = load_err
             .to_string()
+            .replace(project_root_canonical.to_string_lossy().as_ref(), "<DIR>")
             .replace(project.root_path_str(), "<DIR>");
 
         assert_snapshot!(
@@ -1195,6 +1200,110 @@ pkg_b = { local = "../pkg_b" }"#,
         assert_eq!(dep_addrs.published_at, PublishedID::from(3));
     }
 
+    /// Repro for path-identity dedup in ephemeral loading:
+    /// /a, /b (b -> a), /sub/c (c -> b and c -> a).
+    ///
+    /// The root package is intentionally passed as a relative path so dependencies may
+    /// be discovered through different relative spellings ("../a" vs "../../a").
+    #[test(tokio::test)]
+    async fn ephemeral_relative_root_dedups_shared_dep() {
+        use std::fs;
+
+        let cwd = std::env::current_dir().unwrap();
+        let tempdir = tempfile::Builder::new()
+            .prefix("move-package-alt-repro-")
+            .tempdir_in(&cwd)
+            .unwrap();
+        let root = tempdir.path();
+
+        fs::create_dir_all(root.join("a")).unwrap();
+        fs::write(
+            root.join("a/Move.toml"),
+            r#"
+[package]
+name = "a"
+edition = "2024"
+implicit-dependencies = false
+
+[dependencies]
+
+[dep-replacements]
+"#,
+        )
+        .unwrap();
+
+        fs::create_dir_all(root.join("b")).unwrap();
+        fs::write(
+            root.join("b/Move.toml"),
+            r#"
+[package]
+name = "b"
+edition = "2024"
+implicit-dependencies = false
+
+[dependencies]
+a = { local = "../a" }
+
+[dep-replacements]
+"#,
+        )
+        .unwrap();
+
+        fs::create_dir_all(root.join("sub/c")).unwrap();
+        fs::write(
+            root.join("sub/c/Move.toml"),
+            r#"
+[package]
+name = "c"
+edition = "2024"
+implicit-dependencies = false
+
+[dependencies]
+b = { local = "../../b" }
+a = { local = "../../a" }
+
+[dep-replacements]
+"#,
+        )
+        .unwrap();
+
+        let ephemeral = root.join("sub/c/Published.local.toml");
+        fs::write(
+            &ephemeral,
+            r#"
+chain-id = "localnet"
+build-env = "_test_env"
+"#,
+        )
+        .unwrap();
+
+        let relative_root = root
+            .join("sub/c")
+            .strip_prefix(&cwd)
+            .expect("tempdir is inside cwd")
+            .to_path_buf();
+        let relative_ephemeral = ephemeral
+            .strip_prefix(&cwd)
+            .expect("tempdir is inside cwd")
+            .to_path_buf();
+
+        let root_pkg = PackageLoader::new_ephemeral(
+            relative_root,
+            None,
+            "localnet".into(),
+            relative_ephemeral,
+        )
+        .load::<Vanilla>()
+        .await
+        .unwrap();
+
+        let count = root_pkg.unfiltered_graph.packages().len();
+        assert_eq!(
+            count, 3,
+            "Expected 3 package nodes (a, b, c), but got {count}. Shared dependency a is duplicated."
+        );
+    }
+
     /// Ephemerally loading a dep that is neither published nor in the ephemeral file produces an
     /// unpublished package
     #[test(tokio::test)]
@@ -1571,10 +1680,19 @@ pkg_b = { local = "../pkg_b" }"#,
         .load()
         .await;
 
-        let message = root.unwrap_err().to_string().replace(
-            scenario.path_for("root").to_string_lossy().as_ref(),
-            "<DIR>",
-        );
+        let root_dir = scenario.path_for("root");
+        let message = root
+            .unwrap_err()
+            .to_string()
+            .replace(
+                root_dir
+                    .canonicalize()
+                    .unwrap()
+                    .to_string_lossy()
+                    .as_ref(),
+                "<DIR>",
+            )
+            .replace(root_dir.to_string_lossy().as_ref(), "<DIR>");
 
         assert_snapshot!(message, @r#"Error while loading dependency <DIR>: Package `root` does not declare a `unknown environment` environment. The available environments are ["_test_env"]. Consider running with `--build-env _test_env`"#);
     }

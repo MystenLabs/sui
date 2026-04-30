@@ -428,9 +428,12 @@ mod tests {
 
         // Scenario 2: We cannot load the package because it defines addresses with `_` in them and this is not supported.
         let b_err = scenario.try_graph_for("b").await.unwrap_err();
+        let b_dir = scenario.path_for("b");
+        let b_dir_canonical = b_dir.canonicalize().unwrap_or_else(|_| b_dir.clone());
         let b_err_string = b_err
             .to_string()
-            .replace(scenario.path_for("b").to_string_lossy().as_ref(), "<DIR>");
+            .replace(b_dir_canonical.to_string_lossy().as_ref(), "<DIR>")
+            .replace(b_dir.to_string_lossy().as_ref(), "<DIR>");
 
         assert_snapshot!(b_err_string, @r#"Error while loading dependency <DIR>: error while loading legacy manifest "<DIR>/Move.toml": Found non instantiated named address `foo` (declared as `_`). All addresses in the `addresses` field must be instantiated."#);
 

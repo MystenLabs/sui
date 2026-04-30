@@ -372,10 +372,11 @@ mod tests {
 
         let dep = new_local("../child");
         let pinned = dep.pin(&parent).unwrap_as_local().clone();
+        let expected = parent.unfetched_path().join("../child").clean();
 
         assert_eq!(
             pinned.absolute_path_to_package.as_os_str(),
-            tempdir.path().join("child")
+            expected
         );
         assert_eq!(
             pinned.relative_path_from_root_package.as_os_str(),
