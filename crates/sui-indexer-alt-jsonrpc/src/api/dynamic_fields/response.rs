@@ -3,7 +3,7 @@
 
 use anyhow::Context as _;
 use anyhow::anyhow;
-use sui_json::MoveTypeLayout;
+use move_core_types::compressed::annotated as CA;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::BcsName;
 use sui_json_rpc_types::DynamicFieldInfo as DynamicFieldInfoResponse;
@@ -84,16 +84,16 @@ pub(super) async fn dynamic_field_info(
     let type_ = move_object.type_().clone().into();
     let layout = resolve_type(ctx, &type_).await?;
 
-    let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)
+    let field = DFV::FieldVisitor::deserialize(move_object.contents(), layout)
         .context("Failed to deserialize dynamic field info")?;
 
     let type_ = field.kind;
-    let name_type: TypeTag = field.name_layout.into();
+    let name_type: TypeTag = field.name_layout.clone().into();
     let bcs_name = BcsName::Base64 {
         bcs_name: field.name_bytes.to_owned(),
     };
 
-    let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
+    let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout.clone())
         .context("Failed to deserialize dynamic field name")?;
 
     let name = DynamicFieldName {
@@ -142,7 +142,10 @@ pub(super) async fn dynamic_field_info(
 /// Resolve the layout for a given type tag, using the package resolver in the context.
 /// Re-interprets errors from the package resolver, categorizing them as RPC user errors or
 /// internal errors.
-async fn resolve_type(ctx: &Context, type_: &TypeTag) -> Result<MoveTypeLayout, RpcError<Error>> {
+async fn resolve_type(
+    ctx: &Context,
+    type_: &TypeTag,
+) -> Result<CA::MoveTypeLayout, RpcError<Error>> {
     ctx.package_resolver()
         .type_layout(type_.clone())
         .await
@@ -173,6 +176,7 @@ async fn resolve_type(ctx: &Context, type_: &TypeTag) -> Result<MoveTypeLayout, 
                 | PRE::NoTypeOrigin(_, _, _)
                 | PRE::NotAnIdentifier(_)
                 | PRE::TypeParamOOB(_, _)
+                | PRE::UnableToConstructLayout(_)
                 | PRE::UnexpectedReference
                 | PRE::UnexpectedSigner
                 | PRE::UnexpectedError(_)

@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use anyhow::Context as _;
-use move_core_types::annotated_value::MoveDatatypeLayout;
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::compressed::annotated as CA;
 use sui_json_rpc_types::BalanceChange as SuiBalanceChange;
 use sui_json_rpc_types::DryRunTransactionBlockResponse;
 use sui_json_rpc_types::ObjectChange as SuiObjectChange;
@@ -157,21 +156,17 @@ async fn events(
 
     let mut sui_events = Vec::with_capacity(events.len());
     for (ix, event) in events.into_iter().enumerate() {
-        let layout = match ctx
+        let type_layout = ctx
             .package_resolver()
             .type_layout(event.type_.clone().into())
             .await
-            .context("Failed to resolve event type layout")?
-        {
-            MoveTypeLayout::Struct(s) => MoveDatatypeLayout::Struct(s),
-            MoveTypeLayout::Enum(e) => MoveDatatypeLayout::Enum(e),
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Event {ix} is not a struct or enum: {}",
-                    event.type_.to_canonical_string(true)
-                )
-                .into());
-            }
+            .context("Failed to resolve event type layout")?;
+        let Some(layout) = CA::MoveDatatypeLayout::new(type_layout) else {
+            return Err(anyhow::anyhow!(
+                "Event {ix} is not a struct or enum: {}",
+                event.type_.to_canonical_string(true)
+            )
+            .into());
         };
         sui_events.push(
             SuiEvent::try_from(event, tx_digest, ix as u64, None, layout)
