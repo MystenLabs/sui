@@ -5,11 +5,15 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use anyhow::Result;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use diesel::sql_types::BigInt;
 use diesel::sql_types::Bytea;
 use diesel_async::RunQueryDsl;
-use futures::future::try_join_all;
+use futures::stream;
+use sui_futures::stream::Break;
+use sui_futures::stream::ConcurrencyConfig;
+use sui_futures::stream::TrySpawnStreamExt;
 use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClient;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::postgres::Connection;
@@ -19,6 +23,9 @@ use sui_indexer_alt_framework::types::full_checkpoint_content::Checkpoint;
 use sui_indexer_alt_schema::objects::StoredObjVersion;
 use sui_indexer_alt_schema::schema::obj_versions;
 use sui_sql_macro::query;
+use tokio::sync::mpsc;
+
+const PRUNE_CHANNEL_CAPACITY: usize = 100;
 
 pub(crate) struct ObjVersions {
     client: IngestionClient,
@@ -84,13 +91,31 @@ impl Handler for ObjVersions {
         to_exclusive: u64,
         conn: &mut Connection<'a>,
     ) -> anyhow::Result<usize> {
-        let checkpoints = try_join_all((from..to_exclusive).map(|cp| self.client.checkpoint(cp)))
-            .await
-            .context("Failed to fetch checkpoints in pruning range")?;
+        let (tx, mut rx) = mpsc::channel(PRUNE_CHANNEL_CAPACITY);
 
-        let mut ids = vec![];
-        let mut versions = vec![];
-        for cp in &checkpoints {
+        let client = self.client.clone();
+        let fetcher: tokio::task::JoinHandle<Result<(), Break<anyhow::Error>>> =
+            tokio::spawn(async move {
+                stream::iter(from..to_exclusive)
+                    .try_for_each_send_spawned(
+                        ConcurrencyConfig::adaptive(33, 1, 2000),
+                        move |cp| {
+                            let client = client.clone();
+                            async move {
+                                let checkpoint =
+                                    client.checkpoint(cp).await.map_err(anyhow::Error::new)?;
+                                Ok(Arc::new(checkpoint))
+                            }
+                        },
+                        tx,
+                        |_| {},
+                    )
+                    .await
+            });
+
+        let mut ids: Vec<Vec<u8>> = vec![];
+        let mut versions: Vec<i64> = vec![];
+        while let Some(cp) = rx.recv().await {
             for tx in &cp.checkpoint.transactions {
                 let lamport = tx.effects.lamport_version();
                 for change in tx.effects.object_changes() {
@@ -106,6 +131,14 @@ impl Handler for ObjVersions {
                 }
             }
         }
+
+        fetcher
+            .await
+            .context("prune fetcher task panicked")?
+            .map_err(|e| match e {
+                Break::Break => anyhow!("prune fetcher cancelled"),
+                Break::Err(err) => anyhow::Error::from(err).context("prune fetch failed"),
+            })?;
 
         if ids.is_empty() {
             return Ok(0);

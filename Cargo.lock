@@ -15007,6 +15007,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "sui-default-config",
+ "sui-futures",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
