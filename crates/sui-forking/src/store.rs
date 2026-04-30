@@ -996,7 +996,7 @@ impl RpcStateReader for DataStore {
 
 impl RpcIndexes for DataStore {
     fn get_epoch_info(&self, _epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
-        Ok(None)
+        todo!("not supported yet")
     }
 
     fn owned_objects_iter(
@@ -1019,11 +1019,11 @@ impl RpcIndexes for DataStore {
         _parent: ObjectID,
         _cursor: Option<ObjectID>,
     ) -> StorageResult<Box<dyn Iterator<Item = DynamicFieldIteratorItem> + '_>> {
-        Ok(Box::new(std::iter::empty()))
+        todo!("not supported yet")
     }
 
     fn get_coin_info(&self, _coin_type: &StructTag) -> StorageResult<Option<CoinInfo>> {
-        Ok(None)
+        todo!("not supported yet")
     }
 
     fn get_balance(
@@ -1031,7 +1031,7 @@ impl RpcIndexes for DataStore {
         _owner: &SuiAddress,
         _coin_type: &StructTag,
     ) -> StorageResult<Option<BalanceInfo>> {
-        Ok(None)
+        todo!("not supported yet")
     }
 
     fn balance_iter(
@@ -1039,7 +1039,7 @@ impl RpcIndexes for DataStore {
         _owner: &SuiAddress,
         _cursor: Option<(SuiAddress, StructTag)>,
     ) -> StorageResult<BalanceIterator<'_>> {
-        Ok(Box::new(std::iter::empty()))
+        todo!("not supported yet")
     }
 
     fn package_versions_iter(
@@ -1048,7 +1048,7 @@ impl RpcIndexes for DataStore {
         _cursor: Option<u64>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<(u64, ObjectID), TypedStoreError>> + '_>>
     {
-        Ok(Box::new(std::iter::empty()))
+        todo!("not supported yet")
     }
 
     fn get_highest_indexed_checkpoint_seq_number(
@@ -1073,7 +1073,7 @@ impl RpcIndexes for DataStore {
                 > + '_,
         >,
     > {
-        Ok(Box::new(std::iter::empty()))
+        todo!("not supported yet")
     }
 }
 
