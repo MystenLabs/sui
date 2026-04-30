@@ -155,8 +155,20 @@ if [ "$PHASE1_FAILED" -eq 1 ]; then
     tail -100 "$LOG_DIR/log"
   fi
   if [ -s "$LOG_DIR/e2e/failures.ndjson" ]; then
-    jq -r '"  \(.status) \(.binary)::\(.test) seed=\(.seed) (log: \(.log))"' \
-      "$LOG_DIR/e2e/failures.ndjson"
+    # python3 (not jq — jq isn't reliably installed on the simtest hosts).
+    # Plain string concatenation rather than f-strings so the script can be
+    # embedded inside single-quoted bash without escape-quoting the
+    # dictionary key strings.
+    python3 -c '
+import json, sys
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    r = json.loads(line)
+    print("  " + r["status"] + " " + r["binary"] + "::" + r["test"]
+          + " seed=" + r["seed"] + " (log: " + r.get("log", "") + ")")
+' < "$LOG_DIR/e2e/failures.ndjson"
   fi
 fi
 

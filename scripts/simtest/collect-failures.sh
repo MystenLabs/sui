@@ -13,14 +13,23 @@ LOG_DIR="${1:?usage: collect-failures.sh <log_dir>}"
 
 {
   if [ -f "$LOG_DIR/e2e/failures.ndjson" ]; then
+    # python3 (not jq — jq isn't reliably installed on the simtest hosts).
     # Records that include `.package` line up with the nextest format used by
     # phases 2 & 3; those that don't (e.g. an explicit binary path) fall back
     # to "binary::test".
-    jq -r '
-      if .package then "\(.package)::\(.binary)::\(.test)"
-      else "\(.binary)::\(.test)"
-      end
-    ' "$LOG_DIR/e2e/failures.ndjson"
+    python3 -c '
+import json, sys
+for line in sys.stdin:
+    line = line.strip()
+    if not line:
+        continue
+    r = json.loads(line)
+    pkg = r.get("package")
+    if pkg:
+        print(pkg + "::" + r["binary"] + "::" + r["test"])
+    else:
+        print(r["binary"] + "::" + r["test"])
+' < "$LOG_DIR/e2e/failures.ndjson"
   fi
 
   # Phase 2/3 still use nextest output: "FAIL [time] package::binary::test".
