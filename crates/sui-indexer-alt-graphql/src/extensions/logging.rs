@@ -26,6 +26,7 @@ use async_graphql::extensions::NextResolve;
 use async_graphql::extensions::NextValidation;
 use async_graphql::extensions::ResolveInfo;
 use async_graphql::parser::types::ExecutableDocument;
+use axum::http::HeaderMap;
 use axum::http::HeaderName;
 use pin_project::pin_project;
 use pin_project::pinned_drop;
@@ -46,12 +47,27 @@ use crate::metrics::RpcMetrics;
 /// This custom response header contains a unique request-id used for debugging and appears in the logs.
 pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-request-id");
 
+/// Headers identifying the SDK that issued the request. To capture an additional client header
+/// in the future, define another constant here, read it in `ClientInfo::from_headers`, and expose
+/// it via the appropriate metric label or log field.
+const CLIENT_SDK_TYPE_HEADER: HeaderName = HeaderName::from_static("client-sdk-type");
+const CLIENT_SDK_VERSION_HEADER: HeaderName = HeaderName::from_static("client-sdk-version");
+
 /// Context data that tracks the session UUID and the client's address, to associate logs with a
 /// particular request.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub(crate) struct Session {
     pub uuid: Uuid,
     pub addr: SocketAddr,
+    pub client: ClientInfo,
+}
+
+/// Information about the SDK that issued the request, extracted from request headers. Lives on
+/// `Session` so it travels with the request through extensions, metrics, and logs.
+#[derive(Clone, Default)]
+pub(crate) struct ClientInfo {
+    pub sdk_type: Option<String>,
+    pub sdk_version: Option<String>,
 }
 
 /// This extension is responsible for tracing and recording metrics for various GraphQL queries.
@@ -81,6 +97,27 @@ impl Session {
         Self {
             uuid: Uuid::new_v4(),
             addr,
+            client: ClientInfo::default(),
+        }
+    }
+
+    /// Builder used at the HTTP entry point to attach client identifiers extracted from request
+    /// headers. All other code paths keep the default (empty) `ClientInfo`.
+    pub(crate) fn with_client_info(mut self, client: ClientInfo) -> Self {
+        self.client = client;
+        self
+    }
+}
+
+impl ClientInfo {
+    pub(crate) fn from_headers(headers: &HeaderMap) -> Self {
+        Self {
+            sdk_type: headers
+                .get(&CLIENT_SDK_TYPE_HEADER)
+                .and_then(|v| v.to_str().ok().map(String::from)),
+            sdk_version: headers
+                .get(&CLIENT_SDK_VERSION_HEADER)
+                .and_then(|v| v.to_str().ok().map(String::from)),
         }
     }
 }
@@ -90,7 +127,6 @@ impl<F> MetricsFuture<F> {
     where
         F: Future<Output = Response>,
     {
-        ext.metrics.queries_received.inc();
         ext.metrics.queries_in_flight.inc();
         let guard = ext.metrics.query_latency.start_timer();
 
@@ -117,6 +153,13 @@ impl ExtensionFactory for Logging {
 #[async_trait::async_trait]
 impl Extension for LoggingExt {
     async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
+        let session: &Session = ctx.data_unchecked();
+        let client_sdk_type = session.client.sdk_type.as_deref().unwrap_or("");
+        let client_sdk_version = session.client.sdk_version.as_deref().unwrap_or("");
+        self.metrics
+            .queries_received
+            .with_label_values(&[client_sdk_type, client_sdk_version])
+            .inc();
         MetricsFuture::request(self, next.run(ctx)).await
     }
 
@@ -128,8 +171,8 @@ impl Extension for LoggingExt {
         request: Request,
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
-        let session = ctx.data_unchecked();
-        let _ = self.session.set(*session);
+        let session: &Session = ctx.data_unchecked();
+        let _ = self.session.set(session.clone());
         next.run(ctx, request).await
     }
 
@@ -207,15 +250,21 @@ where
         ext.metrics.queries_in_flight.dec();
 
         // SAFETY: This is set by `prepare_request`.
-        let Session { uuid, addr } = ext.session.get().unwrap();
+        let Session {
+            uuid,
+            addr,
+            client,
+        } = ext.session.get().unwrap();
+        let client_sdk_type = client.sdk_type.as_deref().unwrap_or("");
+        let client_sdk_version = client.sdk_version.as_deref().unwrap_or("");
         let request_id = uuid.to_string().try_into().unwrap();
         resp.http_headers.insert(REQUEST_ID_HEADER, request_id);
 
         if resp.is_ok() {
             if log_enabled!(Level::Debug) {
-                debug!(request_id = %uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request succeeded");
+                debug!(request_id = %uuid, %addr, elapsed_ms, client_sdk_type, client_sdk_version, query = ext.query.get().unwrap(), response = %json!(resp), "Request succeeded");
             } else {
-                info!(request_id = %uuid, %addr, elapsed_ms, "Request succeeded");
+                info!(request_id = %uuid, %addr, elapsed_ms, client_sdk_type, client_sdk_version, "Request succeeded");
             }
             ext.metrics.queries_succeeded.inc();
         } else {
@@ -225,11 +274,11 @@ where
 
             // Log internal errors, timeouts, and unknown errors at a higher log level than other errors.
             if is_loud_query(&codes) {
-                warn!(request_id = %uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
+                warn!(request_id = %uuid, %addr, elapsed_ms, client_sdk_type, client_sdk_version, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
             } else if log_enabled!(Level::Debug) {
-                debug!(request_id = %uuid, %addr, elapsed_ms, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
+                debug!(request_id = %uuid, %addr, elapsed_ms, client_sdk_type, client_sdk_version, query = ext.query.get().unwrap(), response = %json!(resp), "Request failed");
             } else {
-                info!(request_id = %uuid, %addr, elapsed_ms, ?codes, "Request failed");
+                info!(request_id = %uuid, %addr, elapsed_ms, client_sdk_type, client_sdk_version, ?codes, "Request failed");
             }
 
             if codes.is_empty() {
@@ -252,10 +301,16 @@ where
 impl<F> PinnedDrop for MetricsFuture<F> {
     fn drop(self: Pin<&mut Self>) {
         if let Some(RequestMetrics { timer, ext }) = self.project().metrics.take() {
-            let Session { uuid, addr } = ext.session.get().unwrap();
+            let Session {
+                uuid,
+                addr,
+                client,
+            } = ext.session.get().unwrap();
+            let client_sdk_type = client.sdk_type.as_deref().unwrap_or("");
+            let client_sdk_version = client.sdk_version.as_deref().unwrap_or("");
             let elapsed_ms = timer.stop_and_record() * 1000.0;
             ext.metrics.queries_cancelled.inc();
-            info!(%uuid, %addr, elapsed_ms, "Request cancelled");
+            info!(%uuid, %addr, elapsed_ms, client_sdk_type, client_sdk_version, "Request cancelled");
         }
     }
 }
@@ -275,6 +330,7 @@ mod tests {
     use async_graphql::EmptySubscription;
     use async_graphql::Object;
     use async_graphql::Schema;
+    use axum::http::HeaderValue;
     use prometheus::Registry;
 
     use super::*;
@@ -286,6 +342,29 @@ mod tests {
         async fn op(&self) -> bool {
             true
         }
+    }
+
+    #[test]
+    fn client_info_extracts_sdk_headers() {
+        let mut headers = HeaderMap::new();
+        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
+        headers.insert(
+            CLIENT_SDK_VERSION_HEADER,
+            HeaderValue::from_static("1.69.0"),
+        );
+
+        let info = ClientInfo::from_headers(&headers);
+
+        assert_eq!(info.sdk_type.as_deref(), Some("rust"));
+        assert_eq!(info.sdk_version.as_deref(), Some("1.69.0"));
+    }
+
+    #[test]
+    fn client_info_missing_headers_yield_none() {
+        let info = ClientInfo::from_headers(&HeaderMap::new());
+
+        assert!(info.sdk_type.is_none());
+        assert!(info.sdk_version.is_none());
     }
 
     #[tokio::test]
@@ -302,7 +381,13 @@ mod tests {
 
         assert!(response.is_err());
         assert_eq!(error_codes(&response), vec![code::GRAPHQL_PARSE_FAILED]);
-        assert_eq!(metrics.queries_received.get(), 1);
+        assert_eq!(
+            metrics
+                .queries_received
+                .with_label_values(&["", ""])
+                .get(),
+            1
+        );
         assert_eq!(
             metrics
                 .query_errors
@@ -331,7 +416,13 @@ mod tests {
             error_codes(&response),
             vec![code::GRAPHQL_VALIDATION_FAILED]
         );
-        assert_eq!(metrics.queries_received.get(), 1);
+        assert_eq!(
+            metrics
+                .queries_received
+                .with_label_values(&["", ""])
+                .get(),
+            1
+        );
         assert_eq!(
             metrics
                 .query_errors
@@ -361,7 +452,13 @@ mod tests {
         let codes = error_codes(&response);
         assert_eq!(codes.len(), 3);
 
-        assert_eq!(metrics.queries_received.get(), 1);
+        assert_eq!(
+            metrics
+                .queries_received
+                .with_label_values(&["", ""])
+                .get(),
+            1
+        );
         assert_eq!(metrics.queries_failed.get(), 1);
         assert_eq!(
             metrics

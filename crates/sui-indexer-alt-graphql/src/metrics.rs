@@ -47,7 +47,7 @@ pub struct RpcMetrics {
 
     // Top-level metrics for all read requests (queries).
     pub query_latency: Histogram,
-    pub queries_received: IntCounter,
+    pub queries_received: IntCounterVec,
     pub queries_succeeded: IntCounter,
     pub queries_failed: IntCounter,
     pub query_errors: IntCounterVec,
@@ -139,9 +139,10 @@ impl RpcMetrics {
             )
             .unwrap(),
 
-            queries_received: register_int_counter_with_registry!(
+            queries_received: register_int_counter_vec_with_registry!(
                 "graphql_queries_received",
-                "Number of read requests the service has received",
+                "Number of read requests the service has received, labelled by the SDK identifiers carried in `client-sdk-type` and `client-sdk-version` request headers (empty when absent)",
+                &["client_sdk_type", "client_sdk_version"],
                 registry,
             )
             .unwrap(),

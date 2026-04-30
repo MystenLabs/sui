@@ -22,6 +22,7 @@ use timeout_tracing::timeout;
 use tracing::warn;
 
 use crate::error::request_timeout;
+use crate::extensions::logging::ClientInfo;
 use crate::extensions::logging::Session;
 
 /// How long to wait for each kind of operation before timing out.
@@ -275,6 +276,7 @@ mod tests {
                 // ffffffff-ffff-ffff-ffff-ffffffffffff
                 uuid: Uuid::from_bytes([255; 16]),
                 addr: SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0),
+                client: ClientInfo::default(),
             })
             .extension(Timeout::new(TimeoutConfig {
                 query: query_timeout,

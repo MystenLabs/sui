@@ -70,6 +70,7 @@ use crate::api::query::Query;
 #[cfg(feature = "staging")]
 use crate::api::subscription::Subscription;
 use crate::error::PanicHandler;
+use crate::extensions::logging::ClientInfo;
 use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
@@ -465,12 +466,13 @@ async fn graphql(
     Extension(watermark): Extension<WatermarksLock>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
+    headers: axum::http::HeaderMap,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
     let mut request = request
         .into_inner()
         .data(content_length)
-        .data(Session::new(addr))
+        .data(Session::new(addr).with_client_info(ClientInfo::from_headers(&headers)))
         .data(watermark.read().await.clone())
         .data(rich::Meter::default());
 
