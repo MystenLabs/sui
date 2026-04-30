@@ -71,7 +71,7 @@ impl NodeRole {
             Self::Validator | Self::FullNode(FullNodeSyncMode::ConsensusObserver)
         )
     }
-    
+
     /// Whether this node should submit JWK updates to consensus.
     pub fn should_run_jwk_updater(&self) -> bool {
         matches!(self, Self::Validator)
