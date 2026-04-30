@@ -30,10 +30,10 @@ Every name returned should equal `$EXPECTED_NAME` and every email should equal `
 First, check if there is an open PR for the current branch (`gh pr view`). Note the result — you will need it in Step 11. If a PR exists, use its base branch as `$BASE`.
 
 Then ensure the branch name:
-- If the current branch starts with `$GH_USER-`, continue.
-- If on `main`/`master`, create a new branch named `$GH_USER-<short-description>` based on the recent commit messages, switch to it, and continue.
-- If on another branch not prefixed with `$GH_USER-` AND there is no open PR for it, rename it with `git branch -m $GH_USER-<current-name>`.
-- If on another branch not prefixed with `$GH_USER-` AND there IS an open PR, do not rename. Continue with the current name.
+- If the current branch starts with `$GH_USER/`, continue.
+- If on `main`/`master`, create a new branch named `$GH_USER/<short-description>` based on the recent commit messages, switch to it, and continue.
+- If on another branch not prefixed with `$GH_USER/` AND there is no open PR for it, rename it with `git branch -m $GH_USER/<current-name>`.
+- If on another branch not prefixed with `$GH_USER/` AND there IS an open PR, do not rename. Continue with the current name.
 
 ## Step 2 — Commit unstaged changes
 
@@ -121,3 +121,5 @@ If the remote branch exists and has diverged (due to rebase), force-push with `g
 Check if a PR already exists for this branch (`gh pr view`).
 - If a PR is open: done. Print the PR URL.
 - If no PR exists: open one in **draft** mode with `gh pr create --draft`. Write a concise title and body summarizing the branch's changes. Print the PR URL.
+
+Be concise in the PR description. Focus on the intent and reasons for the PR, and the functional changes that result, rather than simply listing the names of files or code structures that were modified.
