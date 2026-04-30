@@ -80,7 +80,7 @@ async fn test_consensus_manager() {
         consensus_config,
         &registry_service,
         consensus_client,
-        sui_types::node_role::NodeRole::validator(),
+        sui_types::node_role::NodeRole::Validator,
     );
 
     let boot_counter = *manager.boot_counter.lock().await;
@@ -164,7 +164,7 @@ async fn test_consensus_manager_address_update() {
         consensus_config,
         &registry_service,
         consensus_client,
-        NodeRole::validator(),
+        NodeRole::Validator,
     ));
 
     // Start consensus

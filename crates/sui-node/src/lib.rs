@@ -518,7 +518,7 @@ impl SuiNode {
             .unwrap_or(preliminary_role.runs_consensus());
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
-            is_validator: preliminary_role.is_validator(),
+            is_validator: preliminary_role == NodeRole::Validator,
         };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
@@ -885,7 +885,7 @@ impl SuiNode {
             )
             .await?;
 
-            if node_role.can_submit_to_consensus() {
+            if node_role.can_propose_transactions() {
                 components.consensus_adapter.submit_recovered(&epoch_store);
             }
 
@@ -1530,7 +1530,7 @@ impl SuiNode {
             epoch_start_timestamp_ms, epoch_duration_ms
         );
 
-        let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.can_submit_to_consensus() {
+        let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.can_propose_transactions() {
             Box::new(SubmitCheckpointToConsensus {
                 sender: consensus_adapter,
                 signer: state.secret.clone(),

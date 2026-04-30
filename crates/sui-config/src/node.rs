@@ -30,7 +30,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::node_role::NodeRole;
+use sui_types::node_role::{FullNodeSyncMode, NodeRole};
 use sui_types::supported_protocol_versions::{Chain, SupportedProtocolVersions};
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
@@ -913,9 +913,9 @@ impl NodeConfig {
             .map(|p| !p.observer.peers.is_empty())
             .unwrap_or(false);
         match (has_consensus_config, has_observer_peers) {
-            (true, false) => NodeRole::validator(),
-            (true, true) => NodeRole::observer(),
-            _ => NodeRole::fullnode(),
+            (true, false) => NodeRole::Validator,
+            (true, true) => NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver),
+            _ => NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly),
         }
     }
 

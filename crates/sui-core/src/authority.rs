@@ -977,11 +977,11 @@ impl AuthorityState {
     }
 
     pub fn is_validator(&self, epoch_store: &AuthorityPerEpochStore) -> bool {
-        epoch_store.node_role().is_validator()
+        epoch_store.node_role() == NodeRole::Validator
     }
 
     pub fn is_fullnode(&self, epoch_store: &AuthorityPerEpochStore) -> bool {
-        epoch_store.node_role().is_fullnode()
+        matches!(epoch_store.node_role(), NodeRole::FullNode(_))
     }
 
     pub fn committee_store(&self) -> &Arc<CommitteeStore> {
