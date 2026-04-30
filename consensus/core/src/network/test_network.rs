@@ -149,7 +149,7 @@ impl ObserverNetworkService for Mutex<TestService> {
         let block_stream = stream::iter(
             blocks_to_send
                 .into_iter()
-                .map(|extended_block| extended_block.block),
+                .map(|extended_block| vec![extended_block.block]),
         );
 
         Ok(Box::pin(block_stream))

@@ -247,15 +247,22 @@ impl ObserverNetworkService for ObserverService {
         let past_stream = stream::iter(
             past_blocks
                 .into_iter()
-                .map(move |block| block.serialized().clone()),
+                .map(move |block| vec![block.serialized().clone()]),
         );
 
+        const MAX_BLOCKS_PER_POLL: usize = 20;
         let live_stream = BroadcastStream::<VerifiedBlock>::new(
             PeerId::Observer(Box::new(peer)),
             self.rx_accepted_block_broadcast.resubscribe(),
+            MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         )
-        .map(|block| block.serialized().clone());
+        .map(|blocks| {
+            blocks
+                .into_iter()
+                .map(|block| block.serialized().clone())
+                .collect()
+        });
 
         Ok(Box::pin(past_stream.chain(live_stream)))
     }
@@ -363,24 +370,22 @@ mod tests {
         tx_accepted_block.send(block2.clone()).unwrap();
         tx_accepted_block.send(block3.clone()).unwrap();
 
-        // Verify observer receives all three blocks in order
-        let block1 = stream.next().await.unwrap();
-        let signed1 = bcs::from_bytes(&block1).unwrap();
-        let received1 = VerifiedBlock::new_verified(signed1, block1);
-        assert_eq!(received1.round(), 5);
-        assert_eq!(received1.author().value(), 0);
-
-        let block2 = stream.next().await.unwrap();
-        let signed2 = bcs::from_bytes(&block2).unwrap();
-        let received2 = VerifiedBlock::new_verified(signed2, block2);
-        assert_eq!(received2.round(), 10);
-        assert_eq!(received2.author().value(), 1);
-
-        let block3 = stream.next().await.unwrap();
-        let signed3 = bcs::from_bytes(&block3).unwrap();
-        let received3 = VerifiedBlock::new_verified(signed3, block3);
-        assert_eq!(received3.round(), 15);
-        assert_eq!(received3.author().value(), 2);
+        // Verify observer receives all three blocks in order.
+        // Collect all blocks from the batched stream.
+        let mut received_blocks = Vec::new();
+        while received_blocks.len() < 3 {
+            let batch = stream.next().await.unwrap();
+            for block_bytes in batch {
+                let signed: SignedBlock = bcs::from_bytes(&block_bytes).unwrap();
+                received_blocks.push(VerifiedBlock::new_verified(signed, block_bytes));
+            }
+        }
+        assert_eq!(received_blocks[0].round(), 5);
+        assert_eq!(received_blocks[0].author().value(), 0);
+        assert_eq!(received_blocks[1].round(), 10);
+        assert_eq!(received_blocks[1].author().value(), 1);
+        assert_eq!(received_blocks[2].round(), 15);
+        assert_eq!(received_blocks[2].author().value(), 2);
     }
 
     #[tokio::test]

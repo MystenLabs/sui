@@ -38,8 +38,8 @@ pub(crate) struct BlockStreamRequest {
 
 #[derive(Clone, prost::Message)]
 pub(crate) struct BlockStreamResponse {
-    #[prost(bytes = "bytes", tag = "1")]
-    pub(crate) block: Bytes,
+    #[prost(bytes = "bytes", repeated, tag = "1")]
+    pub(crate) blocks: Vec<Bytes>,
 }
 
 // Observer fetch messages
@@ -265,7 +265,7 @@ impl ObserverNetworkClient for TonicObserverClient {
                 let peer_cloned = peer.clone();
                 async move {
                     match b {
-                        Ok(response) => Some(response.block),
+                        Ok(response) => Some(response.blocks),
                         Err(e) => {
                             debug!("Network error received from {:?}: {e:?}", peer_cloned);
                             None
@@ -420,7 +420,7 @@ impl<S: ObserverNetworkService> ObserverService for ObserverServiceProxy<S> {
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
 
-        let response_stream = block_stream.map(|block| Ok(BlockStreamResponse { block }));
+        let response_stream = block_stream.map(|blocks| Ok(BlockStreamResponse { blocks }));
 
         Ok(Response::new(Box::pin(response_stream)))
     }
@@ -515,7 +515,7 @@ mod tests {
     use bytes::Bytes;
     use consensus_config::PeerRecord;
     use consensus_types::block::Round;
-    use futures::StreamExt as _;
+    use futures::{StreamExt as _, stream};
     use parking_lot::Mutex;
 
     use crate::{
@@ -550,7 +550,7 @@ mod tests {
             .await
             .unwrap();
 
-        let blocks: Vec<_> = block_stream.collect().await;
+        let blocks: Vec<Bytes> = block_stream.flat_map(stream::iter).collect().await;
 
         assert_eq!(blocks.len(), 100);
         assert_eq!(blocks[0], Bytes::from(vec![1u8; 16]));
@@ -582,7 +582,7 @@ mod tests {
             .await
             .unwrap();
 
-        let blocks: Vec<_> = block_stream.collect().await;
+        let blocks: Vec<Bytes> = block_stream.flat_map(stream::iter).collect().await;
 
         assert_eq!(blocks.len(), 50);
         assert_eq!(blocks[0], Bytes::from(vec![51u8; 16]));
@@ -648,12 +648,17 @@ mod tests {
         // If it fails, it's likely due to authentication/allowlist configuration
         let mut stream = result.unwrap();
         let mut count = 0;
-        while let Some(block) = stream.next().await {
-            // Verify the blocks are in the expected range (rounds 11-50)
-            assert!(block.len() == 16);
-            count += 1;
+        while let Some(batch) = stream.next().await {
+            for block in batch {
+                // Verify the blocks are in the expected range (rounds 11-50)
+                assert!(block.len() == 16);
+                count += 1;
+                if count >= 40 {
+                    break; // We expect 40 blocks (rounds 11-50)
+                }
+            }
             if count >= 40 {
-                break; // We expect 40 blocks (rounds 11-50)
+                break;
             }
         }
         assert_eq!(count, 40);

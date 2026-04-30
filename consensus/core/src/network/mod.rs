@@ -240,7 +240,7 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
 }
 
 /// Observer block stream type.
-pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = Bytes> + Send + 'static>>;
+pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = Vec<Bytes>> + Send + 'static>>;
 
 /// Observer network service for handling requests from observer nodes.
 /// Unlike ValidatorNetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)

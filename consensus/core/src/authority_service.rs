@@ -373,15 +373,23 @@ impl<C: CoreThreadDispatcher> ValidatorNetworkService for AuthorityService<C> {
             )
         };
 
+        const MAX_BLOCKS_PER_POLL: usize = 1;
         let broadcasted_blocks = BroadcastedBlockStream::new(
             PeerId::Validator(peer),
             self.rx_block_broadcast.resubscribe(),
+            MAX_BLOCKS_PER_POLL,
             self.subscription_counter.clone(),
         );
 
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         Ok(Box::pin(past_proposed_blocks.chain(
-            broadcasted_blocks.map(ExtendedSerializedBlock::from),
+            broadcasted_blocks.flat_map(|items| {
+                debug_assert!(
+                    items.len() <= MAX_BLOCKS_PER_POLL,
+                    "Too many blocks received from broadcast"
+                );
+                stream::iter(items.into_iter().map(ExtendedSerializedBlock::from))
+            }),
         )))
     }
 
@@ -573,6 +581,8 @@ pub(crate) struct BroadcastStream<T> {
             broadcast::Receiver<T>,
         ),
     >,
+    // Maximum number of items to return per poll.
+    max_items_per_poll: usize,
     // Counts total subscriptions / active BroadcastStreams.
     subscription_counter: Arc<SubscriptionCounter>,
 }
@@ -581,8 +591,10 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
     pub fn new(
         peer: PeerId,
         rx: broadcast::Receiver<T>,
+        max_items_per_poll: usize,
         subscription_counter: Arc<SubscriptionCounter>,
     ) -> Self {
+        assert!(max_items_per_poll > 0, "max_items_per_poll must be > 0");
         if let Err(err) = subscription_counter.increment(&peer) {
             match err {
                 ConsensusError::Shutdown => {}
@@ -592,39 +604,61 @@ impl<T: 'static + Clone + Send> BroadcastStream<T> {
         Self {
             peer,
             inner: ReusableBoxFuture::new(make_recv_future(rx)),
+            max_items_per_poll,
             subscription_counter,
         }
     }
 }
 
 impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
-    type Item = T;
+    type Item = Vec<T>;
 
     fn poll_next(
         mut self: Pin<&mut Self>,
         cx: &mut task::Context<'_>,
     ) -> task::Poll<Option<Self::Item>> {
-        let peer = self.peer.clone();
-        let maybe_item = loop {
-            let (result, rx) = ready!(self.inner.poll(cx));
-            self.inner.set(make_recv_future(rx));
+        loop {
+            let (result, mut rx) = ready!(self.inner.poll(cx));
 
             match result {
-                Ok(item) => break Some(item),
+                Ok(item) => {
+                    let mut items = Vec::new();
+                    items.push(item);
+
+                    // Drain any additional items that are already available, up to the cap.
+                    while items.len() < self.max_items_per_poll {
+                        match rx.try_recv() {
+                            Ok(item) => items.push(item),
+                            Err(broadcast::error::TryRecvError::Empty) => break,
+                            Err(broadcast::error::TryRecvError::Closed) => break,
+                            Err(broadcast::error::TryRecvError::Lagged(n)) => {
+                                warn!(
+                                    "Block BroadcastedBlockStream {} lagged by {} messages",
+                                    self.peer, n
+                                );
+                                break;
+                            }
+                        }
+                    }
+
+                    self.inner.set(make_recv_future(rx));
+                    return task::Poll::Ready(Some(items));
+                }
                 Err(broadcast::error::RecvError::Closed) => {
-                    info!("Block BroadcastedBlockStream {} closed", peer);
-                    break None;
+                    info!("Block BroadcastedBlockStream {} closed", self.peer);
+                    return task::Poll::Ready(None);
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     warn!(
                         "Block BroadcastedBlockStream {} lagged by {} messages",
-                        peer, n
+                        self.peer, n
                     );
+                    // Re-arm the future and loop to await the next item.
+                    self.inner.set(make_recv_future(rx));
                     continue;
                 }
             }
-        };
-        task::Poll::Ready(maybe_item)
+        }
     }
 }
 
