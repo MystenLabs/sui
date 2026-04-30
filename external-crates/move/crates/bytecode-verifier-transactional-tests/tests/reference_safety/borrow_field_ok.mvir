@@ -1,8 +1,8 @@
 //# publish
 mvir 0x1::A {
 
-    struct T has drop {v: u64}
-    struct K has drop {f: Self::T}
+    public struct T has drop {v: u64}
+    public struct K has drop {f: Self::T}
 
     public fun new_T(v: u64) : Self::T {
     label b0:

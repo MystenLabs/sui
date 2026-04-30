@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::M {
-    enum M has drop { V { } }
+    public enum M has drop { V { } }
     public fun new(): Self::M {
     label b0:
         return M::V { };

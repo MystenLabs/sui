@@ -33,7 +33,7 @@ mvir 0x0::m {
 //# publish
 mvir 0x0::m {
     import 0x2::tx_context;
-    struct Droppable has drop { flag: bool }
+    public struct Droppable has drop { flag: bool }
     public entry fun foo(ctx: &mut tx_context::TxContext): Self::Droppable {
         label l0:
         abort 0;
@@ -43,7 +43,7 @@ mvir 0x0::m {
 //# publish
 mvir 0x0::m {
     import 0x2::tx_context;
-    struct Droppable has drop { flag: bool }
+    public struct Droppable has drop { flag: bool }
     public entry fun foo(ctx: &mut tx_context::TxContext): vector<Self::Droppable> * u64 {
         label l0:
         abort 0;

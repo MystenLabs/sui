@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct R has store { b: bool }
+    public struct R has store { b: bool }
     fun f() {
         let v: vector<Self::R>;
     label b0:

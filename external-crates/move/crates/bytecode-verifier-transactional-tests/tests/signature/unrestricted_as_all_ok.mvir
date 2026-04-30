@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct S<T> { b: bool }
+    public struct S<T> { b: bool }
 
     fun foo() {
         // no constraint

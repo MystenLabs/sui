@@ -1,8 +1,8 @@
 //# publish
 mvir 0x42::Tester {
 
-    enum Initializer { V { x: u64, y: u64 } }
-    enum Point { V { x: u64, y: u64 } }
+    public enum Initializer { V { x: u64, y: u64 } }
+    public enum Point { V { x: u64, y: u64 } }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
     fun set_and_pick(init: &mut Self::Initializer, p: &mut Self::Point): &mut u64 {
@@ -48,8 +48,8 @@ mvir 0x42::Tester {
 //# publish
 mvir 0x43::Tester {
 
-    enum Initializer { V { x: u64, y: u64 } }
-    enum Point { V { x: u64, y: u64 } }
+    public enum Initializer { V { x: u64, y: u64 } }
+    public enum Point { V { x: u64, y: u64 } }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
     fun set_and_pick(init: &mut Self::Initializer, p: &mut Self::Point): &mut u64 {

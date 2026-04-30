@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    enum E has drop {
+    public enum E has drop {
         V { f0: u64 }
     }
 
@@ -27,7 +27,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M1 {
-    enum E has drop {
+    public enum E has drop {
         V { f0: u64 }
     }
 
@@ -58,7 +58,7 @@ mvir 0x1::M1 {
 
 //# publish
 mvir 0x1::M2 {
-    enum E has drop {
+    public enum E has drop {
         V { f0: u64 }
     }
 

@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct Foo { f: bool }
+    public struct Foo { f: bool }
 
     public fun id<T>(x: T): T {
     label b0:
@@ -24,7 +24,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x2::M {
-    enum Foo { V{ f: bool } }
+    public enum Foo { V{ f: bool } }
 
     public fun id<T>(x: T): T {
     label b0:

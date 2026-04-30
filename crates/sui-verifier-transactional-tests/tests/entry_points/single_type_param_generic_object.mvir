@@ -5,7 +5,7 @@
 mvir 0x0::m {
     import 0x2::object;
     import 0x2::tx_context;
-    struct Obj<T> has key {
+    public struct Obj<T> has key {
         id: object::UID,
     }
     public entry fun foo<T: store>(l: Self::Obj<T>, ctx: &mut tx_context::TxContext) {

@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
-    struct X has drop { v: u64 }
-    struct S<T> has drop { f: T }
+    public struct X has drop { v: u64 }
+    public struct S<T> has drop { f: T }
     fun t(s: Self::S<Self::X>): u64 {
     label b0:
         return *(&(&(&s).S<Self::X>::f).X::v);
@@ -10,8 +10,8 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x2::M {
-    enum X has drop { V { v: u64 } }
-    enum S<T> has drop { V { f: T } }
+    public enum X has drop { V { v: u64 } }
+    public enum S<T> has drop { V { f: T } }
     fun t(s: Self::S<Self::X>): u64 {
     let v: &u64;
     let f: &Self::X;

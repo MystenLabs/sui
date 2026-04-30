@@ -5,7 +5,7 @@
 
 //# publish 
 mvir 0x0::f {
-    enum X has key {
+    public enum X has key {
         A { } 
     }
 }

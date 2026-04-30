@@ -1,7 +1,7 @@
 //# publish
 mvir 0x42::m {
 
-    enum Threes<T> has {
+    public enum Threes<T> has {
         One { pos0: T } ,
         Two{},
         Three { pos0: T }

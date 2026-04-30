@@ -3,7 +3,7 @@
 //# run
 mvir 0x42::m {
 
-enum Wrapper has drop {
+public enum Wrapper has drop {
     Val { x: u64 },
 }
 

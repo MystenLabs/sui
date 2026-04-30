@@ -3,7 +3,7 @@
 // struct and struct ref arguments are now allowed
 
 mvir 0x42::M {
-    struct S has drop { f: u64 }
+    public struct S has drop { f: u64 }
 
     public entry fun foo(s: Self::S, i: &Self::S, m: &mut Self::S) {
         label l0:

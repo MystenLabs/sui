@@ -1,7 +1,7 @@
 //# publish
 
 mvir 0x6::M {
-    struct Box<T> { x: T }
+    public struct Box<T> { x: T }
 
     fun unbox<T>(b: Self::Box<T>): T {
         let x: T;

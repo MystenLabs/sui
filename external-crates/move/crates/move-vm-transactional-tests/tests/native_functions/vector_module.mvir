@@ -1,6 +1,6 @@
 //# publish
 mvir 0x5::Coin {
-    struct Coin has store { value: u64 }
+    public struct Coin has store { value: u64 }
     public fun value(c: &Self::Coin): u64 {
     label b0:
         return *&move(c).Coin::value;
@@ -22,7 +22,7 @@ mvir 0x42::M {
     import 0x5::Coin;
     import 0x1::vector;
 
-    struct Coins has key { f: vector<Coin::Coin> }
+    public struct Coins has key { f: vector<Coin::Coin> }
 
     public fun new(): Self::Coins {
         let coin_vec: vector<Coin::Coin>;

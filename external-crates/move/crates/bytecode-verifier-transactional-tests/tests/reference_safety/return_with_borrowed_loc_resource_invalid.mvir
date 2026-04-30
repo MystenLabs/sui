@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct X { u: u64 }
+    public struct X { u: u64 }
 
     fun t() {
         let s: Self::X;

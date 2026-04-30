@@ -277,7 +277,7 @@ fn cfg_compile_if_else_with_two_aborts() {
 fn cfg_compile_variant_switch_simple() {
     let text = "
         mvir 0x42::m {
-            enum X has drop { V1 { x: u64 }, V2 { } }
+            public enum X has drop { V1 { x: u64 }, V2 { } }
 
             entry fun foo(x: Self::X) {
                 let y: u64;
@@ -304,7 +304,7 @@ fn cfg_compile_variant_switch_simple() {
 fn cfg_compile_variant_switch_simple_unconditional_jump() {
     let text = "
         mvir 0x42::m {
-            enum X has drop { V1 { x: u64 }, V2 { } }
+            public enum X has drop { V1 { x: u64 }, V2 { } }
 
             entry fun foo(x: Self::X) {
                 let y: u64;
@@ -334,7 +334,7 @@ fn cfg_compile_variant_switch_simple_unconditional_jump() {
 fn cfg_compile_variant_switch() {
     let text = "
         mvir 0x42::m {
-            enum X { V1 { x: u64 }, V2 { } }
+            public enum X { V1 { x: u64 }, V2 { } }
 
             entry fun foo(x: Self::X) {
                 let y: u64;
@@ -370,7 +370,7 @@ fn cfg_compile_variant_switch() {
 fn cfg_compile_variant_switch_with_two_aborts() {
     let text = "
         mvir 0x42::m {
-            enum X { V1 { x: u64 }, V2 { } }
+            public enum X { V1 { x: u64 }, V2 { } }
 
             entry fun foo(x: Self::X) {
                 let y: u64;
@@ -406,7 +406,7 @@ fn cfg_compile_variant_switch_with_two_aborts() {
 fn cfg_compile_variant_switch_with_return() {
     let text = "
         mvir 0x42::m {
-            enum X { V1 { x: u64 }, V2 { } }
+            public enum X { V1 { x: u64 }, V2 { } }
 
             entry fun foo(x: Self::X) {
                 let y: u64;

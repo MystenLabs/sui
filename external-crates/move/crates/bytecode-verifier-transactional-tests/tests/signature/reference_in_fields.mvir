@@ -1,5 +1,5 @@
 //# publish
 mvir 0x42::M {
     // no refs in fields
-    struct Foo { x: &u64 }
+    public struct Foo { x: &u64 }
 }

@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::Test {
-    struct T { b: bool }
+    public struct T { b: bool }
 
     public fun new(): Self::T {
     label b0:

@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    enum S { V { b: bool } }
+    public enum S { V { b: bool } }
 
     fun foo() {
         // type arg mismatch

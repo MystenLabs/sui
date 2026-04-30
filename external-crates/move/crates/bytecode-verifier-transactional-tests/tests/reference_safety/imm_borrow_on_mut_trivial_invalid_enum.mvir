@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::Tester {
-    enum X { V { f: u64 } }
+    public enum X { V { f: u64 } }
 
     fun bump_and_give(x_ref: &mut Self::X): &u64 {
         let f_ref: &mut u64;

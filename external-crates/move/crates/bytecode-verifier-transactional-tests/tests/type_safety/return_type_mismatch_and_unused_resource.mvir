@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct R { flag: bool }
+    public struct R { flag: bool }
 
     // Type checking is done before memory safety checks
     // wrong return type
@@ -28,7 +28,7 @@ mvir 0x1::M2 {
 
 //# publish
 mvir 0x1::M {
-    struct R { flag: bool }
+    public struct R { flag: bool }
 
     fun t1(): u64 {
         let c: Self::R;
@@ -54,7 +54,7 @@ mvir 0x1::M2 {
 
 //# publish
 mvir 0x2::M {
-    enum R { V { flag: bool } }
+    public enum R { V { flag: bool } }
 
     // Type checking is done before memory safety checks
     // wrong return type
@@ -68,7 +68,7 @@ mvir 0x2::M {
 
 //# publish
 mvir 0x2::M {
-    enum R { V { flag: bool } }
+    public enum R { V { flag: bool } }
 
     fun t1(): u64 {
         let c: Self::R;

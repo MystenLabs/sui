@@ -4,7 +4,7 @@
 
 mvir 0x2::borrow_field_if_else {
 
-struct S has copy, drop {
+public struct S has copy, drop {
     f: u64,
     g: u64,
 }

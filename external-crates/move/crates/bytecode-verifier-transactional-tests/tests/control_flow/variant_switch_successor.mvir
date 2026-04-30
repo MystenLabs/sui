@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::m {
-    enum X  { A { }, B { } }
+    public enum X  { A { }, B { } }
 
     fun foo(x: Self::X) {
         label b0:

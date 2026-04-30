@@ -1,6 +1,6 @@
 //# publish
 mvir 0x5::Coin {
-    struct Coin { value: u64 }
+    public struct Coin { value: u64 }
     public fun value(c: &Self::Coin): u64 {
     label b0:
         return *&move(c).Coin::value;
@@ -21,7 +21,7 @@ mvir 0x5::Coin {
 mvir 0x43::MoneyHolder {
     import 0x5::Coin;
 
-    struct T { money: Coin::Coin }
+    public struct T { money: Coin::Coin }
 
     public fun new(m: Coin::Coin): Self::T {
     label b0:

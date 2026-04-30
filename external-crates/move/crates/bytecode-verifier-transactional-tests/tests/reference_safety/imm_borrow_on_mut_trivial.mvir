@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::Tester {
-    struct X { f: u64 }
+    public struct X { f: u64 }
 
     fun bump_and_give(x_ref: &mut Self::X): &u64 {
     label b0:

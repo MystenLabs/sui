@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    enum S { V { g: u64 } }
+    public enum S { V { g: u64 } }
 
     fun t1(root: &mut Self::S, cond: bool) {
         let x1: u64;

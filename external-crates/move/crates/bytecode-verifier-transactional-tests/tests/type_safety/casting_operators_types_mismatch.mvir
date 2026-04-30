@@ -122,7 +122,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct S { x: bool }
+    public struct S { x: bool }
     fun f() {
     label b0:
         _ = to_u8(S { x: true });
@@ -132,7 +132,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct S { x: bool }
+    public struct S { x: bool }
     fun g() {
     label b0:
         _ = to_u64(S { x: true });
@@ -142,7 +142,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct S { x: bool }
+    public struct S { x: bool }
     fun h() {
     label b0:
         _ = to_u128(S { x: true });
@@ -152,7 +152,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct S { x: bool }
+    public struct S { x: bool }
     fun f() {
     label b0:
         _ = to_u16(S { x: true });
@@ -162,7 +162,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct S { x: bool }
+    public struct S { x: bool }
     fun g() {
     label b0:
         _ = to_u32(S { x: true });
@@ -172,7 +172,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct S { x: bool }
+    public struct S { x: bool }
     fun h() {
     label b0:
         _ = to_u256(S { x: true });

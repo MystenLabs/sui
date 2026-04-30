@@ -1,7 +1,7 @@
 //# publish
 mvir 0x42::A {
-    struct Coin has store { value: u64 }
-    struct T { f: Self::Coin }
+    public struct Coin has store { value: u64 }
+    public struct T { f: Self::Coin }
 
     public fun t(this: &mut Self::T, y: Self::Coin) {
         let x: &mut Self::Coin;

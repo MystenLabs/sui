@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::M {
-    struct M has drop { b: bool }
+    public struct M has drop { b: bool }
     public fun new(): Self::M {
     label b0:
         return M{ b: true };

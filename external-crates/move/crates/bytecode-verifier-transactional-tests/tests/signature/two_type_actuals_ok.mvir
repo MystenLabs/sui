@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
-    struct R has key { b: bool}
-    struct S<T1: key, T2: copy + drop> { b: bool }
+    public struct R has key { b: bool}
+    public struct S<T1: key, T2: copy + drop> { b: bool }
 
     fun foo() {
         // satisfy constraints

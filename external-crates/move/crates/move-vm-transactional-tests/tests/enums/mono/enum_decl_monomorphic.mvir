@@ -1,15 +1,15 @@
 //# print-bytecode
 mvir 0x6::MonomorphicEnums {
-    enum EnumWithOneVariant {
+    public enum EnumWithOneVariant {
         One { }
     }
 
-    enum EnumWithTwoVariants {
+    public enum EnumWithTwoVariants {
         One { },
         Two { x: u64 }
     }
 
-    enum EnumWithTwoVariantsPlusAbilities has drop, copy, store, key {
+    public enum EnumWithTwoVariantsPlusAbilities has drop, copy, store, key {
         One { },
         Two { x: u64 }
     }
@@ -34,16 +34,16 @@ mvir 0x6::MonomorphicEnums {
 
 //# publish
 mvir 0x6::MonomorphicEnums {
-    enum EnumWithOneVariant {
+    public enum EnumWithOneVariant {
         One { }
     }
 
-    enum EnumWithTwoVariants {
+    public enum EnumWithTwoVariants {
         One { },
         Two { x: u64 }
     }
 
-    enum EnumWithTwoVariantsPlusAbilities has drop, copy, store, key {
+    public enum EnumWithTwoVariantsPlusAbilities has drop, copy, store, key {
         One { },
         Two { x: u64 }
     }

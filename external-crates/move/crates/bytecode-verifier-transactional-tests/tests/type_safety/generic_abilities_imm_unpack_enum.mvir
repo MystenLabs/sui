@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    enum Foo<T> { V{ x: T }}
+    public enum Foo<T> { V{ x: T }}
 
     fun baz(x: u64) {
     label b0:

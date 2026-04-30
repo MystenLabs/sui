@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::M {
-    struct S<T> has copy { s: T }
+    public struct S<T> has copy { s: T }
     fun t(s: signer): Self::S<signer> {
         let x: Self::S<signer>;
     label b0:

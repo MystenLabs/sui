@@ -29,7 +29,7 @@ label b0:
 
 //# print-bytecode
 mvir 0x1d4::M {
-    struct T { u: u64 }
+    public struct T { u: u64 }
 
     // An immutable borrow, of a field on an immutable reference to a struct,
     // produces an immutable reference type.
@@ -64,7 +64,7 @@ mvir 0x1d4::M {
 
 //# print-bytecode
 mvir 0x2d4::M {
-    struct T<U> { u: U }
+    public struct T<U> { u: U }
 
     fun f(t: &Self::T<u64>) {
         let r: &u64;
@@ -85,7 +85,7 @@ mvir 0x2d4::M {
 
 //# publish
 mvir 0x3d4::M {
-    struct T has key { b: bool }
+    public struct T has key { b: bool }
 
     public fun new(): Self::T {
     label b0:

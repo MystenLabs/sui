@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::MonoTooMany {
-    enum Foo{ V { x: u64 } }
+    public enum Foo{ V { x: u64 } }
 
     fun bar(x: u64, y: u64): Self::Foo {
         let t: Self::Foo;
@@ -12,7 +12,7 @@ mvir 0x6::MonoTooMany {
 
 //# publish
 mvir 0x7::MonoTooFew {
-    enum Foo{ V { x: u64 } }
+    public enum Foo{ V { x: u64 } }
 
     fun bar(x: u64, y: u64): Self::Foo {
         let t: Self::Foo;
@@ -24,7 +24,7 @@ mvir 0x7::MonoTooFew {
 
 //# publish
 mvir 0x8::PolyTooMany {
-    enum Foo<T>{ V { x: T } }
+    public enum Foo<T>{ V { x: T } }
 
     fun bar(x: u64, y: u64): Self::Foo<u64> {
         let t: Self::Foo<u64>;
@@ -36,7 +36,7 @@ mvir 0x8::PolyTooMany {
 
 //# publish
 mvir 0x9::PolyTooFew {
-    enum Foo<T>{ V { x: T } }
+    public enum Foo<T>{ V { x: T } }
 
     fun bar(x: u64, y: u64): Self::Foo<u64> {
         let t: Self::Foo<u64>;

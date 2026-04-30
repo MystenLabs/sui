@@ -2,7 +2,7 @@
 // This module defines several public functions with complex bodies.
 // This can be thought of as a smoke test that tests many different aspects of bytecode generation.
 mvir 0x3d10::Example {
-    struct Coin { value: u64 }
+    public struct Coin { value: u64 }
 
     public fun value(this: &Self::Coin): u64 {
         let value_ref: &u64;

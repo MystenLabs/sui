@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::M {
-    struct Foo {
+    public struct Foo {
         a: u64,
         b: u64,
     }

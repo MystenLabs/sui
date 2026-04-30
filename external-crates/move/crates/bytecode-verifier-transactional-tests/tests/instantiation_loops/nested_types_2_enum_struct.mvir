@@ -1,8 +1,8 @@
 //# publish
 
 mvir 0x6::M {
-    struct S<T> { b: bool }
-    enum R<T1, T2> { V{ b: bool } }
+    public struct S<T> { b: bool }
+    public enum R<T1, T2> { V{ b: bool } }
 
     fun foo<T>() {
     label b0:

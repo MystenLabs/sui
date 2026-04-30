@@ -4,7 +4,7 @@
 //# publish
 mvir 0x0::m {
     import 0x2::object;
-    struct S has key {
+    public struct S has key {
         flag: bool,
         id: object::UID,
     }

@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::Tester {
-    struct T has copy { f: u64 }
+    public struct T has copy { f: u64 }
 
     fun t() {
         let x: Self::T;

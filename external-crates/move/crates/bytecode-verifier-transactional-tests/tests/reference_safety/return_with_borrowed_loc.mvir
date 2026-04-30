@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
-    struct X has drop { y: Self::Y }
-    struct Y has drop { u: u64 }
+    public struct X has drop { y: Self::Y }
+    public struct Y has drop { u: u64 }
 
     fun t1() {
         let x: u64;

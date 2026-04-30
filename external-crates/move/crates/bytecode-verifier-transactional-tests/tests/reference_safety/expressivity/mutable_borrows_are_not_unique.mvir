@@ -3,8 +3,8 @@
 //# publish
 mvir 0x2::fields {
 
-    struct S has copy, drop { f: u64 }
-    struct Pair has copy, drop { s1: Self::S, s2: Self::S }
+    public struct S has copy, drop { f: u64 }
+    public struct Pair has copy, drop { s1: Self::S, s2: Self::S }
 
     fun create(p: &mut Self::Pair) {
         // mutable variables are not unique. Nor do they take ownership over their memory
@@ -37,8 +37,8 @@ mvir 0x2::fields {
 //# publish
 mvir 0x3::fields_write {
 
-    struct S has copy, drop { f: u64 }
-    struct Pair has copy, drop { s1: Self::S, s2: Self::S }
+    public struct S has copy, drop { f: u64 }
+    public struct Pair has copy, drop { s1: Self::S, s2: Self::S }
 
     fun write(p: &mut Self::Pair) {
         // We can do the same thing, and write to them

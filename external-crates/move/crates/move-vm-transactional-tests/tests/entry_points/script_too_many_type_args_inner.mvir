@@ -1,6 +1,6 @@
 //# publish
 mvir 0x5::M {
-    struct Ex<T> { flag: bool }
+    public struct Ex<T> { flag: bool }
 }
 
 //# run --type-args 0x5::M::Ex<bool,u64>

@@ -1,6 +1,6 @@
 //# print-bytecode
 mvir 0x3d8::M {
-    enum T has drop {
+    public enum T has drop {
         X { },
         Y { f: u64 },
     }

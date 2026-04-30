@@ -3,7 +3,7 @@
 //# run
 mvir 0x42::m {
 
-struct S has drop { f: u64 }
+public struct S has drop { f: u64 }
 
 entry fun foo() {
     let s: Self::S;

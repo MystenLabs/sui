@@ -1,6 +1,6 @@
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64> {
         let y: Self::Foo<u64>;
@@ -12,7 +12,7 @@ mvir 0x2::O {
 
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<bool> {
         let y: Self::Foo<u64>;
@@ -24,7 +24,7 @@ mvir 0x2::O {
 
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64> {
         let y: Self::Foo<bool>;
@@ -36,7 +36,7 @@ mvir 0x2::O {
 
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64> {
         let y: Self::Foo<u64>;
@@ -48,7 +48,7 @@ mvir 0x2::O {
 
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64> {
         let y: Self::Foo<u64, bool>;
@@ -60,7 +60,7 @@ mvir 0x2::O {
 
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64, bool> {
         let y: Self::Foo<u64>;
@@ -73,13 +73,13 @@ mvir 0x2::O {
 
 //# publish
 mvir 0x1::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 }
 
 //# publish
 mvir 0x2::O {
     import 0x1::O;
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): O::Foo<u64> {
         let y: Self::Foo<u64>;
@@ -92,7 +92,7 @@ mvir 0x2::O {
 //# publish
 mvir 0x2::O {
     import 0x1::O;
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): O::Foo<u64> {
         let y: O::Foo<u64>;

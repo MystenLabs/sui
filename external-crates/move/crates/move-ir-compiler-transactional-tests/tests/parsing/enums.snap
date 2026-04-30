@@ -5,4 +5,15 @@ processed 1 task
 
 task 0, lines 1-6:
 //# print-bytecode
-Error: ParserError: Invalid Token: expected 'fun' before function name
+// Move bytecode v7
+module 3d8.M {
+
+struct T {
+	x: u64
+}
+
+enum T {
+	V {  }
+}
+
+}

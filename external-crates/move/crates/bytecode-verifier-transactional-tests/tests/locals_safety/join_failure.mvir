@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct R { f:bool }
+    public struct R { f:bool }
     fun t0() {
         let r: Self::R;
         let f: bool;
@@ -21,7 +21,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M {
-    struct R { f:bool }
+    public struct R { f:bool }
     fun t0() {
         let r: Self::R;
         let f: bool;
@@ -41,7 +41,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M {
-    struct R { f:bool }
+    public struct R { f:bool }
     fun t0() {
         let r: Self::R;
         let f: bool;
@@ -62,7 +62,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M {
-    struct R has copy, drop { f:bool }
+    public struct R has copy, drop { f:bool }
     fun t0() {
         let r: Self::R;
         let f: bool;
@@ -83,7 +83,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M {
-    struct R { f:bool }
+    public struct R { f:bool }
     fun t0() {
         let r: Self::R;
         let ref: &Self::R;

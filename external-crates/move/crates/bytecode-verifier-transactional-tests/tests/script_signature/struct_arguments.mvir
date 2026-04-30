@@ -4,7 +4,7 @@
 // should abort indicating no verification errors occurred
 
 mvir 0x42::M {
-    struct S { f: u64 }
+    public struct S { f: u64 }
 
     public entry fun foo(s: Self::S, i: &Self::S, m: &mut Self::S) {
         label l0:

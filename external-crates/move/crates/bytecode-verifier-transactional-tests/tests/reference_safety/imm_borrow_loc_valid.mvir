@@ -1,8 +1,8 @@
 //# publish
 mvir 0x1::Tester {
 
-    struct Data has key { v1: u64, v2: u64 }
-    struct Box has key { f: u64 }
+    public struct Data has key { v1: u64, v2: u64 }
+    public struct Box has key { f: u64 }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
     fun bump_and_pick(data: &mut Self::Data, b1: &mut Self::Box, b2: &mut Self::Box): &u64  {

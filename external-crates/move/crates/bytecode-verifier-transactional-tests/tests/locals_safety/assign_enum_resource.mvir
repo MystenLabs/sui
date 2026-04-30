@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    enum EnumValue {
+    public enum EnumValue {
         Nothing { },
         Coin { value: u64 }
     }

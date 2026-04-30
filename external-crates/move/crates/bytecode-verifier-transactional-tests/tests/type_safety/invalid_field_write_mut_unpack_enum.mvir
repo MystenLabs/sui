@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::Test {
-    enum T{V { fr: bool} }
+    public enum T{V { fr: bool} }
 
     public fun new(): Self::T {
     label b0:
@@ -19,7 +19,7 @@ mvir 0x42::Test {
 
 //# publish
 mvir 0x42::Test {
-    enum T<B> {V { fr: B } }
+    public enum T<B> {V { fr: B } }
 
     public fun new(): Self::T<bool> {
     label b0:

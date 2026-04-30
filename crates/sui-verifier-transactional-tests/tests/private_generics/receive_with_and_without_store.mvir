@@ -29,7 +29,7 @@ mvir 0x0::m {
     import 0x2::transfer;
     import 0x2::object;
 
-    struct A has key { id: object::UID }
+    public struct A has key { id: object::UID }
 
     // Valid since `A` defined in this module
     fun receive_good(m: &mut object::UID, r: transfer::Receiving<Self::A>): Self::A {

@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::VTest {
-    struct T has drop {fint: u64, fv: bool}
+    public struct T has drop {fint: u64, fv: bool}
 
     public fun new(x: u64, y: bool): Self::T {
     label b0:
@@ -43,7 +43,7 @@ mvir 0x42::VTest {
 //# publish
 
 mvir 0x43::RTest {
-    struct T{fint: u64, fr: bool}
+    public struct T{fint: u64, fr: bool}
 
     public fun new(x: u64, y: bool): Self::T {
     label b0:

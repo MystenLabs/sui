@@ -1,6 +1,6 @@
 //# print-bytecode
 mvir 0x1d12::M {
-    struct T { b: bool }
+    public struct T { b: bool }
 
     fun new(): Self::T {
     label b0:
@@ -19,7 +19,7 @@ mvir 0x1d12::M {
 
 //# publish
 mvir 0x2d12::M {
-    struct T { b: bool }
+    public struct T { b: bool }
 
     public fun new(): Self::T {
     label b0:

@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::Tester {
-    struct X has key { f: u64 }
+    public struct X has key { f: u64 }
 
     fun bump_and_give(x_ref: &mut Self::X, other: &u64): &u64 {
     label b0:

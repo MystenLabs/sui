@@ -8,7 +8,7 @@ mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::transfer;
 
-    struct Obj has key {
+    public struct Obj has key {
         id: object::UID,
     }
 

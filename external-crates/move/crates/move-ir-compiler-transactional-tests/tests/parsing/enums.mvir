@@ -1,6 +1,6 @@
 //# print-bytecode
 mvir 0x3d8::M {
-    enum T { V { } }
-    // Struct declarations need to be before enum declarations.
-    struct T { x: u64, }
+    // Struct and enum declarations may appear in any order.
+    public enum T { V { } }
+    public struct T { x: u64, }
 }

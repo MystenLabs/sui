@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct Foo<T> { x: T }
+    public struct Foo<T> { x: T }
 
     fun foo() {
         let x: Self::Foo<u64>;
@@ -12,8 +12,8 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::N {
-    struct Foo<T1, T2: key> { x: T1, y: T2 }
-    struct Bar has key { f: bool }
+    public struct Foo<T1, T2: key> { x: T1, y: T2 }
+    public struct Bar has key { f: bool }
 
     fun foo() {
         let x: Self::Foo<u64, Self::Bar>;
@@ -25,8 +25,8 @@ mvir 0x1::N {
 
 //# publish
 mvir 0x1::O {
-    struct Foo<T1, T2: key> { x: T1, y: T2 }
-    struct Bar<T> has key { f: T }
+    public struct Foo<T1, T2: key> { x: T1, y: T2 }
+    public struct Bar<T> has key { f: T }
 
     fun foo() {
         let x: Self::Foo<u64, Self::Bar<bool>>;
@@ -38,8 +38,8 @@ mvir 0x1::O {
 
 //# publish
 mvir 0x1::P {
-    struct Foo<T1, T2: key> { x: T1, y: T2 }
-    struct Bar<T> has key { f: T }
+    public struct Foo<T1, T2: key> { x: T1, y: T2 }
+    public struct Bar<T> has key { f: T }
 
     fun foo() {
         let x: Self::Foo<u64, Self::Bar<bool>>;
@@ -52,7 +52,7 @@ mvir 0x1::P {
 
 //# publish
 mvir 0x2::M {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo() {
         let x: Self::Foo<u64>;
@@ -64,8 +64,8 @@ mvir 0x2::M {
 
 //# publish
 mvir 0x2::N {
-    enum Foo<T1, T2: key> { V { x: T1, y: T2 } }
-    enum Bar has key { V { f: bool } }
+    public enum Foo<T1, T2: key> { V { x: T1, y: T2 } }
+    public enum Bar has key { V { f: bool } }
 
     fun foo() {
         let x: Self::Foo<u64, Self::Bar>;
@@ -77,8 +77,8 @@ mvir 0x2::N {
 
 //# publish
 mvir 0x2::O {
-    enum Foo<T1, T2: key> { V { x: T1, y: T2 } }
-    enum Bar<T> has key { V { f: T } }
+    public enum Foo<T1, T2: key> { V { x: T1, y: T2 } }
+    public enum Bar<T> has key { V { f: T } }
 
     fun foo() {
         let x: Self::Foo<u64, Self::Bar<bool>>;
@@ -90,8 +90,8 @@ mvir 0x2::O {
 
 //# publish
 mvir 0x2::P {
-    enum Foo<T1, T2: key> { V { x: T1, y: T2 } }
-    enum Bar<T> has key { V { f: T } }
+    public enum Foo<T1, T2: key> { V { x: T1, y: T2 } }
+    public enum Bar<T> has key { V { f: T } }
 
     fun foo() {
         let x: Self::Foo<u64, Self::Bar<bool>>;

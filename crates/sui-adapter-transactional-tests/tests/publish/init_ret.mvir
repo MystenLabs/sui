@@ -11,7 +11,7 @@ mvir 0x0::M1 {
     import 0x2::object;
     import 0x2::transfer;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: object::UID,
         value: u64,
     }

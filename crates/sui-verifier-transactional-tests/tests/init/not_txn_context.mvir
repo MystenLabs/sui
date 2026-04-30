@@ -12,7 +12,7 @@ mvir 0x0::m {
 
 //# publish
 mvir 0x0::tx_context {
-    struct TxContext { value: u64 }
+    public struct TxContext { value: u64 }
     fun init(ctx: Self::TxContext) {
         label l0:
         abort 0;

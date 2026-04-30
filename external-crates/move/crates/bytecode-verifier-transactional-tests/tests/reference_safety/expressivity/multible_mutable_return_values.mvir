@@ -4,7 +4,7 @@
 
 mvir 0x2::Tester {
 
-struct Point has copy, drop, store { x: u64, y: u64 }
+public struct Point has copy, drop, store { x: u64, y: u64 }
 
 fun borrow(p: &mut Self::Point): &mut u64 * &mut u64 {
 label b0:

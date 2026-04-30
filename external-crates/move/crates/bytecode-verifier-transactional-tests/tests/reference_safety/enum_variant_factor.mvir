@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::o1 {
-    enum X has drop {
+    public enum X has drop {
         Empty { },
         One { x: u64, y: u64 },
     }
@@ -18,7 +18,7 @@ mvir 0x1::o1 {
 
 //# publish
 mvir 0x1::o2 {
-    enum X has drop {
+    public enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
     }
@@ -37,7 +37,7 @@ mvir 0x1::o2 {
 
 //# publish
 mvir 0x1::o3 {
-    enum X has drop {
+    public enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
     }
@@ -55,7 +55,7 @@ mvir 0x1::o3 {
 
 //# publish
 mvir 0x1::o4 {
-    enum X has drop {
+    public enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
     }
@@ -75,7 +75,7 @@ mvir 0x1::o4 {
 
 //# publish
 mvir 0x1::o5 {
-    enum X has drop {
+    public enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
     }
@@ -95,7 +95,7 @@ mvir 0x1::o5 {
 
 //# publish
 mvir 0x1::invalid {
-    enum X has drop {
+    public enum X has drop {
         One { x: u64 },
         Two { x: u64, y: u64},
     }
@@ -119,7 +119,7 @@ mvir 0x1::invalid {
 
 //# publish
 mvir 0x1::invalid2 {
-    enum X has drop {
+    public enum X has drop {
         One { x: u64 },
         Two { x: u64, y: u64},
     }

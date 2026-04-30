@@ -1,5 +1,5 @@
 //# publish
 mvir 0x42::Test {
-    struct All has key, store, copy, drop { b: bool }
-    struct T { f: Self::All } // can drop abilities
+    public struct All has key, store, copy, drop { b: bool }
+    public struct T { f: Self::All } // can drop abilities
 }

@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::M {
-    struct S<T> { b: bool }
+    public struct S<T> { b: bool }
 
     fun f<T>() {
     label b0:

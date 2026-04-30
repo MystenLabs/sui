@@ -1,14 +1,14 @@
 //# publish
 mvir 0x42::M {
-    struct Box<T> has key, store { x: T }
-    struct Box3<T> has store { x: Self::Box<Self::Box<T>> }
-    struct Box7<T> has store { x: Self::Box3<Self::Box3<T>> }
-    struct Box15<T> has store { x: Self::Box7<Self::Box7<T>> }
-    struct Box31<T> has store { x: Self::Box15<Self::Box15<T>> }
-    struct Box63<T> has store { x: Self::Box31<Self::Box31<T>> }
-    struct Box127<T> has key, store { x: Self::Box63<Self::Box63<T>> }
-    struct Box128<T> has key, store { x: Self::Box127<T> }
-    struct Box255<T> has key, store { x: Self::Box127<Self::Box127<T>> }
+    public struct Box<T> has key, store { x: T }
+    public struct Box3<T> has store { x: Self::Box<Self::Box<T>> }
+    public struct Box7<T> has store { x: Self::Box3<Self::Box3<T>> }
+    public struct Box15<T> has store { x: Self::Box7<Self::Box7<T>> }
+    public struct Box31<T> has store { x: Self::Box15<Self::Box15<T>> }
+    public struct Box63<T> has store { x: Self::Box31<Self::Box31<T>> }
+    public struct Box127<T> has key, store { x: Self::Box63<Self::Box63<T>> }
+    public struct Box128<T> has key, store { x: Self::Box127<T> }
+    public struct Box255<T> has key, store { x: Self::Box127<Self::Box127<T>> }
 
     public fun box3<T>(x: T): Self::Box3<T> {
     label b0:

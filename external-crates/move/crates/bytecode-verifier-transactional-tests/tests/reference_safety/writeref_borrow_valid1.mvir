@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
-    struct G has drop { v1: u64, v2: u64 }
-    struct S { g1: Self::G, g2: Self::G }
+    public struct G has drop { v1: u64, v2: u64 }
+    public struct S { g1: Self::G, g2: Self::G }
 
     fun t1(root: &mut Self::S, cond: bool) {
         let v1_mut: &mut u64;

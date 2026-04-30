@@ -1,7 +1,7 @@
 //# publish
 mvir 0x43::RTest {
-    enum Coin has store { V{ value: u64 } }
-    enum T { V{ f: Self::Coin } }
+    public enum Coin has store { V{ value: u64 } }
+    public enum T { V{ f: Self::Coin } }
 
       public fun update(t: &mut Self::T, i: Self::Coin) {
         let x: &mut Self::Coin;

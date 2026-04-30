@@ -5,8 +5,8 @@
 //   2) fields have correct types
 
 mvir 0x1::M {
-    struct Foo<T> { x: T }
-    struct Bar<T1, T2, T3: key, T4: copy + drop> { x1: T2, x2: T3, x3: T4, x4: T1 }
+    public struct Foo<T> { x: T }
+    public struct Bar<T1, T2, T3: key, T4: copy + drop> { x1: T2, x2: T3, x3: T4, x4: T1 }
 }
 
 //# publish
@@ -16,6 +16,6 @@ mvir 0x1::M {
 //   2) fields have correct types
 
 mvir 0x2::M {
-    enum Foo<T> { V { x: T } }
-    enum Bar<T1, T2, T3: key, T4: copy + drop> { V { x1: T2, x2: T3, x3: T4, x4: T1 } }
+    public enum Foo<T> { V { x: T } }
+    public enum Bar<T1, T2, T3: key, T4: copy + drop> { V { x1: T2, x2: T3, x3: T4, x4: T1 } }
 }

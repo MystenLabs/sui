@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::B {
-    struct T has drop {g: u64}
+    public struct T has drop {g: u64}
 
     public fun new(v: u64): Self::T {
     label b0:

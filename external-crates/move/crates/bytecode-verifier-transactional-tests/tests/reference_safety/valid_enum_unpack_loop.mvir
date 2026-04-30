@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::woo {
-    enum X has drop { 
+    public enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
@@ -40,7 +40,7 @@ mvir 0x1::woo {
 
 //# publish
 mvir 0x1::o {
-    enum X has drop { 
+    public enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
@@ -79,7 +79,7 @@ mvir 0x1::o {
 
 //# publish
 mvir 0x1::k {
-    enum X has drop { 
+    public enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }

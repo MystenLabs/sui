@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::Test {
-    struct X { b: bool }
-    struct T { b: bool }
+    public struct X { b: bool }
+    public struct T { b: bool }
 
     public fun new_t(): Self::T {
     label b0:
@@ -20,8 +20,8 @@ mvir 0x1::Test {
 
 //# publish
 mvir 0x2::Test {
-    enum X { V { b: bool } }
-    enum T { V { b: bool } }
+    public enum X { V { b: bool } }
+    public enum T { V { b: bool } }
 
     public fun new_t(): Self::T {
     label b0:

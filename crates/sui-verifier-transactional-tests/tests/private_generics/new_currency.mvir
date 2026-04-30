@@ -41,7 +41,7 @@ mvir 0x0::t {
     import 0x2::tx_context;
 
     // Uses `LP` with an external generic parameter, to prove that we can do that.
-    struct LP<phantom A> has key {
+    public struct LP<phantom A> has key {
         id: object::UID
     }
 
@@ -73,7 +73,7 @@ mvir 0x0::t {
     import 0x2::coin_registry;
     import 0x2::tx_context;
 
-    struct Foo has key {
+    public struct Foo has key {
         id: object::UID
     }
 

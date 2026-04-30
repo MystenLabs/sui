@@ -15,7 +15,7 @@ mvir 0x0::m {
 mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::object;
-    struct Obj has key { id: object::UID }
+    public struct Obj has key { id: object::UID }
     public entry fun t(flag: bool, arg: &mut Self::Obj) {
         label l0:
         abort 0;

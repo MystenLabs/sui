@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::Cup {
-    enum Cup<T> { V { f: T } }
+    public enum Cup<T> { V { f: T } }
     public fun cup<T>(f: T): Self::Cup<T> {
     label b0:
         return Cup::V<T> { f: move(f) };
@@ -10,14 +10,14 @@ mvir 0x1::Cup {
 //# publish
 mvir 0x1::M0 {
     // recursive enum
-    enum Foo { V { f: Self::Foo } }
+    public enum Foo { V { f: Self::Foo } }
 }
 
 //# publish
 mvir 0x1::M1 {
     import 0x1::Cup;
     // recursive enum
-    enum Foo { V { f: Cup::Cup<Self::Foo> } }
+    public enum Foo { V { f: Cup::Cup<Self::Foo> } }
 
     // would blow up the stack
     public fun foo(): Self::Foo {
@@ -31,8 +31,8 @@ mvir 0x1::M1 {
 mvir 0x1::M2 {
     import 0x1::signer;
 
-    enum X { V { y: vector<Self::Y> } }
-    enum Y { V { x: vector<Self::X> } }
+    public enum X { V { y: vector<Self::Y> } }
+    public enum Y { V { x: vector<Self::X> } }
 }
 
 //# publish
@@ -40,7 +40,7 @@ mvir 0x1::M3 {
     import 0x1::Cup;
 
     // recursive enum
-    enum Foo { V { f: Cup::Cup<Self::Foo> } }
+    public enum Foo { V { f: Cup::Cup<Self::Foo> } }
 
 }
 
@@ -49,8 +49,8 @@ mvir 0x1::M3 {
     import 0x1::Cup;
 
     // indirect recursive enum
-    enum A { V { b: Self::B } }
-    enum B { V { c: Self::C } }
-    enum C { V { d: vector<Self::D> } }
-    enum D { V { x: Cup::Cup<Cup::Cup<Cup::Cup<Self::A>>> } }
+    public enum A { V { b: Self::B } }
+    public enum B { V { c: Self::C } }
+    public enum C { V { d: vector<Self::D> } }
+    public enum D { V { x: Cup::Cup<Cup::Cup<Cup::Cup<Self::A>>> } }
 }

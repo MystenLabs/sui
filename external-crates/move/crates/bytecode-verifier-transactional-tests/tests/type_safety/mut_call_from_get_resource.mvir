@@ -1,7 +1,7 @@
 //# publish
 mvir 0x42::Token {
 
-    struct T has key {balance: u64}
+    public struct T has key {balance: u64}
 
     public fun new(balance: u64): Self::T  {
     label b0:
@@ -64,7 +64,7 @@ mvir 0x42::Token {
 //# publish
 mvir 0x43::Token {
 
-    enum T has key {V { balance: u64} }
+    public enum T has key {V { balance: u64} }
 
     public fun new(balance: u64): Self::T  {
     label b0:

@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
-    struct X has drop { f: Self::Y }
-    struct Y has drop { g: u64, h: u64 }
+    public struct X has drop { f: Self::Y }
+    public struct Y has drop { g: u64, h: u64 }
 
     // tests deep borrows + releases
     fun t1() {

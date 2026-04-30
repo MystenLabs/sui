@@ -2,7 +2,7 @@
 mvir 0x1::M {
     import 0x1::signer;
 
-    struct Some<T> has key { item: T }
+    public struct Some<T> has key { item: T }
 
     fun id<T>(x: T): T { label b0: abort(0); }
     fun foo() {
@@ -14,7 +14,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M {
-    struct Some<T> { item: T }
+    public struct Some<T> { item: T }
 
     fun foo() {
         let x: u64;
@@ -30,7 +30,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M {
-    struct Some<T> { item: T }
+    public struct Some<T> { item: T }
 
     fun foo() {
         let x: &u64;
@@ -44,7 +44,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M {
-    struct S<T> { v: T }
+    public struct S<T> { v: T }
 
     // cannot use refs in generics
     fun foo(s: Self::S<&u64>): u64 {
@@ -55,7 +55,7 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M {
-    struct S<T> { v: T }
+    public struct S<T> { v: T }
 
     // cannot use refs in generics
     fun foo(s: Self::S<&u64>): u64 {

@@ -3,7 +3,7 @@
 //# publish
 
 mvir 0x1::Tester {
-    struct T has copy { f: u64, g: u64, h: u64 }
+    public struct T has copy { f: u64, g: u64, h: u64 }
 
     fun borrow(s1: &mut Self::T): &mut u64 * &mut u64 * &u64 * &u64 {
     label b0:

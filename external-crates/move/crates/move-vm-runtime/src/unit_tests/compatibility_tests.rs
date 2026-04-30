@@ -37,7 +37,7 @@ fn test_enum_upgrade_variant_removal() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { }, L { } }
+            public enum E { V { }, L { } }
         }
         ",
     );
@@ -45,7 +45,7 @@ fn test_enum_upgrade_variant_removal() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E { V { } }
+            public enum E { V { } }
         }
         ",
     );
@@ -59,7 +59,7 @@ fn test_enum_upgrade_variant_rename() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { } }
+            public enum E { V { } }
         }
         ",
     );
@@ -67,7 +67,7 @@ fn test_enum_upgrade_variant_rename() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E { L { } }
+            public enum E { L { } }
         }
         ",
     );
@@ -81,7 +81,7 @@ fn test_enum_upgrade_variant_reorder() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { }, L { } }
+            public enum E { V { }, L { } }
         }
         ",
     );
@@ -89,7 +89,7 @@ fn test_enum_upgrade_variant_reorder() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E { L { }, V { } }
+            public enum E { L { }, V { } }
         }
         ",
     );
@@ -103,7 +103,7 @@ fn test_enum_upgrade_variant_add_field() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { } }
+            public enum E { V { } }
         }
         ",
     );
@@ -111,7 +111,7 @@ fn test_enum_upgrade_variant_add_field() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E { V { x: u64 } }
+            public enum E { V { x: u64 } }
         }
         ",
     );
@@ -125,7 +125,7 @@ fn test_enum_upgrade_variant_remove_field() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { x: u64 } }
+            public enum E { V { x: u64 } }
         }
         ",
     );
@@ -133,7 +133,7 @@ fn test_enum_upgrade_variant_remove_field() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E { V { } }
+            public enum E { V { } }
         }
         ",
     );
@@ -147,7 +147,7 @@ fn test_enum_upgrade_variant_rename_field() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { x: u64 } }
+            public enum E { V { x: u64 } }
         }
         ",
     );
@@ -155,7 +155,7 @@ fn test_enum_upgrade_variant_rename_field() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E { V { y: u64 } }
+            public enum E { V { y: u64 } }
         }
         ",
     );
@@ -169,7 +169,7 @@ fn test_enum_upgrade_variant_change_field_type() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { x: u64 } }
+            public enum E { V { x: u64 } }
         }
         ",
     );
@@ -177,7 +177,7 @@ fn test_enum_upgrade_variant_change_field_type() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E { V { x: bool } }
+            public enum E { V { x: bool } }
         }
         ",
     );
@@ -191,7 +191,7 @@ fn test_enum_upgrade_add_variant_at_front() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { x: u64 } }
+            public enum E { V { x: u64 } }
         }
         ",
     );
@@ -199,7 +199,7 @@ fn test_enum_upgrade_add_variant_at_front() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E { L { x: u64 }, V { x: u64 } }
+            public enum E { L { x: u64 }, V { x: u64 } }
         }
         ",
     );
@@ -214,7 +214,7 @@ fn test_enum_upgrade_add_variant_at_end() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { x: u64 } }
+            public enum E { V { x: u64 } }
         }
         ",
     );
@@ -223,7 +223,7 @@ fn test_enum_upgrade_add_variant_at_end() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E { V { x: u64 }, L { x: u64 }}
+            public enum E { V { x: u64 }, L { x: u64 }}
         }
         ",
     );
@@ -242,7 +242,7 @@ fn test_enum_upgrade_add_store_ability() {
     let old = compile(
         "
         mvir 0x1::M {
-            enum E { V { x: u64 } }
+            public enum E { V { x: u64 } }
         }
         ",
     );
@@ -250,7 +250,7 @@ fn test_enum_upgrade_add_store_ability() {
     let new = compile(
         "
         mvir 0x1::M {
-            enum E has store { V { x: u64 } }
+            public enum E has store { V { x: u64 } }
         }
         ",
     );

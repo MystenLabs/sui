@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct T {v : u64}
+    public struct T {v : u64}
 
     public fun new(v: u64): Self::T {
     label b0:
