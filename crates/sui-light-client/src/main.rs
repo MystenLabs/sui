@@ -95,7 +95,7 @@ pub async fn main() {
                         .await
                         .unwrap();
 
-                    let result = BoundedVisitor::deserialize_value(&event.contents, &type_layout)
+                    let result = BoundedVisitor::deserialize_value(&event.contents, type_layout)
                         .expect("Cannot deserialize");
 
                     println!(
@@ -124,9 +124,8 @@ pub async fn main() {
                     .await
                     .unwrap();
 
-                let result =
-                    BoundedVisitor::deserialize_value(move_object.contents(), &type_layout)
-                        .expect("Cannot deserialize");
+                let result = BoundedVisitor::deserialize_value(move_object.contents(), type_layout)
+                    .expect("Cannot deserialize");
 
                 let (oid, version, hash) = object.compute_object_reference();
                 println!(

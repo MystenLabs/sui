@@ -12,8 +12,8 @@ use std::collections::BTreeSet;
 use anyhow::Result;
 use anyhow::anyhow;
 use move_core_types::annotated_value::MoveStruct;
-use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::annotated_value::MoveValue;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
 use sui_package_resolver::PackageStore;
@@ -196,12 +196,12 @@ pub async fn get_move_struct<T: PackageStore>(
     contents: &[u8],
     resolver: &Resolver<T>,
 ) -> Result<MoveStruct> {
-    let move_struct = match resolver
+    let layout = resolver
         .type_layout(TypeTag::Struct(Box::new(struct_tag.clone())))
-        .await?
-    {
-        MoveTypeLayout::Struct(move_struct_layout) => {
-            BoundedVisitor::deserialize_struct(contents, &move_struct_layout)
+        .await?;
+    let move_struct = match layout.as_view() {
+        CA::MoveLayoutView::Struct(move_struct_layout) => {
+            BoundedVisitor::deserialize_struct(contents, *move_struct_layout)
         }
         _ => Err(anyhow!("Object is not a move struct")),
     }?;

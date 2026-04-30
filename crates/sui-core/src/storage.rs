@@ -562,8 +562,9 @@ impl RpcStateReader for RestReadStore {
             // TODO(cache) - must read through cache
             .type_layout_resolver(epoch_store.protocol_config(), Box::new(overlay_store))
             .get_annotated_layout(struct_tag)
-            .map(|layout| layout.into_layout())
-            .map(Some)
+            .map_err(StorageError::custom)?
+            .inflate()
+            .map(|datatype| Some(datatype.into_layout()))
             .map_err(StorageError::custom)
     }
 }

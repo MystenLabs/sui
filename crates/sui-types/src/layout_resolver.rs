@@ -4,6 +4,7 @@
 use crate::error::{SuiError, SuiErrorKind};
 use move_bytecode_utils::{layout::TypeLayoutBuilder, module_cache::GetModule};
 use move_core_types::{
+    annotated_value as A,
     compressed::annotated as CA,
     language_storage::{StructTag, TypeTag},
 };
@@ -35,12 +36,19 @@ pub fn get_layout_from_struct_tag(
     }
 }
 
-pub fn into_struct_layout(
+/// Inflate a compressed datatype layout into a tree-form `MoveStructLayout`,
+/// erroring if it is an enum.
+pub fn into_tree_struct_layout(
     layout: CA::MoveDatatypeLayout,
-) -> Result<CA::MoveStructLayout, SuiError> {
-    match layout.into_inner() {
-        CA::MoveDatatypeLayout_::Struct(s) => Ok(*s),
-        CA::MoveDatatypeLayout_::Enum(e) => Err(SuiErrorKind::ObjectSerializationError {
+) -> Result<A::MoveStructLayout, SuiError> {
+    let datatype = layout
+        .inflate()
+        .map_err(|e| SuiErrorKind::ObjectSerializationError {
+            error: format!("Failed to inflate compressed layout: {e}"),
+        })?;
+    match datatype {
+        A::MoveDatatypeLayout::Struct(s) => Ok(*s),
+        A::MoveDatatypeLayout::Enum(e) => Err(SuiErrorKind::ObjectSerializationError {
             error: format!("Expected struct layout but got an enum {e:?}"),
         }
         .into()),

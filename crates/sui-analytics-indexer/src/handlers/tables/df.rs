@@ -64,10 +64,10 @@ impl DynamicFieldProcessor {
             .await?;
         let object_id = object.id();
 
-        let field = DFV::FieldVisitor::deserialize(move_object.contents(), &layout)?;
+        let field = DFV::FieldVisitor::deserialize(move_object.contents(), layout)?;
 
         let type_ = field.kind;
-        let name_type: TypeTag = field.name_layout.into();
+        let name_type: TypeTag = field.name_layout.clone().into();
         let bcs_name = field.name_bytes.to_owned();
 
         let name_value = BoundedVisitor::deserialize_value(field.name_bytes, field.name_layout)
