@@ -8,6 +8,7 @@ use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use move_core_types::annotated_value::MoveStructLayout;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -64,6 +65,18 @@ use sui_types::transaction::{CallArg, TransactionData};
 use sui_types::transaction_driver_types::ExecuteTransactionRequestType;
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, parse_sui_struct_tag};
+
+/// Convert a tree-form `MoveStructLayout` to its compressed equivalent.
+fn compress_struct(layout: MoveStructLayout) -> CA::MoveStructLayout {
+    let built = CA::MoveTypeLayoutBuilder::with_builder::<_, anyhow::Error>(|b| {
+        b.from_tree_struct_layout(&layout)
+    })
+    .unwrap();
+    let CA::MoveLayoutView::Struct(s) = built.as_view() else {
+        unreachable!()
+    };
+    *s
+}
 
 struct Examples {
     function_name: String,
@@ -334,7 +347,7 @@ impl RpcExampleProvider {
                     content: Some(
                         SuiParsedData::try_from_object(
                             coin.to_object(SequenceNumber::from_u64(1)),
-                            GasCoin::layout(),
+                            compress_struct(GasCoin::layout()),
                         )
                         .unwrap(),
                     ),
@@ -378,7 +391,7 @@ impl RpcExampleProvider {
             content: Some(
                 SuiParsedData::try_from_object(
                     coin.to_object(SequenceNumber::from_u64(1)),
-                    GasCoin::layout(),
+                    compress_struct(GasCoin::layout()),
                 )
                 .unwrap(),
             ),
@@ -1228,10 +1241,10 @@ impl RpcExampleProvider {
                         )
                         .unwrap()
                     },
-                    MoveStructLayout {
+                    compress_struct(MoveStructLayout {
                         type_: struct_tag,
                         fields: Vec::new(),
-                    },
+                    }),
                 )
                 .unwrap(),
             ),
@@ -1531,7 +1544,7 @@ impl RpcExampleProvider {
                 content: Some(
                     SuiParsedData::try_from_object(
                         coin.to_object(SequenceNumber::from_u64(1)),
-                        GasCoin::layout(),
+                        compress_struct(GasCoin::layout()),
                     )
                     .unwrap(),
                 ),
@@ -1551,7 +1564,7 @@ impl RpcExampleProvider {
                 content: Some(
                     SuiParsedData::try_from_object(
                         coin2.to_object(SequenceNumber::from_u64(4)),
-                        GasCoin::layout(),
+                        compress_struct(GasCoin::layout()),
                     )
                     .unwrap(),
                 ),

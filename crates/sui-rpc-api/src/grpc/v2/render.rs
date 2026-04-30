@@ -55,7 +55,7 @@ impl RpcService {
 
         let bound = self.config.max_json_move_value_size();
         sui_types::object::rpc_visitor::proto::ProtoVisitor::new(bound)
-            .deserialize_value(contents, &layout)
+            .deserialize_value(contents, layout)
             .map_err(|e| tracing::debug!("unable to convert move value to JSON: {e}"))
             .ok()
     }
