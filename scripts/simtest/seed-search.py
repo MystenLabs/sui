@@ -38,9 +38,12 @@ class ProgressTracker:
         self.total = total
         self.running = 0
         self.passed = 0
-        self.failed = 0
         self.failures = []
         self.lock = threading.Lock()
+
+    @property
+    def failed(self):
+        return len(self.failures)
 
     @property
     def remaining(self):
@@ -55,10 +58,8 @@ class ProgressTracker:
             self.running -= 1
             if success:
                 self.passed += 1
-            else:
-                self.failed += 1
-                if failure_record is not None:
-                    self.failures.append(failure_record)
+            elif failure_record is not None:
+                self.failures.append(failure_record)
 
     def format_header(self):
         c = Colors
@@ -269,8 +270,10 @@ def discover_binaries(args, repo_root):
         # `--message-format=json` routes ALL compiler diagnostics into stdout JSON
         # rather than letting them flow to stderr in human-readable form, so we
         # have to collect and re-print them ourselves on failure — otherwise a
-        # build error vanishes and there's nothing to debug from.
-        diagnostics = []
+        # build error vanishes and there's nothing to debug from. Warnings get
+        # dropped (they only matter when the build succeeds, and we don't echo
+        # them then either).
+        errors = []
         try:
             for line in process.stdout:
                 try:
@@ -280,9 +283,8 @@ def discover_binaries(args, repo_root):
                 reason = obj.get("reason")
                 if reason == "compiler-message":
                     msg = obj.get("message") or {}
-                    level = msg.get("level")
-                    if level in ("error", "warning"):
-                        diagnostics.append((level, msg.get("rendered") or ""))
+                    if msg.get("level") == "error":
+                        errors.append(msg.get("rendered") or "")
                     continue
                 if reason != "compiler-artifact":
                     continue
@@ -302,7 +304,6 @@ def discover_binaries(args, repo_root):
         finally:
             process.wait()
         if process.returncode != 0:
-            errors = [r for level, r in diagnostics if level == "error"]
             safe_print(f"Error: build failed with exit code {process.returncode}; "
                        f"{len(errors)} compiler error(s):")
             for rendered in errors:
@@ -390,7 +391,6 @@ if not args.test and not args.package:
 PROCESS_TIMEOUT_SECS = 90 * 60
 
 def run_command(job):
-    """Execute a single (binary, test, seed) job."""
     cmd = job["cmd"]
     env_vars = job["env"]
     seed = env_vars["MSIM_TEST_SEED"]
@@ -408,35 +408,14 @@ def run_command(job):
         update_progress()
 
         timed_out = False
-        captured_stdout = b""
-        captured_stderr = b""
-
-        if log_path:
-            log_file = open(log_path, "wb")
-            try:
-                process = subprocess.Popen(
-                    cmd, env=env, cwd=cwd,
-                    stdout=log_file, stderr=subprocess.STDOUT,
-                    preexec_fn=os.setsid,
-                )
-                try:
-                    process.wait(timeout=PROCESS_TIMEOUT_SECS)
-                except subprocess.TimeoutExpired:
-                    timed_out = True
-                    try:
-                        os.killpg(process.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    process.wait()
-            finally:
-                log_file.close()
-            exit_code = process.returncode
+        log_file = open(log_path, "wb") if log_path else None
+        if log_file is not None:
+            popen_kwargs = {"stdout": log_file, "stderr": subprocess.STDOUT}
         else:
-            process = subprocess.Popen(
-                cmd, env=env, cwd=cwd,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                preexec_fn=os.setsid,
-            )
+            popen_kwargs = {"stdout": subprocess.PIPE, "stderr": subprocess.PIPE}
+
+        try:
+            process = subprocess.Popen(cmd, env=env, cwd=cwd, preexec_fn=os.setsid, **popen_kwargs)
             try:
                 captured_stdout, captured_stderr = process.communicate(timeout=PROCESS_TIMEOUT_SECS)
             except subprocess.TimeoutExpired:
@@ -446,7 +425,10 @@ def run_command(job):
                 except ProcessLookupError:
                     pass
                 captured_stdout, captured_stderr = process.communicate()
-            exit_code = process.returncode
+        finally:
+            if log_file is not None:
+                log_file.close()
+        exit_code = process.returncode
 
         success = exit_code == 0 and not timed_out
         failure_record = None
@@ -495,7 +477,6 @@ def run_command(job):
         return 1
 
 def main(jobs):
-    """Execute all jobs across a thread pool."""
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
         future_to_job = {executor.submit(run_command, job): job for job in jobs}
 
@@ -520,11 +501,18 @@ if __name__ == "__main__":
 
     exclude_re = re.compile(args.exclude) if args.exclude else None
 
-    # Enumerate (binary, test) pairs.
+    # Enumerate (binary, test) pairs. List-tests is one subprocess per binary
+    # (each loads the test binary just to dump its --list output); parallelize
+    # so 42 simtest binaries don't take ~minute of serial startup.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrency) as executor:
+        listings = list(executor.map(
+            lambda b: list_tests_in_binary(b[2], args.testname, args.exact),
+            binaries,
+        ))
+
     bin_tests = []
     total_tests = 0
-    for package_name, binary_name, binary_path, manifest_dir in binaries:
-        tests = list_tests_in_binary(binary_path, args.testname, args.exact)
+    for (package_name, binary_name, binary_path, manifest_dir), tests in zip(binaries, listings):
         if not tests:
             if args.testname:
                 safe_print(f"Warning: no tests in {binary_name} match filter '{args.testname}'")
