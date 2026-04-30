@@ -60,21 +60,31 @@ jobs:
         run: tsh -i ${{ steps.auth.outputs.identity-file }} status
         env:
           TELEPORT_IDENTITY_FILE: ${{ env.TELEPORT_IDENTITY_FILE }}
-      # Clean tmpfs, old repo, and old simtest logs before starting fresh
+      # Clean tmpfs, old repo, and old simtest logs before starting fresh.
+      #
+      # Consolidated into a single SSH call: each additional `tsh ssh`
+      # spin-up has been hitting an intermittent
+      # "cannot relogin in non-interactive session" failure on the
+      # *second* (and beyond) call within the same step. One handshake
+      # = one chance to flake.
+      #
+      # The pkill block kills any stale simtest workers from a prior
+      # nightly that was cancelled mid-run and nohup'd onto the host —
+      # otherwise the survivor's in-flight cargo/test processes race
+      # our re-clone, exec test binaries we're about to delete, and
+      # corrupt the shared ~/simtest_stdout.log via a leaked fd.
       - name: Environment clean
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 echo 'teleport OK'
-          # Kill any stale simtest workers from a prior nightly that was
-          # cancelled mid-run and nohup'd onto the host. Without this, the
-          # survivor's in-flight cargo/test processes race our re-clone,
-          # exec test binaries we're about to delete, and corrupt the
-          # shared ~/simtest_stdout.log via their leaked fd.
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "pkill -9 -f 'scripts/simtest/(simtest-run|seed-search)' || true; pkill -9 -f 'cargo-simtest simtest' || true; pkill -9 -f 'target/simulator/deps/' || true; sleep 3"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -rf ~/sui"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cd ~/ && git clone git@github.com:MystenLabs/sui.git"
-          # Keep only the 10 most recent simtest log directories
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cd ~/simtest_logs && ls -dt */ 2>/dev/null | tail -n +11 | xargs rm -rf" || true
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "set -e; \
+            echo teleport OK; \
+            pkill -9 -f 'scripts/simtest/(simtest-run|seed-search)' || true; \
+            pkill -9 -f 'cargo-simtest simtest' || true; \
+            pkill -9 -f 'target/simulator/deps/' || true; \
+            sleep 3; \
+            sudo rm -rf /tmp/* 2>/dev/null || true; \
+            rm -rf ~/sui; \
+            cd ~/ && git clone git@github.com:MystenLabs/sui.git; \
+            (cd ~/simtest_logs && ls -dt */ 2>/dev/null | tail -n +11 | xargs -r rm -rf) || true"
 
       # Checkout out the latest sui repo
       - name: Checkout sui repo
