@@ -1,6 +1,6 @@
 //# publish
 
-module 0x1::M {
+mvir 0x1::M {
     enum S<T> { V{ b: bool } }
     enum R<T1, T2> { V{ b: bool } }
 

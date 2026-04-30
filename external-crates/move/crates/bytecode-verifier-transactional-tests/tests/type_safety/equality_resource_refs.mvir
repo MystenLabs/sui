@@ -1,5 +1,5 @@
 //# publish
-module 0x1::Token {
+mvir 0x1::Token {
     struct T has key { b: bool }
 
     public fun test() {
@@ -16,7 +16,7 @@ module 0x1::Token {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::Token;
 
 entry fun foo() {
@@ -27,7 +27,7 @@ label b0:
 }
 
 //# publish
-module 0x2::Token {
+mvir 0x2::Token {
     enum T has key { V { b: bool } }
 
     public fun test() {
@@ -44,7 +44,7 @@ module 0x2::Token {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x2::Token;
 
 entry fun foo() {

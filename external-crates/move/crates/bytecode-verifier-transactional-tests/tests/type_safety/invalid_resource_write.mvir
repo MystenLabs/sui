@@ -1,5 +1,5 @@
 //# publish
-module 0x42::RTest {
+mvir 0x42::RTest {
     struct Coin has store { value: u64 }
     struct T { f: Self::Coin }
 

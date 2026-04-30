@@ -2,7 +2,7 @@
 
 //# publish
 
-module 0x2::borrow_field_if_else {
+mvir 0x2::borrow_field_if_else {
 
 struct S has copy, drop {
     f: u64,

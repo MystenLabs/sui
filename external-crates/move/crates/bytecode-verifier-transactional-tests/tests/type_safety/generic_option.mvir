@@ -1,7 +1,7 @@
 //# publish
 
 // example using generics in a few common/interesting/non-trivial ways
-module 0x42::Option {
+mvir 0x42::Option {
     import 0x1::vector;
 
     struct T<E> has copy, drop, store {
@@ -41,7 +41,7 @@ module 0x42::Option {
 //# publish
 
 // example using generics in a few common/interesting/non-trivial ways -- with actual enums!
-module 0x43::Option {
+mvir 0x43::Option {
     enum T<E> has copy, drop, store {
         None { },
         Some { v: E }

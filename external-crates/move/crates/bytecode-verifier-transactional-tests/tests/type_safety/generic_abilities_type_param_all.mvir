@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     fun foo<T>(x: T): T {
         let y: T;
     label b0:

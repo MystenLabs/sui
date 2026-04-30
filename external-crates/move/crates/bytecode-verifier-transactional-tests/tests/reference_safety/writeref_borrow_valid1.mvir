@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct G has drop { v1: u64, v2: u64 }
     struct S { g1: Self::G, g2: Self::G }
 

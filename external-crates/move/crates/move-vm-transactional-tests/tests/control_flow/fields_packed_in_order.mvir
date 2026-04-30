@@ -1,5 +1,5 @@
 //# publish
-module 0x6::M {
+mvir 0x6::M {
     struct T has drop {
         b: u64,
         a: u64
@@ -17,7 +17,7 @@ module 0x6::M {
 
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x6::M;
 entry fun foo() {
   let m: M::T;

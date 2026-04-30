@@ -1,5 +1,5 @@
 //# publish
-module 0x5::A {
+mvir 0x5::A {
     public fun foo(t: u64): u64 * u64 {
     label b0:
        return (copy(t), 2 * move(t));
@@ -17,7 +17,7 @@ module 0x5::A {
 
 
 //# run
-module 0x6::m {
+mvir 0x6::m {
 
 import 0x5::A;
 

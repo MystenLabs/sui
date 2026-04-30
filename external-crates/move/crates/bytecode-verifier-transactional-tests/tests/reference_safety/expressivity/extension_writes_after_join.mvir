@@ -2,7 +2,7 @@
 
 //# publish
 
-module 0x2::extension_after_join {
+mvir 0x2::extension_after_join {
 
 struct S has copy, drop, store { f: u64 }
 

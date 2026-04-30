@@ -4,7 +4,7 @@
 // clock has only key ability
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
     import 0x2::transfer;
 
@@ -16,7 +16,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
     import 0x2::transfer;
 
@@ -28,7 +28,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
     import 0x2::transfer;
 
@@ -40,7 +40,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
     import 0x2::transfer;
     import 0x2::object;

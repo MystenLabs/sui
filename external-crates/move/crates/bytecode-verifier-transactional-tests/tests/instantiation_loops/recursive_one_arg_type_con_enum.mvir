@@ -2,7 +2,7 @@
 
 // Bad! Can have infinitely many instances: f<T>, f<S<T>>, f<S<S<T>>>, ...
 
-module 0x6::M {
+mvir 0x6::M {
     enum S<T> { V{ b: bool } }
 
     fun f<T>(x: T) {

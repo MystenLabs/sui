@@ -4,7 +4,7 @@
 // tests that coin_registry::new_currency can only be called by internal types.
 
 //# publish
-module 0x0::t {
+mvir 0x0::t {
     import 0x1::string;
     import 0x1::vector;
     import 0x2::coin;
@@ -32,7 +32,7 @@ module 0x0::t {
 }
 
 //# publish
-module 0x0::t {
+mvir 0x0::t {
     import 0x1::string;
     import 0x1::vector;
     import 0x2::object;
@@ -65,7 +65,7 @@ module 0x0::t {
 }
 
 //# publish
-module 0x0::t {
+mvir 0x0::t {
     import 0x1::string;
     import 0x1::vector;
     import 0x2::object;

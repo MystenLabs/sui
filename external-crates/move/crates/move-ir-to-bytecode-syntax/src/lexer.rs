@@ -67,7 +67,10 @@ pub enum Tok {
     JumpIfFalse,
     Label,
     Let,
-    Module,
+    /// IR-side equivalent of Move source's `module` keyword. The distinct
+    /// spelling makes it visually obvious whether a snippet is Move source
+    /// or Move IR.
+    Mvir,
     Move,
     Native,
     Public,
@@ -434,7 +437,7 @@ fn get_name_token(name: &str) -> Tok {
         "jump_if_false" => Tok::JumpIfFalse,
         "label" => Tok::Label,
         "let" => Tok::Let,
-        "module" => Tok::Module,
+        "mvir" => Tok::Mvir,
         "native" => Tok::Native,
         "public" => Tok::Public,
         "return" => Tok::Return,

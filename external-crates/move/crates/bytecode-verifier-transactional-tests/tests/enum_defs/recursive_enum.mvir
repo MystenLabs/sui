@@ -1,5 +1,5 @@
 //# publish
-module 0x1::Cup {
+mvir 0x1::Cup {
     enum Cup<T> { V { f: T } }
     public fun cup<T>(f: T): Self::Cup<T> {
     label b0:
@@ -8,13 +8,13 @@ module 0x1::Cup {
 }
 
 //# publish
-module 0x1::M0 {
+mvir 0x1::M0 {
     // recursive enum
     enum Foo { V { f: Self::Foo } }
 }
 
 //# publish
-module 0x1::M1 {
+mvir 0x1::M1 {
     import 0x1::Cup;
     // recursive enum
     enum Foo { V { f: Cup::Cup<Self::Foo> } }
@@ -28,7 +28,7 @@ module 0x1::M1 {
 }
 
 //# publish
-module 0x1::M2 {
+mvir 0x1::M2 {
     import 0x1::signer;
 
     enum X { V { y: vector<Self::Y> } }
@@ -36,7 +36,7 @@ module 0x1::M2 {
 }
 
 //# publish
-module 0x1::M3 {
+mvir 0x1::M3 {
     import 0x1::Cup;
 
     // recursive enum
@@ -45,7 +45,7 @@ module 0x1::M3 {
 }
 
 //# publish
-module 0x1::M3 {
+mvir 0x1::M3 {
     import 0x1::Cup;
 
     // indirect recursive enum

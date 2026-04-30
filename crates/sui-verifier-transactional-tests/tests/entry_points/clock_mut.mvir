@@ -4,7 +4,7 @@
 // invalid, Clock by mutable reference
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
 
     public entry fun no_clock_mut(l0: &mut clock::Clock) {

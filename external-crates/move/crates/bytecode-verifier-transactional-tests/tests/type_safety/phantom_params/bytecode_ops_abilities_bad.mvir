@@ -3,12 +3,12 @@
 // This file contains tests checking that type arguments used in phantom position
 // (phantom arguments) are not considered when deriving the abilities for a struct or enum.
 
-module 0x1::M1 {
+mvir 0x1::M1 {
     struct NoAbilities { a: bool }
 }
 
 //# publish
-module 0x1::M2 {
+mvir 0x1::M2 {
     import 0x1::M1;
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
@@ -22,7 +22,7 @@ module 0x1::M2 {
 }
 
 //# publish
-module 0x1::M3 {
+mvir 0x1::M3 {
     import 0x1::M1;
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
@@ -36,7 +36,7 @@ module 0x1::M3 {
  }
 
 //# publish
- module 0x1::M4 {
+ mvir 0x1::M4 {
     import 0x1::M1;
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
@@ -49,7 +49,7 @@ module 0x1::M3 {
  }
 
 //# publish
- module 0x1::M5 {
+ mvir 0x1::M5 {
     import 0x1::M1;
     struct HasCopy<phantom T1, T2> has copy { a : bool }
 
@@ -61,7 +61,7 @@ module 0x1::M3 {
  }
 
 //# publish
-module 0x1::M9 {
+mvir 0x1::M9 {
     import 0x1::M1;
 
     struct HasStore<phantom T1, T2> has store { a: bool }
@@ -75,12 +75,12 @@ module 0x1::M9 {
 
 //# publish
 
-module 0x2::M1 {
+mvir 0x2::M1 {
     enum NoAbilities { V { a: bool } }
 }
 
 //# publish
-module 0x2::M2 {
+mvir 0x2::M2 {
     import 0x2::M1;
 
     enum HasDrop<phantom T1, T2> has drop { V { a: bool } }
@@ -94,7 +94,7 @@ module 0x2::M2 {
 }
 
 //# publish
-module 0x2::M3 {
+mvir 0x2::M3 {
     import 0x2::M1;
 
     enum HasDrop<phantom T1, T2> has drop { V { a: bool } }
@@ -108,7 +108,7 @@ module 0x2::M3 {
  }
 
 //# publish
- module 0x2::M4 {
+ mvir 0x2::M4 {
     import 0x2::M1;
 
     enum HasDrop<phantom T1, T2> has drop { V { a: bool } }
@@ -121,7 +121,7 @@ module 0x2::M3 {
  }
 
 //# publish
- module 0x2::M5 {
+ mvir 0x2::M5 {
     import 0x2::M1;
     enum HasCopy<phantom T1, T2> has copy { V { a : bool } }
 
@@ -133,7 +133,7 @@ module 0x2::M3 {
  }
 
 //# publish
-module 0x2::M9 {
+mvir 0x2::M9 {
     import 0x2::M1;
 
     enum HasStore<phantom T1, T2> has store { V { a: bool } }

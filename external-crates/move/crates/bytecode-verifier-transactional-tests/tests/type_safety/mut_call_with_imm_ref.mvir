@@ -1,5 +1,5 @@
 //# publish
-module 0x42::Token {
+mvir 0x42::Token {
     struct T{value: u64}
     public fun new(m: u64): Self::T {
     label b0:

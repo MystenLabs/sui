@@ -1,5 +1,5 @@
 //# publish
-module 0x42::Tester {
+mvir 0x42::Tester {
     struct T has drop {v: u64}
 
     public fun new(v: u64): Self::T  {
@@ -25,7 +25,7 @@ module 0x42::Tester {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::Tester;
 
 entry fun foo() {

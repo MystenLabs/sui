@@ -3,7 +3,7 @@
 
 //# publish
 // no allowed, the call tries to make a new UID
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
     import 0x2::transfer;
 

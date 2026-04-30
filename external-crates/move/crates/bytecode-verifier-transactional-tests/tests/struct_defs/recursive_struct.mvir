@@ -1,5 +1,5 @@
 //# publish
-module 0x1::Cup {
+mvir 0x1::Cup {
     struct Cup<T> { f: T }
     public fun cup<T>(f: T): Self::Cup<T> {
     label b0:
@@ -8,13 +8,13 @@ module 0x1::Cup {
 }
 
 //# publish
-module 0x1::M0 {
+mvir 0x1::M0 {
     // recursive struct
     struct Foo { f: Self::Foo }
 }
 
 //# publish
-module 0x1::M1 {
+mvir 0x1::M1 {
     import 0x1::Cup;
     // recursive struct
     struct Foo { f: Cup::Cup<Self::Foo> }
@@ -28,7 +28,7 @@ module 0x1::M1 {
 }
 
 //# publish
-module 0x1::M2 {
+mvir 0x1::M2 {
     import 0x1::signer;
 
     struct X { y: vector<Self::Y> }
@@ -37,7 +37,7 @@ module 0x1::M2 {
 }
 
 //# publish
-module 0x1::M3 {
+mvir 0x1::M3 {
     import 0x1::Cup;
 
     // recursive struct
@@ -46,7 +46,7 @@ module 0x1::M3 {
 }
 
 //# publish
-module 0x1::M3 {
+mvir 0x1::M3 {
     import 0x1::Cup;
 
     // indirect recursive struct

@@ -1,5 +1,5 @@
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: &u64): Self::Foo<u64> {
@@ -11,7 +11,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: &u64): Self::Foo<&u64> {
@@ -23,12 +23,12 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: &T } }
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: &mut u64): Self::Foo<u64> {
@@ -40,7 +40,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: &mut u64): Self::Foo<&mut u64> {
@@ -52,7 +52,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: &mut T } }
 }
 
@@ -60,7 +60,7 @@ module 0x2::O {
 // Mono decls now
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo { V { x: u64 } }
 
     fun foo(x: &mut u64): Self::Foo {
@@ -72,7 +72,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo { V { x: &mut u64 } }
 
     fun foo(x: &mut u64): Self::Foo {
@@ -84,6 +84,6 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo { V { x: &mut u64 } }
 }

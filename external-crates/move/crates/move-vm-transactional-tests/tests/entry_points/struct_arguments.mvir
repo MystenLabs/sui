@@ -2,7 +2,7 @@
 
 // struct and struct ref arguments are now allowed
 
-module 0x42::M {
+mvir 0x42::M {
     struct S has drop { f: u64 }
 
     public entry fun foo(s: Self::S, i: &Self::S, m: &mut Self::S) {
@@ -17,7 +17,7 @@ module 0x42::M {
 }
 
 //# run --args 0 0 0
-module 0x5::m {
+mvir 0x5::m {
 import 0x42::M;
 entry fun foo(s: M::S, i: &M::S, m: &mut M::S) {
     label l0:
@@ -26,7 +26,7 @@ entry fun foo(s: M::S, i: &M::S, m: &mut M::S) {
 }
 
 //# run --type-args 0x42::M::S --args 0 0 0
-module 0x6::m {
+mvir 0x6::m {
 entry fun foo<T:drop>(s: T, i: &T, m: &mut T) {
     label l0:
     return;

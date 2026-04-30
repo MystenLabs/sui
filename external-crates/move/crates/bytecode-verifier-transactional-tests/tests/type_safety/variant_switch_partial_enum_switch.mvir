@@ -1,5 +1,5 @@
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: &Self::Foo<u64>) {
@@ -14,7 +14,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: &Self::Foo<u64>) {
@@ -28,7 +28,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T }, X { } }
 
     fun foo(x: &Self::Foo<u64>) {

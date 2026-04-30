@@ -4,7 +4,7 @@
 // invalid, wrong one-time witness type name format
 
 //# publish
-module 0x0::mod {
+mvir 0x0::mod {
     import 0x2::tx_context;
 
     struct Mod has drop { dummy: bool }

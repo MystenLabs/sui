@@ -1,7 +1,7 @@
 // Struct unpack with an unreachable field reference due to control flow.
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 struct S has drop { f: u64 }
 

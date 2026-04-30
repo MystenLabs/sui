@@ -1,5 +1,5 @@
 //# publish
-module 0x42::M {
+mvir 0x42::M {
     public fun max(a: u64, b: u64): u64 {
     label b0:
         jump_if (copy(a) > copy(b)) b2;
@@ -18,7 +18,7 @@ module 0x42::M {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::M;
 
 entry fun foo() {

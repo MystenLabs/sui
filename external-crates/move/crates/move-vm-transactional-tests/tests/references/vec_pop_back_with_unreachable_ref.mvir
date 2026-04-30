@@ -1,7 +1,7 @@
 // Vector pop_back with an unreachable element reference due to control flow.
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::vector;
 
 struct S has copy, drop { f: u64 }

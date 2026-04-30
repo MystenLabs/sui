@@ -1872,7 +1872,8 @@ fn parse_import_decl(
 
 // pub Module : ModuleDefinition = {
 //     ["unpublishable"]
-//     "module" <n: Name> "{"
+//     // `mvir` here is the IR-side keyword for what Move source calls `module`.
+//     "mvir" <n: Name> "{"
 //         <friends: (FriendDecl)*>
 //         <imports: (ImportDecl)*>
 //         <structs: (StructDecl)*>
@@ -1899,7 +1900,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
             true
         };
     let start_loc = tokens.start_loc();
-    consume_token(tokens, Tok::Module)?;
+    consume_token(tokens, Tok::Mvir)?;
     let identifier = parse_module_ident(tokens)?;
     consume_token(tokens, Tok::LBrace)?;
 

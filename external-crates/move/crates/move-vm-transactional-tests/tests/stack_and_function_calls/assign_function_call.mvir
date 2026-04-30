@@ -1,5 +1,5 @@
 //# publish
-module 0x5::A {
+mvir 0x5::A {
     public fun ones_tens(f: u64): u64 * u64 {
         let k: u64;
         let m: u64;
@@ -12,7 +12,7 @@ module 0x5::A {
 
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x5::A;
 
 entry fun foo() {

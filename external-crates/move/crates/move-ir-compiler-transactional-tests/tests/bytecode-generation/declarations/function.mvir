@@ -1,7 +1,7 @@
 //# print-bytecode
 // This module defines several public functions with complex bodies.
 // This can be thought of as a smoke test that tests many different aspects of bytecode generation.
-module 0x3d10::Example {
+mvir 0x3d10::Example {
     struct Coin { value: u64 }
 
     public fun value(this: &Self::Coin): u64 {
@@ -32,7 +32,7 @@ module 0x3d10::Example {
 
 //# print-bytecode
 // Functions may be declared with entry modifier
-module 0x4d10::M {
+mvir 0x4d10::M {
     public entry fun f() {
     label b0:
         return;

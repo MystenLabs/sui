@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct Foo { f: bool }
 
     public fun id<T>(x: T): T {
@@ -23,7 +23,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x2::M {
+mvir 0x2::M {
     enum Foo { V{ f: bool } }
 
     public fun id<T>(x: T): T {

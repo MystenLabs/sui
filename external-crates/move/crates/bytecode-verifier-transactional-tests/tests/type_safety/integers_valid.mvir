@@ -1,5 +1,5 @@
 //# publish
-module 0x42::tu8 {
+mvir 0x42::tu8 {
 fun test() {
 let x: u8;
 label l0:
@@ -20,7 +20,7 @@ label l0:
 }
 
 //# publish
-module 0x42::tu16 {
+mvir 0x42::tu16 {
 fun test() {
 let x: u16;
 label l0:
@@ -41,7 +41,7 @@ label l0:
 }
 
 //# publish
-module 0x42::tu32 {
+mvir 0x42::tu32 {
 fun test() {
 let x: u32;
 label l0:
@@ -62,7 +62,7 @@ label l0:
 }
 
 //# publish
-module 0x42::tu64 {
+mvir 0x42::tu64 {
 fun test() {
 let x: u64;
 label l0:
@@ -83,7 +83,7 @@ label l0:
 }
 
 //# publish
-module 0x42::tu128 {
+mvir 0x42::tu128 {
 fun test() {
 let x: u128;
 label l0:
@@ -104,7 +104,7 @@ label l0:
 }
 
 //# publish
-module 0x42::tu256 {
+mvir 0x42::tu256 {
 fun test() {
 let x: u256;
 label l0:

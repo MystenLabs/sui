@@ -1,5 +1,5 @@
 //# publish
-module 0x5::Coin {
+mvir 0x5::Coin {
     struct Coin { value: u64 }
     public fun value(c: &Self::Coin): u64 {
     label b0:
@@ -18,7 +18,7 @@ module 0x5::Coin {
 }
 
 //# run --type-args 0x5::Coin::Coin
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo<T: copy + drop>() { // coin does not have copy or drop
 label b0:

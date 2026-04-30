@@ -6,7 +6,7 @@
 // where a given instantiation`T<...>` has key but does _not_ have store
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::transfer;
 
     fun t<T: key>(s: T) {
@@ -17,7 +17,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::transfer;
 
     fun t<T: key>(s: T) {
@@ -28,7 +28,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::transfer;
 
     fun t<T: key>(s: T) {
@@ -39,7 +39,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::transfer;
     import 0x2::object;
 
@@ -52,7 +52,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::transfer;
     import 0x2::party;
 

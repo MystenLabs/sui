@@ -1,5 +1,5 @@
 //# publish
-module 0x42::M1 {
+mvir 0x42::M1 {
     struct S<T: copy> { t: T }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
@@ -10,7 +10,7 @@ module 0x42::M1 {
 }
 
 //# publish
-module 0x42::M2 {
+mvir 0x42::M2 {
     struct S<T: copy> { t: T }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
@@ -21,7 +21,7 @@ module 0x42::M2 {
 }
 
 //# publish
-module 0x42::M3 {
+mvir 0x42::M3 {
     struct S<T: copy> { t: T }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
@@ -32,7 +32,7 @@ module 0x42::M3 {
 }
 
 //# publish
-module 0x43::M1 {
+mvir 0x43::M1 {
     enum S<T: copy> { V { t: T } }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
@@ -43,7 +43,7 @@ module 0x43::M1 {
 }
 
 //# publish
-module 0x43::M2 {
+mvir 0x43::M2 {
     enum S<T: copy> { V { t: T } }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
@@ -54,7 +54,7 @@ module 0x43::M2 {
 }
 
 //# publish
-module 0x43::M3 {
+mvir 0x43::M3 {
     enum S<T: copy> { V { t: T } }
 
     // should get flagged w/ constraint not satisfied--T does not have copy

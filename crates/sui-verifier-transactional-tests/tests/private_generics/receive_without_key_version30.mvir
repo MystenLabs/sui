@@ -1,7 +1,7 @@
 //# init --protocol-version 30 --file-format 6
 
 //# publish
-module 0x0::m2 {
+mvir 0x0::m2 {
     import 0x2::transfer;
     import 0x2::object;
 
@@ -17,7 +17,7 @@ module 0x0::m2 {
 // restriction that `receive` with `key` only constraint can only be called to
 // receive a type defined in the module that defined the type.
 //# publish
-module 0x0::m2 {
+mvir 0x0::m2 {
     import 0x2::transfer;
     import 0x2::object;
 

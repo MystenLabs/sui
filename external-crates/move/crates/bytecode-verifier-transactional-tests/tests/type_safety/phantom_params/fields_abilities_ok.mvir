@@ -3,7 +3,7 @@
 // This module checks that phantom arguments are not considered by checking against
 // the abilities required for the fields of a struct/enum.
 
-module 0x1::M {
+mvir 0x1::M {
     struct NoAbilities { a: bool }
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
@@ -19,7 +19,7 @@ module 0x1::M {
 
 //# publish
 
-module 0x2::M {
+mvir 0x2::M {
     enum NoAbilities { V{ a: bool } }
 
     enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}

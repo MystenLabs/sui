@@ -1,5 +1,5 @@
 //# publish
-module 0x42::Tester {
+mvir 0x42::Tester {
 
     enum Initializer { V { x: u64, y: u64 } }
     enum Point { V { x: u64, y: u64 } }
@@ -46,7 +46,7 @@ module 0x42::Tester {
 }
 
 //# publish
-module 0x43::Tester {
+mvir 0x43::Tester {
 
     enum Initializer { V { x: u64, y: u64 } }
     enum Point { V { x: u64, y: u64 } }

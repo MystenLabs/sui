@@ -1,5 +1,5 @@
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
 label while:

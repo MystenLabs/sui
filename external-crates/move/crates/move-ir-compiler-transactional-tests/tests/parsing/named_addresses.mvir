@@ -1,7 +1,7 @@
 //# init --addresses A=0x1 
 
 //# publish
-module A::T {
+mvir A::T {
     fun f() {
         label l0:
         return;
@@ -14,7 +14,7 @@ module A::T {
 }
 
 //# print-bytecode 
-module A::M {
+mvir A::M {
     import A::T;
     fun f(): address {
         label l0:

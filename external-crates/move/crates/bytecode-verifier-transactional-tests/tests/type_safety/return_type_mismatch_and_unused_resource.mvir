@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct R { flag: bool }
 
     // Type checking is done before memory safety checks
@@ -13,7 +13,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M2 {
+mvir 0x1::M2 {
     // Type checking is done before memory safety checks
     // wrong return type
     fun t2(): bool {
@@ -27,7 +27,7 @@ module 0x1::M2 {
 }
 
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct R { flag: bool }
 
     fun t1(): u64 {
@@ -40,7 +40,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M2 {
+mvir 0x1::M2 {
     fun t2(): &u64 {
         let u: u64;
         let r: &u64;
@@ -53,7 +53,7 @@ module 0x1::M2 {
 }
 
 //# publish
-module 0x2::M {
+mvir 0x2::M {
     enum R { V { flag: bool } }
 
     // Type checking is done before memory safety checks
@@ -67,7 +67,7 @@ module 0x2::M {
 }
 
 //# publish
-module 0x2::M {
+mvir 0x2::M {
     enum R { V { flag: bool } }
 
     fun t1(): u64 {

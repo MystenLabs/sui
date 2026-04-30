@@ -2,7 +2,7 @@
 // but if the mut is a parent, it won't be writable
 
 //# publish
-module 0x2::valid {
+mvir 0x2::valid {
 
     fun id_mut(r: &mut u64): &mut u64 {
     label b0:
@@ -38,7 +38,7 @@ module 0x2::valid {
 }
 
 //# publish
-module 0x2::invalid {
+mvir 0x2::invalid {
 
     fun id_mut(r: &mut u64): &mut u64 {
     label b0:

@@ -1,5 +1,5 @@
 //# publish
-module 0x42::m { 
+mvir 0x42::m { 
     enum X { V1 { x: u64 }, V2 { } }
 
     entry fun foo(x: Self::X) {

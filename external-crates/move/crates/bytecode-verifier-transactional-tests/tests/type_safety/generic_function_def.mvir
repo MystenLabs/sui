@@ -4,7 +4,7 @@
 //   1) type parameters have correct kind constraints
 //   2) variables have correct types
 
-module 0x1::M {
+mvir 0x1::M {
     public fun id<T>(x: T): T {
     label b0:
         return move(x);

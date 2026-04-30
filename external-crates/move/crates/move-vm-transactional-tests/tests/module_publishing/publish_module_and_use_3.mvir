@@ -1,5 +1,5 @@
 //# publish
-module 0x42::M {
+mvir 0x42::M {
     public fun case(a: u64, b: bool): u64 {
     label b0:
         jump_if (copy(b)) b2;
@@ -13,7 +13,7 @@ module 0x42::M {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::M;
 
 entry fun foo() {

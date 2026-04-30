@@ -1,5 +1,5 @@
 //# publish
-module 0x42::Test {
+mvir 0x42::Test {
     struct T has drop {value: u64}
 
     fun initial_value(): u64 {
@@ -39,7 +39,7 @@ module 0x42::Test {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::Test;
 
 entry fun foo() {

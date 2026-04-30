@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     enum E has drop {
         V { f0: u64 }
     }
@@ -26,7 +26,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M1 {
+mvir 0x1::M1 {
     enum E has drop {
         V { f0: u64 }
     }
@@ -57,7 +57,7 @@ module 0x1::M1 {
 }
 
 //# publish
-module 0x1::M2 {
+mvir 0x1::M2 {
     enum E has drop {
         V { f0: u64 }
     }

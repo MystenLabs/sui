@@ -1,5 +1,5 @@
 //# publish
-module 0x42::Math {
+mvir 0x42::Math {
 
     public fun sum_(n: u64, acc: u64): u64 {
         let new_n: u64;
@@ -26,7 +26,7 @@ module 0x42::Math {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::Math;
 
 entry fun foo() {

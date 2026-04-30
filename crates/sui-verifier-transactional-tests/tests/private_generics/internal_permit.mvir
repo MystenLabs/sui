@@ -4,7 +4,7 @@
 // tests that internal::permit can only be called on types internal to the module
 
 //# publish
-module 0x0::t {
+mvir 0x0::t {
     import 0x1::internal;
 
     struct Internal { dummy_field: bool }
@@ -18,7 +18,7 @@ module 0x0::t {
 }
 
 //# publish
-module 0x0::t {
+mvir 0x0::t {
     import 0x1::internal;
     import 0x1::string;
 
@@ -31,7 +31,7 @@ module 0x0::t {
 }
 
 //# publish
-module 0x0::t {
+mvir 0x0::t {
     import 0x1::internal;
 
     struct Internal { dummy_field: bool }
@@ -45,7 +45,7 @@ module 0x0::t {
 }
 
 //# publish
-module 0x0::t {
+mvir 0x0::t {
     import 0x1::internal;
 
     struct Internal { dummy_field: bool }

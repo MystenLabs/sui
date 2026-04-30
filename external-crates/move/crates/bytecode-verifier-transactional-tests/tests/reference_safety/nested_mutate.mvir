@@ -1,5 +1,5 @@
 //# publish
-module 0x42::B {
+mvir 0x42::B {
     struct T has drop {g: u64}
 
     public fun new(g: u64): Self::T {
@@ -19,7 +19,7 @@ module 0x42::B {
 }
 
 //# publish
-module 0x43::A {
+mvir 0x43::A {
     import 0x42::B;
     struct T has drop {f: B::T}
 
@@ -40,7 +40,7 @@ module 0x43::A {
 }
 
 //# run
-module 0x44::m {
+mvir 0x44::m {
 import 0x43::A;
 import 0x42::B;
 

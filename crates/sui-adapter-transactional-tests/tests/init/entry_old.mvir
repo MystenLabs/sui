@@ -6,7 +6,7 @@
 //# init --addresses test=0x0 v2=0x0 --protocol-version 6 --file-format 6 --accounts A
 
 //# publish --sender A --upgradeable
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     entry fun init(ctx: &mut tx_context::TxContext) {
         label l0:

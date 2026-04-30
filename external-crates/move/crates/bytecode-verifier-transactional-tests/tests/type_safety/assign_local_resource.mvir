@@ -1,5 +1,5 @@
 //# publish
-module 0x42::A {
+mvir 0x42::A {
     struct Coin has store { value: u64 }
     struct T { f: Self::Coin }
 
@@ -11,7 +11,7 @@ module 0x42::A {
 }
 
 //# publish
-module 0x42::A {
+mvir 0x42::A {
     enum Coin has store { V { value: u64 } }
 
     public fun t(resource1: Self::Coin, resource2: Self::Coin) {

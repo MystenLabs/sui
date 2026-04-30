@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct Foo<T> { x: T }
 
     fun baz<T>(x: Self::Foo<T>) {
@@ -11,7 +11,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x2::M {
+mvir 0x2::M {
     enum Foo<T> { V{ x: T } }
 
     fun baz<T>(x: Self::Foo<T>) {

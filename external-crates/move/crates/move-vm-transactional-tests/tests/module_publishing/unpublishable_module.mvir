@@ -1,5 +1,5 @@
 //# publish
-module 0x42::M {
+mvir 0x42::M {
     public fun num(): u64 {
         label b0:
             return 42;
@@ -7,7 +7,7 @@ module 0x42::M {
 }
 
 //# publish
-unpublishable module 0x42::N {
+unpublishable mvir 0x42::N {
     public fun num(): u64 {
         label b0:
             return 42;
@@ -15,7 +15,7 @@ unpublishable module 0x42::N {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::M;
     entry fun foo() {
         let a: u64;

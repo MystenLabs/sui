@@ -1,6 +1,6 @@
 //# publish
 
-module 0x42::Tests {
+mvir 0x42::Tests {
 
     public fun test<T: copy + drop>(x: T) {
         let v: vector<T>;

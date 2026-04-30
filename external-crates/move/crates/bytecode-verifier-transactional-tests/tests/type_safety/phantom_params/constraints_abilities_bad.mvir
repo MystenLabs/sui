@@ -1,11 +1,11 @@
 //# publish
-module 0x1::M1 {
+mvir 0x1::M1 {
     struct NoAbilities { a: bool }
     struct HasAbilities<phantom T1, T2> has drop, copy, store, key { a: bool }
 }
 
 //# publish
-module 0x2::M2 {
+mvir 0x2::M2 {
     import 0x1::M1;
 
     struct S1<T: drop + copy + store + key> { a: bool }
@@ -15,7 +15,7 @@ module 0x2::M2 {
 }
 
 //# publish
-module 0x3::M3 {
+mvir 0x3::M3 {
     import 0x1::M1;
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
@@ -34,7 +34,7 @@ module 0x3::M3 {
 }
 
 //# publish
-module 0x4::M4 {
+mvir 0x4::M4 {
     import 0x1::M1;
 
     fun f1<T: drop + copy + store + key>() { label b0: return; }
@@ -47,7 +47,7 @@ module 0x4::M4 {
 
 
 //# publish
-module 0x5::M3Valid {
+mvir 0x5::M3Valid {
     import 0x1::M1;
 
     struct HasDrop<phantom T1, T2> has drop { a: bool }
@@ -58,7 +58,7 @@ module 0x5::M3Valid {
 }
 
 //# publish
-module 0x6::M5 {
+mvir 0x6::M5 {
     import 0x1::M1;
     import 0x5::M3Valid;
 
@@ -75,13 +75,13 @@ module 0x6::M5 {
 }
 
 //# publish
-module 0x7::M1 {
+mvir 0x7::M1 {
     enum NoAbilities { V{ a: bool } }
     enum HasAbilities<phantom T1, T2> has drop, copy, store, key { V{ a: bool } }
 }
 
 //# publish
-module 0x8::M2 {
+mvir 0x8::M2 {
     import 0x7::M1;
 
     enum S1<T: drop + copy + store + key> { V{ a: bool }}
@@ -91,7 +91,7 @@ module 0x8::M2 {
 }
 
 //# publish
-module 0x9::M3 {
+mvir 0x9::M3 {
     import 0x7::M1;
 
     enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
@@ -112,7 +112,7 @@ module 0x9::M3 {
 }
 
 //# publish
-module 0x10::M4 {
+mvir 0x10::M4 {
     import 0x7::M1;
 
     fun f1<T: drop + copy + store + key>() { label b0: return; }
@@ -125,7 +125,7 @@ module 0x10::M4 {
 
 
 //# publish
-module 0x11::M3Valid {
+mvir 0x11::M3Valid {
     import 0x7::M1;
 
     enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
@@ -136,7 +136,7 @@ module 0x11::M3Valid {
 }
 
 //# publish
-module 0x12::M5 {
+mvir 0x12::M5 {
     import 0x7::M1;
     import 0x5::M3Valid;
 

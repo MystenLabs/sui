@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x6::m {
+mvir 0x6::m {
 entry fun foo() {
     let x: u64;
     let ref_x: &mut u64;
@@ -12,7 +12,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x3d::Foobar {
+mvir 0x3d::Foobar {
     struct FooCoin { value: u64 }
 
     public fun borrow_mut_field(arg: &mut Self::FooCoin) {
@@ -25,7 +25,7 @@ module 0x3d::Foobar {
 }
 
 //# print-bytecode
-module 0x4d::Foobar {
+mvir 0x4d::Foobar {
     struct FooCoin<T> { value: u64 }
 
     public fun borrow_mut_field(arg: &mut Self::FooCoin<address>) {

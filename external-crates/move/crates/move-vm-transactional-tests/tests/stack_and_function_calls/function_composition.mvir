@@ -1,5 +1,5 @@
 //# publish
-module 0x5::Test {
+mvir 0x5::Test {
     public fun foo(v: u64): u64 * u64 {
         let one_less: u64;
         let one_more: u64;
@@ -19,7 +19,7 @@ module 0x5::Test {
 
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x5::Test;
 
 entry fun foo() {

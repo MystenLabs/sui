@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x2d20::M {
+mvir 0x2d20::M {
     struct T { u: u64 }
 
     fun f(): Self::T {
@@ -9,7 +9,7 @@ module 0x2d20::M {
 }
 
 //# print-bytecode
-module 0x3d20::M {
+mvir 0x3d20::M {
     struct T { u: u64, v: u128 }
 
     // A pack expression must use the correct field names.
@@ -20,7 +20,7 @@ module 0x3d20::M {
 }
 
 //# print-bytecode
-module 0x4d20::M {
+mvir 0x4d20::M {
     struct T { x: u64, y: u64 }
 
     // A pack expression must refer to the fields in the correct order.

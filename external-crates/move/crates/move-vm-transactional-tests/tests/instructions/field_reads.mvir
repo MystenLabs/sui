@@ -1,5 +1,5 @@
 //# publish
-module 0x42::VTest {
+mvir 0x42::VTest {
     struct T has drop {fint: u64, fv: bool}
 
     public fun new(x: u64, y: bool): Self::T {
@@ -34,7 +34,7 @@ module 0x42::VTest {
 
 //# publish
 
-module 0x43::RTest {
+mvir 0x43::RTest {
     struct T{fint: u64, fv: bool}
 
     public fun new(x: u64, y: bool): Self::T {
@@ -77,7 +77,7 @@ module 0x43::RTest {
 
 //# run
 
-module 0x44::m {
+mvir 0x44::m {
 import 0x43::RTest;
 import 0x42::VTest;
 

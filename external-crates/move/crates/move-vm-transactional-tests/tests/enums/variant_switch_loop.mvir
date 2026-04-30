@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x6::InfiniteSwith {
+mvir 0x6::InfiniteSwith {
     enum EnumWithOneVariant {
         One { }
     }
@@ -22,7 +22,7 @@ module 0x6::InfiniteSwith {
 }
 
 //# publish
-module 0x6::InfiniteSwith {
+mvir 0x6::InfiniteSwith {
     enum EnumWithOneVariant {
         One { }
     }
@@ -46,7 +46,7 @@ module 0x6::InfiniteSwith {
 
 
 //# run --gas-budget 10000
-module 0x7::m {
+mvir 0x7::m {
 import 0x6::InfiniteSwith;
 entry fun foo() {
     let x: InfiniteSwith::EnumWithOneVariant;

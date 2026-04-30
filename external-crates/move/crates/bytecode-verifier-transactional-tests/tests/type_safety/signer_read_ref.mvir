@@ -1,5 +1,5 @@
 //# publish
-module 0x42::M {
+mvir 0x42::M {
     fun t(s: &signer): signer {
     label b0:
         // cannot copy signer

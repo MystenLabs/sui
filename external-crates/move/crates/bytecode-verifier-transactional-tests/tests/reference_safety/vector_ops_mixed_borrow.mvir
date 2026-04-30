@@ -1,6 +1,6 @@
 //# publish
 
-module 0x2::vector_ops_mixed_borrow {
+mvir 0x2::vector_ops_mixed_borrow {
 
 fun foo(m: &mut u8) { label  l0: return; }
 

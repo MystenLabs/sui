@@ -41,7 +41,7 @@ module 0x6::m {
 
 //# run --args 42 --syntax=mvir
 
-module 0x7::m {
+mvir 0x7::m {
 import 0x42::N;
 entry fun foo(v: u64) {
 label b0:

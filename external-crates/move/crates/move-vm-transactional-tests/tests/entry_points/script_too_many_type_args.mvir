@@ -1,5 +1,5 @@
 //# run --type-args u64
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() { // too many type args
 label b0:

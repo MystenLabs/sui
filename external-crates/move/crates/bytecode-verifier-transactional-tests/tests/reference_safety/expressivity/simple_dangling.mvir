@@ -1,7 +1,7 @@
 // simple tests that the verifier stops the creation of a dangling reference
 
 //# publish
-module 0x2::field {
+mvir 0x2::field {
     struct S has copy, drop { f: u64 }
     fun t(s: &mut Self::S) {
         let f: &u64;
@@ -13,7 +13,7 @@ module 0x2::field {
 }
 
 //# publish
-module 0x3::nested_field {
+mvir 0x3::nested_field {
     struct S has copy, drop { f: u64 }
     struct P has copy, drop { s: Self::S }
     fun t(p: &mut Self::P) {
@@ -28,7 +28,7 @@ module 0x3::nested_field {
 }
 
 //# publish
-module 0x4::vector {
+mvir 0x4::vector {
     fun t(v: &mut vector<u64>) {
         let r: &mut u64;
     label b0:
@@ -39,7 +39,7 @@ module 0x4::vector {
 }
 
 //# publish
-module 0x5::simple_call {
+mvir 0x5::simple_call {
     fun f(r: &mut u64): &u64 {
     label b0:
         return freeze(move(r));
@@ -61,7 +61,7 @@ module 0x5::simple_call {
 
 
 //# publish
-module 0x5::field_call {
+mvir 0x5::field_call {
     struct S has copy, drop { f: u64 }
 
     fun f(r: &mut Self::S): &u64 {

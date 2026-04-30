@@ -1,5 +1,5 @@
 //# publish
-module 0x6::PolymorphicEnums {
+mvir 0x6::PolymorphicEnums {
     enum EnumWithTwoVariants<T> {
         One { },
         Two { x: T }
@@ -24,7 +24,7 @@ module 0x6::PolymorphicEnums {
 }
 
 //# run
-module 0x7::m {
+mvir 0x7::m {
     import 0x6::PolymorphicEnums;
     entry fun foo() {
         let x: u64;

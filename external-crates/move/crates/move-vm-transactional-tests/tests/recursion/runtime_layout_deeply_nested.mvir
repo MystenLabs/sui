@@ -1,5 +1,5 @@
 //# publish
-module 0x42::M {
+mvir 0x42::M {
     struct Box<T> has key, store { x: T }
     struct Box3<T> has store { x: Self::Box<Self::Box<T>> }
     struct Box7<T> has store { x: Self::Box3<Self::Box3<T>> }

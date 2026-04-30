@@ -1,6 +1,6 @@
 //# publish
 
-module 0x42::Test {
+mvir 0x42::Test {
     public fun no(): u64 {
     label b0:
         // return type mismatch

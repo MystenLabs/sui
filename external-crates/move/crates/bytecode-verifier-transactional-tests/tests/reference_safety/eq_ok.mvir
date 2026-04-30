@@ -1,7 +1,7 @@
 //# publish
 
 // testing valid usages of == and != over references
-module 0x1::Tester {
+mvir 0x1::Tester {
     fun eqtest1() {
         let x: u64;
         let r: &mut u64;

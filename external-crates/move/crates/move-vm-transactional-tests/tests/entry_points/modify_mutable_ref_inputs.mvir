@@ -3,7 +3,7 @@
 // the VM will provide the values for mutable inputs after the function returns
 // modifications should be observable
 
-module 0x42::M {
+mvir 0x42::M {
     struct S { f: u64 }
 
     public fun set_f(s: &mut Self::S, f: u64) {
@@ -26,7 +26,7 @@ module 0x42::M {
 }
 
 //# run --args 0 1 b"xyz"
-module 0x5::m {
+mvir 0x5::m {
 import 0x42::M;
 entry fun foo(
     u: &mut u64,

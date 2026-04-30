@@ -1,5 +1,5 @@
 //# publish
-module 0x6::Test {
+mvir 0x6::Test {
     struct T { b: bool }
 
     public fun new(): Self::T {
@@ -21,7 +21,7 @@ module 0x6::Test {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x6::Test;
 
 entry fun foo() {

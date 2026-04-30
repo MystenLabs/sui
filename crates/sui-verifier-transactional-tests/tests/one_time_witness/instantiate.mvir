@@ -4,7 +4,7 @@
 // invalid, otw type instantiated
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
 
     struct M has drop { dummy: bool }

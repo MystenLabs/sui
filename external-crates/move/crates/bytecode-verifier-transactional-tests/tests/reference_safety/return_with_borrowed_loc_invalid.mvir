@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct X has drop { y: Self::Y }
     struct Y has drop { u: u64 }
 
@@ -15,7 +15,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M2 {
+mvir 0x1::M2 {
     struct X has drop { y: Self::Y }
     struct Y has drop { u: u64 }
     fun t2(): &u64 {
@@ -30,7 +30,7 @@ module 0x1::M2 {
 }
 
 //# publish
-module 0x1::M3 {
+mvir 0x1::M3 {
     struct X has drop { y: Self::Y }
     struct Y has drop { u: u64 }
     fun t3(): &u64 {
@@ -49,7 +49,7 @@ module 0x1::M3 {
 }
 
 //# publish
-module 0x1::M4 {
+mvir 0x1::M4 {
     struct X has drop { y: Self::Y }
     struct Y has drop { u: u64 }
     fun t4(): &u64 {

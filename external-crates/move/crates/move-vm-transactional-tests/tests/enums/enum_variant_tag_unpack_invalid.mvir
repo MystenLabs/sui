@@ -1,5 +1,5 @@
 //# publish
-module 0x6::Enums {
+mvir 0x6::Enums {
     enum PolyEnum<T> {
         One { },
         Two { x: T },

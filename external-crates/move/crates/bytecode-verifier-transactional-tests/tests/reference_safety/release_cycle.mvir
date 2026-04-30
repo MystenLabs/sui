@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     fun t0(cond: bool) {
         let v: u64;
         let x: &u64;

@@ -6,7 +6,7 @@
 
 // initializer not valid due to public visibility
 
-module 0x0::M1 {
+mvir 0x0::M1 {
     import 0x2::tx_context;
     import 0x2::object;
     import 0x2::transfer;

@@ -1,7 +1,7 @@
 // Tests that if taking a mutable enum that the variant inside cane be mutated.
 
 //# print-bytecode
-module 0x6::MonomorphicEnums {
+mvir 0x6::MonomorphicEnums {
     enum EnumWithTwoVariants has drop {
         One { x: u64 },
         Two { x: u64, y: u64 }
@@ -34,7 +34,7 @@ module 0x6::MonomorphicEnums {
 }
 
 //# publish
-module 0x6::MonomorphicEnums {
+mvir 0x6::MonomorphicEnums {
     enum EnumWithTwoVariants has drop {
         One { x: u64 },
         Two { x: u64, y: u64 }
@@ -67,7 +67,7 @@ module 0x6::MonomorphicEnums {
 }
 
 //# run
-module 0x8::m {
+mvir 0x8::m {
 import 0x6::MonomorphicEnums;
 entry fun foo() {
     let x: MonomorphicEnums::EnumWithTwoVariants;

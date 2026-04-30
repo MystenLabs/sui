@@ -1,6 +1,6 @@
 //# publish
 
-module 0x42::Test {
+mvir 0x42::Test {
     struct A { b: bool }
     struct B { b: bool }
     struct T { ft: Self::B }
@@ -15,7 +15,7 @@ module 0x42::Test {
 
 //# publish
 
-module 0x43::Test {
+mvir 0x43::Test {
     struct B { b: bool }
     enum A { V { b: bool } }
     enum T { V { ft: Self::B } }

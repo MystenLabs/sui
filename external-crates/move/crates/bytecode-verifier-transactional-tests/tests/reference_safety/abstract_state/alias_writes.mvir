@@ -2,7 +2,7 @@
 
 //# publish
 
-module 0x2::alias_after_join {
+mvir 0x2::alias_after_join {
 
 fun t(cond: bool) {
     let a: u64;

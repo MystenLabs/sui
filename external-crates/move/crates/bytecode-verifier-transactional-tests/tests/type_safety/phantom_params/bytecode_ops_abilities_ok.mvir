@@ -4,7 +4,7 @@
 // are not considered when deriving the abilities for a struct/enum by checking against
 // abilities required for specific bytecode operatiosn.
 
-module 0x1::M {
+mvir 0x1::M {
     struct NoAbilities { a: bool }
     struct HasDrop<phantom T1, T2> has drop { a: bool }
     struct HasCopy<phantom T1, T2> has copy { a : bool }
@@ -45,7 +45,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x2::M {
+mvir 0x2::M {
     enum NoAbilities { V{ a: bool } }
     enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
     enum HasCopy<phantom T1, T2> has copy { V{ a : bool }}

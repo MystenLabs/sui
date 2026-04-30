@@ -1,5 +1,5 @@
 //# publish
-module 0x42::Test {
+mvir 0x42::Test {
     enum T{V { fr: bool} }
 
     public fun new(): Self::T {
@@ -18,7 +18,7 @@ module 0x42::Test {
 }
 
 //# publish
-module 0x42::Test {
+mvir 0x42::Test {
     enum T<B> {V { fr: B } }
 
     public fun new(): Self::T<bool> {

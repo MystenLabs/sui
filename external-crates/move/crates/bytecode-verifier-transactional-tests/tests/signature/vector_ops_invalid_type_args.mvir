@@ -1,5 +1,5 @@
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
 label b0:
@@ -9,7 +9,7 @@ label b0:
 
 }
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
 label b0:
@@ -19,7 +19,7 @@ label b0:
 
 }
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
 label b0:

@@ -1,5 +1,5 @@
 //# publish
-module 0x6::MonoTooMany {
+mvir 0x6::MonoTooMany {
     enum Foo{ V { x: u64 } }
 
     fun bar(x: u64, y: u64): Self::Foo {
@@ -11,7 +11,7 @@ module 0x6::MonoTooMany {
 }
 
 //# publish
-module 0x7::MonoTooFew {
+mvir 0x7::MonoTooFew {
     enum Foo{ V { x: u64 } }
 
     fun bar(x: u64, y: u64): Self::Foo {
@@ -23,7 +23,7 @@ module 0x7::MonoTooFew {
 }
 
 //# publish
-module 0x8::PolyTooMany {
+mvir 0x8::PolyTooMany {
     enum Foo<T>{ V { x: T } }
 
     fun bar(x: u64, y: u64): Self::Foo<u64> {
@@ -35,7 +35,7 @@ module 0x8::PolyTooMany {
 }
 
 //# publish
-module 0x9::PolyTooFew {
+mvir 0x9::PolyTooFew {
     enum Foo<T>{ V { x: T } }
 
     fun bar(x: u64, y: u64): Self::Foo<u64> {

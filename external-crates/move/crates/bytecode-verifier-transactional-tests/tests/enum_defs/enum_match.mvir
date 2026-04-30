@@ -1,5 +1,5 @@
 //# publish
-module 0x42::m {
+mvir 0x42::m {
 
     enum Threes<T> has {
         One { pos0: T } ,

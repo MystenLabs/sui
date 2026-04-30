@@ -1,5 +1,5 @@
 //# publish
-module 0x42::A {
+mvir 0x42::A {
     struct Coin has store { value: u64 }
     enum T { V { f: Self::Coin } }
 

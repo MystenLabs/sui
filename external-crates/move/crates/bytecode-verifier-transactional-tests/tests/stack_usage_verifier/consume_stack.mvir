@@ -1,5 +1,5 @@
 //# publish
-module 0x6::M {
+mvir 0x6::M {
     struct R has key { data: vector<u8> }
 
     fun is_ok_(addr: &address, data: &vector<u8>): bool {

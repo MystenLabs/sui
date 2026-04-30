@@ -4,7 +4,7 @@
 //# init --accounts A B --addresses test=0x0
 
 //# publish --sender A
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::random;
 
     entry fun entry_random_mut(c: &mut random::Random) {

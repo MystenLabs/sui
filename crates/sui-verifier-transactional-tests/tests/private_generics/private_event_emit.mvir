@@ -6,7 +6,7 @@
 //# init --addresses test=0x0 test2=0x0
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
     import 0x2::coin;
 
@@ -18,7 +18,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
     fun t<T: copy + drop>(x: T) {
@@ -29,7 +29,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
     fun t(x: u64) {
@@ -40,7 +40,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
     struct X has copy, drop {
@@ -55,7 +55,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
     enum X has copy, drop {
@@ -70,7 +70,7 @@ module 0x0::m {
 }
 
 //# publish
-module test::m {
+mvir test::m {
     struct Y has copy, drop {
         dummy: bool,
     }
@@ -83,7 +83,7 @@ module test::m {
 //# set-address test object(6,0)
 
 //# publish --dependencies test
-module 0x0::t {
+mvir 0x0::t {
     import test::m;
     import 0x2::event;
 
@@ -95,7 +95,7 @@ module 0x0::t {
 }
 
 //# publish --dependencies test
-module 0x0::t {
+mvir 0x0::t {
     import test::m;
     import 0x2::event;
 
@@ -107,7 +107,7 @@ module 0x0::t {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
     import 0x2::coin;
 
@@ -119,7 +119,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
     fun t<T: copy + drop>(x: T) {
@@ -130,7 +130,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
     fun t(x: u64) {
@@ -141,7 +141,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
     struct X has copy, drop {
@@ -156,7 +156,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
     enum X has copy, drop {
@@ -171,7 +171,7 @@ module 0x0::m {
 }
 
 //# publish --dependencies test
-module 0x0::t {
+mvir 0x0::t {
     import test::m;
     import 0x2::event;
 
@@ -183,7 +183,7 @@ module 0x0::t {
 }
 
 //# publish --dependencies test
-module 0x0::t {
+mvir 0x0::t {
     import test::m;
     import 0x2::event;
 

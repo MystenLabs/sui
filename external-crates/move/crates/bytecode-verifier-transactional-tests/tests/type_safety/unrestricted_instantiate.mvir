@@ -1,5 +1,5 @@
 //# publish
-module 0x42::Test {
+mvir 0x42::Test {
     struct T has drop {fint: u64, fv: bool}
 
     public fun t1(fint: u64, fv: bool): Self::T {
@@ -15,7 +15,7 @@ module 0x42::Test {
 
 //# run
 
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::Test;
 
 entry fun foo() {
@@ -29,7 +29,7 @@ label b0:
 }
 
 //# publish
-module 0x44::Test {
+mvir 0x44::Test {
     enum T has drop {V {fint: u64, fv: bool} }
 
     public fun t1(fint: u64, fv: bool): Self::T {
@@ -44,7 +44,7 @@ module 0x44::Test {
 }
 
 //# run
-module 0x45::m {
+mvir 0x45::m {
 import 0x44::Test;
 
 entry fun foo() {

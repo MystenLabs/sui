@@ -1,5 +1,5 @@
 //# publish
-module 0x6::M {
+mvir 0x6::M {
 
     public fun foo(): u64 {
     label b0:
@@ -9,7 +9,7 @@ module 0x6::M {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x6::M;
 
 entry fun foo() {

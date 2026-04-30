@@ -1,5 +1,5 @@
 //# publish
-module 0x42::M1 {
+mvir 0x42::M1 {
     struct S<T: copy> { t: T }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
@@ -10,7 +10,7 @@ module 0x42::M1 {
 }
 
 //# publish
-module 0x42::M2 {
+mvir 0x42::M2 {
     struct S<T: copy> { t: T }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
@@ -21,7 +21,7 @@ module 0x42::M2 {
 }
 
 //# publish
-module 0x42::M3 {
+mvir 0x42::M3 {
     struct S<T: copy> { t: T }
 
     // should get flagged--missing type argument
@@ -32,7 +32,7 @@ module 0x42::M3 {
 }
 
 //# publish
-module 0x42::M4 {
+mvir 0x42::M4 {
     struct Box<T> { t: T }
     struct S<T: copy> { t: T }
 
@@ -44,7 +44,7 @@ module 0x42::M4 {
 }
 
 //# publish
-module 0x43::M1 {
+mvir 0x43::M1 {
     enum S<T: copy> { V{ t: T } }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
@@ -55,7 +55,7 @@ module 0x43::M1 {
 }
 
 //# publish
-module 0x43::M2 {
+mvir 0x43::M2 {
     struct S<T: copy> { t: T }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
@@ -66,7 +66,7 @@ module 0x43::M2 {
 }
 
 //# publish
-module 0x43::M3 {
+mvir 0x43::M3 {
     enum S<T: copy> { V{ t: T } }
 
     // should get flagged--missing type argument
@@ -77,7 +77,7 @@ module 0x43::M3 {
 }
 
 //# publish
-module 0x43::M4 {
+mvir 0x43::M4 {
     enum Box<T> { V{ t: T } }
     enum S<T: copy> { V{ t: T } }
 

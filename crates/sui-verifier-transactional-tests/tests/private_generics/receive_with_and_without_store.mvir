@@ -1,5 +1,5 @@
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::transfer;
     import 0x2::object;
 
@@ -12,7 +12,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m1 {
+mvir 0x0::m1 {
     import 0x2::transfer;
     import 0x2::object;
 
@@ -25,7 +25,7 @@ module 0x0::m1 {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::transfer;
     import 0x2::object;
 
@@ -41,7 +41,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m1 {
+mvir 0x0::m1 {
     import 0x2::transfer;
     import 0x2::object;
 

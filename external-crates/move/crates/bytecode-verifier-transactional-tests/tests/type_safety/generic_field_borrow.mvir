@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct X has drop { v: u64 }
     struct S<T> has drop { f: T }
     fun t(s: Self::S<Self::X>): u64 {
@@ -9,7 +9,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x2::M {
+mvir 0x2::M {
     enum X has drop { V { v: u64 } }
     enum S<T> has drop { V { f: T } }
     fun t(s: Self::S<Self::X>): u64 {

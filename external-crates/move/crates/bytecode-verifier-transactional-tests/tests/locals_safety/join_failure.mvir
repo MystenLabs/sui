@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct R { f:bool }
     fun t0() {
         let r: Self::R;
@@ -20,7 +20,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct R { f:bool }
     fun t0() {
         let r: Self::R;
@@ -40,7 +40,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct R { f:bool }
     fun t0() {
         let r: Self::R;
@@ -61,7 +61,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct R has copy, drop { f:bool }
     fun t0() {
         let r: Self::R;
@@ -82,7 +82,7 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct R { f:bool }
     fun t0() {
         let r: Self::R;

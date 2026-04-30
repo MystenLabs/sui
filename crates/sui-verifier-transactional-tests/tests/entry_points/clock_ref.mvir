@@ -4,7 +4,7 @@
 // valid, Clock by immutable reference
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
 
     public entry fun yes_clock_ref(l0: &clock::Clock) {

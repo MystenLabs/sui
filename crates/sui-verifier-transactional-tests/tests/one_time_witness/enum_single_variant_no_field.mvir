@@ -4,7 +4,7 @@
 // Incorrect -- enums not allowed
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
 
     enum M has drop { 

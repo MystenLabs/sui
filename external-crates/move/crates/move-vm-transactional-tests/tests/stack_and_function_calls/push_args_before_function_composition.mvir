@@ -1,5 +1,5 @@
 //# publish
-module 0x5::A {
+mvir 0x5::A {
     public fun push_u64(): u64  {
     label b0:
         return 42;
@@ -22,7 +22,7 @@ module 0x5::A {
 
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 
 import 0x5::A;
 

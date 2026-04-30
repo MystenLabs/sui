@@ -38,7 +38,7 @@ fn generate_function(name: &str, num_formals: usize, num_locals: usize) -> Strin
 fn compile_module_with_large_frame() {
     let mut code = String::from(
         "
-        module 0x16::Foobar {
+        mvir 0x16::Foobar {
             struct FooCoin { value: u64 }
         ",
     );

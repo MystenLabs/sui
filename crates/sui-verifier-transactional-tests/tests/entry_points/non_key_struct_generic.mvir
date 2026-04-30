@@ -4,7 +4,7 @@
 // invalid as NoStore doesn't have store, so Obj doesn't have key
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::object;
 
@@ -21,7 +21,7 @@ module 0x0::m {
 // invalid, T doesn't have store so Obj is not an object
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::object;
 

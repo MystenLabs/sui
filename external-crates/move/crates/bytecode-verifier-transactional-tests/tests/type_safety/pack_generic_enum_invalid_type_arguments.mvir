@@ -1,5 +1,5 @@
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64> {
@@ -11,7 +11,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<bool> {
@@ -23,7 +23,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64> {
@@ -35,7 +35,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64> {
@@ -47,7 +47,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64> {
@@ -59,7 +59,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64, bool> {
@@ -72,12 +72,12 @@ module 0x2::O {
 
 
 //# publish
-module 0x1::O {
+mvir 0x1::O {
     enum Foo<T> { V { x: T } }
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     import 0x1::O;
     enum Foo<T> { V { x: T } }
 
@@ -90,7 +90,7 @@ module 0x2::O {
 }
 
 //# publish
-module 0x2::O {
+mvir 0x2::O {
     import 0x1::O;
     enum Foo<T> { V { x: T } }
 

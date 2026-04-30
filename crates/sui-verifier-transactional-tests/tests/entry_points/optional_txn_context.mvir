@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     public entry fun t() {
         label l0:
@@ -12,7 +12,7 @@ module 0x0::m {
 
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::object;
     struct Obj has key { id: object::UID }

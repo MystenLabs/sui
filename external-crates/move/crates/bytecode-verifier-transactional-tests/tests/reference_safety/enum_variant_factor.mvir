@@ -1,5 +1,5 @@
 //# publish
-module 0x1::o1 {
+mvir 0x1::o1 {
     enum X has drop {
         Empty { },
         One { x: u64, y: u64 },
@@ -17,7 +17,7 @@ module 0x1::o1 {
 }
 
 //# publish
-module 0x1::o2 {
+mvir 0x1::o2 {
     enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
@@ -36,7 +36,7 @@ module 0x1::o2 {
 }
 
 //# publish
-module 0x1::o3 {
+mvir 0x1::o3 {
     enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
@@ -54,7 +54,7 @@ module 0x1::o3 {
 }
 
 //# publish
-module 0x1::o4 {
+mvir 0x1::o4 {
     enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
@@ -74,7 +74,7 @@ module 0x1::o4 {
 }
 
 //# publish
-module 0x1::o5 {
+mvir 0x1::o5 {
     enum X has drop {
         One { x: u64, y: u64 },
         Two { x: u64, y: u64},
@@ -94,7 +94,7 @@ module 0x1::o5 {
 }
 
 //# publish
-module 0x1::invalid {
+mvir 0x1::invalid {
     enum X has drop {
         One { x: u64 },
         Two { x: u64, y: u64},
@@ -118,7 +118,7 @@ module 0x1::invalid {
 }
 
 //# publish
-module 0x1::invalid2 {
+mvir 0x1::invalid2 {
     enum X has drop {
         One { x: u64 },
         Two { x: u64, y: u64},

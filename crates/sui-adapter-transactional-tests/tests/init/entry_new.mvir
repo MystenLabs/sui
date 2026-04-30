@@ -6,7 +6,7 @@
 //# init --addresses test=0x0
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     entry fun init(ctx: &mut tx_context::TxContext) {
         label l0:

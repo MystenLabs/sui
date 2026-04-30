@@ -2,7 +2,7 @@
 
 // tests various mixed usage of signer in function arguments
 
-module 0x42::M {
+mvir 0x42::M {
 
 public fun main1(s1: signer, s2: &signer, s3: signer) {
     label l0:

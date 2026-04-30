@@ -1,5 +1,5 @@
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
     let v: vector<u8>;
@@ -10,7 +10,7 @@ label b0:
 
 }
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
     let v: vector<u8>;
@@ -24,7 +24,7 @@ label b0:
 
 }
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
     let v: vector<u8>;
@@ -40,7 +40,7 @@ label b0:
 
 }
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
     let v: vector<u8>;
@@ -57,7 +57,7 @@ label b0:
 
 }
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
     let v: vector<u8>;
@@ -74,7 +74,7 @@ label b0:
 
 }
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
     let v: vector<u8>;
@@ -94,7 +94,7 @@ label b0:
 }
 // push int on the stack, then try to pack into vector of the wrong type
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
     let v: vector<bool>;
@@ -106,7 +106,7 @@ label b0:
 }
 // create vector<T>, try to unpack into different type
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
     let v: vector<u8>;

@@ -1,5 +1,5 @@
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
 label b0:
@@ -10,7 +10,7 @@ label b0:
 
 }
 //# run
-module 0x43::m {
+mvir 0x43::m {
 
 entry fun foo() {
 label b0:
@@ -21,7 +21,7 @@ label b0:
 
 }
 //# run
-module 0x44::m {
+mvir 0x44::m {
 
 entry fun foo() {
 label b0:
@@ -32,7 +32,7 @@ label b0:
 
 }
 //# run
-module 0x45::m {
+mvir 0x45::m {
 
 entry fun foo() {
 label b0:
@@ -43,7 +43,7 @@ label b0:
 
 }
 //# run
-module 0x46::m {
+mvir 0x46::m {
 
 entry fun foo() {
 label b0:
@@ -54,7 +54,7 @@ label b0:
 
 }
 //# run
-module 0x47::m {
+mvir 0x47::m {
 
 entry fun foo() {
 label b0:

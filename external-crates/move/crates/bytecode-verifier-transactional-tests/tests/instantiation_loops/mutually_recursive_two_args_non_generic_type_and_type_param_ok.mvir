@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     fun f<T1, T2>() {
     label b0:
         Self::g<u64, T1>();

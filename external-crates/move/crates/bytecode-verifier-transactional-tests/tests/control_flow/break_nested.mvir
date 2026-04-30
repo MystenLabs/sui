@@ -1,5 +1,5 @@
 //# run
-module 0x42::m {
+mvir 0x42::m {
 // check valid breaks in control flow check
 entry fun foo() {
     let x: u64;

@@ -1,5 +1,5 @@
 //# publish
-module 0x42::Token {
+mvir 0x42::Token {
     enum  T { V{value: u64}}
     public fun new(m: u64): Self::T {
     label b0:
@@ -25,7 +25,7 @@ module 0x42::Token {
 }
 
 //# publish
-module 0x42::Token {
+mvir 0x42::Token {
     enum  T<B> { V{value: B }}
 
     public fun bump_value<B>(this: &Self::T<B>, new: B) {

@@ -1,5 +1,5 @@
 //# publish
-module 0x5::M {
+mvir 0x5::M {
     import 0x1::vector;
 
     public fun new(): vector<u64> {
@@ -23,7 +23,7 @@ module 0x5::M {
 }
 
 //# publish
-module 0x6::test {
+mvir 0x6::test {
     import 0x5::M;
     public fun test() {
         let v: vector<u64>;

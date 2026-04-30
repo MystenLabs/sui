@@ -1,6 +1,6 @@
 
 //# publish
-module 0x42::m {
+mvir 0x42::m {
 fun foo() {
     let x: u64;
     let r: &u64;

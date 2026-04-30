@@ -3,7 +3,7 @@
 // Two loops in the resulting graph.
 // One error for the loop.
 
-module 0x6::M {
+mvir 0x6::M {
     enum S<T> { V { b: bool } }
 
     fun f<T>() {

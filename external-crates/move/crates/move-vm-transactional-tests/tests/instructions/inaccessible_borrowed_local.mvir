@@ -1,5 +1,5 @@
 //# run
-module 0x6::m {
+mvir 0x6::m {
 
 entry fun foo() {
     let x: vector<u64>;
@@ -16,7 +16,7 @@ entry fun foo() {
 
 }
 //# run
-module 0x7::m {
+mvir 0x7::m {
 
 entry fun foo() {
     let x: vector<u64>;

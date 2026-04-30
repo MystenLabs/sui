@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct K has key { dummy: bool }
 
     struct BoxCopy<T> has copy { f: T }
@@ -17,7 +17,7 @@ module 0x1::M {
 // all tests should abort, signaling they pass verification
 
 //# run --type-args u64 --args false
-module 0x2::m {
+mvir 0x2::m {
 import 0x1::M;
 entry fun foo<T: copy>(x: M::NeedsCopy<T>) {
     label l0:
@@ -26,7 +26,7 @@ entry fun foo<T: copy>(x: M::NeedsCopy<T>) {
 }
 
 //# run --type-args u64 --args false
-module 0x3::m {
+mvir 0x3::m {
 import 0x1::M;
 entry fun foo<T: drop>(x: M::NeedsDrop<T>) {
     label l0:
@@ -35,7 +35,7 @@ entry fun foo<T: drop>(x: M::NeedsDrop<T>) {
 }
 
 //# run --type-args u64 --args false
-module 0x4::m {
+mvir 0x4::m {
 import 0x1::M;
 entry fun foo<T: store>(x: M::NeedsStore<T>) {
     label l0:
@@ -44,7 +44,7 @@ entry fun foo<T: store>(x: M::NeedsStore<T>) {
 }
 
 //# run --type-args 0x1::M::K --args false
-module 0x5::m {
+mvir 0x5::m {
 import 0x1::M;
 entry fun foo<T: key>(x: M::NeedsKey<T>) {
     label l0:
@@ -53,7 +53,7 @@ entry fun foo<T: key>(x: M::NeedsKey<T>) {
 }
 
 //# run --type-args u64 --args false
-module 0x6::m {
+mvir 0x6::m {
 import 0x1::M;
 entry fun foo<T: copy>(x: M::NeedsCopy<M::BoxCopy<T>>) {
     label l0:
@@ -62,7 +62,7 @@ entry fun foo<T: copy>(x: M::NeedsCopy<M::BoxCopy<T>>) {
 }
 
 //# run --type-args u64 --args false
-module 0x7::m {
+mvir 0x7::m {
 import 0x1::M;
 entry fun foo<T: drop>(x: M::NeedsDrop<M::BoxDrop<T>>) {
     label l0:
@@ -71,7 +71,7 @@ entry fun foo<T: drop>(x: M::NeedsDrop<M::BoxDrop<T>>) {
 }
 
 //# run --type-args u64 --args false
-module 0x8::m {
+mvir 0x8::m {
 import 0x1::M;
 entry fun foo<T: store>(x: M::NeedsStore<M::BoxStore<T>>) {
     label l0:
@@ -80,7 +80,7 @@ entry fun foo<T: store>(x: M::NeedsStore<M::BoxStore<T>>) {
 }
 
 //# run --type-args u64 --args false
-module 0x9::m {
+mvir 0x9::m {
 import 0x1::M;
 entry fun foo<T: store>(x: M::NeedsKey<M::BoxKey<T>>) {
     label l0:

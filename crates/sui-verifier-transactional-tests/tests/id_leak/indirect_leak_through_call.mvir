@@ -3,7 +3,7 @@
 
 //# publish
 // not allowed since Foo is not packed with a fresh UID
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
 
     struct Foo has key {
@@ -27,7 +27,7 @@ module 0x0::m {
 
 //# publish
 // allowed since no packing occurs
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
 
     struct Foo has key {

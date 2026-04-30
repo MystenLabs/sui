@@ -1,5 +1,5 @@
 //# run
-module 0x6::m {
+mvir 0x6::m {
 // Number of bits shifted >= total number of bits in the number.
 entry fun foo() {
 label b0:
@@ -9,7 +9,7 @@ label b0:
 }
 
 //# run
-module 0x7::m {
+mvir 0x7::m {
 
 entry fun foo() {
 label b0:
@@ -19,7 +19,7 @@ label b0:
 
 }
 //# run
-module 0x8::m {
+mvir 0x8::m {
 
 entry fun foo() {
 label b0:
@@ -29,7 +29,7 @@ label b0:
 
 }
 //# run
-module 0x9::m {
+mvir 0x9::m {
 
 entry fun foo() {
 label b0:
@@ -39,7 +39,7 @@ label b0:
 
 }
 //# run
-module 0xa::m {
+mvir 0xa::m {
 
 entry fun foo() {
 label b0:
@@ -49,7 +49,7 @@ label b0:
 
 }
 //# run
-module 0xb::m {
+mvir 0xb::m {
 
 entry fun foo() {
 label b0:
@@ -59,7 +59,7 @@ label b0:
 
 }
 //# run
-module 0xc::m {
+mvir 0xc::m {
 
 entry fun foo() {
 label b0:
@@ -69,7 +69,7 @@ label b0:
 
 }
 //# run
-module 0xd::m {
+mvir 0xd::m {
 
 entry fun foo() {
 label b0:
@@ -79,7 +79,7 @@ label b0:
 
 }
 //# run
-module 0xe::m {
+mvir 0xe::m {
 
 entry fun foo() {
 label b0:
@@ -89,7 +89,7 @@ label b0:
 
 }
 //# run
-module 0x15::m {
+mvir 0x15::m {
 
 entry fun foo() {
 label b0:
@@ -101,7 +101,7 @@ label b0:
 
 // Shifting 0 results in 0.
 //# run
-module 0x16::m {
+mvir 0x16::m {
 
 entry fun foo() {
 label b0:
@@ -126,7 +126,7 @@ label b0:
 
 // Shifting by 0 bits results in the same number.
 //# run
-module 0x17::m {
+mvir 0x17::m {
 
 entry fun foo() {
 label b0:
@@ -151,7 +151,7 @@ label b0:
 
 // shl/shr by 1 equivalent to mul/div by 2.
 //# run
-module 0x18::m {
+mvir 0x18::m {
 
 entry fun foo() {
 label b0:
@@ -176,7 +176,7 @@ label b0:
 
 // Underflowing results in 0.
 //# run
-module 0x19::m {
+mvir 0x19::m {
 
 entry fun foo() {
 label b0:
@@ -194,7 +194,7 @@ label b0:
 
 // Overflowing results are truncated.
 //# run
-module 0x1a::m {
+mvir 0x1a::m {
 
 entry fun foo() {
 label b0:
@@ -212,7 +212,7 @@ label b0:
 
 // Some random tests.
 //# run
-module 0x1b::m {
+mvir 0x1b::m {
 
 entry fun foo() {
 label b0:

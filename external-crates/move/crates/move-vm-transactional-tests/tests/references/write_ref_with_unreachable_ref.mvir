@@ -1,7 +1,7 @@
 // WriteRef with an unreachable frozen reference due to control flow.
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 
 entry fun foo() {
     let x: u64;

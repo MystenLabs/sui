@@ -4,7 +4,7 @@
 // valid because we can use `derived_object::claim` without triggering id leak
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
     import 0x2::derived_object;
     import 0x2::tx_context;

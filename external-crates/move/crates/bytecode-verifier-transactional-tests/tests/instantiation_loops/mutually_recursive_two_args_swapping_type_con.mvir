@@ -1,5 +1,5 @@
 //# publish
-module 0x6::M {
+mvir 0x6::M {
     struct S<T> { b: bool }
 
     fun f<T1, T2>() {

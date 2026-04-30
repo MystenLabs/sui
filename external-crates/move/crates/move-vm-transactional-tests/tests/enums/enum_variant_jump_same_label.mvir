@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x6::Enums {
+mvir 0x6::Enums {
     enum EnumWithThreeVariants<T> {
         One { },
         Two { x: T },
@@ -43,7 +43,7 @@ module 0x6::Enums {
 }
 
 //# publish
-module 0x6::Enums {
+mvir 0x6::Enums {
     enum EnumWithThreeVariants<T> {
         One { },
         Two { x: T },
@@ -87,7 +87,7 @@ module 0x6::Enums {
 }
 
 //# run
-module 0x7::m {
+mvir 0x7::m {
 import 0x6::Enums;
 entry fun foo() {
     let x: u64;

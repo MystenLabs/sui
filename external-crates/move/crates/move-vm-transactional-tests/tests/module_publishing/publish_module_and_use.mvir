@@ -1,5 +1,5 @@
 //# publish
-module 0x5::Coin {
+mvir 0x5::Coin {
     struct Coin { value: u64 }
     public fun value(c: &Self::Coin): u64 {
     label b0:
@@ -18,7 +18,7 @@ module 0x5::Coin {
 }
 
 //# publish
-module 0x43::MoneyHolder {
+mvir 0x43::MoneyHolder {
     import 0x5::Coin;
 
     struct T { money: Coin::Coin }
@@ -48,7 +48,7 @@ module 0x43::MoneyHolder {
 }
 
 //# run
-module 0x44::m {
+mvir 0x44::m {
 import 0x43::MoneyHolder;
 import 0x5::Coin;
 

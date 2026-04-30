@@ -1,7 +1,7 @@
 // can borrow imm fields after a mut borrow, but if the mut is a parent, it won't be writable
 
 //# publish
-module 0x2::field {
+mvir 0x2::field {
 
     struct S has copy, drop { f: u64 }
 
@@ -18,7 +18,7 @@ module 0x2::field {
 }
 
 //# publish
-module 0x3::field {
+mvir 0x3::field {
 
     struct S has copy, drop { f: u64 }
 
@@ -36,7 +36,7 @@ module 0x3::field {
 }
 
 //# publish
-module 0x4::invalid_write {
+mvir 0x4::invalid_write {
 
     struct S has copy, drop { f: u64 }
 

@@ -173,7 +173,8 @@
 //!                                                             // the procedure may be public, or internal to the module
 //!
 //! mdecl ∈ ModuleDecl ::=
-//!   | module m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j pdecl_1 ... pdecl_k }
+//!   | mvir m { idecl_1 ... idecl_i sdecl_1 ... sdecl_j pdecl_1 ... pdecl_k } // module declaration; `mvir` (rather than Move source's `module`)
+//!                                                                            // makes it visually obvious that a snippet is IR, not source
 //! ```
 //!
 //! ## Transaction Scripts

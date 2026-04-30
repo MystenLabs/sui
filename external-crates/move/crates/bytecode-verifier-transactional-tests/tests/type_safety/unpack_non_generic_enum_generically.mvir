@@ -1,5 +1,5 @@
 //# publish
-module 0x2::ByValue {
+mvir 0x2::ByValue {
     enum Foo { V { x: u64 } }
 
     fun foo(y: Self::Foo) {
@@ -12,7 +12,7 @@ module 0x2::ByValue {
 }
 
 //# publish
-module 0x2::ByImmRef {
+mvir 0x2::ByImmRef {
     enum Foo { V { x: u64 } }
 
     fun foo(y: Self::Foo) {
@@ -25,7 +25,7 @@ module 0x2::ByImmRef {
 }
 
 //# publish
-module 0x2::ByMutRef {
+mvir 0x2::ByMutRef {
     enum Foo { V { x: u64 } }
 
     fun foo(y: Self::Foo) {
@@ -38,7 +38,7 @@ module 0x2::ByMutRef {
 }
 
 //# publish
-module 0x2::ByValue {
+mvir 0x2::ByValue {
     enum Foo { V { x: u64 } }
 
     fun foo(y: &Self::Foo) {
@@ -51,7 +51,7 @@ module 0x2::ByValue {
 }
 
 //# publish
-module 0x2::ByImmRef {
+mvir 0x2::ByImmRef {
     enum Foo { V { x: u64 } }
 
     fun foo(y: &Self::Foo) {
@@ -64,7 +64,7 @@ module 0x2::ByImmRef {
 }
 
 //# publish
-module 0x2::ByMutRef {
+mvir 0x2::ByMutRef {
     enum Foo { V { x: u64 } }
 
     fun foo(y: &Self::Foo) {
@@ -77,7 +77,7 @@ module 0x2::ByMutRef {
 }
 
 //# publish
-module 0x2::ByValue {
+mvir 0x2::ByValue {
     enum Foo { V { x: u64 } }
 
     fun foo(y: &mut Self::Foo) {
@@ -90,7 +90,7 @@ module 0x2::ByValue {
 }
 
 //# publish
-module 0x2::ByImmRef {
+mvir 0x2::ByImmRef {
     enum Foo { V { x: u64 } }
 
     fun foo(y: &mut Self::Foo) {
@@ -103,7 +103,7 @@ module 0x2::ByImmRef {
 }
 
 //# publish
-module 0x2::ByMutRef {
+mvir 0x2::ByMutRef {
     enum Foo { V { x: u64 } }
 
     fun foo(y: &mut Self::Foo) {

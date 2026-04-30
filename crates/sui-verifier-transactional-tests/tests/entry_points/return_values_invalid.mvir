@@ -4,7 +4,7 @@
 // return values from entry functions must have drop
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     public entry fun foo(ctx: &mut tx_context::TxContext): &u8 {
         label l0:
@@ -13,7 +13,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     public entry fun foo(ctx: &mut tx_context::TxContext): &mut u8 {
         label l0:
@@ -22,7 +22,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     public entry fun foo(ctx: &mut tx_context::TxContext): u64 * &u8 * u8 {
         label l0:
@@ -31,7 +31,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     struct Copyable has copy { flag: bool }
     public entry fun foo(ctx: &mut tx_context::TxContext): Self::Copyable {
@@ -41,7 +41,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::object;
     struct Obj has key, store { id: object::UID }
@@ -52,7 +52,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::object;
     struct Obj has key, store { id: object::UID }

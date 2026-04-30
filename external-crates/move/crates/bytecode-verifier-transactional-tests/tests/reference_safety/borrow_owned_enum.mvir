@@ -1,6 +1,6 @@
 //# publish
 
-module 0x2::borrow_owned_enum {
+mvir 0x2::borrow_owned_enum {
 
 enum E has drop {
     A { a: u64, b: u64, c: u64, d: u64, e: u64, f: u64, g: u64, h: u64,

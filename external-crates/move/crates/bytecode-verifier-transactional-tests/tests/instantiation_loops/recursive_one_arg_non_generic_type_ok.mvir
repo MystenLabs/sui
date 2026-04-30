@@ -2,7 +2,7 @@
 
 // Good: two instances foo<T> & foo<u64> (if T != u64) for any T.
 
-module 0x6::M {
+mvir 0x6::M {
     fun f<T>() {
     label b0:
         Self::f<u64>();

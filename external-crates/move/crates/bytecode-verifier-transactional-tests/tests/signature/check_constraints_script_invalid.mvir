@@ -1,5 +1,5 @@
 //# publish
-module 0x1::M {
+mvir 0x1::M {
     struct BoxCopy<T> has copy { f: T }
     struct BoxDrop<T> has drop { f: T }
     struct BoxStore<T> has store { f: T }
@@ -15,7 +15,7 @@ module 0x1::M {
 // all tests should give a constraint violation, even without type arguments passed in to 'run'
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::M;
 entry fun foo<T: drop>(x: M::NeedsCopy<T>) {
     label l0:
@@ -24,7 +24,7 @@ entry fun foo<T: drop>(x: M::NeedsCopy<T>) {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::M;
 entry fun foo<T: copy + store>(x: M::NeedsDrop<T>) {
     label l0:
@@ -33,7 +33,7 @@ entry fun foo<T: copy + store>(x: M::NeedsDrop<T>) {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::M;
 entry fun foo<T: key>(x: M::NeedsStore<T>) {
     label l0:
@@ -42,7 +42,7 @@ entry fun foo<T: key>(x: M::NeedsStore<T>) {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::M;
 entry fun foo<T>(x: M::NeedsKey<T>) {
     label l0:
@@ -51,7 +51,7 @@ entry fun foo<T>(x: M::NeedsKey<T>) {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::M;
 entry fun foo<T: store>(x: M::NeedsCopy<M::BoxCopy<T>>) {
     label l0:
@@ -60,7 +60,7 @@ entry fun foo<T: store>(x: M::NeedsCopy<M::BoxCopy<T>>) {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::M;
 entry fun foo<T: key + store>(x: M::NeedsDrop<M::BoxDrop<T>>) {
     label l0:
@@ -69,7 +69,7 @@ entry fun foo<T: key + store>(x: M::NeedsDrop<M::BoxDrop<T>>) {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::M;
 entry fun foo<T>(x: M::NeedsStore<M::BoxStore<T>>) {
     label l0:
@@ -78,7 +78,7 @@ entry fun foo<T>(x: M::NeedsStore<M::BoxStore<T>>) {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::M;
 entry fun foo<T: drop>(x: M::NeedsKey<M::BoxKey<T>>) {
     label l0:

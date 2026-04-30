@@ -1,7 +1,7 @@
 // mutable borrows are not unique
 
 //# publish
-module 0x2::fields {
+mvir 0x2::fields {
 
     struct S has copy, drop { f: u64 }
     struct Pair has copy, drop { s1: Self::S, s2: Self::S }
@@ -35,7 +35,7 @@ module 0x2::fields {
 }
 
 //# publish
-module 0x3::fields_write {
+mvir 0x3::fields_write {
 
     struct S has copy, drop { f: u64 }
     struct Pair has copy, drop { s1: Self::S, s2: Self::S }

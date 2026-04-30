@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x6::m {
+mvir 0x6::m {
 // Borrowing a local produces a reference type.
 entry fun foo() {
     let x: u64;
@@ -13,7 +13,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x7::m {
+mvir 0x7::m {
 // Borrowing a local reference produces a reference type.
 entry fun foo() {
     let x: u64;
@@ -28,7 +28,7 @@ label b0:
 }
 
 //# print-bytecode
-module 0x1d4::M {
+mvir 0x1d4::M {
     struct T { u: u64 }
 
     // An immutable borrow, of a field on an immutable reference to a struct,
@@ -63,7 +63,7 @@ module 0x1d4::M {
 }
 
 //# print-bytecode
-module 0x2d4::M {
+mvir 0x2d4::M {
     struct T<U> { u: U }
 
     fun f(t: &Self::T<u64>) {
@@ -84,7 +84,7 @@ module 0x2d4::M {
 }
 
 //# publish
-module 0x3d4::M {
+mvir 0x3d4::M {
     struct T has key { b: bool }
 
     public fun new(): Self::T {
@@ -97,7 +97,7 @@ module 0x3d4::M {
 //# print-bytecode
 // Attempting an immutable borrow of the field of a struct type defined in a
 // separate module is invalid.
-module 0x3d4::N {
+mvir 0x3d4::N {
     import 0x1::signer;
     import 0x3d4::M;
 
@@ -112,7 +112,7 @@ module 0x3d4::N {
 }
 
 //# print-bytecode
-module 0x8::m {
+mvir 0x8::m {
 import 0x3d4::M;
 entry fun foo(account: signer) {
     let t: M::T;
@@ -127,7 +127,7 @@ label b0:
 //# print-bytecode
 // Attempting a mutable borrow of the field of a struct type defined in a
 // separate module is invalid.
-module 0x3d4::O {
+mvir 0x3d4::O {
     import 0x1::signer;
     import 0x3d4::M;
 
@@ -142,7 +142,7 @@ module 0x3d4::O {
 }
 
 //# print-bytecode
-module 0x9::m {
+mvir 0x9::m {
 entry fun foo(account: signer) {
     let t: M::T;
     let r: &bool;

@@ -2,7 +2,7 @@
 
 //# publish
 
-module 0x2::Tester {
+mvir 0x2::Tester {
 
 struct Point has copy, drop, store { x: u64, y: u64 }
 struct Box has copy, drop, store { tl: Self::Point, br: Self::Point }

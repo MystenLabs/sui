@@ -5,7 +5,7 @@
 // has store
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
 
@@ -17,7 +17,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
 
@@ -29,7 +29,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
 
@@ -41,7 +41,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
     import 0x2::object;
@@ -55,7 +55,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
     import 0x2::party;

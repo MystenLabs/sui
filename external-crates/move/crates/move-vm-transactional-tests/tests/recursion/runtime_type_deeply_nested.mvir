@@ -1,5 +1,5 @@
 //# publish
-module 0x42::M {
+mvir 0x42::M {
     struct Foo<T> { x: bool }
     public fun f0<T>() { label b0: return; }
     public fun f3<T>() { label b0: Self::f0<Self::Foo<Self::Foo<Self::Foo<T>>>>(); return; }
@@ -70,7 +70,7 @@ module 0x42::M {
 // check: "Keep(EXECUTED)"
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::M;
 
 entry fun foo() {
@@ -81,7 +81,7 @@ label b0:
 }
 
 //# run
-module 0x44::m {
+mvir 0x44::m {
 import 0x42::M;
 
 entry fun foo() {

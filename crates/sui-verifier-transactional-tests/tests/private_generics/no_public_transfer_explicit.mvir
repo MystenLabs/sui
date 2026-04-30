@@ -6,7 +6,7 @@
 //# init --addresses test=0x0
 
 //# publish
-module test::m {
+mvir test::m {
     import 0x2::object;
 
     struct KeyStruct has key {
@@ -28,7 +28,7 @@ module test::m {
 //# set-address test object(1,0)
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
     // Enums cannot have key
     enum StoreEnum has key {
@@ -39,7 +39,7 @@ module 0x0::m {
 // Key-only struct not defined in current module
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
 
@@ -51,7 +51,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
 
@@ -63,7 +63,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
 
@@ -75,7 +75,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
     import 0x2::object;
@@ -89,7 +89,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
     import 0x2::party;
@@ -104,7 +104,7 @@ module 0x0::u {
 // Key + store struct not defined in current module
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
 
@@ -116,7 +116,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
 
@@ -128,7 +128,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
 
@@ -140,7 +140,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
     import 0x2::object;
@@ -154,7 +154,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
     import 0x2::party;
@@ -169,7 +169,7 @@ module 0x0::u {
 // Store enum not defined in current module
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
 
@@ -181,7 +181,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
 
@@ -193,7 +193,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
 
@@ -205,7 +205,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
     import 0x2::object;
@@ -219,7 +219,7 @@ module 0x0::u {
 }
 
 //# publish --dependencies test
-module 0x0::u {
+mvir 0x0::u {
     import test::m;
     import 0x2::transfer;
     import 0x2::party;

@@ -6,7 +6,7 @@
 //# init --protocol-version 106
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     import 0x1::option;
 
@@ -18,7 +18,7 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     import 0x1::option;
 

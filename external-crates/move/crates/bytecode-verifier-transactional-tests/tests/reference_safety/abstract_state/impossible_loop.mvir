@@ -3,7 +3,7 @@
 
 //# publish
 
-module 0x2::loopy {
+mvir 0x2::loopy {
 
 struct List has copy, drop {
     dummy: bool,
