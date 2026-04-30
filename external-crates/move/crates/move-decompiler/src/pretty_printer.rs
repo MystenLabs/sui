@@ -279,7 +279,7 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                     }),
                     D::text(",").concat(D::line()),
                 );
-                D::text(format!("match"))
+                D::text("match")
                     .concat_space(D::parens(recur(context, subject)))
                     .concat_space(braces_block(arms_doc))
             }
