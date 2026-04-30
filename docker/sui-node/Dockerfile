@@ -62,7 +62,7 @@ RUN SCCACHE_GCS_BUCKET=sui-sccache-mp3 \
     SCCACHE_GCS_RW_MODE=READ_WRITE \
     SCCACHE_LOG=info \
     RUSTC_WRAPPER=sccache \
-    RUSTFLAGS="-C force-frame-pointers=yes -C force-unwind-tables=yes -A unknown_lints -A mismatched_lifetime_syntaxes -C link-arg=-fuse-ld=mold" \
+    RUSTFLAGS="-C force-frame-pointers=yes -C force-unwind-tables=yes -A unknown_lints -A mismatched_lifetime_syntaxes -C linker=clang -C link-arg=-fuse-ld=mold" \
     cargo build --profile ${PROFILE} --bin sui-node && \
     sccache --show-stats
 
