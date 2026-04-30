@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use fastcrypto::encoding::{Encoding, Hex};
 use move_core_types::annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout};
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::StructTag;
 use move_core_types::u256::U256;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
@@ -28,6 +29,11 @@ use crate::ResolvedCallArg;
 
 use super::{HEX_PREFIX, check_valid_homogeneous};
 use super::{SuiJsonValue, resolve_move_function_args};
+
+/// Convert a tree-form `MoveTypeLayout` to its compressed equivalent.
+fn compress(layout: &MoveTypeLayout) -> CA::MoveTypeLayout {
+    layout.try_into().unwrap()
+}
 
 // Negative test cases
 #[test]
@@ -193,7 +199,7 @@ fn test_basic_args_linter_pure_args_bad() {
     // Driver
     for (arg, expected_type) in checks {
         let r = SuiJsonValue::new(arg);
-        assert!(r.is_err() || r.unwrap().to_bcs_bytes(&expected_type).is_err());
+        assert!(r.is_err() || r.unwrap().to_bcs_bytes(&compress(&expected_type)).is_err());
     }
 }
 
@@ -417,7 +423,7 @@ fn test_basic_args_linter_pure_args_good() {
         // Must conform
         assert!(r.is_ok());
         // Must be serializable
-        let sr = r.unwrap().to_bcs_bytes(&expected_type);
+        let sr = r.unwrap().to_bcs_bytes(&compress(&expected_type));
         // Must match expected serialized value
         assert_eq!(sr.unwrap(), expected_val);
     }
@@ -521,7 +527,8 @@ fn test_convert_address_from_bcs() {
         245, 70, 122, 191, 100, 24, 123, 62, 239, 165, 85,
     ];
 
-    let value = SuiJsonValue::from_bcs_bytes(Some(&MoveTypeLayout::Signer), &bcs_bytes).unwrap();
+    let value =
+        SuiJsonValue::from_bcs_bytes(Some(&compress(&MoveTypeLayout::Signer)), &bcs_bytes).unwrap();
 
     assert_eq!(
         "0x32866f0109fa1ba911392dcd2d4260f1d824313316f5467abf64187b3eefa555",
@@ -532,7 +539,8 @@ fn test_convert_address_from_bcs() {
 #[test]
 fn test_convert_number_from_bcs() {
     let bcs_bytes = [160u8, 134, 1, 0];
-    let value = SuiJsonValue::from_bcs_bytes(Some(&MoveTypeLayout::U32), &bcs_bytes).unwrap();
+    let value =
+        SuiJsonValue::from_bcs_bytes(Some(&compress(&MoveTypeLayout::U32)), &bcs_bytes).unwrap();
     assert_eq!(100000, value.0.as_u64().unwrap());
 }
 
@@ -545,7 +553,8 @@ fn test_no_address_zero_trimming() {
         .unwrap(),
     )
     .unwrap();
-    let value = SuiJsonValue::from_bcs_bytes(Some(&MoveTypeLayout::Address), &bcs_bytes).unwrap();
+    let value = SuiJsonValue::from_bcs_bytes(Some(&compress(&MoveTypeLayout::Address)), &bcs_bytes)
+        .unwrap();
     assert_eq!(
         "0x0000000000000000000000000000011111111111111111111111111111111111",
         value.0.as_str().unwrap()
@@ -559,7 +568,9 @@ fn test_convert_number_array_from_bcs() {
     ];
 
     let value = SuiJsonValue::from_bcs_bytes(
-        Some(&MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U32))),
+        Some(&compress(&MoveTypeLayout::Vector(Box::new(
+            MoveTypeLayout::U32,
+        )))),
         &bcs_bytes,
     )
     .unwrap();
@@ -638,7 +649,8 @@ fn test_sui_call_arg_string_type() {
             layout: MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U8)),
         }],
     })));
-    let v = SuiJsonValue::from_bcs_bytes(string_layout.as_ref(), &arg1).unwrap();
+    let compressed_string_layout = string_layout.as_ref().map(compress);
+    let v = SuiJsonValue::from_bcs_bytes(compressed_string_layout.as_ref(), &arg1).unwrap();
 
     assert_eq!(json! {"Some String"}, v.to_json_value());
 }
@@ -673,10 +685,11 @@ fn test_sui_call_arg_option_type() {
         }],
     }));
 
-    let v = SuiJsonValue::from_bcs_bytes(Some(option_layout).as_ref(), &arg1).unwrap();
+    let compressed_option_layout = compress(&option_layout);
+    let v = SuiJsonValue::from_bcs_bytes(Some(&compressed_option_layout), &arg1).unwrap();
 
     let bytes = v
-        .to_bcs_bytes(&MoveTypeLayout::Vector(Box::new(string_layout)))
+        .to_bcs_bytes(&compress(&MoveTypeLayout::Vector(Box::new(string_layout))))
         .unwrap();
 
     assert_eq!(json! {["Some String"]}, v.to_json_value());
@@ -695,7 +708,7 @@ fn test_convert_struct() {
 
     println!("JS: {:#?}", sui_json);
 
-    let bcs = sui_json.to_bcs_bytes(&layout).unwrap();
+    let bcs = sui_json.to_bcs_bytes(&compress(&layout)).unwrap();
 
     let coin: GasCoin = bcs::from_bytes(&bcs).unwrap();
     assert_eq!(
@@ -728,7 +741,7 @@ fn test_convert_string_vec() {
     let value = json!(test_vec);
     let sui_json = SuiJsonValue::new(value).unwrap();
 
-    let bcs2 = sui_json.to_bcs_bytes(&layout).unwrap();
+    let bcs2 = sui_json.to_bcs_bytes(&compress(&layout)).unwrap();
 
     assert_eq!(bcs, bcs2);
 }
@@ -772,7 +785,7 @@ fn test_string_vec_df_name_child_id_eq() {
     }));
 
     let sui_json = SuiJsonValue::new(name).unwrap();
-    let bcs2 = sui_json.to_bcs_bytes(&layout).unwrap();
+    let bcs2 = sui_json.to_bcs_bytes(&compress(&layout)).unwrap();
 
     let child_id = derive_dynamic_field_id(
         parent_id,
