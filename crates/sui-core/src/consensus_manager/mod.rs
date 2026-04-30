@@ -265,12 +265,15 @@ impl ConsensusManager {
             CommitConsumerArgs::new(replay_after_commit_index, last_processed_commit_index);
         let monitor = commit_consumer.monitor();
 
+        let node_role = epoch_store.node_role();
+
         // Spin up the new Mysticeti consensus handler to listen for committed sub dags, before starting authority.
         let handler = MysticetiConsensusHandler::new(
             last_processed_commit_index,
             consensus_handler,
             commit_receiver,
             monitor.clone(),
+            node_role.should_process_consensus_commits(),
         );
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);

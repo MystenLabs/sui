@@ -469,7 +469,7 @@ impl SuiNode {
         let prometheus_registry = registry_service.default_registry();
 
         info!(node =? config.protocol_public_key(),
-            "Initializing sui-node listening on {}", config.network_address
+            "Initializing sui-node listening on {} with role {:?}", config.network_address, preliminary_role
         );
 
         // Initialize metrics to track db usage before creating any stores
