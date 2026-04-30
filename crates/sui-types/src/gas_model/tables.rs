@@ -231,14 +231,6 @@ impl GasStatus {
         Ok(())
     }
 
-    pub fn decrease_stack_size(&mut self, size_amount: u64) {
-        let new_size = self.stack_size_current.saturating_sub(size_amount);
-        if new_size > self.stack_size_high_water_mark {
-            self.stack_size_high_water_mark = new_size;
-        }
-        self.stack_size_current = new_size;
-    }
-
     /// Given: pushes + pops + increase + decrease in size for an instruction charge for the
     /// execution of the instruction.
     pub fn charge(
@@ -268,7 +260,6 @@ impl GasStatus {
             .total_internal(),
         )?;
 
-        // self.decrease_stack_size(decr_size);
         self.pop_stack(pops);
         Ok(())
     }
