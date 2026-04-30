@@ -41,7 +41,7 @@ impl ProtoVisitor {
     /// it is exhausted, deserialization fails with `MeterError::TooBig`.
     pub fn deserialize_value_with_budget(
         bytes: &[u8],
-        layout: &A::MoveTypeLayout,
+        layout: CA::MoveTypeLayout,
         size_budget: &mut usize,
     ) -> Result<Value, RV::Error> {
         A::MoveValue::visit_deserialize(

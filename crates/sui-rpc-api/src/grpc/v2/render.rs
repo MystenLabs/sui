@@ -73,7 +73,7 @@ impl RpcService {
 
         sui_types::object::rpc_visitor::proto::ProtoVisitor::deserialize_value_with_budget(
             contents,
-            &layout,
+            layout,
             size_budget,
         )
         .map_err(|e| tracing::debug!("unable to convert move value to JSON: {e}"))
