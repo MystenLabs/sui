@@ -151,6 +151,8 @@ if [ "$PHASE1_FAILED" -eq 1 ]; then
   echo "=============================="
   if [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
     echo "seed-search.py exited with code $PHASE1_EXIT (build error or infrastructure failure)"
+    echo "Build/runtime output is in $LOG_DIR/log; tail follows:"
+    tail -100 "$LOG_DIR/log"
   fi
   if [ -s "$LOG_DIR/e2e/failures.ndjson" ]; then
     jq -r '"  \(.status) \(.binary)::\(.test) seed=\(.seed) (log: \(.log))"' \

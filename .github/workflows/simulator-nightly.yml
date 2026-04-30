@@ -64,6 +64,12 @@ jobs:
       - name: Environment clean
         run: |
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 echo 'teleport OK'
+          # Kill any stale simtest workers from a prior nightly that was
+          # cancelled mid-run and nohup'd onto the host. Without this, the
+          # survivor's in-flight cargo/test processes race our re-clone,
+          # exec test binaries we're about to delete, and corrupt the
+          # shared ~/simtest_stdout.log via their leaked fd.
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "pkill -9 -f 'scripts/simtest/(simtest-run|seed-search)' || true; pkill -9 -f 'cargo-simtest simtest' || true; pkill -9 -f 'target/simulator/deps/' || true; sleep 3"
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*"
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -rf ~/sui"
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cd ~/ && git clone git@github.com:MystenLabs/sui.git"
