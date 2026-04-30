@@ -31,18 +31,18 @@ impl<'v, 'p> VecMapVisitor<'v, 'p> {
     }
 }
 
-impl<'v> AV::Visitor<'v, 'v> for VecMapVisitor<'v, '_> {
+impl<'v> AV::Visitor<'v> for VecMapVisitor<'v, '_> {
     type Value = Option<Value<'v>>;
     type Error = FormatError;
 
-    visitor_default! { <'v, 'v> u8, u16, u32, u64, u128, u256 = Ok(None) }
-    visitor_default! { <'v, 'v> bool, address, signer, variant = Ok(None) }
+    visitor_default! { <'v> u8, u16, u32, u64, u128, u256 = Ok(None) }
+    visitor_default! { <'v> bool, address, signer, variant = Ok(None) }
 
     /// Expect to visit the content vector of the VecMap first. Look through each entry for one
     /// with a matching key, and continue visiting the value for that entry.
     fn visit_vector(
         &mut self,
-        driver: &mut AV::VecDriver<'_, 'v, 'v>,
+        driver: &mut AV::VecDriver<'_, 'v>,
     ) -> Result<Self::Value, Self::Error> {
         while let Some(v) = driver.next_element(self)? {
             if let Some(v) = v {
@@ -56,16 +56,16 @@ impl<'v> AV::Visitor<'v, 'v> for VecMapVisitor<'v, '_> {
     /// Entries of the VecMap are structs, with a `key` field, followed by a `value` field.
     fn visit_struct(
         &mut self,
-        driver: &mut AV::StructDriver<'_, 'v, 'v>,
+        driver: &mut AV::StructDriver<'_, 'v>,
     ) -> Result<Self::Value, Self::Error> {
         // Must be a `0x2::vec_map::Entry<_, _>`.
-        if !is_vec_map_entry(&driver.struct_layout().type_) {
+        if !is_vec_map_entry(driver.struct_layout().type_()) {
             return Ok(None);
         }
 
         // First field must be `key`.
         let key = driver.skip_field()?;
-        if key.is_none_or(|f| f.name.as_str() != "key") {
+        if key.is_none_or(|(name, _)| name.as_str() != "key") {
             return Ok(None);
         }
 
@@ -77,7 +77,7 @@ impl<'v> AV::Visitor<'v, 'v> for VecMapVisitor<'v, '_> {
 
         // Second field must be `value`.
         let value = driver.peek_field();
-        if value.is_none_or(|f| f.name.as_str() != "value") {
+        if value.is_none_or(|(name, _)| name.as_str() != "value") {
             return Ok(None);
         }
 

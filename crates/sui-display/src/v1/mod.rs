@@ -8,8 +8,8 @@ use anyhow::Context;
 use anyhow::anyhow;
 use anyhow::bail;
 use move_core_types::annotated_extractor::Extractor;
-use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::annotated_value::MoveValue;
+use move_core_types::compressed::annotated as CA;
 use sui_json_rpc_types::SuiMoveValue;
 use sui_types::collection_types::Entry;
 use sui_types::collection_types::VecMap;
@@ -79,7 +79,7 @@ impl<'s> Format<'s> {
         &self,
         max_output_size: usize,
         bytes: &[u8],
-        layout: &MoveTypeLayout,
+        layout: &CA::MoveTypeLayout,
     ) -> anyhow::Result<BTreeMap<String, anyhow::Result<String>>> {
         let mut output = BTreeMap::new();
 
@@ -111,7 +111,7 @@ impl<'s> Format<'s> {
 fn interpolate(
     output_budget: &mut usize,
     bytes: &[u8],
-    layout: &MoveTypeLayout,
+    layout: &CA::MoveTypeLayout,
     strands: &[Strand<'_>],
 ) -> Result<String, Error> {
     let mut writer = BoundedWriter::new(output_budget);
@@ -123,7 +123,7 @@ fn interpolate(
                 let mut visitor = BoundedVisitor::default();
                 let mut extractor = Extractor::new(&mut visitor, path);
                 let extracted: SuiMoveValue =
-                    MoveValue::visit_deserialize(bytes, layout, &mut extractor)
+                    MoveValue::visit_deserialize(bytes, layout.clone(), &mut extractor)
                         .with_context(|| format!("Failed to extract '{strand}'"))?
                         .with_context(|| format!("'{strand}' not found in object"))?
                         .into();
