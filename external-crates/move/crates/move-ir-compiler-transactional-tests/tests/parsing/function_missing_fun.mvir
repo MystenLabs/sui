@@ -1,0 +1,10 @@
+//# print-bytecode
+// Function declarations require the `fun` keyword between the modifiers
+// and the function name. This also covers the broader
+// "expected 'struct', 'enum', or 'fun' declaration" dispatch error.
+mvir 0x42::M {
+    public foo() {
+    label b0:
+        return;
+    }
+}
