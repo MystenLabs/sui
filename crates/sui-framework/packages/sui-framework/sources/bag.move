@@ -71,7 +71,7 @@ public fun borrow_mut<K: copy + drop + store, V: store>(bag: &mut Bag, k: K): &m
     field::borrow_mut(&mut bag.id, k)
 }
 
-/// Mutably borrows the key-value pair in the bag `bag: &mut Bag` and returns the value.
+/// Removes the key-value pair in the bag `bag: &mut Bag` and returns the value.
 /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
 /// that key `k: K`.
 /// Aborts with `sui::dynamic_field::EFieldTypeMismatch` if the bag has an entry for the key, but

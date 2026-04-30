@@ -203,7 +203,7 @@ the value does not have the specified type.
 
 ## Function `remove`
 
-Mutably borrows the key-value pair in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/object_bag.md#sui_object_bag_ObjectBag">ObjectBag</a></code> and returns the value.
+Removes the key-value pair in the bag <code><a href="../sui/bag.md#sui_bag">bag</a>: &<b>mut</b> <a href="../sui/object_bag.md#sui_object_bag_ObjectBag">ObjectBag</a></code> and returns the value.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldDoesNotExist">sui::dynamic_field::EFieldDoesNotExist</a></code> if the bag does not have an entry with
 that key <code>k: K</code>.
 Aborts with <code><a href="../sui/dynamic_field.md#sui_dynamic_field_EFieldTypeMismatch">sui::dynamic_field::EFieldTypeMismatch</a></code> if the bag has an entry for the key, but
