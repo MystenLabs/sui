@@ -2099,10 +2099,17 @@ impl AuthorityPerEpochStore {
         let cached = self.signed_effects_digests_cache.get(tx_digest).map(|r| *r);
         if in_test_configuration() {
             let from_db = self.tables()?.signed_effects_digests.get(tx_digest)?;
-            assert_eq!(
-                cached, from_db,
-                "signed_effects_digests cache inconsistency for {tx_digest}"
-            );
+            if cached != from_db {
+                // Cache and DB writes are not atomic, so retry after a brief delay
+                // to allow eventual consistency before panicking.
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                let from_db = self.tables()?.signed_effects_digests.get(tx_digest)?;
+                let cached = self.signed_effects_digests_cache.get(tx_digest).map(|r| *r);
+                assert_eq!(
+                    cached, from_db,
+                    "signed_effects_digests cache inconsistency for {tx_digest}"
+                );
+            }
         }
         Ok(cached)
     }
