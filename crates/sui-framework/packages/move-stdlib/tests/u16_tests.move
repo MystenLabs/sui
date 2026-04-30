@@ -97,7 +97,7 @@ fun test_pow() {
 
 #[test, expected_failure(arithmetic_error, location = std::u16)]
 fun test_pow_overflow() {
-    255u16.pow(255);
+    MAX.pow(2);
 }
 
 #[test]
