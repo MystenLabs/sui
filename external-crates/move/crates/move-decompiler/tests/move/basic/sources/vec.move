@@ -1,8 +1,7 @@
 module basic::vec;
 
-use std::vector;
-
-fun t(v: u8) {
+#[allow(unused_function)]
+fun t() {
     let _ = 0u64;
     let _ = vector<u64>[2];
     let mut v = vector[1u8, 2, 3, 4];
