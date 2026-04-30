@@ -3,7 +3,7 @@
 
 use async_graphql::Union;
 
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::compressed::annotated::MoveTypeLayout;
 
 use crate::api::scalars::base64::Base64;
 use crate::api::types::move_type::MoveType;

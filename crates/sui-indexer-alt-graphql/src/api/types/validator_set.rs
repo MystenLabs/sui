@@ -11,8 +11,8 @@ use async_graphql::Object;
 use async_graphql::connection::Connection;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_extractor as AE;
-use move_core_types::annotated_value as A;
 use move_core_types::annotated_visitor as AV;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::StructTag;
 use move_core_types::u256::U256;
 use move_core_types::visitor_default;
@@ -91,7 +91,7 @@ impl ValidatorSet {
     pub(crate) fn from_system_state(
         scope: Scope,
         bytes: &[u8],
-        layout: &A::MoveTypeLayout,
+        layout: &CA::MoveTypeLayout,
     ) -> Result<Self, RpcError> {
         Ok(Self {
             contents: Arc::new(ValidatorSetContents::deserialize(scope, bytes, layout)?),
@@ -108,14 +108,14 @@ impl ValidatorSetContents {
     fn deserialize(
         scope: Scope,
         bytes: &[u8],
-        layout: &A::MoveTypeLayout,
+        layout: &CA::MoveTypeLayout,
     ) -> Result<Self, RpcError> {
         type ReportRecords = BTreeMap<NativeSuiAddress, Vec<NativeSuiAddress>>;
         type AtRiskValidators = BTreeMap<NativeSuiAddress, u64>;
 
         #[derive(Default)]
-        struct Contents<'b, 'l> {
-            native: Option<(&'b [u8], &'l A::MoveTypeLayout)>,
+        struct Contents<'b> {
+            native: Option<(&'b [u8], CA::MoveTypeLayout)>,
             active_validators: Vec<(NativeSuiAddress, &'b [u8])>,
             report_records: Option<ReportRecords>,
             at_risk_validators: Option<AtRiskValidators>,
@@ -123,10 +123,10 @@ impl ValidatorSetContents {
 
         // Visitor to traverse a system state inner value looking for information related to the
         // validator set.
-        enum Traversal<'c, 'b, 'l> {
-            SystemState(&'c mut Contents<'b, 'l>),
-            ValidatorSet(&'c mut Contents<'b, 'l>),
-            ActiveValidators(&'c mut Contents<'b, 'l>),
+        enum Traversal<'c, 'b> {
+            SystemState(&'c mut Contents<'b>),
+            ValidatorSet(&'c mut Contents<'b>),
+            ActiveValidators(&'c mut Contents<'b>),
         }
 
         // Simple visitor to extract the value of an `address`.
@@ -144,17 +144,17 @@ impl ValidatorSetContents {
             Visitor(#[from] AV::Error),
         }
 
-        impl<'b, 'l> AV::Traversal<'b, 'l> for Traversal<'_, 'b, 'l> {
+        impl<'b> AV::Traversal<'b> for Traversal<'_, 'b> {
             type Error = Error;
 
             fn traverse_struct(
                 &mut self,
-                driver: &mut AV::StructDriver<'_, 'b, 'l>,
+                driver: &mut AV::StructDriver<'_, 'b>,
             ) -> Result<(), Error> {
                 // When traversing a struct while under `ActiveValidators`, we are visiting a
                 // particular validator.
                 if let Traversal::ActiveValidators(c) = self {
-                    if !driver.struct_layout().is_type(&ValidatorContents::tag()) {
+                    if driver.struct_layout().type_() != &ValidatorContents::tag() {
                         return Err(Error::NotAValidator);
                     }
 
@@ -180,8 +180,8 @@ impl ValidatorSetContents {
                     return Ok(());
                 }
 
-                while let Some(field) = driver.peek_field() {
-                    let name = field.name.as_str();
+                while let Some((name_ref, field_layout)) = driver.peek_field() {
+                    let name = name_ref.as_str().to_owned();
                     match self {
                         Traversal::SystemState(c) if name == "validators" => {
                             let lo = driver.position();
@@ -189,7 +189,7 @@ impl ValidatorSetContents {
                             let hi = driver.position();
 
                             let bytes = &driver.bytes()[lo..hi];
-                            c.native = Some((bytes, &field.layout));
+                            c.native = Some((bytes, field_layout));
                         }
 
                         Traversal::SystemState(c) if name == "validator_report_records" => {
@@ -226,16 +226,16 @@ impl ValidatorSetContents {
             }
         }
 
-        impl AV::Visitor<'_, '_> for AddressVisitor {
+        impl AV::Visitor<'_> for AddressVisitor {
             type Value = Option<NativeSuiAddress>;
             type Error = Error;
 
-            visitor_default! { <'_, '_> u8, u16, u32, u64, u128, u256 = Ok(None) }
-            visitor_default! { <'_, '_> bool, signer, vector, struct, variant = Ok(None) }
+            visitor_default! { <'_> u8, u16, u32, u64, u128, u256 = Ok(None) }
+            visitor_default! { <'_> bool, signer, vector, struct, variant = Ok(None) }
 
             fn visit_address(
                 &mut self,
-                _: &AV::ValueDriver<'_, '_, '_>,
+                _: &AV::ValueDriver<'_, '_>,
                 value: AccountAddress,
             ) -> Result<Self::Value, Error> {
                 Ok(Some(value.into()))
@@ -244,8 +244,12 @@ impl ValidatorSetContents {
 
         let mut contents = Contents::default();
         let mut traversal = Traversal::SystemState(&mut contents);
-        A::MoveValue::visit_deserialize(bytes, layout, &mut traversal)
-            .context("Failed to deserialize ValidatorSet")?;
+        move_core_types::annotated_value::MoveValue::visit_deserialize(
+            bytes,
+            layout.clone(),
+            &mut traversal,
+        )
+        .context("Failed to deserialize ValidatorSet")?;
 
         let Contents {
             native: Some((bytes, layout)),
