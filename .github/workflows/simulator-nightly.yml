@@ -75,11 +75,19 @@ jobs:
       # corrupt the shared ~/simtest_stdout.log via a leaked fd.
       - name: Environment clean
         run: |
+          # The character classes ([ ], [e]) below are deliberate: pkill -f
+          # matches against the full command line, which includes our own
+          # remote bash's command line — and that command line contains the
+          # literal pattern as text. A char class is a regex metasequence
+          # that still matches the intended live process (cargo-simtest
+          # simtest with a real space, target/simulator/deps/ with a real
+          # 'e') but does NOT match the literal text "[ ]" / "[e]" in our
+          # own shell, so pkill can no longer SIGKILL its own parent.
           tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "set -e; \
             echo teleport OK; \
             pkill -9 -f 'scripts/simtest/(simtest-run|seed-search)' || true; \
-            pkill -9 -f 'cargo-simtest simtest' || true; \
-            pkill -9 -f 'target/simulator/deps/' || true; \
+            pkill -9 -f 'cargo-simtest[ ]simtest' || true; \
+            pkill -9 -f 'target/simulator/d[e]ps/' || true; \
             sleep 3; \
             sudo rm -rf /tmp/* 2>/dev/null || true; \
             rm -rf ~/sui; \
