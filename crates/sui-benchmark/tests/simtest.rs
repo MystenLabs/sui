@@ -2157,9 +2157,7 @@ mod test {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_validator_observer_config(Arc::new(|idx| {
-                Some(ObserverParameters::default())
-            }))
+            .with_validator_observer_config(Arc::new(|idx| Some(ObserverParameters::default())))
             .build()
             .await;
 
