@@ -281,6 +281,8 @@ impl BlockSyncService {
         }
 
         // Read from the dag state to find the latest blocks
+        // TODO: at the moment we don't look into the block manager for suspended blocks. Ideally we
+        // want in the future if we think we would like to tackle the majority of cases.
         let mut blocks = vec![];
         let dag_state = self.dag_state.read();
         for authority in authorities {
@@ -288,7 +290,7 @@ impl BlockSyncService {
 
             debug!("Latest block for {authority}: {block:?}");
 
-            // No reason to serve back the genesis block
+            // no reason to serve back the genesis block - it's equal as if it has not received any block
             if block.round() != GENESIS_ROUND {
                 blocks.push(block);
             }

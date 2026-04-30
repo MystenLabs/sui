@@ -40,13 +40,13 @@ use crate::{
 };
 
 /// Identifies an observer node by its network public key.
-pub(crate) type NodeId = NetworkPublicKey;
+pub type NodeId = NetworkPublicKey;
 
 /// Identifies a peer in the network, which can be either a validator or an observer.
 /// The Observer variant is boxed to keep the enum small, since `NodeId` (32 bytes) is
 /// much larger than `AuthorityIndex` (4 bytes).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum PeerId {
+pub enum PeerId {
     /// A validator node identified by its authority index.
     Validator(AuthorityIndex),
     /// An observer node identified by its network public key.

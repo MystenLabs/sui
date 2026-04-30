@@ -45,7 +45,6 @@ pub(crate) struct ObserverService {
     commit_vote_monitor: Arc<CommitVoteMonitor>,
     transaction_vote_tracker: TransactionVoteTracker,
     synchronizer: Arc<SynchronizerHandle>,
-    #[allow(dead_code)]
     block_sync_service: Arc<BlockSyncService>,
 }
 

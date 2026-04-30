@@ -31,7 +31,6 @@ use std::{
 };
 
 use bytes::Bytes;
-use consensus_config::AuthorityIndex;
 use consensus_types::block::BlockRef;
 use futures::{StreamExt as _, stream::FuturesOrdered};
 use itertools::Itertools as _;
@@ -607,7 +606,7 @@ where
                     // 5. Verify the same number of blocks are returned as requested.
                     if request_block_refs.len() != serialized_blocks.len() {
                         return Err(ConsensusError::UnexpectedNumberOfBlocksFetched {
-                            peer: peer.to_string(), // Convert to string for error
+                            peer,
                             requested: request_block_refs.len(),
                             received: serialized_blocks.len(),
                         });
@@ -637,7 +636,7 @@ where
                         );
                         if *requested_block_ref != received_block_ref {
                             return Err(ConsensusError::UnexpectedBlockForCommit {
-                                peer: peer.to_string(), // Convert to string for error
+                                peer,
                                 requested: *requested_block_ref,
                                 received: received_block_ref,
                             });
@@ -801,13 +800,8 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
             if commits.is_empty() {
                 // start is inclusive, so first commit must be at the start index.
                 if commit.index() != commit_range.start() {
-                    // Extract authority index if it's a validator, otherwise use MAX
-                    let authority = match peer {
-                        PeerId::Validator(idx) => idx,
-                        PeerId::Observer(_) => AuthorityIndex::MAX,
-                    };
                     return Err(ConsensusError::UnexpectedStartCommit {
-                        peer: authority,
+                        peer,
                         start: commit_range.start(),
                         commit: Box::new(commit),
                     });
@@ -819,13 +813,8 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
                 if commit.index() != last_commit.index() + 1
                     || &commit.previous_digest() != last_commit_digest
                 {
-                    // Extract authority index if it's a validator, otherwise use MAX
-                    let authority = match peer {
-                        PeerId::Validator(idx) => idx,
-                        PeerId::Observer(_) => AuthorityIndex::MAX,
-                    };
                     return Err(ConsensusError::UnexpectedCommitSequence {
-                        peer: authority,
+                        peer,
                         prev_commit: Box::new(last_commit.clone()),
                         curr_commit: Box::new(commit),
                     });
@@ -838,12 +827,7 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
             commits.push((digest, commit));
         }
         let Some((end_commit_digest, end_commit)) = commits.last() else {
-            // Extract authority index if it's a validator, otherwise use MAX
-            let authority = match peer {
-                PeerId::Validator(idx) => idx,
-                PeerId::Observer(_) => AuthorityIndex::MAX,
-            };
-            return Err(ConsensusError::NoCommitReceived { peer: authority });
+            return Err(ConsensusError::NoCommitReceived { peer });
         };
 
         // Parse and verify blocks. Then accumulate votes on the end commit.
@@ -871,14 +855,9 @@ impl<VC: ValidatorNetworkClient, OC: ObserverNetworkClient> Inner<VC, OC> {
 
         // Check if the end commit has enough votes.
         if !stake_aggregator.reached_threshold(&self.context.committee) {
-            // Extract authority index if it's a validator, otherwise use MAX
-            let authority = match peer {
-                PeerId::Validator(idx) => idx,
-                PeerId::Observer(_) => AuthorityIndex::MAX,
-            };
             return Err(ConsensusError::NotEnoughCommitVotes {
                 stake: stake_aggregator.stake(),
-                peer: authority,
+                peer,
                 commit: Box::new(end_commit.clone()),
             });
         }
