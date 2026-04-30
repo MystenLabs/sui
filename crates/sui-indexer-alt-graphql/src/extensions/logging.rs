@@ -250,11 +250,7 @@ where
         ext.metrics.queries_in_flight.dec();
 
         // SAFETY: This is set by `prepare_request`.
-        let Session {
-            uuid,
-            addr,
-            client,
-        } = ext.session.get().unwrap();
+        let Session { uuid, addr, client } = ext.session.get().unwrap();
         let client_sdk_type = client.sdk_type.as_deref().unwrap_or("");
         let client_sdk_version = client.sdk_version.as_deref().unwrap_or("");
         let request_id = uuid.to_string().try_into().unwrap();
@@ -301,11 +297,7 @@ where
 impl<F> PinnedDrop for MetricsFuture<F> {
     fn drop(self: Pin<&mut Self>) {
         if let Some(RequestMetrics { timer, ext }) = self.project().metrics.take() {
-            let Session {
-                uuid,
-                addr,
-                client,
-            } = ext.session.get().unwrap();
+            let Session { uuid, addr, client } = ext.session.get().unwrap();
             let client_sdk_type = client.sdk_type.as_deref().unwrap_or("");
             let client_sdk_version = client.sdk_version.as_deref().unwrap_or("");
             let elapsed_ms = timer.stop_and_record() * 1000.0;
@@ -382,10 +374,7 @@ mod tests {
         assert!(response.is_err());
         assert_eq!(error_codes(&response), vec![code::GRAPHQL_PARSE_FAILED]);
         assert_eq!(
-            metrics
-                .queries_received
-                .with_label_values(&["", ""])
-                .get(),
+            metrics.queries_received.with_label_values(&["", ""]).get(),
             1
         );
         assert_eq!(
@@ -417,10 +406,7 @@ mod tests {
             vec![code::GRAPHQL_VALIDATION_FAILED]
         );
         assert_eq!(
-            metrics
-                .queries_received
-                .with_label_values(&["", ""])
-                .get(),
+            metrics.queries_received.with_label_values(&["", ""]).get(),
             1
         );
         assert_eq!(
@@ -453,10 +439,7 @@ mod tests {
         assert_eq!(codes.len(), 3);
 
         assert_eq!(
-            metrics
-                .queries_received
-                .with_label_values(&["", ""])
-                .get(),
+            metrics.queries_received.with_label_values(&["", ""]).get(),
             1
         );
         assert_eq!(metrics.queries_failed.get(), 1);
