@@ -7,6 +7,7 @@
 //!         - {object_id}/
 //!            - latest                  (text: latest persisted version number)
 //!            - deleted                 (text marker: deleted by local execution)
+//!            - wrapped                 (text marker: wrapped by local execution)
 //!            - {version}                (BCS-encoded Object)
 //!     - indices/
 //!         - owned_objects              (BCS-encoded `Vec<OwnedObjectEntry>`)
@@ -36,6 +37,7 @@ use anyhow::bail;
 
 use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::CheckpointContentsDigest;
@@ -66,6 +68,8 @@ const CHECKPOINTS_DIR: &str = "checkpoints";
 const TRANSACTIONS_DIR: &str = "transactions";
 /// Filename marking an object as locally deleted.
 const DELETED_FILE: &str = "deleted";
+/// Filename marking an object as locally wrapped.
+const WRAPPED_FILE: &str = "wrapped";
 /// BCS-encoded owned-object index filename.
 const OWNED_OBJECTS_INDEX_FILE: &str = "owned_objects";
 /// Filename for the BCS-encoded transaction data within a transaction directory.
@@ -286,7 +290,7 @@ impl FilesystemStore {
 
     /// Get the latest object version available on disk for the given object ID.
     pub(crate) fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
-        if self.is_object_deleted(object_id)? {
+        if self.is_object_currently_removed(object_id)? {
             return Ok(None);
         }
 
@@ -336,41 +340,91 @@ impl FilesystemStore {
             .with_context(|| format!("Failed to write latest file for object {}", object.id()))
     }
 
-    /// Mark an object as deleted by local execution. Historical version files
-    /// remain on disk and can still be read by exact version.
-    pub(crate) fn mark_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<()> {
-        let object_dir = self.objects_dir().join(object_id.to_string());
-        fs::create_dir_all(&object_dir)
-            .with_context(|| format!("Failed to create directory: {}", object_dir.display()))?;
-        fs::write(object_dir.join(DELETED_FILE), "deleted")
-            .with_context(|| format!("Failed to mark object {} deleted", object_id))
+    /// Mark an object as deleted by local execution. Historical version files remain on disk and
+    /// can still be read by exact version, but current reads must not resurrect the object.
+    pub(crate) fn mark_object_deleted(&self, object_ref: &ObjectRef) -> anyhow::Result<()> {
+        self.write_object_state_marker(DELETED_FILE, object_ref)?;
+        self.clear_object_wrapped(&object_ref.0)
     }
 
-    /// Clear the local deletion marker for an object that has become live again.
+    /// Mark an object as wrapped by local execution. Historical version files remain on disk and
+    /// can still be read by exact version; a later live write can clear this marker.
+    pub(crate) fn mark_object_wrapped(&self, object_ref: &ObjectRef) -> anyhow::Result<()> {
+        self.write_object_state_marker(WRAPPED_FILE, object_ref)
+    }
+
+    /// Clear the local deletion marker. Normal live writes do not call this because post-fork
+    /// deletions are terminal; it is available for tests and explicit cache repair.
     pub(crate) fn clear_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<()> {
-        let path = self
-            .objects_dir()
-            .join(object_id.to_string())
-            .join(DELETED_FILE);
-        match fs::remove_file(&path) {
-            Ok(()) => Ok(()),
-            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
-            Err(err) => Err(err)
-                .with_context(|| format!("Failed to clear deleted marker: {}", path.display())),
-        }
+        self.clear_object_state_marker(object_id, DELETED_FILE)
+    }
+
+    /// Clear the local wrapped marker for an object that has become live again.
+    pub(crate) fn clear_object_wrapped(&self, object_id: &ObjectID) -> anyhow::Result<()> {
+        self.clear_object_state_marker(object_id, WRAPPED_FILE)
     }
 
     /// Return whether local execution has deleted the object.
     pub(crate) fn is_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
+        self.has_object_state_marker(object_id, DELETED_FILE)
+    }
+
+    /// Return whether local execution has wrapped the object.
+    pub(crate) fn is_object_wrapped(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
+        self.has_object_state_marker(object_id, WRAPPED_FILE)
+    }
+
+    /// Return whether local execution has made the object inaccessible by direct current ID
+    /// lookup.
+    pub(crate) fn is_object_currently_removed(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
+        Ok(self.is_object_deleted(object_id)? || self.is_object_wrapped(object_id)?)
+    }
+
+    fn write_object_state_marker(
+        &self,
+        filename: &str,
+        object_ref: &ObjectRef,
+    ) -> anyhow::Result<()> {
+        let object_id = object_ref.0;
+        let object_dir = self.objects_dir().join(object_id.to_string());
+        fs::create_dir_all(&object_dir)
+            .with_context(|| format!("Failed to create directory: {}", object_dir.display()))?;
+        let contents = format!("{} {}", object_ref.1.value(), object_ref.2);
+        fs::write(object_dir.join(filename), contents)
+            .with_context(|| format!("Failed to mark object {} {}", object_id, filename))
+    }
+
+    fn clear_object_state_marker(
+        &self,
+        object_id: &ObjectID,
+        filename: &str,
+    ) -> anyhow::Result<()> {
         let path = self
             .objects_dir()
             .join(object_id.to_string())
-            .join(DELETED_FILE);
+            .join(filename);
+        match fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+            Err(err) => Err(err)
+                .with_context(|| format!("Failed to clear object marker: {}", path.display())),
+        }
+    }
+
+    fn has_object_state_marker(
+        &self,
+        object_id: &ObjectID,
+        filename: &str,
+    ) -> anyhow::Result<bool> {
+        let path = self
+            .objects_dir()
+            .join(object_id.to_string())
+            .join(filename);
         match fs::metadata(&path) {
             Ok(_) => Ok(true),
             Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
             Err(err) => Err(err)
-                .with_context(|| format!("Failed to stat deleted marker: {}", path.display())),
+                .with_context(|| format!("Failed to stat object marker: {}", path.display())),
         }
     }
 
@@ -386,12 +440,12 @@ impl FilesystemStore {
     /// Apply local execution ownership changes to the durable owned-object index.
     pub(crate) fn apply_owned_object_index_updates<'a>(
         &self,
-        deleted_object_ids: &[ObjectID],
+        removed_object_ids: &[ObjectID],
         written_objects: impl IntoIterator<Item = &'a Object>,
     ) -> anyhow::Result<()> {
         let mut entries = self.get_owned_object_entries()?;
 
-        for object_id in deleted_object_ids {
+        for object_id in removed_object_ids {
             remove_owned_entry(&mut entries, *object_id);
         }
 

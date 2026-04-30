@@ -116,7 +116,9 @@ fn test_deleted_marker_blocks_latest_but_preserves_exact_versions() {
     let obj = make_object(id, 5);
 
     store.write_object(&obj).unwrap();
-    store.mark_object_deleted(&id).unwrap();
+    store
+        .mark_object_deleted(&obj.compute_object_reference())
+        .unwrap();
 
     assert!(store.is_object_deleted(&id).unwrap());
     assert!(store.get_latest_object(&id).unwrap().is_none());
@@ -127,6 +129,33 @@ fn test_deleted_marker_blocks_latest_but_preserves_exact_versions() {
     store.clear_object_deleted(&id).unwrap();
     let latest = store.get_latest_object(&id).unwrap();
     assert_eq!(latest.unwrap(), obj);
+}
+
+#[test]
+fn test_wrapped_marker_blocks_latest_preserves_exact_and_clears_on_write() {
+    let (_dir, store) = test_store();
+    let id = ObjectID::random();
+    let owner = SuiAddress::random_for_testing_only();
+    let obj = make_object_with_owner(id, 5, Owner::AddressOwner(owner));
+
+    store.write_object(&obj).unwrap();
+    store
+        .mark_object_wrapped(&obj.compute_object_reference())
+        .unwrap();
+
+    assert!(store.is_object_wrapped(&id).unwrap());
+    assert!(store.get_latest_object(&id).unwrap().is_none());
+
+    let exact = store.get_object_at_version(&id, 5).unwrap();
+    assert_eq!(exact.unwrap(), obj);
+
+    let unwrapped = make_object_with_owner(id, 7, Owner::AddressOwner(owner));
+    store.write_object(&unwrapped).unwrap();
+    store.clear_object_wrapped(&id).unwrap();
+
+    assert!(!store.is_object_wrapped(&id).unwrap());
+    let latest = store.get_latest_object(&id).unwrap();
+    assert_eq!(latest.unwrap(), unwrapped);
 }
 
 #[test]

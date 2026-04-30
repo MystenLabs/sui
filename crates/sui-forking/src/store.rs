@@ -81,6 +81,20 @@ pub struct DataStore {
     local: FilesystemStore,
 }
 
+/// Current-state removal kind for an object affected by local execution.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RemovedObjectKind {
+    Deleted,
+    Wrapped,
+}
+
+/// Object reference paired with the current-state removal kind that produced it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct RemovedObject {
+    object_ref: ObjectRef,
+    kind: RemovedObjectKind,
+}
+
 impl DataStore {
     /// Create a new `DataStore` for the given network, anchored at `forked_at_checkpoint`.
     ///
@@ -269,7 +283,7 @@ impl DataStore {
     /// Local-first lookup for the latest known version of an object. Falls back to a remote
     /// `AtCheckpoint(forked_at_checkpoint)` query and caches the result on disk.
     fn get_latest_object(&self, object_id: &ObjectID) -> anyhow::Result<Option<Object>> {
-        if self.local.is_object_deleted(object_id)? {
+        if self.local.is_object_currently_removed(object_id)? {
             return Ok(None);
         }
 
@@ -433,6 +447,55 @@ impl DataStore {
         None
     }
 
+    /// Persist local object writes and current-state tombstones, then update the address-owned
+    /// index from the same diff.
+    fn apply_object_updates(
+        &mut self,
+        written_objects: BTreeMap<ObjectID, Object>,
+        removed_objects: Vec<RemovedObject>,
+    ) {
+        let removed_object_ids: Vec<_> = removed_objects
+            .iter()
+            .map(|removed| removed.object_ref.0)
+            .collect();
+
+        for removed in &removed_objects {
+            match removed.kind {
+                RemovedObjectKind::Deleted => self
+                    .local
+                    .mark_object_deleted(&removed.object_ref)
+                    .expect("failed to mark object deleted on disk"),
+                RemovedObjectKind::Wrapped => self
+                    .local
+                    .mark_object_wrapped(&removed.object_ref)
+                    .expect("failed to mark object wrapped on disk"),
+            }
+        }
+
+        for object in written_objects.values() {
+            self.local
+                .write_object(object)
+                .expect("failed to write object to disk");
+            self.local
+                .clear_object_wrapped(&object.id())
+                .expect("failed to clear object wrapped marker");
+        }
+
+        let indexable_written_objects: Vec<_> = written_objects
+            .values()
+            .filter(|object| {
+                !self
+                    .local
+                    .is_object_deleted(&object.id())
+                    .expect("failed to read object deleted marker")
+            })
+            .collect();
+
+        self.local
+            .apply_owned_object_index_updates(&removed_object_ids, indexable_written_objects)
+            .expect("failed to update owned-object index");
+    }
+
     /// Construct a `DataStore` for tests, backed by an explicit local root and a fake (unused)
     /// GraphQL endpoint. The remote client is constructed but never called because tests should
     /// pre-populate the local cache with the data they need.
@@ -525,6 +588,29 @@ fn object_type_matches(filter: &StructTag, candidate: &StructTag) -> bool {
             || filter.type_params.as_slice() == candidate.type_params.as_slice())
 }
 
+/// Extract removal kinds before passing removals through `update_objects`, whose trait signature
+/// does not distinguish deleted, wrapped, or unwrapped-then-deleted objects.
+fn removed_objects_from_effects(effects: &TransactionEffects) -> Vec<RemovedObject> {
+    effects
+        .deleted()
+        .into_iter()
+        .chain(effects.unwrapped_then_deleted())
+        .map(|object_ref| RemovedObject {
+            object_ref,
+            kind: RemovedObjectKind::Deleted,
+        })
+        .chain(
+            effects
+                .wrapped()
+                .into_iter()
+                .map(|object_ref| RemovedObject {
+                    object_ref,
+                    kind: RemovedObjectKind::Wrapped,
+                }),
+        )
+        .collect()
+}
+
 // ============================================================================
 // SimulatorStore super-traits
 // ============================================================================
@@ -538,6 +624,9 @@ impl ObjectStore for DataStore {
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
+        if self.local.is_object_currently_removed(object_id).ok()? {
+            return None;
+        }
         self.get_object_at_version(object_id, version.value())
             .ok()
             .flatten()
@@ -777,12 +866,12 @@ impl SimulatorStore for DataStore {
         events: TransactionEvents,
         written_objects: BTreeMap<ObjectID, Object>,
     ) {
-        let deleted_objects = effects.deleted();
+        let removed_objects = removed_objects_from_effects(&effects);
         let tx_digest = *effects.transaction_digest();
         self.insert_transaction(transaction);
         self.insert_transaction_effects(effects);
         self.insert_events(&tx_digest, events);
-        self.update_objects(written_objects, deleted_objects);
+        self.apply_object_updates(written_objects, removed_objects);
     }
 
     fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
@@ -810,29 +899,14 @@ impl SimulatorStore for DataStore {
         written_objects: BTreeMap<ObjectID, Object>,
         deleted_objects: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
     ) {
-        let deleted_object_ids: Vec<_> = deleted_objects
-            .iter()
-            .map(|(object_id, _, _)| *object_id)
+        let removed_objects = deleted_objects
+            .into_iter()
+            .map(|object_ref| RemovedObject {
+                object_ref,
+                kind: RemovedObjectKind::Deleted,
+            })
             .collect();
-
-        for object_id in &deleted_object_ids {
-            self.local
-                .mark_object_deleted(object_id)
-                .expect("failed to mark object deleted on disk");
-        }
-
-        for object in written_objects.values() {
-            self.local
-                .write_object(object)
-                .expect("failed to write object to disk");
-            self.local
-                .clear_object_deleted(&object.id())
-                .expect("failed to clear object deleted marker");
-        }
-
-        self.local
-            .apply_owned_object_index_updates(&deleted_object_ids, written_objects.values())
-            .expect("failed to update owned-object index");
+        self.apply_object_updates(written_objects, removed_objects);
     }
 
     fn backing_store(&self) -> &dyn BackingStore {

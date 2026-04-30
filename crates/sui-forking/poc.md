@@ -173,3 +173,4 @@ Shows the current checkpoint, epoch, and timestamp.
 - minting any coin type
 - GraphQL RPC support
 - transfer object ownership at startup (seeding by an address and transfer all those objects to either a new address or to the active one in the wallet)
+- handle wrapped or object-owned child objects under seeded parent objects, ensuring historical versions cannot be used as live transaction inputs

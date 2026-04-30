@@ -42,5 +42,6 @@ The table below summarizes when to use each option:
 - Object fetching overhead: First access to objects requires network download.
 - Forking from a checkpoint older than 1 hour requires explicit object seeding (you need to know which owned objects you want to have pulled at startup)
 - Owned-object enumeration only covers locally materialized post-fork state; it is not a full inventory of every object an address owned at the fork checkpoint.
+- Objects deleted or wrapped after the fork point are no longer available through direct current-ID lookup, but exact historical versions remain readable when available.
 - If it forks at checkpoint X, you cannot depend on objects created after checkpoint X from the actual real network. You'll need to restart the network at that checkpoint or a later one.
 - Sequential execution: Transactions are executed one at a time, no parallelism.

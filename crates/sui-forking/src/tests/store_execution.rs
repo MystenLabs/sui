@@ -20,7 +20,10 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
+use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::execution_status::ExecutionStatus;
+use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
 use sui_types::object::ObjectInner;
@@ -291,6 +294,166 @@ fn test_local_deletion_removes_owned_object_and_blocks_remote_resurrection() {
             .expect("exact version read should not error")
             .unwrap(),
         object,
+    );
+    assert!(
+        sui_types::storage::ObjectStore::get_object_by_key(
+            &store,
+            &object_id,
+            SequenceNumber::from_u64(1),
+        )
+        .is_none(),
+        "execution-facing exact-version lookup must reject locally deleted objects",
+    );
+}
+
+#[test]
+fn test_local_wrap_removes_owned_object_and_blocks_direct_current_reads() {
+    let (_temp, mut store) = test_data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
+
+    store.update_objects(BTreeMap::from([(object_id, object.clone())]), vec![]);
+    store.apply_object_updates(
+        BTreeMap::new(),
+        vec![RemovedObject {
+            object_ref: (
+                object_id,
+                SequenceNumber::from_u64(2),
+                ObjectDigest::OBJECT_DIGEST_WRAPPED,
+            ),
+            kind: RemovedObjectKind::Wrapped,
+        }],
+    );
+
+    assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
+    assert!(
+        DataStore::get_object(&store, &object_id)
+            .expect("current object read should not error")
+            .is_none(),
+        "current object lookup must not fall back to the remote after local wrapping",
+    );
+    assert_eq!(
+        DataStore::get_object_at_version(&store, &object_id, 1)
+            .expect("exact version read should not error")
+            .unwrap(),
+        object,
+    );
+    assert!(
+        sui_types::storage::ObjectStore::get_object_by_key(
+            &store,
+            &object_id,
+            SequenceNumber::from_u64(1),
+        )
+        .is_none(),
+        "execution-facing exact-version lookup must reject locally wrapped objects",
+    );
+}
+
+#[test]
+fn test_unwrapped_write_clears_wrapped_marker_and_reindexes_owner() {
+    let (_temp, mut store) = test_data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let recipient = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
+
+    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+    store.apply_object_updates(
+        BTreeMap::new(),
+        vec![RemovedObject {
+            object_ref: (
+                object_id,
+                SequenceNumber::from_u64(2),
+                ObjectDigest::OBJECT_DIGEST_WRAPPED,
+            ),
+            kind: RemovedObjectKind::Wrapped,
+        }],
+    );
+
+    let unwrapped = make_gas_object(object_id, 3, Owner::AddressOwner(recipient));
+    store.apply_object_updates(BTreeMap::from([(object_id, unwrapped.clone())]), vec![]);
+
+    assert!(!store.local.is_object_wrapped(&object_id).unwrap());
+    assert_eq!(
+        DataStore::get_object(&store, &object_id)
+            .expect("current object read should not error")
+            .unwrap(),
+        unwrapped,
+    );
+    assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
+    let recipient_objects: Vec<_> = SimulatorStore::owned_objects(&store, recipient).collect();
+    assert_eq!(recipient_objects.len(), 1);
+    assert_eq!(recipient_objects[0].id(), object_id);
+}
+
+#[test]
+fn test_terminal_deleted_marker_prevents_reindexing_written_object() {
+    let (_temp, mut store) = test_data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
+    let written_again = make_gas_object(object_id, 3, Owner::AddressOwner(owner));
+
+    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+    store.apply_object_updates(
+        BTreeMap::from([(object_id, written_again)]),
+        vec![RemovedObject {
+            object_ref: (
+                object_id,
+                SequenceNumber::from_u64(2),
+                ObjectDigest::OBJECT_DIGEST_DELETED,
+            ),
+            kind: RemovedObjectKind::Deleted,
+        }],
+    );
+
+    assert_eq!(SimulatorStore::owned_objects(&store, owner).count(), 0);
+    assert!(
+        DataStore::get_object(&store, &object_id)
+            .expect("current object read should not error")
+            .is_none(),
+    );
+}
+
+#[test]
+fn test_removed_objects_from_effects_marks_unwrapped_then_deleted_as_deleted() {
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object_ref = (
+        object_id,
+        SequenceNumber::from_u64(2),
+        ObjectDigest::OBJECT_DIGEST_DELETED,
+    );
+    let gas_ref = (
+        ObjectID::random(),
+        SequenceNumber::from_u64(1),
+        ObjectDigest::random(),
+    );
+    let effects = TransactionEffects::new_from_execution_v1(
+        ExecutionStatus::Success,
+        0,
+        GasCostSummary::default(),
+        vec![],
+        vec![],
+        TransactionDigest::random(),
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![object_ref],
+        vec![],
+        (gas_ref, Owner::AddressOwner(owner)),
+        None,
+        vec![],
+    );
+
+    assert_eq!(
+        removed_objects_from_effects(&effects),
+        vec![RemovedObject {
+            object_ref,
+            kind: RemovedObjectKind::Deleted,
+        }],
     );
 }
 
