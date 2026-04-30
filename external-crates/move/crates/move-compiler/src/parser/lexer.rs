@@ -98,7 +98,7 @@ pub enum Tok {
     // lex error. Callers that match against this token (or that would have errored on the
     // underlying diagnostic) should treat it as "not the token I'm looking for" and let
     // `advance` re-encounter and report the error.
-    ErrorRead,
+    LexError,
 }
 
 impl fmt::Display for Tok {
@@ -182,7 +182,7 @@ impl fmt::Display for Tok {
             BlockLabel => "'<Identifier>",
             MinusGreater => "->",
             For => "for",
-            ErrorRead => "<ErrorRead>",
+            LexError => "<LexError>",
         };
         fmt::Display::fmt(s, formatter)
     }
@@ -451,7 +451,7 @@ impl<'input> Lexer<'input> {
     }
 
     // Look ahead to the next token after the current one without advancing the state of the
-    // lexer. Returns `Tok::EOF` if there is no more input, and `Tok::ErrorRead` if the next
+    // lexer. Returns `Tok::EOF` if there is no more input, and `Tok::LexError` if the next
     // token could not be lexed (e.g. because of an unterminated string). The diagnostic for
     // the lex error is suppressed here; `advance` will re-encounter and report it.
     pub fn lookahead(&mut self) -> Tok {
@@ -459,11 +459,8 @@ impl<'input> Lexer<'input> {
             .trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)
         {
             Ok(t) => t,
-            Err(_) => return Tok::ErrorRead,
+            Err(_) => return Tok::LexError,
         };
-        if text.is_empty() {
-            return Tok::EOF;
-        }
         let next_start = self.text.len() - text.len();
         let (result, _) = find_token(
             /* panic_mode */ true,
@@ -472,22 +469,19 @@ impl<'input> Lexer<'input> {
             text,
             next_start,
         );
-        result.unwrap_or(Tok::ErrorRead)
+        result.unwrap_or(Tok::LexError)
     }
 
     // Look ahead to the next two tokens after the current one without advancing the state of
-    // the lexer. Each position independently returns `Tok::EOF` or `Tok::ErrorRead` as in
+    // the lexer. Each position independently returns `Tok::EOF` or `Tok::LexError` as in
     // `lookahead` if the corresponding token cannot be read.
     pub fn lookahead2(&mut self) -> (Tok, Tok) {
         let (text, _) = match self
             .trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)
         {
             Ok(t) => t,
-            Err(_) => return (Tok::ErrorRead, Tok::ErrorRead),
+            Err(_) => return (Tok::LexError, Tok::LexError),
         };
-        if text.is_empty() {
-            return (Tok::EOF, Tok::EOF);
-        }
         let offset = self.text.len() - text.len();
         let (result, length) = find_token(
             /* panic_mode */ true,
@@ -496,16 +490,13 @@ impl<'input> Lexer<'input> {
             text,
             offset,
         );
-        let first = result.unwrap_or(Tok::ErrorRead);
+        let first = result.unwrap_or(Tok::LexError);
         let (text2, _) = match self
             .trim_whitespace_and_comments(offset + length, /* track doc comments */ false)
         {
             Ok(t) => t,
-            Err(_) => return (first, Tok::ErrorRead),
+            Err(_) => return (first, Tok::LexError),
         };
-        if text2.is_empty() {
-            return (first, Tok::EOF);
-        }
         let offset2 = self.text.len() - text2.len();
         let (result2, _) = find_token(
             /* panic_mode */ true,
@@ -514,7 +505,7 @@ impl<'input> Lexer<'input> {
             text2,
             offset2,
         );
-        let second = result2.unwrap_or(Tok::ErrorRead);
+        let second = result2.unwrap_or(Tok::LexError);
         (first, second)
     }
 
