@@ -3,10 +3,7 @@ title: Encrypted Social Media
 description: Build a Web3 social platform with encrypted content, Seal-based access control, and Walrus storage on Sui.
 keywords: [example, seal, encryption, walrus, dapp-kit, sponsored-transactions, viewer-token, zklogin]
 example_id: onlyfins-example-app
-shape: standard
-network: testnet
 last_verified: 2026-04-28
-sui_release: testnet
 repo: https://github.com/MystenLabs/onlyfins-example-app
 path: /
 languages: [move, typescript]
@@ -24,14 +21,6 @@ related_examples: [seal-example, walrus-sites]
 OnlyFins is a Web3 social platform that demonstrates encrypted content sharing with onchain access control. Creators publish posts with images they store on Walrus and encrypt through Seal, while viewers purchase `ViewerToken` capability objects to decrypt and view content. The example targets Testnet and suits readers who already know the basics of Move modules, React, and the Sui TypeScript SDK.
 
 ## What you learn
-
-By the end of this page, you can:
-
-- Create shared objects that store encrypted content references onchain.
-- Use Seal threshold encryption to gate access to offchain data.
-- Issue capability tokens (`ViewerToken`) that prove a viewer has access to a post.
-- Integrate Enoki-based zkLogin for wallet authentication with sponsored transactions.
-- Fetch and decrypt images from Walrus storage in a React frontend.
 
 This example teaches:
 
@@ -295,12 +284,3 @@ Errors can occur at the sponsorship step (backend unreachable), the Seal step (s
 **Cause:** The sponsor backend gas budget is below what the function consumes.
 
 **Fix:** Increase the gas budget in the sponsor backend or the transaction builder. For CLI publishing, raise `--gas-budget` to `200000000`.
-
-## Related links
-
-- [Seal documentation](/develop/cryptography/seal): Explains Seal threshold encryption in depth.
-- [Walrus documentation](https://docs.walrus.site): The storage layer for encrypted and unencrypted image blobs.
-- [Enoki documentation](https://docs.enoki.mystenlabs.com): The zkLogin wallet provider for authentication.
-- [Sponsored Transactions](/develop/advanced/sponsored-transactions): How gasless transactions work on Sui.
-- [Sui dApp Kit](/develop/app-development/dapp-kit): The React hooks library the frontend uses.
-

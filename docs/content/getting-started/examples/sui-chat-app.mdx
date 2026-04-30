@@ -1,13 +1,10 @@
 ---
-title: Sui Stack Messaging Chat App
+title: Secure Messaging Chat App
 description: Build an end-to-end encrypted group messaging app on Sui using Seal threshold encryption, a Walrus-backed relayer, and onchain permission management.
 keywords: [example, messaging, encryption, seal, walrus, permissions, groups, relayer, enoki, dapp-kit]
 sidebar_label: Messaging Chat
 example_id: sui-stack-messaging-chat
-shape: standard
-network: testnet
 last_verified: 2026-04-28
-sui_release: testnet
 repo: https://github.com/MystenLabs/sui-stack-messaging
 path: /chat-app
 languages: [move, typescript, rust]
@@ -23,22 +20,21 @@ events_emitted:
 shared_objects:
   - { struct: EncryptionHistory, module: encryption_history }
   - { struct: Version, module: version }
-related_examples:
-  - onlyfins-example-app
-  - seal-example
 ---
 
-Sui Stack Messaging is an end-to-end encrypted group chat app built on Sui. Messages are encrypted client-side with AES-256-GCM before leaving the browser, routed through an offchain relayer that never sees plaintext, and archived to Walrus for decentralized persistence. Onchain Move contracts manage group membership, 7 granular permission types, and versioned encryption keys through Seal threshold encryption. The example targets Testnet and suits readers who know Move, React, and the Sui TypeScript SDK (TS SDK).
+This example builds an end-to-end encrypted group chat app on Sui. Messages are encrypted client-side with AES-256-GCM before leaving the browser, routed through an offchain relayer that never sees plaintext, and archived to Walrus for decentralized persistence. Onchain Move contracts manage group membership, 7 granular permission types, and versioned encryption keys through Seal threshold encryption.
+
+## When to use this pattern
+
+Use this pattern when you need to:
+
+- Build a messaging or collaboration app where the server never sees plaintext content.
+- Manage group membership and granular permissions (send, read, edit, delete, rotate keys) onchain.
+- Implement key rotation so removed members lose access to future messages while existing members retain access to history.
+- Route encrypted data through an offchain service that enforces onchain permissions without decrypting the payload.
+- Store encrypted files and messages on Walrus for decentralized persistence with automatic archival.
 
 ## What you learn
-
-By the end of this page, you can:
-
-- Design a permissioned group system in Move with 7 distinct permission types.
-- Implement envelope encryption where Seal manages Data Encryption Keys (DEKs) and AES-256-GCM encrypts message content.
-- Build a Seal access-control policy (`seal_approve_reader`) that gates decryption on onchain group membership.
-- Connect a frontend to an offchain relayer that routes encrypted messages and syncs them to Walrus.
-- Manage encryption key rotation so removed members lose access to future messages.
 
 This example teaches:
 
@@ -52,14 +48,36 @@ This example teaches:
 
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
-- [x] Sui CLI installed and configured for Testnet
+- [x] [Install the latest version of Sui](/getting-started/onboarding/sui-install).
+
+- [x] [Configure the Sui client](/getting-started/onboarding/configure-sui-client).
+
+- [x] [Create a Sui address](/getting-started/onboarding/get-address).
+
+- [x] [Get SUI Testnet tokens](/getting-started/onboarding/get-coins).
+
+- [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
+
+    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
+
+    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
+
+    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
+
+    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
+    
+        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
+
+- [x] [Download and install Git](https://git-scm.com/downloads).
+
 - [x] Node.js 18 or later
+
 - [x] Rust toolchain (for the relayer service)
+
 - [x] A Sui wallet (Slush Wallet or another compatible wallet)
+
 </TabItem>
 </Tabs>
-
-## Architecture
 
 The example has 3 layers and 5 actors. The diagram below shows the components and the data flow between them.
 
@@ -81,9 +99,11 @@ graph LR
   seal --> package
 ```
 
-The **React frontend** handles wallet connection, message composition, client-side encryption and decryption, and group management. The **relayer service** is a Rust/Axum HTTP server that stores encrypted messages in memory, verifies sender signatures, checks onchain permissions through a cached membership store, and batches messages to Walrus for archival. The **messaging Move package** manages group creation, member permissions, encryption key history, and the Seal access-control gate. **Seal key servers** hold threshold encryption keys and release DEK shares only when the `seal_approve_reader` function confirms the caller has `MessagingReader` permission. **Walrus** stores encrypted message quilts for decentralized persistence.
+The React frontend handles wallet connection, message composition, client-side encryption and decryption, and group management. The relayer service is a Rust/Axum HTTP server that stores encrypted messages in memory, verifies sender signatures, checks onchain permissions through a cached membership store, and batches messages to Walrus for archival. Walrus stores encrypted message quilts for decentralized persistence.
 
-## How the encryption works
+The messaging Move package manages group creation, member permissions, encryption key history, and the Seal access-control gate. 
+
+Seal key servers hold threshold encryption keys and release DEK shares only when the `seal_approve_reader` function confirms the caller has `MessagingReader` permission. 
 
 The app uses a 2-layer encryption scheme called envelope encryption:
 
@@ -112,27 +132,17 @@ The chat app depends on the local `@mysten/sui-stack-messaging` package:
 $ cd ts-sdks
 $ pnpm install
 $ pnpm build
-$ cd ..
 ```
 
-##### Step 3: Start the relayer
+##### Step 3: Configure the frontend
 
 ```bash
-$ cd relayer
-$ cargo run
-```
-
-The relayer starts on `http://localhost:3000` by default. Leave it running in a separate terminal.
-
-##### Step 4: Configure the frontend
-
-```bash
-$ cd chat-app
-$ npm install
+$ cd ../chat-app
+$ pnpm install
 $ cp .env.example .env
 ```
 
-Edit `.env` with your network and service configuration:
+Edit `.env` with your network and service configuration. By default
 
 ```bash title='.env'
 VITE_SUI_NETWORK=testnet
@@ -145,15 +155,43 @@ VITE_WALRUS_EPOCHS=5
 VITE_SEAL_KEY_SERVER_OBJECT_IDS=COMMA_SEPARATED_SEAL_SERVER_IDS
 ```
 
-##### Step 5: Start the frontend
+Configure the `VITE_SEAL_KEY_SERVER_OBJECT_IDS` using the list of [verified key servers](https://seal-docs.wal.app/Pricing#verified-key-servers). You must provide at least 2 server object IDs.
+
+##### Step 4: Start the relayer
 
 ```bash
+$ cd relayer
+$ cp .env.example .env  # fill in SUI_RPC_URL (https://fullnode.testnet.sui.io:443 for testnet) and GROUPS_PACKAGE_ID (Deployed Groups SDK package ID)
+```
+
+The deployed Groups SDK package IDs for Mainnet and Testnet are:
+
+| Network | Groups SDK package ID |
+| Testnet | 0xba8a26d42bc8b5e5caf4dac2a0f7544128d5dd9b4614af88eec1311ade11de79 |
+| Mainnet | 0x541840ae7df705d1c6329c22415ed61f9140a18b79b13c1c9dc7415b115c1ba8 |
+
+Then, run the relayer:
+
+```bash
+$ cargo run
+```
+
+The relayer starts on `http://localhost:3000` by default. Leave it running, and open a separate terminal.
+
+##### Step 5: Start the frontend
+
+In a new terminal, navigate back into the example's directory and start the app's frontend:
+
+```bash
+$ cd sui-stack-messaging/chat-app
 $ npm run dev
 ```
 
 ## Run the example
 
-Open `http://localhost:5173` in a browser and connect your wallet. Click **+ New** in the sidebar to create a group. Enter a group name and optionally add member addresses. The app creates a `PermissionedGroup<Messaging>` onchain, generates an encrypted DEK through Seal, and stores the encryption history onchain.
+Open `http://localhost:5173` in a browser and connect your wallet. Slush is the recommended wallet for this application. If using Slush, you must use a passphrase or imported wallet. If you use a wallet with zkLogin (login with Google, etc), then you will get the error `Invalid public key format: Unknown signature scheme flag: 0x05`. If you use another wallet like Suilet, it might not be supported and once logged in, the app might be blank.
+
+Click **+ New** in the sidebar to create a group. Enter a group name and optionally add member addresses. **You must add at least your wallet address as a group member, otherwise you cannot message the group.** The app creates a `PermissionedGroup<Messaging>` onchain, generates an encrypted DEK through Seal, and stores the encryption history onchain.
 
 Select the group from the sidebar to open the chat. Type a message and press **Enter**. The frontend encrypts the message with the group DEK, signs it with your wallet, and sends the ciphertext to the relayer. Other group members see the message appear in real time through polling, and their clients decrypt it locally.
 
@@ -161,9 +199,23 @@ To test file attachments, click **Attach files** and select up to 10 files (5MB 
 
 ## Key code highlights
 
+The following steps walk through the flow:
+
+1. The sender types a message and presses **Enter**. The frontend fetches the current encrypted DEK from the `EncryptionHistory` object onchain.
+
+2. The frontend sends the encrypted DEK to Seal key servers along with a `seal_approve_reader` transaction. Seal dry-runs the transaction, confirms the sender has `MessagingReader` permission, and returns key shares. The frontend combines the shares to recover the plaintext DEK.
+
+3. The frontend encrypts the message text with AES-256-GCM using the DEK and a random 12-byte nonce. It signs the ciphertext with the wallet and POSTs the encrypted payload to the relayer.
+
+4. The relayer verifies the sender's signature, checks `MessagingSender` permission against its cached membership store, assigns a message order number, and stores the ciphertext in memory. A background service batches pending messages to Walrus as encrypted quilts.
+
+5. The recipient's frontend polls the relayer for new messages. It receives the ciphertext, fetches the DEK through the same Seal flow (with its own `MessagingReader` permission check), decrypts the message locally, and verifies the sender's signature.
+
+Errors can occur at the Seal step (session key expired, permission revoked), the relayer step (signature invalid, permission denied), or the Walrus step (upload timeout). The SDK retries transient failures and surfaces persistent errors through the `useMessages` hook's error state.
+
 The following snippets are the parts of the code worth reading carefully.
 
-### Move: Seal access-control policy
+### Seal access-control policy
 
 The `seal_approve_reader` function is the onchain gate that Seal key servers call before releasing DEK shares. It checks that the caller has `MessagingReader` permission in the group.
 
@@ -171,7 +223,7 @@ The `seal_approve_reader` function is the onchain gate that Seal key servers cal
 
 The function validates the 40-byte identity (32-byte group ID + 8-byte key version), confirms the encryption history belongs to the correct group, and verifies the caller holds `MessagingReader` permission. If any check fails, the transaction aborts and Seal denies the key shares.
 
-### Move: encryption key rotation
+### Encryption key rotation
 
 The `rotate_encryption_key` function appends a new encrypted DEK version to the onchain history. It requires `EncryptionKeyRotator` permission.
 
@@ -179,7 +231,7 @@ The `rotate_encryption_key` function appends a new encrypted DEK version to the 
 
 Key rotation creates a new DEK version. Future messages encrypt with the new version. Removed members can still decrypt old messages (they had the old DEK cached) but cannot access the new DEK because Seal checks their permission at decryption time.
 
-### Move: encryption history storage
+### Encryption history storage
 
 The `EncryptionHistory` struct stores versioned encrypted DEKs as a `TableVec` on a shared object.
 
@@ -187,7 +239,7 @@ The `EncryptionHistory` struct stores versioned encrypted DEKs as a `TableVec` o
 
 Each entry in the `deks` table is an encrypted DEK blob (up to 1024 bytes). The key version is the index into this table. The identity format `[group_id (32 bytes)][key_version (8 bytes)]` ensures each DEK maps to exactly 1 group and version.
 
-### Frontend: messaging client setup
+### Messaging client setup
 
 The `MessagingClientProvider` initializes the SDK client with Seal, Walrus, and relayer configuration.
 
@@ -195,62 +247,13 @@ The `MessagingClientProvider` initializes the SDK client with Seal, Walrus, and 
 
 The provider creates a `SuiStackMessagingClient` that composes the Sui client with Seal (for DEK encryption and decryption), a Walrus storage adapter (for file attachments), and an HTTP relayer transport. The `DappKitSigner` bridges the wallet's signing capability to the SDK's signer interface.
 
-### Frontend: sending and receiving messages
+### Ssending and receiving messages
 
 The `useMessages` hook manages the full message lifecycle: fetching history, subscribing for updates, sending, editing, and deleting.
 
 <ImportContent source="chat-app/src/hooks/useMessages.ts" mode="code" org="MystenLabs" repo="sui-stack-messaging" fun="useMessages" />
 
 The hook calls `client.sendMessage()` which encrypts the text with AES-256-GCM using the group DEK, signs the ciphertext, and POSTs it to the relayer. For real-time updates, it calls `client.subscribe()` which polls the relayer and automatically decrypts incoming messages using the cached DEK.
-
-### Frontend: group creation
-
-The `CreateGroupModal` builds the onchain group creation transaction and persists the group to local storage for instant sidebar rendering.
-
-<ImportContent source="chat-app/src/components/CreateGroupModal.tsx" mode="code" org="MystenLabs" repo="sui-stack-messaging" fun="CreateGroupModal" />
-
-The component calls `client.createAndShareGroup()` which builds a PTB that creates a `PermissionedGroup<Messaging>`, generates and encrypts the initial DEK through Seal, stores the `EncryptionHistory` onchain, and grants the creator all 7 permissions. Initial members receive `MessagingReader` permission.
-
-## Data flow
-
-The diagram below traces 1 message from composition to delivery.
-
-```mermaid
-sequenceDiagram
-  participant Sender
-  participant Frontend as Sender frontend
-  participant Seal as Seal key servers
-  participant Relayer
-  participant Walrus
-  participant Recipient as Recipient frontend
-
-  Sender->>Frontend: Type message, press Enter
-  Frontend->>Frontend: Fetch encrypted DEK from chain
-  Frontend->>Seal: Decrypt DEK (seal_approve_reader)
-  Seal-->>Frontend: DEK shares
-  Frontend->>Frontend: AES-256-GCM encrypt message
-  Frontend->>Frontend: Sign ciphertext with wallet
-  Frontend->>Relayer: POST /messages (ciphertext)
-  Relayer->>Relayer: Verify signature + permissions
-  Relayer-->>Frontend: {messageId, order}
-  Relayer->>Walrus: Batch upload (background)
-  Recipient->>Relayer: Poll /messages
-  Relayer-->>Recipient: Encrypted messages
-  Recipient->>Seal: Decrypt DEK (seal_approve_reader)
-  Seal-->>Recipient: DEK shares
-  Recipient->>Recipient: AES-256-GCM decrypt message
-  Recipient->>Recipient: Verify sender signature
-```
-
-The following steps walk through the flow:
-
-1. The sender types a message and presses **Enter**. The frontend fetches the current encrypted DEK from the `EncryptionHistory` object onchain.
-2. The frontend sends the encrypted DEK to Seal key servers along with a `seal_approve_reader` transaction. Seal dry-runs the transaction, confirms the sender has `MessagingReader` permission, and returns key shares. The frontend combines the shares to recover the plaintext DEK.
-3. The frontend encrypts the message text with AES-256-GCM using the DEK and a random 12-byte nonce. It signs the ciphertext with the wallet and POSTs the encrypted payload to the relayer.
-4. The relayer verifies the sender's signature, checks `MessagingSender` permission against its cached membership store, assigns a message order number, and stores the ciphertext in memory. A background service batches pending messages to Walrus as encrypted quilts.
-5. The recipient's frontend polls the relayer for new messages. It receives the ciphertext, fetches the DEK through the same Seal flow (with its own `MessagingReader` permission check), decrypts the message locally, and verifies the sender's signature.
-
-Errors can occur at the Seal step (session key expired, permission revoked), the relayer step (signature invalid, permission denied), or the Walrus step (upload timeout). The SDK retries transient failures and surfaces persistent errors through the `useMessages` hook's error state.
 
 ## Troubleshooting
 
@@ -293,3 +296,21 @@ Errors can occur at the Seal step (session key expired, permission revoked), the
 **Cause:** The file exceeds the 5MB per-file or 50MB total limit, the Walrus publisher is unreachable, or the publisher URL is misconfigured.
 
 **Fix:** Check file sizes (max 5MB each, 10 files, 50MB total). Verify `VITE_WALRUS_PUBLISHER_URL` is correct and reachable with `curl PUBLISHER_URL/v1/health`. Increase `VITE_WALRUS_EPOCHS` if storage duration is too short.
+
+### Error: `Invalid key servers or threshold 2 for 1 key servers for package 0x04...`
+
+**Cause:** Configured key servers are invalid, unreachable, or only one was specified.
+
+**Fix:** Check that the Seal key server object IDs in `.env` are correct, there are at least 2, and the servers are reachable.
+
+### Error: `Invalid public key format: Unknown signature scheme flag: 0x05`
+
+**Cause:** zkLogin is not supported by this application, and the wallet connected to the app uses zkLogin.
+
+**Fix:** Use a passphrase or imported key wallet instead.
+
+### Application disappears after connecting your wallet
+
+**Cause:** You've connected an unsupported wallet to the application.
+
+**Fix:** Restart the application and connect a known supported wallet, such as Slush, to the application instead. 

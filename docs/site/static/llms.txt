@@ -14,13 +14,49 @@
       contracts, object creation and transfer, capability patterns, witness patterns, and hot
       potato patterns. Essential reference for all Move smart contract development on Sui.
 
+## Concepts
+
+- [Concepts](https://docs.sui.io/concepts.md)
+- [Architecture](https://docs.sui.io/concepts/architecture.md)
+- [Coin Mgt](https://docs.sui.io/concepts/coin-mgt.md)
+- [Cryptography](https://docs.sui.io/concepts/cryptography.md)
+- [Nautilus Design](https://docs.sui.io/concepts/cryptography/nautilus/nautilus-design.md)
+
+### Concepts/Cryptography
+- [Passkeys](https://docs.sui.io/concepts/cryptography/passkeys.md)
+- [System](https://docs.sui.io/concepts/cryptography/system.md)
+- [Zklogin](https://docs.sui.io/concepts/cryptography/zklogin.md)
+
+### Concepts/Cryptography/System
+- [Checkpoint
+    Verification](https://docs.sui.io/concepts/cryptography/system/checkpoint-verification.md)
+- [Intents For
+    Validation](https://docs.sui.io/concepts/cryptography/system/intents-for-validation.md)
+- [Validator Signatures](https://docs.sui.io/concepts/cryptography/system/validator-signatures.md)
+
+### Concepts/Data Access
+- [Data Serving](https://docs.sui.io/concepts/data-access/data-serving.md)
+- [Graphql Indexer](https://docs.sui.io/concepts/data-access/graphql-indexer.md)
+- [Graphql Rpc](https://docs.sui.io/concepts/data-access/graphql-rpc.md)
+- [Grpc](https://docs.sui.io/concepts/data-access/grpc.md)
+- [Gaming](https://docs.sui.io/concepts/gaming.md)
+- [Research Papers](https://docs.sui.io/concepts/research-papers.md)
+
+### Concepts/Sui Architecture
+- [Consensus](https://docs.sui.io/concepts/sui-architecture/consensus.md)
+
 ## Develop
 
 - [Develop](https://docs.sui.io/develop.md)
+- [Accessing Data](https://docs.sui.io/develop/accessing-data.md)
 
 ### Develop/Accessing Data
+- [Archival Store](https://docs.sui.io/develop/accessing-data/archival-store.md)
 - [Authenticated Events](https://docs.sui.io/develop/accessing-data/authenticated-events.md)
+- [Custom Indexer](https://docs.sui.io/develop/accessing-data/custom-indexer.md)
 - [Data Serving](https://docs.sui.io/develop/accessing-data/data-serving.md)
+- [Graphql](https://docs.sui.io/develop/accessing-data/graphql.md)
+- [Grpc](https://docs.sui.io/develop/accessing-data/grpc.md)
 - [Accessing Data Index](https://docs.sui.io/develop/accessing-data/index.md)
 - [Using Events](https://docs.sui.io/develop/accessing-data/using-events.md)
 
@@ -53,6 +89,7 @@
 - [Grpc Index](https://docs.sui.io/develop/accessing-data/grpc/index.md)
 - [Using Grpc](https://docs.sui.io/develop/accessing-data/grpc/using-grpc.md)
 - [What Is Grpc](https://docs.sui.io/develop/accessing-data/grpc/what-is-grpc.md)
+- [Cryptography](https://docs.sui.io/develop/cryptography.md)
 
 ### Develop/Cryptography
 - [Ecvrf](https://docs.sui.io/develop/cryptography/ecvrf.md)
@@ -61,17 +98,23 @@
 - [Cryptography Index](https://docs.sui.io/develop/cryptography/index.md)
 - [Passkeys](https://docs.sui.io/develop/cryptography/passkeys.md)
 - [Signing](https://docs.sui.io/develop/cryptography/signing.md)
+- [Develop Index](https://docs.sui.io/develop/index.md)
+- [Manage Packages](https://docs.sui.io/develop/manage-packages.md)
 
 ### Develop/Manage Packages
 - [Automated Address
     Management](https://docs.sui.io/develop/manage-packages/automated-address-management.md)
 - [Manage Packages Index](https://docs.sui.io/develop/manage-packages/index.md)
 - [Move Package Management](https://docs.sui.io/develop/manage-packages/move-package-management.md)
+- [Objects](https://docs.sui.io/develop/objects.md)
 
 ### Develop/Objects
 - [Derived Objects](https://docs.sui.io/develop/objects/derived-objects.md)
+- [Display](https://docs.sui.io/develop/objects/display.md)
 - [Dynamic Fields](https://docs.sui.io/develop/objects/dynamic-fields.md)
 - [Objects Index](https://docs.sui.io/develop/objects/index.md)
+- [Object Ownership](https://docs.sui.io/develop/objects/object-ownership.md)
+- [Transfers](https://docs.sui.io/develop/objects/transfers.md)
 - [Versioning](https://docs.sui.io/develop/objects/versioning.md)
 
 ### Develop/Objects/Display
@@ -85,53 +128,134 @@
 - [Immutable](https://docs.sui.io/develop/objects/object-ownership/immutable.md)
 - [Object Ownership Index](https://docs.sui.io/develop/objects/object-ownership/index.md)
 - [Party](https://docs.sui.io/develop/objects/object-ownership/party.md)
-- [Shared](https://docs.sui.io/develop/objects/object-ownership/shared.md)
-- [Wrapped](https://docs.sui.io/develop/objects/object-ownership/wrapped.md)
-
-### Develop/Objects/Transfers
-- [Custom Rules](https://docs.sui.io/develop/objects/transfers/custom-rules.md)
-- [Transfers Index](https://docs.sui.io/develop/objects/transfers/index.md)
-- [Simulating Refs](https://docs.sui.io/develop/objects/transfers/simulating-refs.md)
-- [Transfer Policies](https://docs.sui.io/develop/objects/transfers/transfer-policies.md)
-- [Transfer To Object](https://docs.sui.io/develop/objects/transfers/transfer-to-object.md)
-
-### Develop/Publish Upgrade Packages
-- [Custom Policies](https://docs.sui.io/develop/publish-upgrade-packages/custom-policies.md)
-- [Publish Upgrade Packages Index](https://docs.sui.io/develop/publish-upgrade-packages/index.md)
-- [Upgrade](https://docs.sui.io/develop/publish-upgrade-packages/upgrade.md)
-- [Versioning](https://docs.sui.io/develop/publish-upgrade-packages/versioning.md)
-
-### Develop/Sui Architecture
-- [Checkpoint Verification](https://docs.sui.io/develop/sui-architecture/checkpoint-verification.md)
-- [Components](https://docs.sui.io/develop/sui-architecture/components.md)
-- [Consensus](https://docs.sui.io/develop/sui-architecture/consensus.md)
-- [Epochs](https://docs.sui.io/develop/sui-architecture/epochs.md)
-- [Sui Architecture Index](https://docs.sui.io/develop/sui-architecture/index.md)
-- [Networks](https://docs.sui.io/develop/sui-architecture/networks.md)
 
 ## Getting Started
 
 - [Getting Started](https://docs.sui.io/getting-started.md)
 - [Dev Cheat Sheet](https://docs.sui.io/getting-started/dev-cheat-sheet.md)
+- [Examples](https://docs.sui.io/getting-started/examples.md)
+
+### Getting Started/Examples
+- [Examples Index](https://docs.sui.io/getting-started/examples/index.md)
+- [Plinko](https://docs.sui.io/getting-started/examples/plinko.md)
+- [Sui Chat App](https://docs.sui.io/getting-started/examples/sui-chat-app.md)
+- [Getting Started Index](https://docs.sui.io/getting-started/index.md)
+- [Onboarding](https://docs.sui.io/getting-started/onboarding.md)
 
 ### Getting Started/Onboarding
 - [App Frontends](https://docs.sui.io/getting-started/onboarding/app-frontends.md)
 - [Configure Sui Client](https://docs.sui.io/getting-started/onboarding/configure-sui-client.md)
 - [Get Address](https://docs.sui.io/getting-started/onboarding/get-address.md)
-- [Get Coins](https://docs.sui.io/getting-started/onboarding/get-coins.md)
-- [Hello World](https://docs.sui.io/getting-started/onboarding/hello-world.md)
-- [Onboarding Index](https://docs.sui.io/getting-started/onboarding/index.md)
-- [Install Binaries](https://docs.sui.io/getting-started/onboarding/install-binaries.md)
-- [Install Source](https://docs.sui.io/getting-started/onboarding/install-source.md)
+
+## Guides
+
+- [Guides](https://docs.sui.io/guides.md)
+
+### Guides/Developer
+- [App Examples](https://docs.sui.io/guides/developer/app-examples.md)
+- [Coin Index](https://docs.sui.io/guides/developer/coin-index.md)
+- [Common Errors](https://docs.sui.io/guides/developer/common-errors.md)
+- [Cryptography](https://docs.sui.io/guides/developer/cryptography.md)
+- [Currency](https://docs.sui.io/guides/developer/currency.md)
+- [Dev Cheat Sheet](https://docs.sui.io/guides/developer/dev-cheat-sheet.md)
+- [Getting Started](https://docs.sui.io/guides/developer/getting-started.md)
+- [Nft Index](https://docs.sui.io/guides/developer/nft-index.md)
+- [Nft](https://docs.sui.io/guides/developer/nft.md)
+- [Stablecoins](https://docs.sui.io/guides/developer/stablecoins.md)
+- [Starter Templates](https://docs.sui.io/guides/developer/starter-templates.md)
+- [Wallet Index](https://docs.sui.io/guides/developer/wallet-index.md)
+- [Zklogin Onboarding](https://docs.sui.io/guides/developer/zklogin-onboarding.md)
+
+### Guides/Developer/Accessing Data
+- [Archival Store](https://docs.sui.io/guides/developer/accessing-data/archival-store.md)
+- [Custom Indexing
+    Framework](https://docs.sui.io/guides/developer/accessing-data/custom-indexing-framework.md)
+- [Grpc Overview](https://docs.sui.io/guides/developer/accessing-data/grpc-overview.md)
+- [Pipeline
+    Architecture](https://docs.sui.io/guides/developer/accessing-data/pipeline-architecture.md)
+- [Query With Graphql](https://docs.sui.io/guides/developer/accessing-data/query-with-graphql.md)
+- [Using Events](https://docs.sui.io/guides/developer/accessing-data/using-events.md)
+
+### Guides/Developer/Accessing Data/Custom Indexer
+- [Build](https://docs.sui.io/guides/developer/accessing-data/custom-indexer/build.md)
+- [Indexer Data
+    Integration](https://docs.sui.io/guides/developer/accessing-data/custom-indexer/indexer-data-integration.md)
+- [Indexer Runtime
+    Perf](https://docs.sui.io/guides/developer/accessing-data/custom-indexer/indexer-runtime-perf.md)
+- [Indexer
+    Walrus](https://docs.sui.io/guides/developer/accessing-data/custom-indexer/indexer-walrus.md)
+
+### Guides/Developer/Advanced
+- [Efficient Smart
+    Contracts](https://docs.sui.io/guides/developer/advanced/efficient-smart-contracts.md)
+- [Maximize Reach](https://docs.sui.io/guides/developer/advanced/maximize-reach.md)
+- [Min Gas Fees](https://docs.sui.io/guides/developer/advanced/min-gas-fees.md)
+- [Security Best
+    Practices](https://docs.sui.io/guides/developer/advanced/security-best-practices.md)
+- [Wallet Integrations](https://docs.sui.io/guides/developer/advanced/wallet-integrations.md)
+
+### Guides/Developer/App Examples
+- [Auction](https://docs.sui.io/guides/developer/app-examples/auction.md)
+- [Blackjack](https://docs.sui.io/guides/developer/app-examples/blackjack.md)
+- [Client Tssdk](https://docs.sui.io/guides/developer/app-examples/client-tssdk.md)
+- [Coin Flip](https://docs.sui.io/guides/developer/app-examples/coin-flip.md)
+- [E2e Counter](https://docs.sui.io/guides/developer/app-examples/e2e-counter.md)
+- [Meta Pricing Oracle](https://docs.sui.io/guides/developer/app-examples/meta-pricing-oracle.md)
+- [Oracle](https://docs.sui.io/guides/developer/app-examples/oracle.md)
+- [Plinko](https://docs.sui.io/guides/developer/app-examples/plinko.md)
+- [Reviews Rating](https://docs.sui.io/guides/developer/app-examples/reviews-rating.md)
+- [Tic Tac Toe](https://docs.sui.io/guides/developer/app-examples/tic-tac-toe.md)
+- [Trustless Swap](https://docs.sui.io/guides/developer/app-examples/trustless-swap.md)
+- [Turnip Town](https://docs.sui.io/guides/developer/app-examples/turnip-town.md)
+- [Weather Oracle](https://docs.sui.io/guides/developer/app-examples/weather-oracle.md)
+
+### Guides/Developer/Coin
+- [In Game Token](https://docs.sui.io/guides/developer/coin/in-game-token.md)
+- [Loyalty](https://docs.sui.io/guides/developer/coin/loyalty.md)
+- [Regulated](https://docs.sui.io/guides/developer/coin/regulated.md)
+- [Vesting Strategies](https://docs.sui.io/guides/developer/coin/vesting-strategies.md)
+
+### Guides/Developer/Cryptography
+- [Ecvrf](https://docs.sui.io/guides/developer/cryptography/ecvrf.md)
+- [Groth16](https://docs.sui.io/guides/developer/cryptography/groth16.md)
+- [Hashing](https://docs.sui.io/guides/developer/cryptography/hashing.md)
+- [Multisig](https://docs.sui.io/guides/developer/cryptography/multisig.md)
+- [Signing](https://docs.sui.io/guides/developer/cryptography/signing.md)
+- [Zklogin Integration](https://docs.sui.io/guides/developer/cryptography/zklogin-integration.md)
+
+### Guides/Developer/Cryptography/Zklogin Integration
+- [Developer
+    Account](https://docs.sui.io/guides/developer/cryptography/zklogin-integration/developer-account.md)
+- [Zklogin
+    Example](https://docs.sui.io/guides/developer/cryptography/zklogin-integration/zklogin-example.md)
+
+### Guides/Developer/Getting Started
+- [App Frontends](https://docs.sui.io/guides/developer/getting-started/app-frontends.md)
+- [Configure Sui
+    Client](https://docs.sui.io/guides/developer/getting-started/configure-sui-client.md)
+- [Get Address](https://docs.sui.io/guides/developer/getting-started/get-address.md)
+- [Get Coins](https://docs.sui.io/guides/developer/getting-started/get-coins.md)
+- [Hello World](https://docs.sui.io/guides/developer/getting-started/hello-world.md)
+- [Install Binaries](https://docs.sui.io/guides/developer/getting-started/install-binaries.md)
+- [Install Source](https://docs.sui.io/guides/developer/getting-started/install-source.md)
 
 ## Onchain Finance
 
 - [Onchain Finance](https://docs.sui.io/onchain-finance.md)
+- [Asset Custody](https://docs.sui.io/onchain-finance/asset-custody.md)
 
 ### Onchain Finance/Asset Custody
-- [Address Balance
-    Migration](https://docs.sui.io/onchain-finance/asset-custody/address-balance-migration.md)
+- [Address Balances](https://docs.sui.io/onchain-finance/asset-custody/address-balances.md)
 - [Asset Custody Index](https://docs.sui.io/onchain-finance/asset-custody/index.md)
+- [Wallets](https://docs.sui.io/onchain-finance/asset-custody/wallets.md)
+
+### Onchain Finance/Asset Custody/Address Balances
+- [Address Balances
+    Index](https://docs.sui.io/onchain-finance/asset-custody/address-balances/index.md)
+- [Migrate Address
+    Balances](https://docs.sui.io/onchain-finance/asset-custody/address-balances/migrate-address-balances.md)
+- [Using Address
+    Balances](https://docs.sui.io/onchain-finance/asset-custody/address-balances/using-address-balances.md)
 
 ### Onchain Finance/Asset Custody/Wallets
 - [Wallets Index](https://docs.sui.io/onchain-finance/asset-custody/wallets/index.md)
@@ -141,6 +265,7 @@
 - [Wallet Standard](https://docs.sui.io/onchain-finance/asset-custody/wallets/wallet-standard.md)
 - [What Is A Wallet](https://docs.sui.io/onchain-finance/asset-custody/wallets/what-is-a-wallet.md)
 - [Zk Login Wallets](https://docs.sui.io/onchain-finance/asset-custody/wallets/zk-login-wallets.md)
+- [Closed Loop Token](https://docs.sui.io/onchain-finance/closed-loop-token.md)
 
 ### Onchain Finance/Closed Loop Token
 - [Action Request](https://docs.sui.io/onchain-finance/closed-loop-token/action-request.md)
@@ -148,6 +273,7 @@
 - [Rules](https://docs.sui.io/onchain-finance/closed-loop-token/rules.md)
 - [Spending](https://docs.sui.io/onchain-finance/closed-loop-token/spending.md)
 - [Token Policy](https://docs.sui.io/onchain-finance/closed-loop-token/token-policy.md)
+- [Deepbook Margin Sdk](https://docs.sui.io/onchain-finance/deepbook-margin-sdk.md)
 
 ### Onchain Finance/Deepbook Margin
 - [Contract
@@ -165,6 +291,7 @@
 - [Margin Pool](https://docs.sui.io/onchain-finance/deepbook-margin-sdk/margin-pool.md)
 - [Orders](https://docs.sui.io/onchain-finance/deepbook-margin-sdk/orders.md)
 - [Tpsl](https://docs.sui.io/onchain-finance/deepbook-margin-sdk/tpsl.md)
+- [Deepbook Margin](https://docs.sui.io/onchain-finance/deepbook-margin.md)
 
 ### Onchain Finance/Deepbook Margin/Contract Information
 - [Interest
@@ -181,6 +308,7 @@
 - [Supply
     Referral](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/supply-referral.md)
 - [Tpsl](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/tpsl.md)
+- [Deepbookv3 Sdk](https://docs.sui.io/onchain-finance/deepbookv3-sdk.md)
 
 ### Onchain Finance/Deepbookv3
 - [Contract Information](https://docs.sui.io/onchain-finance/deepbookv3/contract-information.md)
@@ -191,35 +319,12 @@
 ### Onchain Finance/Deepbookv3 Sdk
 - [Balance Manager](https://docs.sui.io/onchain-finance/deepbookv3-sdk/balance-manager.md)
 - [Flash Loans](https://docs.sui.io/onchain-finance/deepbookv3-sdk/flash-loans.md)
-- [Deepbookv3 Sdk Index](https://docs.sui.io/onchain-finance/deepbookv3-sdk/index.md)
-- [Orders](https://docs.sui.io/onchain-finance/deepbookv3-sdk/orders.md)
-- [Pools](https://docs.sui.io/onchain-finance/deepbookv3-sdk/pools.md)
-- [Staking Governance](https://docs.sui.io/onchain-finance/deepbookv3-sdk/staking-governance.md)
-- [Swaps](https://docs.sui.io/onchain-finance/deepbookv3-sdk/swaps.md)
-
-### Onchain Finance/Deepbookv3/Contract Information
-- [Balance
-    Manager](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/balance-manager.md)
-- [Ewma](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/ewma.md)
-- [Flash Loans](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/flash-loans.md)
-- [Orders](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/orders.md)
-- [Permissionless
-    Pool](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/permissionless-pool.md)
-- [Query The
-    Pool](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/query-the-pool.md)
-- [Referral](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/referral.md)
-- [Staking
-    Governance](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/staking-governance.md)
-- [Swaps](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/swaps.md)
-
-### Onchain Finance/Examples Patterns
-- [Fixed Supply](https://docs.sui.io/onchain-finance/examples-patterns/fixed-supply.md)
-- [In Game Currency](https://docs.sui.io/onchain-finance/examples-patterns/in-game-currency.md)
 
 ## Operators
 
 - [Operators](https://docs.sui.io/operators.md)
 - [Bridge Node Configuration](https://docs.sui.io/operators/bridge-node-configuration.md)
+- [Data Management](https://docs.sui.io/operators/data-management.md)
 
 ### Operators/Data Management
 - [Archival Stack Setup](https://docs.sui.io/operators/data-management/archival-stack-setup.md)
@@ -229,13 +334,10 @@
 - [Managing Data](https://docs.sui.io/operators/data-management/managing-data.md)
 - [Remote Store Setup](https://docs.sui.io/operators/data-management/remote-store-setup.md)
 - [Exchange Integration](https://docs.sui.io/operators/exchange-integration.md)
+- [Full Node](https://docs.sui.io/operators/full-node.md)
 
 ### Operators/Full Node
 - [Full Node Index](https://docs.sui.io/operators/full-node/index.md)
-- [Monitoring](https://docs.sui.io/operators/full-node/monitoring.md)
-- [Sui Full Node](https://docs.sui.io/operators/full-node/sui-full-node.md)
-- [Updates](https://docs.sui.io/operators/full-node/updates.md)
-- [Genesis](https://docs.sui.io/operators/genesis.md)
 
 ## References
 
@@ -266,6 +368,12 @@
 - [Sui Environment](https://docs.sui.io/references/contribute/sui-environment.md)
 - [Exchange Integration Guide](https://docs.sui.io/references/exchange-integration-guide.md)
 - [Framework](https://docs.sui.io/references/framework.md)
+
+### References/Framework
+- [Sui Bridge](https://docs.sui.io/references/framework/sui_bridge.md)
+- [Sui Std](https://docs.sui.io/references/framework/sui_std.md)
+- [Sui Sui System](https://docs.sui.io/references/framework/sui_sui_system.md)
+- [Sui Sui](https://docs.sui.io/references/framework/sui_sui.md)
 
 ### References/Framework/Sui Bridge
 - [Bridge](https://docs.sui.io/references/framework/sui_bridge/bridge.md)
@@ -385,11 +493,13 @@
 - [Fullnode Protocol Types](https://docs.sui.io/references/fullnode-protocol-types.md)
 - [Fullnode Protocol](https://docs.sui.io/references/fullnode-protocol.md)
 - [Gaming](https://docs.sui.io/references/gaming.md)
+- [Ide](https://docs.sui.io/references/ide.md)
 
 ### References/Ide
 - [Debugger](https://docs.sui.io/references/ide/debugger.md)
 - [Ide Index](https://docs.sui.io/references/ide/index.md)
 - [Move](https://docs.sui.io/references/ide/move.md)
+- [References Index](https://docs.sui.io/references/index.md)
 - [Object Display Syntax](https://docs.sui.io/references/object-display-syntax.md)
 
 ### References/Package Managers
@@ -402,6 +512,7 @@
 - [Rust Sdk](https://docs.sui.io/references/rust-sdk.md)
 - [Sui Api](https://docs.sui.io/references/sui-api.md)
 - [Rpc Best Practices](https://docs.sui.io/references/sui-api/rpc-best-practices.md)
+- [Generated](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/generated.md)
 
 ### References/Sui Api/Sui Graphql/Beta/Reference/Operations/Directives
 -
@@ -522,156 +633,54 @@
     Name](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/dynamic-field-name.md)
 - [Event
     Filter](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/event-filter.md)
-- [Object
-    Filter](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/object-filter.md)
-- [Object
-    Key](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/object-key.md)
-- [Package Checkpoint
-    Filter](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/package-checkpoint-filter.md)
-- [Package
-    Key](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/package-key.md)
-- [Transaction
-    Filter](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/transaction-filter.md)
-- [Version
-    Filter](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/inputs/version-filter.md)
 
-### References/Sui Api/Sui Graphql/Beta/Reference/Types/Interfaces
--
-    [Iaddressable](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/interfaces/iaddressable.md)
-- [Imove
-    Datatype](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/interfaces/imove-datatype.md)
-- [Imove
-    Object](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/interfaces/imove-object.md)
--
-    [Iobject](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/interfaces/iobject.md)
-- [Node](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/interfaces/node.md)
+## Standards
 
-### References/Sui Api/Sui Graphql/Beta/Reference/Types/Objects
-- [Accumulator Root Create
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/accumulator-root-create-transaction.md)
-- [Active Jwk
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/active-jwk-connection.md)
-- [Active Jwk
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/active-jwk-edge.md)
-- [Active
-    Jwk](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/active-jwk.md)
-- [Address Alias State Create
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/address-alias-state-create-transaction.md)
-- [Address
-    Owner](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/address-owner.md)
--
-    [Address](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/address.md)
-- [Authenticator State Create
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/authenticator-state-create-transaction.md)
-- [Authenticator State Expire
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/authenticator-state-expire-transaction.md)
-- [Authenticator State Update
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/authenticator-state-update-transaction.md)
-- [Available
-    Range](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/available-range.md)
-- [Balance Change
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/balance-change-connection.md)
-- [Balance Change
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/balance-change-edge.md)
-- [Balance
-    Change](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/balance-change.md)
-- [Balance
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/balance-connection.md)
-- [Balance
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/balance-edge.md)
-- [Balance
-    Withdraw](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/balance-withdraw.md)
--
-    [Balance](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/balance.md)
-- [Bridge Committee Init
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/bridge-committee-init-transaction.md)
-- [Bridge State Create
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/bridge-state-create-transaction.md)
-- [Change Epoch
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/change-epoch-transaction.md)
-- [Checkpoint
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/checkpoint-connection.md)
-- [Checkpoint
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/checkpoint-edge.md)
--
-    [Checkpoint](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/checkpoint.md)
-- [Circom
-    G1](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/circom-g1.md)
-- [Circom
-    G2](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/circom-g2.md)
-- [Coin Deny List State Create
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/coin-deny-list-state-create-transaction.md)
-- [Coin
-    Metadata](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/coin-metadata.md)
-- [Coin Registry Create
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/coin-registry-create-transaction.md)
-- [Command
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/command-connection.md)
-- [Command
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/command-edge.md)
-- [Command
-    Output](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/command-output.md)
-- [Command
-    Result](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/command-result.md)
-- [Consensus Address
-    Owner](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/consensus-address-owner.md)
-- [Consensus Commit Prologue
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/consensus-commit-prologue-transaction.md)
-- [Consensus Object
-    Cancelled](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/consensus-object-cancelled.md)
-- [Consensus Object
-    Read](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/consensus-object-read.md)
-- [Display Registry Create
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/display-registry-create-transaction.md)
--
-    [Display](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/display.md)
-- [Dynamic Field
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/dynamic-field-connection.md)
-- [Dynamic Field
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/dynamic-field-edge.md)
-- [Dynamic
-    Field](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/dynamic-field.md)
-- [Ed 25519 Public
-    Key](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/ed-25519-public-key.md)
-- [Ed 25519
-    Signature](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/ed-25519-signature.md)
-- [End Of Epoch Transaction Kind
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/end-of-epoch-transaction-kind-connection.md)
-- [End Of Epoch Transaction Kind
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/end-of-epoch-transaction-kind-edge.md)
-- [End Of Epoch
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/end-of-epoch-transaction.md)
-- [Epoch
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/epoch-connection.md)
-- [Epoch
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/epoch-edge.md)
-- [Epoch](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/epoch.md)
-- [Event
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/event-connection.md)
-- [Event
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/event-edge.md)
-- [Event](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/event.md)
-- [Execution
-    Error](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/execution-error.md)
-- [Execution
-    Result](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/execution-result.md)
-- [Feature
-    Flag](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/feature-flag.md)
-- [Gas
-    Coin](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/gas-coin.md)
-- [Gas Cost
-    Summary](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/gas-cost-summary.md)
-- [Gas
-    Effects](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/gas-effects.md)
-- [Gas
-    Input](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/gas-input.md)
-- [Genesis
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/genesis-transaction.md)
+- [Standards](https://docs.sui.io/standards.md)
+- [Closed Loop Token](https://docs.sui.io/standards/closed-loop-token.md)
+
+### Standards/Closed Loop Token
+- [Action Request](https://docs.sui.io/standards/closed-loop-token/action-request.md)
+- [Coin Token Comparison](https://docs.sui.io/standards/closed-loop-token/coin-token-comparison.md)
+- [Rules](https://docs.sui.io/standards/closed-loop-token/rules.md)
+- [Spending](https://docs.sui.io/standards/closed-loop-token/spending.md)
+- [Token Policy](https://docs.sui.io/standards/closed-loop-token/token-policy.md)
+- [Coin](https://docs.sui.io/standards/coin.md)
+- [Currency](https://docs.sui.io/standards/currency.md)
+- [Deepbook Margin Indexer](https://docs.sui.io/standards/deepbook-margin-indexer.md)
+- [Deepbook Margin Sdk](https://docs.sui.io/standards/deepbook-margin-sdk.md)
+
+### Standards/Deepbook Margin
+- [Contract Information](https://docs.sui.io/standards/deepbook-margin/contract-information.md)
+- [Design](https://docs.sui.io/standards/deepbook-margin/design.md)
+- [Margin Risks](https://docs.sui.io/standards/deepbook-margin/margin-risks.md)
+
+### Standards/Deepbook Margin Sdk
+- [Maintainer](https://docs.sui.io/standards/deepbook-margin-sdk/maintainer.md)
+- [Margin Manager](https://docs.sui.io/standards/deepbook-margin-sdk/margin-manager.md)
+- [Margin Pool](https://docs.sui.io/standards/deepbook-margin-sdk/margin-pool.md)
+- [Orders](https://docs.sui.io/standards/deepbook-margin-sdk/orders.md)
+- [Tpsl](https://docs.sui.io/standards/deepbook-margin-sdk/tpsl.md)
+- [Deepbook Margin](https://docs.sui.io/standards/deepbook-margin.md)
+
+### Standards/Deepbook Margin/Contract Information
+- [Interest
+    Rates](https://docs.sui.io/standards/deepbook-margin/contract-information/interest-rates.md)
+- [Maintainer](https://docs.sui.io/standards/deepbook-margin/contract-information/maintainer.md)
+- [Margin
+    Manager](https://docs.sui.io/standards/deepbook-margin/contract-information/margin-manager.md)
+- [Margin Pool](https://docs.sui.io/standards/deepbook-margin/contract-information/margin-pool.md)
+- [Orders](https://docs.sui.io/standards/deepbook-margin/contract-information/orders.md)
+- [Risk Ratio](https://docs.sui.io/standards/deepbook-margin/contract-information/risk-ratio.md)
+- [Supply
+    Referral](https://docs.sui.io/standards/deepbook-margin/contract-information/supply-referral.md)
 
 ## Sui Stack
 
 - [Sui Stack](https://docs.sui.io/sui-stack.md)
+- [Sui Stack Index](https://docs.sui.io/sui-stack/index.md)
 - [Indexer Walrus](https://docs.sui.io/sui-stack/indexer-walrus.md)
+- [Nautilus](https://docs.sui.io/sui-stack/nautilus.md)
 
 ### Sui Stack/Nautilus
 - [Community Dev Tools](https://docs.sui.io/sui-stack/nautilus/community-dev-tools.md)
@@ -681,12 +690,8 @@
 - [Nautilus Overview](https://docs.sui.io/sui-stack/nautilus/nautilus-overview.md)
 - [Seal](https://docs.sui.io/sui-stack/nautilus/seal.md)
 - [Using Nautilus](https://docs.sui.io/sui-stack/nautilus/using-nautilus.md)
+- [On Chain Primitives](https://docs.sui.io/sui-stack/on-chain-primitives.md)
 
 ### Sui Stack/On Chain Primitives
 - [Access Time](https://docs.sui.io/sui-stack/on-chain-primitives/access-time.md)
 - [On Chain Primitives Index](https://docs.sui.io/sui-stack/on-chain-primitives/index.md)
-- [Randomness Onchain](https://docs.sui.io/sui-stack/on-chain-primitives/randomness-onchain.md)
-- [Sagat](https://docs.sui.io/sui-stack/sagat.md)
-
-### Sui Stack/Suiplay0x1
-- [Best Practices](https://docs.sui.io/sui-stack/suiplay0x1/best-practices.md)
