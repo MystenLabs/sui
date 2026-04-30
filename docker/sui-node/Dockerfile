@@ -6,10 +6,6 @@ FROM rust:1.92-bullseye AS builder
 ARG PROFILE=release
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
-# AWS credentials for sccache S3 backend, passed as build args. Used only
-# during cargo build below; not persisted into the final runtime image.
-ARG AWS_ACCESS_KEY_ID
-ARG AWS_SECRET_ACCESS_KEY
 WORKDIR "$WORKDIR/sui"
 RUN apt-get update && apt-get install -y cmake clang curl
 
@@ -51,14 +47,20 @@ COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
 
-# Build with mold linker + sccache S3 backend. RUSTFLAGS replicates sui's
-# .cargo/config.toml baseline plus -C link-arg=-fuse-ld=mold; keep in sync
-# with .github/actions/setup-sccache/action.yml in the sui repo.
-RUN AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-    AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-    SCCACHE_BUCKET=mystenlabs-sccache \
-    SCCACHE_REGION=us-west-2 \
-    SCCACHE_S3_KEY_PREFIX=mp3-sui-node-experiment \
+# Build with mold linker + sccache GCS backend. Auth via Application
+# Default Credentials — mp3 buildkitd-sa has Workload Identity binding
+# with roles/storage.objectAdmin on this bucket, and the buildkit pod's
+# rootless --oci-worker-no-process-sandbox setup lets inner RUN
+# containers reach the GKE metadata server. No credentials needed in
+# the Dockerfile or build args.
+#
+# RUSTFLAGS replicates sui's .cargo/config.toml baseline plus
+# -C link-arg=-fuse-ld=mold; keep in sync with
+# .github/actions/setup-sccache/action.yml in the sui repo.
+RUN SCCACHE_GCS_BUCKET=sui-sccache-mp3 \
+    SCCACHE_GCS_KEY_PREFIX=sui-node \
+    SCCACHE_GCS_RW_MODE=READ_WRITE \
+    SCCACHE_LOG=info \
     RUSTC_WRAPPER=sccache \
     RUSTFLAGS="-C force-frame-pointers=yes -C force-unwind-tables=yes -A unknown_lints -A mismatched_lifetime_syntaxes -C link-arg=-fuse-ld=mold" \
     cargo build --profile ${PROFILE} --bin sui-node && \
