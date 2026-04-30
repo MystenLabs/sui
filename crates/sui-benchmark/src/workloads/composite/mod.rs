@@ -467,6 +467,37 @@ struct AliasState {
     cycle_state: AliasRevokeCycleState,
 }
 
+impl AliasState {
+    /// Apply the result of polling `is_transaction_checkpointed` for the currently
+    /// pending Add or Remove alias tx. If checkpoint-confirmed, transitions to the
+    /// next cycle state.
+    fn confirm_pending_alias_checkpoint(&mut self, checkpointed: bool) {
+        if !checkpointed {
+            return;
+        }
+        let next_state = match &self.cycle_state {
+            AliasRevokeCycleState::AddPending {
+                tx_digest: Some(digest),
+            } => {
+                info!("Add alias tx {digest} checkpoint confirmed");
+                Some(AliasRevokeCycleState::Active {
+                    successful_alias_txs: 0,
+                })
+            }
+            AliasRevokeCycleState::RemovePending {
+                tx_digest: Some(digest),
+            } => {
+                info!("Remove alias tx {digest} checkpoint confirmed");
+                Some(AliasRevokeCycleState::Revoked)
+            }
+            _ => None,
+        };
+        if let Some(s) = next_state {
+            self.cycle_state = s;
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum BatchTxKind {
     /// Standard composite PTB.
@@ -744,47 +775,30 @@ impl CompositePayload {
     /// Polls for pending alias checkpoint confirmations and returns true if
     /// an alias tx should be generated this batch.
     async fn advance_alias_state(&mut self) -> bool {
-        let Some(ref mut alias_state) = self.alias_state else {
-            return false;
-        };
-
-        match &alias_state.cycle_state {
-            AliasRevokeCycleState::AddPending {
-                tx_digest: Some(digest),
-            } => {
-                let checkpointed = self.fullnode_proxies[0]
-                    .is_transaction_checkpointed(digest)
-                    .await
-                    .unwrap_or(false);
-                if checkpointed {
-                    info!("Add alias tx {digest} checkpoint confirmed");
-                    alias_state.cycle_state = AliasRevokeCycleState::Active {
-                        successful_alias_txs: 0,
-                    };
-                }
+        let pending_alias_digest = self.alias_state.as_ref().and_then(|s| match s.cycle_state {
+            AliasRevokeCycleState::AddPending { tx_digest: Some(d) }
+            | AliasRevokeCycleState::RemovePending { tx_digest: Some(d) } => Some(d),
+            _ => None,
+        });
+        if let Some(digest) = pending_alias_digest {
+            let checkpointed = self.fullnode_proxies[0]
+                .is_transaction_checkpointed(&digest)
+                .await
+                .unwrap_or(false);
+            if let Some(alias_state) = self.alias_state.as_mut() {
+                alias_state.confirm_pending_alias_checkpoint(checkpointed);
             }
-            AliasRevokeCycleState::RemovePending {
-                tx_digest: Some(digest),
-            } => {
-                let checkpointed = self.fullnode_proxies[0]
-                    .is_transaction_checkpointed(digest)
-                    .await
-                    .unwrap_or(false);
-                if checkpointed {
-                    info!("Remove alias tx {digest} checkpoint confirmed");
-                    alias_state.cycle_state = AliasRevokeCycleState::Revoked;
-                }
-            }
-            _ => {}
         }
 
-        let mut rng = get_rng();
+        let Some(alias_state) = self.alias_state.as_ref() else {
+            return false;
+        };
         match &alias_state.cycle_state {
             AliasRevokeCycleState::Active {
                 successful_alias_txs,
             } if *successful_alias_txs >= self.config.alias_txs_before_revoke => true,
             AliasRevokeCycleState::Active { .. } => {
-                rng.gen_bool(self.config.alias_tx_probability as f64)
+                get_rng().gen_bool(self.config.alias_tx_probability as f64)
             }
             AliasRevokeCycleState::Revoked | AliasRevokeCycleState::NeedAdd => true,
             _ => false,
@@ -1927,5 +1941,87 @@ impl Workload<dyn Payload> for CompositeWorkload {
 
     fn name(&self) -> &str {
         "Composite"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn alias_state_for_test(cycle_state: AliasRevokeCycleState) -> AliasState {
+        let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+        AliasState {
+            alias_address: sender,
+            alias_keypair: Arc::new(keypair),
+            address_aliases_id: ObjectID::random(),
+            address_aliases_initial_shared_version: SequenceNumber::from_u64(1),
+            cycle_state,
+        }
+    }
+
+    /// Verifies `Revoked` is reachable: a checkpoint-confirmed `RemovePending`
+    /// transitions the state machine into `Revoked`, the gating state for the
+    /// post-revoke probe.
+    #[test]
+    fn alias_state_remove_pending_to_revoked() {
+        let mut state = alias_state_for_test(AliasRevokeCycleState::RemovePending {
+            tx_digest: Some(TransactionDigest::random()),
+        });
+
+        state.confirm_pending_alias_checkpoint(false);
+        assert!(matches!(
+            state.cycle_state,
+            AliasRevokeCycleState::RemovePending { tx_digest: Some(_) }
+        ));
+
+        state.confirm_pending_alias_checkpoint(true);
+        assert!(matches!(state.cycle_state, AliasRevokeCycleState::Revoked));
+    }
+
+    #[test]
+    fn alias_state_add_pending_to_active() {
+        let mut state = alias_state_for_test(AliasRevokeCycleState::AddPending {
+            tx_digest: Some(TransactionDigest::random()),
+        });
+        state.confirm_pending_alias_checkpoint(true);
+        assert!(matches!(
+            state.cycle_state,
+            AliasRevokeCycleState::Active {
+                successful_alias_txs: 0
+            }
+        ));
+    }
+
+    /// Pending states with no observed digest yet (Phase 1) must not advance.
+    #[test]
+    fn alias_state_pending_without_digest_does_not_advance() {
+        let mut state =
+            alias_state_for_test(AliasRevokeCycleState::RemovePending { tx_digest: None });
+        state.confirm_pending_alias_checkpoint(true);
+        assert!(matches!(
+            state.cycle_state,
+            AliasRevokeCycleState::RemovePending { tx_digest: None }
+        ));
+    }
+
+    /// Verifies the cycle exits `Revoked`: a permanent failure for the
+    /// post-revoke probe transitions back to `NeedAdd`, restarting the cycle.
+    #[test]
+    fn alias_state_revoked_exits_to_need_add_on_probe_failure() {
+        let mut state = alias_state_for_test(AliasRevokeCycleState::Revoked);
+        let counted = CompositePayload::handle_alias_tx_result(
+            &mut state,
+            BatchTxKind::InvalidPostRevocation,
+            &BatchedTransactionStatus::PermanentFailure {
+                error: "test".into(),
+            },
+            10,
+            TransactionDigest::random(),
+        );
+        assert!(
+            counted,
+            "expected probe rejection to be counted as expected"
+        );
+        assert!(matches!(state.cycle_state, AliasRevokeCycleState::NeedAdd));
     }
 }

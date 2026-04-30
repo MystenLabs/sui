@@ -600,6 +600,23 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 }
 
+async fn warn_and_backoff_for_retry(
+    digests: &[TransactionDigest],
+    retry_cnt: &mut u32,
+    reason: impl std::fmt::Display,
+) {
+    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+    warn!(
+        ?digests,
+        retry_cnt = *retry_cnt,
+        "Soft bundle retry: {}. Sleeping for {:?} ...",
+        reason,
+        delay,
+    );
+    *retry_cnt += 1;
+    sleep(delay).await;
+}
+
 #[instrument(level = "debug", skip_all, fields(digests = ?txs.iter().map(|tx| *tx.digest()).collect::<Vec<_>>()))]
 async fn execute_soft_bundle_with_retries(
     td: &TransactionDriver<NetworkAuthorityClient>,
@@ -639,16 +656,12 @@ async fn execute_soft_bundle_with_retries(
                 if err.is_retryable().0
                     && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
                 {
-                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
-                    warn!(
-                        ?digests,
-                        retry_cnt,
-                        "Failed to get validator client with retriable error: {:?}. Sleeping for {:?} ...",
-                        err,
-                        delay,
-                    );
-                    retry_cnt += 1;
-                    sleep(delay).await;
+                    warn_and_backoff_for_retry(
+                        &digests,
+                        &mut retry_cnt,
+                        format!("get validator client failed: {err:?}"),
+                    )
+                    .await;
                     continue;
                 }
                 return Err(err.into());
@@ -670,16 +683,12 @@ async fn execute_soft_bundle_with_retries(
                 if sui_error.is_retryable().0
                     && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
                 {
-                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
-                    warn!(
-                        ?digests,
-                        retry_cnt,
-                        "Soft bundle submission failed with retriable error: {:?}. Sleeping for {:?} ...",
-                        sui_error,
-                        delay,
-                    );
-                    retry_cnt += 1;
-                    sleep(delay).await;
+                    warn_and_backoff_for_retry(
+                        &digests,
+                        &mut retry_cnt,
+                        format!("submission failed: {sui_error:?}"),
+                    )
+                    .await;
                     continue;
                 }
                 return Err(sui_error.into());
@@ -742,16 +751,12 @@ async fn execute_soft_bundle_with_retries(
         }
 
         if should_retry {
-            let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
-            warn!(
-                ?digests,
-                retry_cnt,
-                "Soft bundle rejected with retriable error: {:?}. Sleeping for {:?} ...",
-                last_error,
-                delay,
-            );
-            retry_cnt += 1;
-            sleep(delay).await;
+            warn_and_backoff_for_retry(
+                &digests,
+                &mut retry_cnt,
+                format!("submission rejected: {last_error:?}"),
+            )
+            .await;
             continue;
         }
 
@@ -783,6 +788,34 @@ async fn execute_soft_bundle_with_retries(
             .collect();
 
         let wait_responses = futures::future::join_all(wait_futures).await;
+
+        // If any tx's wait_for_effects came back with a retriable signal (epoch-change
+        // rejection or an Expired consensus position), the tx was never ordered, so
+        // re-submit the bundle in the new epoch / with a fresh consensus position.
+        // Rejected{error: None} is intentionally not treated as retriable: it occurs
+        // when our chosen validator voted to accept while a quorum of others voted to
+        // reject, leaving no local rejection reason to act on. The caller surfaces it
+        // as UnknownRejection.
+        let retriable_wait_failure = wait_responses.iter().find_map(|r| match r {
+            Ok(WaitForEffectsResponse::Rejected { error: Some(e) }) if e.is_retryable().0 => {
+                Some(format!("rejected: {e:?}"))
+            }
+            Ok(WaitForEffectsResponse::Expired { epoch, round }) => {
+                Some(format!("expired (epoch {epoch}, round {round:?})"))
+            }
+            _ => None,
+        });
+        if let Some(reason) = retriable_wait_failure
+            && (retry_cnt < max_retries || start.elapsed() < min_retry_duration)
+        {
+            warn_and_backoff_for_retry(
+                &digests,
+                &mut retry_cnt,
+                format!("wait_for_effects retriable failure: {reason}"),
+            )
+            .await;
+            continue;
+        }
 
         // Build final results by combining immediate responses with waited responses
         let mut wait_response_iter = wait_responses.into_iter();
