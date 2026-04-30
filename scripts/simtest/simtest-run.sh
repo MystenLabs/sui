@@ -133,6 +133,14 @@ fi
 # determinism-log). Phase 1's per-job logs live under $LOG_DIR/e2e/, which we
 # intentionally don't grep over here — Phase 1 failures are surfaced via
 # failures.ndjson.
+#
+# TODO: this regex misses signal-based terminations. nextest reports
+# signal-killed tests with status tokens other than FAIL/TIMEOUT — e.g.
+# `SIGABRT [time] pkg::bin::test`, and similarly SIGSEGV, SIGBUS, SIGKILL,
+# SIGTRAP, SIGFPE, SIGSYS, plus LEAK for goroutine/thread leaks. Today
+# sui-benchmark's `test_simulated_load_large_consensus_commit_prologue_size`
+# SIGABRTs in ~50% of stress iterations on main and silently passes as a
+# result. Same regex is used in collect-failures.sh — keep them in sync.
 if grep -EqHn 'TIMEOUT|FAIL' "$LOG_DIR"/log-* "$LOG_DIR"/determinism-log 2>/dev/null; then
   PHASE23_FAILED=1
 fi

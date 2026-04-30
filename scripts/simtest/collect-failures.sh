@@ -35,6 +35,12 @@ for line in sys.stdin:
   # Phase 2/3 still use nextest output: "FAIL [time] package::binary::test".
   # Globs are explicit (log-*, determinism-log) so we do not pick up Phase 1's
   # per-job logs under $LOG_DIR/e2e/ and try to parse them as nextest output.
+  #
+  # TODO: this regex misses signal-based terminations. nextest also emits
+  # status lines like "SIGABRT [time] pkg::bin::test" (and SIGSEGV, SIGBUS,
+  # SIGKILL, SIGTRAP, SIGFPE, SIGSYS, plus LEAK), none of which match
+  # FAIL|TIMEOUT. simtest-run.sh's failure-detection grep has the same gap
+  # — keep them in sync when this is fixed.
   for f in "$LOG_DIR"/log-* "$LOG_DIR"/determinism-log; do
     [ -f "$f" ] || continue
     sed 's/\x1b\[[0-9;]*m//g' "$f" \
