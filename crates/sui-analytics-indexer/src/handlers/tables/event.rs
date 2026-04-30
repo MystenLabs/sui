@@ -72,7 +72,7 @@ impl Processor for EventProcessor {
                         ))
                         .await?;
 
-                    let move_value = BoundedVisitor::deserialize_value(contents, &layout)?;
+                    let move_value = BoundedVisitor::deserialize_value(contents, layout.as_ref())?;
                     let (_, event_json) = type_and_fields_from_move_event_data(move_value)?;
 
                     let row = EventRow {

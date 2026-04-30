@@ -4,6 +4,7 @@
 use crate::error::{SuiError, SuiErrorKind};
 use move_bytecode_utils::{layout::TypeLayoutBuilder, module_cache::GetModule};
 use move_core_types::{
+    annotated_value as A,
     compressed::annotated as CA,
     language_storage::{StructTag, TypeTag},
 };
@@ -55,6 +56,8 @@ pub fn into_tree_struct_layout(
     }
 }
 
+/// Project a compressed datatype layout to its struct case, erroring if it is
+/// an enum.
 pub fn into_struct_layout<'l>(
     layout: CA::MoveDatatypeLayout<'l>,
 ) -> Result<CA::MoveStructLayout<'l>, SuiError> {
