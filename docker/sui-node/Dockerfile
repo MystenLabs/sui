@@ -47,6 +47,22 @@ COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
 
+# Diagnostic: what identity does the inner BuildKit RUN container see?
+RUN set -eux; \
+    echo "--- metadata server reachability ---"; \
+    curl -fsS -H "Metadata-Flavor: Google" "http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/email" || echo "(metadata server unreachable)"; \
+    echo; \
+    echo "--- token info (scopes) ---"; \
+    TOKEN=$(curl -fsS -H "Metadata-Flavor: Google" "http://169.254.169.254/computeMetadata/v1/instance/service-accounts/default/token" 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)['access_token'])" || echo ""); \
+    if [ -n "$TOKEN" ]; then \
+      curl -fsS "https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=$TOKEN" || true; \
+    fi; \
+    echo; \
+    echo "--- direct GCS check via that token ---"; \
+    if [ -n "$TOKEN" ]; then \
+      curl -i -fsS -H "Authorization: Bearer $TOKEN" "https://storage.googleapis.com/storage/v1/b/sui-sccache-mp3" | head -10 || true; \
+    fi
+
 # Build with mold linker + sccache GCS backend. Auth via Application
 # Default Credentials — mp3 buildkitd-sa has Workload Identity binding
 # with roles/storage.objectAdmin on this bucket, and the buildkit pod's
