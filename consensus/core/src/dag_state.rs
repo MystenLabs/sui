@@ -936,17 +936,20 @@ impl DagState {
     }
 
     /// Returns the `RoundInfo` for `round`, if retained. `None` if the round has
-    /// been evicted (<= gc_round) or has not been reached yet.
-    #[cfg(test)] // consumed by FlexCommitter on the v3 path (next branch)
+    /// been evicted, Gc'ed or has not been reached yet.
+    #[cfg(test)]
     pub(crate) fn round_info(&self, round: Round) -> Option<&RoundInfo> {
-        if round <= self.gc_round() {
-            return None;
-        }
         let front_round = self.round_info.front()?.round;
-        if round < front_round {
+        if round < front_round || round <= self.gc_round() {
             return None;
         }
-        self.round_info.get((round - front_round) as usize)
+        let round_info = self.round_info.get((round - front_round) as usize)?;
+        assert_eq!(
+            round_info.round, round,
+            "RoundInfo round {} does not match requested round {}. RoundInfo should be contiguous.",
+            round_info.round, round
+        );
+        Some(round_info)
     }
 
     /// Updates the `RoundInfo` for the round of the given block,
