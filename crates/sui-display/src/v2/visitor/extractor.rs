@@ -40,13 +40,13 @@ impl<'v, 'p> Extractor<'v, 'p> {
     }
 }
 
-impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
+impl<'v, 'l: 'v> AV::Visitor<'v, 'l> for Extractor<'v, '_> {
     type Value = Option<Value<'v>>;
     type Error = FormatError;
 
     fn visit_u8(
         &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: &AV::ValueDriver<'_, 'v, 'l>,
         n: u8,
     ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U8(n)))
@@ -54,7 +54,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_u16(
         &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: &AV::ValueDriver<'_, 'v, 'l>,
         n: u16,
     ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U16(n)))
@@ -62,7 +62,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_u32(
         &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: &AV::ValueDriver<'_, 'v, 'l>,
         n: u32,
     ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U32(n)))
@@ -70,7 +70,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_u64(
         &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: &AV::ValueDriver<'_, 'v, 'l>,
         n: u64,
     ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U64(n)))
@@ -78,7 +78,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_u128(
         &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: &AV::ValueDriver<'_, 'v, 'l>,
         n: u128,
     ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U128(n)))
@@ -86,7 +86,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_u256(
         &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: &AV::ValueDriver<'_, 'v, 'l>,
         n: U256,
     ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::U256(n)))
@@ -94,7 +94,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_bool(
         &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: &AV::ValueDriver<'_, 'v, 'l>,
         b: bool,
     ) -> Result<Self::Value, Self::Error> {
         Ok(self.path.is_empty().then_some(Value::Bool(b)))
@@ -102,7 +102,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_address(
         &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: &AV::ValueDriver<'_, 'v, 'l>,
         a: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         match self.path.last() {
@@ -118,7 +118,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
     /// Sui does not produce signer values, so we can never extract them.
     fn visit_signer(
         &mut self,
-        _: &AV::ValueDriver<'_, 'v, 'v>,
+        _: &AV::ValueDriver<'_, 'v, 'l>,
         _: AccountAddress,
     ) -> Result<Self::Value, Self::Error> {
         Ok(None)
@@ -126,7 +126,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_vector(
         &mut self,
-        driver: &mut AV::VecDriver<'_, 'v, 'v>,
+        driver: &mut AV::VecDriver<'_, 'v, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         let Some(accessor) = self.path.pop() else {
             while driver.skip_element()? {}
@@ -147,9 +147,10 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_struct(
         &mut self,
-        driver: &mut AV::StructDriver<'_, 'v, 'v>,
+        driver: &mut AV::StructDriver<'_, 'v, 'l>,
     ) -> Result<Self::Value, Self::Error> {
-        let ty = &driver.struct_layout().type_;
+        let struct_layout = driver.struct_layout();
+        let ty = struct_layout.type_();
         if (&ty.address, ty.module.as_ref(), ty.name.as_ref()) == RESOLVED_STD_OPTION {
             return Ok(OptionVisitor(self).visit_struct(driver)?.flatten());
         }
@@ -178,13 +179,13 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         // If the next accessor is an index, then try and treat this struct as a VecMap, and
         // perform a VecMap look-up.
         if let Accessor::Index(i) = accessor {
-            if !is_vec_map(&driver.struct_layout().type_) {
+            if !is_vec_map(struct_layout.type_()) {
                 return Ok(None);
             }
 
             let key = bcs::to_bytes(i)?;
             let contents = driver.peek_field();
-            if contents.is_none_or(|l| l.name.as_str() != "contents") {
+            if contents.is_none_or(|(name, _)| name.as_str() != "contents") {
                 return Ok(None);
             }
 
@@ -204,8 +205,8 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
         };
 
         self.path.pop();
-        while let Some(field) = driver.peek_field() {
-            if field.name.as_str() == name.as_ref() {
+        while let Some((field_name, _)) = driver.peek_field() {
+            if field_name.as_str() == name.as_ref() {
                 return Ok(driver.next_field(self)?.and_then(|(_, v)| v));
             } else {
                 driver.skip_field()?;
@@ -217,7 +218,7 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
 
     fn visit_variant(
         &mut self,
-        driver: &mut AV::VariantDriver<'_, 'v, 'v>,
+        driver: &mut AV::VariantDriver<'_, 'v, 'l>,
     ) -> Result<Self::Value, Self::Error> {
         let Some(accessor) = self.path.pop() else {
             while driver.skip_field()?.is_some() {}
@@ -232,8 +233,8 @@ impl<'v> AV::Visitor<'v, 'v> for Extractor<'v, '_> {
             return Ok(None);
         };
 
-        while let Some(field) = driver.peek_field() {
-            if field.name.as_str() == name.as_ref() {
+        while let Some((field_name, _)) = driver.peek_field() {
+            if field_name.as_str() == name.as_ref() {
                 return Ok(driver.next_field(self)?.and_then(|(_, v)| v));
             } else {
                 driver.skip_field()?;
