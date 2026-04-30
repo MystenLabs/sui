@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_false_positives.move:13:49
+   │
+13 │     public fun mutate_rhs(other: &mut ValueCap, c: &ValueCap) {
+   │                                                 ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_false_positives.move:18:33
+   │
+18 │     public fun abort_with_field(c: &ValueCap, flag: bool) {
+   │                                 ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99012]: unused object with fields
+   ┌─ tests/sui_mode/linter/unused_object_with_fields_false_positives.move:24:32
+   │
+24 │     public fun vector_returned(c: &ValueCap): vector<u64> {
+   │                                ^ Unused object with fields. Consider reading or writing the object's fields, or passing it to another function.
+   │
+   = This warning can be suppressed with '#[allow(lint(unused_object_with_fields))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
