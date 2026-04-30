@@ -1087,13 +1087,13 @@ impl AuthorityPerEpochStore {
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
 
-        let epoch_alive_token = CancellationToken::new();
-
         let signed_effects_digests_cache = DashMap::new();
         for item in tables.signed_effects_digests.safe_iter() {
             let (tx_digest, effects_digest) = item?;
             signed_effects_digests_cache.insert(tx_digest, effects_digest);
         }
+
+        let epoch_alive_token = CancellationToken::new();
 
         assert_eq!(
             epoch_start_configuration.epoch_start_state().epoch(),
