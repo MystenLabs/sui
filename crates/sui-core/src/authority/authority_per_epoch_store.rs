@@ -25,7 +25,7 @@ use mysten_common::assert_reachable;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{debug_fatal, fatal};
+use mysten_common::{debug_fatal, fatal, in_test_configuration};
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
 use parking_lot::RwLock;
@@ -2096,7 +2096,15 @@ impl AuthorityPerEpochStore {
         &self,
         tx_digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionEffectsDigest>> {
-        Ok(self.signed_effects_digests_cache.get(tx_digest).map(|r| *r))
+        let cached = self.signed_effects_digests_cache.get(tx_digest).map(|r| *r);
+        if in_test_configuration() {
+            let from_db = self.tables()?.signed_effects_digests.get(tx_digest)?;
+            assert_eq!(
+                cached, from_db,
+                "signed_effects_digests cache inconsistency for {tx_digest}"
+            );
+        }
+        Ok(cached)
     }
 
     pub fn get_transaction_cert_sig(
