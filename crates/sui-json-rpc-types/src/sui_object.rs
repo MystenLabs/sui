@@ -11,7 +11,8 @@ use anyhow::anyhow;
 use colored::Colorize;
 use fastcrypto::encoding::Base64;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::annotated_value::{MoveStructLayout, MoveValue};
+use move_core_types::annotated_value::{MoveTypeLayout as TreeMoveTypeLayout, MoveValue};
+use move_core_types::compressed::annotated as CA;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
@@ -465,7 +466,12 @@ impl TryFrom<(ObjectRead, SuiObjectDataOptions)> for SuiObjectResponse {
                 SuiObjectResponseError::NotExists { object_id: id },
             )),
             ObjectRead::Exists(object_ref, o, layout) => {
-                let data = (object_ref, o, layout, options).try_into()?;
+                let compressed_layout = layout
+                    .map(|layout| {
+                        CA::MoveTypeLayout::try_from(&TreeMoveTypeLayout::Struct(Box::new(layout)))
+                    })
+                    .transpose()?;
+                let data = (object_ref, o, compressed_layout, options).try_into()?;
                 Ok(SuiObjectResponse::new_with_data(data))
             }
             ObjectRead::Deleted((object_id, version, digest)) => Ok(
@@ -512,7 +518,7 @@ impl
     TryFrom<(
         ObjectRef,
         Object,
-        Option<MoveStructLayout>,
+        Option<CA::MoveTypeLayout>,
         SuiObjectDataOptions,
     )> for SuiObjectData
 {
@@ -522,7 +528,7 @@ impl
         (object_ref, o, layout, options): (
             ObjectRef,
             Object,
-            Option<MoveStructLayout>,
+            Option<CA::MoveTypeLayout>,
             SuiObjectDataOptions,
         ),
     ) -> Result<Self, Self::Error> {
@@ -549,7 +555,10 @@ impl
                     let layout = layout.clone().ok_or_else(|| {
                         anyhow!("Layout is required to convert Move object to json")
                     })?;
-                    SuiRawData::try_from_object(m, layout)?
+                    let struct_layout = layout
+                        .as_struct()
+                        .ok_or_else(|| anyhow!("expected struct layout"))?;
+                    SuiRawData::try_from_object(m, struct_layout)?
                 }
                 Data::Package(p) => SuiRawData::try_from_package(p)
                     .map_err(|e| anyhow!("Error getting raw data from package: {e:#?}"))?,
@@ -567,7 +576,10 @@ impl
                     let layout = layout.ok_or_else(|| {
                         anyhow!("Layout is required to convert Move object to json")
                     })?;
-                    SuiParsedData::try_from_object(m, layout)?
+                    let struct_layout = layout
+                        .as_struct()
+                        .ok_or_else(|| anyhow!("expected struct layout"))?;
+                    SuiParsedData::try_from_object(m, struct_layout)?
                 }
                 Data::Package(p) => SuiParsedData::try_from_package(p)?,
             };
@@ -603,7 +615,7 @@ impl
     TryFrom<(
         ObjectRef,
         Object,
-        Option<MoveStructLayout>,
+        Option<CA::MoveTypeLayout>,
         SuiObjectDataOptions,
         Option<DisplayFieldsResponse>,
     )> for SuiObjectData
@@ -614,7 +626,7 @@ impl
         (object_ref, o, layout, options, display_fields): (
             ObjectRef,
             Object,
-            Option<MoveStructLayout>,
+            Option<CA::MoveTypeLayout>,
             SuiObjectDataOptions,
             Option<DisplayFieldsResponse>,
         ),
@@ -701,8 +713,10 @@ impl From<ObjectRef> for SuiObjectRef {
 pub trait SuiData: Sized {
     type ObjectType;
     type PackageType;
-    fn try_from_object(object: MoveObject, layout: MoveStructLayout)
-    -> Result<Self, anyhow::Error>;
+    fn try_from_object(
+        object: MoveObject,
+        layout: CA::MoveStructLayout,
+    ) -> Result<Self, anyhow::Error>;
     fn try_from_package(package: MovePackage) -> Result<Self, anyhow::Error>;
     fn try_as_move(&self) -> Option<&Self::ObjectType>;
     fn try_into_move(self) -> Option<Self::ObjectType>;
@@ -722,7 +736,7 @@ impl SuiData for SuiRawData {
     type ObjectType = SuiRawMoveObject;
     type PackageType = SuiRawMovePackage;
 
-    fn try_from_object(object: MoveObject, _: MoveStructLayout) -> Result<Self, anyhow::Error> {
+    fn try_from_object(object: MoveObject, _: CA::MoveStructLayout) -> Result<Self, anyhow::Error> {
         Ok(Self::MoveObject(object.into()))
     }
 
@@ -773,7 +787,7 @@ impl SuiData for SuiParsedData {
 
     fn try_from_object(
         object: MoveObject,
-        layout: MoveStructLayout,
+        layout: CA::MoveStructLayout,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self::MoveObject(SuiParsedMoveObject::try_from_layout(
             object, layout,
@@ -865,9 +879,19 @@ impl SuiParsedData {
             ObjectRead::Exists(_object_ref, o, layout) => {
                 let data = match o.into_inner().data {
                     Data::Move(m) => {
-                        let layout = layout.ok_or_else(|| {
-                            anyhow!("Layout is required to convert Move object to json")
-                        })?;
+                        let layout = layout
+                            .map(|layout| {
+                                CA::MoveTypeLayout::try_from(&TreeMoveTypeLayout::Struct(Box::new(
+                                    layout,
+                                )))
+                            })
+                            .transpose()?
+                            .ok_or_else(|| {
+                                anyhow!("Layout is required to convert Move object to json")
+                            })?;
+                        let layout = layout
+                            .as_struct()
+                            .ok_or_else(|| anyhow!("expected struct layout"))?;
                         SuiParsedData::try_from_object(m, layout)?
                     }
                     Data::Package(p) => SuiParsedData::try_from_package(p)?,
@@ -885,12 +909,17 @@ impl SuiParsedData {
 }
 
 pub trait SuiMoveObject: Sized {
-    fn try_from_layout(object: MoveObject, layout: MoveStructLayout)
-    -> Result<Self, anyhow::Error>;
+    fn try_from_layout(
+        object: MoveObject,
+        layout: CA::MoveStructLayout,
+    ) -> Result<Self, anyhow::Error>;
 
     fn try_from(o: MoveObject, resolver: &impl GetModule) -> Result<Self, anyhow::Error> {
         let layout = o.get_layout(resolver)?;
-        Self::try_from_layout(o, layout)
+        let struct_layout = layout
+            .as_struct()
+            .ok_or_else(|| anyhow::anyhow!("expected struct layout from build_with_types"))?;
+        Self::try_from_layout(o, struct_layout)
     }
 
     fn type_(&self) -> &StructTag;
@@ -911,9 +940,9 @@ pub struct SuiParsedMoveObject {
 impl SuiMoveObject for SuiParsedMoveObject {
     fn try_from_layout(
         object: MoveObject,
-        layout: MoveStructLayout,
+        layout: CA::MoveStructLayout,
     ) -> Result<Self, anyhow::Error> {
-        let move_struct = object.to_move_struct(&layout)?.into();
+        let move_struct = object.to_move_struct(layout)?.into();
 
         Ok(
             if let SuiMoveStruct::WithTypes { type_, fields } = move_struct {
@@ -1003,7 +1032,7 @@ impl From<MoveObject> for SuiRawMoveObject {
 impl SuiMoveObject for SuiRawMoveObject {
     fn try_from_layout(
         object: MoveObject,
-        _layout: MoveStructLayout,
+        _layout: CA::MoveStructLayout,
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             type_: object.type_().clone().into(),

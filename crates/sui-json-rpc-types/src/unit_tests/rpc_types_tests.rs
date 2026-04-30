@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 use anyhow::anyhow;
 use move_core_types::annotated_value::{MoveStruct, MoveValue};
+use move_core_types::compressed::annotated as CA;
 use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -25,9 +26,13 @@ fn test_move_value_to_sui_coin() {
     let coin = GasCoin::new(id, value);
 
     let move_object = MoveObject::new_gas_coin(SequenceNumber::new(), id, value);
-    let layout = GasCoin::layout();
-
-    let move_struct = move_object.to_move_struct(&layout).unwrap();
+    let layout = CA::MoveTypeLayout::try_from(
+        &move_core_types::annotated_value::MoveTypeLayout::Struct(Box::new(GasCoin::layout())),
+    )
+    .unwrap();
+    let move_struct = move_object
+        .to_move_struct(layout.as_struct().unwrap())
+        .unwrap();
     let sui_struct = SuiMoveStruct::from(move_struct);
     let gas_coin = GasCoin::try_from(&sui_struct).unwrap();
     assert_eq!(coin.value(), gas_coin.value());

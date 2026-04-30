@@ -16,7 +16,7 @@ use tabled::{
 use fastcrypto::encoding::Base64;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::identifier::{IdentStr, Identifier};
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use mysten_common::ZipDebugEqIteratorExt;
@@ -1941,7 +1941,7 @@ impl SuiProgrammableTransactionBlock {
         inputs: &[CallArg],
         commands: &[Command],
         module_cache: &impl GetModule,
-    ) -> Vec<Option<MoveTypeLayout>> {
+    ) -> Vec<Option<CA::MoveTypeLayout>> {
         let mut result_types = vec![None; inputs.len()];
         for command in commands.iter() {
             match command {
@@ -1975,13 +1975,13 @@ impl SuiProgrammableTransactionBlock {
                         if let &Argument::Input(i) = arg
                             && let Some(x) = result_types.get_mut(i as usize)
                         {
-                            x.replace(MoveTypeLayout::U64);
+                            x.replace(CA::MoveTypeLayout::u64());
                         }
                     }
                 }
                 Command::TransferObjects(_, Argument::Input(i)) => {
                     if let Some(x) = result_types.get_mut((*i) as usize) {
-                        x.replace(MoveTypeLayout::Address);
+                        x.replace(CA::MoveTypeLayout::address());
                     }
                 }
                 _ => {}
@@ -1995,7 +1995,7 @@ fn get_signature_types(
     id: ModuleId,
     function: &IdentStr,
     module_cache: &impl GetModule,
-) -> Option<Vec<Option<MoveTypeLayout>>> {
+) -> Option<Vec<Option<CA::MoveTypeLayout>>> {
     use std::borrow::Borrow;
     if let Ok(Some(module)) = module_cache.get_module_by_id(&id) {
         let module: &CompiledModule = module.borrow();
@@ -2371,11 +2371,11 @@ pub enum SuiCallArg {
 impl SuiCallArg {
     pub fn try_from(
         value: CallArg,
-        layout: Option<&MoveTypeLayout>,
+        layout: Option<&CA::MoveTypeLayout>,
     ) -> Result<Self, anyhow::Error> {
         Ok(match value {
             CallArg::Pure(p) => SuiCallArg::Pure(SuiPureValue {
-                value_type: layout.map(|l| l.into()),
+                value_type: layout.map(|l| l.as_view().into()),
                 value: SuiJsonValue::from_bcs_bytes(layout, &p)?,
             }),
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, version, digest))) => {
