@@ -70,6 +70,7 @@ pub(super) async fn function(
                 | PRE::NotAnIdentifier(_)
                 | PRE::TypeArityMismatch(_, _)
                 | PRE::TypeParamOOB(_, _)
+                | PRE::UnableToConstructLayout(_)
                 | PRE::UnexpectedReference
                 | PRE::UnexpectedSigner
                 | PRE::UnexpectedError(_)

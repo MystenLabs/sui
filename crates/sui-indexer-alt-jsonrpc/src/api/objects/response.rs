@@ -8,7 +8,7 @@ use anyhow::Context as _;
 use anyhow::bail;
 use async_trait::async_trait;
 use futures::future::OptionFuture;
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::StructTag;
 use serde_json::Value as Json;
 use sui_display::v1::Format;
@@ -153,7 +153,7 @@ async fn object_data<D: SuiData>(ctx: &Context, object: &Object) -> Result<D, Rp
 
         Data::Move(move_object) => {
             let type_: TypeTag = move_object.type_().clone().into();
-            let MoveTypeLayout::Struct(layout) = ctx
+            let layout = ctx
                 .package_resolver()
                 .type_layout(type_.clone())
                 .await
@@ -162,15 +162,15 @@ async fn object_data<D: SuiData>(ctx: &Context, object: &Object) -> Result<D, Rp
                         "Failed to resolve type layout for {}",
                         type_.to_canonical_display(/*with_prefix */ true)
                     )
-                })?
-            else {
+                })?;
+            let CA::MoveLayoutView::Struct(struct_layout) = layout.as_view() else {
                 rpc_bail!(
                     "Type {} is not a struct",
                     type_.to_canonical_display(/*with_prefix */ true)
                 );
             };
 
-            D::try_from_object(move_object, *layout)?
+            D::try_from_object(move_object, struct_layout)?
         }
     })
 }
@@ -328,7 +328,7 @@ impl sui_display::v2::Store for DisplayStore<'_> {
     async fn latest(
         &self,
         id: move_core_types::account_address::AccountAddress,
-    ) -> anyhow::Result<Option<(move_core_types::annotated_value::MoveTypeLayout, Vec<u8>)>> {
+    ) -> anyhow::Result<Option<(CA::MoveTypeLayout, Vec<u8>)>> {
         let Some(object) = load_live(self.ctx, id.into())
             .await
             .context("Failed to fetch object")?
