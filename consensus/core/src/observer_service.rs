@@ -279,14 +279,14 @@ impl ObserverNetworkService for ObserverService {
         &self,
         _peer: NodeId,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
     ) -> ConsensusResult<Vec<Bytes>> {
         fail_point_async!("consensus-rpc-response");
 
-        // Delegate to BlockSyncService (for observer, no highest_accepted_rounds)
+        // Delegate to BlockSyncService
         self.block_sync_service
-            .fetch_blocks(block_refs, highest_accepted_rounds, breadth_first)
+            .fetch_blocks(block_refs, fetch_after_rounds, fetch_missing_ancestors)
             .await
     }
 
