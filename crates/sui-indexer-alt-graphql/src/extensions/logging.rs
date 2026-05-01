@@ -53,6 +53,16 @@ pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-req
 const CLIENT_SDK_TYPE_HEADER: HeaderName = HeaderName::from_static("client-sdk-type");
 const CLIENT_SDK_VERSION_HEADER: HeaderName = HeaderName::from_static("client-sdk-version");
 
+/// Maximum length of a client SDK header value we accept as a Prometheus label. Anything longer
+/// is bucketed to `CLIENT_LABEL_INVALID` so a misbehaving client cannot grow the per-series memory
+/// cost without bound.
+const MAX_CLIENT_SDK_LABEL_LEN: usize = 64;
+
+/// Sentinel label value substituted when a client SDK header exceeds `MAX_CLIENT_SDK_LABEL_LEN`.
+/// Distinct from the empty string we use when the header is absent, so dashboards can tell the
+/// two apart.
+const CLIENT_LABEL_INVALID: &str = "INVALID";
+
 /// Context data that tracks the session UUID and the client's address, to associate logs with a
 /// particular request.
 #[derive(Clone)]
@@ -114,10 +124,12 @@ impl ClientInfo {
         Self {
             sdk_type: headers
                 .get(&CLIENT_SDK_TYPE_HEADER)
-                .and_then(|v| v.to_str().ok().map(String::from)),
+                .and_then(|v| v.to_str().ok())
+                .map(sanitize_client_label),
             sdk_version: headers
                 .get(&CLIENT_SDK_VERSION_HEADER)
-                .and_then(|v| v.to_str().ok().map(String::from)),
+                .and_then(|v| v.to_str().ok())
+                .map(sanitize_client_label),
         }
     }
 }
@@ -316,6 +328,17 @@ fn is_loud_query(codes: &[&str]) -> bool {
             .any(|c| matches!(*c, code::REQUEST_TIMEOUT | code::INTERNAL_SERVER_ERROR))
 }
 
+/// Sanitize a client SDK header value before it is used as a Prometheus label. Values longer than
+/// `MAX_CLIENT_SDK_LABEL_LEN` bytes are bucketed to `CLIENT_LABEL_INVALID`, which caps the
+/// per-series memory cost in the metric registry.
+fn sanitize_client_label(value: &str) -> String {
+    if value.len() <= MAX_CLIENT_SDK_LABEL_LEN {
+        value.to_string()
+    } else {
+        CLIENT_LABEL_INVALID.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use async_graphql::EmptyMutation;
@@ -357,6 +380,20 @@ mod tests {
 
         assert!(info.sdk_type.is_none());
         assert!(info.sdk_version.is_none());
+    }
+
+    #[test]
+    fn client_info_oversized_value_bucketed_invalid() {
+        let mut headers = HeaderMap::new();
+        let too_long = "a".repeat(MAX_CLIENT_SDK_LABEL_LEN + 1);
+        headers.insert(
+            CLIENT_SDK_TYPE_HEADER,
+            HeaderValue::from_str(&too_long).unwrap(),
+        );
+
+        let info = ClientInfo::from_headers(&headers);
+
+        assert_eq!(info.sdk_type.as_deref(), Some(CLIENT_LABEL_INVALID));
     }
 
     #[tokio::test]
