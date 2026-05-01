@@ -462,6 +462,9 @@ impl<'input> Lexer<'input> {
             Err(_) => return Tok::LexError,
         };
         let next_start = self.text.len() - text.len();
+        // Note [lookahead-panic]: panic_mode = true so `find_token` returns `Err(None)` instead of
+        // building a diagnostic we'd just discard via `unwrap_or` below. `advance` will
+        // re-encounter and report the error if the parser ever consumes past this position.
         let (result, _) = find_token(
             /* panic_mode */ true,
             self.file_hash,
@@ -483,6 +486,7 @@ impl<'input> Lexer<'input> {
             Err(_) => return (Tok::LexError, Tok::LexError),
         };
         let offset = self.text.len() - text.len();
+        // See [lookahead-panic] for why panic_mode is true here.
         let (result, length) = find_token(
             /* panic_mode */ true,
             self.file_hash,
