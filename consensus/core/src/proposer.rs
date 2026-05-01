@@ -450,36 +450,32 @@ impl Proposer for ValidatorProposer {
             self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
         }
 
-        // TODO(v3): support these metrics under v3 multi leader logic:
-        // - Leader slots are empty when the quorum round is no greater than last committed leader round,
-        //   because of async process or recovery.
-        // - Record accepted time for each block, to decide the last leader and the amount of time waiting for it.
-        if !self.context.protocol_config.enable_v3() {
-            let leader_slot = leader_slots.first().unwrap();
-            let leader_authority = &self
-                .context
-                .committee
-                .authority(leader_slot.authority)
-                .hostname;
-            self.context
-                .metrics
-                .node_metrics
+        // Record wait metrics for every waited leader slot. Missing leaders
+        // are counted only when a forced proposal proceeds after timeout.
+        let dag_state_read = self.dag_state.read();
+        let quorum_ts = dag_state_read.threshold_clock_quorum_ts();
+        let wait_duration_ms = Instant::now()
+            .saturating_duration_since(quorum_ts)
+            .as_millis() as u64;
+        for slot in &leader_slots {
+            let leader_authority = &self.context.committee.authority(slot.authority).hostname;
+            let metrics = &self.context.metrics.node_metrics;
+            metrics
                 .block_proposal_leader_wait_ms
                 .with_label_values(&[leader_authority])
-                .inc_by(
-                    Instant::now()
-                        .saturating_duration_since(
-                            self.dag_state.read().threshold_clock_quorum_ts(),
-                        )
-                        .as_millis() as u64,
-                );
-            self.context
-                .metrics
-                .node_metrics
+                .inc_by(wait_duration_ms);
+            metrics
                 .block_proposal_leader_wait_count
                 .with_label_values(&[leader_authority])
                 .inc();
+            if force && !dag_state_read.contains_cached_block_at_slot(*slot) {
+                metrics
+                    .block_proposal_leader_missing_count
+                    .with_label_values(&[leader_authority])
+                    .inc();
+            }
         }
+        drop(dag_state_read);
 
         self.context
             .metrics

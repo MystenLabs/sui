@@ -170,7 +170,6 @@ fn to_consensus_protocol_config(config: &ProtocolConfig) -> ConsensusProtocolCon
         /* transaction_voting_enabled */ true,
         config.mysticeti_num_leaders_per_round(),
         50,
-        // TODO: use sui-protocol-config once experiments are done.
         /* enable_v3 */ true,
         /* leader_schedule_window_size */ 300,
         /* leader_schedule_update_interval */ 12,

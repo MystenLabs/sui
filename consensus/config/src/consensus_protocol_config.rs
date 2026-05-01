@@ -25,6 +25,8 @@ pub struct ConsensusProtocolConfig {
     transaction_voting_enabled: bool,
     num_leaders_per_round: Option<usize>,
     bad_nodes_stake_threshold: u64,
+
+    // TODO(v3): use sui-protocol-config once experiments are done.
     /// Whether to enable V3 logic.
     enable_v3: bool,
     /// Number of recent commits retained for leader schedule sliding-window scoring.
