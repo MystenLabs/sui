@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/typing/vector_void.move:3:13
+  │
+3 │         let v = vector[{ abort 0 }];
+  │             ^ Unused local variable 'v'. Consider removing or prefixing with an underscore: '_v'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04004]: expected a single non-reference type
+  ┌─ tests/move_check/typing/vector_void.move:3:17
+  │
+3 │         let v = vector[{ abort 0 }];
+  │                 ^^^^^^^^^^^^^^^^^^^
+  │                 │        │
+  │                 │        Expected a base type, but this type diverges
+  │                 Invalid 'vector' type

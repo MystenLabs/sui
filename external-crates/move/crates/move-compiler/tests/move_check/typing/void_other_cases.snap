@@ -1,0 +1,74 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/typing/void_other_cases.move:6:13
+  │
+6 │         let o = option::some(abort 0);
+  │             ^ Unused local variable 'o'. Consider removing or prefixing with an underscore: '_o'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04004]: expected a single non-reference type
+  ┌─ tests/move_check/typing/void_other_cases.move:6:17
+  │
+6 │         let o = option::some(abort 0);
+  │                 ^^^^^^^^^^^^^^^^^^^^^
+  │                 │            │
+  │                 │            Expected a base type, but this type diverges
+  │                 Invalid type argument
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/typing/void_other_cases.move:12:13
+   │
+12 │         let v = vector[vector[abort 0]];
+   │             ^ Unused local variable 'v'. Consider removing or prefixing with an underscore: '_v'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_check/typing/void_other_cases.move:12:24
+   │
+12 │         let v = vector[vector[abort 0]];
+   │                        ^^^^^^^^^^^^^^^
+   │                        │      │
+   │                        │      Expected a base type, but this type diverges
+   │                        Invalid 'vector' type
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/typing/void_other_cases.move:19:13
+   │
+19 │         let x = id(abort 0);
+   │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_check/typing/void_other_cases.move:19:17
+   │
+19 │         let x = id(abort 0);
+   │                 ^^^^^^^^^^^
+   │                 │  │
+   │                 │  Expected a base type, but this type diverges
+   │                 Invalid type argument
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/typing/void_other_cases.move:25:13
+   │
+25 │         let v = vector[if (cond) abort 0 else abort 1];
+   │             ^ Unused local variable 'v'. Consider removing or prefixing with an underscore: '_v'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_check/typing/void_other_cases.move:25:17
+   │
+25 │         let v = vector[if (cond) abort 0 else abort 1];
+   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                 │                │
+   │                 │                Expected a base type, but this type diverges
+   │                 Invalid 'vector' type
