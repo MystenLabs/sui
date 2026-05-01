@@ -47,21 +47,28 @@ use crate::metrics::RpcMetrics;
 /// This custom response header contains a unique request-id used for debugging and appears in the logs.
 pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-request-id");
 
-/// Headers identifying the SDK that issued the request. To capture an additional client header
-/// in the future, define another constant here, read it in `ClientInfo::from_headers`, and expose
-/// it via the appropriate metric label or log field.
+/// Header identifying the SDK that issued the request. The value flows into the
+/// `client_sdk_type` Prometheus label, matched against `SDK_TYPE_WHITELIST`. Add a new entry to
+/// the whitelist when a new first-party SDK adopts this header, otherwise its requests will be
+/// bucketed into `CLIENT_LABEL_OTHER`.
 const CLIENT_SDK_TYPE_HEADER: HeaderName = HeaderName::from_static("client-sdk-type");
+
+/// Header identifying the SDK version that issued the request. The value flows into the
+/// `client_sdk_version` Prometheus label, sanitized by `sanitize_sdk_version`. Values longer
+/// than `MAX_SDK_VERSION_LEN` or containing characters outside `[A-Za-z0-9._-]` are bucketed
+/// into `CLIENT_LABEL_OTHER`.
 const CLIENT_SDK_VERSION_HEADER: HeaderName = HeaderName::from_static("client-sdk-version");
 
-/// Maximum length of a client SDK header value we accept as a Prometheus label. Anything longer
-/// is bucketed to `CLIENT_LABEL_INVALID` so a misbehaving client cannot grow the per-series memory
-/// cost without bound.
-const MAX_CLIENT_SDK_LABEL_LEN: usize = 64;
+/// SDKs we accept verbatim as the `client_sdk_type` Prometheus label.
+const SDK_TYPE_WHITELIST: &[&str] = &["rust", "typescript", "python"];
 
-/// Sentinel label value substituted when a client SDK header exceeds `MAX_CLIENT_SDK_LABEL_LEN`.
-/// Distinct from the empty string we use when the header is absent, so dashboards can tell the
-/// two apart.
-const CLIENT_LABEL_INVALID: &str = "INVALID";
+/// Maximum length of a `client-sdk-version` value we accept verbatim.
+const MAX_SDK_VERSION_LEN: usize = 32;
+
+/// Sentinel label value substituted when a client SDK header is present but does not match an
+/// allowed value. Distinct from the empty string we use when the header is absent, so dashboards
+/// can tell the two apart.
+const CLIENT_LABEL_OTHER: &str = "other";
 
 /// Context data that tracks the session UUID and the client's address, to associate logs with a
 /// particular request.
@@ -125,11 +132,11 @@ impl ClientInfo {
             sdk_type: headers
                 .get(&CLIENT_SDK_TYPE_HEADER)
                 .and_then(|v| v.to_str().ok())
-                .map(sanitize_client_label),
+                .map(sanitize_sdk_type),
             sdk_version: headers
                 .get(&CLIENT_SDK_VERSION_HEADER)
                 .and_then(|v| v.to_str().ok())
-                .map(sanitize_client_label),
+                .map(sanitize_sdk_version),
         }
     }
 }
@@ -165,18 +172,13 @@ impl ExtensionFactory for Logging {
 #[async_trait::async_trait]
 impl Extension for LoggingExt {
     async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
-        let session: &Session = ctx.data_unchecked();
-        let client_sdk_type = session.client.sdk_type.as_deref().unwrap_or("");
-        let client_sdk_version = session.client.sdk_version.as_deref().unwrap_or("");
-        self.metrics
-            .queries_received
-            .with_label_values(&[client_sdk_type, client_sdk_version])
-            .inc();
         MetricsFuture::request(self, next.run(ctx)).await
     }
 
     /// Capture Session information from the Context so that the `request` handler can use it for
-    /// logging, once it has finished executing.
+    /// logging, once it has finished executing. The labeled `queries_received` counter is also
+    /// incremented here because `request` is called before request-level data is merged into the
+    /// context, so `Session` is not yet readable at that point.
     async fn prepare_request(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -184,6 +186,12 @@ impl Extension for LoggingExt {
         next: NextPrepareRequest<'_>,
     ) -> ServerResult<Request> {
         let session: &Session = ctx.data_unchecked();
+        let client_sdk_type = session.client.sdk_type.as_deref().unwrap_or("");
+        let client_sdk_version = session.client.sdk_version.as_deref().unwrap_or("");
+        self.metrics
+            .queries_received
+            .with_label_values(&[client_sdk_type, client_sdk_version])
+            .inc();
         let _ = self.session.set(session.clone());
         next.run(ctx, request).await
     }
@@ -328,14 +336,32 @@ fn is_loud_query(codes: &[&str]) -> bool {
             .any(|c| matches!(*c, code::REQUEST_TIMEOUT | code::INTERNAL_SERVER_ERROR))
 }
 
-/// Sanitize a client SDK header value before it is used as a Prometheus label. Values longer than
-/// `MAX_CLIENT_SDK_LABEL_LEN` bytes are bucketed to `CLIENT_LABEL_INVALID`, which caps the
-/// per-series memory cost in the metric registry.
-fn sanitize_client_label(value: &str) -> String {
-    if value.len() <= MAX_CLIENT_SDK_LABEL_LEN {
+/// Sanitize a `client-sdk-type` header value before it is used as a Prometheus label. Values
+/// outside `SDK_TYPE_WHITELIST` are bucketed to `CLIENT_LABEL_OTHER` so the metric's cardinality
+/// is bounded by the size of the whitelist.
+fn sanitize_sdk_type(value: &str) -> String {
+    if SDK_TYPE_WHITELIST.contains(&value) {
         value.to_string()
     } else {
-        CLIENT_LABEL_INVALID.to_string()
+        CLIENT_LABEL_OTHER.to_string()
+    }
+}
+
+/// Sanitize a `client-sdk-version` header value before it is used as a Prometheus label. Values
+/// longer than `MAX_SDK_VERSION_LEN` or containing characters outside `[A-Za-z0-9._-]` are
+/// bucketed to `CLIENT_LABEL_OTHER`. Build metadata (`+...`) is rejected on purpose, because
+/// per-build suffixes are exactly the cardinality vector we are trying to avoid.
+fn sanitize_sdk_version(value: &str) -> String {
+    let valid = !value.is_empty()
+        && value.len() <= MAX_SDK_VERSION_LEN
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'));
+
+    if valid {
+        value.to_string()
+    } else {
+        CLIENT_LABEL_OTHER.to_string()
     }
 }
 
@@ -383,17 +409,45 @@ mod tests {
     }
 
     #[test]
-    fn client_info_oversized_value_bucketed_invalid() {
+    fn client_info_unknown_sdk_type_bucketed_other() {
         let mut headers = HeaderMap::new();
-        let too_long = "a".repeat(MAX_CLIENT_SDK_LABEL_LEN + 1);
+        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("haskell"));
+        headers.insert(CLIENT_SDK_VERSION_HEADER, HeaderValue::from_static("0.1.0"));
+
+        let info = ClientInfo::from_headers(&headers);
+
+        assert_eq!(info.sdk_type.as_deref(), Some(CLIENT_LABEL_OTHER));
+        assert_eq!(info.sdk_version.as_deref(), Some("0.1.0"));
+    }
+
+    #[test]
+    fn client_info_oversized_version_bucketed_other() {
+        let mut headers = HeaderMap::new();
+        let too_long = "1.".to_string() + &"0".repeat(MAX_SDK_VERSION_LEN);
+        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
         headers.insert(
-            CLIENT_SDK_TYPE_HEADER,
+            CLIENT_SDK_VERSION_HEADER,
             HeaderValue::from_str(&too_long).unwrap(),
         );
 
         let info = ClientInfo::from_headers(&headers);
 
-        assert_eq!(info.sdk_type.as_deref(), Some(CLIENT_LABEL_INVALID));
+        assert_eq!(info.sdk_type.as_deref(), Some("rust"));
+        assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
+    }
+
+    #[test]
+    fn client_info_version_with_build_metadata_bucketed_other() {
+        let mut headers = HeaderMap::new();
+        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
+        headers.insert(
+            CLIENT_SDK_VERSION_HEADER,
+            HeaderValue::from_static("1.0.0+abc123"),
+        );
+
+        let info = ClientInfo::from_headers(&headers);
+
+        assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
     }
 
     #[tokio::test]

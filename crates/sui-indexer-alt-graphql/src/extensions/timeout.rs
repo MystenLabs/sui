@@ -22,7 +22,6 @@ use timeout_tracing::timeout;
 use tracing::warn;
 
 use crate::error::request_timeout;
-use crate::extensions::logging::ClientInfo;
 use crate::extensions::logging::Session;
 
 /// How long to wait for each kind of operation before timing out.
@@ -130,6 +129,8 @@ mod tests {
     use itertools::Itertools;
     use regex::Regex;
     use telemetry_subscribers::TelemetryConfig;
+
+    use crate::extensions::logging::ClientInfo;
     use uuid::Uuid;
 
     use crate::error::code;
