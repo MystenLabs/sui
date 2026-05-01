@@ -33,6 +33,7 @@ url.workspace = true
 prometheus.workspace = true
 async-trait.workspace = true
 object_store.workspace = true
+reqwest.workspace = true
 serde_json.workspace = true
 zstd.workspace = true
 humantime.workspace = true
