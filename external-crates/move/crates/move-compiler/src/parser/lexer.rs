@@ -450,43 +450,18 @@ impl<'input> Lexer<'input> {
         text
     }
 
-    // Look ahead to the next token after the current one without advancing the state of the
-    // lexer. Returns `Tok::EOF` if there is no more input, and `Tok::LexError` if the next
-    // token could not be lexed (e.g. because of an unterminated string). The diagnostic for
-    // the lex error is suppressed here; `advance` will re-encounter and report it.
-    pub fn lookahead(&mut self) -> Tok {
-        let (text, _) = match self
-            .trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)
-        {
-            Ok(t) => t,
-            Err(_) => return Tok::LexError,
-        };
-        let next_start = self.text.len() - text.len();
-        // Note [lookahead-panic]: panic_mode = true so `find_token` returns `Err(None)` instead of
-        // building a diagnostic we'd just discard via `unwrap_or` below. `advance` will
-        // re-encounter and report the error if the parser ever consumes past this position.
-        let (result, _) = find_token(
-            /* panic_mode */ true,
-            self.file_hash,
-            self.edition,
-            text,
-            next_start,
-        );
-        result.unwrap_or(Tok::LexError)
-    }
-
-    // Look ahead to the next two tokens after the current one without advancing the state of
-    // the lexer. Each position independently returns `Tok::EOF` or `Tok::LexError` as in
-    // `lookahead` if the corresponding token cannot be read.
-    pub fn lookahead2(&mut self) -> (Tok, Tok) {
-        let (text, _) = match self
-            .trim_whitespace_and_comments(self.cur_end, /* track doc comments */ false)
-        {
-            Ok(t) => t,
-            Err(_) => return (Tok::LexError, Tok::LexError),
-        };
+    // Trim whitespace/comments starting at `start`, then lex the next token without recording
+    // diagnostics. Returns `None` if whitespace trimming itself errored; otherwise returns the
+    // lexed token (or `Tok::LexError`) and the absolute end-position of that token (suitable
+    // as the `start` for a subsequent call).
+    fn lookahead_token(&mut self, start: usize) -> Option<(Tok, usize)> {
+        let (text, _) = self
+            .trim_whitespace_and_comments(start, /* track doc comments */ false)
+            .ok()?;
         let offset = self.text.len() - text.len();
-        // See [lookahead-panic] for why panic_mode is true here.
+        // NB: panic_mode = true so `find_token` returns `Err(None)` instead of building a
+        // diagnostic we'd just discard. `advance` will re-encounter and report the error if the
+        // parser ever consumes past this position.
         let (result, length) = find_token(
             /* panic_mode */ true,
             self.file_hash,
@@ -494,22 +469,28 @@ impl<'input> Lexer<'input> {
             text,
             offset,
         );
-        let first = result.unwrap_or(Tok::LexError);
-        let (text2, _) = match self
-            .trim_whitespace_and_comments(offset + length, /* track doc comments */ false)
-        {
-            Ok(t) => t,
-            Err(_) => return (first, Tok::LexError),
+        Some((result.unwrap_or(Tok::LexError), offset + length))
+    }
+
+    // Look ahead to the next token after the current one without advancing the state of the
+    // lexer. Returns `Tok::EOF` if there is no more input, and `Tok::LexError` if the next
+    // token could not be lexed (e.g. because of an unterminated string). The diagnostic for
+    // the lex error is suppressed here; `advance` will re-encounter and report it.
+    pub fn lookahead(&mut self) -> Tok {
+        self.lookahead_token(self.cur_end)
+            .map_or(Tok::LexError, |(tok, _)| tok)
+    }
+
+    // Look ahead to the next two tokens after the current one without advancing the state of
+    // the lexer. Each position independently returns `Tok::EOF` or `Tok::LexError` as in
+    // `lookahead` if the corresponding token cannot be read.
+    pub fn lookahead2(&mut self) -> (Tok, Tok) {
+        let Some((first, end)) = self.lookahead_token(self.cur_end) else {
+            return (Tok::LexError, Tok::LexError);
         };
-        let offset2 = self.text.len() - text2.len();
-        let (result2, _) = find_token(
-            /* panic_mode */ true,
-            self.file_hash,
-            self.edition,
-            text2,
-            offset2,
-        );
-        let second = result2.unwrap_or(Tok::LexError);
+        let Some((second, _)) = self.lookahead_token(end) else {
+            return (first, Tok::LexError);
+        };
         (first, second)
     }
 
