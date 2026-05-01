@@ -529,7 +529,9 @@ impl DataStore {
         }
     }
 
-    fn owned_object_infos(
+    /// Get owned objects for an address, optionally filtered by object type and paginated with a
+    /// cursor.
+    fn get_owned_objects(
         &self,
         owner: SuiAddress,
         object_type: Option<StructTag>,
@@ -547,7 +549,7 @@ impl DataStore {
             .filter(|entry| {
                 object_type
                     .as_ref()
-                    .is_none_or(|ty| object_type_matches(ty, &entry.object_type))
+                    .is_none_or(|ty| struct_tag_filter_matches(ty, &entry.object_type))
             })
             // `RpcIndexes` cursors are lower bounds. The v2 RPC layer stores
             // the first not-yet-returned item in the page token and expects
@@ -557,6 +559,9 @@ impl DataStore {
             .collect())
     }
 
+    /// Validate that the given `OwnedObjectEntry` corresponds to an actual owned object in the
+    /// local store, and if so convert it to `OwnedObjectInfo`. This guards against stale index
+    /// entries that point to objects that have been deleted or wrapped by later transactions.
     fn valid_owned_object_info(&self, entry: OwnedObjectEntry) -> Option<OwnedObjectInfo> {
         let object = self.local.get_latest_object(&entry.object_id).ok()??;
         if object.version() != entry.version {
@@ -580,7 +585,13 @@ impl DataStore {
     }
 }
 
-fn object_type_matches(filter: &StructTag, candidate: &StructTag) -> bool {
+/// Check if the these two `StructTag`s match for the purposes of owned-object filtering. The filter
+/// may have empty type parameters, in which case they are ignored and only the address, module, and
+/// name are compared.
+///
+/// This allows a wildcard filter like `0x2::coin::Coin` to match all versions of the `Coin` struct,
+/// regardless of the type parameter (e.g., `0x2::coin::Coin<0x1::sui::SUI>`).
+fn struct_tag_filter_matches(filter: &StructTag, candidate: &StructTag) -> bool {
     filter.address == candidate.address
         && filter.module.as_ident_str() == candidate.module.as_ident_str()
         && filter.name.as_ident_str() == candidate.name.as_ident_str()
@@ -777,7 +788,7 @@ impl SimulatorStore for DataStore {
     }
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
-        let objects = match self.owned_object_infos(owner, None, None) {
+        let objects = match self.get_owned_objects(owner, None, None) {
             Ok(infos) => infos
                 .into_iter()
                 .filter_map(|info| {
@@ -1080,7 +1091,7 @@ impl RpcIndexes for DataStore {
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>>
     {
-        let infos = self.owned_object_infos(owner, object_type, cursor)?;
+        let infos = self.get_owned_objects(owner, object_type, cursor)?;
         Ok(Box::new(
             infos
                 .into_iter()

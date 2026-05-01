@@ -1,10 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Error, Result};
-use cynic::{GraphQlResponse, Operation};
+use anyhow::Context;
+use anyhow::Error;
+use anyhow::Result;
+use cynic::GraphQlResponse;
+use cynic::Operation;
 use reqwest::header::USER_AGENT;
 
+use sui_protocol_config::Chain;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -19,7 +23,6 @@ use crate::ObjectRead;
 use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::gql::queries;
-use sui_protocol_config::Chain;
 
 macro_rules! block_on {
     ($expr:expr) => {{

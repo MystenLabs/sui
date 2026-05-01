@@ -8,17 +8,17 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use prometheus::Registry;
 use rand::rngs::OsRng;
-use sui_rpc_api::subscription::{SubscriptionService, SubscriptionServiceHandle};
-use sui_rpc_api::{RpcService, ServerVersion};
-use sui_types::storage::RpcStateReader;
 use tracing::info;
 
 use simulacrum::Simulacrum;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_protocol_config::ProtocolVersion;
+use sui_rpc_api::subscription::{SubscriptionService, SubscriptionServiceHandle};
+use sui_rpc_api::{RpcService, ServerVersion};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::storage::RpcStateReader;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 
 use crate::Node;

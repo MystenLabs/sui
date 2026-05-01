@@ -89,7 +89,7 @@ const CHECKPOINT_DIGEST_INDEX_FILE: &str = "digest_index";
 /// Marker file for the latest checkpoint sequence known to the store.
 const LATEST_FILE: &str = "latest";
 
-/// Durable secondary index entry for a live address-owned object.
+/// Index entry for a live address-owned object.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub(crate) struct OwnedObjectEntry {
     pub(crate) owner: SuiAddress,
@@ -183,6 +183,7 @@ impl FilesystemStore {
         self.transactions_dir().join(digest.to_string())
     }
 
+    /// Return the file path for the owned-object index.
     fn owned_objects_index_path(&self) -> PathBuf {
         self.indices_dir().join(OWNED_OBJECTS_INDEX_FILE)
     }
@@ -380,6 +381,7 @@ impl FilesystemStore {
         Ok(self.is_object_deleted(object_id)? || self.is_object_wrapped(object_id)?)
     }
 
+    /// Write a state marker (WRAPPED / DELETED) file for the given object reference.
     fn write_object_state_marker(
         &self,
         filename: &str,
@@ -394,6 +396,8 @@ impl FilesystemStore {
             .with_context(|| format!("Failed to mark object {} {}", object_id, filename))
     }
 
+    /// Clear a state marker (WRAPPED / DELETED) file for the given object ID. If the file does not
+    /// exist, this is a no-op.
     fn clear_object_state_marker(
         &self,
         object_id: &ObjectID,
@@ -411,6 +415,7 @@ impl FilesystemStore {
         }
     }
 
+    /// Check for the existence of a state marker (WRAPPED / DELETED) file for the given object ID.
     fn has_object_state_marker(
         &self,
         object_id: &ObjectID,
@@ -428,7 +433,7 @@ impl FilesystemStore {
         }
     }
 
-    /// Read the durable owned-object index. Missing index files represent an empty index.
+    /// Read the owned-object index. Missing index files represent an empty index.
     pub(crate) fn get_owned_object_entries(&self) -> anyhow::Result<Vec<OwnedObjectEntry>> {
         let path = self.owned_objects_index_path();
         if !path.exists() {
@@ -437,7 +442,7 @@ impl FilesystemStore {
         self.read_bcs_file(&path)
     }
 
-    /// Apply local execution ownership changes to the durable owned-object index.
+    /// Apply local execution ownership changes to the owned-object index.
     pub(crate) fn apply_owned_object_index_updates<'a>(
         &self,
         removed_object_ids: &[ObjectID],
@@ -459,6 +464,9 @@ impl FilesystemStore {
         self.write_owned_object_entries(&entries)
     }
 
+    /// Persist the owned-object index to disk. The entire index is rewritten on each update, but
+    /// this is expected to be small and updated infrequently enough that this should not be a
+    /// bottleneck.
     fn write_owned_object_entries(&self, entries: &[OwnedObjectEntry]) -> anyhow::Result<()> {
         let path = self.owned_objects_index_path();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {

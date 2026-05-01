@@ -4,16 +4,20 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
+use anyhow::Context;
+use anyhow::Result;
+use clap::Parser;
+use clap::Subcommand;
+use reqwest::Url;
 use serde::Serialize;
 use tracing::info;
 
-use crate::{
-    AdvanceCheckpointRequest, AdvanceClockRequest, ForkingServiceClient, GetStatusRequest,
-    GraphQLClient, Node,
-};
-use reqwest::Url;
+use crate::AdvanceCheckpointRequest;
+use crate::AdvanceClockRequest;
+use crate::ForkingServiceClient;
+use crate::GetStatusRequest;
+use crate::GraphQLClient;
+use crate::Node;
 
 /// Default bind address for the RPC server.
 pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9000";
