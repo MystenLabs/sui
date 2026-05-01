@@ -337,20 +337,19 @@ pub fn checkpoint_seq(item: &Value) -> u64 {
         .expect("checkpoint payload missing sequenceNumber")
 }
 
-/// Read checkpoint items from `stream` until it goes quiet for one second,
-/// returning the last sequence number observed. `start` is returned unchanged
-/// if the stream stalls before delivering anything. Used to assert that the
-/// streaming subscription has paused (e.g. during a forced reconnect blackout).
-pub async fn drain_checkpoints_until_stalled(
+/// Read items from `stream` until it goes quiet for one second, returning every item
+/// observed in order. Returns an empty `Vec` when the stream stalls before delivering
+/// anything. Used to assert silence (`drained.is_empty()`) or to recover the last
+/// observed value via a domain-specific extractor (`drained.last().map(...)`).
+pub async fn drain_until_stalled(
     stream: &mut (impl tokio_stream::Stream<Item = Value> + Unpin),
-    start: u64,
-) -> u64 {
-    let mut last = start;
+) -> Vec<Value> {
+    let mut drained = Vec::new();
     loop {
         match tokio::time::timeout(Duration::from_secs(1), stream.next()).await {
-            Ok(Some(item)) => last = checkpoint_seq(&item),
+            Ok(Some(item)) => drained.push(item),
             Ok(None) => panic!("stream ended unexpectedly"),
-            Err(_) => return last,
+            Err(_) => return drained,
         }
     }
 }

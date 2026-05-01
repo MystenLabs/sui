@@ -13,4 +13,8 @@ module emit_test_event::emit_test_event {
             value: 1,
         });
     }
+
+    public fun emit_with_value(value: u64) {
+        event::emit(TestEvent { value })
+    }
 }

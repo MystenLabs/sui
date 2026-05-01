@@ -100,7 +100,7 @@ pub enum TransactionContents {
 #[derive(Clone)]
 pub struct ExecutedTransactionData {
     pub effects: Box<TransactionEffects>,
-    pub events: Option<Vec<Event>>,
+    pub events: Vec<Event>,
     pub transaction_data: Box<TransactionData>,
     pub signatures: Vec<GenericSignature>,
     pub balance_changes: Vec<grpc::BalanceChange>,
@@ -381,14 +381,15 @@ impl TransactionContents {
             .deserialize()
             .context("Effects BCS should be valid")?;
 
-        // Parse events from BCS if present
-        let events = executed_transaction
+        // Parse events from BCS if present, defaulting to empty when absent.
+        let events: Vec<Event> = executed_transaction
             .events
             .as_ref()
             .and_then(|events| events.bcs.as_ref())
             .map(|bcs| bcs.deserialize().context("Events BCS should be valid"))
             .transpose()?
-            .map(|events: TransactionEvents| events.data);
+            .map(|events: TransactionEvents| events.data)
+            .unwrap_or_default();
 
         let balance_changes = executed_transaction.balance_changes.clone();
 
@@ -485,7 +486,7 @@ impl TransactionContents {
             }
             Self::Bigtable(kv) => Ok(kv.events.clone().unwrap_or_default().data),
             Self::LedgerGrpc(txn) => Ok(txn.events.clone().unwrap_or_default()),
-            Self::ExecutedTransaction(tx) => Ok(tx.events.clone().unwrap_or_default()),
+            Self::ExecutedTransaction(tx) => Ok(tx.events.clone()),
         }
     }
 

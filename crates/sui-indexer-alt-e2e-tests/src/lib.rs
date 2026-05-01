@@ -83,6 +83,7 @@ use url::Url;
 
 pub mod coin_registry;
 pub mod find;
+pub mod move_helpers;
 
 /// A simulation of the network, accompanied by off-chain services (database, indexer, RPC),
 /// connected by local data ingestion.

@@ -1646,6 +1646,9 @@ Subscription.checkpoints
 Subscription.transactions
   => {}
 
+Subscription.events
+  => {}
+
 Transaction.id
   => {}
 

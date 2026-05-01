@@ -4067,6 +4067,16 @@ type Subscription {
 	"""
 	checkpoints: Checkpoint!
 	"""
+	Subscribe to events as they are emitted, with optional filtering.
+	
+	Each matching event is yielded individually as it appears in finalized
+	checkpoints. Events are ordered by checkpoint, then by transaction
+	position within the checkpoint, then by position within the transaction.
+	
+	This subscription is not yet available for use.
+	"""
+	events(filter: EventFilter): Event!
+	"""
 	Subscribe to transactions as they are finalized, with optional filtering.
 	
 	Each matching transaction is yielded individually as it appears in finalized
