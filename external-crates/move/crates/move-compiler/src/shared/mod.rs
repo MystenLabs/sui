@@ -458,13 +458,16 @@ impl CompilationEnv {
     ) {
         let filter_attr = self.known_filters.entry(attr_name).or_default();
         for (name, ids) in filters {
-            for f in &ids {
+            let existing = filter_attr.entry(name).or_default();
+            for f in ids {
                 if f.category != DIAGNOSTIC_FILTER_WILDCARD && f.code != DIAGNOSTIC_FILTER_WILDCARD
                 {
-                    self.known_filter_names.insert(*f, (attr_name, name));
+                    self.known_filter_names.insert(f, (attr_name, name));
+                }
+                if !existing.contains(&f) {
+                    existing.push(f);
                 }
             }
-            filter_attr.entry(name).or_default().extend(ids);
         }
     }
 
