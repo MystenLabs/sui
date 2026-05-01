@@ -350,8 +350,7 @@ fn constant_name_as_constant_value_index(
     const_name: &ConstantName,
 ) -> Result<ConstantPoolIndex> {
     let name_constant = compile_constant(
-        context,
-        &Type_::Vector(Box::new(Type_::U8.make_type())).make_type(),
+        &SignatureToken::Vector(Box::new(SignatureToken::U8)),
         MoveValue::vector_u8(const_name.to_string().into_bytes()),
     )?;
     context.constant_index(name_constant)
@@ -419,7 +418,8 @@ pub fn compile_module<'a>(
             constant_name_as_constant_value_index(&mut context, &ir_constant.name)?;
         }
 
-        let constant = compile_constant(&mut context, &ir_constant.signature, ir_constant.value)?;
+        let signature_token = compile_type(&mut context, &HashMap::new(), &ir_constant.signature)?;
+        let constant = compile_constant(&signature_token, ir_constant.value)?;
         context.declare_constant(ir_constant.name.clone(), constant.clone())?;
         let const_idx = context.constant_index(constant)?;
         record_src_loc!(const_decl: context, const_idx, ir_constant.name);
@@ -1309,8 +1309,7 @@ fn compile_expression(
         Exp_::Value(cv) => match cv.value {
             CopyableVal_::Address(address) => {
                 let address_value = MoveValue::Address(address);
-                let constant =
-                    compile_constant(context, &Type_::Address.make_type(), address_value)?;
+                let constant = compile_constant(&SignatureToken::Address, address_value)?;
                 let idx = context.constant_index(constant)?;
                 push_instr!(exp.loc, Bytecode::LdConst(idx));
                 function_frame.push()?;
@@ -1341,8 +1340,10 @@ fn compile_expression(
             }
             CopyableVal_::ByteArray(buf) => {
                 let vec_value = MoveValue::vector_u8(buf);
-                let ty = Type_::Vector(Box::new(Type_::U8.make_type())).make_type();
-                let constant = compile_constant(context, &ty, vec_value)?;
+                let constant = compile_constant(
+                    &SignatureToken::Vector(Box::new(SignatureToken::U8)),
+                    vec_value,
+                )?;
                 let idx = context.constant_index(constant)?;
                 push_instr!(exp.loc, Bytecode::LdConst(idx));
                 function_frame.push()?;
@@ -1712,10 +1713,9 @@ fn compile_call(
     Ok(())
 }
 
-fn compile_constant(context: &mut Context, ty: &Type, value: MoveValue) -> Result<Constant> {
-    let const_sig_token = compile_type(context, &HashMap::new(), ty)?;
-    let Some(layout) = constant_sig_token_to_layout(&const_sig_token) else {
-        bail!("Unsupported constant type: {:?}", ty);
+fn compile_constant(const_sig_token: &SignatureToken, value: MoveValue) -> Result<Constant> {
+    let Some(layout) = constant_sig_token_to_layout(const_sig_token) else {
+        bail!("Unsupported constant type: {:?}", const_sig_token);
     };
     Constant::serialize_constant(layout.as_ref(), &value)
         .ok_or_else(|| format_err!("Could not serialize constant"))
@@ -1828,7 +1828,8 @@ fn compile_bytecode(
         IRBytecode_::LdTrue => Bytecode::LdTrue,
         IRBytecode_::LdFalse => Bytecode::LdFalse,
         IRBytecode_::LdConst(ty, v) => {
-            let constant = compile_constant(context, &ty, v)?;
+            let signature_token = compile_type(context, &HashMap::new(), &ty)?;
+            let constant = compile_constant(&signature_token, v)?;
             Bytecode::LdConst(context.constant_index(constant)?)
         }
         IRBytecode_::LdNamedConst(c) => Bytecode::LdConst(context.named_constant_index(&c)?),
