@@ -114,6 +114,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_proposal_interval: Histogram,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
+    pub(crate) block_proposal_leader_missing_count: IntCounterVec,
     pub(crate) block_timestamp_drift_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
@@ -310,6 +311,12 @@ impl NodeMetrics {
             block_proposal_leader_wait_count: register_int_counter_vec_with_registry!(
                 "block_proposal_leader_wait_count",
                 "Total times waiting for a leader when proposing blocks.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            block_proposal_leader_missing_count: register_int_counter_vec_with_registry!(
+                "block_proposal_leader_missing_count",
+                "Per-leader count of proposals where the leader's slot was expected but absent in the local DAG at proposal time (force-true / timeout path).",
                 &["authority"],
                 registry,
             ).unwrap(),
@@ -533,7 +540,7 @@ impl NodeMetrics {
             ).unwrap(),
             committed_leaders_total: register_int_counter_vec_with_registry!(
                 "committed_leaders_total",
-                "Total number of (direct or indirect) committed leaders per authority",
+                "Total number of decided leaders per authority. The `commit_type` label is `\"{decision}-{status}\"`: decision is direct/indirect/certified; status is commit/skip. Note `certified-skip` does not occur — certified commits carry only committed leader-round blocks.",
                 &["authority", "commit_type"],
                 registry,
             ).unwrap(),

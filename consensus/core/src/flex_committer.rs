@@ -12,7 +12,7 @@ use rand::{SeedableRng as _, rngs::StdRng, seq::SliceRandom as _};
 use crate::{
     BlockAPI, VerifiedBlock,
     block::Slot,
-    commit::{Commit, CommitAPI, CommittedSubDag, LeaderStatus, TrustedCommit},
+    commit::{Commit, CommitAPI, CommittedSubDag, Decision, LeaderStatus, TrustedCommit},
     context::Context,
     dag_state::DagState,
     leader_schedule_v3::NextCommitLeaderSchedule,
@@ -126,6 +126,7 @@ impl FlexCommitter {
                 }
                 let leader_slot = &mut round_state.leader_slots[i];
                 leader_slot.leader_status = status;
+                leader_slot.decision = Some(Decision::Direct);
             }
         }
     }
@@ -195,12 +196,14 @@ impl FlexCommitter {
                 if matches!(status, LeaderStatus::Commit(_)) {
                     round_state.num_committed += 1;
                 }
+                leader_slot.decision = Some(Decision::Indirect);
             } else {
                 assert_eq!(
                     leader_slot.leader_status, status,
                     "Indirect and direct commit decisions must agree: {:?} vs {:?}",
                     leader_slot.leader_status, status
                 );
+                // Already decided directly on a previous pass — keep the original `decision`.
             }
             leader_slot.leader_status = status.clone();
         }
@@ -221,6 +224,23 @@ impl FlexCommitter {
         None
     }
 
+    /// Highest leader round in the contiguous-decided prefix of
+    /// `pending_commit_state.rounds`, used as a high-water mark for the
+    /// `last_decided_leader_round` gauge. Walks from the front, stops at the
+    /// first round with non-empty `undecided_slots`, and returns the round of
+    /// the last fully-decided entry seen so far. Returns `None` if no round
+    /// is fully decided yet.
+    pub(crate) fn highest_decided_leader_round(&self) -> Option<Round> {
+        let mut highest = None;
+        for round_state in &self.pending_commit_state.rounds {
+            if !round_state.undecided_slots.is_empty() {
+                break;
+            }
+            highest = Some(round_state.round);
+        }
+        highest
+    }
+
     /// Builds a single commit from `commit_leader_round`.
     ///
     /// Traversal starts from every committed leader in the round — v3 allows
@@ -238,6 +258,13 @@ impl FlexCommitter {
             let round_state = self
                 .pending_commit_state
                 .get_or_create_round_state(commit_leader_round);
+            // Emit the per-slot decision metric for every leader slot at the
+            // emitted commit leader round. Skip-only rounds never reach
+            // build_commit, so their slot statuses are intentionally not
+            // counted here.
+            for s in &round_state.leader_slots {
+                report_leader_decision(&self.context, s);
+            }
             round_state
                 .leader_slots
                 .iter()
@@ -396,6 +423,7 @@ impl PendingCommitState {
                     LeaderSlot {
                         slot,
                         leader_status: LeaderStatus::Undecided(slot),
+                        decision: None,
                     }
                 })
                 .collect();
@@ -423,13 +451,45 @@ struct RoundState {
 struct LeaderSlot {
     slot: Slot,
     leader_status: LeaderStatus,
+    /// How the slot's `leader_status` was decided. `None` while `Undecided`;
+    /// set to `Direct` or `Indirect` exactly once when the slot first transitions
+    /// to a non-`Undecided` status. Used at `build_commit` time to label the
+    /// `committed_leaders_total` metric.
+    decision: Option<Decision>,
+}
+
+/// Emits `committed_leaders_total{authority, commit_type}` for one decided
+/// leader slot at the emitted commit leader round.
+fn report_leader_decision(context: &Context, slot: &LeaderSlot) {
+    let (authority, status_str) = match &slot.leader_status {
+        LeaderStatus::Commit(block) => (block.author(), "commit"),
+        LeaderStatus::Skip(s) => (s.authority, "skip"),
+        LeaderStatus::Undecided(_) => {
+            unreachable!("commit_leader_round must be fully decided before build_commit")
+        }
+    };
+    let decision_str = match slot.decision {
+        Some(Decision::Direct) => "direct",
+        Some(Decision::Indirect) => "indirect",
+        // Both branches below indicate a state-tracking bug; assert rather
+        // than silently drop the increment.
+        Some(Decision::Certified) => {
+            unreachable!("FlexCommitter does not produce Certified decisions locally")
+        }
+        None => unreachable!("decided slot at commit_leader_round must have decision set"),
+    };
+    let host = &context.committee.authority(authority).hostname;
+    context
+        .metrics
+        .node_metrics
+        .committed_leaders_total
+        .with_label_values(&[host, &format!("{decision_str}-{status_str}")])
+        .inc();
 }
 
 /// Commit-level seed for v3 sub-dag sorting: a hash over the committed-leader
-/// digests in iteration order. Changing the committed leader set or their
-/// iteration order changes the seed, so the within-round block order changes
-/// with the set of leaders being committed, without any validator-specific
-/// state.
+/// digests in iteration order. Changing the leader set changes the within-round
+/// block order without validator-specific state.
 fn compute_sort_seed(committed_leaders: &[VerifiedBlock]) -> [u8; DIGEST_LENGTH] {
     let mut hasher = DefaultHashFunction::new();
     for leader in committed_leaders {

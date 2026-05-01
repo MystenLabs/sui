@@ -131,7 +131,12 @@ impl CommitObserver {
     }
 
     /// Forwards a committed subdag to the commit finalizer. Used by `Core::post_commit`.
+    /// Also emits per-commit observer metrics (`last_committed_leader_round`,
+    /// `last_commit_index`, `blocks_per_commit_count`, `block_commit_latency`,
+    /// `sub_dags_per_commit_count`); on the v2 path these come from
+    /// `handle_committed_leaders`, but the v3 path goes through this method.
     pub(crate) fn send_to_finalizer(&self, subdag: CommittedSubDag) -> ConsensusResult<()> {
+        self.report_metrics(std::slice::from_ref(&subdag));
         self.commit_finalizer_handle.send(subdag)
     }
 

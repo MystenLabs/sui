@@ -840,6 +840,27 @@ impl Core {
                 .unwrap_or_else(|| panic!("FlexCommitter must be initialized on the v3 path"))
                 .handle_certified_commit(&commit);
 
+            // Emit `committed_leaders_total{commit_type="certified-commit"}`
+            // for each leader-round block in the certified subdag — parity
+            // with v2's `UniversalCommitter::update_metrics(... Decision::Certified)`.
+            // We don't infer direct/indirect/skip from certified commits;
+            // they only carry committed leader-round blocks.
+            let leader_round = commit.leader().round;
+            for block in subdag.blocks.iter().filter(|b| b.round() == leader_round) {
+                let host = self
+                    .context
+                    .committee
+                    .authority(block.author())
+                    .hostname
+                    .as_str();
+                self.context
+                    .metrics
+                    .node_metrics
+                    .committed_leaders_total
+                    .with_label_values(&[host, "certified-commit"])
+                    .inc();
+            }
+
             self.post_commit(commit, subdag.clone())?;
             subdags.push(subdag);
 
@@ -890,6 +911,24 @@ impl Core {
             committed_sub_dags.push(subdag);
 
             fail_point!("consensus-after-handle-commit");
+        }
+
+        // Advance `last_decided_leader_round` to cover skip-only rounds — the
+        // gauge would otherwise stall whenever a leader round resolves entirely
+        // to Skip (no `CommittedSubDag` produced and `post_commit` never runs).
+        // Note: this updates the gauge only; `Core::last_decided_leader` (the
+        // in-memory field) is not mutated, since v3 has no single `Slot` to
+        // store for skip-only rounds.
+        if let Some(round) = self
+            .flex_committer
+            .as_ref()
+            .and_then(|c| c.highest_decided_leader_round())
+        {
+            let metric = &self.context.metrics.node_metrics.last_decided_leader_round;
+            let current = metric.get();
+            if (round as i64) > current {
+                metric.set(round as i64);
+            }
         }
 
         Ok(committed_sub_dags)
