@@ -31,7 +31,7 @@ warning[W10007]: issue with attribute value
    │
    = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
-error[E10004]: invalid usage of known attribute
+error[E10004]: invalid use of recognized attribute
    ┌─ tests/move_2024/unit_test/random_test_invalid.move:11:7
    │
 10 │     #[random_test]
@@ -58,7 +58,7 @@ warning[W10007]: issue with attribute value
    │
    = Attributes '#[test]' and '#[random_test]' implicitly specify '#[mode(test)]'
 
-error[E10004]: invalid usage of known attribute
+error[E10004]: invalid use of recognized attribute
    ┌─ tests/move_2024/unit_test/random_test_invalid.move:15:7
    │
 14 │     #[random_test]

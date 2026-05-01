@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07002]: mutable ownership violated
+error[E07002]: mutable borrow rule violated
    ┌─ tests/move_check/borrows/borrow_local_full_invalid.move:14:9
    │
 12 │         let x = &mut v;
@@ -14,7 +14,7 @@ error[E07002]: mutable ownership violated
 14 │         *y;
    │         ^^ Invalid dereference.
 
-error[E07005]: invalid transfer of references
+error[E07005]: invalid reference transfer
    ┌─ tests/move_check/borrows/borrow_local_full_invalid.move:18:17
    │
 17 │         let x = &mut v;
@@ -22,7 +22,7 @@ error[E07005]: invalid transfer of references
 18 │         let y = id_mut(&mut v);
    │                 ^^^^^^^^^^^^^^ Invalid usage of reference as function argument. Cannot transfer a mutable reference that is being borrowed
 
-error[E07003]: invalid operation, could create dangling a reference
+error[E07003]: invalid operation, could create a dangling reference
    ┌─ tests/move_check/borrows/borrow_local_full_invalid.move:24:9
    │
 22 │         let x = &v;
@@ -31,7 +31,7 @@ error[E07003]: invalid operation, could create dangling a reference
 24 │         *y = 0;
    │         ^^^^^^ Invalid mutation of reference.
 
-error[E07001]: referential transparency violated
+error[E07001]: invalid borrow
    ┌─ tests/move_check/borrows/borrow_local_full_invalid.move:33:17
    │
 32 │         let x = &mut v;

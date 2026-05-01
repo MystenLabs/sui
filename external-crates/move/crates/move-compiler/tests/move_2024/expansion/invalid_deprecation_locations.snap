@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E10004]: invalid usage of known attribute
+error[E10004]: invalid use of recognized attribute
   ┌─ tests/move_2024/expansion/invalid_deprecation_locations.move:5:7
   │
 5 │     #[deprecated]
@@ -20,7 +20,7 @@ error[E13002]: feature is deprecated in specified edition
 6 │     friend 0x42::k;
   │     ^^^^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
 
-error[E10004]: invalid usage of known attribute
+error[E10004]: invalid use of recognized attribute
   ┌─ tests/move_2024/expansion/invalid_deprecation_locations.move:8:7
   │
 8 │     #[deprecated]

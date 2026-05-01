@@ -13,7 +13,7 @@ error[E03018]: invalid type parameter
    │
    = Type arguments are used with the enum, as '0x42::a::Maybe<u64>::Nothing'
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
    ┌─ tests/move_2024/expansion/invalid_tyargs.move:11:13
    │
 11 │             _x<u64> => (),
