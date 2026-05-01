@@ -274,7 +274,7 @@ codes!(
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
-        Constraint: { msg: "missing required ability", severity: NonblockingError },
+        Constraint: { msg: "ability constraint not satisfied", severity: NonblockingError },
         ImplicitlyCopyable: { msg: "type not implicitly copyable", severity: NonblockingError },
     ],
     // errors for move rules. mostly cfgir/locals
