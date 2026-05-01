@@ -3198,7 +3198,7 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
             None => return Err(A::Error::invalid_length(0, &self)),
         };
 
-        let Some(variant_layout) = self.0.variant(tag as u16) else {
+        let Some(variant_layout) = self.0.variant(tag) else {
             return Err(A::Error::invalid_length(tag as usize, &self));
         };
 

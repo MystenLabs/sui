@@ -233,14 +233,8 @@ mod testing {
     fn get_annotated_struct_layout(
         context: &NativeContext,
         ty: &Type,
-    ) -> PartialVMResult<CA::MoveDatatypeLayout> {
-        let annotated_type_layout = context.type_to_fully_annotated_layout(ty)?.unwrap();
-        CA::MoveDatatypeLayout::new(annotated_type_layout).ok_or_else(|| {
-            partial_vm_error!(
-                INTERNAL_TYPE_ERROR,
-                "Could not convert Type to fully-annotated MoveTypeLayout via NativeContext"
-            )
-        })
+    ) -> PartialVMResult<CA::MoveTypeLayout> {
+        Ok(context.type_to_fully_annotated_layout(ty)?.unwrap())
     }
 
     fn get_vector_inner_type(ty: &Type) -> PartialVMResult<&Type> {
@@ -377,7 +371,7 @@ mod testing {
                         let ann_ty_layout = context.type_to_fully_annotated_layout(&ty)?.unwrap();
                         let mv = val
                             .as_move_value(ty_layout.as_ref())?
-                            .decorate_compressed(&ann_ty_layout);
+                            .decorate_compressed(ann_ty_layout.as_ref());
                         print_move_value(
                             out,
                             mv,
@@ -402,8 +396,9 @@ mod testing {
                     }
                 };
 
+                let annotated_layout = get_annotated_struct_layout(context, &ty)?;
                 let CA::MoveLayoutView::Struct(annotated_struct_layout) =
-                    get_annotated_struct_layout(context, &ty)?.as_view()
+                    annotated_layout.as_view()
                 else {
                     return Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
@@ -433,8 +428,8 @@ mod testing {
                     }
                 };
 
-                let CA::MoveLayoutView::Enum(annotated_enum_layout) =
-                    get_annotated_struct_layout(context, &ty)?.as_view()
+                let annotated_layout = get_annotated_struct_layout(context, &ty)?;
+                let CA::MoveLayoutView::Enum(annotated_enum_layout) = annotated_layout.as_view()
                 else {
                     return Err(partial_vm_error!(
                         INTERNAL_TYPE_ERROR,
@@ -459,7 +454,7 @@ mod testing {
                 print_move_value(
                     out,
                     val.as_move_value(ty_layout.as_ref())?
-                        .decorate_compressed(&ann_ty_layout),
+                        .decorate_compressed(ann_ty_layout.as_ref()),
                     move_std_addr,
                     depth,
                     canonicalize,

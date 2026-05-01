@@ -859,7 +859,7 @@ impl VMDispatchTables {
                 }
                 let variant_field_refs: Vec<Vec<(&Identifier, CA::LayoutHandle)>> = variant_layouts
                     .iter()
-                    .map(|(_, _, fields)| fields.iter().map(|(n, h)| (n, h.clone())).collect())
+                    .map(|(_, _, fields)| fields.iter().map(|(n, h)| (n, *h)).collect())
                     .collect();
                 let variant_refs: Vec<(&Identifier, u16, Option<&[(&Identifier, CA::LayoutHandle)]>)> =
                     variant_layouts
@@ -898,7 +898,7 @@ impl VMDispatchTables {
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let field_refs: Vec<(&Identifier, CA::LayoutHandle)> = field_layouts
                     .iter()
-                    .map(|(n, h)| (n, h.clone()))
+                    .map(|(n, h)| (n, *h))
                     .collect();
                 builder
                     .struct_layout(&struct_tag, &field_refs)
