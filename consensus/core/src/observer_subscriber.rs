@@ -157,8 +157,8 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                         context
                             .metrics
                             .node_metrics
-                            .observer_subscribed_blocks
-                            .inc_by(batch.len() as u64);
+                            .observer_subscribed_blocks_batch_size
+                            .observe(batch.len() as f64);
 
                         for block in batch {
                             // Backpressure: wait if we've hit max parallelism
