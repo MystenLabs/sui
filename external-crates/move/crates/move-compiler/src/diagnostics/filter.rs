@@ -74,6 +74,8 @@ pub const FILTER_LITERAL_ENFORCEMENT: &str = "untyped_literal";
 //**************************************************************************************************
 
 /// The action a matching filter entries takes on a diagnostic.
+/// These are ordered by increasing severity for conflict resolution: when multiple entries match
+/// the same diagnostic at the same scope, the one further on this list wins.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub enum FilterKind {
     /// Suppress the diagnostic but retain it in `filtered_source_diagnostics`.
@@ -81,11 +83,11 @@ pub enum FilterKind {
     /// Emit the diagnostic as a warning (the default level). Overrides `Allow`/`Deny`/`Expect`
     /// from an outer scope, restoring normal warning behavior.
     Warn,
-    /// Upgrade the diagnostic's severity to `NonblockingError`.
-    Deny,
     /// Suppress the diagnostic and mark this filter entry as fulfilled. Unfulfilled `Expect`
     /// entries emit an "unfulfilled expect" diagnostic at [`FilterScope::finalize`] time.
     Expect,
+    /// Upgrade the diagnostic's severity to `NonblockingError`.
+    Deny,
     /// Suppress the diagnostic and discard it entirely. Used by dependency compilation.
     Drop,
 }
@@ -117,7 +119,7 @@ impl std::fmt::Display for FilterKind {
 /// wildcard sentinels); conversion happens via `From<DiagnosticsID>` at the filter boundary.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 enum FilterTarget {
-    /// Matches a single diagnostic by its exact code ID.
+    /// Matches a single diagnostic by its exact code ID (and ExternalPrefix, if available).
     Diagnostic(DiagnosticsID),
     /// Matches all diagnostics in a category, scoped to a prefix.
     Category(ExternalPrefix, u8),
@@ -139,14 +141,6 @@ impl From<DiagnosticsID> for FilterTarget {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
-struct FilterEntry_ {
-    target: FilterTarget,
-    kind: FilterKind,
-}
-
-type FilterEntry = Spanned<FilterEntry_>;
-
 /// Fulfillment record for a single `#[expect(...)]` entry.
 #[derive(Debug)]
 struct ExpectState {
@@ -158,7 +152,7 @@ struct ExpectState {
 /// An immutable set of entries plus expect-fulfillment side-car.
 #[derive(Debug)]
 pub(crate) struct FilterScopeData {
-    filter_entries: BTreeMap<FilterTarget, FilterEntry>,
+    filter_entries: BTreeMap<FilterTarget, Spanned<FilterKind>>,
     expects: Vec<ExpectState>,
 }
 
@@ -180,9 +174,9 @@ impl Eq for FilterScope {}
 pub enum FilterResult {
     /// Diagnostic passed through (possibly with adjusted severity or added notes).
     Emit(Diagnostic),
-    /// Diagnostic was suppressed by `Allow` (retained for tooling).
+    /// Diagnostic was suppressed by `Allow` or `Expect` (retained for tooling).
     Filtered(Diagnostic),
-    /// Diagnostic was suppressed and discarded entirely (`Drop` or `Expect`).
+    /// Diagnostic was suppressed and discarded entirely (`Drop`).
     Discarded,
 }
 
@@ -212,35 +206,29 @@ static EMPTY_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
 
 static ALL_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
     let target = FilterTarget::Prefix(None);
-    let o = FilterEntry_ {
-        target,
-        kind: FilterKind::Allow,
-    };
     FilterScope(Arc::new(FilterScopeData {
-        filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), o))]),
+        filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), FilterKind::Allow))]),
         expects: vec![],
     }))
 });
 
+const UNUSED_ITEM_CATEGORY: u8 = Category::UnusedItem as u8;
+const UNUSED_ITEM_CODES: [u8; 6] = [
+    UnusedItem::Function as u8,
+    UnusedItem::StructField as u8,
+    UnusedItem::FunTypeParam as u8,
+    UnusedItem::Constant as u8,
+    UnusedItem::MutReference as u8,
+    UnusedItem::MutParam as u8,
+];
+
 static UNUSED_FOR_TEST_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
-    let cat = Category::UnusedItem as u8;
-    let codes = [
-        UnusedItem::Function,
-        UnusedItem::StructField,
-        UnusedItem::FunTypeParam,
-        UnusedItem::Constant,
-        UnusedItem::MutReference,
-        UnusedItem::MutParam,
-    ];
-    let filter_entries = codes
+    let filter_entries = UNUSED_ITEM_CODES
         .into_iter()
         .map(|c| {
-            let target = FilterTarget::Diagnostic(DiagnosticsID::exact(None, cat, c as u8));
-            let o = FilterEntry_ {
-                target,
-                kind: FilterKind::Allow,
-            };
-            (target, sp(Loc::invalid(), o))
+            let target =
+                FilterTarget::Diagnostic(DiagnosticsID::exact(None, UNUSED_ITEM_CATEGORY, c));
+            (target, sp(Loc::invalid(), FilterKind::Allow))
         })
         .collect();
     FilterScope(Arc::new(FilterScopeData {
@@ -251,12 +239,8 @@ static UNUSED_FOR_TEST_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
 
 static DEPENDENCY_DROP_FILTER_SCOPE: LazyLock<FilterScope> = LazyLock::new(|| {
     let target = FilterTarget::AllForDependency;
-    let o = FilterEntry_ {
-        target,
-        kind: FilterKind::Drop,
-    };
     FilterScope(Arc::new(FilterScopeData {
-        filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), o))]),
+        filter_entries: BTreeMap::from([(target, sp(Loc::invalid(), FilterKind::Drop))]),
         expects: vec![],
     }))
 });
@@ -419,16 +403,13 @@ impl FilterScope {
         if input.is_empty() {
             return EMPTY_FILTER_SCOPE.clone();
         }
-        let filter_entries: BTreeMap<FilterTarget, FilterEntry> = input
+        let filter_entries: BTreeMap<FilterTarget, Spanned<FilterKind>> = input
             .into_iter()
-            .map(|(id, sp!(loc, kind))| {
-                let target = FilterTarget::from(id);
-                (target, sp(loc, FilterEntry_ { target, kind }))
-            })
+            .map(|(id, sp!(loc, kind))| (FilterTarget::from(id), sp(loc, kind)))
             .collect();
         let expects = filter_entries
             .iter()
-            .filter(|(_, sp!(_, o))| o.kind == FilterKind::Expect)
+            .filter(|(_, sp!(_, kind))| *kind == FilterKind::Expect)
             .map(|(target, sp!(loc, _))| ExpectState {
                 loc: *loc,
                 target: *target,
@@ -445,21 +426,19 @@ impl FilterScope {
     pub fn filter_entries(
         &self,
     ) -> impl Iterator<Item = (DiagnosticsID, Spanned<FilterKind>)> + '_ {
-        self.0.filter_entries.values().map(|sp!(loc, o)| {
-            let id = match o.target {
-                FilterTarget::Diagnostic(id) => id,
-                FilterTarget::Category(prefix, cat) => DiagnosticsID::category(prefix, cat),
-                FilterTarget::Prefix(prefix) => DiagnosticsID::all(prefix),
+        self.0.filter_entries.iter().map(|(target, kind)| {
+            let id = match target {
+                FilterTarget::Diagnostic(id) => *id,
+                FilterTarget::Category(prefix, cat) => DiagnosticsID::category(*prefix, *cat),
+                FilterTarget::Prefix(prefix) => DiagnosticsID::all(*prefix),
                 FilterTarget::AllForDependency => DiagnosticsID::all(None),
             };
-            (id, sp(*loc, o.kind))
+            (id, *kind)
         })
     }
 
-    /// Emit diagnostics for every `#[expect(...)]` entry that was never matched.
-    /// NB: `Copy` could ostensibly let you call this multiple times, but that would be a misuse
-    /// of the API and also hopefully deduped by the diagnostic framework.
-    /// TODO: decide if we want to finalize beyond `to_bytecode` in case compilation fails earlier.
+    /// Emit diagnostics for every `#[expect(...)]` entry that was never matched. TODO: decide if
+    /// we want to finalize beyond `to_bytecode` in case compilation fails earlier.
     pub fn finalize(self) -> Vec<Diagnostic> {
         self.0
             .expects
@@ -515,15 +494,16 @@ impl FilterStack {
         mut diag: Diagnostic,
         known_filter_names: &BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     ) -> FilterResult {
-        let key = diag.info().id();
+        if diag.severity() > Severity::Warning {
+            return FilterResult::Emit(diag);
+        }
 
-        let Some(resolved) = self.resolve(key) else {
+        let Some(resolved) = self.resolve(diag.info().id()) else {
             maybe_add_filter_hint(&mut diag, known_filter_names);
             return FilterResult::Emit(diag);
         };
 
         match resolved.kind {
-            _ if diag.severity() > Severity::Warning => FilterResult::Emit(diag),
             FilterKind::Drop => FilterResult::Discarded,
             FilterKind::Allow => FilterResult::Filtered(diag),
             FilterKind::Warn => {
@@ -542,7 +522,7 @@ impl FilterStack {
             }
             FilterKind::Expect => {
                 mark_expect_fulfilled(resolved.scope, resolved.target);
-                FilterResult::Discarded
+                FilterResult::Filtered(diag)
             }
         }
     }
@@ -555,20 +535,20 @@ impl FilterStack {
             FilterTarget::AllForDependency,
         ];
         for scope in self.stack.iter().rev() {
-            let mut best: Option<(usize, &FilterEntry)> = None;
+            let mut best: Option<(usize, FilterTarget, &Spanned<FilterKind>)> = None;
             for (specificity, candidate) in candidates.iter().enumerate() {
                 if let Some(entry) = scope.0.filter_entries.get(candidate)
-                    && best.is_none_or(|(s, _)| specificity < s)
+                    && best.is_none_or(|(s, ..)| specificity < s)
                 {
-                    best = Some((specificity, entry));
+                    best = Some((specificity, *candidate, entry));
                 }
             }
-            if let Some((_, sp!(loc, o))) = best {
+            if let Some((_, target, sp!(loc, kind))) = best {
                 return Some(Resolved {
                     loc: *loc,
                     scope,
-                    kind: o.kind,
-                    target: o.target,
+                    kind: *kind,
+                    target,
                 });
             }
         }

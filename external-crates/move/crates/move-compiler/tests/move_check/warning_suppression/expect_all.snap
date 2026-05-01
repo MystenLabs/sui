@@ -9,7 +9,9 @@ warning[W10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/expect_all.move:3:10
   │
 3 │ #[expect(all)]
-  │          ^^^ Wildcard filters are not allowed in '#[expect(...)]'. Use '#[allow(all)]' instead
+  │          ^^^ 'all' matches multiple diagnostics, but 'expect' may only be used for individual diagnostics
+  │
+  = Use '#[allow(all)]' instead
 
 warning[W09002]: unused variable
   ┌─ tests/move_check/warning_suppression/expect_all.move:4:26
@@ -23,7 +25,9 @@ warning[W10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/expect_all.move:7:10
   │
 7 │ #[expect(unused)]
-  │          ^^^^^^ Wildcard filters are not allowed in '#[expect(...)]'. Use '#[allow(unused)]' instead
+  │          ^^^^^^ 'unused' matches multiple diagnostics, but 'expect' may only be used for individual diagnostics
+  │
+  = Use '#[allow(unused)]' instead
 
 warning[W09002]: unused variable
   ┌─ tests/move_check/warning_suppression/expect_all.move:8:26

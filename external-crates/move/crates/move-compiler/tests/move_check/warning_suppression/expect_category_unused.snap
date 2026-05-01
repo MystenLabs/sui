@@ -9,7 +9,9 @@ warning[W10007]: issue with attribute value
   ┌─ tests/move_check/warning_suppression/expect_category_unused.move:4:14
   │
 4 │     #[expect(unused)]
-  │              ^^^^^^ Wildcard filters are not allowed in '#[expect(...)]'. Use '#[allow(unused)]' instead
+  │              ^^^^^^ 'unused' matches multiple diagnostics, but 'expect' may only be used for individual diagnostics
+  │
+  = Use '#[allow(unused)]' instead
 
 warning[W09002]: unused variable
   ┌─ tests/move_check/warning_suppression/expect_category_unused.move:6:13

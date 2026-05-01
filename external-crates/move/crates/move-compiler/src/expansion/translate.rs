@@ -1682,12 +1682,14 @@ fn warning_filter_(
                 id.category == DIAGNOSTIC_FILTER_WILDCARD || id.code == DIAGNOSTIC_FILTER_WILDCARD
             });
             if is_wildcard {
+                let attr_str = format_allow_attr(prefix, name.value);
                 let msg = format!(
-                    "Wildcard filters are not allowed in '#[expect(...)]'. \
-                     Use '#[allow({})]' instead",
-                    format_allow_attr(prefix, name.value)
+                    "'{attr_str}' matches multiple diagnostics, \
+                     but 'expect' may only be used for individual diagnostics"
                 );
-                context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
+                let mut diag = diag!(Attributes::ValueWarning, (name.loc, msg));
+                diag.add_note(format!("Use '#[allow({attr_str})]' instead"));
+                context.add_diag(diag);
             }
             !is_wildcard
         });

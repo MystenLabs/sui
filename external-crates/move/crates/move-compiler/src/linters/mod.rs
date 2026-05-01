@@ -182,8 +182,11 @@ pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
-    (
-        Some(ALLOW_ATTR_CATEGORY.into()),
+    let mut filters: Vec<(FilterName, Vec<DiagnosticsID>)> = vec![(
+        Symbol::from(crate::diagnostics::filter::FILTER_ALL),
+        vec![DiagnosticsID::all(Some(LINT_WARNING_PREFIX))],
+    )];
+    filters.extend(
         STYLE_WARNING_FILTERS
             .iter()
             .map(|(category, code, filter_name)| {
@@ -195,9 +198,9 @@ pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>
                         *code,
                     )],
                 )
-            })
-            .collect(),
-    )
+            }),
+    );
+    (Some(ALLOW_ATTR_CATEGORY.into()), filters)
 }
 
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
