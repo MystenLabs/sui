@@ -74,13 +74,17 @@ where
         Bound::Included(upper_bound) => {
             let mut key_buf = be_fix_int_ser(&upper_bound);
 
-            // If the key is already at the limit, there's nowhere else to go, so no upper bound
-            if !is_max(&key_buf) {
-                // Since we want exclusive, we need to increment the key to get the upper bound
+            if is_max(&key_buf) {
+                // The key is already at the limit, so the inclusive upper bound covers
+                // everything; leaving the rocksdb upper bound unset is the only way to
+                // include the max key (rocksdb upper bound is exclusive).
+                None
+            } else {
+                // Since rocksdb upper bound is exclusive, increment the key by one so the
+                // user-supplied inclusive bound is included.
                 big_endian_saturating_add_one(&mut key_buf);
-                // readopts.set_iterate_upper_bound(key_buf);
+                Some(key_buf)
             }
-            Some(key_buf)
         }
         Bound::Excluded(upper_bound) => {
             // Rocksdb upper bound is inclusive by default so nothing to do

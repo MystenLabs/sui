@@ -515,6 +515,36 @@ async fn test_range_iter() {
 }
 
 #[tokio::test]
+async fn test_safe_range_iter_inclusive_upper_bound_at_max() {
+    let db: DBMap<u8, String> = open_map(temp_dir(), None);
+    db.insert(&100u8, &"100".to_string()).unwrap();
+    db.insert(&u8::MAX, &"max".to_string()).unwrap();
+
+    let results: Vec<_> = get_range_iter(&db, 100u8..=u8::MAX).collect();
+    assert_eq!(
+        vec![(100u8, "100".to_string()), (u8::MAX, "max".to_string())],
+        results,
+        "Range ..=u8::MAX must include the entry at u8::MAX",
+    );
+}
+
+#[tokio::test]
+async fn test_reversed_safe_iter_inclusive_upper_bound_at_max() {
+    let db: DBMap<u8, String> = open_map(temp_dir(), None);
+    db.insert(&100u8, &"100".to_string()).unwrap();
+    db.insert(&u8::MAX, &"max".to_string()).unwrap();
+
+    let results: Vec<_> = get_reverse_iter(&db, None, Some(u8::MAX))
+        .map(|item| item.unwrap())
+        .collect();
+    assert_eq!(
+        vec![(u8::MAX, "max".to_string()), (100u8, "100".to_string())],
+        results,
+        "reversed_safe_iter_with_bounds upper=u8::MAX must include the entry at u8::MAX",
+    );
+}
+
+#[tokio::test]
 async fn test_is_empty() {
     let db: DBMap<i32, String> = open_map(temp_dir(), Some("table"));
     // Test empty map is truly empty
