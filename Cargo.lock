@@ -14332,6 +14332,7 @@ dependencies = [
  "object_store 0.13.0",
  "prometheus",
  "prost 0.14.1",
+ "reqwest",
  "serde",
  "serde_json",
  "sui-default-config",
