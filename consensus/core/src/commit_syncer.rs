@@ -504,25 +504,33 @@ where
                         return (commit_range.end(), commits);
                     }
                     Ok(Err(e)) => {
-                        let peer_name = peer.hostname(&inner.context);
-                        warn!("Failed to fetch {commit_range:?} from {peer_name}: {}", e);
+                        warn!(
+                            "Failed to fetch {commit_range:?} from {}: {}",
+                            peer.hostname(&inner.context),
+                            e
+                        );
                         inner
                             .context
                             .metrics
                             .node_metrics
                             .commit_sync_fetch_once_errors
-                            .with_label_values(&[peer_name.as_str(), e.name()])
+                            .with_label_values(&[peer.labelname(&inner.context).as_str(), e.name()])
                             .inc();
                     }
                     Err(_) => {
-                        let peer_name = peer.hostname(&inner.context);
-                        warn!("Timed out fetching {commit_range:?} from {peer}",);
+                        warn!(
+                            "Timed out fetching {commit_range:?} from {}",
+                            peer.hostname(&inner.context)
+                        );
                         inner
                             .context
                             .metrics
                             .node_metrics
                             .commit_sync_fetch_once_errors
-                            .with_label_values(&[peer_name.as_str(), "FetchTimeout"])
+                            .with_label_values(&[
+                                peer.labelname(&inner.context).as_str(),
+                                "FetchTimeout",
+                            ])
                             .inc();
                     }
                 }
@@ -663,13 +671,15 @@ where
                 continue;
             };
             // Extract hostname based on peer type
-            let peer_hostname = target_peer.hostname(&inner.context);
             inner
                 .context
                 .metrics
                 .node_metrics
                 .block_timestamp_drift_ms
-                .with_label_values(&[peer_hostname.as_str(), "commit_syncer"])
+                .with_label_values(&[
+                    target_peer.labelname(&inner.context).as_str(),
+                    "commit_syncer",
+                ])
                 .inc_by(forward_drift);
         }
 
