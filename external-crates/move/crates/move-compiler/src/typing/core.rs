@@ -2661,7 +2661,7 @@ fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: 
             ))
         }
         TI::Void => {
-            let tmsg = "Expected a base type, but this type diverges";
+            let tmsg = "Could not find a concrete type for this expression";
             context.add_diag(diag!(
                 TypeSafety::ExpectedBaseType,
                 (loc, msg),

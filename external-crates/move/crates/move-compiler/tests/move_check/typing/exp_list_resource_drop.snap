@@ -41,5 +41,5 @@ error[E04004]: expected a single non-reference type
 9 │         (0u64, S{ }, Box { f: abort 0 });
   │                      ^^^^^^^^^^^^^^^^^^
   │                      │        │
-  │                      │        Expected a base type, but this type diverges
+  │                      │        Could not find a concrete type for this expression
   │                      Invalid type argument

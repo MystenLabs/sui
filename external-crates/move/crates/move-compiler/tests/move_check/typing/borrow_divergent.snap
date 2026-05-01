@@ -11,7 +11,7 @@ error[E04004]: expected a single non-reference type
 4 │            &break;
   │            ^^^^^^
   │            ││
-  │            │Expected a base type, but this type diverges
+  │            │Could not find a concrete type for this expression
   │            Invalid borrow
 
 error[E04004]: expected a single non-reference type
@@ -20,7 +20,7 @@ error[E04004]: expected a single non-reference type
 9 │         &{ return };
   │         ^^^^^^^^^^^
   │         │  │
-  │         │  Expected a base type, but this type diverges
+  │         │  Could not find a concrete type for this expression
   │         Invalid borrow
 
 error[E04004]: expected a single non-reference type
@@ -28,6 +28,6 @@ error[E04004]: expected a single non-reference type
    │
 13 │         &(if (cond) return else return);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │         │                       │
-   │         │                       Expected a base type, but this type diverges
+   │         │           │
+   │         │           Could not find a concrete type for this expression
    │         Invalid borrow

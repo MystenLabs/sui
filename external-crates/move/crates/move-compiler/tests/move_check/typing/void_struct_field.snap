@@ -5,19 +5,11 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09002]: unused variable
-  ┌─ tests/move_check/typing/void_struct_field.move:4:13
-  │
-4 │         let b = Box { f: abort 0 };
-  │             ^ Unused local variable 'b'. Consider removing or prefixing with an underscore: '_b'
-  │
-  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
 error[E04004]: expected a single non-reference type
-  ┌─ tests/move_check/typing/void_struct_field.move:4:17
+  ┌─ tests/move_check/typing/void_struct_field.move:4:18
   │
-4 │         let b = Box { f: abort 0 };
-  │                 ^^^^^^^^^^^^^^^^^^
-  │                 │        │
-  │                 │        Expected a base type, but this type diverges
-  │                 Invalid type argument
+4 │         let _b = Box { f: abort 0 };
+  │                  ^^^^^^^^^^^^^^^^^^
+  │                  │        │
+  │                  │        Could not find a concrete type for this expression
+  │                  Invalid type argument
