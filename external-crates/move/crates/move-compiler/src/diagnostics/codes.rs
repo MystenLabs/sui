@@ -279,12 +279,12 @@ codes!(
     ],
     // errors for move rules. mostly cfgir/locals
     MoveSafety: [
-        UnusedUndroppable: { msg: "discarded value lacks 'drop' ability", severity: NonblockingError },
+        UnusedUndroppable: { msg: "unused value without 'drop'", severity: NonblockingError },
         UnassignedVariable: { msg: "use of unassigned variable", severity: NonblockingError },
     ],
     // errors for move rules. mostly cfgir/borrows
     ReferenceSafety: [
-        RefTrans: { msg: "reference aliasing rule violated", severity: BlockingError },
+        RefTrans: { msg: "invalid borrow", severity: BlockingError },
         MutOwns: { msg: "mutable borrow rule violated", severity: NonblockingError },
         Dangling: {
             msg: "invalid operation, could create a dangling reference",
@@ -323,7 +323,7 @@ codes!(
         InvalidTest: { msg: "unable to generate test", severity: NonblockingError },
         InvalidBytecodeInst:
             { msg: "unknown bytecode instruction", severity: NonblockingError },
-        ValueWarning: { msg: "questionable attribute value", severity: Warning },
+        ValueWarning: { msg: "issue with attribute value", severity: Warning },
         AmbiguousAttributeValue: { msg: "ambiguous attribute value", severity: NonblockingError },
     ],
     Tests: [
