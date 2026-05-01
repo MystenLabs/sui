@@ -20,6 +20,9 @@ use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
 use prometheus::Histogram;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderName;
+use reqwest::header::HeaderValue;
 use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
@@ -75,6 +78,12 @@ pub struct IngestionClientArgs {
     #[arg(long, group = "source")]
     pub remote_store_gcs: Option<String>,
 
+    /// GCP project ID for requester-pays GCS buckets. When set, the
+    /// `x-goog-user-project` header is included in every request so that
+    /// charges are billed to this project instead of the bucket owner.
+    #[arg(long, requires = "remote_store_gcs")]
+    pub remote_store_gcs_project_id: Option<String>,
+
     /// Fetch checkpoints from Azure Blob Storage. Provide the container name.
     /// (env: AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_ACCESS_KEY)
     #[arg(long, group = "source")]
@@ -113,6 +122,7 @@ impl Default for IngestionClientArgs {
             remote_store_url: None,
             remote_store_s3: None,
             remote_store_gcs: None,
+            remote_store_gcs_project_id: None,
             remote_store_azure: None,
             local_ingestion_path: None,
             rpc_api_url: None,
@@ -193,8 +203,21 @@ impl IngestionClient {
                 .map(Arc::new)?;
             IngestionClient::with_store(store, metrics.clone())?
         } else if let Some(bucket) = args.remote_store_gcs.as_ref() {
+            let mut client_options = args.client_options();
+            if let Some(project_id) = &args.remote_store_gcs_project_id {
+                let header_value = HeaderValue::from_str(project_id)
+                    .expect("invalid project ID for requester-pays header");
+                let headers = HeaderMap::from_iter([
+                    (
+                        HeaderName::from_static("x-goog-user-project"),
+                        header_value.clone(),
+                    ),
+                    (HeaderName::from_static("userproject"), header_value),
+                ]);
+                client_options = client_options.with_default_headers(headers);
+            }
             let store = GoogleCloudStorageBuilder::from_env()
-                .with_client_options(args.client_options())
+                .with_client_options(client_options)
                 .with_retry(retry)
                 .with_bucket_name(bucket)
                 .build()

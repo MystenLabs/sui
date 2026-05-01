@@ -23,6 +23,7 @@ mysten-network.workspace = true
 num_cpus.workspace = true
 prometheus.workspace = true
 object_store.workspace = true
+reqwest.workspace = true
 serde_json.workspace = true
 rand.workspace = true
 scoped-futures.workspace = true
