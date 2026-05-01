@@ -1910,7 +1910,7 @@ mod tests {
 
     use super::*;
 
-    fn fmt(struct_layout: MoveTypeLayout, enum_layout: MoveTypeLayout) -> String {
+    fn fmt(struct_layout: CA::MoveTypeLayout, enum_layout: CA::MoveTypeLayout) -> String {
         format!("struct:\n{struct_layout:#}\n\nenum:\n{enum_layout:#}",)
     }
 

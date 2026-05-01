@@ -3645,7 +3645,7 @@ mod tests {
                 &mut self,
                 _struct_tag: &move_core_types::language_storage::StructTag,
             ) -> Result<
-                move_core_types::annotated_value::MoveDatatypeLayout,
+                move_core_types::compressed::annotated::MoveTypeLayout,
                 sui_types::error::SuiError,
             > {
                 panic!("layout resolver should not be invoked by ledger history indexing");
@@ -3707,7 +3707,7 @@ mod tests {
                 &mut self,
                 _struct_tag: &move_core_types::language_storage::StructTag,
             ) -> Result<
-                move_core_types::annotated_value::MoveDatatypeLayout,
+                move_core_types::compressed::annotated::MoveTypeLayout,
                 sui_types::error::SuiError,
             > {
                 panic!("layout resolver should not be invoked by ledger history indexing");

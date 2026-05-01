@@ -742,8 +742,9 @@ impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {
         &self,
         _: &move_core_types::language_storage::StructTag,
         _overlay: &sui_types::full_checkpoint_content::ObjectSet,
-    ) -> sui_types::storage::error::Result<Option<move_core_types::annotated_value::MoveTypeLayout>>
-    {
+    ) -> sui_types::storage::error::Result<
+        Option<move_core_types::compressed::annotated::MoveTypeLayout>,
+    > {
         Ok(None)
     }
 }
