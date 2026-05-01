@@ -520,18 +520,14 @@ impl MoveStructLayout {
 
 impl fmt::Display for MoveStructLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {{ ", self.type_)?;
-        for (i, (name, layout)) in self.fields().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            if f.alternate() {
-                write!(f, "{name}: {layout:#}")?;
-            } else {
-                write!(f, "{name}: {layout}")?;
-            }
+        use AV::DebugAsDisplay as DD;
+        write!(f, "struct ")?;
+        write!(f, "{} ", self.type_)?;
+        let mut map = f.debug_map();
+        for (name, layout) in self.fields() {
+            map.entry(&DD(name), &DD(&layout));
         }
-        write!(f, " }}")
+        map.finish()
     }
 }
 
@@ -599,30 +595,37 @@ impl MoveEnumLayout {
 
 impl fmt::Display for MoveEnumLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {{ ", self.type_)?;
-        for (i, vl) in self.variants().iter().enumerate() {
-            if i > 0 {
-                write!(f, ", ")?;
-            }
-            write!(f, "{}(", vl.name())?;
-            match vl.fields() {
-                Some(fields) => {
-                    for (j, (name, layout)) in fields.fields().enumerate() {
-                        if j > 0 {
-                            write!(f, ", ")?;
-                        }
-                        if f.alternate() {
-                            write!(f, "{name}: {layout:#}")?;
-                        } else {
-                            write!(f, "{name}: {layout}")?;
-                        }
-                    }
-                }
-                None => write!(f, "?")?,
-            }
-            write!(f, ")")?;
+        use AV::DebugAsDisplay as DD;
+        write!(f, "enum {} ", self.type_)?;
+        // Match tree-form `MoveEnumLayout`'s display, which keys variants in a
+        // `BTreeMap<(Identifier, u16), _>` and so iterates them sorted by
+        // (name, tag).
+        let mut sorted: Vec<&VariantLayout> = self.variants().iter().collect();
+        sorted.sort_by(|a, b| (a.name(), a.tag()).cmp(&(b.name(), b.tag())));
+        let mut vmap = f.debug_set();
+        for vl in sorted {
+            vmap.entry(&DD(&MoveVariantDisplay(vl)));
         }
-        write!(f, " }}")
+        vmap.finish()
+    }
+}
+
+struct MoveVariantDisplay<'a>(&'a VariantLayout);
+
+impl fmt::Display for MoveVariantDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use AV::DebugAsDisplay as DD;
+        let name = self.0.name().as_str();
+        match self.0.fields() {
+            Some(fields) => {
+                let mut map = f.debug_struct(name);
+                for (fname, layout) in fields.fields() {
+                    map.field(fname.as_str(), &DD(&layout));
+                }
+                map.finish()
+            }
+            None => write!(f, "{name}(?)"),
+        }
     }
 }
 
