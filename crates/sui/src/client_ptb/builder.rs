@@ -17,7 +17,7 @@ use move_binary_format::{
     CompiledModule, binary_config::BinaryConfig, file_format::SignatureToken,
 };
 use move_core_types::{
-    account_address::AccountAddress, annotated_value::MoveTypeLayout, ident_str,
+    account_address::AccountAddress, compressed::annotated::MoveTypeLayout, ident_str,
 };
 use move_core_types::{
     language_storage::StructTag,

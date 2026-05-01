@@ -316,6 +316,11 @@ impl std::fmt::Display for VerboseObjectOutput {
                     if resp.object.is_package() {
                         writeln!(f, "  -- object: <Move Package>")?;
                     } else if let Some(layout) = &resp.layout {
+                        let compressed =
+                            move_core_types::compressed::annotated::MoveStructLayout::try_from(
+                                layout,
+                            )
+                            .unwrap();
                         writeln!(
                             f,
                             "  -- object: Move Object: {}",
@@ -323,7 +328,7 @@ impl std::fmt::Display for VerboseObjectOutput {
                                 .data
                                 .try_as_move()
                                 .unwrap()
-                                .to_move_struct(layout)
+                                .to_move_struct(compressed)
                                 .unwrap()
                         )?;
                     }

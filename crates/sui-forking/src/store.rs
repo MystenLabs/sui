@@ -10,7 +10,7 @@ use std::sync::RwLockWriteGuard;
 use anyhow::anyhow;
 use tracing::info;
 
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::compressed::annotated::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use simulacrum::store::SimulatorStore;
 use sui_protocol_config::Chain;

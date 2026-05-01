@@ -3,7 +3,8 @@
 
 use crate::displays::Pretty;
 use crate::replay::LocalExec;
-use move_core_types::annotated_value::{MoveTypeLayout, MoveValue};
+use move_core_types::annotated_value::MoveValue;
+use move_core_types::compressed::annotated as CA;
 use move_core_types::language_storage::TypeTag;
 use std::fmt::{Display, Formatter};
 use std::sync::Arc;
@@ -303,14 +304,16 @@ fn resolve_to_layout(
     executor: &Arc<dyn Executor + Send + Sync>,
     protocol_config: &ProtocolConfig,
     store_factory: &LocalExec,
-) -> MoveTypeLayout {
+) -> CA::MoveTypeLayout {
     match type_tag {
-        TypeTag::Vector(inner) => MoveTypeLayout::Vector(Box::from(resolve_to_layout(
-            inner,
-            executor,
-            protocol_config,
-            store_factory,
-        ))),
+        TypeTag::Vector(inner) => {
+            let inner_layout = resolve_to_layout(inner, executor, protocol_config, store_factory);
+            CA::MoveTypeLayoutBuilder::with_builder(|b| {
+                let inner_h = b.from_layout(&inner_layout)?;
+                b.vector(inner_h)
+            })
+            .unwrap()
+        }
         TypeTag::Struct(inner) => {
             let mut layout_resolver =
                 executor.type_layout_resolver(protocol_config, Box::new(store_factory));
@@ -319,15 +322,15 @@ fn resolve_to_layout(
                 .unwrap()
                 .into_layout()
         }
-        TypeTag::Bool => MoveTypeLayout::Bool,
-        TypeTag::U8 => MoveTypeLayout::U8,
-        TypeTag::U64 => MoveTypeLayout::U64,
-        TypeTag::U128 => MoveTypeLayout::U128,
-        TypeTag::Address => MoveTypeLayout::Address,
-        TypeTag::Signer => MoveTypeLayout::Signer,
-        TypeTag::U16 => MoveTypeLayout::U16,
-        TypeTag::U32 => MoveTypeLayout::U32,
-        TypeTag::U256 => MoveTypeLayout::U256,
+        TypeTag::Bool => CA::MoveTypeLayout::bool(),
+        TypeTag::U8 => CA::MoveTypeLayout::u8(),
+        TypeTag::U64 => CA::MoveTypeLayout::u64(),
+        TypeTag::U128 => CA::MoveTypeLayout::u128(),
+        TypeTag::Address => CA::MoveTypeLayout::address(),
+        TypeTag::Signer => CA::MoveTypeLayout::signer(),
+        TypeTag::U16 => CA::MoveTypeLayout::u16(),
+        TypeTag::U32 => CA::MoveTypeLayout::u32(),
+        TypeTag::U256 => CA::MoveTypeLayout::u256(),
     }
 }
 
@@ -339,7 +342,7 @@ fn resolve_value(
     store_factory: &LocalExec,
 ) -> anyhow::Result<MoveValue> {
     let layout = resolve_to_layout(type_tag, executor, protocol_config, store_factory);
-    BoundedVisitor::deserialize_value(bytes, &layout)
+    BoundedVisitor::deserialize_value(bytes, layout)
 }
 
 pub fn transform_command_results_to_annotated(

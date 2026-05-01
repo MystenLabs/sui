@@ -68,10 +68,8 @@ use sui_types::{SUI_FRAMEWORK_PACKAGE_ID, parse_sui_struct_tag};
 
 /// Convert a tree-form `MoveStructLayout` to its compressed equivalent.
 fn compress_struct(layout: MoveStructLayout) -> CA::MoveStructLayout {
-    let built = CA::MoveTypeLayoutBuilder::with_builder::<_, anyhow::Error>(|b| {
-        b.from_tree_struct_layout(&layout)
-    })
-    .unwrap();
+    let built =
+        CA::MoveTypeLayoutBuilder::with_builder(|b| b.from_tree_struct_layout(&layout)).unwrap();
     let CA::MoveLayoutView::Struct(s) = built.as_view() else {
         unreachable!()
     };
