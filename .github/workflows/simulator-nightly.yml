@@ -177,7 +177,7 @@ jobs:
         run: |
           LOG_DIR=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -td ~/simtest_logs/*/ | head -1")
           FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
-            "cd ~/sui && ./scripts/simtest/collect-failures.sh '$LOG_DIR' | head -20")
+            "cd ~/sui && ./scripts/simtest/collect-failures.py '$LOG_DIR' | head -20")
           echo "failed_tests<<EOF" >> $GITHUB_OUTPUT
           echo "$FAILED_TESTS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT

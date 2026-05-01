@@ -166,7 +166,7 @@ if [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
 fi
 
 # Per-test failure rendering (Phase 1 NDJSON + Phase 2/3 nextest plaintext)
-# lives in collect-failures.sh.
-scripts/simtest/collect-failures.sh --detailed "$LOG_DIR"
+# lives in collect-failures.py.
+scripts/simtest/collect-failures.py --format=detailed "$LOG_DIR"
 
 exit 1
