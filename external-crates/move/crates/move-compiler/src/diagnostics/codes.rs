@@ -275,7 +275,7 @@ codes!(
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
         Constraint: { msg: "missing required ability", severity: NonblockingError },
-        ImplicitlyCopyable: { msg: "type lacks 'copy' ability", severity: NonblockingError },
+        ImplicitlyCopyable: { msg: "type not implicitly copyable", severity: NonblockingError },
     ],
     // errors for move rules. mostly cfgir/locals
     MoveSafety: [
@@ -291,7 +291,7 @@ codes!(
             severity: NonblockingError,
         },
         InvalidReturn:
-            { msg: "cannot return reference to local value", severity: NonblockingError },
+            { msg: "invalid return of locally borrowed state", severity: NonblockingError },
         InvalidTransfer: { msg: "invalid reference transfer", severity: NonblockingError },
         AmbiguousVariableUsage: { msg: "ambiguous variable usage", severity: NonblockingError },
     ],
