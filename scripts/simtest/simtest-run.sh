@@ -163,20 +163,71 @@ if [ "$PHASE1_FAILED" -eq 1 ]; then
     tail -100 "$LOG_DIR/log"
   fi
   if [ -s "$LOG_DIR/e2e/failures.ndjson" ]; then
+    # Group failures by (binary, test): if a test fails on N seeds it usually
+    # fails for the same root cause, so print ONE log tail (panic + nextest
+    # result block) per distinct test plus a list of all failing seeds.
+    # Caps at MAX_TESTS distinct tests so a totally broken build doesn't
+    # produce gigabytes of output.
+    #
     # python3 (not jq — jq isn't reliably installed on the simtest hosts).
-    # Plain string concatenation rather than f-strings so the script can be
-    # embedded inside single-quoted bash without escape-quoting the
-    # dictionary key strings.
+    # Plain string concatenation rather than f-strings so this can be embedded
+    # inside single-quoted bash without escape-quoting dictionary keys.
     python3 -c '
-import json, sys
+import json, sys, os, collections
+
+LOG_DIR = sys.argv[1]
+MAX_TESTS = int(os.environ.get("SIMTEST_FAILURE_REPORT_MAX_TESTS", "50"))
+TAIL_LINES = int(os.environ.get("SIMTEST_FAILURE_REPORT_TAIL_LINES", "100"))
+
+groups = collections.OrderedDict()
+total = 0
 for line in sys.stdin:
     line = line.strip()
     if not line:
         continue
+    total += 1
     r = json.loads(line)
-    print("  " + r["status"] + " " + r["binary"] + "::" + r["test"]
-          + " seed=" + r["seed"] + " (log: " + r.get("log", "") + ")")
-' < "$LOG_DIR/e2e/failures.ndjson"
+    key = (r["binary"], r["test"])
+    groups.setdefault(key, []).append(r)
+
+shown = 0
+for (binary, test), records in groups.items():
+    if shown >= MAX_TESTS:
+        break
+    shown += 1
+    seeds = sorted({r["seed"] for r in records})
+    statuses = sorted({r["status"] for r in records})
+    seed_list = ", ".join(seeds[:10]) + (", ..." if len(seeds) > 10 else "")
+    print("")
+    print("------------------------------")
+    print("/".join(statuses) + " " + binary + "::" + test
+          + " (" + str(len(records)) + " seed(s): " + seed_list + ")")
+    sample = records[0]
+    log_name = sample.get("log", "")
+    if log_name:
+        log_path = os.path.join(LOG_DIR, "e2e", log_name)
+        if os.path.exists(log_path):
+            print("--- last " + str(TAIL_LINES) + " lines of seed=" + sample["seed"]
+                  + " log (" + log_name + "):")
+            try:
+                with open(log_path, errors="replace") as f:
+                    tail = f.readlines()[-TAIL_LINES:]
+                for ln in tail:
+                    print("    " + ln.rstrip())
+            except OSError as e:
+                print("    (could not read log: " + repr(e) + ")")
+        else:
+            print("--- log file missing: " + log_path)
+
+remaining = max(0, len(groups) - shown)
+if remaining > 0:
+    print("")
+    print("... and " + str(remaining) + " more distinct failing test(s); "
+          + "showing first " + str(shown) + ".")
+print("")
+print("Phase 1 failure summary: " + str(total) + " record(s) across "
+      + str(len(groups)) + " distinct test(s).")
+' "$LOG_DIR" < "$LOG_DIR/e2e/failures.ndjson"
   fi
 fi
 
