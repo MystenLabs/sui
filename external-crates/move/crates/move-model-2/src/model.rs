@@ -1150,7 +1150,7 @@ fn make_map<I: Ord + Copy, T>(
 impl ConstantData {
     fn value(&self, compiled: &normalized::Constant) -> &runtime_value::MoveValue {
         self.value.get_or_init(|| {
-            let constant_layout = annotated_constant_layout(&compiled.type_);
+            let constant_layout = constant_layout(&compiled.type_);
             runtime_value::MoveValue::simple_deserialize_compressed(
                 &compiled.data,
                 &constant_layout,
@@ -1160,8 +1160,8 @@ impl ConstantData {
     }
 }
 
-fn annotated_constant_layout(ty: &normalized::Type) -> CR::MoveTypeLayout {
-    fn annotated_constant_layout_(
+fn constant_layout(ty: &normalized::Type) -> CR::MoveTypeLayout {
+    fn constant_layout_(
         builder: &mut CR::MoveTypeLayoutBuilder,
         ty: &normalized::Type,
     ) -> LayoutHandle {
@@ -1176,7 +1176,7 @@ fn annotated_constant_layout(ty: &normalized::Type) -> CR::MoveTypeLayout {
             T::U256 => builder.u256(),
             T::Address => builder.address(),
             T::Vector(inner) => {
-                let inner = annotated_constant_layout_(builder, inner);
+                let inner = constant_layout_(builder, inner);
                 builder
                     .vector(inner)
                     .expect("Building a vector layout for a const should never fail")
@@ -1188,7 +1188,7 @@ fn annotated_constant_layout(ty: &normalized::Type) -> CR::MoveTypeLayout {
         }
     }
     let mut builder = CR::MoveTypeLayoutBuilder::new();
-    let handle = annotated_constant_layout_(&mut builder, ty);
+    let handle = constant_layout_(&mut builder, ty);
     builder.build(handle)
 }
 
