@@ -152,94 +152,21 @@ fi
 
 echo "Failures detected, printing details..."
 
-if [ "$PHASE1_FAILED" -eq 1 ]; then
+# Build/infra failure case (seed-search.py exited non-zero, e.g. cargo build
+# error). The relevant evidence is in $LOG_DIR/log; surface its tail before
+# the per-test rendering.
+if [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
   echo ""
   echo "=============================="
-  echo "Phase 1 failures:"
+  echo "Phase 1 build/infrastructure failure:"
   echo "=============================="
-  if [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
-    echo "seed-search.py exited with code $PHASE1_EXIT (build error or infrastructure failure)"
-    echo "Build/runtime output is in $LOG_DIR/log; tail follows:"
-    tail -100 "$LOG_DIR/log"
-  fi
-  if [ -s "$LOG_DIR/e2e/failures.ndjson" ]; then
-    # Group failures by (binary, test): if a test fails on N seeds it usually
-    # fails for the same root cause, so print ONE log tail (panic + nextest
-    # result block) per distinct test plus a list of all failing seeds.
-    # Caps at MAX_TESTS distinct tests so a totally broken build doesn't
-    # produce gigabytes of output.
-    #
-    # python3 (not jq — jq isn't reliably installed on the simtest hosts).
-    # Plain string concatenation rather than f-strings so this can be embedded
-    # inside single-quoted bash without escape-quoting dictionary keys.
-    python3 -c '
-import json, sys, os, collections
-
-LOG_DIR = sys.argv[1]
-MAX_TESTS = int(os.environ.get("SIMTEST_FAILURE_REPORT_MAX_TESTS", "50"))
-TAIL_LINES = int(os.environ.get("SIMTEST_FAILURE_REPORT_TAIL_LINES", "100"))
-
-groups = collections.OrderedDict()
-total = 0
-for line in sys.stdin:
-    line = line.strip()
-    if not line:
-        continue
-    total += 1
-    r = json.loads(line)
-    key = (r["binary"], r["test"])
-    groups.setdefault(key, []).append(r)
-
-shown = 0
-for (binary, test), records in groups.items():
-    if shown >= MAX_TESTS:
-        break
-    shown += 1
-    seeds = sorted({r["seed"] for r in records})
-    statuses = sorted({r["status"] for r in records})
-    seed_list = ", ".join(seeds[:10]) + (", ..." if len(seeds) > 10 else "")
-    print("")
-    print("------------------------------")
-    print("/".join(statuses) + " " + binary + "::" + test
-          + " (" + str(len(records)) + " seed(s): " + seed_list + ")")
-    sample = records[0]
-    log_name = sample.get("log", "")
-    if log_name:
-        log_path = os.path.join(LOG_DIR, "e2e", log_name)
-        if os.path.exists(log_path):
-            print("--- last " + str(TAIL_LINES) + " lines of seed=" + sample["seed"]
-                  + " log (" + log_name + "):")
-            try:
-                with open(log_path, errors="replace") as f:
-                    tail = f.readlines()[-TAIL_LINES:]
-                for ln in tail:
-                    print("    " + ln.rstrip())
-            except OSError as e:
-                print("    (could not read log: " + repr(e) + ")")
-        else:
-            print("--- log file missing: " + log_path)
-
-remaining = max(0, len(groups) - shown)
-if remaining > 0:
-    print("")
-    print("... and " + str(remaining) + " more distinct failing test(s); "
-          + "showing first " + str(shown) + ".")
-print("")
-print("Phase 1 failure summary: " + str(total) + " record(s) across "
-      + str(len(groups)) + " distinct test(s).")
-' "$LOG_DIR" < "$LOG_DIR/e2e/failures.ndjson"
-  fi
+  echo "seed-search.py exited with code $PHASE1_EXIT"
+  echo "Tail of $LOG_DIR/log:"
+  tail -100 "$LOG_DIR/log"
 fi
 
-if [ "$PHASE23_FAILED" -eq 1 ]; then
-  readarray -t FAILED_LOG_FILES < <(grep -El 'TIMEOUT|FAIL' "$LOG_DIR"/log-* "$LOG_DIR"/determinism-log 2>/dev/null)
-  for LOG_FILE in "${FAILED_LOG_FILES[@]}"; do
-    echo ""
-    echo "=============================="
-    echo "Failure detected in $LOG_FILE:"
-    echo "=============================="
-    cat "$LOG_FILE"
-  done
-fi
+# Per-test failure rendering (Phase 1 NDJSON + Phase 2/3 nextest plaintext)
+# lives in collect-failures.sh.
+scripts/simtest/collect-failures.sh --detailed "$LOG_DIR"
 
 exit 1
