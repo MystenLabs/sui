@@ -215,6 +215,22 @@ impl MoveTypeLayout {
         self.as_view().is_type(t)
     }
 
+    /// If this layout is a struct, return it. Otherwise `None`.
+    pub fn into_struct(self) -> Option<MoveStructLayout> {
+        match self.as_view() {
+            MoveLayoutView::Struct(s) => Some(*s),
+            _ => None,
+        }
+    }
+
+    /// If this layout is an enum, return it. Otherwise `None`.
+    pub fn into_enum(self) -> Option<MoveEnumLayout> {
+        match self.as_view() {
+            MoveLayoutView::Enum(e) => Some(*e),
+            _ => None,
+        }
+    }
+
     /// Returns `true` iff `self` and `other` describe the same Move type
     /// (same shape, type tags, field names, variant names+tags), regardless
     /// of pool ordering or how subtrees are shared.
@@ -297,6 +313,65 @@ impl TryFrom<&AV::MoveTypeLayout> for MoveTypeLayout {
 impl TryFrom<AV::MoveTypeLayout> for MoveTypeLayout {
     type Error = anyhow::Error;
     fn try_from(layout: AV::MoveTypeLayout) -> Result<Self, Self::Error> {
+        (&layout).try_into()
+    }
+}
+
+impl TryFrom<&AV::MoveStructLayout> for MoveStructLayout {
+    type Error = anyhow::Error;
+    fn try_from(layout: &AV::MoveStructLayout) -> Result<Self, Self::Error> {
+        let mut b = MoveTypeLayoutBuilder::new();
+        let root = b.from_tree_struct_layout(layout)?;
+        let built = b.build(root);
+        match built.as_view() {
+            MoveLayoutView::Struct(s) => Ok(*s),
+            _ => anyhow::bail!("expected struct layout from from_tree_struct_layout"),
+        }
+    }
+}
+
+impl TryFrom<AV::MoveStructLayout> for MoveStructLayout {
+    type Error = anyhow::Error;
+    fn try_from(layout: AV::MoveStructLayout) -> Result<Self, Self::Error> {
+        (&layout).try_into()
+    }
+}
+
+impl TryFrom<&AV::MoveEnumLayout> for MoveEnumLayout {
+    type Error = anyhow::Error;
+    fn try_from(layout: &AV::MoveEnumLayout) -> Result<Self, Self::Error> {
+        let tree = AV::MoveTypeLayout::Enum(Box::new(layout.clone()));
+        let built: MoveTypeLayout = (&tree).try_into()?;
+        match built.as_view() {
+            MoveLayoutView::Enum(e) => Ok(*e),
+            _ => anyhow::bail!("expected enum layout from AV::MoveTypeLayout::Enum"),
+        }
+    }
+}
+
+impl TryFrom<AV::MoveEnumLayout> for MoveEnumLayout {
+    type Error = anyhow::Error;
+    fn try_from(layout: AV::MoveEnumLayout) -> Result<Self, Self::Error> {
+        (&layout).try_into()
+    }
+}
+
+impl TryFrom<&AV::MoveDatatypeLayout> for MoveDatatypeLayout {
+    type Error = anyhow::Error;
+    fn try_from(layout: &AV::MoveDatatypeLayout) -> Result<Self, Self::Error> {
+        let tree = match layout {
+            AV::MoveDatatypeLayout::Struct(s) => AV::MoveTypeLayout::Struct(s.clone()),
+            AV::MoveDatatypeLayout::Enum(e) => AV::MoveTypeLayout::Enum(e.clone()),
+        };
+        let built: MoveTypeLayout = (&tree).try_into()?;
+        MoveDatatypeLayout::new(built)
+            .ok_or_else(|| anyhow::anyhow!("expected struct or enum layout"))
+    }
+}
+
+impl TryFrom<AV::MoveDatatypeLayout> for MoveDatatypeLayout {
+    type Error = anyhow::Error;
+    fn try_from(layout: AV::MoveDatatypeLayout) -> Result<Self, Self::Error> {
         (&layout).try_into()
     }
 }

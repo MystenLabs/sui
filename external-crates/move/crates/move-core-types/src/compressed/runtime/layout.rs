@@ -188,6 +188,22 @@ impl MoveTypeLayout {
         self.as_view().inflate()
     }
 
+    /// If this layout is a struct, return it. Otherwise `None`.
+    pub fn into_struct(self) -> Option<MoveStructLayout> {
+        match self.as_view() {
+            MoveLayoutView::Struct(s) => Some(*s),
+            _ => None,
+        }
+    }
+
+    /// If this layout is an enum, return it. Otherwise `None`.
+    pub fn into_enum(self) -> Option<MoveEnumLayout> {
+        match self.as_view() {
+            MoveLayoutView::Enum(e) => Some(*e),
+            _ => None,
+        }
+    }
+
     /// Returns `true` iff `self` and `other` describe the same Move type,
     /// regardless of pool ordering or how subtrees are shared.
     pub fn equivalent(&self, other: &Self) -> bool {
