@@ -140,7 +140,7 @@ codes!(
     Uncategorized: [
         DeprecatedWillBeRemoved: { msg: "DEPRECATED. will be removed", severity: Warning },
         DeprecatedSpecItem: { msg: "DEPRECATED. unexpected spec item", severity: NonblockingError },
-        UnableToMigrate: { msg: "unable to migrate", severity: NonblockingError },
+        UnableToMigrate: { msg: "migration failed", severity: NonblockingError },
     ],
     // syntax errors
     Syntax: [
@@ -178,7 +178,7 @@ codes!(
         InvalidFunction: { msg: "invalid 'fun' declaration", severity: NonblockingError },
         InvalidStruct: { msg: "invalid 'struct' declaration", severity: NonblockingError },
         InvalidSpec: { msg: "invalid 'spec' declaration", severity: NonblockingError },
-        InvalidName: { msg: "invalid name", severity: BlockingError },
+        InvalidName: { msg: "invalid declaration name", severity: BlockingError },
         InvalidFriendDeclaration:
             { msg: "invalid 'friend' declaration", severity: NonblockingError },
         InvalidAcquiresItem: { msg: "invalid 'acquires' item", severity: NonblockingError },
@@ -204,14 +204,14 @@ codes!(
         UnboundModuleMember: { msg: "unbound module member", severity: BlockingError },
         UnboundType: { msg: "unbound type", severity: BlockingError },
         UnboundUnscopedName: { msg: "unbound unscoped name", severity: BlockingError },
-        NamePositionMismatch: { msg: "unexpected name in this position", severity: BlockingError },
+        NamePositionMismatch: { msg: "name not allowed in this position", severity: BlockingError },
         TooManyTypeArguments: { msg: "too many type arguments", severity: NonblockingError },
         TooFewTypeArguments: { msg: "too few type arguments", severity: BlockingError },
         UnboundVariable: { msg: "unbound variable", severity: BlockingError },
         UnboundField: { msg: "unbound field", severity: NonblockingError },
         ReservedName: { msg: "invalid use of reserved name", severity: BlockingError },
         UnboundMacro: { msg: "unbound macro", severity: BlockingError },
-        PositionalCallMismatch: { msg: "positional call mismatch", severity: NonblockingError },
+        PositionalCallMismatch: { msg: "positional argument mismatch", severity: NonblockingError },
         InvalidLabel: { msg: "invalid use of label", severity: BlockingError },
         UnboundLabel: { msg: "unbound label", severity: BlockingError },
         InvalidMut: { msg: "invalid 'mut' declaration", severity: NonblockingError },
@@ -220,7 +220,7 @@ codes!(
         InvalidPattern: { msg: "invalid pattern", severity: BlockingError },
         UnboundVariant: { msg: "unbound variant", severity: BlockingError },
         InvalidTypeAnnotation: { msg: "invalid type annotation", severity: NonblockingError },
-        InvalidPosition: { msg: "invalid usage position", severity: NonblockingError },
+        InvalidPosition: { msg: "invalid usage in this position", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [
@@ -231,7 +231,7 @@ codes!(
         ExpectedSingleType: { msg: "expected a single type", severity: BlockingError },
         SubtypeError: { msg: "invalid subtype", severity: BlockingError },
         JoinError: { msg: "incompatible types", severity: BlockingError },
-        RecursiveType: { msg: "invalid type. recursive type found", severity: BlockingError },
+        RecursiveType: { msg: "recursive type not allowed", severity: BlockingError },
         ExpectedSpecificType: { msg: "expected specific type", severity: BlockingError },
         UninferredType: { msg: "cannot infer type", severity: BlockingError },
         ScriptSignature: { msg: "invalid script signature", severity: NonblockingError },
@@ -246,7 +246,7 @@ codes!(
         CyclicInstantiation:
             { msg: "cyclic type instantiation", severity: NonblockingError },
         MissingAcquires: { msg: "missing acquires annotation", severity: NonblockingError },
-        InvalidNum: { msg: "invalid number after type inference", severity: NonblockingError },
+        InvalidNum: { msg: "invalid numeric literal for inferred type", severity: NonblockingError },
         NonInvocablePublicScript: {
             msg: "script function cannot be invoked with this signature \
                 (NOTE: this may become an error in the future)",
@@ -267,33 +267,33 @@ codes!(
         IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
         InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
         IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
-        DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
-        InvalidString: { msg: "invalid string after type inference", severity: NonblockingError },
+        DeprecatedUsage: { msg: "use of deprecated item", severity: Warning },
+        InvalidString: { msg: "invalid string literal for inferred type", severity: NonblockingError },
         MissingLiteralType:
-            { msg: "unable to determine principal type for literal", severity: Warning },
+            { msg: "unable to determine type of literal", severity: Warning },
     ],
     // errors for ability rules. mostly typing/translate
     AbilitySafety: [
-        Constraint: { msg: "ability constraint not satisfied", severity: NonblockingError },
-        ImplicitlyCopyable: { msg: "type not implicitly copyable", severity: NonblockingError },
+        Constraint: { msg: "missing required ability", severity: NonblockingError },
+        ImplicitlyCopyable: { msg: "type lacks 'copy' ability", severity: NonblockingError },
     ],
     // errors for move rules. mostly cfgir/locals
     MoveSafety: [
-        UnusedUndroppable: { msg: "unused value without 'drop'", severity: NonblockingError },
+        UnusedUndroppable: { msg: "discarded value lacks 'drop' ability", severity: NonblockingError },
         UnassignedVariable: { msg: "use of unassigned variable", severity: NonblockingError },
     ],
     // errors for move rules. mostly cfgir/borrows
     ReferenceSafety: [
-        RefTrans: { msg: "referential transparency violated", severity: BlockingError },
-        MutOwns: { msg: "mutable ownership violated", severity: NonblockingError },
+        RefTrans: { msg: "reference aliasing rule violated", severity: BlockingError },
+        MutOwns: { msg: "mutable borrow rule violated", severity: NonblockingError },
         Dangling: {
-            msg: "invalid operation, could create dangling a reference",
+            msg: "invalid operation, could create a dangling reference",
             severity: NonblockingError,
         },
         InvalidReturn:
-            { msg: "invalid return of locally borrowed state", severity: NonblockingError },
-        InvalidTransfer: { msg: "invalid transfer of references", severity: NonblockingError },
-        AmbiguousVariableUsage: { msg: "ambiguous usage of variable", severity: NonblockingError },
+            { msg: "cannot return reference to local value", severity: NonblockingError },
+        InvalidTransfer: { msg: "invalid reference transfer", severity: NonblockingError },
+        AmbiguousVariableUsage: { msg: "ambiguous variable usage", severity: NonblockingError },
     ],
     CodeGeneration: [
         UnfoldableConstant: { msg: "cannot compute constant value", severity: NonblockingError },
@@ -319,11 +319,11 @@ codes!(
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },
         InvalidName: { msg: "invalid attribute name", severity: NonblockingError },
         InvalidValue: { msg: "invalid attribute value", severity: NonblockingError },
-        InvalidUsage: { msg: "invalid usage of known attribute", severity: NonblockingError },
+        InvalidUsage: { msg: "invalid use of recognized attribute", severity: NonblockingError },
         InvalidTest: { msg: "unable to generate test", severity: NonblockingError },
         InvalidBytecodeInst:
-            { msg: "unknown bytecode instruction function", severity: NonblockingError },
-        ValueWarning: { msg: "issue with attribute value", severity: Warning },
+            { msg: "unknown bytecode instruction", severity: NonblockingError },
+        ValueWarning: { msg: "questionable attribute value", severity: Warning },
         AmbiguousAttributeValue: { msg: "ambiguous attribute value", severity: NonblockingError },
     ],
     Tests: [
