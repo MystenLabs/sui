@@ -4,12 +4,14 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::hash_map::Entry;
 use std::ops::Range;
+use std::sync::Arc;
 use std::time::Duration;
 
+use mysten_metrics::monitored_mpsc;
 use sui_futures::service::Service;
-use tokio::sync::mpsc;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::Instant;
@@ -44,14 +46,16 @@ pub struct BackfillService {
     backfill_config: BackfillConfig,
     ingestion_client: IngestionClient,
     pipeline_ranges: HashMap<BackfillHandleId, Range<u64>>,
-    request_tx: mpsc::Sender<BackfillRequest>,
-    request_rx: mpsc::Receiver<BackfillRequest>,
+    request_semaphore: Arc<Semaphore>,
+    request_tx: monitored_mpsc::UnboundedSender<BackfillRequest>,
+    request_rx: monitored_mpsc::UnboundedReceiver<BackfillRequest>,
 }
 
 /// Per-pipeline subscription handle returned by [`BackfillService::subscribe`].
 pub struct BackfillHandle {
     backfill_handle_id: BackfillHandleId,
-    request_tx: mpsc::Sender<BackfillRequest>,
+    request_semaphore: Arc<Semaphore>,
+    request_tx: monitored_mpsc::UnboundedSender<BackfillRequest>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -64,10 +68,15 @@ enum BackfillRequest {
     SetPipelineLo {
         backfill_handle_id: BackfillHandleId,
         pipeline_lo: u64,
+        _permit: OwnedSemaphorePermit,
     },
     NextChunk {
         backfill_handle_id: BackfillHandleId,
         reply: oneshot::Sender<Option<Vec<CheckpointEnvelope>>>,
+        _permit: OwnedSemaphorePermit,
+    },
+    DropHandle {
+        backfill_handle_id: BackfillHandleId,
     },
 }
 
@@ -98,6 +107,9 @@ struct BackfillState {
     max_pipeline_hi: u64,
     /// Cache key is the chunk's exclusive upper bound.
     cache: HashMap<u64, CacheEntry>,
+    /// Handles can be pending on or expected by many cache entries; this avoids scanning all cache
+    /// entries when a handle closes.
+    cache_chunks_by_backfill_handle_id: HashMap<BackfillHandleId, HashSet<u64>>,
     /// Cache keys can repeat after eviction, so stale fetches need a generation discriminator.
     next_cache_entry_id: usize,
     /// Tasks run independently so one slow checkpoint or eviction timer does not block requests.
@@ -128,11 +140,12 @@ impl BackfillService {
             "backfill chunk_size must be greater than zero"
         );
 
-        let (request_tx, request_rx) = mpsc::channel(BACKFILL_REQUEST_CHANNEL_SIZE);
+        let (request_tx, request_rx) = monitored_mpsc::unbounded_channel("backfill_requests");
         Ok(Self {
             backfill_config,
             ingestion_client,
             pipeline_ranges: HashMap::new(),
+            request_semaphore: Arc::new(Semaphore::new(BACKFILL_REQUEST_CHANNEL_SIZE)),
             request_tx,
             request_rx,
         })
@@ -144,6 +157,7 @@ impl BackfillService {
         self.pipeline_ranges.insert(id, pipeline_backfill_range);
         BackfillHandle {
             backfill_handle_id: id,
+            request_semaphore: self.request_semaphore.clone(),
             request_tx: self.request_tx.clone(),
         }
     }
@@ -154,6 +168,7 @@ impl BackfillService {
                 backfill_config,
                 ingestion_client,
                 pipeline_ranges,
+                request_semaphore: _,
                 request_tx: _,
                 mut request_rx,
             } = self;
@@ -173,8 +188,9 @@ impl BackfillService {
                             break;
                         };
                         match request {
-                            BackfillRequest::SetPipelineLo { backfill_handle_id, pipeline_lo } => state.handle_set_pipeline_lo(backfill_handle_id, pipeline_lo),
-                            BackfillRequest::NextChunk { backfill_handle_id, reply } => state.handle_next_chunk(backfill_handle_id, reply),
+                            BackfillRequest::SetPipelineLo { backfill_handle_id, pipeline_lo, .. } => state.handle_set_pipeline_lo(backfill_handle_id, pipeline_lo),
+                            BackfillRequest::NextChunk { backfill_handle_id, reply, .. } => state.handle_next_chunk(backfill_handle_id, reply),
+                            BackfillRequest::DropHandle { backfill_handle_id } => state.close_handle(backfill_handle_id),
                         }
                     }
 
@@ -233,6 +249,7 @@ impl BackfillState {
             pipeline_ranges,
             max_pipeline_hi,
             cache: HashMap::new(),
+            cache_chunks_by_backfill_handle_id: HashMap::new(),
             next_cache_entry_id: 0,
             tasks: JoinSet::new(),
         };
@@ -245,7 +262,7 @@ impl BackfillState {
             // high end there is no remaining backfill work for that handle.
             pipeline_range.start = pipeline_lo;
             if pipeline_range.is_empty() {
-                self.pipeline_ranges.remove(&id);
+                self.close_handle(id);
             }
         }
     }
@@ -290,70 +307,62 @@ impl BackfillState {
             response_range: response_lo..response_hi,
         };
 
-        let cache_entry = match self.cache.entry(chunk_hi) {
-            Entry::Occupied(entry) => entry.into_mut(),
-            Entry::Vacant(entry) => {
-                // Fetch completions can arrive after this entry is evicted and recreated.
-                let cache_entry_id = CacheEntryId(self.next_cache_entry_id);
-                self.next_cache_entry_id += 1;
+        if !self.cache.contains_key(&chunk_hi) {
+            // Fetch completions can arrive after this entry is evicted and recreated.
+            let cache_entry_id = CacheEntryId(self.next_cache_entry_id);
+            self.next_cache_entry_id += 1;
 
-                for checkpoint in chunk_lo..chunk_hi {
-                    let ingestion_client = self.ingestion_client.clone();
-                    self.tasks.spawn(async move {
-                        let checkpoint_envelope = ingestion_client
-                            .wait_for(checkpoint, retry_interval)
-                            .await
-                            .unwrap_or_else(|e| {
-                                panic!("checkpoint {checkpoint} fetch failed during backfill: {e}")
-                            });
+            for checkpoint in chunk_lo..chunk_hi {
+                let ingestion_client = self.ingestion_client.clone();
+                self.tasks.spawn(async move {
+                    let checkpoint_envelope = ingestion_client
+                        .wait_for(checkpoint, retry_interval)
+                        .await
+                        .unwrap_or_else(|e| {
+                            panic!("checkpoint {checkpoint} fetch failed during backfill: {e}")
+                        });
 
-                        BackfillTask::Fetch {
-                            cache_entry_id,
-                            chunk_hi,
-                            checkpoint_envelope,
-                        }
-                    });
-                }
+                    BackfillTask::Fetch {
+                        cache_entry_id,
+                        chunk_hi,
+                        checkpoint_envelope,
+                    }
+                });
+            }
 
-                // Keep the completed chunk warm only for consumers close enough to plausibly ask
-                // for this same chunk next.
-                let remaining_backfill_handle_ids = self
-                    .pipeline_ranges
-                    .iter()
-                    .filter_map(|(&handle_id, &Range { start, end })| {
-                        // Range is after chunk.
-                        if start >= chunk_hi
+            // Keep the completed chunk warm only for consumers close enough to plausibly ask
+            // for this same chunk next.
+            let remaining_backfill_handle_ids = self
+                .pipeline_ranges
+                .iter()
+                .filter_map(|(&handle_id, &Range { start, end })| {
+                    // Range is after chunk.
+                    if start >= chunk_hi
                             // Range is before chunk.
                             || end <= chunk_lo
                             // Range overlaps, but range end is too far away from chunk start.
                             || end.saturating_sub(chunk_hi) > expected_consumer_max_distance
-                        {
-                            return None;
-                        }
+                    {
+                        return None;
+                    }
 
-                        Some(handle_id)
-                    })
-                    .collect::<HashSet<_>>();
+                    Some(handle_id)
+                })
+                .collect::<HashSet<_>>();
 
-                entry.insert(CacheEntry {
+            self.insert_cache_entry(
+                chunk_hi,
+                CacheEntry {
                     cache_entry_id,
                     remaining_backfill_handle_ids,
                     pending_handles: HashMap::new(),
                     checkpoint_envelopes: BTreeMap::new(),
                     expected_checkpoint_envelope_count: (chunk_hi - chunk_lo) as usize,
-                })
-            }
-        };
-        cache_entry
-            .remaining_backfill_handle_ids
-            .remove(&backfill_handle_id);
-        cache_entry
-            .pending_handles
-            .insert(backfill_handle_id, pending_handle);
+                },
+            );
+        }
 
-        if cache_entry.has_all_checkpoint_envelopes()
-            && cache_entry.remaining_backfill_handle_ids.is_empty()
-        {
+        if self.insert_pending_handle(chunk_hi, backfill_handle_id, pending_handle) {
             self.dispatch_pending(chunk_hi);
         }
     }
@@ -415,8 +424,40 @@ impl BackfillState {
         }
     }
 
+    fn close_handle(&mut self, backfill_handle_id: BackfillHandleId) {
+        self.pipeline_ranges.remove(&backfill_handle_id);
+
+        let cache_chunks = self
+            .cache_chunks_by_backfill_handle_id
+            .get(&backfill_handle_id)
+            .cloned()
+            .unwrap_or_default();
+
+        let mut ready_chunks = Vec::new();
+        for chunk_hi in cache_chunks {
+            let Some((pending_handle, is_ready)) =
+                self.remove_handle_from_cache_entry(chunk_hi, backfill_handle_id)
+            else {
+                continue;
+            };
+
+            if let Some(pending_handle) = pending_handle {
+                let PendingHandle { reply, .. } = pending_handle;
+                let _ = reply.send(None);
+            }
+
+            if is_ready {
+                ready_chunks.push(chunk_hi);
+            }
+        }
+
+        for chunk_hi in ready_chunks {
+            self.dispatch_pending(chunk_hi);
+        }
+    }
+
     fn dispatch_pending(&mut self, chunk_hi: u64) {
-        let Some(mut cache_entry) = self.cache.remove(&chunk_hi) else {
+        let Some(mut cache_entry) = self.remove_cache_entry(chunk_hi) else {
             return;
         };
 
@@ -435,8 +476,11 @@ impl BackfillState {
         }
     }
 
-    fn close_pending_handles(self) {
-        for cache_entry in self.cache.into_values() {
+    fn close_pending_handles(mut self) {
+        while let Some(chunk_hi) = self.cache.keys().next().copied() {
+            let Some(cache_entry) = self.remove_cache_entry(chunk_hi) else {
+                continue;
+            };
             for pending_handle in cache_entry.pending_handles.into_values() {
                 let PendingHandle { reply, .. } = pending_handle;
                 // Shutdown should resolve callers instead of leaving their oneshot receivers open.
@@ -444,17 +488,125 @@ impl BackfillState {
             }
         }
     }
+
+    fn insert_cache_entry(&mut self, chunk_hi: u64, cache_entry: CacheEntry) {
+        assert!(
+            !self.cache.contains_key(&chunk_hi),
+            "cache entry for chunk {chunk_hi} must not be replaced"
+        );
+
+        self.index_cache_entry(chunk_hi, &cache_entry);
+        self.cache.insert(chunk_hi, cache_entry);
+    }
+
+    fn remove_cache_entry(&mut self, chunk_hi: u64) -> Option<CacheEntry> {
+        let cache_entry = self.cache.remove(&chunk_hi)?;
+        for &handle_id in &cache_entry.remaining_backfill_handle_ids {
+            self.unindex_cache_chunk(handle_id, chunk_hi);
+        }
+
+        for &handle_id in cache_entry.pending_handles.keys() {
+            self.unindex_cache_chunk(handle_id, chunk_hi);
+        }
+
+        Some(cache_entry)
+    }
+
+    fn insert_pending_handle(
+        &mut self,
+        chunk_hi: u64,
+        backfill_handle_id: BackfillHandleId,
+        pending_handle: PendingHandle,
+    ) -> bool {
+        self.index_cache_chunk(backfill_handle_id, chunk_hi);
+        let cache_entry = self
+            .cache
+            .get_mut(&chunk_hi)
+            .expect("cache entry must exist before adding a pending handle");
+        cache_entry
+            .remaining_backfill_handle_ids
+            .remove(&backfill_handle_id);
+        cache_entry
+            .pending_handles
+            .insert(backfill_handle_id, pending_handle);
+
+        cache_entry.has_all_checkpoint_envelopes()
+            && cache_entry.remaining_backfill_handle_ids.is_empty()
+    }
+
+    fn remove_handle_from_cache_entry(
+        &mut self,
+        chunk_hi: u64,
+        backfill_handle_id: BackfillHandleId,
+    ) -> Option<(Option<PendingHandle>, bool)> {
+        self.unindex_cache_chunk(backfill_handle_id, chunk_hi);
+        let cache_entry = self.cache.get_mut(&chunk_hi)?;
+        cache_entry
+            .remaining_backfill_handle_ids
+            .remove(&backfill_handle_id);
+        let pending_handle = cache_entry.pending_handles.remove(&backfill_handle_id);
+        let is_ready = cache_entry.has_all_checkpoint_envelopes()
+            && cache_entry.remaining_backfill_handle_ids.is_empty();
+
+        Some((pending_handle, is_ready))
+    }
+
+    fn index_cache_entry(&mut self, chunk_hi: u64, cache_entry: &CacheEntry) {
+        for &handle_id in &cache_entry.remaining_backfill_handle_ids {
+            self.index_cache_chunk(handle_id, chunk_hi);
+        }
+
+        for &handle_id in cache_entry.pending_handles.keys() {
+            self.index_cache_chunk(handle_id, chunk_hi);
+        }
+    }
+
+    fn index_cache_chunk(&mut self, backfill_handle_id: BackfillHandleId, chunk_hi: u64) {
+        self.cache_chunks_by_backfill_handle_id
+            .entry(backfill_handle_id)
+            .or_default()
+            .insert(chunk_hi);
+    }
+
+    fn unindex_cache_chunk(&mut self, backfill_handle_id: BackfillHandleId, chunk_hi: u64) {
+        let remove_entry = if let Some(chunks) = self
+            .cache_chunks_by_backfill_handle_id
+            .get_mut(&backfill_handle_id)
+        {
+            chunks.remove(&chunk_hi);
+            chunks.is_empty()
+        } else {
+            false
+        };
+
+        if remove_entry {
+            self.cache_chunks_by_backfill_handle_id
+                .remove(&backfill_handle_id);
+        }
+    }
 }
 
 impl BackfillHandle {
     pub async fn set_pipeline_lo(&self, pipeline_lo: u64) -> anyhow::Result<bool> {
+        let permit = self
+            .request_semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "backfill request semaphore closed for handle {:?}",
+                    self.backfill_handle_id
+                )
+            })?;
+
         if self
             .request_tx
             .send(BackfillRequest::SetPipelineLo {
                 backfill_handle_id: self.backfill_handle_id,
                 pipeline_lo,
+                _permit: permit,
             })
-            .await
             .is_err()
         {
             // The service has stopped, so the low watermark was not applied.
@@ -465,14 +617,25 @@ impl BackfillHandle {
     }
 
     pub async fn next_chunk(&mut self) -> anyhow::Result<Option<Vec<CheckpointEnvelope>>> {
+        let permit = self
+            .request_semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|_| {
+                anyhow::anyhow!(
+                    "backfill request semaphore closed for handle {:?}",
+                    self.backfill_handle_id
+                )
+            })?;
         let (reply, receive) = oneshot::channel();
         if self
             .request_tx
             .send(BackfillRequest::NextChunk {
                 backfill_handle_id: self.backfill_handle_id,
                 reply,
+                _permit: permit,
             })
-            .await
             .is_err()
         {
             // The service has stopped, so no chunk can be returned.
@@ -485,6 +648,14 @@ impl BackfillHandle {
         };
 
         Ok(Some(chunk))
+    }
+}
+
+impl Drop for BackfillHandle {
+    fn drop(&mut self) {
+        let _ = self.request_tx.send(BackfillRequest::DropHandle {
+            backfill_handle_id: self.backfill_handle_id,
+        });
     }
 }
 
@@ -875,6 +1046,49 @@ mod tests {
 
         pending.abort();
         assert!(pending.await.unwrap_err().is_cancelled());
+
+        expect_service_join(service).await;
+    }
+
+    #[tokio::test]
+    async fn completed_expected_consumer_releases_pending_chunk() {
+        let (service, mut handles, mock_client) = test_service_with_expected_consumer_wait_duration(
+            [0..CHUNK_SIZE, 0..CHUNK_SIZE],
+            EXPECTED_CONSUMER_WAIT_DURATION,
+        );
+        let expected_handle = handles.pop().unwrap();
+        let mut first_handle = handles.pop().unwrap();
+
+        let first = tokio::spawn(async move { first_handle.next_chunk().await });
+        yield_to_service().await;
+        assert!(expected_handle.set_pipeline_lo(CHUNK_SIZE).await.unwrap());
+        insert_mock_checkpoints(&mock_client, 0..CHUNK_SIZE);
+
+        let first_chunk = expect_spawned_next_chunk("first", first).await;
+
+        assert_eq!(checkpoint_sequences(&first_chunk), vec![0, 1, 2]);
+
+        drop(expected_handle);
+        expect_service_join(service).await;
+    }
+
+    #[tokio::test]
+    async fn dropped_expected_consumer_releases_pending_chunk() {
+        let (service, mut handles, mock_client) = test_service_with_expected_consumer_wait_duration(
+            [0..CHUNK_SIZE, 0..CHUNK_SIZE],
+            EXPECTED_CONSUMER_WAIT_DURATION,
+        );
+        let expected_handle = handles.pop().unwrap();
+        let mut first_handle = handles.pop().unwrap();
+
+        let first = tokio::spawn(async move { first_handle.next_chunk().await });
+        yield_to_service().await;
+        drop(expected_handle);
+        insert_mock_checkpoints(&mock_client, 0..CHUNK_SIZE);
+
+        let first_chunk = expect_spawned_next_chunk("first", first).await;
+
+        assert_eq!(checkpoint_sequences(&first_chunk), vec![0, 1, 2]);
 
         expect_service_join(service).await;
     }
