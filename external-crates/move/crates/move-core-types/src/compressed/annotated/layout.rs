@@ -576,8 +576,8 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
 
     /// Access a field by index, returning `(name, layout)`.
     #[inline]
-    pub fn field(self, i: usize) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
-        self.fields.get(i).map(|entry| {
+    pub fn field(self, i: u16) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
+        self.fields.get(i as usize).map(|entry| {
             (
                 &entry.name,
                 MoveTypeLayoutRef {
@@ -647,7 +647,7 @@ impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
 
     /// Access a field by index, returning `(name, layout)`.
     #[inline]
-    pub fn field(self, i: usize) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
+    pub fn field(self, i: u16) -> Option<(&'a Identifier, MoveTypeLayoutRef<'a, T>)> {
         self.fields.field(i)
     }
 
@@ -729,15 +729,9 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
         self.variants.len()
     }
 
-    /// Access a variant by position index.
+    /// Access a variant by its tag.
     #[inline]
-    pub fn variant(self, i: usize) -> Option<VariantLayout<'a, T>> {
-        self.variants.get(i).map(|v| variant_view(self.pool, v))
-    }
-
-    /// Find a variant by its tag value.
-    #[inline]
-    pub fn variant_by_tag(self, tag: VariantTag) -> Option<VariantLayout<'a, T>> {
+    pub fn variant(self, tag: VariantTag) -> Option<VariantLayout<'a, T>> {
         self.variants
             .iter()
             .find(|v| v.tag == tag)

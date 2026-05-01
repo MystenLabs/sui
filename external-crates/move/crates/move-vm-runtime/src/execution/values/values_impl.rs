@@ -2979,7 +2979,7 @@ impl serde::Serialize for AnnotatedValue<'_, '_, MoveEnumLayout<'_>, (VariantTag
             })?
         };
 
-        let fields = &self.layout.variant(tag as usize).ok_or_else(|| {
+        let fields = &self.layout.variant(tag as u16).ok_or_else(|| {
             invariant_violation::<S>("Invalid variant tag for serialization".to_string())
         })?;
         let VariantLayout::Known(fields) = fields else {
@@ -3198,7 +3198,7 @@ impl<'d> serde::de::Visitor<'d> for EnumFieldVisitor<'_> {
             None => return Err(A::Error::invalid_length(0, &self)),
         };
 
-        let Some(variant_layout) = self.0.variant(tag as usize) else {
+        let Some(variant_layout) = self.0.variant(tag as u16) else {
             return Err(A::Error::invalid_length(tag as usize, &self));
         };
 
@@ -3657,8 +3657,7 @@ impl Value {
             (L::Enum(enum_layout), Value::Variant(entry)) => {
                 let (tag, values) = entry.as_ref();
                 let tag = *tag; // Simply copy the u16 value, no need for dereferencing
-                let VariantLayout::Known(field_layouts) =
-                    safe_unwrap!(enum_layout.variant(tag as usize))
+                let VariantLayout::Known(field_layouts) = safe_unwrap!(enum_layout.variant(tag))
                 else {
                     return Err(partial_vm_error!(
                         UNREACHABLE,
@@ -3797,7 +3796,7 @@ impl Value {
                     name,
                     tag: _v_tag,
                     fields: field_layouts,
-                } = e_layout.variant(tag as usize)?
+                } = e_layout.variant(tag)?
                 else {
                     return None;
                 };

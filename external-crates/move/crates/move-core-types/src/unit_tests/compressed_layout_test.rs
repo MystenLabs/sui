@@ -404,7 +404,7 @@ fn annotated_view_enum_navigate() {
     };
     assert_eq!(ev.type_().name.as_str(), "MyEnum");
 
-    let vl = ev.variant_by_tag(1).unwrap();
+    let vl = ev.variant(1).unwrap();
     assert_eq!(vl.name().as_str(), "Some");
     let fv = vl.fields().expect("expected known variant");
     assert_eq!(fv.field_count(), 1);
@@ -412,7 +412,7 @@ fn annotated_view_enum_navigate() {
     assert_eq!(field_name.as_str(), "value");
     assert_eq!(field_layout.inflate().unwrap(), A::MoveTypeLayout::U64);
 
-    let vl = ev.variant_by_tag(0).unwrap();
+    let vl = ev.variant(0).unwrap();
     assert_eq!(vl.name().as_str(), "None");
     let fv = vl.fields().expect("expected known variant");
     assert_eq!(fv.field_count(), 0);

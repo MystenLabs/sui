@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::compressed::VariantTag;
 use crate::compressed::backend::DefaultRuntime;
 use crate::runtime_value as RV;
 use anyhow::Result as AResult;
@@ -428,8 +429,8 @@ impl<'a, T: TypeLayout> MoveFieldsLayout<'a, T> {
 
     /// Access a field by index.
     #[inline]
-    pub fn field(self, i: usize) -> Option<MoveTypeLayoutRef<'a, T>> {
-        self.fields.get(i).map(|f| MoveTypeLayoutRef {
+    pub fn field(self, i: u16) -> Option<MoveTypeLayoutRef<'a, T>> {
+        self.fields.get(i as usize).map(|f| MoveTypeLayoutRef {
             pool: self.pool,
             root: f,
         })
@@ -462,7 +463,7 @@ impl<'a, T: TypeLayout> MoveStructLayout<'a, T> {
 
     /// Access a field by index.
     #[inline]
-    pub fn field(self, i: usize) -> Option<MoveTypeLayoutRef<'a, T>> {
+    pub fn field(self, i: u16) -> Option<MoveTypeLayoutRef<'a, T>> {
         self.fields.field(i)
     }
 
@@ -506,10 +507,12 @@ impl<'a, T: TypeLayout> MoveEnumLayout<'a, T> {
         self.variants.len()
     }
 
-    /// Access a variant by index.
+    /// Access a variant by tag.
     #[inline]
-    pub fn variant(self, i: usize) -> Option<VariantLayout<'a, T>> {
-        self.variants.get(i).map(|v| make_variant(self.pool, v))
+    pub fn variant(self, tag: VariantTag) -> Option<VariantLayout<'a, T>> {
+        self.variants
+            .get(tag as usize)
+            .map(|v| make_variant(self.pool, v))
     }
 
     /// Iterate over all variants.
