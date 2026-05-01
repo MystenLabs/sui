@@ -451,13 +451,16 @@ impl<'input> Lexer<'input> {
     }
 
     // Trim whitespace/comments starting at `start`, then lex the next token without recording
-    // diagnostics. Returns `None` if whitespace trimming itself errored; otherwise returns the
-    // lexed token (or `Tok::LexError`) and the absolute end-position of that token (suitable
-    // as the `start` for a subsequent call).
-    fn lookahead_token(&mut self, start: usize) -> Option<(Tok, usize)> {
-        let (text, _) = self
-            .trim_whitespace_and_comments(start, /* track doc comments */ false)
-            .ok()?;
+    // diagnostics. Returns `Tok::LexError` if either step fails, along with the absolute
+    // end-position of the (attempted) token, suitable as the `start` for a subsequent call. On
+    // trim failure the end-position is `start` itself — a follow-up call will hit the same
+    // failure and again return `LexError`, which is what we want for `lookahead2`.
+    fn lookahead_token(&mut self, start: usize) -> (Tok, usize) {
+        let Ok((text, _)) =
+            self.trim_whitespace_and_comments(start, /* track doc comments */ false)
+        else {
+            return (Tok::LexError, start);
+        };
         let offset = self.text.len() - text.len();
         // NB: panic_mode = true so `find_token` returns `Err(None)` instead of building a
         // diagnostic we'd just discard. `advance` will re-encounter and report the error if the
@@ -469,7 +472,7 @@ impl<'input> Lexer<'input> {
             text,
             offset,
         );
-        Some((result.unwrap_or(Tok::LexError), offset + length))
+        (result.unwrap_or(Tok::LexError), offset + length)
     }
 
     // Look ahead to the next token after the current one without advancing the state of the
@@ -477,20 +480,15 @@ impl<'input> Lexer<'input> {
     // token could not be lexed (e.g. because of an unterminated string). The diagnostic for
     // the lex error is suppressed here; `advance` will re-encounter and report it.
     pub fn lookahead(&mut self) -> Tok {
-        self.lookahead_token(self.cur_end)
-            .map_or(Tok::LexError, |(tok, _)| tok)
+        self.lookahead_token(self.cur_end).0
     }
 
     // Look ahead to the next two tokens after the current one without advancing the state of
     // the lexer. Each position independently returns `Tok::EOF` or `Tok::LexError` as in
     // `lookahead` if the corresponding token cannot be read.
     pub fn lookahead2(&mut self) -> (Tok, Tok) {
-        let Some((first, end)) = self.lookahead_token(self.cur_end) else {
-            return (Tok::LexError, Tok::LexError);
-        };
-        let Some((second, _)) = self.lookahead_token(end) else {
-            return (first, Tok::LexError);
-        };
+        let (first, end) = self.lookahead_token(self.cur_end);
+        let (second, _) = self.lookahead_token(end);
         (first, second)
     }
 
