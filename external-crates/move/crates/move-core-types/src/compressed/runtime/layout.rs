@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::compressed::{LayoutRef, LeafType, ResolvedRef};
+use crate::compressed::{LayoutRef, LeafType, ResolvedRef, VariantTag};
 use crate::runtime_value as RV;
 use anyhow::Result as AResult;
 use indexmap::IndexSet;
@@ -267,8 +267,8 @@ impl MoveFieldsLayout {
     }
 
     /// Access a field by index.
-    pub fn field(&self, i: usize) -> Option<MoveTypeLayout> {
-        self.fields.get(i).map(|f| MoveTypeLayout {
+    pub fn field(&self, i: u16) -> Option<MoveTypeLayout> {
+        self.fields.get(i as usize).map(|f| MoveTypeLayout {
             pool: self.pool.clone(),
             root: *f,
         })
@@ -292,7 +292,7 @@ impl MoveStructLayout {
     }
 
     /// Access a field by index.
-    pub fn field(&self, i: usize) -> Option<MoveTypeLayout> {
+    pub fn field(&self, i: u16) -> Option<MoveTypeLayout> {
         self.0.field(i)
     }
 
@@ -335,8 +335,8 @@ impl MoveEnumLayout {
     }
 
     /// Access a variant by index.
-    pub fn variant(&self, i: usize) -> Option<&VariantLayout> {
-        self.variants.get(i)
+    pub fn variant(&self, i: VariantTag) -> Option<&VariantLayout> {
+        self.variants.get(i as usize)
     }
 
     /// Iterate over all variants.

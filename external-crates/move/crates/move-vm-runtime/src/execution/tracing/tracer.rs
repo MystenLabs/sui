@@ -1434,7 +1434,7 @@ impl VMTracer<'_> {
                     return None;
                 };
                 let field_offset = fh_ptr.offset;
-                let field_layout = slayout.field(field_offset)?.1;
+                let field_layout = slayout.field(field_offset as u16)?.1;
                 let location = value_ty.ref_type.as_ref()?.1.clone();
                 let field_location =
                     RuntimeLocation::Indexed(Box::new(location.clone()), field_offset);
@@ -1460,7 +1460,7 @@ impl VMTracer<'_> {
                     return None;
                 };
                 let field_offset = fh_ptr.offset;
-                let field_layout = slayout.field(field_offset)?.1;
+                let field_layout = slayout.field(field_offset as u16)?.1;
                 let location = value_ty.ref_type.as_ref()?.1.clone();
                 let field_location =
                     RuntimeLocation::Indexed(Box::new(location.clone()), field_offset);
@@ -1677,7 +1677,7 @@ impl VMTracer<'_> {
                     self.report_error(&format!("Expected enum, got {:#?}", ty.layout));
                     return None;
                 };
-                let CA::VariantLayout::Known { fields, .. } = e.variant(tag as usize)? else {
+                let CA::VariantLayout::Known { fields, .. } = e.variant(tag)? else {
                     self.report_error(&format!(
                         "Layout not known for enum variant tag = {} enum_layout = {:#?}",
                         tag, ty.layout
@@ -1729,7 +1729,7 @@ impl VMTracer<'_> {
                     self.report_error(&format!("Expected enum, got {:#?}", ty.layout));
                     return None;
                 };
-                let CA::VariantLayout::Known { fields, .. } = e.variant(tag as usize)? else {
+                let CA::VariantLayout::Known { fields, .. } = e.variant(tag)? else {
                     self.report_error(&format!(
                         "Layout not known for enum variant tag = {} enum_layout = {:#?}",
                         tag, ty.layout

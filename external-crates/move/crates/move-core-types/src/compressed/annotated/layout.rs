@@ -446,8 +446,8 @@ impl MoveFieldsLayout {
     }
 
     /// Access a field by index, returning `(name, layout)`.
-    pub fn field(&self, i: usize) -> Option<(&Identifier, MoveTypeLayout)> {
-        self.fields.get(i).map(|entry| {
+    pub fn field(&self, i: u16) -> Option<(&Identifier, MoveTypeLayout)> {
+        self.fields.get(i as usize).map(|entry| {
             (
                 &entry.name,
                 MoveTypeLayout {
@@ -508,7 +508,7 @@ impl MoveStructLayout {
     }
 
     /// Access a field by index, returning `(name, layout)`.
-    pub fn field(&self, i: usize) -> Option<(&Identifier, MoveTypeLayout)> {
+    pub fn field(&self, i: u16) -> Option<(&Identifier, MoveTypeLayout)> {
         self.fields.field(i)
     }
 
@@ -582,8 +582,8 @@ impl MoveEnumLayout {
     }
 
     /// Access a variant by position index.
-    pub fn variant(&self, i: usize) -> Option<&VariantLayout> {
-        self.variants.get(i)
+    pub fn variant(&self, i: VariantTag) -> Option<&VariantLayout> {
+        self.variants.get(i as usize)
     }
 
     /// Find a variant by its tag value.

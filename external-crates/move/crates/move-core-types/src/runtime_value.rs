@@ -338,7 +338,7 @@ impl MoveVariant {
             name: v_name,
             tag: _,
             fields: field_layouts,
-        }) = layout.variant(tag as usize)
+        }) = layout.variant(tag)
         else {
             panic!("Unknown variant tag {tag} in compressed layout")
         };
