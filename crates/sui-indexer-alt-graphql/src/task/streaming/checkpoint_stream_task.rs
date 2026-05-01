@@ -448,7 +448,7 @@ fn process_transaction(
         .deserialize()
         .context("Failed to deserialize transaction effects")?;
 
-    let events: Vec<_> = proto
+    let events: Vec<Arc<_>> = proto
         .events
         .as_ref()
         .and_then(|e| e.bcs.as_ref())
@@ -457,7 +457,7 @@ fn process_transaction(
                 .context("Failed to deserialize transaction events")
         })
         .transpose()?
-        .map(|e: TransactionEvents| e.data)
+        .map(|e: TransactionEvents| e.data.into_iter().map(Arc::new).collect())
         .unwrap_or_default();
 
     let signatures: Vec<GenericSignature> = proto

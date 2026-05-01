@@ -100,7 +100,7 @@ pub enum TransactionContents {
 #[derive(Clone)]
 pub struct ExecutedTransactionData {
     pub effects: Box<TransactionEffects>,
-    pub events: Vec<Event>,
+    pub events: Vec<Arc<Event>>,
     pub transaction_data: Box<TransactionData>,
     pub signatures: Vec<GenericSignature>,
     pub balance_changes: Vec<grpc::BalanceChange>,
@@ -382,13 +382,13 @@ impl TransactionContents {
             .context("Effects BCS should be valid")?;
 
         // Parse events from BCS if present, defaulting to empty when absent.
-        let events: Vec<Event> = executed_transaction
+        let events: Vec<Arc<Event>> = executed_transaction
             .events
             .as_ref()
             .and_then(|events| events.bcs.as_ref())
             .map(|bcs| bcs.deserialize().context("Events BCS should be valid"))
             .transpose()?
-            .map(|events: TransactionEvents| events.data)
+            .map(|events: TransactionEvents| events.data.into_iter().map(Arc::new).collect())
             .unwrap_or_default();
 
         let balance_changes = executed_transaction.balance_changes.clone();
@@ -479,13 +479,20 @@ impl TransactionContents {
         }
     }
 
-    pub fn events(&self) -> anyhow::Result<Vec<Event>> {
+    /// Returns the events for this transaction. Each `Event` is wrapped in an `Arc` so
+    /// callers fanning the same transaction out to multiple consumers (e.g., subscription
+    /// resolvers serving different subscribers) share the underlying event allocation
+    /// rather than each performing a deep clone.
+    pub fn events(&self) -> anyhow::Result<Vec<Arc<Event>>> {
+        fn wrap(events: Vec<Event>) -> Vec<Arc<Event>> {
+            events.into_iter().map(Arc::new).collect()
+        }
         match self {
-            Self::Pg(stored) => {
-                bcs::from_bytes(&stored.events).context("Failed to deserialize events")
-            }
-            Self::Bigtable(kv) => Ok(kv.events.clone().unwrap_or_default().data),
-            Self::LedgerGrpc(txn) => Ok(txn.events.clone().unwrap_or_default()),
+            Self::Pg(stored) => bcs::from_bytes(&stored.events)
+                .context("Failed to deserialize events")
+                .map(wrap),
+            Self::Bigtable(kv) => Ok(wrap(kv.events.clone().unwrap_or_default().data)),
+            Self::LedgerGrpc(txn) => Ok(wrap(txn.events.clone().unwrap_or_default())),
             Self::ExecutedTransaction(tx) => Ok(tx.events.clone()),
         }
     }
