@@ -100,11 +100,9 @@ pub enum LinterDiagnosticCode {
 
 pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
     let sui = LinterDiagnosticCategory::Sui as u8;
+    // `lint(all)` is registered by the core linter (`linters::known_filters`); don't
+    // register it again here or `filter_from_str` returns duplicate ids.
     let filters = vec![
-        (
-            Symbol::from("all"),
-            vec![DiagnosticsID::all(Some(LINT_WARNING_PREFIX))],
-        ),
         (
             Symbol::from(SHARE_OWNED_FILTER_NAME),
             vec![DiagnosticsID::exact(

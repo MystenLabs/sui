@@ -1729,30 +1729,23 @@ fn add_filter_entries(
                     e.insert(sp(name_loc, filter_kind));
                 }
                 Entry::Occupied(e) if e.get().value == filter_kind => {
-                    // Same kind, no conflict — keep the existing entry.
+                    // Same-kind overlap. Textual duplicates within one attribute
+                    // (`#[allow(unused, unused)]`) are rejected by the parser, so this
+                    // branch is reachable only via implicit-allow insertion (e.g.
+                    // `#[lint_allow]`) overlapping with a user-written filter, or two
+                    // distinct filter names that expand to overlapping ids. If the
+                    // existing entry has a real loc, both insertions came from
+                    // user-written attributes — that should be unreachable.
+                    let prev_loc = e.get().loc;
+                    debug_assert!(
+                        prev_loc == Loc::invalid(),
+                        "ICE within-attribute same-kind duplicate reached add_filter_entries; \
+                         parser dedup should have caught it"
+                    );
                 }
                 Entry::Occupied(mut e) => {
                     let sp!(prev_loc, prev_kind) = *e.get();
-                    let filter_name = format_allow_attr(prefix, name);
-                    let (fst_loc, snd_loc) = if prev_loc > name_loc {
-                        (prev_loc, name_loc)
-                    } else {
-                        (name_loc, prev_loc)
-                    };
-                    context.add_diag(diag!(
-                        Attributes::AmbiguousAttributeValue,
-                        (
-                            snd_loc,
-                            format!(
-                                "Conflicting filter for '{filter_name}' \
-                                 specified in the same attribute"
-                            )
-                        ),
-                        (
-                            fst_loc,
-                            format!("Conflicting filter for '{filter_name}' specified here")
-                        )
-                    ));
+                    emit_diagnostic_filter_conflict(context, prefix, name, name_loc, prev_loc);
                     let winner = FilterKind::resolve_conflict(prev_kind, filter_kind);
                     let winner_loc = if winner == filter_kind {
                         name_loc
@@ -1764,6 +1757,35 @@ fn add_filter_entries(
             }
         }
     }
+}
+
+fn emit_diagnostic_filter_conflict(
+    context: &Context<'_>,
+    prefix: Option<Symbol>,
+    name: Symbol,
+    name_loc: Loc,
+    prev_loc: Loc,
+) {
+    let filter_name = format_allow_attr(prefix, name);
+    let (fst_loc, snd_loc) = if prev_loc > name_loc {
+        (prev_loc, name_loc)
+    } else {
+        (name_loc, prev_loc)
+    };
+    context.add_diag(diag!(
+        Attributes::AmbiguousAttributeValue,
+        (
+            snd_loc,
+            format!(
+                "Conflicting filter for '{filter_name}' \
+                 specified in the same attribute"
+            )
+        ),
+        (
+            fst_loc,
+            format!("Conflicting filter for '{filter_name}' specified here")
+        )
+    ));
 }
 
 //**************************************************************************************************

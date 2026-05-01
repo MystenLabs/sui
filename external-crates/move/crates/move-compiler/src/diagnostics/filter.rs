@@ -94,7 +94,7 @@ pub enum FilterKind {
 
 impl FilterKind {
     /// When two different filter kinds target the same diagnostic at the same scope, pick the
-    /// stricter one. Variant ordering defines strictness: Allow < Warn < Deny < Expect < Drop.
+    /// stricter one. Variant ordering defines strictness: Allow < Warn < Expect < Deny < Drop.
     pub fn resolve_conflict(self, other: Self) -> Self {
         std::cmp::max(self, other)
     }
@@ -119,7 +119,7 @@ impl std::fmt::Display for FilterKind {
 /// wildcard sentinels); conversion happens via `From<DiagnosticsID>` at the filter boundary.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 enum FilterTarget {
-    /// Matches a single diagnostic by its exact code ID (and ExternalPrefix, if available).
+    /// Matches a single diagnostic by its exact code ID.
     Diagnostic(DiagnosticsID),
     /// Matches all diagnostics in a category, scoped to a prefix.
     Category(ExternalPrefix, u8),
