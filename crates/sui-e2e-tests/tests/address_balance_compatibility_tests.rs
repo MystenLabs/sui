@@ -1369,23 +1369,9 @@ async fn test_mix_coin_reservations_real_coins_and_shared_object() {
     test_env.cluster.trigger_reconfiguration().await;
 }
 
-// SECURITY: A fake coin reservation ObjectRef whose unmasked accumulator id does not exist
-// bypasses normal input loading (CallArg::input_objects skips coin reservation digests), but
-// dryRun / devInspect still feed the input through rewrite_transaction_for_coin_reservations.
-// That rewriter calls resolve_funds_withdrawal(...).unwrap(), which panics on a missing
-// accumulator. With `panic = 'abort'` set in Cargo.toml, this terminates the fullnode process.
-//
-// dryRun and devInspect are unauthenticated read-only RPC methods exposed by every fullnode,
-// so any caller can DoS a fullnode by submitting a single PTB. The fix should make the
-// rewriter surface a typed error and the dry-run / dev-inspect paths should return that
-// error to the caller instead of panicking.
-
 fn build_fake_coin_reservation_pt(
     chain_id: sui_types::digests::ChainIdentifier,
 ) -> TransactionKind {
-    // Build a PTB whose only command transfers a coin reservation that points to a
-    // non-existent accumulator. The transfer ensures the input is consumed (no
-    // UnusedValueWithoutDrop) so we reach the rewriter with the malicious input.
     let bogus_accumulator_id = ObjectID::random();
     let fake_coin_res = ParsedObjectRefWithdrawal::new(bogus_accumulator_id, 0, 100)
         .encode(SequenceNumber::new(), chain_id);
@@ -1429,7 +1415,6 @@ async fn test_fake_coin_reservation_dry_run_does_not_panic() {
     });
     let digest = TransactionDigest::new(default_hash(&tx_data));
 
-    // Spawn the call so we can observe a panic via JoinError instead of aborting the test.
     let state = test_env
         .cluster
         .fullnode_handle
@@ -1440,7 +1425,6 @@ async fn test_fake_coin_reservation_dry_run_does_not_panic() {
     match join.await {
         Ok(Ok(_)) => panic!("dry-run with fake coin reservation should have errored"),
         Ok(Err(e)) => {
-            // After fix: a typed error is surfaced, mentioning the invalid reservation.
             let msg = e.to_string();
             assert!(
                 msg.contains("InvalidWithdrawReservation") || msg.contains("not found"),
@@ -1449,7 +1433,7 @@ async fn test_fake_coin_reservation_dry_run_does_not_panic() {
         }
         Err(join_err) if join_err.is_panic() => {
             panic!(
-                "VULNERABILITY: dryRunTransactionBlock panicked on fake coin reservation: {:?}",
+                "dryRunTransactionBlock panicked on fake coin reservation: {:?}",
                 join_err
             );
         }
@@ -1504,7 +1488,7 @@ async fn test_fake_coin_reservation_dev_inspect_does_not_panic() {
         }
         Err(join_err) if join_err.is_panic() => {
             panic!(
-                "VULNERABILITY: devInspectTransactionBlock panicked on fake coin reservation: {:?}",
+                "devInspectTransactionBlock panicked on fake coin reservation: {:?}",
                 join_err
             );
         }
@@ -1512,9 +1496,6 @@ async fn test_fake_coin_reservation_dev_inspect_does_not_panic() {
     }
 }
 
-// Confirms that networks with the coin-reservation feature flag DISABLED are not affected:
-// CallArg::validity_check rejects the input in TransactionData::validity_check_no_gas_check
-// before dry_run / dev_inspect can reach the rewriter that contains the unwrap panic.
 #[sim_test]
 async fn test_fake_coin_reservation_dry_run_safe_when_flag_disabled() {
     if has_mainnet_protocol_config_override() {
@@ -1561,7 +1542,7 @@ async fn test_fake_coin_reservation_dry_run_safe_when_flag_disabled() {
         }
         Err(join_err) if join_err.is_panic() => {
             panic!(
-                "REGRESSION: dryRunTransactionBlock panicked even with the coin reservation flag disabled: {:?}",
+                "dryRunTransactionBlock panicked with coin reservation flag disabled: {:?}",
                 join_err
             );
         }
@@ -1616,7 +1597,7 @@ async fn test_fake_coin_reservation_dev_inspect_safe_when_flag_disabled() {
         }
         Err(join_err) if join_err.is_panic() => {
             panic!(
-                "REGRESSION: devInspectTransactionBlock panicked even with the coin reservation flag disabled: {:?}",
+                "devInspectTransactionBlock panicked with coin reservation flag disabled: {:?}",
                 join_err
             );
         }
