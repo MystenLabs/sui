@@ -13,6 +13,9 @@ use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderName;
+use reqwest::header::HeaderValue;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -47,6 +50,12 @@ struct Args {
     /// (env: GOOGLE_SERVICE_ACCOUNT_PATH)
     #[arg(long, group = "store")]
     gcs: Option<String>,
+
+    /// GCP project ID for requester-pays GCS buckets. When set, the
+    /// `x-goog-user-project` header is included in every request so that
+    /// charges are billed to this project instead of the bucket owner.
+    #[arg(long, requires = "gcs")]
+    gcs_project_id: Option<String>,
 
     /// Write to Azure Blob Storage. Provide the container name.
     /// (env: AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_ACCESS_KEY)
@@ -112,6 +121,19 @@ async fn main() -> anyhow::Result<()> {
             .build()
             .map(Arc::new)?
     } else if let Some(bucket) = args.gcs {
+        let mut client_options = client_options;
+        if let Some(project_id) = &args.gcs_project_id {
+            let header_value = HeaderValue::from_str(project_id)
+                .expect("invalid project ID for requester-pays header");
+            let headers = HeaderMap::from_iter([
+                (
+                    HeaderName::from_static("x-goog-user-project"),
+                    header_value.clone(),
+                ),
+                (HeaderName::from_static("userproject"), header_value),
+            ]);
+            client_options = client_options.with_default_headers(headers);
+        }
         info!(bucket, "Using GCS storage");
         GoogleCloudStorageBuilder::from_env()
             .with_client_options(client_options)
