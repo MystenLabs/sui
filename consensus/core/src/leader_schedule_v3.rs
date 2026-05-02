@@ -1139,8 +1139,6 @@ mod tests {
         // every call.
         let (mut ctx, _) = Context::new_for_test(4);
         ctx.protocol_config
-            .set_num_leaders_per_round_for_testing(Some(4));
-        ctx.protocol_config
             .set_bad_nodes_stake_threshold_for_testing(0);
         let context = Arc::new(ctx);
         let schedule = LeaderScheduleV3::new(context, vec![1, 2, 3, 4]);
