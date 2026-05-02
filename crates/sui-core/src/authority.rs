@@ -1889,9 +1889,8 @@ impl AuthorityState {
         );
     }
 
-    /// Helper function that handles transaction rewriting for coin reservations and executes
-    /// the transaction to effects. Returns the execution results along with the command offset
-    /// used for rewriting failure command indices.
+    /// Helper that runs the executor over an already-prepared transaction (i.e., after any coin
+    /// reservation rewriting has been done by the caller).
     fn execute_transaction_to_effects(
         &self,
         executor: &dyn Executor,
@@ -1904,11 +1903,10 @@ impl AuthorityState {
         input_objects: CheckedInputObjects,
         gas_data: GasData,
         gas_status: SuiGasStatus,
-        sender: SuiAddress,
-        mut kind: TransactionKind,
+        kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
         signer: SuiAddress,
         tx_digest: TransactionDigest,
-        accumulator_version: Option<SequenceNumber>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -1916,20 +1914,6 @@ impl AuthorityState {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        // Skip rewriting if execution_params already indicates an error - the transaction will fail
-        // anyway, and trying to rewrite could fail if the accumulator was deleted.
-        let rewritten_inputs = if execution_params.is_ok() {
-            rewrite_transaction_for_coin_reservations(
-                self.chain_identifier,
-                &*self.coin_reservation_resolver,
-                sender,
-                &mut kind,
-                accumulator_version,
-            )
-        } else {
-            None
-        };
-
         let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
             // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
             .execute_transaction_to_effects_and_execution_error(
@@ -2013,7 +1997,7 @@ impl AuthorityState {
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
         let sender = transaction_data.sender();
-        let (kind, signer, gas_data) = transaction_data.execution_parts();
+        let (mut kind, signer, gas_data) = transaction_data.execution_parts();
         let early_execution_error = get_early_execution_error(
             &tx_digest,
             &input_objects,
@@ -2023,6 +2007,21 @@ impl AuthorityState {
         let execution_params = match early_execution_error {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
+        };
+
+        // Skip rewriting if execution_params already indicates an error - the transaction will
+        // fail anyway, and rewriting could fail if the accumulator was deleted.
+        let rewritten_inputs = if execution_params.is_ok() {
+            rewrite_transaction_for_coin_reservations(
+                self.chain_identifier,
+                &*self.coin_reservation_resolver,
+                sender,
+                &mut kind,
+                execution_env.assigned_versions.accumulator_version,
+            )
+            .expect("coin reservation rewriting failed for a certified transaction")
+        } else {
+            None
         };
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
@@ -2047,11 +2046,10 @@ impl AuthorityState {
                 input_objects,
                 gas_data,
                 gas_status,
-                sender,
                 kind,
+                rewritten_inputs,
                 signer,
                 tx_digest,
-                execution_env.assigned_versions.accumulator_version,
             );
 
         let object_funds_checker = self.object_funds_checker.load();
@@ -2357,7 +2355,7 @@ impl AuthorityState {
         };
 
         let protocol_config = epoch_store.protocol_config();
-        let (kind, signer, _) = transaction.execution_parts();
+        let (mut kind, signer, _) = transaction.execution_parts();
 
         let silent = true;
         let executor = sui_execution::executor(protocol_config, silent)
@@ -2380,6 +2378,20 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
+        // Skip rewriting when execution_params is already an error - the transaction will fail anyway.
+        let rewritten_inputs = if execution_params.is_ok() {
+            rewrite_transaction_for_coin_reservations(
+                self.chain_identifier,
+                &*self.coin_reservation_resolver,
+                transaction.sender(),
+                &mut kind,
+                // Use latest accumulator version for dry run.
+                None,
+            )?
+        } else {
+            None
+        };
+
         let (inner_temp_store, _, effects, _timings, execution_error) = self
             .execute_transaction_to_effects(
                 executor.as_ref(),
@@ -2395,12 +2407,10 @@ impl AuthorityState {
                 checked_input_objects,
                 gas_data,
                 gas_status,
-                transaction.sender(),
                 kind,
+                rewritten_inputs,
                 signer,
                 transaction_digest,
-                // Use latest accumulator version for dry run/dev inspect
-                None,
             );
 
         let tx_digest = *effects.transaction_digest();
@@ -2614,7 +2624,7 @@ impl AuthorityState {
             signer,
             &mut kind,
             None,
-        );
+        )?;
         let early_execution_error = get_early_execution_error(
             &transaction.digest(),
             &checked_input_objects,
@@ -2932,7 +2942,7 @@ impl AuthorityState {
             sender,
             &mut transaction_kind,
             None,
-        );
+        )?;
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
             protocol_config,
