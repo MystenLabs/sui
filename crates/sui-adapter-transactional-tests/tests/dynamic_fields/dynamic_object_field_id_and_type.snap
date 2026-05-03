@@ -1,0 +1,39 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 920
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-72:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 13733200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 74:
+//# run test::m::parent --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 76:
+//# run test::m::add_child --sender A --args object(2,0)
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5988800,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
+
+task 4, line 78:
+//# run test::m::replace_child --sender A --args object(2,0)
+created: object(4,0)
+mutated: object(0,0), object(2,0), object(3,1)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 6026800,  storage_rebate: 5928912, non_refundable_storage_fee: 59888
+
+task 5, line 80:
+//# run test::m::remove_child --sender A --args object(2,0)
+mutated: object(0,0), object(2,0)
+deleted: object(3,1), object(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 5966532, non_refundable_storage_fee: 60268
