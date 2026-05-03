@@ -545,6 +545,40 @@ async fn test_reversed_safe_iter_inclusive_upper_bound_at_max() {
 }
 
 #[tokio::test]
+async fn test_safe_range_iter_exclusive_lower_bound_at_max() {
+    use std::ops::Bound;
+
+    let db: DBMap<u8, String> = open_map(temp_dir(), None);
+    db.insert(&100u8, &"100".to_string()).unwrap();
+    db.insert(&u8::MAX, &"max".to_string()).unwrap();
+
+    let results: Vec<_> =
+        get_range_iter(&db, (Bound::Excluded(u8::MAX), Bound::Unbounded)).collect();
+    assert_eq!(
+        Vec::<(u8, String)>::new(),
+        results,
+        "Range (Excluded(u8::MAX), Unbounded) must yield no entries -- there is no key strictly greater than u8::MAX",
+    );
+}
+
+#[tokio::test]
+async fn test_safe_range_iter_exclusive_lower_bound_at_max_with_inclusive_upper() {
+    use std::ops::Bound;
+
+    let db: DBMap<u8, String> = open_map(temp_dir(), None);
+    db.insert(&100u8, &"100".to_string()).unwrap();
+    db.insert(&u8::MAX, &"max".to_string()).unwrap();
+
+    let results: Vec<_> =
+        get_range_iter(&db, (Bound::Excluded(u8::MAX), Bound::Included(u8::MAX))).collect();
+    assert_eq!(
+        Vec::<(u8, String)>::new(),
+        results,
+        "Range (Excluded(u8::MAX), Included(u8::MAX)) must yield no entries -- the lower bound excludes the only candidate",
+    );
+}
+
+#[tokio::test]
 async fn test_is_empty() {
     let db: DBMap<i32, String> = open_map(temp_dir(), Some("table"));
     // Test empty map is truly empty
