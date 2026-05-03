@@ -1,0 +1,393 @@
+---
+title: TypeScript SDK Examples
+description: Practical examples using SuiGrpcClient from the @mysten/sui SDK to query and interact with the Sui network.
+keywords: [ grpc, typescript, sui sdk, SuiGrpcClient, examples, tutorial, bcs decoding, streaming ]
+---
+
+The `@mysten/sui` TypeScript SDK provides `SuiGrpcClient`, a high-level, type-safe client for the Sui Full Node gRPC API. This page shows practical examples with real request and response shapes.
+
+For the low-level gRPC protocol details, see [Querying Data with gRPC](/develop/accessing-data/grpc/using-grpc). For the full method reference, see [Sui Full Node gRPC Methods](/references/fullnode-protocol).
+
+## Setup
+
+Install the SDK:
+
+```shell
+npm install @mysten/sui @mysten/bcs
+```
+
+Create the client:
+
+```ts
+import { SuiGrpcClient } from "@mysten/sui/grpc";
+
+const client = new SuiGrpcClient({
+  network: "testnet",
+  baseUrl: "https://fullnode.testnet.sui.io",
+});
+```
+
+### Network URLs
+
+| Network | `network` | `baseUrl` |
+| ------- | --------- | --------- |
+| Mainnet | `"mainnet"` | `https://fullnode.mainnet.sui.io` |
+| Testnet | `"testnet"` | `https://fullnode.testnet.sui.io` |
+| Devnet | `"devnet"` | `https://fullnode.devnet.sui.io` |
+| Localnet | `"localnet"` | `http://127.0.0.1:9000` |
+
+:::info
+
+Both `network` and `baseUrl` are required. The `baseUrl` should not include a port suffix for public networks (no `:443`).
+
+:::
+
+### Transport options
+
+By default, `SuiGrpcClient` uses `GrpcWebFetchTransport` (gRPC-web over HTTP/1.1 or HTTP/2), which works in both browsers and Node.js.
+
+For server-side applications that need native HTTP/2 gRPC, you can provide a custom transport:
+
+```ts
+import { SuiGrpcClient } from "@mysten/sui/grpc";
+import { GrpcTransport } from "@protobuf-ts/grpc-transport";
+import { ChannelCredentials } from "@grpc/grpc-js";
+
+const client = new SuiGrpcClient({
+  network: "mainnet",
+  transport: new GrpcTransport({
+    host: "https://fullnode.mainnet.sui.io:443",
+    channelCredentials: ChannelCredentials.createSsl(),
+  }),
+});
+```
+
+This requires installing `@protobuf-ts/grpc-transport` and `@grpc/grpc-js`.
+
+## Querying objects
+
+Use `getObject` to fetch a single object. The `include` parameter controls which fields are returned.
+
+```ts
+const result = await client.getObject({
+  objectId: "0x0000000000000000000000000000000000000000000000000000000000000006",
+  include: { json: true },
+});
+
+console.log(result);
+```
+
+Response:
+
+```json
+{
+  "object": {
+    "objectId": "0x0000000000000000000000000000000000000000000000000000000000000006",
+    "version": "849547913",
+    "digest": "Bd6aRkqj5Va43F8QT3gymCBoVLcdvD77b9jS3GmLYsR",
+    "owner": {
+      "$kind": "Shared",
+      "Shared": { "initialSharedVersion": "1" }
+    },
+    "type": "0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock",
+    "json": {
+      "id": "0x0000000000000000000000000000000000000000000000000000000000000006",
+      "timestamp_ms": "1777798905234"
+    }
+  }
+}
+```
+
+### Include options for objects
+
+| Option | Type | What it adds to the response |
+| ------ | ---- | ---------------------------- |
+| `json` | `boolean` | JSON-decoded Move fields |
+| `content` | `boolean` | Raw BCS content bytes |
+| `objectBcs` | `boolean` | Full object BCS encoding |
+| `display` | `boolean` | Display metadata (if configured) |
+| `previousTransaction` | `boolean` | Digest of the last transaction that modified this object |
+
+### Batch fetching
+
+Use `getObjects` to fetch multiple objects in a single call:
+
+```ts
+const result = await client.getObjects({
+  objectIds: [
+    "0x0000000000000000000000000000000000000000000000000000000000000005",
+    "0x0000000000000000000000000000000000000000000000000000000000000006",
+  ],
+  include: { json: true },
+});
+
+for (const obj of result.objects) {
+  console.log(obj.type, obj.json);
+}
+```
+
+## Listing owned objects
+
+Use `listOwnedObjects` with pagination:
+
+```ts
+let cursor: string | null = null;
+let hasNextPage = true;
+
+while (hasNextPage) {
+  const page = await client.listOwnedObjects({
+    owner: "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5",
+    limit: 50,
+    cursor,
+  });
+
+  for (const obj of page.objects) {
+    console.log(obj.objectId, obj.type);
+  }
+
+  cursor = page.cursor;
+  hasNextPage = page.hasNextPage;
+}
+```
+
+## Balances and coins
+
+### Get balance for a coin type
+
+```ts
+const balance = await client.getBalance({
+  owner: "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5",
+});
+
+console.log(balance);
+```
+
+Response:
+
+```json
+{
+  "balance": {
+    "balance": "1500000000",
+    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+    "coinBalance": "1500000000",
+    "addressBalance": "1500000000"
+  }
+}
+```
+
+The default `coinType` is `0x2::sui::SUI`. To query a different coin:
+
+```ts
+const balance = await client.getBalance({
+  owner: "0x...",
+  coinType: "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+});
+```
+
+### List all balances
+
+```ts
+const allBalances = await client.listBalances({
+  owner: "0x94096a6a54129234237759c66e6ef1037224fb3102a0ae29d33b490281c8e4d5",
+});
+
+for (const bal of allBalances.balances) {
+  console.log(bal.coinType, bal.coinBalance);
+}
+```
+
+### Get coin metadata
+
+```ts
+const meta = await client.getCoinMetadata({ coinType: "0x2::sui::SUI" });
+console.log(meta);
+```
+
+Response:
+
+```json
+{
+  "coinMetadata": {
+    "id": "0xf256d3fb6a50eaa748d94335b34f2982fbc3b63ceec78cafaa29ebc9ebaf2bbc",
+    "decimals": 9,
+    "name": "Sui",
+    "symbol": "SUI",
+    "description": "",
+    "iconUrl": ""
+  }
+}
+```
+
+## Transactions
+
+### Fetch a transaction
+
+```ts
+const tx = await client.getTransaction({
+  digest: "ASYhXWNufSk8ujeeAYS2Sjw8Z8o4kB9s2Pz2HLCqmGCq",
+  include: { effects: true, events: true },
+});
+
+console.log(tx.Transaction.digest);
+console.log(tx.Transaction.status); // { success: true, error: null }
+```
+
+### Execute a transaction
+
+Build, sign, and execute a transaction end-to-end:
+
+```ts
+import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
+import { Transaction } from "@mysten/sui/transactions";
+
+const keypair = Ed25519Keypair.fromSecretKey("suiprivkey1...");
+
+const tx = new Transaction();
+tx.transferObjects(
+  [tx.splitCoins(tx.gas, [1_000_000_000])],
+  "0xRECIPIENT_ADDRESS"
+);
+
+const result = await client.signAndExecuteTransaction({
+  transaction: tx,
+  signer: keypair,
+  include: { effects: true },
+});
+
+console.log("Digest:", result.Transaction.digest);
+console.log("Success:", result.Transaction.status.success);
+```
+
+### Include options for transactions
+
+| Option | Type | What it adds |
+| ------ | ---- | ------------ |
+| `effects` | `boolean` | Transaction effects (created/mutated/deleted objects, gas used) |
+| `events` | `boolean` | Events emitted by the transaction |
+| `objectTypes` | `boolean` | A `Record<objectId, typeString>` for affected objects |
+| `commandResults` | `boolean` | Return values from Move calls (for `simulateTransaction`) |
+
+## Simulating transactions and BCS decoding
+
+Use `simulateTransaction` to dry-run a transaction and decode return values using `@mysten/bcs`.
+
+```ts
+import { bcs } from "@mysten/bcs";
+import { Transaction } from "@mysten/sui/transactions";
+
+const tx = new Transaction();
+// Call a Move function that returns a u64
+tx.moveCall({
+  target: "0xPACKAGE::module::my_view_function",
+  arguments: [tx.object("0xOBJECT_ID")],
+});
+
+const simResult = await client.simulateTransaction({
+  transaction: tx,
+  include: { commandResults: true },
+});
+
+// Decode the return value from BCS bytes
+const returnBytes = simResult.commandResults?.[0]?.returnValues?.[0]?.bcs;
+if (returnBytes) {
+  const value = bcs.u64().parse(new Uint8Array(returnBytes));
+  console.log("Return value:", value);
+}
+```
+
+### Common BCS decoders
+
+```ts
+import { bcs } from "@mysten/bcs";
+
+// Single values
+bcs.u64().parse(bytes);          // bigint
+bcs.u128().parse(bytes);         // bigint
+bcs.bool().parse(bytes);         // boolean
+bcs.string().parse(bytes);       // string
+
+// Vectors
+bcs.vector(bcs.u64()).parse(bytes);    // bigint[]
+bcs.vector(bcs.string()).parse(bytes); // string[]
+```
+
+## Dynamic fields
+
+### List dynamic fields on an object
+
+```ts
+const fields = await client.listDynamicFields({
+  parentId: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac",
+});
+
+for (const field of fields.dynamicFields) {
+  console.log(field.name, field.objectId);
+}
+```
+
+### Get a specific dynamic field
+
+```ts
+const field = await client.getDynamicField({
+  parentId: "0xPARENT_OBJECT_ID",
+  name: {
+    type: "u64",
+    value: "42",
+  },
+});
+```
+
+## Streaming checkpoints
+
+Use the raw `subscriptionService` to stream live checkpoint updates:
+
+```ts
+const stream = client.subscriptionService.subscribeCheckpoints({
+  readMask: {
+    paths: ["sequenceNumber", "digest", "summary"],
+  },
+});
+
+for await (const response of stream.responses) {
+  console.log(
+    "Checkpoint:",
+    response.checkpoint?.sequenceNumber,
+    response.checkpoint?.digest
+  );
+}
+```
+
+:::info
+
+Streaming uses gRPC server-side streaming. The stream starts from the latest checkpoint and delivers updates in order without gaps. If the connection drops, reconnect and use other APIs to backfill any missed checkpoints.
+
+:::
+
+## Using raw service clients
+
+`SuiGrpcClient` exposes the underlying protobuf-ts service clients for when you need full proto-level control:
+
+| Property | Proto service | Use case |
+| -------- | ------------- | -------- |
+| `client.transactionExecutionService` | `TransactionExecutionService` | Submit transactions, simulate |
+| `client.ledgerService` | `LedgerService` | Fetch checkpoints, transactions, objects |
+| `client.stateService` | `StateService` | Query balances, coins, dynamic fields |
+| `client.subscriptionService` | `SubscriptionService` | Stream checkpoints |
+| `client.movePackageService` | `MovePackageService` | Inspect Move packages |
+| `client.signatureVerificationService` | `SignatureVerificationService` | Verify signatures |
+| `client.nameService` | `NameService` | Resolve SuiNS names |
+
+Example using the raw ledger service:
+
+```ts
+const { response } = await client.ledgerService.getTransaction({
+  digest: "ASYhXWNufSk8ujeeAYS2Sjw8Z8o4kB9s2Pz2HLCqmGCq",
+  readMask: {
+    paths: ["events", "effects"],
+  },
+});
+
+console.log(response);
+```
+
+The raw service clients use proto field names (`read_mask`, `sequence_number`) rather than the camelCase Core API names. Refer to the [Message Definitions](/references/fullnode-protocol-messages) for the full proto schema.
