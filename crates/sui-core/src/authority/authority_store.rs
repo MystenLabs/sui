@@ -888,17 +888,21 @@ impl AuthorityStore {
         for obj_ref in objects {
             let latest_alive = self.get_latest_object_ref_if_alive(obj_ref.0)?;
             match latest_alive {
-                None => fp_bail!(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: None,
-                }
-                .into()),
-                Some(latest_ref) if latest_ref != *obj_ref => {
-                    fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
-                        provided_obj_ref: *obj_ref,
-                        current_version: latest_ref.1,
+                None => fp_bail!(
+                    UserInputError::ObjectNotFound {
+                        object_id: obj_ref.0,
+                        version: None,
                     }
-                    .into());
+                    .into()
+                ),
+                Some(latest_ref) if latest_ref != *obj_ref => {
+                    fp_bail!(
+                        UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: *obj_ref,
+                            current_version: latest_ref.1,
+                        }
+                        .into()
+                    );
                 }
                 Some(_) => {}
             }
