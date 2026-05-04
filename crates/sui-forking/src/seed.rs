@@ -12,9 +12,11 @@ use std::collections::BTreeSet;
 use anyhow::Error;
 use anyhow::bail;
 use itertools::Itertools as _;
-use move_core_types::language_storage::StructTag;
 use serde::Deserialize;
 use serde::Serialize;
+use tracing::warn;
+
+use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
@@ -22,7 +24,6 @@ use sui_types::digests::ObjectDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::object::Owner;
-use tracing::warn;
 
 use crate::DataStore;
 use crate::ObjectKey;

@@ -1173,7 +1173,8 @@ impl RpcStateReader for DataStore {
 
 impl RpcIndexes for DataStore {
     fn get_epoch_info(&self, _epoch: EpochId) -> StorageResult<Option<EpochInfo>> {
-        todo!("not supported yet")
+        // TODO: For now, we don't really need it. To be added later
+        StorageResult::Ok(None)
     }
 
     fn owned_objects_iter(
