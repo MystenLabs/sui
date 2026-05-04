@@ -526,6 +526,23 @@ impl LeaderScheduleV3 {
                 .leader_schedule_average_num_leaders
                 .set(self.average_num_leaders());
         }
+        // Per-authority count of inclusions in the current allowed-leaders
+        // set. Emitted once per commit (called from `add_commit`); consumers
+        // can rate-limit to derive "fraction of recent commits where X is
+        // an allowed leader." The shuffle inside
+        // `select_allowed_leaders_with_fixed_config` is committee-bounded
+        // and cheap; running it here keeps the cadence aligned with the
+        // running-window updates above.
+        for authority_index in self.select_allowed_leaders_with_fixed_config() {
+            let hostname = &self.context.committee.authority(authority_index).hostname;
+            if hostname.is_empty() {
+                continue;
+            }
+            metrics
+                .leader_schedule_allowed_leader_count
+                .with_label_values(&[hostname])
+                .inc();
+        }
     }
 
     fn window_size(&self) -> usize {

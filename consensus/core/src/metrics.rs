@@ -175,6 +175,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) leader_schedule_normalized_scores: GaugeVec,
     pub(crate) leader_schedule_last_num_leaders: IntGauge,
     pub(crate) leader_schedule_average_num_leaders: Gauge,
+    pub(crate) leader_schedule_allowed_leader_count: IntCounterVec,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
     pub(crate) block_suspensions: IntCounterVec,
@@ -658,6 +659,12 @@ impl NodeMetrics {
             leader_schedule_average_num_leaders: register_gauge_with_registry!(
                 "leader_schedule_average_num_leaders",
                 "LeaderScheduleV3 moving average of the number of leaders per commit across the scoring window",
+                registry,
+            ).unwrap(),
+            leader_schedule_allowed_leader_count: register_int_counter_vec_with_registry!(
+                "leader_schedule_allowed_leader_count",
+                "LeaderScheduleV3 per-authority count of times the authority is included in the `allowed_leaders` set computed after a commit (one increment per commit per included authority).",
+                &["authority"],
                 registry,
             ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(

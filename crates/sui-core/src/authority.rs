@@ -335,6 +335,7 @@ pub struct AuthorityMetrics {
     pub accumulator_withdrawals: IntCounter,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
+    pub consensus_user_transaction_rounds_from_leader_total: IntCounterVec,
     pub consensus_finalized_user_transactions: IntGaugeVec,
     pub consensus_rejected_user_transactions: IntGaugeVec,
     pub consensus_calculated_throughput: IntGauge,
@@ -701,6 +702,12 @@ impl AuthorityMetrics {
             consensus_committed_user_transactions: register_int_gauge_vec_with_registry!(
                 "consensus_committed_user_transactions",
                 "Number of certified & user transactions committed, sliced by submitter and persisted across restarts within each epoch",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            consensus_user_transaction_rounds_from_leader_total: register_int_counter_vec_with_registry!(
+                "consensus_user_transaction_rounds_from_leader_total",
+                "Sum of (commit_leader_round - block_round) over user transactions seen in committed sub-dags, sliced by the authority that authored the block carrying the transaction. rate(metric) / rate(consensus_committed_user_transactions) gives the per-authority average sub-dag depth at which their user transactions land.",
                 &["authority"],
                 registry,
             ).unwrap(),
