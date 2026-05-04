@@ -32,6 +32,25 @@ use crate::task::watermark::Watermarks;
 pub(crate) type ExecutionObjectMap =
     Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>;
 
+/// Where object lookups in this scope draw their data from. Encodes the mutually exclusive
+/// modes a [`Scope`] can be in. Indexed mode hits the database/kv_loader (no in-memory payload).
+/// Executed mode is the mutation/simulate path, with a freshly executed transaction's outputs.
+/// Streamed mode is the subscription path, with an in-memory checkpoint payload.
+#[derive(Clone)]
+pub(crate) enum ObjectSource {
+    /// Reads go through the indexed-checkpoint path (kv_loader / DB). No in-memory payload.
+    Indexed,
+    /// A freshly executed transaction's input/output objects.
+    Executed {
+        execution_objects: ExecutionObjectMap,
+    },
+    /// A streamed checkpoint with all per-tx contents and execution objects. The transaction
+    /// the scope is currently resolving for is identified by [`Scope::tx_sequence_number_viewed_at`].
+    Streamed {
+        checkpoint: Arc<ProcessedCheckpoint>,
+    },
+}
+
 /// Root object bound for consistent dynamic field reads.
 ///
 /// This enables consistent dynamic field reads in the case of chained dynamic object fields,
@@ -64,25 +83,18 @@ pub(crate) struct Scope {
     /// None indicates execution context where we're viewing fresh transaction effects not yet indexed.
     checkpoint_viewed_at: Option<u64>,
 
+    /// The transaction we are scoped to, identified by global `tx_sequence_number`. In streaming
+    /// mode, anchors object lookups to that transaction's per-tx `execution_objects` within the
+    /// streamed checkpoint.
+    tx_sequence_number_viewed_at: Option<u64>,
+
     /// Root object bound for dynamic fields.
     ///
     /// This can be expressed either in terms of a specific object version or a checkpoint.
     root_bound: Option<RootBound>,
 
-    /// Cache of objects available in execution context (freshly executed transaction).
-    /// Maps (ObjectID, SequenceNumber) to optional object data.
-    /// None indicates the object was deleted or wrapped at that version.
-    /// This enables any Object GraphQL type to access fresh data without database queries.
-    execution_objects: ExecutionObjectMap,
-
-    /// The streamed checkpoint payload this scope is resolving against, if any. Holds the
-    /// per-tx contents and execution objects so nested resolvers can navigate the checkpoint
-    /// without re-plumbing per-yield context.
-    streamed_checkpoint: Option<Arc<ProcessedCheckpoint>>,
-
-    /// Within `streamed_checkpoint`, the `tx_sequence_number` of the transaction we are
-    /// resolving for. Object lookups use this transaction's own `execution_objects`.
-    tx_sequence_number_viewed_at: Option<u64>,
+    /// Where object lookups in this scope draw their data from. See [`ObjectSource`].
+    object_source: ObjectSource,
 
     /// Access to packages for type resolution.
     package_store: Arc<dyn PackageStore>,
@@ -101,10 +113,9 @@ impl Scope {
 
         Ok(Self {
             checkpoint_viewed_at: Some(watermark.high_watermark().checkpoint()),
-            root_bound: None,
-            execution_objects: Arc::new(BTreeMap::new()),
-            streamed_checkpoint: None,
             tx_sequence_number_viewed_at: None,
+            root_bound: None,
+            object_source: ObjectSource::Indexed,
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
@@ -119,24 +130,28 @@ impl Scope {
     ) -> Self {
         Self {
             checkpoint_viewed_at: None,
-            root_bound: None,
-            execution_objects: Arc::new(BTreeMap::new()),
-            streamed_checkpoint: Some(streamed_checkpoint),
             tx_sequence_number_viewed_at: None,
+            root_bound: None,
+            object_source: ObjectSource::Streamed {
+                checkpoint: streamed_checkpoint,
+            },
             package_store,
             resolver_limits,
         }
     }
 
-    /// Anchor a nested scope to a specific transaction within `streamed_checkpoint`. Object
-    /// lookups in this scope use that transaction's own `execution_objects`.
-    pub(crate) fn with_streamed_tx(&self, tx_sequence_number_viewed_at: u64) -> Self {
+    /// Pin a nested scope to a specific transaction by global `tx_sequence_number`. In streaming
+    /// mode this anchors object lookups to that transaction's per-tx `execution_objects` within
+    /// the streamed checkpoint.
+    pub(crate) fn with_tx_sequence_number_viewed_at(
+        &self,
+        tx_sequence_number_viewed_at: u64,
+    ) -> Self {
         Self {
-            checkpoint_viewed_at: None,
-            root_bound: None,
-            execution_objects: Arc::clone(&self.execution_objects),
-            streamed_checkpoint: self.streamed_checkpoint.clone(),
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
             tx_sequence_number_viewed_at: Some(tx_sequence_number_viewed_at),
+            root_bound: self.root_bound,
+            object_source: self.object_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -160,10 +175,9 @@ impl Scope {
 
         Self {
             checkpoint_viewed_at: Some(0),
-            root_bound: None,
-            execution_objects: Arc::new(BTreeMap::new()),
-            streamed_checkpoint: None,
             tx_sequence_number_viewed_at: None,
+            root_bound: None,
+            object_source: ObjectSource::Indexed,
             package_store: Arc::new(EmptyPackageStore),
             resolver_limits: Limits::default().package_resolver(),
         }
@@ -180,10 +194,9 @@ impl Scope {
         let cp_hi_inclusive = watermark.high_watermark().checkpoint();
         (checkpoint_viewed_at <= cp_hi_inclusive).then(|| Self {
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
-            root_bound: self.root_bound,
-            execution_objects: Arc::clone(&self.execution_objects),
-            streamed_checkpoint: self.streamed_checkpoint.clone(),
             tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
+            root_bound: self.root_bound,
+            object_source: self.object_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
@@ -193,10 +206,9 @@ impl Scope {
     pub(crate) fn with_root_version(&self, root_version: u64) -> Self {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
-            root_bound: Some(RootBound::Version(root_version)),
-            execution_objects: Arc::clone(&self.execution_objects),
-            streamed_checkpoint: self.streamed_checkpoint.clone(),
             tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
+            root_bound: Some(RootBound::Version(root_version)),
+            object_source: self.object_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -206,10 +218,9 @@ impl Scope {
     pub(crate) fn with_root_checkpoint(&self, root_checkpoint: u64) -> Self {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
-            root_bound: Some(RootBound::Checkpoint(root_checkpoint)),
-            execution_objects: Arc::clone(&self.execution_objects),
-            streamed_checkpoint: self.streamed_checkpoint.clone(),
             tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
+            root_bound: Some(RootBound::Checkpoint(root_checkpoint)),
+            object_source: self.object_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -219,10 +230,9 @@ impl Scope {
     pub(crate) fn without_root_bound(&self) -> Self {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
-            root_bound: None,
-            execution_objects: Arc::clone(&self.execution_objects),
-            streamed_checkpoint: self.streamed_checkpoint.clone(),
             tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
+            root_bound: None,
+            object_source: self.object_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -264,19 +274,17 @@ impl Scope {
         self.checkpoint_viewed_at.map(|cp| cp + 1)
     }
 
-    /// The execution objects map active for object lookups in this scope. When anchored to a
-    /// streamed transaction (via [`Self::with_streamed_tx`]), returns that transaction's
-    /// per-tx map from `streamed_checkpoint`. Otherwise returns the per-scope map populated
-    /// by [`Self::with_executed_transaction`] (mutation/simulate path).
-    fn execution_objects_in_view(&self) -> &ExecutionObjectMap {
-        if let (Some(seq), Some(cp)) = (
-            self.tx_sequence_number_viewed_at,
-            self.streamed_checkpoint.as_ref(),
-        ) && let Some(tx) = cp.transactions.iter().find(|t| t.tx_sequence_number == seq)
-        {
-            &tx.execution_objects
-        } else {
-            &self.execution_objects
+    /// The execution objects map active for object lookups in this scope. Resolves through the
+    /// scope's [`ObjectSource`]: in `Streamed` mode, looks up the per-tx map for the transaction
+    /// identified by `tx_sequence_number_viewed_at`; in `Executed` mode, returns the freshly
+    /// extracted map; in `Indexed` mode, returns `None` so callers fall through to the DB.
+    fn execution_objects_in_view(&self) -> Option<&ExecutionObjectMap> {
+        match &self.object_source {
+            ObjectSource::Indexed => None,
+            ObjectSource::Executed { execution_objects } => Some(execution_objects),
+            ObjectSource::Streamed { checkpoint } => checkpoint
+                .transaction(self.tx_sequence_number_viewed_at?)
+                .map(|t| &t.execution_objects),
         }
     }
 
@@ -288,7 +296,7 @@ impl Scope {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Option<&NativeObject> {
-        self.execution_objects_in_view()
+        self.execution_objects_in_view()?
             .get(&(object_id, version))
             .and_then(|opt| opt.as_ref())
     }
@@ -299,7 +307,7 @@ impl Scope {
         &self,
         object_id: ObjectID,
     ) -> Option<&NativeObject> {
-        self.execution_objects_in_view()
+        self.execution_objects_in_view()?
             .range(..=(object_id, SequenceNumber::MAX))
             .last()
             .and_then(|(_, opt)| opt.as_ref())
@@ -314,10 +322,9 @@ impl Scope {
 
         Ok(Self {
             checkpoint_viewed_at: None,
-            root_bound: self.root_bound,
-            execution_objects,
-            streamed_checkpoint: None,
             tx_sequence_number_viewed_at: None,
+            root_bound: self.root_bound,
+            object_source: ObjectSource::Executed { execution_objects },
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
@@ -402,8 +409,7 @@ impl PackageStore for Scope {
         let object_id = ObjectID::from(id);
 
         // First check execution context objects if we have any
-        let execution_objects = self.execution_objects_in_view();
-        if !execution_objects.is_empty() {
+        if let Some(execution_objects) = self.execution_objects_in_view() {
             let latest_package = execution_objects
                 .range((object_id, SequenceNumber::MIN)..=(object_id, SequenceNumber::MAX))
                 .last()

@@ -416,13 +416,13 @@ pub(super) fn process_checkpoint(
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    Ok(ProcessedCheckpoint {
+    Ok(ProcessedCheckpoint::new(
         sequence_number,
         summary,
         contents,
         signature,
         transactions,
-    })
+    ))
 }
 
 fn process_transaction(
