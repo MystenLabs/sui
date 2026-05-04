@@ -192,13 +192,6 @@ pub mod checked {
         /// This information feels a bit brittle but should be used only by PTB execution.
         /// This might also differ from the final charge location, if override_gas_charge_location
         /// is used.
-        fn gas_payment_location(&self) -> Option<PaymentLocation> {
-            match &self.payment {
-                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
-                PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
-            }
-        }
-
         pub fn gas_payment_amount(&self) -> Option<GasPayment> {
             match &self.payment {
                 PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
@@ -206,6 +199,13 @@ pub mod checked {
                     location: metadata.smash_target.location(),
                     amount: metadata.total_smashed,
                 }),
+            }
+        }
+
+        fn gas_payment_location(&self) -> Option<PaymentLocation> {
+            match &self.payment {
+                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
+                PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
             }
         }
 
