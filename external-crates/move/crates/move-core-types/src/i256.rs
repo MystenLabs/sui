@@ -15,8 +15,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     fmt,
     ops::{
-        Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitXor, Div, DivAssign, Mul, MulAssign, Rem,
-        RemAssign, Shl, Shr, Sub, SubAssign,
+        Add, AddAssign, BitAnd, BitAndAssign, BitOr, BitXor, Div, DivAssign, Mul, MulAssign, Neg,
+        Not, Rem, RemAssign, Shl, Shr, Sub, SubAssign,
     },
 };
 
@@ -262,6 +262,23 @@ impl Rem for I256 {
 impl RemAssign for I256 {
     fn rem_assign(&mut self, rhs: Self) {
         *self = Self(self.0 % rhs.0);
+    }
+}
+
+// Ignores overflow at MIN (wraps to MIN). Use `checked_neg` to detect that case.
+impl Neg for I256 {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        self.wrapping_neg()
+    }
+}
+
+impl Not for I256 {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        Self(!self.0)
     }
 }
 
@@ -968,6 +985,129 @@ mod tests {
         let neg = I256::from(-5i32);
         assert_eq!(neg.down_cast_lossy::<i8>(), -5i8);
         assert_eq!(neg.down_cast_lossy::<i128>(), -5i128);
+    }
+
+    // The down_cast first truncates I256 -> i128 (low 128 bits) and then `TryFrom<i128>` checks
+    // whether the result fits the destination type. These tests pin the wrap behavior of those
+    // two steps so it's clear what crossing each width boundary returns.
+    #[test]
+    fn down_cast_lossy_i128_wrap() {
+        // i128::MAX + 1 == 2^127 — low 128 bits become i128::MIN (high bit set).
+        let one_past_i128_max = I256::from(i128::MAX) + I256::one();
+        assert_eq!(one_past_i128_max.down_cast_lossy::<i128>(), i128::MIN);
+
+        // i128::MIN - 1 == -(2^127 + 1) — low 128 bits become i128::MAX.
+        let one_before_i128_min = I256::from(i128::MIN) - I256::one();
+        assert_eq!(one_before_i128_min.down_cast_lossy::<i128>(), i128::MAX);
+    }
+
+    #[test]
+    fn down_cast_lossy_full_width_wrap() {
+        // Low 128 bits of I256::MAX is all-ones == i128(-1).
+        assert_eq!(I256::max_value().down_cast_lossy::<i128>(), -1i128);
+        // Low 128 bits of I256::MIN is zero (the bit set is bit 255, not in the low 128).
+        assert_eq!(I256::min_value().down_cast_lossy::<i128>(), 0i128);
+    }
+
+    #[test]
+    #[should_panic(expected = "Downcast failed")]
+    fn down_cast_lossy_to_i8_panics_when_low_bits_out_of_range() {
+        // Low 128 bits = 200, which doesn't fit in i8.
+        let _ = I256::from(200i32).down_cast_lossy::<i8>();
+    }
+
+    // Cast error kinds
+
+    #[test]
+    fn cast_error_kinds_per_target() {
+        // Each TryFrom emits its target-specific kind.
+        let too_big = I256::max_value();
+        let cases: &[(I256CastErrorKind, &str)] = &[
+            (I256CastErrorKind::OutOfRangeForI8, "i8"),
+            (I256CastErrorKind::OutOfRangeForI16, "i16"),
+            (I256CastErrorKind::OutOfRangeForI32, "i32"),
+            (I256CastErrorKind::OutOfRangeForI64, "i64"),
+            (I256CastErrorKind::OutOfRangeForI128, "i128"),
+        ];
+        let i8_err = i8::try_from(too_big).unwrap_err();
+        let i16_err = i16::try_from(too_big).unwrap_err();
+        let i32_err = i32::try_from(too_big).unwrap_err();
+        let i64_err = i64::try_from(too_big).unwrap_err();
+        let i128_err = i128::try_from(too_big).unwrap_err();
+        let kinds = [
+            i8_err.kind,
+            i16_err.kind,
+            i32_err.kind,
+            i64_err.kind,
+            i128_err.kind,
+        ];
+        for ((expected_kind, expected_type_str), got_kind) in cases.iter().zip(kinds.iter()) {
+            assert_eq!(*got_kind, *expected_kind);
+            // The Display message names the target type.
+            let err = I256CastError::new(too_big, *got_kind);
+            assert!(format!("{err}").contains(expected_type_str));
+        }
+    }
+
+    // Bit-layout edge cases
+
+    #[test]
+    fn shift_to_sign_bit() {
+        // 1 << 255 sets only the sign bit — that is exactly I256::MIN in two's complement.
+        assert_eq!(I256::one() << 255u32, I256::min_value());
+        // 1 << 254 is the largest positive power of two below MAX.
+        let near_max = I256::one() << 254u32;
+        assert!(near_max > I256::zero());
+        assert!(near_max < I256::max_value());
+        // (MIN >> 1) is arithmetic — sign extends — giving roughly MIN/2 (still negative).
+        assert!((I256::min_value() >> 1u8) < I256::zero());
+    }
+
+    #[test]
+    fn bitwise_extreme_patterns() {
+        // All-ones (xor-cascading) is interpretable as -1 in two's complement.
+        let all_ones = I256::from(-1i8);
+        assert_eq!(all_ones, !I256::zero());
+        // Sign bit alone via XOR.
+        let sign_bit = I256::one() << 255u32;
+        assert_eq!(I256::zero() ^ sign_bit, sign_bit);
+        // AND with sign bit isolates it.
+        assert_eq!(all_ones & sign_bit, sign_bit);
+        // OR fills the rest.
+        assert_eq!(I256::zero() | all_ones, all_ones);
+    }
+
+    #[test]
+    fn extreme_byte_roundtrip() {
+        // 1 << 255 ↔ MIN ↔ bytes round-trip.
+        let sign_only = I256::one() << 255u32;
+        let bytes = sign_only.to_le_bytes();
+        assert_eq!(I256::from_le_bytes(&bytes), I256::min_value());
+        // bytes representation: only the high byte's high bit is set (little-endian).
+        assert_eq!(bytes[31], 0x80);
+        for b in &bytes[..31] {
+            assert_eq!(*b, 0);
+        }
+    }
+
+    // Neg / Not operators
+
+    #[test]
+    fn neg_operator() {
+        // Wrapping behaviour: matches `wrapping_neg`.
+        assert_eq!(-I256::from(42i32), I256::from(-42i32));
+        assert_eq!(-I256::from(-42i32), I256::from(42i32));
+        assert_eq!(-I256::zero(), I256::zero());
+        // -MIN wraps to MIN under two's-complement.
+        assert_eq!(-I256::min_value(), I256::min_value());
+    }
+
+    #[test]
+    fn not_operator() {
+        assert_eq!(!I256::zero(), I256::from(-1i8));
+        assert_eq!(!I256::from(-1i8), I256::zero());
+        // `!x == -x - 1` for two's complement.
+        assert_eq!(!I256::from(42i32), I256::from(-43i32));
     }
 
     // Negative arithmetic

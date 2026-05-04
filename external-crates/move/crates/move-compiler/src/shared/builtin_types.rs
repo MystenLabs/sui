@@ -39,6 +39,8 @@ pub fn has_signed_suffix(s: &str) -> bool {
     SIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
 }
 
+/// Checks whether a numeric literal token string (e.g., `"123u64"`) ends with an unsigned integer
+/// type suffix. Intended to be called on lexer token content, not on arbitrary strings.
 pub fn has_unsigned_suffix(s: &str) -> bool {
     UNSIGNED_INT_SUFFIXES.iter().any(|sfx| s.ends_with(sfx))
 }

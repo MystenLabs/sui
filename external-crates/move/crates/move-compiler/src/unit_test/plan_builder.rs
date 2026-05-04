@@ -382,13 +382,22 @@ fn convert_builtin_type_to_typetag(s_type: &HA::SingleType_) -> Option<TypeTag> 
                         TypeTag::Vector(Box::new(tts.remove(0)))
                     }
                     NA::BuiltinTypeName_::Signer => TypeTag::Signer,
-                    // TODO (signed-ints): Fix this when we have signed ints in the bytecode
+                    // TODO (signed-ints): Fix this when we have signed ints in the bytecode.
+                    // Reaching this branch means signed-int code made it through earlier
+                    // bytecode-gen layers without being rejected, which is currently
+                    // expected to be impossible — flag it loudly in debug builds.
                     NA::BuiltinTypeName_::I8
                     | NA::BuiltinTypeName_::I16
                     | NA::BuiltinTypeName_::I32
                     | NA::BuiltinTypeName_::I64
                     | NA::BuiltinTypeName_::I128
-                    | NA::BuiltinTypeName_::I256 => return None,
+                    | NA::BuiltinTypeName_::I256 => {
+                        debug_assert!(
+                            false,
+                            "ICE signed integer type reached unit test plan builder"
+                        );
+                        return None;
+                    }
                 };
                 Some(tag)
             }

@@ -489,7 +489,7 @@ fn constant(
                 .add(name, value.clone())
                 .expect("ICE constant name collision");
             let loc = value.loc;
-            let mv = move_value_from_value(context.env, value);
+            let mv = move_value_from_value(context.env, context.current_package, value);
             if mv.is_none() {
                 context.add_diag(dev_feature!(FeatureGate::SignedIntegers, loc));
             }
@@ -618,6 +618,7 @@ fn check_constant_value(context: &mut Context, e: &H::Exp) {
 
 pub(crate) fn move_value_from_value(
     env: &CompilationEnv,
+    current_package: Option<Symbol>,
     sp!(vloc, v_): Value,
 ) -> Option<MoveValue> {
     use MoveValue as MV;
@@ -634,11 +635,18 @@ pub(crate) fn move_value_from_value(
         V::Vector(_, vs) => {
             let mvs: Option<Vec<_>> = vs
                 .into_iter()
-                .map(|v| move_value_from_value(env, v))
+                .map(|v| move_value_from_value(env, current_package, v))
                 .collect();
             MV::Vector(mvs?)
         }
         V::I8(_) | V::I16(_) | V::I32(_) | V::I64(_) | V::I128(_) | V::I256(_) => {
+            // Upstream feature gating should have rejected signed-int code in any
+            // edition that doesn't support it. Reaching here in an unsupported edition
+            // means a feature-gate site is missing.
+            debug_assert!(
+                env.supports_feature(current_package, FeatureGate::SignedIntegers),
+                "ICE signed integer value reached cfgir with feature not supported"
+            );
             env.diagnostic_reporter_at_top_level()
                 .add_diag(dev_feature!(FeatureGate::SignedIntegers, vloc));
             return None;

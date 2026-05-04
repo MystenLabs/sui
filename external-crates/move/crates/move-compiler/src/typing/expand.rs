@@ -11,7 +11,7 @@ use crate::{
         ANYTHING_TYPE, BuiltinTypeName_, FunctionSignature, Type, TypeInner, TypeName_,
         UNRESOLVED_ERROR_TYPE,
     },
-    parser::ast::Ability_,
+    parser::ast::{Ability_, UnaryOp_},
     shared::{ide::IDEAnnotation, string_utils::debug_print},
     typing::{
         ast::{self as T},
@@ -240,10 +240,34 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
             }
         }
         E::Value(sp!(vloc, Value_::InferredNum(v))) => {
-            if let Some(value) = inferred_numerical_value(context, e.exp.loc, *v, &e.ty) {
+            if let Some(value) =
+                inferred_numerical_value(context, e.exp.loc, *v, &e.ty, /* negated */ false)
+            {
                 e.exp.value = E::Value(sp(*vloc, value));
             } else {
                 e.exp.value = E::UnresolvedError
+            }
+        }
+        // `e.ty` is already substituted (above); `inner.ty` may still be a type variable.
+        // Neg unifies operand and result types, so `e.ty` stands in for the inner's type.
+        E::UnaryExp(sp!(_, UnaryOp_::Neg), inner)
+            if matches!(&inner.exp.value, E::Value(sp!(_, Value_::InferredNum(_))))
+                && matches!(
+                    e.ty.value.builtin_name(),
+                    Some(sp!(_, bt)) if bt.is_signed_numeric()
+                ) =>
+        {
+            let inner_loc = inner.exp.loc;
+            let E::Value(sp!(_, Value_::InferredNum(v))) = &inner.exp.value else {
+                unreachable!()
+            };
+            let v = *v;
+            if let Some(value) =
+                inferred_numerical_value(context, e.exp.loc, v, &e.ty, /* negated */ true)
+            {
+                e.exp.value = E::Value(sp(inner_loc, value));
+            } else {
+                e.exp.value = E::UnresolvedError;
             }
         }
         E::Value(sp!(vloc, Value_::InferredString(v))) => {
@@ -372,26 +396,29 @@ fn find_fit_unsigned(value: U256) -> BuiltinTypeName_ {
     }
 }
 
-/// Returns the smallest signed type whose max value is >= `value`. Note that we do not need to
-/// check the minimum value of each signed type, since inferred numeric literals are always
-/// non-negative (represented as U256). If they had a negative value, that would have been pushed
-/// in and checked during expansion.
-fn find_fit_signed(value: U256) -> BuiltinTypeName_ {
+/// Returns the smallest signed type whose representable range contains `value`. When `negated`,
+/// compares against `|MIN|` (e.g., 128 for `i8`); otherwise compares against `MAX` (e.g., 127).
+fn find_fit_signed(value: U256, negated: bool) -> BuiltinTypeName_ {
     use BuiltinTypeName_ as BT;
-    let i8_max = max_value_for(BT::I8);
-    let i16_max = max_value_for(BT::I16);
-    let i32_max = max_value_for(BT::I32);
-    let i64_max = max_value_for(BT::I64);
-    let i128_max = max_value_for(BT::I128);
-    if value > i128_max {
+    let bound = if negated {
+        abs_min_value_for
+    } else {
+        max_value_for
+    };
+    let i8_b = bound(BT::I8);
+    let i16_b = bound(BT::I16);
+    let i32_b = bound(BT::I32);
+    let i64_b = bound(BT::I64);
+    let i128_b = bound(BT::I128);
+    if value > i128_b {
         BT::I256
-    } else if value > i64_max {
+    } else if value > i64_b {
         BT::I128
-    } else if value > i32_max {
+    } else if value > i32_b {
         BT::I64
-    } else if value > i16_max {
+    } else if value > i16_b {
         BT::I32
-    } else if value > i8_max {
+    } else if value > i8_b {
         BT::I16
     } else {
         BT::I8
@@ -418,28 +445,57 @@ fn max_value_for(bt: BuiltinTypeName_) -> U256 {
     }
 }
 
+/// Returns `|MIN|` for signed builtin types (e.g., 128 for `i8`). Panics for non-signed-numeric.
+fn abs_min_value_for(bt: BuiltinTypeName_) -> U256 {
+    use BuiltinTypeName_ as BT;
+    match bt {
+        BT::I8 => U256::from(1u64 << 7),
+        BT::I16 => U256::from(1u64 << 15),
+        BT::I32 => U256::from(1u64 << 31),
+        BT::I64 => U256::from(1u128 << 63),
+        BT::I128 => U256::from(1u128 << 127),
+        BT::I256 => move_core_types::i256::I256::min_value().to_u256_bits(),
+        BT::U8
+        | BT::U16
+        | BT::U32
+        | BT::U64
+        | BT::U128
+        | BT::U256
+        | BT::Address
+        | BT::Signer
+        | BT::Vector
+        | BT::Bool => unreachable!(),
+    }
+}
+
 fn inferred_numerical_value(
     context: &mut Context,
     eloc: Loc,
     value: U256,
     ty: &Type,
+    negated: bool,
 ) -> Option<Value_> {
     use BuiltinTypeName_ as BT;
     let bt = match ty.value.builtin_name() {
         Some(sp!(_, bt)) if bt.is_numeric() => bt,
         _ => panic!("ICE inferred num failed {:?}", &ty.value),
     };
-    let max = max_value_for(*bt);
-    if value > max {
+    let bound = if negated {
+        abs_min_value_for(*bt)
+    } else {
+        max_value_for(*bt)
+    };
+    if value > bound {
         let msg = format!("This literal does not fit into the type '{}'.", bt);
         let fix_bt = if bt.is_signed_numeric() {
-            find_fit_signed(value)
+            find_fit_signed(value, negated)
         } else {
             find_fit_unsigned(value)
         };
+        let sign = if negated { "-" } else { "" };
         let fix = format!(
-            "Annotating the literal might help inference: '{value}{type}'",
-            type=fix_bt,
+            "Annotating the literal might help inference: '{sign}{value}{type}'",
+            type = fix_bt,
         );
         context.add_diag(diag!(
             TypeSafety::InvalidNum,
@@ -448,6 +504,27 @@ fn inferred_numerical_value(
             (eloc, fix),
         ));
         None
+    } else if negated {
+        use move_core_types::i256::I256;
+        let value_ = match bt {
+            BT::I8 => Value_::I8(value.down_cast_lossy::<u8>().wrapping_neg() as i8),
+            BT::I16 => Value_::I16(value.down_cast_lossy::<u16>().wrapping_neg() as i16),
+            BT::I32 => Value_::I32(value.down_cast_lossy::<u32>().wrapping_neg() as i32),
+            BT::I64 => Value_::I64(value.down_cast_lossy::<u64>().wrapping_neg() as i64),
+            BT::I128 => Value_::I128(value.down_cast_lossy::<u128>().wrapping_neg() as i128),
+            BT::I256 => Value_::I256(I256::from_u256_bits(value).wrapping_neg()),
+            BT::U8
+            | BT::U16
+            | BT::U32
+            | BT::U64
+            | BT::U128
+            | BT::U256
+            | BT::Address
+            | BT::Signer
+            | BT::Vector
+            | BT::Bool => unreachable!("guarded by callsite: negated only with signed numeric"),
+        };
+        Some(value_)
     } else {
         let value_ = match bt {
             BT::U8 => Value_::U8(value.down_cast_lossy()),
@@ -604,7 +681,9 @@ fn pat(context: &mut Context, p: &mut T::MatchPattern) {
                 | TI::UnresolvedError
                 | TI::Void => &p.ty,
             };
-            if let Some(value) = inferred_numerical_value(context, p.pat.loc, *v, num_ty) {
+            if let Some(value) =
+                inferred_numerical_value(context, p.pat.loc, *v, num_ty, /* negated */ false)
+            {
                 p.pat.value = P::Literal(sp(*vloc, value));
             } else {
                 p.pat.value = P::ErrorPat;
