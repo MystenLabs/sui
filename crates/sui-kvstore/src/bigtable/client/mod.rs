@@ -475,14 +475,17 @@ impl BigTableClient {
         ];
         if let Some(checkpoint) = new.checkpoint_hi_inclusive {
             cells.push((col::CHECKPOINT_HI, u64_be(checkpoint)));
-            let v0 = WatermarkV0 {
-                epoch_hi_inclusive: new.epoch_hi_inclusive,
-                checkpoint_hi_inclusive: checkpoint,
-                tx_hi: new.tx_hi,
-                timestamp_ms_hi_inclusive: new.timestamp_ms_hi_inclusive,
-            };
-            cells.push((col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)));
         }
+        // Always write the v0 `w` cell so older readers (which decode the BCS `WatermarkV0`)
+        // don't see a row with only v1 cells. When the v1 row has no checkpoint observed
+        // yet, write `checkpoint_hi_inclusive: 0` as a sentinel.
+        let v0 = WatermarkV0 {
+            epoch_hi_inclusive: new.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: new.checkpoint_hi_inclusive.unwrap_or(0),
+            tx_hi: new.tx_hi,
+            timestamp_ms_hi_inclusive: new.timestamp_ms_hi_inclusive,
+        };
+        cells.push((col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)));
         let mutations = build_set_cell_mutations(cells);
         let predicate = column_exists_filter(tables::watermarks::col::SCHEMA_VERSION);
         // Predicate is "row has any schema-version cell" → false_mutations write the new row.

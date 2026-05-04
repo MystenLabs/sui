@@ -173,12 +173,15 @@ async fn test_init_watermark_fresh_none() -> Result<()> {
     assert_eq!(init.checkpoint_hi_inclusive, None);
     assert_eq!(init.reader_lo, Some(0));
 
-    // The row should have the v1 cells but no v0 `w` cell.
+    // The row should have the v1 cells and a sentinel v0 `w` cell (chi=0) for backward
+    // compatibility with older readers that still target the BCS `w` column.
     let cells = harness.cells(PIPELINE).await?;
     assert!(
-        cells.w.is_none(),
-        "fresh init(None) must not write the `w` cell"
+        cells.w.is_some(),
+        "fresh init(None) must still write a sentinel `w` cell for old readers"
     );
+    let v0: WatermarkV0 = bcs::from_bytes(cells.w.as_ref().unwrap())?;
+    assert_eq!(v0.checkpoint_hi_inclusive, 0);
     assert!(cells.has_v1, "fresh init(None) must write the v1 cells");
     assert_eq!(cells.schema_version, Some(1));
     assert!(
