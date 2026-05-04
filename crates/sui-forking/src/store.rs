@@ -70,6 +70,7 @@ use crate::TransactionRead;
 use crate::VersionQuery;
 use crate::filesystem::FilesystemStore;
 use crate::filesystem::OwnedObjectEntry;
+use crate::filesystem::RemovedObjectKind;
 
 /// A data store for Sui data, combining a shared local filesystem cache with a remote GraphQL
 /// endpoint for historical reads. Pre-fork data is fetched on demand and cached locally; post-fork
@@ -91,13 +92,6 @@ struct DataStoreInner {
     local: FilesystemStore,
     /// Protects multi-file filesystem snapshots between executor writes and cloned RPC readers.
     local_snapshot_lock: RwLock<()>,
-}
-
-/// Current-state removal kind for an object affected by local execution.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum RemovedObjectKind {
-    Deleted,
-    Wrapped,
 }
 
 /// Object reference paired with the current-state removal kind that produced it.
@@ -553,7 +547,7 @@ impl DataStore {
                     .inner
                     .local
                     .is_object_deleted(&object.id())
-                    .expect("failed to read object deleted marker")
+                    .expect("failed to read object removal marker")
             })
             .collect();
 

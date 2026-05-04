@@ -6,8 +6,7 @@
 //!     - objects/
 //!         - {object_id}/
 //!            - latest                  (text: latest persisted version number)
-//!            - deleted                 (text marker: deleted by local execution)
-//!            - wrapped                 (text marker: wrapped by local execution)
+//!            - removed                 (text marker: removed kind + object ref)
 //!            - {version}                (BCS-encoded Object)
 //!     - indices/
 //!         - owned_objects              (BCS-encoded `Vec<OwnedObjectEntry>`)
@@ -42,6 +41,7 @@ use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::digests::CheckpointContentsDigest;
 use sui_types::digests::CheckpointDigest;
+use sui_types::digests::ObjectDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
@@ -66,10 +66,8 @@ const INDICES_DIR: &str = "indices";
 const CHECKPOINTS_DIR: &str = "checkpoints";
 /// Per-chain transaction storage directory.
 const TRANSACTIONS_DIR: &str = "transactions";
-/// Filename marking an object as locally deleted.
-const DELETED_FILE: &str = "deleted";
-/// Filename marking an object as locally wrapped.
-const WRAPPED_FILE: &str = "wrapped";
+/// Filename marking the current local removal state for an object.
+const REMOVED_FILE: &str = "removed";
 /// BCS-encoded owned-object index filename.
 const OWNED_OBJECTS_INDEX_FILE: &str = "owned_objects";
 /// Filename for the BCS-encoded transaction data within a transaction directory.
@@ -88,6 +86,30 @@ const CHECKPOINT_CONTENTS_DIR: &str = "contents";
 const CHECKPOINT_DIGEST_INDEX_FILE: &str = "digest_index";
 /// Marker file for the latest checkpoint sequence known to the store.
 const LATEST_FILE: &str = "latest";
+
+/// Current-state removal kind for an object affected by local execution.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum RemovedObjectKind {
+    Deleted,
+    Wrapped,
+}
+
+impl RemovedObjectKind {
+    fn marker_text(self) -> &'static str {
+        match self {
+            Self::Deleted => "deleted",
+            Self::Wrapped => "wrapped",
+        }
+    }
+
+    fn from_marker_text(value: &str) -> anyhow::Result<Self> {
+        match value {
+            "deleted" => Ok(Self::Deleted),
+            "wrapped" => Ok(Self::Wrapped),
+            _ => bail!("Unknown object removal marker kind: {value}"),
+        }
+    }
+}
 
 /// Index entry for a live address-owned object.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -344,92 +366,149 @@ impl FilesystemStore {
     /// Mark an object as deleted by local execution. Historical version files remain on disk and
     /// can still be read by exact version, but current reads must not resurrect the object.
     pub(crate) fn mark_object_deleted(&self, object_ref: &ObjectRef) -> anyhow::Result<()> {
-        self.write_object_state_marker(DELETED_FILE, object_ref)?;
-        self.clear_object_wrapped(&object_ref.0)
+        self.write_object_removed_marker(RemovedObjectKind::Deleted, object_ref)
     }
 
     /// Mark an object as wrapped by local execution. Historical version files remain on disk and
     /// can still be read by exact version; a later live write can clear this marker.
     pub(crate) fn mark_object_wrapped(&self, object_ref: &ObjectRef) -> anyhow::Result<()> {
-        self.write_object_state_marker(WRAPPED_FILE, object_ref)
+        if self.is_object_deleted(&object_ref.0)? {
+            return Ok(());
+        }
+        self.write_object_removed_marker(RemovedObjectKind::Wrapped, object_ref)
     }
 
     /// Clear the local deletion marker. Normal live writes do not call this because post-fork
     /// deletions are terminal; it is available for tests and explicit cache repair.
     pub(crate) fn clear_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<()> {
-        self.clear_object_state_marker(object_id, DELETED_FILE)
+        self.clear_object_removed_marker_kind(object_id, RemovedObjectKind::Deleted)
     }
 
     /// Clear the local wrapped marker for an object that has become live again.
     pub(crate) fn clear_object_wrapped(&self, object_id: &ObjectID) -> anyhow::Result<()> {
-        self.clear_object_state_marker(object_id, WRAPPED_FILE)
+        self.clear_object_removed_marker_kind(object_id, RemovedObjectKind::Wrapped)
     }
 
     /// Return whether local execution has deleted the object.
     pub(crate) fn is_object_deleted(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
-        self.has_object_state_marker(object_id, DELETED_FILE)
+        Ok(self.object_removed_kind(object_id)? == Some(RemovedObjectKind::Deleted))
     }
 
     /// Return whether local execution has wrapped the object.
     pub(crate) fn is_object_wrapped(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
-        self.has_object_state_marker(object_id, WRAPPED_FILE)
+        Ok(self.object_removed_kind(object_id)? == Some(RemovedObjectKind::Wrapped))
     }
 
     /// Return whether local execution has made the object inaccessible by direct current ID
     /// lookup.
     pub(crate) fn is_object_currently_removed(&self, object_id: &ObjectID) -> anyhow::Result<bool> {
-        Ok(self.is_object_deleted(object_id)? || self.is_object_wrapped(object_id)?)
+        Ok(self.object_removed_kind(object_id)?.is_some())
     }
 
-    /// Write a state marker (WRAPPED / DELETED) file for the given object reference.
-    fn write_object_state_marker(
+    /// Write the current removal marker file for the given object reference.
+    fn write_object_removed_marker(
         &self,
-        filename: &str,
+        kind: RemovedObjectKind,
         object_ref: &ObjectRef,
     ) -> anyhow::Result<()> {
         let object_id = object_ref.0;
         let object_dir = self.objects_dir().join(object_id.to_string());
         fs::create_dir_all(&object_dir)
             .with_context(|| format!("Failed to create directory: {}", object_dir.display()))?;
-        let contents = format!("{} {}", object_ref.1.value(), object_ref.2);
-        fs::write(object_dir.join(filename), contents)
-            .with_context(|| format!("Failed to mark object {} {}", object_id, filename))
+        let contents = format!(
+            "{} {} {}\n",
+            kind.marker_text(),
+            object_ref.1.value(),
+            object_ref.2
+        );
+        fs::write(object_dir.join(REMOVED_FILE), contents)
+            .with_context(|| format!("Failed to mark object {} removed", object_id))
     }
 
-    /// Clear a state marker (WRAPPED / DELETED) file for the given object ID. If the file does not
-    /// exist, this is a no-op.
-    fn clear_object_state_marker(
+    /// Clear the current removal marker if it matches `kind`.
+    fn clear_object_removed_marker_kind(
         &self,
         object_id: &ObjectID,
-        filename: &str,
+        kind: RemovedObjectKind,
     ) -> anyhow::Result<()> {
+        if self
+            .read_object_removed_marker_kind(object_id)?
+            .is_some_and(|removed_kind| removed_kind == kind)
+        {
+            self.clear_object_removed_marker(object_id)?;
+        }
+        Ok(())
+    }
+
+    /// Return the current removal kind.
+    fn object_removed_kind(
+        &self,
+        object_id: &ObjectID,
+    ) -> anyhow::Result<Option<RemovedObjectKind>> {
+        self.read_object_removed_marker_kind(object_id)
+    }
+
+    /// Read the canonical `removed` marker.
+    fn read_object_removed_marker_kind(
+        &self,
+        object_id: &ObjectID,
+    ) -> anyhow::Result<Option<RemovedObjectKind>> {
         let path = self
             .objects_dir()
             .join(object_id.to_string())
-            .join(filename);
+            .join(REMOVED_FILE);
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read object removed marker: {}", path.display()))?;
+        let mut parts = content.split_whitespace();
+        let kind = parts
+            .next()
+            .ok_or_else(|| anyhow!("Missing object removal kind in: {}", path.display()))
+            .and_then(RemovedObjectKind::from_marker_text)?;
+        let _version = parts
+            .next()
+            .ok_or_else(|| anyhow!("Missing object removal version in: {}", path.display()))?
+            .parse::<u64>()
+            .with_context(|| {
+                format!(
+                    "Failed to parse object removal version in: {}",
+                    path.display()
+                )
+            })?;
+        let _digest = parts
+            .next()
+            .ok_or_else(|| anyhow!("Missing object removal digest in: {}", path.display()))?
+            .parse::<ObjectDigest>()
+            .with_context(|| {
+                format!(
+                    "Failed to parse object removal digest in: {}",
+                    path.display()
+                )
+            })?;
+        anyhow::ensure!(
+            parts.next().is_none(),
+            "Unexpected extra object removal marker data in: {}",
+            path.display()
+        );
+
+        Ok(Some(kind))
+    }
+
+    /// Clear the removal marker for the given object ID. If the file does not exist, this is a
+    /// no-op.
+    fn clear_object_removed_marker(&self, object_id: &ObjectID) -> anyhow::Result<()> {
+        let path = self
+            .objects_dir()
+            .join(object_id.to_string())
+            .join(REMOVED_FILE);
         match fs::remove_file(&path) {
             Ok(()) => Ok(()),
             Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
             Err(err) => Err(err)
                 .with_context(|| format!("Failed to clear object marker: {}", path.display())),
-        }
-    }
-
-    /// Check for the existence of a state marker (WRAPPED / DELETED) file for the given object ID.
-    fn has_object_state_marker(
-        &self,
-        object_id: &ObjectID,
-        filename: &str,
-    ) -> anyhow::Result<bool> {
-        let path = self
-            .objects_dir()
-            .join(object_id.to_string())
-            .join(filename);
-        match fs::metadata(&path) {
-            Ok(_) => Ok(true),
-            Err(err) if err.kind() == ErrorKind::NotFound => Ok(false),
-            Err(err) => Err(err)
-                .with_context(|| format!("Failed to stat object marker: {}", path.display())),
         }
     }
 

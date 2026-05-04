@@ -50,6 +50,10 @@ fn build_checkpoint(sequence: u64) -> (VerifiedCheckpoint, CheckpointContents) {
     (checkpoint, data.contents)
 }
 
+fn object_dir(store: &FilesystemStore, object_id: &ObjectID) -> std::path::PathBuf {
+    store.objects_dir().join(object_id.to_string())
+}
+
 #[test]
 fn test_write_and_read_latest_object() {
     let (_dir, store) = test_store();
@@ -116,12 +120,18 @@ fn test_deleted_marker_blocks_latest_but_preserves_exact_versions() {
     let obj = make_object(id, 5);
 
     store.write_object(&obj).unwrap();
-    store
-        .mark_object_deleted(&obj.compute_object_reference())
-        .unwrap();
+    let object_ref = obj.compute_object_reference();
+    store.mark_object_deleted(&object_ref).unwrap();
 
     assert!(store.is_object_deleted(&id).unwrap());
     assert!(store.get_latest_object(&id).unwrap().is_none());
+    let dir = object_dir(&store, &id);
+    assert_eq!(
+        fs::read_to_string(dir.join(REMOVED_FILE)).unwrap(),
+        format!("deleted {} {}\n", object_ref.1.value(), object_ref.2),
+    );
+    assert!(!dir.join("deleted").exists());
+    assert!(!dir.join("wrapped").exists());
 
     let exact = store.get_object_at_version(&id, 5).unwrap();
     assert_eq!(exact.unwrap(), obj);
@@ -139,12 +149,18 @@ fn test_wrapped_marker_blocks_latest_preserves_exact_and_clears_on_write() {
     let obj = make_object_with_owner(id, 5, Owner::AddressOwner(owner));
 
     store.write_object(&obj).unwrap();
-    store
-        .mark_object_wrapped(&obj.compute_object_reference())
-        .unwrap();
+    let object_ref = obj.compute_object_reference();
+    store.mark_object_wrapped(&object_ref).unwrap();
 
     assert!(store.is_object_wrapped(&id).unwrap());
     assert!(store.get_latest_object(&id).unwrap().is_none());
+    let dir = object_dir(&store, &id);
+    assert_eq!(
+        fs::read_to_string(dir.join(REMOVED_FILE)).unwrap(),
+        format!("wrapped {} {}\n", object_ref.1.value(), object_ref.2),
+    );
+    assert!(!dir.join("deleted").exists());
+    assert!(!dir.join("wrapped").exists());
 
     let exact = store.get_object_at_version(&id, 5).unwrap();
     assert_eq!(exact.unwrap(), obj);
@@ -156,6 +172,42 @@ fn test_wrapped_marker_blocks_latest_preserves_exact_and_clears_on_write() {
     assert!(!store.is_object_wrapped(&id).unwrap());
     let latest = store.get_latest_object(&id).unwrap();
     assert_eq!(latest.unwrap(), unwrapped);
+}
+
+#[test]
+fn test_clear_wrapped_preserves_deleted_marker() {
+    let (_dir, store) = test_store();
+    let id = ObjectID::random();
+    let obj = make_object(id, 5);
+
+    store.write_object(&obj).unwrap();
+    store
+        .mark_object_deleted(&obj.compute_object_reference())
+        .unwrap();
+    store.clear_object_wrapped(&id).unwrap();
+
+    assert!(store.is_object_deleted(&id).unwrap());
+    assert!(!store.is_object_wrapped(&id).unwrap());
+    assert!(store.get_latest_object(&id).unwrap().is_none());
+}
+
+#[test]
+fn test_deleted_marker_overwrites_wrapped_marker() {
+    let (_dir, store) = test_store();
+    let id = ObjectID::random();
+    let obj = make_object(id, 5);
+    let object_ref = obj.compute_object_reference();
+
+    store.write_object(&obj).unwrap();
+    store.mark_object_wrapped(&object_ref).unwrap();
+    store.mark_object_deleted(&object_ref).unwrap();
+
+    assert!(store.is_object_deleted(&id).unwrap());
+    assert!(!store.is_object_wrapped(&id).unwrap());
+    assert_eq!(
+        fs::read_to_string(object_dir(&store, &id).join(REMOVED_FILE)).unwrap(),
+        format!("deleted {} {}\n", object_ref.1.value(), object_ref.2),
+    );
 }
 
 #[test]
