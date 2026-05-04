@@ -43,6 +43,7 @@ impl Subscription {
                         let scope = Scope::for_streamed_checkpoint(
                             package_store.clone(),
                             resolver_limits.clone(),
+                            processed.clone(),
                         );
                         yield Ok(Checkpoint {
                             sequence_number: processed.sequence_number,
@@ -84,6 +85,7 @@ impl Subscription {
                         let scope = Scope::for_streamed_checkpoint(
                             package_store.clone(),
                             resolver_limits.clone(),
+                            processed.clone(),
                         );
                         // TODO(DVX-2050): Pre-filter checkpoints using bloom filters
                         // before evaluating exact matches, to skip checkpoints with
@@ -95,9 +97,7 @@ impl Subscription {
                             yield Ok(Transaction {
                                 digest: tx.digest,
                                 contents: TransactionContents {
-                                    scope: scope.with_execution_objects(
-                                        tx.execution_objects.clone(),
-                                    ),
+                                    scope: scope.with_streamed_tx(tx.tx_sequence_number),
                                     contents: Some(Arc::new(tx.contents.clone())),
                                 },
                             });
@@ -138,6 +138,7 @@ impl Subscription {
                         let scope = Scope::for_streamed_checkpoint(
                             package_store.clone(),
                             resolver_limits.clone(),
+                            processed.clone(),
                         );
                         for tx in &processed.transactions {
                             let events = tx.contents.events().unwrap_or_default();
@@ -146,9 +147,7 @@ impl Subscription {
                                     continue;
                                 }
                                 yield Ok(Event {
-                                    scope: scope.with_execution_objects(
-                                        tx.execution_objects.clone(),
-                                    ),
+                                    scope: scope.with_streamed_tx(tx.tx_sequence_number),
                                     native,
                                     transaction_digest: tx.digest,
                                     sequence_number: idx as u64,

@@ -23,6 +23,7 @@ use sui_types::object::Object as NativeObject;
 
 use crate::config::Limits;
 use crate::error::RpcError;
+use crate::task::streaming::ProcessedCheckpoint;
 use crate::task::streaming::StreamingPackageStore;
 use crate::task::watermark::Watermarks;
 
@@ -74,6 +75,15 @@ pub(crate) struct Scope {
     /// This enables any Object GraphQL type to access fresh data without database queries.
     execution_objects: ExecutionObjectMap,
 
+    /// The streamed checkpoint payload this scope is resolving against, if any. Holds the
+    /// per-tx contents and execution objects so nested resolvers can navigate the checkpoint
+    /// without re-plumbing per-yield context.
+    streamed_checkpoint: Option<Arc<ProcessedCheckpoint>>,
+
+    /// Within `streamed_checkpoint`, the `tx_sequence_number` of the transaction we are
+    /// resolving for. Object lookups use this transaction's own `execution_objects`.
+    tx_sequence_number_viewed_at: Option<u64>,
+
     /// Access to packages for type resolution.
     package_store: Arc<dyn PackageStore>,
 
@@ -93,6 +103,8 @@ impl Scope {
             checkpoint_viewed_at: Some(watermark.high_watermark().checkpoint()),
             root_bound: None,
             execution_objects: Arc::new(BTreeMap::new()),
+            streamed_checkpoint: None,
+            tx_sequence_number_viewed_at: None,
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
@@ -103,23 +115,28 @@ impl Scope {
     pub(crate) fn for_streamed_checkpoint(
         package_store: Arc<StreamingPackageStore>,
         resolver_limits: sui_package_resolver::Limits,
+        streamed_checkpoint: Arc<ProcessedCheckpoint>,
     ) -> Self {
         Self {
             checkpoint_viewed_at: None,
             root_bound: None,
             execution_objects: Arc::new(BTreeMap::new()),
+            streamed_checkpoint: Some(streamed_checkpoint),
+            tx_sequence_number_viewed_at: None,
             package_store,
             resolver_limits,
         }
     }
 
-    /// Create a nested scope with pre-built execution objects. Used by streaming to attach
-    /// per-transaction objects that were deserialized from checkpoint-level data.
-    pub(crate) fn with_execution_objects(&self, execution_objects: ExecutionObjectMap) -> Self {
+    /// Anchor a nested scope to a specific transaction within `streamed_checkpoint`. Object
+    /// lookups in this scope use that transaction's own `execution_objects`.
+    pub(crate) fn with_streamed_tx(&self, tx_sequence_number_viewed_at: u64) -> Self {
         Self {
             checkpoint_viewed_at: None,
-            root_bound: self.root_bound,
-            execution_objects,
+            root_bound: None,
+            execution_objects: Arc::clone(&self.execution_objects),
+            streamed_checkpoint: self.streamed_checkpoint.clone(),
+            tx_sequence_number_viewed_at: Some(tx_sequence_number_viewed_at),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -145,6 +162,8 @@ impl Scope {
             checkpoint_viewed_at: Some(0),
             root_bound: None,
             execution_objects: Arc::new(BTreeMap::new()),
+            streamed_checkpoint: None,
+            tx_sequence_number_viewed_at: None,
             package_store: Arc::new(EmptyPackageStore),
             resolver_limits: Limits::default().package_resolver(),
         }
@@ -163,6 +182,8 @@ impl Scope {
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
             root_bound: self.root_bound,
             execution_objects: Arc::clone(&self.execution_objects),
+            streamed_checkpoint: self.streamed_checkpoint.clone(),
+            tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
@@ -174,6 +195,8 @@ impl Scope {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             root_bound: Some(RootBound::Version(root_version)),
             execution_objects: Arc::clone(&self.execution_objects),
+            streamed_checkpoint: self.streamed_checkpoint.clone(),
+            tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -185,6 +208,8 @@ impl Scope {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             root_bound: Some(RootBound::Checkpoint(root_checkpoint)),
             execution_objects: Arc::clone(&self.execution_objects),
+            streamed_checkpoint: self.streamed_checkpoint.clone(),
+            tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -196,6 +221,8 @@ impl Scope {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             root_bound: None,
             execution_objects: Arc::clone(&self.execution_objects),
+            streamed_checkpoint: self.streamed_checkpoint.clone(),
+            tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -237,6 +264,22 @@ impl Scope {
         self.checkpoint_viewed_at.map(|cp| cp + 1)
     }
 
+    /// The execution objects map active for object lookups in this scope. When anchored to a
+    /// streamed transaction (via [`Self::with_streamed_tx`]), returns that transaction's
+    /// per-tx map from `streamed_checkpoint`. Otherwise returns the per-scope map populated
+    /// by [`Self::with_executed_transaction`] (mutation/simulate path).
+    fn execution_objects_in_view(&self) -> &ExecutionObjectMap {
+        if let (Some(seq), Some(cp)) = (
+            self.tx_sequence_number_viewed_at,
+            self.streamed_checkpoint.as_ref(),
+        ) && let Some(tx) = cp.transactions.iter().find(|t| t.tx_sequence_number == seq)
+        {
+            &tx.execution_objects
+        } else {
+            &self.execution_objects
+        }
+    }
+
     /// Get an object from the execution context cache, if available.
     ///
     /// Returns None if the object doesn't exist in the cache or if it was deleted/wrapped.
@@ -245,7 +288,7 @@ impl Scope {
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> Option<&NativeObject> {
-        self.execution_objects
+        self.execution_objects_in_view()
             .get(&(object_id, version))
             .and_then(|opt| opt.as_ref())
     }
@@ -256,7 +299,7 @@ impl Scope {
         &self,
         object_id: ObjectID,
     ) -> Option<&NativeObject> {
-        self.execution_objects
+        self.execution_objects_in_view()
             .range(..=(object_id, SequenceNumber::MAX))
             .last()
             .and_then(|(_, opt)| opt.as_ref())
@@ -273,6 +316,8 @@ impl Scope {
             checkpoint_viewed_at: None,
             root_bound: self.root_bound,
             execution_objects,
+            streamed_checkpoint: None,
+            tx_sequence_number_viewed_at: None,
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
@@ -340,6 +385,10 @@ impl Debug for Scope {
         f.debug_struct("Scope")
             .field("checkpoint_viewed_at", &self.checkpoint_viewed_at)
             .field("root_bound", &self.root_bound)
+            .field(
+                "tx_sequence_number_viewed_at",
+                &self.tx_sequence_number_viewed_at,
+            )
             .field("resolver_limits", &self.resolver_limits)
             .finish()
     }
@@ -353,9 +402,9 @@ impl PackageStore for Scope {
         let object_id = ObjectID::from(id);
 
         // First check execution context objects if we have any
-        if !self.execution_objects.is_empty() {
-            let latest_package = self
-                .execution_objects
+        let execution_objects = self.execution_objects_in_view();
+        if !execution_objects.is_empty() {
+            let latest_package = execution_objects
                 .range((object_id, SequenceNumber::MIN)..=(object_id, SequenceNumber::MAX))
                 .last()
                 .and_then(|(_, opt_object)| opt_object.as_ref())
