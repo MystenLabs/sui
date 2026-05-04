@@ -14583,7 +14583,7 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.3.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e494a36a76a0aab8c5d66d5557995faee5c1fb09#e494a36a76a0aab8c5d66d5557995faee5c1fb09"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd#f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -15468,9 +15468,15 @@ dependencies = [
 name = "sui-inverted-index"
 version = "1.73.0"
 dependencies = [
+ "anyhow",
+ "async-stream",
  "bcs",
+ "futures",
+ "itertools 0.13.0",
  "move-core-types",
+ "roaring",
  "sui-types",
+ "tokio",
 ]
 
 [[package]]
@@ -15675,18 +15681,27 @@ name = "sui-kv-rpc"
 version = "1.73.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "axum 0.8.3",
+ "bcs",
  "bin-version",
+ "bytes",
  "clap",
+ "dashmap 5.5.3",
+ "fastcrypto",
+ "futures",
  "move-core-types",
  "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "prometheus",
+ "prost 0.14.1",
  "prost-types 0.14.1",
  "rustls",
+ "serde",
  "sui-futures",
+ "sui-inverted-index",
  "sui-kvstore",
  "sui-package-resolver",
  "sui-protocol-config",
@@ -15698,6 +15713,7 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tonic 0.14.5",
+ "tonic-prost",
  "tonic-reflection",
  "tracing",
 ]
@@ -15708,6 +15724,7 @@ version = "1.73.0"
 dependencies = [
  "anyhow",
  "arc-swap",
+ "async-stream",
  "async-trait",
  "backoff",
  "base64 0.21.7",
@@ -15718,6 +15735,7 @@ dependencies = [
  "gcp_auth",
  "governor",
  "http 1.3.1",
+ "integer-encoding",
  "move-core-types",
  "mysten-common",
  "num_cpus",
@@ -16526,8 +16544,8 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc"
-version = "0.3.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e494a36a76a0aab8c5d66d5557995faee5c1fb09#e494a36a76a0aab8c5d66d5557995faee5c1fb09"
+version = "0.3.1"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd#f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16713,8 +16731,8 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.3.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=e494a36a76a0aab8c5d66d5557995faee5c1fb09#e494a36a76a0aab8c5d66d5557995faee5c1fb09"
+version = "0.3.1"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd#f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd"
 dependencies = [
  "base64ct",
  "bcs",

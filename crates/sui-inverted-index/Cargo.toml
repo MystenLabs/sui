@@ -9,7 +9,18 @@ publish = false
 edition = "2024"
 version.workspace = true
 
+[lib]
+path = "src/mod.rs"
+
 [dependencies]
+anyhow.workspace = true
+async-stream.workspace = true
 bcs.workspace = true
+futures.workspace = true
+itertools.workspace = true
 move-core-types.workspace = true
+roaring.workspace = true
 sui-types.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

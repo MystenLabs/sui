@@ -11,8 +11,8 @@ use crate::tables;
 
 use super::handler::BigTableProcessor;
 
-/// Pipeline that writes one row per transaction keyed by tx_sequence_number,
-/// mapping each tx_seq to its `(TransactionDigest, event_count)`.
+/// Pipeline that writes one row per transaction keyed by bit-reversed
+/// tx_sequence_number.
 pub struct TxSeqDigestPipeline;
 
 #[async_trait::async_trait]
@@ -22,6 +22,7 @@ impl Processor for TxSeqDigestPipeline {
 
     async fn process(&self, checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
         let cp = checkpoint.summary.data();
+        let checkpoint_number = cp.sequence_number;
         // network_total_transactions is cumulative *including* this checkpoint,
         // so tx_lo is the first tx_seq in this checkpoint.
         let tx_lo = cp.network_total_transactions - checkpoint.transactions.len() as u64;
@@ -37,7 +38,7 @@ impl Processor for TxSeqDigestPipeline {
                 let event_count = tx.events.as_ref().map(|e| e.data.len() as u32).unwrap_or(0);
                 tables::make_entry(
                     tables::tx_seq_digest::encode_key(tx_seq),
-                    tables::tx_seq_digest::encode(&digest, event_count),
+                    tables::tx_seq_digest::encode(&digest, event_count, checkpoint_number),
                     Some(timestamp_ms),
                 )
             })

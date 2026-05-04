@@ -28,7 +28,7 @@ use crate::PackageResolver;
 pub const MAX_BATCH_REQUESTS: usize = 200;
 pub const READ_MASK_DEFAULT: &str = "digest";
 
-fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
+pub(crate) fn validate_read_mask(read_mask: Option<FieldMask>) -> Result<FieldMaskTree, RpcError> {
     let read_mask = read_mask.unwrap_or_else(|| FieldMask::from_str(READ_MASK_DEFAULT));
     read_mask
         .validate::<ExecutedTransaction>()
@@ -129,10 +129,10 @@ pub async fn batch_get_transactions(
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
-async fn transaction_to_response(
+pub(crate) async fn transaction_to_response(
     source: TransactionData,
     mask: &FieldMaskTree,
-    objects: &HashMap<ObjectKey, Object>,
+    objects: &HashMap<ObjectKey, std::sync::Arc<Object>>,
     resolver: &PackageResolver,
 ) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
@@ -186,7 +186,7 @@ async fn transaction_to_response(
                 .input_version_opt()
                 .unwrap_or_else(|| changed_object.output_version());
             if let Some(object) = objects.get(&ObjectKey(object_id, version.into())) {
-                changed_object.set_object_type(object_type_to_string(object.into()));
+                changed_object.set_object_type(object_type_to_string(object.as_ref().into()));
             }
         }
 
@@ -199,7 +199,7 @@ async fn transaction_to_response(
                 continue;
             };
             if let Some(object) = objects.get(&ObjectKey(object_id, unchanged.version().into())) {
-                unchanged.set_object_type(object_type_to_string(object.into()));
+                unchanged.set_object_type(object_type_to_string(object.as_ref().into()));
             }
         }
 
@@ -242,7 +242,7 @@ async fn transaction_to_response(
 /// Always includes `cn` and `ts` (small metadata).
 /// Only includes `td`, `sg`, `ef`, `ev`, `bc`, and `ul` when the corresponding fields
 /// are in the mask.
-fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
+pub(crate) fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
     let mut columns = vec![col::CHECKPOINT_NUMBER, col::TIMESTAMP];
 
     if mask
@@ -282,7 +282,7 @@ fn transaction_columns(mask: &FieldMaskTree) -> Vec<&'static str> {
     columns
 }
 
-fn needs_object_types(mask: &FieldMaskTree) -> bool {
+pub(crate) fn needs_object_types(mask: &FieldMaskTree) -> bool {
     mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name)
         .is_some_and(|submask| {
             submask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name)
@@ -290,7 +290,7 @@ fn needs_object_types(mask: &FieldMaskTree) -> bool {
         })
 }
 
-fn compute_object_keys(source: &TransactionData) -> BTreeSet<ObjectKey> {
+pub(crate) fn compute_object_keys(source: &TransactionData) -> BTreeSet<ObjectKey> {
     match (&source.transaction_data, &source.effects) {
         (Some(tx_data), Some(effects)) => sui_types::storage::get_transaction_object_set(
             tx_data,
@@ -301,10 +301,10 @@ fn compute_object_keys(source: &TransactionData) -> BTreeSet<ObjectKey> {
     }
 }
 
-async fn fetch_object_map<'a>(
+pub(crate) async fn fetch_object_map<'a>(
     client: &mut BigTableClient,
     transactions: impl Iterator<Item = &'a TransactionData>,
-) -> Result<HashMap<ObjectKey, Object>, RpcError> {
+) -> Result<HashMap<ObjectKey, std::sync::Arc<Object>>, RpcError> {
     let keys: Vec<_> = transactions
         .flat_map(compute_object_keys)
         .collect::<BTreeSet<_>>()
@@ -314,7 +314,7 @@ async fn fetch_object_map<'a>(
         .get_objects(&keys)
         .await?
         .into_iter()
-        .map(|o| (ObjectKey(o.id(), o.version()), o))
+        .map(|o| (ObjectKey(o.id(), o.version()), std::sync::Arc::new(o)))
         .collect())
 }
 

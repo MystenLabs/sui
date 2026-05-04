@@ -7,12 +7,10 @@ use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_inverted_index::IndexDimension;
 use sui_types::full_checkpoint_content::Checkpoint;
 
-mod checkpoint_bitmap;
 mod event_bitmap;
 mod handler;
 mod transaction_bitmap;
 
-pub use checkpoint_bitmap::CheckpointBitmapProcessor;
 pub use event_bitmap::EventBitmapProcessor;
 pub(crate) use handler::BitmapBatch;
 pub use handler::BitmapIndexHandler;

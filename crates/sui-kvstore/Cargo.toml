@@ -9,6 +9,7 @@ version.workspace = true
 [dependencies]
 anyhow.workspace = true
 arc-swap.workspace = true
+async-stream.workspace = true
 bytes.workspace = true
 async-trait.workspace = true
 backoff.workspace = true
@@ -19,6 +20,7 @@ futures.workspace = true
 governor.workspace = true
 http.workspace = true
 gcp_auth.workspace = true
+integer-encoding.workspace = true
 mysten-common.workspace = true
 num_cpus.workspace = true
 prometheus.workspace = true

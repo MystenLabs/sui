@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use anyhow::ensure;
 use prometheus::Registry;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::CHECKPOINTS_BY_DIGEST_PIPELINE;
 use sui_kvstore::CHECKPOINTS_PIPELINE;
@@ -31,9 +32,20 @@ use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
 use tracing::error;
 
+mod bigtable_client;
+mod filter;
+mod object_cache;
+mod operation;
 mod package_store;
+mod pipeline;
+mod query_options;
 mod v2;
+mod v2alpha;
 
+use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerServiceServer as KvLedgerServiceServer;
+
+pub use bigtable_client::ConcurrencyConfig;
+use bigtable_client::Metrics as BigTableLimiterMetrics;
 use package_store::BigTablePackageStore;
 
 pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
@@ -45,7 +57,22 @@ pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
     EPOCH_END_PIPELINE,
 ];
 
+pub const EXPERIMENTAL_QUERY_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 3] = ALPHA_PIPELINE_NAMES;
+
 pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
+
+#[derive(Clone)]
+struct KvRpcMetrics {
+    bigtable_limiter: Arc<BigTableLimiterMetrics>,
+}
+
+impl KvRpcMetrics {
+    fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
+            bigtable_limiter: BigTableLimiterMetrics::new(registry),
+        })
+    }
+}
 
 #[derive(Clone)]
 pub struct KvRpcServer {
@@ -56,6 +83,8 @@ pub struct KvRpcServer {
     service_info_watermark_pipelines: Vec<&'static str>,
     cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
     package_resolver: PackageResolver,
+    metrics: Arc<KvRpcMetrics>,
+    concurrency: ConcurrencyConfig,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).
@@ -64,6 +93,7 @@ pub struct ServerConfig {
     pub tls_identity: Option<Identity>,
     pub metrics_registry: Option<Registry>,
     pub enable_reflection: bool,
+    pub enable_experimental_query_apis: bool,
 }
 
 impl KvRpcServer {
@@ -78,7 +108,9 @@ impl KvRpcServer {
         credentials_path: Option<String>,
         pool_config: PoolConfig,
         service_info_watermark_pipelines: Vec<&'static str>,
+        concurrency: ConcurrencyConfig,
     ) -> anyhow::Result<Self> {
+        concurrency.validate()?;
         let mut client = BigTableClient::new_remote_with_credentials(
             instance_id,
             project_id,
@@ -99,12 +131,15 @@ impl KvRpcServer {
             .expect("failed to fetch genesis checkpoint from the KV store");
         let summary = genesis.summary.expect("genesis checkpoint missing summary");
         let chain_id = ChainIdentifier::from(summary.digest());
+        let metrics = KvRpcMetrics::new(registry);
         Self::init(
             client,
             chain_id,
             server_version,
             checkpoint_bucket,
             service_info_watermark_pipelines,
+            metrics,
+            concurrency,
         )
     }
 
@@ -116,12 +151,17 @@ impl KvRpcServer {
         checkpoint_bucket: Option<String>,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
+        // Emulator/test path: metrics are inert (no scrape endpoint), but the
+        // request-scoped BigTable wrapper still expects a handle.
+        let metrics = KvRpcMetrics::new(&Registry::default());
         Self::init(
             client,
             ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
             server_version,
             checkpoint_bucket,
-            DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec(),
+            default_service_info_watermark_pipelines(false),
+            metrics,
+            ConcurrencyConfig::default(),
         )
     }
 
@@ -131,11 +171,14 @@ impl KvRpcServer {
         server_version: Option<ServerVersion>,
         checkpoint_bucket: Option<String>,
         service_info_watermark_pipelines: Vec<&'static str>,
+        metrics: Arc<KvRpcMetrics>,
+        concurrency: ConcurrencyConfig,
     ) -> anyhow::Result<Self> {
         ensure!(
             !service_info_watermark_pipelines.is_empty(),
             "at least one service info watermark pipeline must be configured"
         );
+        concurrency.validate()?;
 
         let cache = Arc::new(RwLock::new(None));
 
@@ -152,6 +195,8 @@ impl KvRpcServer {
             service_info_watermark_pipelines,
             cache,
             package_resolver,
+            metrics,
+            concurrency,
         };
 
         let server_clone = server.clone();
@@ -200,15 +245,19 @@ impl KvRpcServer {
         // backs a gRPC service mounted below. Consumed by both the
         // reflection services and the metrics allowlist so they cannot drift
         // out of sync.
-        let file_descriptor_sets: &[&[u8]] = &[
+        let enable_experimental_query_apis = config.enable_experimental_query_apis;
+        let mut file_descriptor_sets: Vec<&'static [u8]> = vec![
             sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
             sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
             sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
         ];
+        if enable_experimental_query_apis {
+            file_descriptor_sets.push(sui_rpc::proto::sui::rpc::v2alpha::FILE_DESCRIPTOR_SET);
+        }
 
         let registry = config.metrics_registry.unwrap_or_default();
         let grpc_method_allowlist = Arc::new(grpc_method_paths_from_file_descriptor_sets(
-            file_descriptor_sets,
+            &file_descriptor_sets,
         )?);
         let mut router = builder
             .layer(CallbackLayer::new(
@@ -217,12 +266,16 @@ impl KvRpcServer {
                     grpc_method_allowlist,
                 ),
             ))
-            .add_service(LedgerServiceServer::new(self));
+            .add_service(LedgerServiceServer::new(self.clone()));
+
+        if enable_experimental_query_apis {
+            router = router.add_service(KvLedgerServiceServer::new(self));
+        }
 
         if config.enable_reflection {
             let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();
             let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure();
-            for fds in file_descriptor_sets {
+            for &fds in &file_descriptor_sets {
                 reflection_v1_builder =
                     reflection_v1_builder.register_encoded_file_descriptor_set(fds);
                 reflection_v1alpha_builder =
@@ -249,4 +302,14 @@ impl KvRpcServer {
 
         Ok(service)
     }
+}
+
+pub fn default_service_info_watermark_pipelines(
+    enable_experimental_query_apis: bool,
+) -> Vec<&'static str> {
+    let mut pipelines = DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec();
+    if enable_experimental_query_apis {
+        pipelines.extend_from_slice(&EXPERIMENTAL_QUERY_SERVICE_INFO_WATERMARK_PIPELINES);
+    }
+    pipelines
 }

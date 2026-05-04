@@ -5,7 +5,6 @@ pub(crate) use bitmap::BitmapBatch;
 pub use bitmap::BitmapIndexHandler;
 pub use bitmap::BitmapIndexProcessor;
 pub(crate) use bitmap::BitmapIndexValue;
-pub use bitmap::CheckpointBitmapProcessor;
 pub use bitmap::EventBitmapProcessor;
 pub use bitmap::TransactionBitmapProcessor;
 pub use checkpoints::CheckpointsPipeline;

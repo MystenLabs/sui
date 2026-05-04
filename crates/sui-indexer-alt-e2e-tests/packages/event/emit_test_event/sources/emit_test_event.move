@@ -24,6 +24,14 @@ public fun emit_with_value(value: u64) {
 	event::emit(TestEvent { value })
 }
 
+public fun emit_many(n: u64) {
+	let mut i = 0;
+	while (i < n) {
+		event::emit(TestEvent { value: i });
+		i = i + 1;
+	}
+}
+
 /// Emit a `TestEvent` and create a `TestObject` in the same transaction. Used to
 /// verify chained `event { transaction { effects { objectChanges } } }` queries.
 public fun emit_and_create(value: u64, ctx: &mut TxContext): TestObject {

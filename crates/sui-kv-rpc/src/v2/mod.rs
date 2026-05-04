@@ -19,10 +19,10 @@ use sui_types::object::rpc_visitor::proto::ProtoVisitor;
 
 use crate::{KvRpcServer, PackageResolver};
 
-mod get_checkpoint;
+pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
-mod get_transaction;
+pub(crate) mod get_transaction;
 
 /// Maximum size in bytes for JSON-rendered Move values (1 MiB).
 const MAX_JSON_MOVE_VALUE_SIZE: usize = 1024 * 1024;

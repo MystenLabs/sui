@@ -8,10 +8,11 @@ use axum::Router;
 use axum::routing::get;
 use clap::Parser;
 use prometheus::Registry;
-use sui_kv_rpc::DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES;
+use sui_kv_rpc::ConcurrencyConfig;
 use sui_kv_rpc::KvRpcServer;
 use sui_kv_rpc::PoolConfig;
 use sui_kv_rpc::ServerConfig;
+use sui_kv_rpc::default_service_info_watermark_pipelines;
 use sui_kvstore::validate_pipeline_name;
 use sui_rpc_api::ServerVersion;
 use telemetry_subscribers::TelemetryConfig;
@@ -37,6 +38,29 @@ impl From<PoolArgs> for PoolConfig {
             min_pool_size: args.bigtable_min_pool_size,
             max_pool_size: args.bigtable_max_pool_size,
             ..Self::default()
+        }
+    }
+}
+
+#[derive(Parser)]
+struct ConcurrencyArgs {
+    /// Per-request cap for active downstream BigTable reads.
+    #[clap(
+        long = "request-bigtable-concurrency",
+        default_value_t = ConcurrencyConfig::default().request_bigtable_concurrency
+    )]
+    request_bigtable_concurrency: usize,
+    /// Maximum total bitmap-literal fanout accepted in one filter request.
+    /// Bitmap scans do not consume request-bigtable-concurrency permits.
+    #[clap(long = "max-bitmap-filter-literals", default_value_t = ConcurrencyConfig::default().max_bitmap_filter_literals)]
+    max_bitmap_filter_literals: usize,
+}
+
+impl From<ConcurrencyArgs> for ConcurrencyConfig {
+    fn from(args: ConcurrencyArgs) -> Self {
+        Self {
+            request_bigtable_concurrency: args.request_bigtable_concurrency,
+            max_bitmap_filter_literals: args.max_bitmap_filter_literals,
         }
     }
 }
@@ -67,6 +91,9 @@ struct App {
     app_profile_id: Option<String>,
     #[clap(long = "checkpoint-bucket")]
     checkpoint_bucket: Option<String>,
+    /// Enable v2alpha List APIs. These rely on experimental BigTable query indexes.
+    #[clap(long = "enable-experimental-query-apis")]
+    enable_experimental_query_apis: bool,
     /// Pipeline watermark to include when reporting GetServiceInfo checkpoint height. Repeat to
     /// include multiple pipelines.
     #[clap(
@@ -81,6 +108,8 @@ struct App {
     bigtable_channel_timeout_ms: Option<u64>,
     #[clap(flatten)]
     pool: PoolArgs,
+    #[clap(flatten)]
+    concurrency: ConcurrencyArgs,
 }
 
 async fn health_check() -> &'static str {
@@ -102,8 +131,9 @@ async fn main() -> Result<()> {
     mysten_metrics::init_metrics(&registry);
     let channel_timeout = app.bigtable_channel_timeout_ms.map(Duration::from_millis);
     let pool_config: PoolConfig = app.pool.into();
+    let concurrency_config: ConcurrencyConfig = app.concurrency.into();
     let service_info_watermark_pipelines = if app.watermark_pipeline.is_empty() {
-        DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec()
+        default_service_info_watermark_pipelines(app.enable_experimental_query_apis)
     } else {
         app.watermark_pipeline
     };
@@ -119,6 +149,7 @@ async fn main() -> Result<()> {
         app.credentials,
         pool_config,
         service_info_watermark_pipelines,
+        concurrency_config,
     )
     .await?;
 
@@ -135,6 +166,7 @@ async fn main() -> Result<()> {
         tls_identity,
         metrics_registry: Some(registry),
         enable_reflection: true,
+        enable_experimental_query_apis: app.enable_experimental_query_apis,
     };
 
     tokio::spawn(async {
