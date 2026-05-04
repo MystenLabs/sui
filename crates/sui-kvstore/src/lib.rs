@@ -58,6 +58,7 @@ pub use crate::handlers::PackagesPipeline;
 pub use crate::handlers::ProtocolConfigsPipeline;
 pub use crate::handlers::SystemPackagesPipeline;
 pub use crate::handlers::TransactionsPipeline;
+pub use crate::handlers::TxSeqDigestPipeline;
 pub use crate::store::BigTableConnection;
 pub use crate::store::BigTableStore;
 pub use config::BigtablePoolLayer;
@@ -89,9 +90,13 @@ pub const PACKAGES_BY_CHECKPOINT_PIPELINE: &str =
     <BigTableHandler<PackagesByCheckpointPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const SYSTEM_PACKAGES_PIPELINE: &str =
     <BigTableHandler<SystemPackagesPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
+pub const TX_SEQ_DIGEST_PIPELINE: &str =
+    <BigTableHandler<TxSeqDigestPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 
-/// All pipeline names registered by the indexer.
-pub const ALL_PIPELINE_NAMES: [&str; 11] = [
+pub const ALPHA_PIPELINE_NAMES: [&str; 1] = [TX_SEQ_DIGEST_PIPELINE];
+
+/// All pipeline names known to the indexer.
+pub const ALL_PIPELINE_NAMES: [&str; 12] = [
     CHECKPOINTS_PIPELINE,
     CHECKPOINTS_BY_DIGEST_PIPELINE,
     TRANSACTIONS_PIPELINE,
@@ -103,6 +108,7 @@ pub const ALL_PIPELINE_NAMES: [&str; 11] = [
     PACKAGES_BY_ID_PIPELINE,
     PACKAGES_BY_CHECKPOINT_PIPELINE,
     SYSTEM_PACKAGES_PIPELINE,
+    TX_SEQ_DIGEST_PIPELINE,
 ];
 
 pub fn validate_pipeline_name(value: &str) -> Result<&'static str, String> {
@@ -114,6 +120,19 @@ pub fn validate_pipeline_name(value: &str) -> Result<&'static str, String> {
             format!(
                 "unknown pipeline `{value}`; expected one of: {}",
                 ALL_PIPELINE_NAMES.join(", ")
+            )
+        })
+}
+
+pub fn parse_alpha_pipeline_name(value: &str) -> Result<&'static str, String> {
+    ALPHA_PIPELINE_NAMES
+        .iter()
+        .copied()
+        .find(|name| *name == value)
+        .ok_or_else(|| {
+            format!(
+                "unknown alpha pipeline `{value}`; expected one of: {}",
+                ALPHA_PIPELINE_NAMES.join(", ")
             )
         })
 }
@@ -170,6 +189,13 @@ impl TransactionData {
 pub struct TransactionEventsData {
     pub events: Vec<Event>,
     pub timestamp_ms: u64,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct TxSeqDigestData {
+    pub tx_sequence_number: u64,
+    pub digest: TransactionDigest,
+    pub event_count: u32,
 }
 
 /// Epoch data returned by reader methods.
@@ -337,6 +363,7 @@ impl BigTableIndexer {
         config: IndexerConfig,
         pipeline: PipelineLayer,
         chain: Chain,
+        alpha_pipelines: &[&str],
         registry: &Registry,
     ) -> Result<Self> {
         let mut indexer = Indexer::new(
@@ -483,6 +510,18 @@ impl BigTableIndexer {
                 pipeline.system_packages.finish(base.clone()),
             )
             .await?;
+        if alpha_pipelines.contains(&TX_SEQ_DIGEST_PIPELINE) {
+            indexer
+                .concurrent_pipeline(
+                    BigTableHandler::new(
+                        TxSeqDigestPipeline,
+                        &pipeline.tx_seq_digest,
+                        build_rate_limiter(&pipeline.tx_seq_digest, base_rps, &global),
+                    ),
+                    pipeline.tx_seq_digest.finish(base.clone()),
+                )
+                .await?;
+        }
 
         Ok(Self { indexer })
     }

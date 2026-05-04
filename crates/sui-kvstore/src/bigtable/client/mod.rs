@@ -4,6 +4,7 @@
 mod auth_channel;
 mod channel_pool;
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -40,6 +41,7 @@ use crate::PackageData;
 use crate::ProtocolConfigData;
 use crate::TransactionData;
 use crate::TransactionEventsData;
+use crate::TxSeqDigestData;
 use crate::WatermarkV0;
 use crate::WatermarkV1;
 use crate::bigtable::metrics::KvMetrics;
@@ -65,6 +67,7 @@ use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
 use crate::bigtable::proto::bigtable::v2::value_range;
 use crate::tables;
+use crate::tables::tx_seq_digest;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
 // TODO: Add per-method timeouts (e.g. separate write vs read) via tonic::Request::set_timeout().
@@ -891,6 +894,46 @@ impl BigTableClient {
             ..ReadRowsRequest::default()
         };
         self.read_rows(request, table_name).await
+    }
+
+    /// Resolve tx_sequence_numbers to tx digest mapping rows
+    /// via a single `multi_get` on the `tx_seq_digest` table.
+    ///
+    /// Returns a vector parallel to the input: `None` for any tx_seq that has
+    /// no row (e.g. not yet indexed).
+    pub async fn resolve_tx_digests(
+        &mut self,
+        tx_sequence_numbers: &[u64],
+    ) -> Result<Vec<Option<TxSeqDigestData>>> {
+        if tx_sequence_numbers.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let keys: Vec<Vec<u8>> = tx_sequence_numbers
+            .iter()
+            .map(|s| tx_seq_digest::encode_key(*s))
+            .collect();
+
+        let rows = self.multi_get(tx_seq_digest::NAME, keys, None).await?;
+
+        let mut by_seq: HashMap<u64, TxSeqDigestData> = HashMap::with_capacity(rows.len());
+        for (row_key, cells) in &rows {
+            let tx_seq = tx_seq_digest::decode_key(row_key.as_ref())?;
+            let (digest, event_count) = tx_seq_digest::decode(cells)?;
+            by_seq.insert(
+                tx_seq,
+                TxSeqDigestData {
+                    tx_sequence_number: tx_seq,
+                    digest,
+                    event_count,
+                },
+            );
+        }
+
+        Ok(tx_sequence_numbers
+            .iter()
+            .map(|s| by_seq.get(s).copied())
+            .collect())
     }
 }
 

@@ -848,6 +848,7 @@ async fn start_archival(
         BtIndexerConfig::default(),
         PipelineLayer::default(),
         Chain::Unknown,
+        &[],
         registry,
     )
     .await

@@ -35,6 +35,7 @@ pub const TABLES: &[&str] = &[
     crate::tables::packages_by_id::NAME,
     crate::tables::packages_by_checkpoint::NAME,
     crate::tables::system_packages::NAME,
+    crate::tables::tx_seq_digest::NAME,
 ];
 
 /// A self-contained BigTable emulator process.

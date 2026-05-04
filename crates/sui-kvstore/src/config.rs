@@ -197,6 +197,7 @@ pub struct PipelineLayer {
     pub packages_by_id: ConcurrentLayer,
     pub packages_by_checkpoint: ConcurrentLayer,
     pub system_packages: ConcurrentLayer,
+    pub tx_seq_digest: ConcurrentLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be

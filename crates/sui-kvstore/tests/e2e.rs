@@ -7,6 +7,7 @@
 //! creates the required tables, and tears everything down when done.
 //! Tests require `gcloud`, `cbt`, and the BigTable emulator on PATH.
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -28,6 +29,7 @@ use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
+use sui_kvstore::TX_SEQ_DIGEST_PIPELINE;
 use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
@@ -174,6 +176,7 @@ impl TestHarness {
             IndexerConfig::default(),
             PipelineLayer::default(),
             Chain::Unknown,
+            &[TX_SEQ_DIGEST_PIPELINE],
             &registry,
         )
         .await
@@ -688,6 +691,40 @@ async fn test_indexer_e2e() -> Result<()> {
     assert!(partial.summary.is_some(), "summary should be present");
     assert!(partial.signatures.is_none(), "signatures should be absent");
     assert!(partial.contents.is_none(), "contents should be absent");
+
+    // -- tx_seq_digest pipeline: verify tx_sequence_number resolution --
+    let mut all_tx_seqs: Vec<u64> = Vec::new();
+    for cp in &checkpoints {
+        let summary = cp.summary.as_ref().unwrap();
+        let contents = cp.contents.as_ref().unwrap();
+        let tx_lo = summary.network_total_transactions - contents.size() as u64;
+        for i in 0..contents.size() {
+            all_tx_seqs.push(tx_lo + i as u64);
+        }
+    }
+    let resolved_digests = harness
+        .bigtable_client()
+        .resolve_tx_digests(&all_tx_seqs)
+        .await?;
+    assert_eq!(
+        resolved_digests.len(),
+        all_tx_seqs.len(),
+        "all tx_sequence_numbers should resolve to digests"
+    );
+    assert!(
+        resolved_digests.iter().all(|r| r.is_some()),
+        "every tx_seq should resolve to Some(TxSeqDigestData)"
+    );
+    let resolved_digest_set: HashSet<_> = resolved_digests
+        .iter()
+        .filter_map(|r| r.map(|data| data.digest))
+        .collect();
+    for d in &tx_digests {
+        assert!(
+            resolved_digest_set.contains(d),
+            "tx_seq_digest pipeline should contain digest {d}"
+        );
+    }
 
     // -- Column-filtered epoch partial reads --
     // Fetch epoch with only small scalar columns — no system_state.

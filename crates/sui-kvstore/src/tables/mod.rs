@@ -26,6 +26,7 @@ pub mod packages_by_id;
 pub mod protocol_configs;
 pub mod system_packages;
 pub mod transactions;
+pub mod tx_seq_digest;
 pub mod watermarks;
 
 /// Column family name used by all tables.
