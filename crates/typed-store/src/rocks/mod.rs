@@ -1145,7 +1145,7 @@ impl<K, V> DBMap<K, V> {
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
+                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound, prefix);
                     iter.reverse();
                     Ok(Box::new(transform_th_iterator(
                         iter,
@@ -1829,7 +1829,7 @@ where
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound, prefix);
                     Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
@@ -1862,7 +1862,7 @@ where
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound, prefix);
                     Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),

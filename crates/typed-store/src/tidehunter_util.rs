@@ -124,12 +124,16 @@ pub(crate) fn apply_range_bounds(
     iterator: &mut DbIterator,
     lower_bound: Option<Vec<u8>>,
     upper_bound: Option<Vec<u8>>,
+    prefix: &Option<Vec<u8>>,
 ) {
+    // Bounds come from `be_fix_int_ser(K)` which still includes the typed-store
+    // length prefix. Tidehunter stores keys with the prefix stripped, so the
+    // bounds must be stripped to match — same transform every other key path uses.
     if let Some(lower_bound) = lower_bound {
-        iterator.set_lower_bound(lower_bound);
+        iterator.set_lower_bound(transform_th_key(&lower_bound, prefix));
     }
     if let Some(upper_bound) = upper_bound {
-        iterator.set_upper_bound(upper_bound);
+        iterator.set_upper_bound(transform_th_key(&upper_bound, prefix));
     }
 }
 
