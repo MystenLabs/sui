@@ -48,6 +48,7 @@ use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
 use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_kv_rpc::KvRpcServer;
+use sui_kvstore::ALL_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
@@ -718,12 +719,16 @@ impl OffchainCluster {
             let mut interval = interval(Duration::from_millis(200));
             loop {
                 interval.tick().await;
-                if client.get_watermark().await.is_ok_and(|wm| {
-                    wm.is_some_and(|wm| {
-                        wm.checkpoint_hi_inclusive
-                            .is_some_and(|cp| cp >= checkpoint)
+                if client
+                    .get_watermark_for_pipelines(&ALL_PIPELINE_NAMES)
+                    .await
+                    .is_ok_and(|wm| {
+                        wm.is_some_and(|wm| {
+                            wm.checkpoint_hi_inclusive
+                                .is_some_and(|cp| cp >= checkpoint)
+                        })
                     })
-                }) {
+                {
                     break;
                 }
             }

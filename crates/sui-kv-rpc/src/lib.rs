@@ -4,10 +4,17 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use anyhow::ensure;
 use prometheus::Registry;
 use sui_kvstore::BigTableClient;
+use sui_kvstore::CHECKPOINTS_BY_DIGEST_PIPELINE;
+use sui_kvstore::CHECKPOINTS_PIPELINE;
+use sui_kvstore::EPOCH_END_PIPELINE;
+use sui_kvstore::EPOCH_START_PIPELINE;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::OBJECTS_PIPELINE;
 pub use sui_kvstore::PoolConfig;
+use sui_kvstore::TRANSACTIONS_PIPELINE;
 use sui_package_resolver::PackageStore;
 use sui_package_resolver::PackageStoreWithLruCache;
 use sui_package_resolver::Resolver;
@@ -29,6 +36,15 @@ mod v2;
 
 use package_store::BigTablePackageStore;
 
+pub const DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 6] = [
+    CHECKPOINTS_PIPELINE,
+    CHECKPOINTS_BY_DIGEST_PIPELINE,
+    TRANSACTIONS_PIPELINE,
+    OBJECTS_PIPELINE,
+    EPOCH_START_PIPELINE,
+    EPOCH_END_PIPELINE,
+];
+
 pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
 
 #[derive(Clone)]
@@ -37,6 +53,7 @@ pub struct KvRpcServer {
     client: BigTableClient,
     server_version: Option<ServerVersion>,
     checkpoint_bucket: Option<String>,
+    service_info_watermark_pipelines: Vec<&'static str>,
     cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
     package_resolver: PackageResolver,
 }
@@ -60,6 +77,7 @@ impl KvRpcServer {
         registry: &Registry,
         credentials_path: Option<String>,
         pool_config: PoolConfig,
+        service_info_watermark_pipelines: Vec<&'static str>,
     ) -> anyhow::Result<Self> {
         let mut client = BigTableClient::new_remote_with_credentials(
             instance_id,
@@ -81,12 +99,13 @@ impl KvRpcServer {
             .expect("failed to fetch genesis checkpoint from the KV store");
         let summary = genesis.summary.expect("genesis checkpoint missing summary");
         let chain_id = ChainIdentifier::from(summary.digest());
-        Ok(Self::init(
+        Self::init(
             client,
             chain_id,
             server_version,
             checkpoint_bucket,
-        ))
+            service_info_watermark_pipelines,
+        )
     }
 
     /// Construct a KvRpcServer backed by a local BigTable emulator.
@@ -97,12 +116,13 @@ impl KvRpcServer {
         checkpoint_bucket: Option<String>,
     ) -> anyhow::Result<Self> {
         let client = BigTableClient::new_local(host, instance_id).await?;
-        Ok(Self::init(
+        Self::init(
             client,
             ChainIdentifier::from(sui_types::digests::CheckpointDigest::default()),
             server_version,
             checkpoint_bucket,
-        ))
+            DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec(),
+        )
     }
 
     fn init(
@@ -110,7 +130,13 @@ impl KvRpcServer {
         chain_id: ChainIdentifier,
         server_version: Option<ServerVersion>,
         checkpoint_bucket: Option<String>,
-    ) -> Self {
+        service_info_watermark_pipelines: Vec<&'static str>,
+    ) -> anyhow::Result<Self> {
+        ensure!(
+            !service_info_watermark_pipelines.is_empty(),
+            "at least one service info watermark pipeline must be configured"
+        );
+
         let cache = Arc::new(RwLock::new(None));
 
         let package_store: Arc<dyn PackageStore> = Arc::new(PackageStoreWithLruCache::new(
@@ -123,6 +149,7 @@ impl KvRpcServer {
             client,
             server_version,
             checkpoint_bucket,
+            service_info_watermark_pipelines,
             cache,
             package_resolver,
         };
@@ -134,6 +161,7 @@ impl KvRpcServer {
                     server_clone.client.clone(),
                     server_clone.chain_id,
                     server_clone.server_version.clone(),
+                    &server_clone.service_info_watermark_pipelines,
                 )
                 .await
                 {
@@ -147,7 +175,7 @@ impl KvRpcServer {
             }
         });
 
-        server
+        Ok(server)
     }
 
     /// Start this server as a tonic gRPC service on the given address.

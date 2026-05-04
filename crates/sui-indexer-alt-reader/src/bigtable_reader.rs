@@ -10,16 +10,26 @@ use anyhow::bail;
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_kvstore::BigTableClient;
+use sui_kvstore::CHECKPOINTS_PIPELINE;
 use sui_kvstore::CheckpointData;
 use sui_kvstore::KeyValueStoreReader;
+use sui_kvstore::OBJECTS_PIPELINE;
+use sui_kvstore::TRANSACTIONS_PIPELINE;
 use sui_kvstore::TransactionData;
 use sui_kvstore::TransactionEventsData;
 use sui_kvstore::WatermarkV1;
+use sui_kvstore::validate_pipeline_name;
 use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::warn;
+
+const DEFAULT_BIGTABLE_WATERMARK_PIPELINES: [&str; 3] = [
+    CHECKPOINTS_PIPELINE,
+    TRANSACTIONS_PIPELINE,
+    OBJECTS_PIPELINE,
+];
 
 #[derive(clap::Args, Debug, Clone, Default)]
 pub struct BigtableArgs {
@@ -38,6 +48,16 @@ pub struct BigtableArgs {
     /// Maximum gRPC decoding message size for Bigtable responses, in bytes.
     #[arg(long)]
     pub bigtable_max_decoding_message_size: Option<usize>,
+
+    /// Pipeline watermark to include when reporting the BigTable reader watermark. Repeat to
+    /// include multiple pipelines.
+    #[arg(
+        long,
+        value_name = "PIPELINE",
+        value_delimiter = ',',
+        value_parser = validate_pipeline_name
+    )]
+    pub bigtable_watermark_pipeline: Vec<&'static str>,
 }
 
 /// A reader backed by BigTable KV store.
@@ -45,7 +65,10 @@ pub struct BigtableArgs {
 /// In order to use this reader, the environment variable `GOOGLE_APPLICATION_CREDENTIALS` must be
 /// set to the path of the credentials file.
 #[derive(Clone)]
-pub struct BigtableReader(BigTableClient);
+pub struct BigtableReader {
+    client: BigTableClient,
+    watermark_pipelines: Vec<&'static str>,
+}
 
 impl BigtableArgs {
     pub fn statement_timeout(&self) -> Option<Duration> {
@@ -72,8 +95,14 @@ impl BigtableReader {
         }
 
         let timeout = bigtable_args.statement_timeout();
-        Ok(Self(
-            BigTableClient::new_remote(
+        let watermark_pipelines = if bigtable_args.bigtable_watermark_pipeline.is_empty() {
+            DEFAULT_BIGTABLE_WATERMARK_PIPELINES.to_vec()
+        } else {
+            bigtable_args.bigtable_watermark_pipeline
+        };
+
+        Ok(Self {
+            client: BigTableClient::new_remote(
                 instance_id,
                 bigtable_args.bigtable_project,
                 true,
@@ -86,7 +115,8 @@ impl BigtableReader {
             )
             .await
             .context("Failed to create BigTable client")?,
-        ))
+            watermark_pipelines,
+        })
     }
 
     /// Create a data loader backed by this reader.
@@ -94,9 +124,9 @@ impl BigtableReader {
         DataLoader::new(self.clone(), tokio::spawn)
     }
 
-    /// Get the watermark representing the minimum across all pipeline watermarks.
+    /// Get the configured BigTable reader watermark.
     pub async fn watermark(&self) -> anyhow::Result<Option<WatermarkV1>> {
-        measure("watermark", &(), self.0.clone().get_watermark()).await
+        self.watermark_for_pipeline(&self.watermark_pipelines).await
     }
 
     /// Get the minimum watermark across the specified pipelines.
@@ -107,7 +137,7 @@ impl BigtableReader {
         measure(
             "watermark",
             &(),
-            self.0.clone().get_watermark_for_pipelines(pipelines),
+            self.client.clone().get_watermark_for_pipelines(pipelines),
         )
         .await
     }
@@ -117,7 +147,12 @@ impl BigtableReader {
         &self,
         keys: &[CheckpointSequenceNumber],
     ) -> anyhow::Result<Vec<CheckpointData>> {
-        measure("checkpoints", &keys, self.0.clone().get_checkpoints(keys)).await
+        measure(
+            "checkpoints",
+            &keys,
+            self.client.clone().get_checkpoints(keys),
+        )
+        .await
     }
 
     /// Multi-get transactions by transaction digest.
@@ -125,12 +160,17 @@ impl BigtableReader {
         &self,
         keys: &[TransactionDigest],
     ) -> anyhow::Result<Vec<TransactionData>> {
-        measure("transactions", &keys, self.0.clone().get_transactions(keys)).await
+        measure(
+            "transactions",
+            &keys,
+            self.client.clone().get_transactions(keys),
+        )
+        .await
     }
 
     /// Multi-get objects by object ID and version.
     pub(crate) async fn objects(&self, keys: &[ObjectKey]) -> anyhow::Result<Vec<Object>> {
-        measure("objects", &keys, self.0.clone().get_objects(keys)).await
+        measure("objects", &keys, self.client.clone().get_objects(keys)).await
     }
 
     // Multi-get events from transactions.
@@ -141,7 +181,7 @@ impl BigtableReader {
         measure(
             "events",
             &keys,
-            self.0.clone().get_events_for_transactions(keys),
+            self.client.clone().get_events_for_transactions(keys),
         )
         .await
     }

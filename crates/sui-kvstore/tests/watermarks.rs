@@ -458,6 +458,15 @@ async fn test_get_watermark_for_pipelines_hides_init_none() -> Result<()> {
 }
 
 #[tokio::test]
+async fn test_get_watermark_for_pipelines_rejects_empty_input() -> Result<()> {
+    let harness = WatermarkHarness::new().await?;
+    let err = harness.read_watermark(&[]).await.unwrap_err();
+
+    assert!(err.to_string().contains("at least one watermark pipeline"));
+    Ok(())
+}
+
+#[tokio::test]
 async fn test_get_watermark_for_pipelines_hides_below_reader_lo() -> Result<()> {
     // A row with a real checkpoint becomes hidden once `reader_lo` is raised past it.
     let harness = WatermarkHarness::new().await?;

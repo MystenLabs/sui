@@ -12,6 +12,7 @@ use std::time::Instant;
 
 use anyhow::Context as _;
 use anyhow::Result;
+use anyhow::bail;
 use async_trait::async_trait;
 use bytes::Bytes;
 use gcp_auth::TokenProvider;
@@ -945,6 +946,10 @@ impl KeyValueStoreReader for BigTableClient {
         &mut self,
         pipelines: &[&str],
     ) -> Result<Option<WatermarkV1>> {
+        if pipelines.is_empty() {
+            bail!("at least one watermark pipeline must be provided");
+        }
+
         let keys: Vec<Vec<u8>> = pipelines
             .iter()
             .map(|name| tables::watermarks::encode_key(name))

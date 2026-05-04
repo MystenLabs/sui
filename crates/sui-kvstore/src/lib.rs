@@ -105,6 +105,19 @@ pub const ALL_PIPELINE_NAMES: [&str; 11] = [
     SYSTEM_PACKAGES_PIPELINE,
 ];
 
+pub fn validate_pipeline_name(value: &str) -> Result<&'static str, String> {
+    ALL_PIPELINE_NAMES
+        .iter()
+        .copied()
+        .find(|name| *name == value)
+        .ok_or_else(|| {
+            format!(
+                "unknown pipeline `{value}`; expected one of: {}",
+                ALL_PIPELINE_NAMES.join(", ")
+            )
+        })
+}
+
 static WRITE_LEGACY_DATA: OnceLock<bool> = OnceLock::new();
 
 /// Set whether to write legacy data (deprecated combined tx column).
@@ -254,10 +267,6 @@ pub trait KeyValueStoreReader {
         &mut self,
         pipelines: &[&str],
     ) -> Result<Option<WatermarkV1>>;
-    /// Return the minimum watermark across all pipelines.
-    async fn get_watermark(&mut self) -> Result<Option<WatermarkV1>> {
-        self.get_watermark_for_pipelines(&ALL_PIPELINE_NAMES).await
-    }
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>>;
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochData>>;
     async fn get_latest_epoch(&mut self) -> Result<Option<EpochData>>;

@@ -10,6 +10,7 @@ use prometheus::Registry;
 use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::TransactionData as KVTransactionData;
 use sui_kvstore::TransactionEventsData as KVTransactionEventsData;
+use sui_kvstore::validate_pipeline_name;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::base_types::ObjectID;
@@ -64,6 +65,16 @@ pub struct KvArgs {
     /// Applies to both Bigtable and Ledger gRPC readers.
     #[arg(long, alias = "bigtable-max-decoding-message-size")]
     pub kv_max_decoding_message_size: Option<usize>,
+
+    /// Bigtable pipeline watermark to include when reporting the Bigtable reader watermark.
+    /// Repeat to include multiple pipelines.
+    #[arg(
+        long = "bigtable-watermark-pipeline",
+        value_name = "PIPELINE",
+        value_delimiter = ',',
+        value_parser = validate_pipeline_name
+    )]
+    pub bigtable_watermark_pipeline: Vec<&'static str>,
 
     /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
     #[arg(long, group = "kv_source")]
@@ -176,6 +187,7 @@ impl KvArgs {
             bigtable_project: self.bigtable_project.clone(),
             bigtable_app_profile_id: self.bigtable_app_profile_id.clone(),
             bigtable_max_decoding_message_size: self.kv_max_decoding_message_size,
+            bigtable_watermark_pipeline: self.bigtable_watermark_pipeline.clone(),
         }
     }
 

@@ -21,6 +21,7 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_keys::keystore::AccountKeystore;
+use sui_kvstore::ALL_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
@@ -229,13 +230,17 @@ impl TestHarness {
             let mut interval = interval(Duration::from_millis(100));
             loop {
                 interval.tick().await;
-                let ok = self.client.get_watermark().await.is_ok_and(|wm| {
-                    wm.is_some_and(|wm| {
-                        wm.checkpoint_hi_inclusive
-                            .is_some_and(|cp| cp >= checkpoint)
-                            && wm.epoch_hi_inclusive >= epoch
-                    })
-                });
+                let ok = self
+                    .client
+                    .get_watermark_for_pipelines(&ALL_PIPELINE_NAMES)
+                    .await
+                    .is_ok_and(|wm| {
+                        wm.is_some_and(|wm| {
+                            wm.checkpoint_hi_inclusive
+                                .is_some_and(|cp| cp >= checkpoint)
+                                && wm.epoch_hi_inclusive >= epoch
+                        })
+                    });
                 if ok {
                     break;
                 }
