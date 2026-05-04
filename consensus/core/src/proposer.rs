@@ -462,7 +462,13 @@ impl Proposer for ValidatorProposer {
                     .iter()
                     .any(|a| a.author() == slot.authority && a.round() == slot.round)
             })
-            .map(|slot| self.context.committee.authority(slot.authority).hostname.as_str())
+            .map(|slot| {
+                self.context
+                    .committee
+                    .authority(slot.authority)
+                    .hostname
+                    .as_str()
+            })
             .collect();
         if !missing_leader_hosts.is_empty() {
             info!(
