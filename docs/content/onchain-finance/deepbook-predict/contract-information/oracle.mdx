@@ -16,8 +16,6 @@ keywords:
 
 `OracleSVI` is the market state for one underlying asset and one expiry. It stores spot and forward prices, SVI volatility surface parameters, activation state, the last update timestamp, and the settlement price after expiry.
 
-The code examples on this page load from `packages/predict/sources/oracle.move` on the `predict-testnet-4-16` branch.
-
 ## Lifecycle
 
 An oracle starts inactive, becomes active after `activate()`, accepts live price and SVI updates before expiry, enters pending settlement at expiry, and becomes settled when the first post-expiry price update freezes the settlement price.

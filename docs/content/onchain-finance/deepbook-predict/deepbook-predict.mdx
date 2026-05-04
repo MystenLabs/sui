@@ -21,7 +21,7 @@ The protocol is currently documented from the `predict-testnet-4-16` branch of t
 
 :::caution
 
-DeepBook Predict smart contracts are subject to change before Mainnet deployment. Treat the current package IDs, object layouts, and entry points as Testnet integration targets.
+DeepBook Predict smart contracts might change before Mainnet deployment. Treat the current package IDs, object layouts, and entry points as Testnet integration targets.
 
 :::
 
@@ -41,14 +41,14 @@ DeepBook Predict provides the following capabilities:
 Most applications should combine three data sources:
 
 - Use the public Predict server for page rendering, lists, portfolio summaries, vault summaries, and historical data.
-- Use Sui checkpoint or event streaming when a page needs low-latency oracle updates.
-- Use direct on-chain object reads immediately before or after wallet flows that need confirmation-critical state.
+- Sui checkpoint or event streaming supports pages that need low-latency oracle updates.
+- Use direct onchain object reads immediately before or after wallet flows that need confirmation-critical state.
 
 Avoid building the primary UI around raw chain scans. The server already exposes indexed surfaces for market state, portfolio state, vault state, and history.
 
 ## User flow
 
-A typical user flow starts with current market data from the public server. After selecting an active oracle and strike, the user creates or finds a `PredictManager`, deposits the enabled quote asset, previews mint and redeem amounts, then submits a transaction for a binary position or vertical range. After confirmation, refresh both the affected on-chain objects and the indexed server endpoints backing the current page.
+A typical user flow starts with current market data from the public server. After selecting an active oracle and strike, the user creates or finds a `PredictManager`, deposits the enabled quote asset, previews mint and redeem amounts, then submits a transaction for a binary position or vertical range. After confirmation, refresh both the affected onchain objects and the indexed server endpoints backing the current page.
 
 ## Liquidity provider flow
 

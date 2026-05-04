@@ -15,7 +15,7 @@ keywords:
   ]
 ---
 
-At a high level, DeepBook Predict revolves around four main on-chain components:
+At a high level, DeepBook Predict revolves around four main onchain components:
 
 - `Predict`: The top-level shared object. It holds vault balances, pricing config, risk config, the quote-asset allowlist, oracle strike grids, withdrawal-limiter config, and the `PLP` treasury cap.
 - `PredictManager`: A per-user shared account object. It wraps a DeepBook `BalanceManager`, stores deposited quote balances, and tracks a user's binary position and vertical range quantities.
@@ -71,6 +71,6 @@ Applications should split reads by freshness and purpose:
 
 1. Render markets, portfolios, vault summaries, and history from the public Predict server.
 1. Subscribe to Sui checkpoints or events for second-level oracle updates when the UI needs a live tape.
-1. Read on-chain `Predict`, `PredictManager`, `OracleSVI`, and quote coin objects around wallet flows that require authoritative state.
+1. Read onchain `Predict`, `PredictManager`, `OracleSVI`, and quote coin objects around wallet flows that require authoritative state.
 
-This keeps page rendering fast while still letting transaction flows confirm exact on-chain state.
+This keeps page rendering fast while still letting transaction flows confirm exact onchain state.

@@ -7,7 +7,7 @@ keywords:
     predict package id,
     predict object id,
     predict server,
-    testnet,
+    Testnet,
     quote asset,
     oracle,
     plp,
@@ -18,7 +18,7 @@ This page contains the current public integration targets for DeepBook Predict o
 
 :::caution
 
-DeepBook Predict is documented here as a Testnet integration surface. The smart contracts are subject to change before Mainnet deployment, so treat the current package IDs, object layouts, and entry points as provisional. Ignore older Predict package IDs in local configs or scripts unless a newer deployment explicitly replaces the values below.
+DeepBook Predict is documented here as a Testnet integration surface. The smart contracts might change before Mainnet deployment, so treat the current package IDs, object layouts, and entry points as provisional. Ignore older Predict package IDs in local configs or scripts unless a newer deployment explicitly replaces the values below.
 
 :::
 
@@ -33,7 +33,7 @@ DeepBook Predict is documented here as a Testnet integration surface. The smart 
 | Predict object | `0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a` |
 | Current quote asset | `0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC` |
 | PLP coin type | `0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::plp::PLP` |
-| Source branch | `predict-testnet-4-16` |
+| Source branch | [`predict-testnet-4-16`](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-4-16/packages/predict) |
 
 ## Supported quote assets
 
@@ -51,7 +51,7 @@ DeepBook Predict is documented here as a Testnet integration surface. The smart 
 
 ## Public server endpoints
 
-Use the public server for render-ready market, vault, portfolio, and history data.
+The public server provides render-ready market, vault, portfolio, and history data.
 
 ### Protocol and market state
 
@@ -98,7 +98,7 @@ Use the public server for render-ready market, vault, portfolio, and history dat
 
 ## Live Sui events
 
-Use Sui checkpoint or event streaming when a UI needs lower-latency oracle state than the indexed server provides. Filter by the current Predict package ID and watch these event types:
+When a UI needs lower-latency oracle state than the indexed server provides, use Sui checkpoint or event streaming. Filter by the current Predict package ID and watch these event types:
 
 - `oracle::OraclePricesUpdated`
 - `oracle::OracleSVIUpdated`
