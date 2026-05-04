@@ -1726,10 +1726,9 @@ impl AuthorityPerEpochStore {
         else {
             return itertools::Either::Left(std::iter::empty());
         };
-        assert!(
-            params.observations_chunk_size.is_some(),
-            "observation chunking must be enabled"
-        );
+        if params.observations_chunk_size.is_none() {
+            return itertools::Either::Left(std::iter::empty());
+        }
 
         // Load stored execution time observations from the SuiSystemState object.
         let system_state =
@@ -1756,7 +1755,15 @@ impl AuthorityPerEpochStore {
             system_state.extra_fields.id.id.bytes,
             &EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_CHUNK_COUNT_KEY,
         ) else {
-            debug_fatal!("could not read stored execution time chunk count");
+            error!(
+                "Could not read stored execution time chunk count. This should only happen in the first epoch where chunking is enabled."
+            );
+            if let Some(metrics) = mysten_metrics::get_metrics() {
+                metrics
+                    .system_invariant_violations
+                    .with_label_values(&["execution_time_chunk_count_missing"])
+                    .inc();
+            }
             return itertools::Either::Left(std::iter::empty());
         };
 
