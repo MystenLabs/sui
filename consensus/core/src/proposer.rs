@@ -450,6 +450,28 @@ impl Proposer for ValidatorProposer {
             self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
         }
 
+        // Diagnostic: any leader we waited for whose slot did not end up as
+        // an ancestor of this proposal — happens on force=true (timeout)
+        // when the leader's block hasn't reached us, or when ancestor
+        // selection dropped it. Logged by hostname for fast cross-reference
+        // with `block_proposal_leader_missing_count`.
+        let missing_leader_hosts: Vec<&str> = leader_slots
+            .iter()
+            .filter(|slot| {
+                !ancestors
+                    .iter()
+                    .any(|a| a.author() == slot.authority && a.round() == slot.round)
+            })
+            .map(|slot| self.context.committee.authority(slot.authority).hostname.as_str())
+            .collect();
+        if !missing_leader_hosts.is_empty() {
+            info!(
+                "Proposing round {} block without waited leader(s) as ancestor: [{}]",
+                clock_round,
+                missing_leader_hosts.join(", "),
+            );
+        }
+
         // Record wait metrics for every waited leader slot. Missing leaders
         // are counted only when a forced proposal proceeds after timeout.
         let dag_state_read = self.dag_state.read();
