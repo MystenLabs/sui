@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 123;
+const MAX_PROTOCOL_VERSION: u64 = 124;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -325,6 +325,8 @@ const TESTNET_USDC: &str =
 //              Enable defer_unpaid_amplification on mainnet.
 // Version 123: Add timestamp_based_epoch_close feature flag and enable in tests.
 //              Fix native call double-pop in gas meter stack height tracking (gas_model v12).
+// Version 124: Enable GCP Confidential Spaces attestation native function on devnet.
+//              Bump max_move_package_size to 110KB to accommodate new framework modules.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -618,6 +620,10 @@ struct FeatureFlags {
     // Enable upgraded parsing of nitro attestation to always include required PCRs, even when all zeros.
     #[serde(skip_serializing_if = "is_false")]
     enable_nitro_attestation_always_include_required_pcrs_parsing: bool,
+
+    // Enable GCP Confidential Spaces attestation verification.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_gcp_attestation: bool,
 
     // Reject functions with mutable Random.
     #[serde(skip_serializing_if = "is_false")]
@@ -1770,6 +1776,10 @@ pub struct ProtocolConfig {
     nitro_attestation_verify_base_cost: Option<u64>,
     nitro_attestation_verify_cost_per_cert: Option<u64>,
 
+    // gcp_attestation::verify_gcp_attestation
+    gcp_attestation_verify_base_cost: Option<u64>,
+    gcp_attestation_verify_cost_per_byte: Option<u64>,
+
     // Stdlib costs
     bcs_per_byte_serialized_cost: Option<u64>,
     bcs_legacy_min_output_size_cost: Option<u64>,
@@ -2502,6 +2512,10 @@ impl ProtocolConfig {
     pub fn enable_nitro_attestation_always_include_required_pcrs_parsing(&self) -> bool {
         self.feature_flags
             .enable_nitro_attestation_always_include_required_pcrs_parsing
+    }
+
+    pub fn enable_gcp_attestation(&self) -> bool {
+        self.feature_flags.enable_gcp_attestation
     }
 
     pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
@@ -3269,6 +3283,9 @@ impl ProtocolConfig {
             nitro_attestation_parse_cost_per_byte: None,
             nitro_attestation_verify_base_cost: None,
             nitro_attestation_verify_cost_per_cert: None,
+
+            gcp_attestation_verify_base_cost: None,
+            gcp_attestation_verify_cost_per_byte: None,
 
             bcs_per_byte_serialized_cost: None,
             bcs_legacy_min_output_size_cost: None,
@@ -4883,6 +4900,17 @@ impl ProtocolConfig {
                     }
                     cfg.gas_model_version = Some(12);
                 }
+                124 => {
+                    // Bump package size limit to accommodate new framework modules.
+                    cfg.max_move_package_size = Some(110 * 1024);
+
+                    // Enable GCP Confidential Spaces attestation on devnet only initially.
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_gcp_attestation = true;
+                        cfg.gcp_attestation_verify_base_cost = Some(22_000 * 50);
+                        cfg.gcp_attestation_verify_cost_per_byte = Some(50);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5368,6 +5396,10 @@ impl ProtocolConfig {
 
     pub fn set_merge_randomness_into_checkpoint_for_testing(&mut self, val: bool) {
         self.feature_flags.merge_randomness_into_checkpoint = val;
+    }
+
+    pub fn set_enable_gcp_attestation_for_testing(&mut self, val: bool) {
+        self.feature_flags.enable_gcp_attestation = val
     }
 }
 

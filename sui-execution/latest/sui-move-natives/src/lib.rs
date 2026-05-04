@@ -47,6 +47,7 @@ use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use crate::{crypto::group_ops, transfer::PartyTransferInternalCostParams};
 use better_any::{Tid, TidAble};
+use crypto::gcp_attestation::{self as gcp_attestation_mod, GcpAttestationCostParams};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -204,9 +205,34 @@ pub struct NativesCostTable {
 
     // bulletproofs range proofs
     pub bulletproofs_cost_params: BulletproofsCostParams,
+
+    // gcp attestation
+    pub gcp_attestation_cost_params: GcpAttestationCostParams,
 }
 
 impl NativeExtensionMarker<'_> for NativesCostTable {}
+
+/// Cached JWK map populated at execution setup from AuthenticatorState.
+/// Maps `(iss, kid)` to `(n_b64, e_b64)` where the values are base64url strings
+/// of the RSA JWK modulus and exponent, as stored in AuthenticatorState.
+#[derive(Tid, Default)]
+pub struct JwkMap {
+    pub map: std::collections::HashMap<(String, String), (String, String)>,
+}
+
+impl NativeExtensionMarker<'_> for JwkMap {}
+
+impl JwkMap {
+    pub fn from_active_jwks(active_jwks: Vec<sui_types::authenticator_state::ActiveJwk>) -> Self {
+        let mut jwk_map = JwkMap::default();
+        for active_jwk in active_jwks {
+            let key = (active_jwk.jwk_id.iss, active_jwk.jwk_id.kid);
+            let value = (active_jwk.jwk.n, active_jwk.jwk.e);
+            jwk_map.map.insert(key, value);
+        }
+        jwk_map
+    }
+}
 
 impl NativesCostTable {
     pub fn from_protocol_config(protocol_config: &ProtocolConfig) -> NativesCostTable {
@@ -799,6 +825,14 @@ impl NativesCostTable {
                     .verify_bulletproofs_ristretto255_cost_per_bit_and_commitment_as_option()
                     .map(Into::into),
             },
+            gcp_attestation_cost_params: GcpAttestationCostParams {
+                verify_base_cost: protocol_config
+                    .gcp_attestation_verify_base_cost_as_option()
+                    .map(Into::into),
+                verify_cost_per_byte: protocol_config
+                    .gcp_attestation_verify_cost_per_byte_as_option()
+                    .map(Into::into),
+            },
         }
     }
 }
@@ -1305,6 +1339,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "rangeproofs",
             "verify_bulletproofs_ristretto255_internal",
             make_native!(rangeproofs::verify_bulletproofs_ristretto255),
+        ),
+        (
+            "gcp_attestation",
+            "verify_gcp_attestation_internal",
+            make_native!(gcp_attestation_mod::verify_gcp_attestation_internal),
         ),
     ];
     let sui_framework_natives_iter =
