@@ -26,6 +26,9 @@ ARG PROFILE=release
 COPY rust-toolchain.toml ./
 COPY .cargo .cargo
 COPY --from=planner /sui/recipe.json recipe.json
+# external-crates/move is a separate workspace; cargo-chef needs its source to
+# resolve and build path deps that sui-node pulls from there.
+COPY external-crates external-crates
 RUN cargo chef cook --locked --profile ${PROFILE} --recipe-path recipe.json --bin sui-node
 
 FROM deps AS builder
