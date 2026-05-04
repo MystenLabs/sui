@@ -855,6 +855,8 @@ async fn start_archival(
     .await
     .context("Failed to create BigTable indexer")?;
 
+    // Use the BigTable wrapper, not the raw framework indexer, so bitmap
+    // committer background tasks are supervised for the duration of the test.
     let bt_indexer_service = bt_indexer
         .run()
         .await
@@ -869,7 +871,13 @@ async fn start_archival(
     .await
     .context("Failed to create KvRpcServer")?;
     let kv_rpc_service = kv_rpc_server
-        .start_service(kv_rpc_address, sui_kv_rpc::ServerConfig::default())
+        .start_service(
+            kv_rpc_address,
+            sui_kv_rpc::ServerConfig {
+                enable_experimental_query_apis: true,
+                ..Default::default()
+            },
+        )
         .await
         .context("Failed to start kv-rpc server")?;
 

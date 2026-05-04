@@ -47,10 +47,12 @@ use sui_types::transaction::Transaction;
 
 pub use crate::bigtable::client::BigTableClient;
 pub use crate::bigtable::client::PoolConfig;
+pub use crate::bigtable::client::bitmap_query::BigTableBitmapSource;
+pub use crate::bigtable::client::bitmap_query::BitmapIndexSpec;
+pub use crate::bigtable::proto::bigtable::v2::RowFilter;
 pub use crate::handlers::BigTableHandler;
 pub use crate::handlers::BitmapIndexHandler;
 pub use crate::handlers::BitmapIndexProcessor;
-pub use crate::handlers::CheckpointBitmapProcessor;
 pub use crate::handlers::CheckpointsByDigestPipeline;
 pub use crate::handlers::CheckpointsPipeline;
 pub use crate::handlers::EpochEndPipeline;
@@ -74,6 +76,10 @@ pub use config::IndexerConfig;
 pub use config::IngestionConfig;
 pub use config::PipelineLayer;
 pub use config::SequentialLayer;
+pub use sui_inverted_index::BitmapLiteral;
+pub use sui_inverted_index::BitmapQuery;
+pub use sui_inverted_index::BitmapTerm;
+pub use sui_inverted_index::ScanDirection;
 
 pub const BITMAP_INDEX_PIPELINE: &str =
     <BitmapIndexHandler<TransactionBitmapProcessor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
@@ -103,18 +109,15 @@ pub const TX_SEQ_DIGEST_PIPELINE: &str =
     <BigTableHandler<TxSeqDigestPipeline> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 pub const EVENT_BITMAP_INDEX_PIPELINE: &str =
     <BitmapIndexHandler<EventBitmapProcessor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
-pub const CHECKPOINT_BITMAP_INDEX_PIPELINE: &str =
-    <BitmapIndexHandler<CheckpointBitmapProcessor> as sui_indexer_alt_framework::pipeline::Processor>::NAME;
 
-pub const ALPHA_PIPELINE_NAMES: [&str; 4] = [
+pub const ALPHA_PIPELINE_NAMES: [&str; 3] = [
     TX_SEQ_DIGEST_PIPELINE,
     BITMAP_INDEX_PIPELINE,
     EVENT_BITMAP_INDEX_PIPELINE,
-    CHECKPOINT_BITMAP_INDEX_PIPELINE,
 ];
 
 /// All pipeline names known to the indexer.
-pub const ALL_PIPELINE_NAMES: [&str; 15] = [
+pub const ALL_PIPELINE_NAMES: [&str; 14] = [
     CHECKPOINTS_PIPELINE,
     CHECKPOINTS_BY_DIGEST_PIPELINE,
     TRANSACTIONS_PIPELINE,
@@ -129,7 +132,6 @@ pub const ALL_PIPELINE_NAMES: [&str; 15] = [
     TX_SEQ_DIGEST_PIPELINE,
     BITMAP_INDEX_PIPELINE,
     EVENT_BITMAP_INDEX_PIPELINE,
-    CHECKPOINT_BITMAP_INDEX_PIPELINE,
 ];
 
 pub fn validate_pipeline_name(value: &str) -> Result<&'static str, String> {
@@ -221,6 +223,7 @@ pub struct TxSeqDigestData {
     pub tx_sequence_number: u64,
     pub digest: TransactionDigest,
     pub event_count: u32,
+    pub checkpoint_number: CheckpointSequenceNumber,
 }
 
 /// Epoch data returned by reader methods.
@@ -631,34 +634,6 @@ impl BigTableIndexer {
                 )
                 .await?;
         }
-        if alpha_pipelines.contains(&CHECKPOINT_BITMAP_INDEX_PIPELINE) {
-            let cp_bitmap_rate_limiter = build_rate_limiter(
-                pipeline.checkpoint_bitmap_index.max_rows_per_second,
-                base_rps,
-                &global,
-            );
-            store_runtime_builder = store_runtime_builder
-                .with_bitmap_committer::<CheckpointBitmapProcessor>(
-                    pipeline.checkpoint_bitmap_index.max_rows_or_default(),
-                    pipeline
-                        .checkpoint_bitmap_index
-                        .write_concurrency
-                        .unwrap_or(base.committer.write_concurrency),
-                    cp_bitmap_rate_limiter,
-                    Some(registry),
-                );
-            let cp_bitmap_handler = BitmapIndexHandler::new(CheckpointBitmapProcessor);
-            indexer
-                .sequential_pipeline(
-                    cp_bitmap_handler,
-                    pipeline
-                        .checkpoint_bitmap_index
-                        .clone()
-                        .finish(base.clone()),
-                )
-                .await?;
-        }
-
         Ok(Self {
             indexer,
             store_service: store_runtime_builder.into_service(),

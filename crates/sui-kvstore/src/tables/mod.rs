@@ -18,7 +18,6 @@ use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::bigtable::proto::bigtable::v2::mutation::SetCell;
 use crate::bigtable::proto::bigtable::v2::{Mutation, mutation};
 
-pub mod checkpoint_bitmap_index;
 pub mod checkpoints;
 pub mod checkpoints_by_digest;
 pub mod epochs;
