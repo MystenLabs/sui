@@ -104,11 +104,11 @@ async fn local_hit_returns_transaction_without_remote() {
     // Pre-populate the filesystem; the fake GraphQL URL in `new_for_testing`
     // would fail if the remote path were reached.
     store
-        .local
+        .local()
         .write_transaction(&digest, &verified)
         .expect("write transaction");
     store
-        .local
+        .local()
         .write_transaction_effects(&digest, &executed.effects)
         .expect("write effects");
 
@@ -152,7 +152,7 @@ async fn remote_fallback_caches_pre_fork_transaction() {
     // Second call should hit the filesystem cache, not the remote.
     assert!(
         store
-            .local
+            .local()
             .get_transaction(&digest)
             .expect("local lookup after remote hit")
             .is_some(),
@@ -160,7 +160,7 @@ async fn remote_fallback_caches_pre_fork_transaction() {
     );
     assert!(
         store
-            .local
+            .local()
             .get_transaction_effects(&digest)
             .expect("local effects lookup after remote hit")
             .is_some(),
@@ -195,7 +195,7 @@ async fn remote_fallback_rejects_post_fork_transaction() {
     // And it must not have been cached to disk.
     assert!(
         store
-            .local
+            .local()
             .get_transaction(&digest)
             .expect("local lookup after rejected remote")
             .is_none(),

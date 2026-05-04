@@ -124,6 +124,10 @@ Unsupported index methods return empty iterators or `None`.
   remote endpoint.
 - The owned-object index is durable and sorted, but it is not a complete live
   object database.
+- Owned-object reads and local object/index updates are coordinated by an
+  in-process snapshot guard shared by cloned `DataStore` handles. This does not
+  provide cross-process locking for multiple processes using the same data
+  directory.
 - The index only covers locally materialized post-fork writes.
 - Aggregate balance APIs are out of scope for this first version.
 - Crash recovery is limited to atomic replacement of the index file. A future

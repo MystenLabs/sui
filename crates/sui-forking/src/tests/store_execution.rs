@@ -374,7 +374,7 @@ fn test_unwrapped_write_clears_wrapped_marker_and_reindexes_owner() {
     let unwrapped = make_gas_object(object_id, 3, Owner::AddressOwner(recipient));
     store.apply_object_updates(BTreeMap::from([(object_id, unwrapped.clone())]), vec![]);
 
-    assert!(!store.local.is_object_wrapped(&object_id).unwrap());
+    assert!(!store.local().is_object_wrapped(&object_id).unwrap());
     assert_eq!(
         DataStore::get_object(&store, &object_id)
             .expect("current object read should not error")
@@ -502,4 +502,31 @@ fn test_rpc_owned_objects_iter_filters_and_pages_by_object_id() {
     .collect();
     assert_eq!(page_from_cursor.len(), 1);
     assert_eq!(page_from_cursor[0].object_id, infos[1].object_id);
+}
+
+#[test]
+fn test_cloned_store_shares_owned_object_snapshot_guard() {
+    let (_temp, mut store) = test_data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 1, Owner::AddressOwner(owner));
+    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+
+    let reader = store.clone();
+    let local_snapshot_guard = store
+        .write_local_snapshot()
+        .expect("snapshot lock should not be poisoned");
+    assert!(
+        reader.inner.local_snapshot_lock.try_read().is_err(),
+        "cloned stores should share the same snapshot guard",
+    );
+    drop(local_snapshot_guard);
+
+    let infos: Vec<_> =
+        RpcIndexes::owned_objects_iter(&reader, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should build")
+            .map(|result| result.expect("owned-object entry should decode"))
+            .collect();
+    assert_eq!(infos.len(), 1);
+    assert_eq!(infos[0].object_id, object_id);
 }
