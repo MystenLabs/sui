@@ -132,9 +132,15 @@ pub fn simulate_transaction(
             //
             // If the request did not specify a budget, then simulate the transaction to get a budget estimate and
             // overwrite the resolved budget with the more accurate estimate.
-            if request.transaction().gas_payment().budget.is_none()
-                && request.transaction().bcs_opt().is_none()
-            {
+            // When the request didn't specify a budget, the budget computed below covers
+            // computation + storage + safe-overhead, with the synthetic gas coin's storage
+            // cost subtracted (it doesn't exist at execution time). The cost of loading
+            // any additional payment objects is added either in `estimate_gas_budget_from_gas_cost`
+            // (when payment was specified) or incrementally inside `select_gas` (when gas
+            // selection picks the coins).
+            let budget_was_estimated = request.transaction().gas_payment().budget.is_none()
+                && request.transaction().bcs_opt().is_none();
+            if budget_was_estimated {
                 let mut estimation_transaction = transaction.clone();
                 estimation_transaction.gas_data_mut().payment = Vec::new();
                 estimation_transaction.gas_data_mut().budget = protocol_config.max_tx_gas();
@@ -151,6 +157,7 @@ pub fn simulate_transaction(
                     simulation_result.effects.gas_cost_summary(),
                     reference_gas_price,
                     request.transaction().gas_payment().objects.len(),
+                    mock_gas_storage_cost(&simulation_result),
                     &protocol_config,
                 );
 
@@ -172,7 +179,15 @@ pub fn simulate_transaction(
             }
 
             if transaction.gas_data().payment.is_empty() {
-                select_gas(service, &mut transaction, &protocol_config)?;
+                select_gas(
+                    service,
+                    &mut transaction,
+                    // Only adjust the budget for actually-selected coins when we just
+                    // computed the budget from estimation. A caller-supplied budget is
+                    // taken as-is.
+                    budget_was_estimated.then_some(reference_gas_price),
+                    &protocol_config,
+                )?;
             }
         }
 
@@ -316,63 +331,75 @@ fn to_command_output(
 /// Estimate the gas budget for a transaction based on simulation results.
 ///
 /// The estimation includes:
-/// 1. Base cost from gas_cost_summary (computation + storage costs)
-/// 2. Cost of loading gas payment objects (which weren't loaded during simulation)
-/// 3. Rounding up to the protocol gas rounding step (typically 1000 MIST)
-/// 4. Adding safe overhead buffer (1000 * reference_gas_price)
-/// 5. Clamping to max_tx_gas protocol limit
+/// 1. Base cost from gas_cost_summary (computation + storage costs), with the synthetic gas
+///    coin's storage cost subtracted (it doesn't exist at execution time).
+/// 2. Cost of loading additional gas payment objects beyond the synthetic gas coin already
+///    in the simulation. When the request didn't specify gas payment objects, this is 0 —
+///    `select_gas` will pick the actual coins (or address balance) and adjust the budget
+///    incrementally for each one.
+/// 3. Rounding up to the protocol gas rounding step (typically 1000 MIST).
+/// 4. Adding safe overhead buffer (1000 * reference_gas_price).
+/// 5. Clamping to max_tx_gas protocol limit.
 fn estimate_gas_budget_from_gas_cost(
     gas_cost_summary: &sui_types::gas::GasCostSummary,
     reference_gas_price: u64,
     num_payment_objects_on_request: usize,
+    mock_gas_storage_cost: u64,
     protocol_config: &ProtocolConfig,
 ) -> u64 {
     const GAS_SAFE_OVERHEAD: u64 = 1000;
 
-    // Calculate base estimate from gas cost summary (in MIST)
-    let gas_usage = gas_cost_summary.net_gas_usage();
-    let base_estimate_mist =
-        gas_cost_summary
-            .computation_cost
-            .max(if gas_usage < 0 { 0 } else { gas_usage as u64 });
+    // The simulation always loads a synthetic gas coin so that it can produce a gas cost
+    // summary even when the caller hasn't specified a gas payment. That coin's storage
+    // write is phantom — it is not written at execution time (real address-balance gas
+    // emits an accumulator event, real coin gas writes the user-provided coin instead) —
+    // so subtract its contribution from `storage_cost` before deriving the estimate.
+    let storage_cost = gas_cost_summary
+        .storage_cost
+        .saturating_sub(mock_gas_storage_cost);
+    let gas_used = gas_cost_summary
+        .computation_cost
+        .saturating_add(storage_cost);
+    let net_gas_usage = (gas_used as i64).saturating_sub(gas_cost_summary.storage_rebate as i64);
+    let base_estimate_mist = gas_cost_summary.computation_cost.max(if net_gas_usage < 0 {
+        0
+    } else {
+        net_gas_usage as u64
+    });
 
-    // Calculate cost of loading gas payment objects.
-    // Subtract 1 because the simulation already loaded one ephemeral gas coin.
-    let num_payment_objects_for_estimation = {
-        let total = if num_payment_objects_on_request == 0 {
-            protocol_config.max_gas_payment_objects() as u64
-        } else {
-            num_payment_objects_on_request as u64
-        };
-        total.saturating_sub(1)
-    };
+    // Loading cost for additional gas coins beyond the synthetic gas coin already counted
+    // by the simulation. When the request did not specify any payment objects, the loading
+    // cost is added incrementally inside `select_gas` once the actual coins are known.
+    let extra_payment_objects = (num_payment_objects_on_request as u64).saturating_sub(1);
+    let gas_loading_cost_mist =
+        compute_gas_loading_cost_mist(extra_payment_objects, reference_gas_price, protocol_config);
 
-    // Calculate gas loading cost in gas units
-    let gas_loading_cost_units = num_payment_objects_for_estimation
-        .saturating_mul(GAS_COIN_SIZE_BYTES)
-        .saturating_mul(protocol_config.obj_access_cost_read_per_byte());
-
-    // Round up to the nearest gas rounding step (in gas units)
-    let rounded_gas_loading_cost_units =
-        if let Some(step) = protocol_config.gas_rounding_step_as_option() {
-            round_up_to_nearest(gas_loading_cost_units, step)
-        } else {
-            gas_loading_cost_units
-        };
-
-    // Convert gas loading cost to MIST
-    let gas_loading_cost_mist = rounded_gas_loading_cost_units.saturating_mul(reference_gas_price);
-
-    // Calculate safe overhead buffer in MIST
     let safe_overhead_mist = GAS_SAFE_OVERHEAD.saturating_mul(reference_gas_price);
 
-    // Add all together: base (MIST) + loading (MIST) + overhead (MIST)
-    let estimate_mist = base_estimate_mist
+    base_estimate_mist
         .saturating_add(gas_loading_cost_mist)
-        .saturating_add(safe_overhead_mist);
+        .saturating_add(safe_overhead_mist)
+        .min(protocol_config.max_tx_gas())
+}
 
-    // Clamp to max_tx_gas to ensure we don't exceed the protocol limit
-    estimate_mist.min(protocol_config.max_tx_gas())
+/// Cost in MIST of loading `extra_coins` gas-payment objects beyond the synthetic gas coin
+/// already accounted for by the estimation simulation. Mirrors the protocol's per-byte
+/// read cost, rounded up to the protocol gas rounding step in gas units before being
+/// converted to MIST.
+fn compute_gas_loading_cost_mist(
+    extra_coins: u64,
+    reference_gas_price: u64,
+    protocol_config: &ProtocolConfig,
+) -> u64 {
+    let units = extra_coins
+        .saturating_mul(GAS_COIN_SIZE_BYTES)
+        .saturating_mul(protocol_config.obj_access_cost_read_per_byte());
+    let rounded = if let Some(step) = protocol_config.gas_rounding_step_as_option() {
+        round_up_to_nearest(units, step)
+    } else {
+        units
+    };
+    rounded.saturating_mul(reference_gas_price)
 }
 
 /// Round up a value to the nearest multiple of `step` using saturating arithmetic.
@@ -385,15 +412,40 @@ fn round_up_to_nearest(value: u64, step: u64) -> u64 {
     }
 }
 
+/// Storage cost (in MIST) of the synthetic gas coin that the simulator wrote during the
+/// estimation pass. The new `storage_rebate` on the written object equals the storage cost
+/// (see `track_storage_mutation` / `collect_storage_and_rebate`) so we can read it directly
+/// from the simulation's object set instead of re-deriving it from protocol parameters.
+/// Returns 0 when the simulation didn't use a mock gas coin.
+fn mock_gas_storage_cost(
+    simulation_result: &sui_types::transaction_executor::SimulateTransactionResult,
+) -> u64 {
+    let Some(mock_gas_id) = simulation_result.mock_gas_id else {
+        return 0;
+    };
+    // Both the input version (rebate 0, since the mock coin is fresh) and the written version
+    // (rebate set to the storage cost) end up in `objects`. The written version always carries
+    // the larger value, so taking the max is correct and avoids depending on iteration order.
+    simulation_result
+        .objects
+        .iter()
+        .filter(|o| o.id() == mock_gas_id)
+        .map(|o| o.storage_rebate)
+        .max()
+        .unwrap_or(0)
+}
+
 fn select_gas(
     service: &RpcService,
     transaction: &mut sui_types::transaction::TransactionData,
+    incremental_loading_rgp: Option<u64>,
     protocol_config: &ProtocolConfig,
 ) -> Result<()> {
     use sui_types::accumulator_root::AccumulatorValue;
     use sui_types::balance::Balance;
     use sui_types::base_types::SequenceNumber;
     use sui_types::coin_reservation::CoinReservationResolver;
+    use sui_types::coin_reservation::ParsedDigest;
     use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
     use sui_types::gas_coin::GAS;
     use sui_types::gas_coin::GasCoin;
@@ -544,7 +596,29 @@ fn select_gas(
         selected_gas_value
     };
 
-    if selected_gas_value >= budget {
+    // When the caller asked us to top up the budget for the loading cost of the just-picked
+    // payment objects, do so before the balance check. The simulation already counted the
+    // synthetic gas coin's load, so charge for the rest. Coin reservations don't load real
+    // gas-coin objects and are excluded.
+    let final_budget = if let Some(rgp) = incremental_loading_rgp {
+        let real_coins = transaction
+            .gas_data()
+            .payment
+            .iter()
+            .filter(|obj_ref| !ParsedDigest::is_coin_reservation_digest(&obj_ref.2))
+            .count() as u64;
+        let extra_loading_mist =
+            compute_gas_loading_cost_mist(real_coins.saturating_sub(1), rgp, protocol_config);
+        let new_budget = budget
+            .saturating_add(extra_loading_mist)
+            .min(protocol_config.max_tx_gas());
+        transaction.gas_data_mut().budget = new_budget;
+        new_budget
+    } else {
+        budget
+    };
+
+    if selected_gas_value >= final_budget {
         Ok(())
     } else {
         Err(RpcError::new(
@@ -552,7 +626,7 @@ fn select_gas(
             format!(
                 "Unable to perform gas selection due to insufficient SUI \
                 balance (in address balance or coins) for account {owner} \
-                to satisfy required budget {budget}."
+                to satisfy required budget {final_budget}."
             ),
         ))
     }
