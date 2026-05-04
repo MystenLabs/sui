@@ -21,7 +21,7 @@ mod checked {
         verifier::VerifierConfig,
     };
     use mysten_common::debug_fatal;
-    use sui_move_natives::{object_runtime, transaction_context::TransactionContext};
+    use sui_move_natives::{JwkMap, object_runtime, transaction_context::TransactionContext};
     use sui_types::error::SuiErrorKind;
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_verifier::check_for_verifier_timeout;
@@ -83,6 +83,7 @@ mod checked {
         protocol_config: &'r ProtocolConfig,
         metrics: Arc<ExecutionMetrics>,
         tx_context: Rc<RefCell<TxContext>>,
+        jwk_map: Option<JwkMap>,
     ) -> Result<NativeExtensions<'r>, ExecutionError> {
         let current_epoch_id: EpochId = tx_context.borrow().epoch();
         let extensions = NativeExtensions::default();
@@ -101,6 +102,9 @@ mod checked {
         ));
         exts.add(NativesCostTable::from_protocol_config(protocol_config));
         exts.add(TransactionContext::new(tx_context));
+        if let Some(map) = jwk_map {
+            exts.add(map);
+        }
         drop(exts);
         Ok(extensions)
     }

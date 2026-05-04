@@ -404,6 +404,40 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             }
             None => None,
         };
+        // Build the JwkMap extension for GCP attestation if enabled.
+        // Reads the AuthenticatorState object from the backing store to cache active JWKs.
+        let jwk_map = if env.protocol_config.enable_gcp_attestation() {
+            use sui_move_natives::JwkMap;
+            use sui_types::authenticator_state::get_authenticator_state;
+            use sui_types::storage::ObjectStore;
+
+            // Bridge from ExecutionState to ObjectStore for get_authenticator_state.
+            struct StateAsObjectStore<'a>(&'a dyn crate::execution_value::ExecutionState);
+            impl ObjectStore for StateAsObjectStore<'_> {
+                fn get_object(
+                    &self,
+                    object_id: &sui_types::base_types::ObjectID,
+                ) -> Option<sui_types::object::Object> {
+                    self.0.read_object(object_id).cloned()
+                }
+                fn get_object_by_key(
+                    &self,
+                    object_id: &sui_types::base_types::ObjectID,
+                    _version: sui_types::base_types::VersionNumber,
+                ) -> Option<sui_types::object::Object> {
+                    self.0.read_object(object_id).cloned()
+                }
+            }
+
+            let store = StateAsObjectStore(&*env.state_view);
+            match get_authenticator_state(&store) {
+                Ok(Some(inner)) => Some(JwkMap::from_active_jwks(inner.active_jwks)),
+                _ => Some(JwkMap::default()),
+            }
+        } else {
+            None
+        };
+
         let native_extensions = adapter::new_native_extensions(
             env.state_view.as_child_resolver(),
             input_object_map,
@@ -411,6 +445,7 @@ impl<'env, 'pc, 'vm, 'state, 'linkage, 'gas, 'extension>
             env.protocol_config,
             metrics.clone(),
             tx_context.clone(),
+            jwk_map,
         )?;
         if let Some(new_gas_coin_id) = new_gas_coin_id {
             // If we created a new gas coin for the transaction,

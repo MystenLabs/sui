@@ -76,3 +76,4 @@ passkey-authenticator.workspace = true
 coset.workspace = true
 url.workspace = true
 p256.workspace = true
+base64.workspace = true
