@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod bundled;
 mod converters;
 mod epoch_cache;
 mod epoch_source;
@@ -243,6 +244,32 @@ impl ClientError {
     }
 }
 
+async fn connect_channel(url: &str, rpc_timeout: Duration) -> Result<Channel, ClientError> {
+    let mut endpoint = Channel::from_shared(url.to_string())
+        .map_err(|e| ClientError::InternalError(format!("Invalid URL {}: {}", url, e)))?
+        .connect_timeout(Duration::from_secs(5))
+        .timeout(rpc_timeout);
+
+    if url.starts_with("https") {
+        endpoint = endpoint
+            .tls_config(tonic::transport::ClientTlsConfig::new().with_webpki_roots())
+            .map_err(|e| ClientError::InternalError(format!("TLS config error: {}", e)))?;
+    }
+
+    const MAX_RETRIES: u32 = 10;
+    let mut last_err = None;
+    for _ in 0..MAX_RETRIES {
+        match endpoint.connect().await {
+            Ok(ch) => return Ok(ch),
+            Err(e) => {
+                last_err = Some(e);
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        }
+    }
+    Err(last_err.unwrap().into())
+}
+
 pub struct AuthenticatedEventsClient {
     event_service: EventServiceClient<tonic::transport::Channel>,
     proof_service: ProofServiceClient<tonic::transport::Channel>,
@@ -253,56 +280,40 @@ pub struct AuthenticatedEventsClient {
 }
 
 impl AuthenticatedEventsClient {
-    pub async fn new(rpc_url: &str, genesis_committee: Committee) -> Result<Self, ClientError> {
-        Self::new_with_config(rpc_url, None, genesis_committee, ClientConfig::default()).await
+    pub async fn new(rpc_url: &str, starting_committee: Committee) -> Result<Self, ClientError> {
+        Self::new_with_config(rpc_url, None, starting_committee, ClientConfig::default()).await
     }
 
     pub async fn new_with_config(
         rpc_url: &str,
         archive_url: Option<&str>,
-        genesis_committee: Committee,
+        starting_committee: Committee,
         config: ClientConfig,
     ) -> Result<Self, ClientError> {
         config.validate().map_err(ClientError::InternalError)?;
 
-        let mut endpoint = Channel::from_shared(rpc_url.to_string())
-            .map_err(|e| ClientError::InternalError(format!("Invalid RPC URL: {}", e)))?
-            .connect_timeout(Duration::from_secs(5))
-            .timeout(config.rpc_timeout);
+        let primary = connect_channel(rpc_url, config.rpc_timeout).await?;
+        let archive = match archive_url {
+            Some(url) => Some(LedgerServiceClient::new(
+                connect_channel(url, config.rpc_timeout).await?,
+            )),
+            None => None,
+        };
 
-        if rpc_url.starts_with("https") {
-            endpoint = endpoint
-                .tls_config(tonic::transport::ClientTlsConfig::new().with_webpki_roots())
-                .map_err(|e| ClientError::InternalError(format!("TLS config error: {}", e)))?;
-        }
+        let event_service = EventServiceClient::new(primary.clone());
+        let proof_service = ProofServiceClient::new(primary.clone());
+        let ledger_service = LedgerServiceClient::new(primary);
+        let epoch_cache = EpochCache::new(starting_committee);
+        let epoch_fetcher = EpochDataFetcher::new(ledger_service.clone(), archive);
 
-        const MAX_RETRIES: u32 = 10;
-        let mut last_err = None;
-        for _ in 0..MAX_RETRIES {
-            match endpoint.connect().await {
-                Ok(ch) => {
-                    let event_service = EventServiceClient::new(ch.clone());
-                    let proof_service = ProofServiceClient::new(ch.clone());
-                    let ledger_service = LedgerServiceClient::new(ch);
-                    let epoch_cache = EpochCache::new(genesis_committee);
-                    let epoch_fetcher = EpochDataFetcher::new(ledger_service.clone(), archive_url)?;
-
-                    return Ok(Self {
-                        event_service,
-                        proof_service,
-                        ledger_service,
-                        epoch_cache: Arc::new(tokio::sync::Mutex::new(epoch_cache)),
-                        epoch_fetcher,
-                        config,
-                    });
-                }
-                Err(e) => {
-                    last_err = Some(e);
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-            }
-        }
-        Err(last_err.unwrap().into())
+        Ok(Self {
+            event_service,
+            proof_service,
+            ledger_service,
+            epoch_cache: Arc::new(tokio::sync::Mutex::new(epoch_cache)),
+            epoch_fetcher,
+            config,
+        })
     }
 
     fn extract_stream_head_from_object(

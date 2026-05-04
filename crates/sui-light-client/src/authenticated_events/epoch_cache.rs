@@ -5,28 +5,36 @@ use std::sync::Arc;
 use sui_types::committee::Committee;
 
 pub(crate) struct EpochCache {
+    // Committees for every epoch in `[start_epoch, current_epoch_number)`.
+    // `completed_committees[i]` is the committee for epoch `start_epoch + i`.
     completed_committees: Vec<Arc<Committee>>,
+    start_epoch: u64,
     current_epoch_number: u64,
     current_committee: Arc<Committee>,
 }
 
 impl EpochCache {
-    pub fn new(genesis_committee: Committee) -> Self {
+    pub fn new(starting_committee: Committee) -> Self {
+        let start_epoch = starting_committee.epoch();
         Self {
             completed_committees: vec![],
-            current_epoch_number: 0,
-            current_committee: Arc::new(genesis_committee),
+            start_epoch,
+            current_epoch_number: start_epoch,
+            current_committee: Arc::new(starting_committee),
         }
     }
 
-    /// Returns the committee for `epoch`, or `None` if the cache hasn't ratcheted that far.
-    /// Relies on the invariant that the cache starts at epoch 0 and `apply_ratchet_update`
-    /// pushes completed epochs in order, so `completed_committees[N]` is epoch `N`.
+    /// Returns the committee for `epoch`, or `None` if it's outside the
+    /// `[start_epoch, current_epoch_number]` range we've ratcheted into.
     pub fn get_committee_for_epoch(&self, epoch: u64) -> Option<Arc<Committee>> {
         if epoch == self.current_epoch_number {
             return Some(self.current_committee.clone());
         }
-        self.completed_committees.get(epoch as usize).cloned()
+        if epoch < self.start_epoch {
+            return None;
+        }
+        let idx = (epoch - self.start_epoch) as usize;
+        self.completed_committees.get(idx).cloned()
     }
 
     pub fn current_epoch(&self) -> u64 {
@@ -69,5 +77,26 @@ mod tests {
         }
 
         assert!(cache.get_committee_for_epoch(6).is_none());
+    }
+
+    #[test]
+    fn lookup_works_with_non_zero_start_epoch() {
+        let mut cache = EpochCache::new(make_committee(1029));
+        for epoch in 1030..=1032 {
+            cache.apply_ratchet_update(make_committee(epoch));
+        }
+
+        assert_eq!(cache.current_epoch(), 1032);
+
+        for epoch in 1029..=1032 {
+            let committee = cache.get_committee_for_epoch(epoch).unwrap();
+            assert_eq!(committee.epoch(), epoch);
+        }
+
+        // Epochs before the start are not retrievable.
+        assert!(cache.get_committee_for_epoch(0).is_none());
+        assert!(cache.get_committee_for_epoch(1028).is_none());
+        // Epochs past current haven't been ratcheted into yet.
+        assert!(cache.get_committee_for_epoch(1033).is_none());
     }
 }
