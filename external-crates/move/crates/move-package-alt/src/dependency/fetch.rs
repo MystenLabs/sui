@@ -17,6 +17,7 @@ use crate::{
 };
 
 use super::Pinned;
+use crate::schema::EnvironmentID;
 
 #[derive(Error, Debug)]
 pub enum FetchError {
@@ -32,15 +33,19 @@ pub type FetchResult<T> = Result<T, FetchError>;
 /// Ensure that the dependency's files are present on the disk and return a path to them.
 /// Assumes that `pinned` is already normalized - paths of any local dependencies are relative
 /// to the current working directory, and local dependencies of git dependencies have been
-/// transformed into git dependencies.
-pub async fn fetch(pinned: &Pinned, allow_dirty: bool) -> FetchResult<PackagePath> {
+/// transformed into git dependencies. `chain_id` is passed through to [Pinned::unfetched_path].
+pub async fn fetch(
+    pinned: &Pinned,
+    allow_dirty: bool,
+    chain_id: &EnvironmentID,
+) -> FetchResult<PackagePath> {
     let path = match &pinned {
         Pinned::Git(dep) => dep
             .inner
             .checkout_repo(allow_dirty)
             .await
             .map_err(FetchError::from_git(pinned))?,
-        _ => pinned.unfetched_path(),
+        _ => pinned.unfetched_path(chain_id),
     };
 
     PackagePath::new(path).map_err(FetchError::from_package(pinned))

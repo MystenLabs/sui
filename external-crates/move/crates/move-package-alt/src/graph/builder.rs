@@ -300,7 +300,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         .map_err(|err| PackageError::DepError {
             dep: package
                 .dep_for_self()
-                .unfetched_path()
+                .unfetched_path(env.id())
                 .to_string_lossy()
                 .to_string(),
             err: Box::new(err),
@@ -313,7 +313,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
             let new_env = Environment::new(dep.use_environment().clone(), env.id().clone());
             let fetched = self
                 .cache
-                .fetch(dep.as_ref(), &new_env, mtx, self.config)
+                .fetch(dep.pinned(), &new_env, mtx, self.config)
                 .await?;
 
             let future = self.add_transitive_manifest_deps(
@@ -362,7 +362,7 @@ impl<F: MoveFlavor> PackageCache<F> {
             .cache
             .lock()
             .expect("unpoisoned")
-            .entry(dep.unfetched_path())
+            .entry(dep.unfetched_path(env.id()))
             .or_default()
             .clone();
 
@@ -381,7 +381,7 @@ impl<F: MoveFlavor> PackageCache<F> {
                 Ok(node)
             }
             Err(e) => Err(PackageError::DepError {
-                dep: dep.unfetched_path().display().to_string(),
+                dep: dep.unfetched_path(env.id()).display().to_string(),
                 err: Box::new(e),
             }),
         }

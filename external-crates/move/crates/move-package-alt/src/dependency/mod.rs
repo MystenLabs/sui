@@ -9,7 +9,7 @@ mod resolve;
 pub use resolve::ResolverError;
 
 mod pin;
-pub use pin::Pinned;
+pub(crate) use pin::Pinned;
 pub use pin::PinnedDependency;
 
 pub mod fetch;

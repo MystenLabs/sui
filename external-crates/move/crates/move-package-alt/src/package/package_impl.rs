@@ -77,7 +77,7 @@ impl<F: MoveFlavor> Package<F> {
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
         let flavor = &*config.flavor;
-        let path = fetch::fetch(&dep, config.allow_dirty).await?;
+        let path = fetch::fetch(&dep, config.allow_dirty, &config.chain_id).await?;
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
@@ -142,7 +142,7 @@ impl<F: MoveFlavor> Package<F> {
 
         debug!(
             "successfully loaded {:?}",
-            result.dep_for_self.unfetched_path()
+            result.dep_for_self.unfetched_path(&config.chain_id)
         );
         Ok(result)
     }
@@ -341,7 +341,7 @@ pub async fn cache_package<F: MoveFlavor>(
 
     // load
     let package = Package::<F>::load(
-        deps[0].as_ref().clone(),
+        deps[0].pinned().clone(),
         env,
         &mtx,
         &PackageConfig::persistent(dummy_path.path(), env.clone(), vec![], flavor),
