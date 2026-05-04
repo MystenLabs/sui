@@ -39,7 +39,8 @@ Under the hood, the tool uses `simulacrum` to manage the state of the network an
 
 When a transaction execution request comes in from gRPC, it will be routed by the gRPC API and passed to the `simulacrum`. Before executing the transaction, there are a few more steps needed to successfully execute the transaction:
 - fetch any missing input objects (this delegates fetching data to the data-layer)
-- sign the transaction with a dummy private key (allows for impersonating senders)
+- if the transaction has an empty signature list, execute it through the explicit sender
+  impersonation path
 - execute the transaction and get back the effects
 - create a checkpoint
 - notifies subscription service subscribers (needed for Sui CLI integration)

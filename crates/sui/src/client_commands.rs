@@ -713,6 +713,10 @@ pub struct TxProcessingArgs {
     /// private key corresponding to this address is not in keystore.
     #[arg(long, required = false, value_parser)]
     pub sender: Option<SuiAddress>,
+    /// Submit the transaction without signatures for forked networks that support sender
+    /// impersonation. This is only intended for local forked-network testing.
+    #[arg(long)]
+    pub forking_mode: bool,
 }
 
 #[derive(Args, Debug, Default)]
@@ -3323,6 +3327,7 @@ async fn dry_run_or_execute_or_serialize_impl(
         serialize_unsigned_transaction,
         serialize_signed_transaction,
         sender,
+        forking_mode,
     } = processing;
 
     ensure!(
@@ -3446,31 +3451,36 @@ async fn dry_run_or_execute_or_serialize_impl(
     } else if tx_digest {
         Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
-        let mut signatures = vec![
-            context
-                .sign_secure(
-                    &KeyIdentity::Address(signer),
-                    &tx_data,
-                    Intent::sui_transaction(),
-                )
-                .await?
-                .into(),
-        ];
-
-        if let Some(gas_sponsor) = gas_sponsor
-            && gas_sponsor != signer
-        {
-            signatures.push(
+        let signatures = if forking_mode {
+            vec![]
+        } else {
+            let mut signatures = vec![
                 context
                     .sign_secure(
-                        &KeyIdentity::Address(gas_sponsor),
+                        &KeyIdentity::Address(signer),
                         &tx_data,
                         Intent::sui_transaction(),
                     )
                     .await?
                     .into(),
-            );
-        }
+            ];
+
+            if let Some(gas_sponsor) = gas_sponsor
+                && gas_sponsor != signer
+            {
+                signatures.push(
+                    context
+                        .sign_secure(
+                            &KeyIdentity::Address(gas_sponsor),
+                            &tx_data,
+                            Intent::sui_transaction(),
+                        )
+                        .await?
+                        .into(),
+                );
+            }
+            signatures
+        };
 
         let sender_signed_data = SenderSignedData::new(tx_data, signatures);
         if serialize_signed_transaction {

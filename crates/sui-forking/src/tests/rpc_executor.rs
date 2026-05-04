@@ -118,14 +118,14 @@ impl TestHarness {
             .clone()
     }
 
-    /// Create a transaction where `amount` of SUI is transferred to a random recipient.
-    fn build_transfer_tx(&self, amount: u64) -> Transaction {
+    /// Create transaction data where `amount` of SUI is transferred to a random recipient.
+    fn build_transfer_tx_data(&self, amount: u64) -> TransactionData {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
             builder.transfer_sui(SuiAddress::random_for_testing_only(), Some(amount));
             builder.finish()
         };
-        let tx_data = TransactionData::new_with_gas_data(
+        TransactionData::new_with_gas_data(
             TransactionKind::ProgrammableTransaction(pt),
             self.sender,
             GasData {
@@ -134,7 +134,12 @@ impl TestHarness {
                 price: self.reference_gas_price,
                 budget: 100_000_000,
             },
-        );
+        )
+    }
+
+    /// Create a transaction where `amount` of SUI is transferred to a random recipient.
+    fn build_transfer_tx(&self, amount: u64) -> Transaction {
+        let tx_data = self.build_transfer_tx_data(amount);
         Transaction::from_data_and_signer(tx_data, vec![&self.sender_key])
     }
 }
@@ -187,6 +192,36 @@ async fn test_tx_execution() {
         *response.effects.effects.transaction_digest(),
         expected_digest
     );
+}
+
+#[tokio::test]
+async fn test_empty_signature_transaction_impersonates_sender() {
+    let mut harness = TestHarness::new();
+    let tx_data = harness.build_transfer_tx_data(1_000);
+    let transaction = Transaction::from_generic_sig_data(tx_data, vec![]);
+    let expected_digest = *transaction.digest();
+
+    let request = ExecuteTransactionRequestV3::new_v2(transaction);
+    let response = harness
+        .executor
+        .execute_transaction(request, None)
+        .await
+        .expect("empty-signature transaction should impersonate sender");
+
+    assert!(
+        response.effects.effects.status().is_ok(),
+        "transfer failed: {:?}",
+        response.effects.effects.status(),
+    );
+    assert_eq!(
+        *response.effects.effects.transaction_digest(),
+        expected_digest
+    );
+
+    tokio::time::timeout(Duration::from_secs(5), harness.checkpoint_receiver.recv())
+        .await
+        .expect("timed out waiting for published checkpoint")
+        .expect("checkpoint channel closed");
 }
 
 #[tokio::test]

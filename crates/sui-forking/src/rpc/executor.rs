@@ -30,10 +30,10 @@ use sui_types::transaction_executor::TransactionExecutor;
 use crate::context::Context;
 
 /// `TransactionExecutor` implementation that runs transactions against the
-/// forked network's Simulacrum. Inbound transactions must be signed by the
-/// sender (Simulacrum verifies user signatures during execution) and each
-/// accepted execution is sealed into a fresh Simulacrum checkpoint and
-/// published to checkpoint subscribers.
+/// forked network's Simulacrum. Empty-signature transactions explicitly
+/// request sender impersonation; signed transactions keep Simulacrum's normal
+/// user-signature verification. Each accepted execution is sealed into a fresh
+/// Simulacrum checkpoint and published to checkpoint subscribers.
 pub(crate) struct ForkedTransactionExecutor {
     context: Arc<Context>,
 }
@@ -66,7 +66,7 @@ impl TransactionExecutor for ForkedTransactionExecutor {
             .context
             .try_run_with_new_checkpoint(|sim| {
                 let (effects, exec_error) = sim
-                    .execute_transaction(transaction)
+                    .execute_transaction_impersonating(transaction)
                     .map_err(into_submission_error)?;
                 Ok((effects, exec_error))
             })

@@ -21,6 +21,16 @@ A development tool that enables testing and developing against a local Sui netwo
 Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
 That means that you have full control over the advancement of checkpoints, time, and epochs to simulate different scenarios.
 
+## Impersonating Senders
+
+The Sui CLI supports `--forking-mode` on transaction commands such as
+`sui client upgrade`. This flag is only intended for local forked networks. It
+submits the transaction with an empty signature list, which tells the forked
+network to execute the transaction as the declared sender without requiring that
+sender's private key.
+
+Transactions with non-empty signatures still use normal signature verification.
+
 ## Forked Network vs Sui CLI Local Network
 
 The table below summarizes when to use each option:
