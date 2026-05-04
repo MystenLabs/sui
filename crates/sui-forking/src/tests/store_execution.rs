@@ -272,7 +272,7 @@ fn test_seeded_owned_object_metadata_lists_without_bcs_until_deleted() {
     let object_id = ObjectID::random();
 
     store
-        .local
+        .local()
         .write_owned_object_entries(&[OwnedObjectEntry {
             owner,
             object_id,
@@ -292,7 +292,7 @@ fn test_seeded_owned_object_metadata_lists_without_bcs_until_deleted() {
     assert_eq!(infos[0].balance, Some(123));
     assert!(
         store
-            .local
+            .local()
             .get_latest_object(&object_id)
             .expect("local lookup should not fail")
             .is_none(),

@@ -24,6 +24,7 @@ use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::gql::AddressOwnedObject;
 use crate::gql::queries;
+use sui_types::base_types::SuiAddress;
 
 macro_rules! block_on {
     ($expr:expr) => {{

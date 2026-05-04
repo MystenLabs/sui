@@ -143,11 +143,6 @@ impl DataStore {
         self.inner.gql.chain()
     }
 
-    #[cfg(test)]
-    pub(crate) fn local(&self) -> &FilesystemStore {
-        &self.inner.local
-    }
-
     fn read_local_snapshot(&self) -> StorageResult<RwLockReadGuard<'_, ()>> {
         self.inner
             .local_snapshot_lock
@@ -163,11 +158,11 @@ impl DataStore {
     }
 
     pub(crate) fn gql(&self) -> &GraphQLClient {
-        &self.gql
+        &self.inner.gql
     }
 
     pub(crate) fn local(&self) -> &FilesystemStore {
-        &self.local
+        &self.inner.local
     }
 
     /// Get a checkpoint summary by sequence number. Tries the local filesystem first. If it's a
@@ -645,7 +640,7 @@ impl DataStore {
             return None;
         }
 
-        if let Some(object) = self.local.get_latest_object(&entry.object_id).ok()? {
+        if let Some(object) = self.local().get_latest_object(&entry.object_id).ok()? {
             if object.version() != entry.version {
                 return None;
             }

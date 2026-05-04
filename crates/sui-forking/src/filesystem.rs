@@ -555,7 +555,10 @@ impl FilesystemStore {
     /// Persist the owned-object index to disk. The entire index is rewritten on each update, but
     /// this is expected to be small and updated infrequently enough that this should not be a
     /// bottleneck.
-    fn write_owned_object_entries(&self, entries: &[OwnedObjectEntry]) -> anyhow::Result<()> {
+    pub(crate) fn write_owned_object_entries(
+        &self,
+        entries: &[OwnedObjectEntry],
+    ) -> anyhow::Result<()> {
         let path = self.owned_objects_index_path();
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             fs::create_dir_all(parent)
@@ -573,6 +576,11 @@ impl FilesystemStore {
             .with_context(|| format!("Failed to write index file: {}", tmp_path.display()))?;
         fs::rename(&tmp_path, &path)
             .with_context(|| format!("Failed to replace owned-object index: {}", path.display()))
+    }
+
+    /// Return whether the durable owned-object index has already been initialized.
+    pub(crate) fn owned_object_index_exists(&self) -> bool {
+        self.owned_objects_index_path().exists()
     }
 
     /// Return whether the immutable seed manifest exists for this fork directory.
