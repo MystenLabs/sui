@@ -53,7 +53,7 @@ pub async fn get_checkpoint(
             let sequence_number = client
                 .get_watermark_for_pipelines(&[CHECKPOINTS_PIPELINE])
                 .await?
-                .map(|wm| wm.checkpoint_hi_inclusive)
+                .and_then(|wm| wm.checkpoint_hi_inclusive)
                 .ok_or(CheckpointNotFoundError::sequence_number(0))?;
             client
                 .get_checkpoints_filtered(&[sequence_number], Some(&columns))

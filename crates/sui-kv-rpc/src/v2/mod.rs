@@ -156,11 +156,14 @@ pub(crate) async fn get_service_info(
     let Some(wm) = client.get_watermark().await? else {
         return Err(CheckpointNotFoundError::sequence_number(0).into());
     };
+    let Some(checkpoint_hi_inclusive) = wm.checkpoint_hi_inclusive else {
+        return Err(CheckpointNotFoundError::sequence_number(0).into());
+    };
     let mut message = GetServiceInfoResponse::default();
     message.chain_id = Some(Digest::new(chain_id.as_bytes().to_owned()).to_string());
     message.chain = Some(chain_id.chain().as_str().into());
     message.epoch = Some(wm.epoch_hi_inclusive);
-    message.checkpoint_height = Some(wm.checkpoint_hi_inclusive);
+    message.checkpoint_height = Some(checkpoint_hi_inclusive);
     message.timestamp = Some(timestamp_ms_to_proto(wm.timestamp_ms_hi_inclusive));
     message.lowest_available_checkpoint = Some(0);
     message.lowest_available_checkpoint_objects = Some(0);
