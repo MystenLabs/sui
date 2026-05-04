@@ -631,15 +631,6 @@ impl DataStore {
     /// local store, and if so convert it to `OwnedObjectInfo`. This guards against stale index
     /// entries that point to objects that have been deleted or wrapped by later transactions.
     fn valid_owned_object_info(&self, entry: OwnedObjectEntry) -> Option<OwnedObjectInfo> {
-        let object = self
-            .inner
-            .local
-            .get_latest_object(&entry.object_id)
-            .ok()??;
-        if object.version() != entry.version {
-            return None;
-        }
-
         if let Some(object) = self.local().get_latest_object(&entry.object_id).ok()? {
             if object.version() != entry.version {
                 return None;
