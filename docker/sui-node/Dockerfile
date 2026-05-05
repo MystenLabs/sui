@@ -8,19 +8,22 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends cmake clang \
  && rm -rf /var/lib/apt/lists/*
 ARG PROFILE=release
-ARG GIT_REVISION
-ENV GIT_REVISION=$GIT_REVISION
 WORKDIR /sui
 
+# COPYs ordered least- to most-frequently-changing for deeper layer cache hits.
 COPY rust-toolchain.toml ./
 COPY .cargo .cargo
 COPY Cargo.toml Cargo.lock ./
+COPY external-crates external-crates
+COPY sui-execution sui-execution
 COPY consensus consensus
 COPY crates crates
-COPY sui-execution sui-execution
-COPY external-crates external-crates
 
-RUN cargo build --locked --profile ${PROFILE} --bin sui-node
+# GIT_REVISION declared late so SHA changes don't invalidate the COPYs above.
+ARG GIT_REVISION
+ENV GIT_REVISION=$GIT_REVISION
+RUN cargo build --locked --profile ${PROFILE} --bin sui-node \
+ && strip target/${PROFILE}/sui-node
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
