@@ -3562,7 +3562,12 @@ impl TransactionDataV1 {
         for withdraw in withdraws {
             let reserved_amount = match &withdraw.reservation {
                 Reservation::MaxAmountU64(amount) => {
-                    assert!(*amount > 0, "verified in validity check");
+                    if *amount == 0 {
+                        return Err(UserInputError::InvalidWithdrawReservation {
+                            error: "Balance withdraw reservation amount must be non-zero"
+                                .to_string(),
+                        });
+                    }
                     *amount
                 }
             };
