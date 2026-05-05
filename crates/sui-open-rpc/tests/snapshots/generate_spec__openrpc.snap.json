@@ -1391,6 +1391,7 @@
                 "include_cancelled_randomness_txns_in_prologue": false,
                 "include_checkpoint_artifacts_digest_in_summary": false,
                 "include_consensus_digest_in_prologue": false,
+                "limit_groth16_pvk_inputs": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
