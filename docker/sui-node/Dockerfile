@@ -22,8 +22,7 @@ COPY crates crates
 # GIT_REVISION declared late so SHA changes don't invalidate the COPYs above.
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
-RUN cargo build --locked --profile ${PROFILE} --bin sui-node \
- && strip target/${PROFILE}/sui-node
+RUN cargo build --locked --profile ${PROFILE} --bin sui-node
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
