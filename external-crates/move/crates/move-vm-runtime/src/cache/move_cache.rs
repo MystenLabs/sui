@@ -11,8 +11,9 @@ use crate::{
     jit,
     runtime::telemetry::MoveCacheTelemetry,
     shared::{
-        constants::VIRTUAL_DISPATCH_TABLE_CACHE_SIZE, linkage_context::LinkageHash,
-        types::VersionId,
+        constants::VIRTUAL_DISPATCH_TABLE_CACHE_SIZE,
+        linkage_context::LinkageHash,
+        types::{OriginalId, VersionId},
     },
     validation::verification,
 };
@@ -21,7 +22,7 @@ use dashmap::DashMap;
 use move_vm_config::runtime::VMConfig;
 use quick_cache::sync::Cache as QCache;
 
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -43,6 +44,11 @@ pub struct MoveCache {
     pub(crate) package_cache: Arc<PackageCache>,
     pub(crate) linkage_vtables: Arc<QCache<LinkageHash, VMDispatchTables>>,
     pub(crate) interner: Arc<IdentifierInterner>,
+    /// Pinned packages whose `Arc<Package>` is held for the lifetime of this cache, keyed by
+    /// `OriginalId`. The JIT translator consults this set to rewrite cross-package calls into
+    /// these packages as direct pointers; soundness rests on the fact that these `Arc<Package>`s
+    /// outlive every user package compiled against them in this cache.
+    pub(crate) system_packages: Arc<BTreeMap<OriginalId, Arc<Package>>>,
 }
 
 #[derive(Debug)]
@@ -64,6 +70,27 @@ impl MoveCache {
             package_cache: Arc::new(DashMap::new()),
             interner: Arc::new(IdentifierInterner::new()),
             linkage_vtables: Arc::new(QCache::new(VIRTUAL_DISPATCH_TABLE_CACHE_SIZE)),
+            system_packages: Arc::new(BTreeMap::new()),
+        }
+    }
+
+    pub fn system_packages(&self) -> &BTreeMap<OriginalId, Arc<Package>> {
+        &self.system_packages
+    }
+
+    /// Register a pinned system package keyed by its `OriginalId`. Returns `true` if newly
+    /// inserted, `false` if a package was already registered at that id (which the system-pkg
+    /// install loop hits naturally when `resolve_packages` returns previously-installed
+    /// siblings as cache hits — caller decides whether to log).
+    pub(crate) fn add_system_package(&mut self, pkg: Arc<Package>) -> bool {
+        use std::collections::btree_map::Entry;
+        let id = pkg.runtime.original_id;
+        match Arc::make_mut(&mut self.system_packages).entry(id) {
+            Entry::Occupied(_) => false,
+            Entry::Vacant(slot) => {
+                slot.insert(pkg);
+                true
+            }
         }
     }
 
@@ -256,12 +283,14 @@ impl Clone for MoveCache {
             package_cache,
             interner,
             linkage_vtables,
+            system_packages,
         } = self;
         Self {
             vm_config: Arc::clone(vm_config),
             package_cache: Arc::clone(package_cache),
             interner: Arc::clone(interner),
             linkage_vtables: Arc::clone(linkage_vtables),
+            system_packages: Arc::clone(system_packages),
         }
     }
 }
