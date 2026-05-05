@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Seed resolution for the initial owned-object index.
+//! Fork manifest and seed resolution for the initial owned-object index.
 //!
-//! Address seeds resolve lightweight object metadata at the fork checkpoint, while
-//! explicit object seeds also cache the full object BCS through the existing object query path.
+//! The manifest is written for every initialized fork directory. Address seeds resolve
+//! lightweight object metadata at the fork checkpoint, while explicit object seeds also cache
+//! the full object BCS through the existing object query path.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -53,12 +54,22 @@ pub(crate) struct SeedEntry {
     pub(crate) balance: Option<u64>,
 }
 
-/// Durable manifest for pre-fork seed metadata.
+/// Durable manifest for fork metadata and optional pre-fork seed metadata.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct SeedManifest {
     pub(crate) network: String,
     pub(crate) checkpoint: CheckpointSequenceNumber,
     pub(crate) entries: Vec<SeedEntry>,
+}
+
+impl SeedManifest {
+    fn empty(network: String, checkpoint: CheckpointSequenceNumber) -> Self {
+        Self {
+            network,
+            checkpoint,
+            entries: Vec::new(),
+        }
+    }
 }
 
 impl SeedEntry {
@@ -121,6 +132,33 @@ pub(crate) fn ensure_seed_policy(data_store: &DataStore, input: &SeedInput) -> R
     Ok(())
 }
 
+/// Ensure an existing fork manifest matches the requested network and checkpoint.
+pub(crate) fn ensure_seed_manifest_matches(
+    manifest: &SeedManifest,
+    network: &str,
+    checkpoint: Option<CheckpointSequenceNumber>,
+) -> Result<(), Error> {
+    if manifest.network != network {
+        bail!(
+            "Seed manifest network {} does not match requested network {}. Use a different --data-dir.",
+            manifest.network,
+            network,
+        );
+    }
+
+    if let Some(checkpoint) = checkpoint
+        && manifest.checkpoint != checkpoint
+    {
+        bail!(
+            "Seed manifest checkpoint {} does not match requested checkpoint {}. Use a different --data-dir.",
+            manifest.checkpoint,
+            checkpoint,
+        );
+    }
+
+    Ok(())
+}
+
 /// Initialize the durable owned-object index from the seed manifest when it is safe to do so.
 pub(crate) fn initialize_owned_index_from_seed(
     data_store: &DataStore,
@@ -151,7 +189,7 @@ pub(crate) async fn prepare_seed_manifest(
     data_store: &DataStore,
     network: String,
     input: &SeedInput,
-) -> Result<Option<SeedManifest>, Error> {
+) -> Result<SeedManifest, Error> {
     if data_store.local().seed_manifest_exists() {
         if !input.is_empty() {
             bail!(
@@ -159,16 +197,18 @@ pub(crate) async fn prepare_seed_manifest(
                 data_store.local().seed_manifest_path().display(),
             );
         }
-        return data_store.local().read_seed_manifest().map(Some);
+        let manifest = data_store.local().read_seed_manifest()?;
+        ensure_seed_manifest_matches(&manifest, &network, Some(data_store.forked_at_checkpoint()))?;
+        return Ok(manifest);
     }
 
-    if input.is_empty() {
-        return Ok(None);
-    }
-
-    let manifest = resolve_seeds(input, network, data_store).await?;
+    let manifest = if input.is_empty() {
+        SeedManifest::empty(network, data_store.forked_at_checkpoint())
+    } else {
+        resolve_seeds(input, network, data_store).await?
+    };
     data_store.local().write_seed_manifest(&manifest)?;
-    Ok(Some(manifest))
+    Ok(manifest)
 }
 
 fn dedupe_addresses(addresses: &[SuiAddress]) -> Vec<SuiAddress> {
@@ -346,6 +386,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn prepare_seed_manifest_writes_empty_manifest_without_seed_input() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store = DataStore::new_for_testing_with_remote(
+            temp.path().to_path_buf(),
+            "http://localhost:1".to_owned(),
+            11,
+        );
+
+        let manifest = prepare_seed_manifest(&store, "custom".to_owned(), &SeedInput::default())
+            .await
+            .expect("empty seed manifest should be written");
+
+        assert_eq!(
+            manifest,
+            SeedManifest {
+                network: "custom".to_owned(),
+                checkpoint: 11,
+                entries: Vec::new(),
+            }
+        );
+        assert_eq!(store.local().read_seed_manifest().unwrap(), manifest);
+    }
+
+    #[tokio::test]
     async fn prepare_seed_manifest_does_not_write_manifest_when_resolution_fails() {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
@@ -403,8 +467,7 @@ mod tests {
             },
         )
         .await
-        .expect("seed manifest should resolve")
-        .expect("manifest should exist");
+        .expect("seed manifest should resolve");
 
         assert_eq!(manifest.entries.len(), 1);
         assert_eq!(manifest.entries[0].object_id, object.id());

@@ -112,20 +112,29 @@ Owned-object enumeration can be seeded when starting the fork:
 sui-fork start --checkpoint 12345678 --address 0x... --object 0x...
 ```
 
+- `--data-dir` is the exact filesystem root for local fork data. Objects,
+  checkpoints, transactions, indices, and `seed_manifest.json` are written
+  directly under that directory.
+- Without `--data-dir`, the default root is
+  `{base_path}/{network}/forked_at_{checkpoint}`. `FORKING_DATA_STORE` sets
+  `{base_path}` directly; otherwise the base path uses `.sui_fork_data` under
+  the Sui config directory or home directory.
 - `--address` is repeatable and seeds metadata for every object owned by that
   address at the fork checkpoint. Address seeding requires a checkpoint in the
   GraphQL object enumeration range.
 - `--object` is repeatable and fetches that object at the fork checkpoint. If
   the object is address-owned, it is added to the initial owned-object index.
-- Seed metadata is written once to `seed_manifest.json` under the fork
-  directory. The manifest is immutable.
+- Fork metadata is written once to `seed_manifest.json` under the fork
+  directory. The manifest is immutable and records the source network, original
+  fork checkpoint, and any optional seed object metadata. When no seed inputs
+  are provided, it is still written with an empty seed entry list.
 
-When restarting with the same `--data-dir`, `--network`, and `--checkpoint`,
-omit seed flags. If a seed manifest already exists and any seed flags are
-provided, startup fails instead of overwriting or reinterpreting the local
-state. Resume starts from the highest locally persisted checkpoint and keeps
-the durable owned-object index and deleted-object markers authoritative over
-the original seed manifest.
+When restarting with the same fork data directory, omit seed flags. If a seed
+manifest already exists and any seed flags are provided, startup fails instead
+of overwriting or reinterpreting the local state. Resume uses the original fork
+checkpoint from `seed_manifest.json`, starts from the highest locally persisted
+checkpoint, and keeps the durable owned-object index and deleted-object markers
+authoritative over the manifest seed entries.
 
 ## Limitations
 - Sequential execution: Transactions are executed one at a time, no parallelism.

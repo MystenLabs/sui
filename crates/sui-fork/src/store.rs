@@ -104,9 +104,8 @@ struct RemovedObject {
 impl DataStore {
     /// Create a new `DataStore` for the given network, anchored at `forked_at_checkpoint`.
     ///
-    /// The local filesystem cache is rooted under a per-network, per-checkpoint directory
-    /// (see `FilesystemStore`). The GraphQL client is constructed eagerly but no remote
-    /// requests are made until reads happen.
+    /// The local filesystem cache root is selected by `FilesystemStore`. The GraphQL client is
+    /// constructed eagerly but no remote requests are made until reads happen.
     pub async fn new(
         node: Node,
         forked_at_checkpoint: CheckpointSequenceNumber,

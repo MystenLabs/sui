@@ -51,8 +51,8 @@ enum Command {
         #[arg(long)]
         checkpoint: Option<u64>,
 
-        /// Base directory for on-disk storage (overrides FORKING_DATA_STORE env var)
-        #[arg(long, env = "FORKING_DATA_STORE")]
+        /// Exact directory for on-disk storage
+        #[arg(long)]
         data_dir: Option<PathBuf>,
 
         /// Address whose owned objects should seed the initial owned-object index
@@ -99,6 +99,10 @@ struct StartOutput {
     network: String,
     checkpoint: u64,
     rpc_addr: String,
+    #[serde(skip)]
+    current_checkpoint: u64,
+    #[serde(skip)]
+    resuming: bool,
 }
 
 #[derive(Serialize)]
@@ -190,7 +194,12 @@ async fn cmd_start(
 ) -> Result<()> {
     let network_name = node.network_name();
 
-    let checkpoint = match checkpoint {
+    let resolved_start = crate::startup::resolve_start_checkpoint_from_local(
+        &node,
+        checkpoint,
+        data_dir.as_deref(),
+    )?;
+    let checkpoint = match resolved_start.checkpoint {
         Some(cp) => cp,
         None => GraphQLClient::new(node.clone(), version)?
             .get_latest_checkpoint_sequence_number()
@@ -200,18 +209,34 @@ async fn cmd_start(
 
     let (context, subscription_handle) =
         crate::startup::initialize(node, checkpoint, version, data_dir, seed_input).await?;
+    let current_checkpoint = {
+        let sim = context.simulacrum().read().await;
+        sim.store()
+            .get_highest_verified_checkpoint()?
+            .map(|checkpoint| checkpoint.data().sequence_number)
+            .unwrap_or(checkpoint)
+    };
 
     let output = StartOutput {
         network: network_name.clone(),
         checkpoint,
         rpc_addr: rpc_addr.to_string(),
+        current_checkpoint,
+        resuming: resolved_start.resuming,
     };
     print_output(&output, json_output);
 
-    info!(
-        "Starting forked network from {} at checkpoint {} (rpc on {})",
-        network_name, checkpoint, rpc_addr,
-    );
+    if resolved_start.resuming {
+        info!(
+            "Resuming forked network from {}; forked at checkpoint {}, current checkpoint {} (rpc on {})",
+            network_name, checkpoint, current_checkpoint, rpc_addr,
+        );
+    } else {
+        info!(
+            "Starting forked network from {} at checkpoint {} (rpc on {})",
+            network_name, checkpoint, rpc_addr,
+        );
+    }
 
     let handle = tokio::spawn(crate::startup::run(
         context,
@@ -304,6 +329,13 @@ fn format_timestamp(ms: u64) -> String {
 
 impl std::fmt::Display for StartOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.resuming {
+            return write!(
+                f,
+                "Resuming forked network from {}; forked at checkpoint {}, current checkpoint {} (rpc on {})",
+                self.network, self.checkpoint, self.current_checkpoint, self.rpc_addr,
+            );
+        }
         write!(
             f,
             "Starting forked network from {} at checkpoint {} (rpc on {})",
@@ -357,6 +389,38 @@ impl std::fmt::Display for StatusOutput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn start_output_describes_new_start() {
+        let output = StartOutput {
+            network: "mainnet".to_owned(),
+            checkpoint: 11,
+            rpc_addr: "127.0.0.1:9000".to_owned(),
+            current_checkpoint: 11,
+            resuming: false,
+        };
+
+        assert_eq!(
+            output.to_string(),
+            "Starting forked network from mainnet at checkpoint 11 (rpc on 127.0.0.1:9000)",
+        );
+    }
+
+    #[test]
+    fn start_output_describes_resume() {
+        let output = StartOutput {
+            network: "mainnet".to_owned(),
+            checkpoint: 11,
+            rpc_addr: "127.0.0.1:9000".to_owned(),
+            current_checkpoint: 17,
+            resuming: true,
+        };
+
+        assert_eq!(
+            output.to_string(),
+            "Resuming forked network from mainnet; forked at checkpoint 11, current checkpoint 17 (rpc on 127.0.0.1:9000)",
+        );
+    }
 
     #[test]
     fn client_commands_accept_default_rpc_addr() {
