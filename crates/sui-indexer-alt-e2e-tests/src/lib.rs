@@ -49,6 +49,7 @@ use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_kv_rpc::KvRpcServer;
 use sui_kvstore::ALL_PIPELINE_NAMES;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
@@ -848,7 +849,7 @@ async fn start_archival(
         BtIndexerConfig::default(),
         PipelineLayer::default(),
         Chain::Unknown,
-        &[],
+        &ALPHA_PIPELINE_NAMES,
         registry,
     )
     .await
