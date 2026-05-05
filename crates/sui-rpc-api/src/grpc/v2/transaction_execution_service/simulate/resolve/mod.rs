@@ -353,10 +353,15 @@ pub(super) fn resolve_ptb(
     unresolved_inputs: &[sui_rpc::proto::sui::rpc::v2::Input],
     commands: Vec<Command>,
 ) -> Result<ProgrammableTransaction> {
+    // Precompute uses of every input argument across all commands once, so that
+    // per-input resolution is linear in the number of uses rather than scanning
+    // every command and every argument for each input. Without this, the
+    // resolver does O(inputs * commands * args/cmd) work.
+    let arg_uses = ArgUses::build(unresolved_inputs.len(), &commands);
     let inputs = unresolved_inputs
         .iter()
         .enumerate()
-        .map(|(arg_idx, arg)| resolve_arg(service, called_packages, &commands, arg, arg_idx))
+        .map(|(arg_idx, arg)| resolve_arg(service, called_packages, &arg_uses, arg, arg_idx))
         .collect::<Result<_>>()?;
 
     ProgrammableTransaction {
@@ -369,7 +374,7 @@ pub(super) fn resolve_ptb(
 fn resolve_arg(
     service: &RpcService,
     called_packages: &mut NormalizedPackages,
-    commands: &[Command],
+    arg_uses: &ArgUses,
     arg: &sui_rpc::proto::sui::rpc::v2::Input,
     arg_idx: usize,
 ) -> Result<CallArg> {
@@ -430,7 +435,7 @@ fn resolve_arg(
         } => CallArg::Object(resolve_shared_input(
             service,
             called_packages,
-            commands,
+            arg_uses,
             arg_idx,
             object_id,
         )?),
@@ -467,7 +472,7 @@ fn resolve_arg(
         } => CallArg::Object(resolve_object(
             service,
             called_packages,
-            commands,
+            arg_uses,
             arg_idx,
             object_id,
             version,
@@ -509,7 +514,7 @@ fn resolve_arg(
             literal: Some(literal),
         } => CallArg::Pure(literal::resolve_literal(
             called_packages,
-            commands,
+            arg_uses,
             arg_idx,
             literal,
         )?),
@@ -527,7 +532,7 @@ fn resolve_arg(
 fn resolve_object(
     service: &RpcService,
     called_packages: &NormalizedPackages,
-    commands: &[Command],
+    arg_uses: &ArgUses,
     arg_idx: usize,
     object_id: Address,
     version: Option<sui_sdk_types::Version>,
@@ -575,7 +580,7 @@ fn resolve_object(
                 },
             )?;
 
-            if is_input_argument_receiving(called_packages, commands, arg_idx)? {
+            if is_input_argument_receiving(called_packages, arg_uses, arg_idx)? {
                 ObjectArg::Receiving(object_ref)
             } else {
                 ObjectArg::ImmOrOwnedObject(object_ref)
@@ -584,7 +589,7 @@ fn resolve_object(
         }
         sui_types::object::Owner::Shared { .. }
         | sui_types::object::Owner::ConsensusAddressOwner { .. } => {
-            resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
+            resolve_shared_input_with_object(called_packages, arg_uses, arg_idx, object)
         }
         sui_types::object::Owner::ObjectOwner(_) => Err(RpcError::new(
             tonic::Code::InvalidArgument,
@@ -596,7 +601,7 @@ fn resolve_object(
 fn resolve_shared_input(
     service: &RpcService,
     called_packages: &NormalizedPackages,
-    commands: &[Command],
+    arg_uses: &ArgUses,
     arg_idx: usize,
     object_id: Address,
 ) -> Result<ObjectArg> {
@@ -606,20 +611,20 @@ fn resolve_shared_input(
         .inner()
         .get_object(&id)
         .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
-    resolve_shared_input_with_object(called_packages, commands, arg_idx, object)
+    resolve_shared_input_with_object(called_packages, arg_uses, arg_idx, object)
 }
 
 // Checks if the provided input argument is used as a receiving object
 fn is_input_argument_receiving(
     called_packages: &NormalizedPackages,
-    commands: &[Command],
+    arg_uses: &ArgUses,
     arg_idx: usize,
 ) -> Result<bool> {
     let (receiving_package, receiving_module, receiving_struct) =
         sui_types::transfer::RESOLVED_RECEIVING_STRUCT;
 
     let mut receiving = false;
-    for (command, idx) in find_arg_uses(arg_idx, commands) {
+    for (command, idx) in arg_uses.uses_of(arg_idx) {
         if let (Command::MoveCall(move_call), Some(idx)) = (command, idx) {
             let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
 
@@ -683,7 +688,7 @@ fn arg_type_of_move_call_input(
 
 fn resolve_shared_input_with_object(
     called_packages: &NormalizedPackages,
-    commands: &[Command],
+    arg_uses: &ArgUses,
     arg_idx: usize,
     object: sui_types::object::Object,
 ) -> Result<ObjectArg> {
@@ -704,7 +709,7 @@ fn resolve_shared_input_with_object(
         ));
     };
     let mut mutable = false;
-    for (command, idx) in find_arg_uses(arg_idx, commands) {
+    for (command, idx) in arg_uses.uses_of(arg_idx) {
         match (command, idx) {
             (Command::MoveCall(move_call), Some(idx)) => {
                 let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
@@ -740,69 +745,94 @@ fn resolve_shared_input_with_object(
     })
 }
 
-/// Given an particular input argument, find all of its uses.
+/// Precomputed map from input argument index to the commands that consume it.
 ///
-/// The returned iterator contains all commands where the argument is used and an optional index
-/// to indicate where the argument is used in that command.
-fn find_arg_uses(
-    arg_idx: usize,
-    commands: &[Command],
-) -> impl Iterator<Item = (&Command, Option<usize>)> {
-    fn matches_input_arg(arg: Argument, arg_idx: usize) -> bool {
-        matches!(arg, Argument::Input(idx) if idx as usize == arg_idx)
+/// Building this once is `O(commands * args_per_command)`. Looking up uses for a
+/// single input is then `O(uses_of_input)`, so the resolver as a whole is linear
+/// in the total number of arguments rather than quadratic.
+pub(super) struct ArgUses<'a> {
+    commands: &'a [Command],
+    /// `uses[input_idx]` is the list of `(command_idx, position)` pairs where
+    /// `Argument::Input(input_idx)` first appears within that command. The
+    /// `position` is `Some(i)` for argument lists (e.g. `MoveCall` parameters,
+    /// `TransferObjects` objects) and `None` for the "primary" slot of commands
+    /// that have one (e.g. `TransferObjects::address`, `SplitCoins::coin`).
+    /// Matches the prior `find_arg_uses` behaviour: at most one entry per
+    /// command, recording the first matching position.
+    uses: Vec<Vec<(usize, Option<usize>)>>,
+}
+
+impl<'a> ArgUses<'a> {
+    pub(super) fn build(num_inputs: usize, commands: &'a [Command]) -> Self {
+        let mut uses: Vec<Vec<(usize, Option<usize>)>> = vec![Vec::new(); num_inputs];
+
+        for (cmd_idx, command) in commands.iter().enumerate() {
+            // Track the first matching position per input within this command,
+            // matching the prior `find_arg_uses` semantics that returned only
+            // one entry per command.
+            let mut first_pos: BTreeMap<u16, Option<usize>> = BTreeMap::new();
+            let mut record = |arg: &Argument, pos: Option<usize>| {
+                if let Argument::Input(idx) = arg {
+                    first_pos.entry(*idx).or_insert(pos);
+                }
+            };
+
+            match command {
+                Command::MoveCall(move_call) => {
+                    for (i, arg) in move_call.arguments.iter().enumerate() {
+                        record(arg, Some(i));
+                    }
+                }
+                Command::TransferObjects(transfer_objects) => {
+                    record(&transfer_objects.address, None);
+                    for (i, arg) in transfer_objects.objects.iter().enumerate() {
+                        record(arg, Some(i));
+                    }
+                }
+                Command::SplitCoins(split_coins) => {
+                    record(&split_coins.coin, None);
+                    for (i, arg) in split_coins.amounts.iter().enumerate() {
+                        record(arg, Some(i));
+                    }
+                }
+                Command::MergeCoins(merge_coins) => {
+                    record(&merge_coins.coin, None);
+                    for (i, arg) in merge_coins.coins_to_merge.iter().enumerate() {
+                        record(arg, Some(i));
+                    }
+                }
+                Command::MakeMoveVector(make_move_vector) => {
+                    for (i, arg) in make_move_vector.elements.iter().enumerate() {
+                        record(arg, Some(i));
+                    }
+                }
+                Command::Upgrade(upgrade) => {
+                    record(&upgrade.ticket, None);
+                }
+                Command::Publish(_) => {}
+                _ => {}
+            }
+
+            for (input_idx, pos) in first_pos {
+                if let Some(slot) = uses.get_mut(input_idx as usize) {
+                    slot.push((cmd_idx, pos));
+                }
+            }
+        }
+
+        Self { commands, uses }
     }
 
-    commands.iter().filter_map(move |command| {
-        match command {
-            Command::MoveCall(move_call) => move_call
-                .arguments
-                .iter()
-                .position(|elem| matches_input_arg(*elem, arg_idx))
-                .map(Some),
-            Command::TransferObjects(transfer_objects) => {
-                if matches_input_arg(transfer_objects.address, arg_idx) {
-                    Some(None)
-                } else {
-                    transfer_objects
-                        .objects
-                        .iter()
-                        .position(|elem| matches_input_arg(*elem, arg_idx))
-                        .map(Some)
-                }
-            }
-            Command::SplitCoins(split_coins) => {
-                if matches_input_arg(split_coins.coin, arg_idx) {
-                    Some(None)
-                } else {
-                    split_coins
-                        .amounts
-                        .iter()
-                        .position(|amount| matches_input_arg(*amount, arg_idx))
-                        .map(Some)
-                }
-            }
-            Command::MergeCoins(merge_coins) => {
-                if matches_input_arg(merge_coins.coin, arg_idx) {
-                    Some(None)
-                } else {
-                    merge_coins
-                        .coins_to_merge
-                        .iter()
-                        .position(|elem| matches_input_arg(*elem, arg_idx))
-                        .map(Some)
-                }
-            }
-            Command::Publish(_) => None,
-            Command::MakeMoveVector(make_move_vector) => make_move_vector
-                .elements
-                .iter()
-                .position(|elem| matches_input_arg(*elem, arg_idx))
-                .map(Some),
-            Command::Upgrade(upgrade) => matches_input_arg(upgrade.ticket, arg_idx).then_some(None),
-            _ => None,
-        }
-        .map(|x| (command, x))
-    })
+    pub(super) fn uses_of(
+        &self,
+        arg_idx: usize,
+    ) -> impl Iterator<Item = (&Command, Option<usize>)> {
+        self.uses
+            .get(arg_idx)
+            .into_iter()
+            .flat_map(|entries| entries.iter())
+            .map(|(cmd_idx, pos)| (&self.commands[*cmd_idx], *pos))
+    }
 }
 
 struct UnresolvedObjectReference {
