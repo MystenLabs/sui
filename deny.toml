@@ -62,6 +62,9 @@ ignore = [
     # Not reachable in Sui: sui-tls uses webpki only for EndEntityCert verification (client/server
     # auth); no code path calls BorrowedCertRevocationList::from_der or OwnedCertRevocationList::from_der.
     "RUSTSEC-2026-0104",
+    # diesel sqlite3_value_text unsoundness: uses str::from_utf8_unchecked on SQLite BLOB values.
+    # Not reachable in Sui: all diesel usage targets PostgreSQL; the SQLite backend is not enabled.
+    "RUSTSEC-2026-0111",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
