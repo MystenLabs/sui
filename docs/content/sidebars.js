@@ -450,6 +450,7 @@ export default {
       ],
     },
     'onchain-finance/payment-kit',
+	'onchain-finance/payment-intents',
   ],
 
   suiStackSidebar: [
