@@ -29,7 +29,7 @@ use sui_types::storage::{
     get_module, get_package,
 };
 use sui_types::sui_system_state::get_sui_system_state;
-use sui_types::{base_types::SequenceNumber, fp_bail, fp_ensure};
+use sui_types::{base_types::SequenceNumber, fp_ensure};
 use tokio::time::Instant;
 use tracing::{debug, info, trace};
 use typed_store::traits::Map;
@@ -852,32 +852,6 @@ impl AuthorityStore {
         } else {
             Ok(ObjectLockStatus::Initialized)
         }
-    }
-
-    /// Checks that every requested ObjectRef matches the latest live version of that object.
-    /// Returns UserInputError::ObjectNotFound if any object has no live version (deleted/wrapped/missing).
-    /// Returns UserInputError::ObjectVersionUnavailableForConsumption if the latest live version
-    /// differs from the requested ref.
-    pub fn check_owned_objects_are_live(&self, objects: &[ObjectRef]) -> SuiResult {
-        for obj_ref in objects {
-            let latest_alive = self.get_latest_object_ref_if_alive(obj_ref.0)?;
-            match latest_alive {
-                None => fp_bail!(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: None,
-                }
-                .into()),
-                Some(latest_ref) if latest_ref != *obj_ref => {
-                    fp_bail!(UserInputError::ObjectVersionUnavailableForConsumption {
-                        provided_obj_ref: *obj_ref,
-                        current_version: latest_ref.1,
-                    }
-                    .into());
-                }
-                Some(_) => {}
-            }
-        }
-        Ok(())
     }
 
     /// Return the object with version less then or eq to the provided seq number.

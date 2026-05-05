@@ -46,7 +46,7 @@ use crate::authority::authority_store::{
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
-use crate::fallback_fetch::{do_fallback_lookup, do_fallback_lookup_fallible};
+use crate::fallback_fetch::do_fallback_lookup;
 use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 
@@ -1946,37 +1946,6 @@ impl ObjectCacheRead for WritebackCache {
             },
         )?;
         Ok(obj.compute_object_reference())
-    }
-
-    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        do_fallback_lookup_fallible(
-            owned_object_refs,
-            |obj_ref| match self.get_object_by_id_cache_only("object_is_live", &obj_ref.0) {
-                CacheResult::Hit((version, obj)) => {
-                    if obj.compute_object_reference() != *obj_ref {
-                        Err(UserInputError::ObjectVersionUnavailableForConsumption {
-                            provided_obj_ref: *obj_ref,
-                            current_version: version,
-                        }
-                        .into())
-                    } else {
-                        Ok(CacheResult::Hit(()))
-                    }
-                }
-                CacheResult::NegativeHit => Err(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: None,
-                }
-                .into()),
-                CacheResult::Miss => Ok(CacheResult::Miss),
-            },
-            |remaining| {
-                self.record_db_multi_get("object_is_live", remaining.len())
-                    .check_owned_objects_are_live(remaining)?;
-                Ok(vec![(); remaining.len()])
-            },
-        )?;
-        Ok(())
     }
 
     fn get_highest_pruned_checkpoint(&self) -> Option<CheckpointSequenceNumber> {
