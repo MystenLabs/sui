@@ -1,0 +1,39 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/event_subscription.rs
+expression: item
+---
+{
+  "data": {
+    "events": {
+      "contents": {
+        "extract": {
+          "asAddress": {
+            "asTransactionObject": {
+              "__typename": "ObjectChange",
+              "inputState": {
+                "asMoveObject": {
+                  "contents": {
+                    "json": {
+                      "id": "[json_id]",
+                      "value": "7"
+                    }
+                  }
+                }
+              },
+              "outputState": {
+                "asMoveObject": {
+                  "contents": {
+                    "json": {
+                      "id": "[json_id]",
+                      "value": "99"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

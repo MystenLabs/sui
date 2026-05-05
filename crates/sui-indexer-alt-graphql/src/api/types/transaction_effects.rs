@@ -539,7 +539,7 @@ impl TransactionEffects {
 }
 
 impl EffectsContents {
-    fn empty(scope: Scope) -> Self {
+    pub(crate) fn empty(scope: Scope) -> Self {
         Self {
             scope,
             contents: None,

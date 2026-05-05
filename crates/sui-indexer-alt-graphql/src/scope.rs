@@ -293,6 +293,13 @@ impl Scope {
         }
     }
 
+    /// The digest of the transaction this scope is anchored to, if any. Returns `None` if no
+    /// specific transaction is in scope (e.g. top-level queries, indexed scopes that were not
+    /// pinned to a transaction).
+    pub(crate) fn active_transaction_digest(&self) -> Option<TransactionDigest> {
+        self.active_transaction_digest
+    }
+
     /// The execution objects map active for object lookups in this scope. Resolves through the
     /// scope's [`DataSource`]: in `Streamed` mode, returns the checkpoint-wide map (object
     /// visibility is end-of-checkpoint, matching the indexed Query path); in `Executed` mode,
