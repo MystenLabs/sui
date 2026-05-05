@@ -6,6 +6,7 @@ use crate::{
     cache::{
         arena::{ArenaBox, ArenaBuilder, ArenaVec},
         identifier_interner::{IdentifierInterner, IdentifierKey},
+        move_cache::Package as CachedPackage,
     },
     dbg_println,
     execution::{
@@ -38,7 +39,10 @@ use move_core_types::{
 use indexmap::IndexMap;
 use tracing::instrument;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
+};
 
 // -------------------------------------------------------------------------------------------------
 // Translation Context and Definitions
@@ -61,6 +65,12 @@ struct PackageContext<'borrows> {
 
     pub vtable_funs: DefinitionMap<VMPointer<Function>>,
     pub vtable_types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
+
+    /// Effective system packages for direct-call rewriting in this translation. The caller is
+    /// responsible for filtering this to the system packages that the user package's linkage
+    /// table actually maps to (`OriginalId -> our pinned VersionId`); membership here is the
+    /// *only* signal we use to direct-resolve cross-package calls into a system package.
+    pub system_packages: &'borrows BTreeMap<OriginalId, Arc<CachedPackage>>,
 }
 
 struct FunctionContext<'pkg_ctxt, 'natives> {
@@ -114,29 +124,51 @@ impl PackageContext<'_> {
         self.vtable_types.extend(datatypes)
     }
 
-    /// Try to resolve a function call (vtable entry) to a direct call (i.e. a call to a function
-    /// in the same package). If the vtable key represents an inter-package call this function
-    /// will return `None` as the call cannot be resolved to a direct call.
+    /// Try to resolve a function call (vtable entry) to a direct call.
+    ///
+    /// Two cases produce a direct call:
+    /// 1. The target is a function in the same package; resolved via the in-progress vtable.
+    /// 2. The target is in a system package that this translation is keyed against; resolved
+    ///    via that system package's already-built vtable.
+    ///
+    /// Otherwise the call must remain virtual and be resolved at runtime through the
+    /// `VMDispatchTables`. The system-package map handed in here has already been filtered
+    /// against the user package's linkage table by the caller; absence here means "not a
+    /// direct-call target", not "missing dependency".
     fn try_resolve_direct_function_call(
         &self,
         vtable_entry: &VirtualTableKey,
     ) -> PartialVMResult<Option<VMPointer<Function>>> {
-        // We are calling into a different package so we cannot resolve this to a direct call.
-        if vtable_entry.package_key() != self.original_id {
-            return Ok(None);
+        // Same-package call: resolve against the package we're currently building.
+        if vtable_entry.package_key() == self.original_id {
+            return match self.vtable_funs.get(vtable_entry.intra_package_key()) {
+                Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
+                None => Err(partial_vm_error!(
+                    FUNCTION_RESOLUTION_FAILURE,
+                    "Function not found in vtable with name: {}::{}",
+                    self.version_id,
+                    self.interner.resolve_ident(
+                        &vtable_entry.intra_package_key().member_name,
+                        "function name"
+                    )
+                )),
+            };
         }
-        match self.vtable_funs.get(vtable_entry.intra_package_key()) {
-            Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
-            None => Err(partial_vm_error!(
-                FUNCTION_RESOLUTION_FAILURE,
-                "Function not found in vtable with name: {}::{}",
-                self.version_id,
-                self.interner.resolve_ident(
-                    &vtable_entry.intra_package_key().member_name,
-                    "function name"
-                )
-            )),
+
+        // System-package call: only direct-resolve if the caller has handed us a pinned
+        // version that matches the user's linkage. The pointer points into the system
+        // package's arena, which is kept alive by the runtime's `Arc<Package>` chain.
+        if let Some(sys_pkg) = self.system_packages.get(&vtable_entry.package_key())
+            && let Some(fun_ptr) = sys_pkg
+                .runtime
+                .vtable
+                .functions
+                .get(vtable_entry.intra_package_key())
+        {
+            return Ok(Some(fun_ptr.ptr_clone()));
         }
+
+        Ok(None)
     }
 
     fn arena_vec<T>(
@@ -183,6 +215,7 @@ impl FunctionContext<'_, '_> {
 pub fn package(
     natives: &NativeFunctions,
     interner: &IdentifierInterner,
+    system_packages: &BTreeMap<OriginalId, Arc<CachedPackage>>,
     verified_package: input::Package,
 ) -> PartialVMResult<Package> {
     tracing::trace!(
@@ -227,6 +260,7 @@ pub fn package(
         vtable_funs: DefinitionMap::empty(),
         vtable_types: DefinitionMap::empty(),
         type_origin_table,
+        system_packages,
     };
 
     modules(&mut package_context, &module_ids_in_pkg, &package_modules)?;
@@ -241,6 +275,7 @@ pub fn package(
         vtable_funs,
         vtable_types,
         type_origin_table: _,
+        system_packages: _,
     } = package_context;
 
     let vtable = PackageVirtualTable::new(vtable_funs, vtable_types);
