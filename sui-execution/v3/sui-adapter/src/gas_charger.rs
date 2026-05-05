@@ -332,7 +332,7 @@ pub mod checked {
                     })
                     .unwrap_or(false);
                 // bucketize computation cost
-                if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
+                if let Err(err) = self.gas_status.round_computation_cost(Some(is_move_abort))
                     && execution_result.is_ok()
                 {
                     *execution_result = Err(err);

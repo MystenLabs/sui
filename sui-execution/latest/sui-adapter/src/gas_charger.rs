@@ -11,14 +11,14 @@ pub mod checked {
     use crate::temporary_store::TemporaryStore;
     use either::Either;
     use indexmap::IndexMap;
+    use move_core_types::language_storage::TypeTag;
+    use std::collections::BTreeMap;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::deny_list_v2::CONFIG_SETTING_DYNAMIC_FIELD_SIZE_FOR_GAS;
     use sui_types::digests::TransactionDigest;
     use sui_types::error::ExecutionErrorTrait;
     use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
-    use sui_types::gas_model::gas_predicates::{
-        charge_upgrades, dont_charge_budget_on_storage_oog,
-    };
+    use sui_types::gas_model::gas_predicates::charge_upgrades;
     use sui_types::{
         accumulator_event::AccumulatorEvent,
         base_types::{ObjectID, ObjectRef, SuiAddress},
@@ -220,6 +220,18 @@ pub mod checked {
             self.gas_status.is_unmetered()
         }
 
+        pub fn gas_model_version(&self) -> u64 {
+            self.gas_model_version
+        }
+
+        pub fn set_computation_to_budget(&mut self) {
+            self.gas_status.adjust_computation_on_out_of_gas();
+        }
+
+        pub fn reset_storage_cost_and_rebate(&mut self) {
+            self.gas_status.reset_storage_cost_and_rebate();
+        }
+
         pub fn move_gas_status(&self) -> &GasStatus {
             self.gas_status.move_gas_status()
         }
@@ -264,10 +276,6 @@ pub mod checked {
         ) -> u64 {
             self.gas_status
                 .track_storage_mutation(object_id, new_size, storage_rebate)
-        }
-
-        pub fn reset_storage_cost_and_rebate(&mut self) {
-            self.gas_status.reset_storage_cost_and_rebate();
         }
 
         pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
@@ -318,125 +326,151 @@ pub mod checked {
             self.gas_status.charge_storage_read(owner_cost)
         }
 
-        /// Resets any mutations, deletions, and events recorded in the store, as well as any storage costs and
-        /// rebates, then Re-runs gas smashing. Effects on store are now as if we were about to begin execution
+        /// Resets any mutations, deletions, and events recorded in the store, as well as any
+        /// storage costs and rebates, then re-runs gas smashing. After reset, the store
+        /// Resets the temporary store and gas tracking to a clean post-input state:
+        /// drops all writes, clears storage costs/rebates, re-smashes gas, and
+        /// re-touches all mutable input objects for version bumping.
         pub fn reset(&mut self, temporary_store: &mut TemporaryStore<'_>) {
             temporary_store.drop_writes();
             self.gas_status.reset_storage_cost_and_rebate();
             self.smash_gas(temporary_store);
+            temporary_store.ensure_active_inputs_mutated();
         }
 
-        /// Entry point for gas charging.
-        /// 1. Compute tx storage gas costs and tx storage rebates, update storage_rebate field of
-        /// mutated objects
-        /// 2. Deduct computation gas costs and storage costs, credit storage rebates.
-        /// The happy path of this function follows (1) + (2) and is fairly simple.
-        /// Most of the complexity is in the unhappy paths:
-        /// - if execution aborted before calling this function, we have to dump all writes +
-        ///   re-smash gas, then charge for storage
-        /// - if we run out of gas while charging for storage, we have to dump all writes +
-        ///   re-smash gas, then charge for storage again
-        pub fn charge_gas<T, E: ExecutionErrorTrait>(
-            &mut self,
-            temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
-        ) -> GasCostSummary {
-            // at this point, we have done *all* charging for computation,
-            // but have not yet set the storage rebate or storage gas units
+        /// Round the raw computation cost into a pricing tier and apply the gas price multiplier,
+        /// setting `computation_cost` in the gas status. `is_move_abort` is a hint used
+        /// when the transaction aborted via Move.
+        /// Returns `Err(InsufficientGas)` if the rounded computation exceeds the budget;
+        /// the caller is responsible for turning that into the transaction result.
+        /// Skipped entirely (returns `Ok(())`) for unmetered transactions (system txns,
+        /// dev inspect).
+        pub fn round_computation(&mut self, is_move_abort: bool) -> Result<(), ExecutionError> {
             debug_assert!(self.gas_status.storage_rebate() == 0);
             debug_assert!(self.gas_status.storage_gas_units() == 0);
 
-            if !matches!(&self.payment, PaymentMetadata::Unmetered) {
-                // bucketize computation cost
-                let is_move_abort = execution_result
-                    .as_ref()
-                    .err()
-                    .map(|err| {
-                        matches!(
-                            err.kind(),
-                            sui_types::execution_status::ExecutionErrorKind::MoveAbort(_, _)
-                        )
-                    })
-                    .unwrap_or(false);
-                // bucketize computation cost
-                if let Err(err) = self.gas_status.bucketize_computation(Some(is_move_abort))
-                    && execution_result.is_ok()
-                {
-                    *execution_result = Err(err.into());
-                }
-
-                // On error we need to dump writes, deletes, etc before charging storage gas
-                if execution_result.is_err() {
-                    self.reset(temporary_store);
-                }
+            if matches!(&self.payment, PaymentMetadata::Unmetered) {
+                return Ok(());
             }
+            self.gas_status.round_computation_cost(Some(is_move_abort))
+        }
 
-            // compute and collect storage charges
-            temporary_store.ensure_active_inputs_mutated();
-            temporary_store.collect_storage_and_rebate(self);
-
-            let gas_payment_location = match &self.payment {
+        /// Collect storage costs and check budget sufficiency.
+        /// For gasless transactions, validates execution requirements first (must run
+        /// before `ensure_active_inputs_mutated` which would add objects to written_objects).
+        /// Returns Ok if storage fits within budget, Err(InsufficientGas) if not.
+        /// Does NOT retry or reset on failure — the caller handles that.
+        /// Does NOT apply payment — call `charge` separately after this.
+        pub fn finalize_storage(
+            &mut self,
+            temporary_store: &mut TemporaryStore<'_>,
+            withdrawal_reservations: Option<&BTreeMap<(SuiAddress, TypeTag), u64>>,
+        ) -> Result<(), ExecutionError> {
+            match &self.payment {
                 PaymentMetadata::Unmetered => {
-                    return GasCostSummary::default();
+                    temporary_store.ensure_active_inputs_mutated();
+                    temporary_store.collect_storage_and_rebate(self);
+                    Ok(())
                 }
-                PaymentMetadata::Gasless => None,
-                PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
-            };
-            if let Some(PaymentLocation::Coin(_)) = gas_payment_location {
-                #[skip_checked_arithmetic]
-                trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
-            }
-
-            if execution_result
-                .as_ref()
-                .err()
-                .map(|err| {
-                    matches!(
-                        err.kind(),
-                        sui_types::execution_status::ExecutionErrorKind::InsufficientFundsForWithdraw
-                    )
-                })
-                .unwrap_or(false)
-                && matches!(gas_payment_location, Some(PaymentLocation::AddressBalance(_))) {
-                    // If we don't have enough balance to withdraw, don't charge for gas
-                    // TODO: consider charging gas if we have enough to reserve but not enough to cover all withdraws
-                    return GasCostSummary::default();
-            }
-
-            self.compute_storage_and_rebate(temporary_store, execution_result);
-
-            let cost_summary = self.gas_status.summary();
-
-            let Some(gas_payment_location) = gas_payment_location else {
-                // Gasless: sender pays nothing.
-                assert!(
-                    matches!(self.payment, PaymentMetadata::Gasless),
-                    "Only gasless transactions should reach this point without a payment location"
-                );
-                if execution_result.is_err() {
-                    return GasCostSummary::default();
+                PaymentMetadata::Gasless => {
+                    // Gasless check must run before ensure_active_inputs_mutated, which
+                    // would add input objects to written_objects and break the check.
+                    if let Err(msg) = temporary_store
+                        .check_gasless_execution_requirements(withdrawal_reservations)
+                    {
+                        return Err(ExecutionError::new_with_source(
+                            sui_types::execution_status::ExecutionErrorKind::InsufficientGas,
+                            msg,
+                        ));
+                    }
+                    temporary_store.ensure_active_inputs_mutated();
+                    temporary_store.collect_storage_and_rebate(self);
+                    Ok(())
                 }
-                // Any storage rebate from destroyed input coins is absorbed as
-                // network fees, not returned to sender.
-                let storage_cost = cost_summary.storage_cost;
-                assert!(
-                    storage_cost == 0,
-                    "Gasless transaction must not incur storage cost, got {storage_cost}"
-                );
-                let sender_rebate = cost_summary.storage_rebate;
-                return GasCostSummary {
-                    computation_cost: sender_rebate,
-                    storage_cost: 0,
-                    storage_rebate: sender_rebate,
-                    non_refundable_storage_fee: cost_summary.non_refundable_storage_fee,
-                };
-            };
+                PaymentMetadata::Smash(_) => {
+                    temporary_store.ensure_active_inputs_mutated();
+                    temporary_store.collect_storage_and_rebate(self);
+                    self.gas_status.charge_storage_and_rebate()
+                }
+            }
+        }
 
+        /// Apply the final gas charge based on the cost summary.
+        /// For unmetered: returns a default (zero) summary.
+        /// For gasless on error: returns a default summary (no charge).
+        /// For gasless on success: absorbs storage rebate as network fees.
+        /// For smash: deducts net gas from the coin or emits an accumulator event.
+        pub fn charge<T, E: ExecutionErrorTrait>(
+            &mut self,
+            temporary_store: &mut TemporaryStore<'_>,
+            execution_result: &Result<T, E>,
+        ) -> GasCostSummary {
+            match &self.payment {
+                PaymentMetadata::Unmetered => GasCostSummary::default(),
+                PaymentMetadata::Gasless => {
+                    if execution_result.is_err() {
+                        return GasCostSummary::default();
+                    }
+                    let cost_summary = self.gas_status.summary();
+                    let storage_cost = cost_summary.storage_cost;
+                    assert!(
+                        storage_cost == 0,
+                        "Gasless transaction must not incur storage cost, got {storage_cost}"
+                    );
+                    // Any storage rebate from destroyed input coins is absorbed as
+                    // network fees, not returned to sender.
+                    let sender_rebate = cost_summary.storage_rebate;
+                    GasCostSummary {
+                        computation_cost: sender_rebate,
+                        storage_cost: 0,
+                        storage_rebate: sender_rebate,
+                        non_refundable_storage_fee: cost_summary.non_refundable_storage_fee,
+                    }
+                }
+                PaymentMetadata::Smash(metadata) => {
+                    // Don't charge if we can't withdraw from the address balance
+                    if execution_result
+                        .as_ref()
+                        .err()
+                        .map(|err| {
+                            matches!(
+                                err.kind(),
+                                sui_types::execution_status::ExecutionErrorKind::InsufficientFundsForWithdraw
+                            )
+                        })
+                        .unwrap_or(false)
+                        && matches!(
+                            metadata.gas_charge_location,
+                            PaymentLocation::AddressBalance(_)
+                        )
+                    {
+                        return GasCostSummary::default();
+                    }
+
+                    if let PaymentLocation::Coin(_) = metadata.gas_charge_location {
+                        #[skip_checked_arithmetic]
+                        trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
+                    }
+
+                    let cost_summary = self.gas_status.summary();
+                    self.apply_payment(temporary_store, cost_summary, metadata.gas_charge_location)
+                }
+            }
+        }
+
+        /// Apply the gas charge to the payment source.
+        /// For coin payments, deducts net gas usage from the gas coin.
+        /// For address balance payments, emits an accumulator event.
+        fn apply_payment(
+            &mut self,
+            temporary_store: &mut TemporaryStore<'_>,
+            cost_summary: GasCostSummary,
+            gas_payment_location: PaymentLocation,
+        ) -> GasCostSummary {
             let net_change = cost_summary.net_gas_usage();
 
             match gas_payment_location {
                 PaymentLocation::AddressBalance(payer_address) => {
-                    // TODO tracing?
                     if net_change != 0 {
                         let balance_type = sui_types::balance::Balance::type_tag(
                             sui_types::gas_coin::GAS::type_tag(),
@@ -460,73 +494,6 @@ pub mod checked {
                 }
             }
             cost_summary
-        }
-
-        /// Calculate total gas cost considering storage and rebate.
-        ///
-        /// First, we net computation, storage, and rebate to determine total gas to charge.
-        ///
-        /// If we exceed gas_budget, we set execution_result to InsufficientGas, failing the tx.
-        /// If we have InsufficientGas, we determine how much gas to charge for the failed tx:
-        ///
-        /// v1: we set computation_cost = gas_budget, so we charge net (gas_budget - storage_rebates)
-        /// v2: we charge (computation + storage costs for input objects - storage_rebates)
-        ///     if the gas balance is still insufficient, we fall back to set computation_cost = gas_budget
-        ///     so we charge net (gas_budget - storage_rebates)
-        fn compute_storage_and_rebate<T, E: ExecutionErrorTrait>(
-            &mut self,
-            temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
-        ) {
-            if dont_charge_budget_on_storage_oog(self.gas_model_version) {
-                self.handle_storage_and_rebate_v2(temporary_store, execution_result)
-            } else {
-                self.handle_storage_and_rebate_v1(temporary_store, execution_result)
-            }
-        }
-
-        fn handle_storage_and_rebate_v1<T, E: ExecutionErrorTrait>(
-            &mut self,
-            temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
-        ) {
-            if let Err(err) = self.gas_status.charge_storage_and_rebate() {
-                self.reset(temporary_store);
-                self.gas_status.adjust_computation_on_out_of_gas();
-                temporary_store.ensure_active_inputs_mutated();
-                temporary_store.collect_rebate(self);
-                if execution_result.is_ok() {
-                    *execution_result = Err(err.into());
-                }
-            }
-        }
-
-        fn handle_storage_and_rebate_v2<T, E: ExecutionErrorTrait>(
-            &mut self,
-            temporary_store: &mut TemporaryStore<'_>,
-            execution_result: &mut Result<T, E>,
-        ) {
-            if let Err(err) = self.gas_status.charge_storage_and_rebate() {
-                // we run out of gas charging storage, reset and try charging for storage again.
-                // Input objects are touched and so they have a storage cost
-                // Attempt to charge just for computation + input object storage costs - storage_rebate
-                self.reset(temporary_store);
-                temporary_store.ensure_active_inputs_mutated();
-                temporary_store.collect_storage_and_rebate(self);
-                if let Err(err) = self.gas_status.charge_storage_and_rebate() {
-                    // we run out of gas attempting to charge for the input objects exclusively,
-                    // deal with this edge case by not charging for storage: we charge (gas_budget - rebates).
-                    self.reset(temporary_store);
-                    self.gas_status.adjust_computation_on_out_of_gas();
-                    temporary_store.ensure_active_inputs_mutated();
-                    temporary_store.collect_rebate(self);
-                    if execution_result.is_ok() {
-                        *execution_result = Err(err.into());
-                    }
-                } else if execution_result.is_ok() {
-                    *execution_result = Err(err.into());
-                }
-            }
         }
     }
 

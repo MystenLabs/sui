@@ -67,6 +67,7 @@ mod checked {
     use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
+    use sui_types::gas_model::gas_predicates::dont_charge_budget_on_storage_oog;
     use sui_types::id::UID;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::storage::BackingStore;
@@ -436,85 +437,71 @@ mod checked {
                 None
             };
 
-        // We must charge object read here during transaction execution, because if this fails
-        // we must still ensure an effect is committed and all objects versions incremented
-        let result = gas_charger.charge_input_objects(temporary_store);
-
-        let result: ResultWithTimings<Mode::ExecutionResults, Mode::Error> =
-            result.map_err(|e| (e.into(), vec![])).and_then(
-                |()| -> ResultWithTimings<Mode::ExecutionResults, Mode::Error> {
-                    let mut execution_result: ResultWithTimings<
-                        Mode::ExecutionResults,
-                        Mode::Error,
-                    > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => Err((
-                            ExecutionError::new(early_execution_error, None).into(),
-                            vec![],
-                        )),
-                        ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
-                            store,
-                            temporary_store,
-                            transaction_kind,
-                            rewritten_inputs,
-                            tx_ctx,
-                            move_vm,
-                            gas_charger,
-                            protocol_config,
-                            metrics.clone(),
-                            trace_builder_opt,
-                        ),
-                    };
-
-                    let meter_check = check_meter_limit::<Mode>(
-                        temporary_store,
-                        gas_charger,
-                        protocol_config,
-                        metrics.clone(),
-                    );
-                    if let Err(e) = meter_check {
-                        execution_result = Err((e, vec![]));
-                    }
-
-                    if execution_result.is_ok() {
-                        let gas_check = check_written_objects_limit::<Mode>(
-                            temporary_store,
-                            gas_charger,
-                            protocol_config,
-                            metrics,
-                        );
-                        if let Err(e) = gas_check {
-                            execution_result = Err((e, vec![]));
-                        }
-                    }
-
-                    execution_result
-                },
-            );
-
-        let (mut result, timings) = match result {
-            Ok((r, t)) => (Ok(r), t),
-            Err((e, t)) => (Err(e), t),
-        };
-        if is_gasless
-            && result.is_ok()
-            && let Err(msg) = temporary_store
-                .check_gasless_execution_requirements(withdrawal_reservations.as_ref())
-        {
-            result = Err(
-                ExecutionError::new_with_source(ExecutionErrorKind::InsufficientGas, msg).into(),
+        // Transaction execution pipeline. Each phase depends on the previous succeeding:
+        //   1. Charge input objects — deduct read costs from the gas meter
+        //   2. Execute PTB — run the transaction and round computation cost
+        //   3. Finalize storage — collect storage costs, check budget, validate gasless
+        //   4. Check effects limits — validate effects size and written objects size
+        // If any phase fails, the error short-circuits via and_then; the error path is
+        // recovered uniformly by reset_charges (see below), after which charge applies
+        // the final payment. On success, charge is called directly on the phase result.
+        let mut timings = vec![];
+        let phase_result: Result<Mode::ExecutionResults, Mode::Error> = gas_charger
+            .charge_input_objects(temporary_store)
+            .map_err(Into::into)
+            .and_then(|()| {
+                let (result, t) = execute_ptb::<Mode>(
+                    store,
+                    temporary_store,
+                    transaction_kind,
+                    rewritten_inputs,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics.clone(),
+                    trace_builder_opt,
+                    execution_params,
+                );
+                timings = t;
+                result
+            })
+            .and_then(|v| {
+                gas_charger.finalize_storage(temporary_store, withdrawal_reservations.as_ref())?;
+                Ok(v)
+            })
+            .and_then(|v| {
+                // Effects limits are only checked when all previous phases succeed.
+                // TODO: review whether these should run unconditionally (before charge)
+                // so that effects-too-large is always reported even on failed transactions.
+                check_meter_limit::<Mode>(
+                    temporary_store,
+                    gas_charger,
+                    protocol_config,
+                    metrics.clone(),
+                )?;
+                check_written_objects_limit::<Mode>(
+                    temporary_store,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )?;
+                Ok(v)
+            });
+        if phase_result.is_err() {
+            reset_charges(
+                gas_charger,
+                temporary_store,
+                withdrawal_reservations.as_ref(),
             );
         }
+        let mut result = phase_result;
+        let cost_summary = gas_charger.charge(temporary_store, &result);
 
-        let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
-        // For advance epoch transaction, we need to provide epoch rewards and rebates as extra
-        // information provided to check_sui_conserved, because we mint rewards, and burn
-        // the rebates. We also need to pass in the unmetered_storage_rebate because storage
-        // rebate is not reflected in the storage_rebate of gas summary. This is a bit confusing.
-        // We could probably clean up the code a bit.
-        // Put all the storage rebate accumulated in the system transaction
-        // to the 0x5 object so that it's not lost.
+        // Always: conserve unmetered storage rebate.
         temporary_store.conserve_unmetered_storage_rebate(gas_charger.unmetered_storage_rebate());
 
+        // Always: conservation checks.
         if let Err(e) = run_conservation_checks::<Mode>(
             temporary_store,
             gas_charger,
@@ -525,6 +512,7 @@ mod checked {
             &cost_summary,
             is_genesis_tx,
             advance_epoch_gas_summary,
+            withdrawal_reservations.as_ref(),
         ) {
             // FIXME: we cannot fail the transaction if this is an epoch change transaction.
             result = Err(e);
@@ -533,6 +521,103 @@ mod checked {
         (cost_summary, result, timings)
     }
 
+    /// Uniform error recovery. Leaves the gas status and temporary store in a state
+    /// where `GasCharger::charge` can be called by the caller to apply the final payment.
+    /// Does not charge — it only prepares the cost summary.
+    ///
+    /// Reset drops execution writes, re-smashes gas, and re-touches all mutable input
+    /// objects. After reset the store contains gas coin + input objects (no execution
+    /// outputs). Then finalize storage (collect storage costs for those objects + budget
+    /// check).
+    ///
+    /// If the budget check fails (computation consumed nearly the entire budget, leaving
+    /// no room for even input-object storage), we reset again and set
+    /// computation_cost = gas_budget with zero storage. The subsequent `charge` then
+    /// always succeeds because there are no storage costs to exceed the budget. Gas coin
+    /// and input objects remain in the store so their versions are updated in the
+    /// transaction effects.
+    ///
+    /// For gas model v1 (version < 4), the input-only storage attempt is skipped entirely
+    /// and we go straight to the full-budget fallback. This preserves the original v1
+    /// behavior where storage OOG always charges the full budget.
+    fn reset_charges(
+        gas_charger: &mut GasCharger,
+        temporary_store: &mut TemporaryStore<'_>,
+        withdrawal_reservations: Option<&BTreeMap<(SuiAddress, TypeTag), u64>>,
+    ) {
+        gas_charger.reset(temporary_store);
+        // v2+: try collecting input-only storage costs (reduced scope after reset).
+        // v1: skip this and go straight to the full-budget fallback.
+        if dont_charge_budget_on_storage_oog(gas_charger.gas_model_version())
+            && gas_charger
+                .finalize_storage(temporary_store, withdrawal_reservations)
+                .is_ok()
+        {
+            return;
+        }
+        // Input-only storage doesn't fit or v1 path: set computation to the full
+        // budget with zero storage so the subsequent charge takes the entire budget.
+        gas_charger.reset(temporary_store);
+        gas_charger.set_computation_to_budget();
+    }
+
+    /// Execute the programmable transaction (or apply early error), then round the
+    /// computation cost into a pricing tier. Returns the execution result and timings.
+    fn execute_ptb<Mode: ExecutionMode>(
+        store: &dyn BackingStore,
+        temporary_store: &mut TemporaryStore<'_>,
+        transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        tx_ctx: Rc<RefCell<TxContext>>,
+        move_vm: &Arc<MoveRuntime>,
+        gas_charger: &mut GasCharger,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+        execution_params: ExecutionOrEarlyError,
+    ) -> (
+        Result<Mode::ExecutionResults, Mode::Error>,
+        Vec<ExecutionTiming>,
+    ) {
+        let r = match execution_params {
+            ExecutionOrEarlyError::Err(early_execution_error) => Err((
+                ExecutionError::new(early_execution_error, None).into(),
+                vec![],
+            )),
+            ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
+                store,
+                temporary_store,
+                transaction_kind,
+                rewritten_inputs,
+                tx_ctx,
+                move_vm,
+                gas_charger,
+                protocol_config,
+                metrics,
+                trace_builder_opt,
+            ),
+        };
+        let (mut result, timings) = match r {
+            Ok((v, t)) => (Ok(v), t),
+            Err((e, t)) => (Err(e), t),
+        };
+        let is_move_abort = matches!(
+            result.as_ref().err().map(|e| e.kind()),
+            Some(sui_types::execution_status::ExecutionErrorKind::MoveAbort(
+                ..
+            ))
+        );
+        if let Err(err) = gas_charger.round_computation(is_move_abort)
+            && result.is_ok()
+        {
+            result = Err(err.into());
+        }
+        (result, timings)
+    }
+
+    /// Check SUI conservation. On failure, reset charges and re-charge to recover,
+    /// then re-check conservation against the recovered cost summary.
+    /// Panics if conservation still fails after recovery.
     #[instrument(name = "run_conservation_checks", level = "debug", skip_all)]
     fn run_conservation_checks<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
@@ -544,73 +629,71 @@ mod checked {
         cost_summary: &GasCostSummary,
         is_genesis_tx: bool,
         advance_epoch_gas_summary: Option<(u64, u64)>,
+        withdrawal_reservations: Option<&BTreeMap<(SuiAddress, TypeTag), u64>>,
     ) -> Result<(), Mode::Error> {
-        let mut result: Result<(), Mode::Error> = Ok(());
-        if !is_genesis_tx && !Mode::skip_conservation_checks() {
-            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-            let conservation_result = {
-                temporary_store
-                    .check_sui_conserved(simple_conservation_checks, cost_summary)
-                    .and_then(|()| {
-                        if enable_expensive_checks {
-                            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-                            let mut layout_resolver = TypeLayoutResolver::new(
-                                move_vm,
-                                temporary_store.protocol_config(),
-                                Box::new(&*temporary_store),
-                            );
-                            temporary_store.check_sui_conserved_expensive(
-                                cost_summary,
-                                advance_epoch_gas_summary,
-                                &mut layout_resolver,
-                            )
-                        } else {
-                            Ok(())
-                        }
-                    })
-            };
-            if let Err(conservation_err) = conservation_result {
-                // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
-                // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
-                result = Err(conservation_err.into());
-                gas_charger.reset(temporary_store);
-                gas_charger.charge_gas(temporary_store, &mut result);
-                // check conservation once more
-                if let Err(recovery_err) = {
-                    temporary_store
-                        .check_sui_conserved(simple_conservation_checks, cost_summary)
-                        .and_then(|()| {
-                            if enable_expensive_checks {
-                                // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-                                let mut layout_resolver = TypeLayoutResolver::new(
-                                    move_vm,
-                                    temporary_store.protocol_config(),
-                                    Box::new(&*temporary_store),
-                                );
-                                temporary_store.check_sui_conserved_expensive(
-                                    cost_summary,
-                                    advance_epoch_gas_summary,
-                                    &mut layout_resolver,
-                                )
-                            } else {
-                                Ok(())
-                            }
-                        })
-                } {
-                    // if we still fail, it's a problem with gas
-                    // charging that happens even in the "aborted" case--no other option but panic.
-                    // we will create or destroy SUI otherwise
-                    panic!(
-                        "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
-                        tx_digest,
-                        recovery_err,
-                        gas_charger.summary()
-                    )
-                }
+        if is_genesis_tx || Mode::skip_conservation_checks() {
+            return Ok(());
+        }
+
+        if let Err(conservation_err) = check_conservation(
+            temporary_store,
+            move_vm,
+            simple_conservation_checks,
+            enable_expensive_checks,
+            cost_summary,
+            advance_epoch_gas_summary,
+        ) {
+            // Conservation violated. Reset and re-charge, then re-check against the
+            // recovered cost summary.
+            let recovery_result: Result<(), Mode::Error> = Err(conservation_err.into());
+            reset_charges(gas_charger, temporary_store, withdrawal_reservations);
+            let recovery_cost = gas_charger.charge(temporary_store, &recovery_result);
+
+            if let Err(recovery_err) = check_conservation(
+                temporary_store,
+                move_vm,
+                simple_conservation_checks,
+                enable_expensive_checks,
+                &recovery_cost,
+                advance_epoch_gas_summary,
+            ) {
+                panic!(
+                    "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
+                    tx_digest,
+                    recovery_err,
+                    gas_charger.summary()
+                )
             }
-        } // else, we're in the genesis transaction which mints the SUI supply, and hence does not satisfy SUI conservation, or
-        // we're in the non-production dev inspect mode which allows us to violate conservation
-        result
+
+            return recovery_result;
+        }
+
+        Ok(())
+    }
+
+    /// Run both cheap and (optionally) expensive SUI conservation checks.
+    fn check_conservation(
+        temporary_store: &mut TemporaryStore<'_>,
+        move_vm: &Arc<MoveRuntime>,
+        simple_conservation_checks: bool,
+        enable_expensive_checks: bool,
+        cost_summary: &GasCostSummary,
+        advance_epoch_gas_summary: Option<(u64, u64)>,
+    ) -> Result<(), ExecutionError> {
+        temporary_store.check_sui_conserved(simple_conservation_checks, cost_summary)?;
+        if enable_expensive_checks {
+            let mut layout_resolver = TypeLayoutResolver::new(
+                move_vm,
+                temporary_store.protocol_config(),
+                Box::new(&*temporary_store),
+            );
+            temporary_store.check_sui_conserved_expensive(
+                cost_summary,
+                advance_epoch_gas_summary,
+                &mut layout_resolver,
+            )?;
+        }
+        Ok(())
     }
 
     #[instrument(name = "check_meter_limit", level = "debug", skip_all)]

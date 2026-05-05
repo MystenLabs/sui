@@ -189,7 +189,7 @@ mod checked {
         gas_budget: u64,
         // Computation cost after execution. This is the result of the gas used by the `GasStatus`
         // properly bucketized.
-        // Starts at 0 and it is assigned in `bucketize_computation`.
+        // Starts at 0 and it is assigned in `round_computation_cost`.
         computation_cost: u64,
         // Whether to charge or go unmetered
         charge: bool,
@@ -409,7 +409,7 @@ mod checked {
             &mut self.gas_status
         }
 
-        fn bucketize_computation(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError> {
+        fn round_computation_cost(&mut self, aborted: Option<bool>) -> Result<(), ExecutionError> {
             let gas_used = self.gas_status.gas_used_pre_gas_price();
             let effective_gas_price = if self
                 .cost_table
