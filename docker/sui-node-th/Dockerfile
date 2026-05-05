@@ -34,14 +34,15 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /sui
-ARG PROFILE=release
 # Tidehunter-feature binaries ship at suffixed paths only — no canonical
 # aliases, since the storage backend is incompatible with rocksdb and a
 # silent swap at /opt/sui/bin/sui-node could corrupt unrelated databases.
-COPY --from=builder /sui/target/tidehunter/${PROFILE}/sui-node /opt/sui/bin/sui-node-th
-COPY --from=builder /sui/target/tidehunter/${PROFILE}/sui      /opt/sui/bin/sui-th
-COPY --from=builder /sui/target/tidehunter/${PROFILE}/sui-tool /opt/sui/bin/sui-tool-th
-COPY --from=builder /sui/target/tidehunter/${PROFILE}/stress   /opt/sui/bin/stress-th
+# Source path is hardcoded to /release/ because the release and bench
+# profiles both emit there (bench inherits release's dir-name).
+COPY --from=builder /sui/target/tidehunter/release/sui-node /opt/sui/bin/sui-node-th
+COPY --from=builder /sui/target/tidehunter/release/sui      /opt/sui/bin/sui-th
+COPY --from=builder /sui/target/tidehunter/release/sui-tool /opt/sui/bin/sui-tool-th
+COPY --from=builder /sui/target/tidehunter/release/stress   /opt/sui/bin/stress-th
 
 ARG BUILD_DATE
 ARG GIT_REVISION
