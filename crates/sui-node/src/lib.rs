@@ -886,7 +886,9 @@ impl SuiNode {
             .await?;
 
             if node_role.can_propose_transactions() {
-                components.consensus_adapter.submit_recovered(&epoch_store);
+                components
+                    .consensus_adapter
+                    .recover_end_of_publish(&epoch_store);
             }
 
             if node_role.should_run_validator_service() {
@@ -1319,18 +1321,20 @@ impl SuiNode {
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
-        let validator_server_handle = if node_role.should_run_validator_service() {
-            Some(
-                Self::start_grpc_validator_service(
-                    &config,
-                    state.clone(),
-                    consensus_adapter.clone(),
-                    &registry_service.default_registry(),
-                )
-                .await?,
+        let (validator_server_handle, admission_queue) = if node_role.should_run_validator_service()
+        {
+            let (handle, queue) = Self::start_grpc_validator_service(
+                &config,
+                state.clone(),
+                consensus_adapter.clone(),
+                epoch_store.clone(),
+                &registry_service.default_registry(),
+                inflight_slot_freed_notify,
             )
+            .await?;
+            (Some(handle), queue)
         } else {
-            None
+            (None, None)
         };
 
         // Starts an overload monitor that monitors the execution of the authority.
