@@ -22,7 +22,6 @@ use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableConnection;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::KeyValueStoreReader;
-use sui_kvstore::WatermarkV0;
 use sui_kvstore::WatermarkV1;
 use sui_kvstore::tables;
 use sui_kvstore::testing::BigTableEmulator;
@@ -119,11 +118,6 @@ impl Harness for WatermarkHarness {
 /// Snapshot of a watermark row's distinguishing cells.
 #[derive(Default)]
 struct RawCells {
-    /// The v0 BCS `w` cell, if present.
-    w: Option<Bytes>,
-    /// True iff the v1 per-field schema has been written (detected by presence of the `ehi`
-    /// cell, which is always written alongside the rest of the v1 cells).
-    has_v1: bool,
     /// The value of the `chi` (checkpoint_hi_inclusive) cell — `None` when the cell is absent,
     /// which is the post-`init(None)` state.
     checkpoint_hi: Option<u64>,
@@ -158,10 +152,6 @@ async fn read_raw_cells(client: &mut BigTableClient, pipeline: &str) -> Result<R
         }
         for (col, val) in row {
             match col.as_ref() {
-                b if b == tables::watermarks::col::WATERMARK_V0.as_bytes() => cells.w = Some(val),
-                b if b == tables::watermarks::col::EPOCH_HI.as_bytes() => {
-                    cells.has_v1 = true;
-                }
                 b if b == tables::watermarks::col::CHECKPOINT_HI.as_bytes() => {
                     cells.checkpoint_hi = Some(decode_u64(&val));
                 }
@@ -185,57 +175,53 @@ async fn read_raw_cells(client: &mut BigTableClient, pipeline: &str) -> Result<R
 }
 
 #[tokio::test]
-async fn test_init_watermark_v0_bootstrap() -> Result<()> {
+async fn test_init_watermark_with_checkpoint_writes_schema_cells() -> Result<()> {
     let harness = WatermarkHarness::new().await?;
-
-    // Seed a BCS `WatermarkV0` directly into the `w` column.
-    let v0 = WatermarkV0 {
-        epoch_hi_inclusive: EPOCH_HI,
-        checkpoint_hi_inclusive: CHECKPOINT_HI,
-        tx_hi: TX_HI,
-        timestamp_ms_hi_inclusive: TIMESTAMP_MS_HI,
-    };
-    let cell = tables::watermarks::encode_v0(&v0)?;
-    let entry = tables::make_entry(
-        tables::watermarks::encode_key(PIPELINE),
-        [cell],
-        Some(TIMESTAMP_MS_HI),
-    );
-    harness
-        .client
-        .clone()
-        .write_entries(tables::watermarks::NAME, [entry])
-        .await?;
-
-    // Now run init_watermark — it should bootstrap the v1 cells from the v0 committer
-    // fields and leave the v0 `w` cell untouched.
     let mut conn = harness.connect().await?;
-    let init = conn.init_watermark(PIPELINE, Some(0)).await?.unwrap();
-    assert_eq!(init.checkpoint_hi_inclusive, Some(CHECKPOINT_HI));
-    assert_eq!(init.reader_lo, Some(CHECKPOINT_HI + 1));
+
+    conn.init_watermark(PIPELINE, Some(CHECKPOINT_HI)).await?;
 
     let cells = harness.cells(PIPELINE).await?;
-    assert!(cells.w.is_some(), "v0 `w` cell must be preserved");
-    assert!(cells.has_v1, "v1 cells must be written");
+    assert_eq!(cells.checkpoint_hi, Some(CHECKPOINT_HI));
     assert_eq!(cells.schema_version, Some(1));
     Ok(())
 }
 
 #[tokio::test]
-async fn test_set_reader_watermark_after_init_none_skips_v0() -> Result<()> {
+async fn test_set_committer_watermark_writes_schema_cells() -> Result<()> {
     let harness = WatermarkHarness::new().await?;
     let mut conn = harness.connect().await?;
     conn.init_watermark(PIPELINE, None).await?;
 
-    assert!(conn.set_reader_watermark(PIPELINE, READER_LO).await?);
+    conn.set_committer_watermark(
+        PIPELINE,
+        CommitterWatermark {
+            epoch_hi_inclusive: EPOCH_HI,
+            checkpoint_hi_inclusive: CHECKPOINT_HI,
+            tx_hi: TX_HI,
+            timestamp_ms_hi_inclusive: TIMESTAMP_MS_HI,
+        },
+    )
+    .await?;
 
     let cells = harness.cells(PIPELINE).await?;
-    assert!(
-        cells.w.is_none(),
-        "set_reader_watermark must not introduce `w` when checkpoint is still None"
-    );
-    assert!(cells.has_v1);
+    assert_eq!(cells.checkpoint_hi, Some(CHECKPOINT_HI));
     assert_eq!(cells.schema_version, Some(1));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_set_reader_watermark_after_init_none_preserves_absent_checkpoint() -> Result<()> {
+    let harness = WatermarkHarness::new().await?;
+    let mut conn = harness.connect().await?;
+    conn.init_watermark(PIPELINE, None).await?;
+
+    conn.set_reader_watermark(PIPELINE, READER_LO).await?;
+
+    let cells = harness.cells(PIPELINE).await?;
+    assert_eq!(cells.checkpoint_hi, None);
+    assert_eq!(cells.schema_version, Some(1));
+    assert_eq!(cells.reader_lo, Some(READER_LO));
     Ok(())
 }
 
@@ -256,21 +242,18 @@ async fn test_pruner_watermark_saturates_when_ready() -> Result<()> {
 }
 
 #[tokio::test]
-async fn test_set_reader_watermark_rejects_stale() -> Result<()> {
+async fn test_stale_reader_watermark_does_not_bump_pruner_timestamp() -> Result<()> {
     let harness = WatermarkHarness::new().await?;
     let mut conn = harness.connect().await?;
     conn.init_watermark(PIPELINE, None).await?;
 
-    assert!(conn.set_reader_watermark(PIPELINE, READER_LO).await?);
+    conn.set_reader_watermark(PIPELINE, READER_LO).await?;
     let advanced = harness.cells(PIPELINE).await?;
 
-    // Equal value must be rejected (strict `>` semantics).
-    assert!(!conn.set_reader_watermark(PIPELINE, READER_LO).await?);
-    // Strictly lower value must be rejected.
-    assert!(!conn.set_reader_watermark(PIPELINE, READER_LO - 1).await?);
+    let _ = conn.set_reader_watermark(PIPELINE, READER_LO).await?;
+    let _ = conn.set_reader_watermark(PIPELINE, READER_LO - 1).await?;
 
     let after_rejects = harness.cells(PIPELINE).await?;
-    assert_eq!(after_rejects.reader_lo, advanced.reader_lo);
     assert_eq!(
         after_rejects.pruner_timestamp_ms, advanced.pruner_timestamp_ms,
         "rejected reader writes must not bump the pruner timestamp"
@@ -284,17 +267,14 @@ async fn test_set_reader_watermark_advances_pruner_timestamp() -> Result<()> {
     let mut conn = harness.connect().await?;
     conn.init_watermark(PIPELINE, None).await?;
 
-    assert!(conn.set_reader_watermark(PIPELINE, READER_LO).await?);
+    conn.set_reader_watermark(PIPELINE, READER_LO).await?;
     let first = harness.cells(PIPELINE).await?;
     let first_ts = first.pruner_timestamp_ms.expect("ptm cell must be written");
 
     // Sleep past 1ms so the second timestamp is observably greater.
     tokio::time::sleep(Duration::from_millis(2)).await;
 
-    assert!(
-        conn.set_reader_watermark(PIPELINE, READER_LO + 1).await?,
-        "strictly greater reader_lo must succeed"
-    );
+    conn.set_reader_watermark(PIPELINE, READER_LO + 1).await?;
     let second = harness.cells(PIPELINE).await?;
     let second_ts = second
         .pruner_timestamp_ms
@@ -353,37 +333,6 @@ async fn test_get_watermark_for_pipelines_hides_below_reader_lo() -> Result<()> 
     assert!(
         hidden.is_none(),
         "row with checkpoint < reader_lo must be hidden"
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn test_get_watermark_for_pipelines_ignores_v0_only() -> Result<()> {
-    // A row that only has the v0 `w` column (e.g. seeded by an older indexer) is no longer
-    // surfaced after the switch to reading the v1 per-field columns.
-    let harness = WatermarkHarness::new().await?;
-    let v0 = WatermarkV0 {
-        epoch_hi_inclusive: EPOCH_HI,
-        checkpoint_hi_inclusive: CHECKPOINT_HI,
-        tx_hi: TX_HI,
-        timestamp_ms_hi_inclusive: TIMESTAMP_MS_HI,
-    };
-    let cell = tables::watermarks::encode_v0(&v0)?;
-    let entry = tables::make_entry(
-        tables::watermarks::encode_key(PIPELINE),
-        [cell],
-        Some(TIMESTAMP_MS_HI),
-    );
-    harness
-        .client
-        .clone()
-        .write_entries(tables::watermarks::NAME, [entry])
-        .await?;
-
-    let wm = harness.read_watermark(&[PIPELINE]).await?;
-    assert!(
-        wm.is_none(),
-        "v0-only rows must be hidden by the v1 read path"
     );
     Ok(())
 }

@@ -42,7 +42,6 @@ use crate::ProtocolConfigData;
 use crate::TransactionData;
 use crate::TransactionEventsData;
 use crate::TxSeqDigestData;
-use crate::WatermarkV0;
 use crate::WatermarkV1;
 use crate::bigtable::metrics::KvMetrics;
 use crate::bigtable::proto::bigtable::v2::CheckAndMutateRowRequest;
@@ -376,8 +375,7 @@ impl BigTableClient {
     }
 
     /// Read the raw cells of a pipeline's watermark row. Returns an empty vec when the row
-    /// does not exist. Callers decode whichever schema variant they need (e.g.
-    /// [`tables::watermarks::decode_v1`] / [`tables::watermarks::decode_v0`]).
+    /// does not exist. Callers decode the row with [`tables::watermarks::decode_v1`].
     pub async fn get_pipeline_watermark_rows(
         &mut self,
         pipeline: &str,
@@ -460,8 +458,7 @@ impl BigTableClient {
     }
 
     /// Create the row for a pipeline iff no schema-version cell exists yet. Used by
-    /// `init_watermark` for fresh rows and the v0 → v1 bootstrap. Returns `true` iff the
-    /// write happened.
+    /// `init_watermark` for fresh rows. Returns `true` iff the write happened.
     pub async fn create_pipeline_watermark_if_absent(
         &mut self,
         pipeline: &str,
@@ -479,13 +476,6 @@ impl BigTableClient {
         ];
         if let Some(checkpoint) = new.checkpoint_hi_inclusive {
             cells.push((col::CHECKPOINT_HI, u64_be(checkpoint)));
-            let v0 = WatermarkV0 {
-                epoch_hi_inclusive: new.epoch_hi_inclusive,
-                checkpoint_hi_inclusive: checkpoint,
-                tx_hi: new.tx_hi,
-                timestamp_ms_hi_inclusive: new.timestamp_ms_hi_inclusive,
-            };
-            cells.push((col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)));
         }
         let mutations = build_set_cell_mutations(cells);
         let predicate = column_exists_filter(tables::watermarks::col::SCHEMA_VERSION);

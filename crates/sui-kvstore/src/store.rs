@@ -6,7 +6,6 @@
 //! This implements the `Store`, `Connection`, and `ConcurrentConnection` traits to allow the
 //! new framework to use BigTable for watermark storage. Per-pipeline watermarks are stored in
 //! the `watermark_alt` table as:
-//! - `w` (BCS v0 `WatermarkV0`) — kept in sync for backward compatibility.
 //! - `v` (schema version, currently `1`) — marks the row as using the new schema.
 //! - `ehi` / `chi` / `th` / `tmhi` / `rl` / `ph` / `ptm` — one u64 BE cell per
 //!   [`WatermarkV1`] field. `chi` (checkpoint) is absent when the committer has not observed
@@ -32,11 +31,9 @@ use sui_indexer_alt_framework_store_traits::PrunerWatermark;
 use sui_indexer_alt_framework_store_traits::ReaderWatermark;
 use sui_indexer_alt_framework_store_traits::Store;
 
-use crate::WatermarkV0;
 use crate::WatermarkV1;
 use crate::bigtable::client::BigTableClient;
 use crate::tables::watermarks::col;
-use crate::tables::watermarks::decode_v0;
 use crate::tables::watermarks::decode_v1;
 
 /// A Store implementation backed by BigTable.
@@ -108,15 +105,12 @@ impl Connection for BigTableConnection<'_> {
         pipeline_task: &str,
         checkpoint_hi_inclusive: Option<u64>,
     ) -> Result<Option<InitWatermark>> {
-        // This initial read is to determine if we need to migrate from v0 to v1.
         let row = self
             .client
             .get_pipeline_watermark_rows(pipeline_task)
             .await?;
         let existing_v1 = decode_v1(&row)?;
-        let existing_v0 = decode_v0(&row)?;
 
-        // Case 1: row already in the v1 format → return its values, no write.
         if let Some(wm) = existing_v1 {
             return Ok(Some(InitWatermark {
                 checkpoint_hi_inclusive: wm.checkpoint_hi_inclusive,
@@ -124,30 +118,15 @@ impl Connection for BigTableConnection<'_> {
             }));
         }
 
-        let initial = if let Some(v0) = existing_v0 {
-            // Case 2: v0-only row → bootstrap a v1 watermark from the v0 committer fields.
-            let reader_lo = v0.checkpoint_hi_inclusive + 1;
-            WatermarkV1 {
-                epoch_hi_inclusive: v0.epoch_hi_inclusive,
-                checkpoint_hi_inclusive: Some(v0.checkpoint_hi_inclusive),
-                tx_hi: v0.tx_hi,
-                timestamp_ms_hi_inclusive: v0.timestamp_ms_hi_inclusive,
-                reader_lo,
-                pruner_hi: reader_lo,
-                pruner_timestamp_ms: 0,
-            }
-        } else {
-            // Case 3: nothing exists → write a fresh row from the framework's input.
-            let reader_lo = checkpoint_hi_inclusive.map_or(0, |cp| cp + 1);
-            WatermarkV1 {
-                epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive,
-                tx_hi: 0,
-                timestamp_ms_hi_inclusive: 0,
-                reader_lo,
-                pruner_hi: reader_lo,
-                pruner_timestamp_ms: 0,
-            }
+        let reader_lo = checkpoint_hi_inclusive.map_or(0, |cp| cp + 1);
+        let initial = WatermarkV1 {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive,
+            tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
+            reader_lo,
+            pruner_hi: reader_lo,
+            pruner_timestamp_ms: 0,
         };
 
         let write_happened = self
@@ -200,12 +179,6 @@ impl Connection for BigTableConnection<'_> {
         pipeline_task: &str,
         watermark: CommitterWatermark,
     ) -> Result<bool> {
-        let v0 = WatermarkV0 {
-            epoch_hi_inclusive: watermark.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
-            tx_hi: watermark.tx_hi,
-            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
-        };
         let cells = vec![
             (col::EPOCH_HI, u64_be(watermark.epoch_hi_inclusive)),
             (
@@ -217,7 +190,6 @@ impl Connection for BigTableConnection<'_> {
                 col::TIMESTAMP_MS_HI,
                 u64_be(watermark.timestamp_ms_hi_inclusive),
             ),
-            (col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)),
         ];
         self.client
             .cas_write_pipeline_watermark_cells(

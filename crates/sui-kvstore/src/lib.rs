@@ -243,17 +243,6 @@ pub struct ProtocolConfigData {
     pub flags: std::collections::BTreeMap<String, bool>,
 }
 
-/// Serializable watermark for per-pipeline tracking in BigTable. BCS-encoded into the `w`
-/// column. The `BigTableConnection` write paths keep this column in sync alongside the new
-/// per-field schema (see `WatermarkV1`) so existing readers continue to work.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct WatermarkV0 {
-    pub epoch_hi_inclusive: u64,
-    pub checkpoint_hi_inclusive: u64,
-    pub tx_hi: u64,
-    pub timestamp_ms_hi_inclusive: u64,
-}
-
 /// New watermark for per-pipeline tracking in BigTable. Written as per-field u64 BE cells,
 /// tagged by a schema-version cell `v = 1`.
 ///
@@ -528,16 +517,5 @@ impl BigTableIndexer {
 
     pub fn pipeline_names(&self) -> Vec<&'static str> {
         self.indexer.pipelines().collect()
-    }
-}
-
-impl From<WatermarkV0> for sui_indexer_alt_framework_store_traits::CommitterWatermark {
-    fn from(w: WatermarkV0) -> Self {
-        Self {
-            epoch_hi_inclusive: w.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: w.checkpoint_hi_inclusive,
-            tx_hi: w.tx_hi,
-            timestamp_ms_hi_inclusive: w.timestamp_ms_hi_inclusive,
-        }
     }
 }
