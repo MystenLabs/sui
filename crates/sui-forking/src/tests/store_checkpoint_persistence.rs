@@ -87,8 +87,8 @@ fn insert_checkpoint_and_contents_are_independent() {
     );
 }
 
-#[test]
-fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoint() {
+#[tokio::test]
+async fn resumed_simulacrum_builds_next_checkpoint_after_highest_local_checkpoint() {
     let temp = tempfile::tempdir().expect("tempdir");
     let mut rng = OsRng;
     let config = ConfigBuilder::new_with_temp_dir()
