@@ -34,6 +34,8 @@ use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_ADDRESS, SUI_SYSTEM_PACKAGE_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
+#[cfg(test)]
+use crate::types::RedeemPlan;
 use crate::types::internal_operation::{
     ConsolidateAllStakedSuiToFungible, MergeAndRedeemFungibleStakedSui, PayCoin, PaySui, Stake,
     WithdrawStake,
@@ -934,16 +936,22 @@ impl Operations {
 
     /// Parse a PTB that represents `MergeAndRedeemFungibleStakedSui`.
     ///
-    /// Strict shape produced by `merge_and_redeem_fss_pt`:
-    ///   `[join_fss]*, [split_fss]?, redeem_fss, coin::from_balance<SUI>, TransferObjects`
-    /// where:
-    /// - `[join_fss]*` means zero or more joins (N-1 joins for N FSS inputs)
-    /// - `[split_fss]?` is present only for partial redemption (AtLeast/AtMost modes)
-    /// - exactly one `redeem_fss`, `from_balance<SUI>`, and trailing `TransferObjects`
+    /// Recognized shapes (all produced by `merge_and_redeem_fss_pt`):
+    /// 1. `All`: `[join_fss]*, redeem_fss, coin::from_balance<SUI>, TransferObjects`
+    /// 2. `AtMost`: `[join_fss]*, split_fss, redeem_fss, coin::from_balance<SUI>, TransferObjects`
+    /// 3. `AtLeast`: `[join_fss]*, split_fss, redeem_fss, balance::split<SUI>, balance::join<SUI>, coin::from_balance<SUI>, TransferObjects`
     ///
-    /// Emits `redeem_mode = Some(All)` when no split is present, `None` when split is
-    /// present (AtLeast vs AtMost are indistinguishable from PTB bytes). Returns `None`
-    /// on any shape mismatch, causing fall-through to generic op.
+    /// The `balance::split + balance::join` pair after `redeem_fss` is the AtLeast
+    /// runtime guard: the chain-side `balance::split(min_sui)` aborts if the redeemed
+    /// balance is below `min_sui`, then the join restores the original balance for
+    /// `coin::from_balance` to consume in full.
+    ///
+    /// Emits:
+    /// * `Some(All)` when no `split_fungible_staked_sui` is present.
+    /// * `Some(AtLeast)` when a split_fungible_staked_sui plus `balance::split + balance::join` guard pair are present.
+    /// * `Some(AtMost)` when a split_fungible_staked_sui is present without the balance guard.
+    ///
+    /// Returns `None` on any shape mismatch, causing fall-through to generic op.
     fn parse_merge_and_redeem(
         sender: SuiAddress,
         inputs: &[Input],
@@ -961,6 +969,8 @@ impl Operations {
             Joins,
             AfterSplit,
             AfterRedeem,
+            AfterBalanceSplit,
+            AfterBalanceJoin,
             AfterFromBalance,
             Done,
         }
@@ -968,7 +978,8 @@ impl Operations {
         let mut phase = Phase::Joins;
         let mut fss_indices: Vec<u32> = Vec::new();
         let mut fss_seen: BTreeSet<u32> = BTreeSet::new();
-        let mut has_split = false;
+        let mut has_split_fss = false;
+        let mut has_balance_guard = false;
 
         for (idx, command) in commands.iter().enumerate() {
             if phase == Phase::Done {
@@ -1002,7 +1013,6 @@ impl Operations {
                     if m.arguments.len() != 2 {
                         return None;
                     }
-                    // First arg = the FSS being split (Input or Result from prior joins).
                     let first = &m.arguments[0];
                     match first.kind() {
                         ArgumentKind::Input => {
@@ -1014,8 +1024,6 @@ impl Operations {
                         ArgumentKind::Result => {}
                         _ => return None,
                     }
-                    // Second arg must be a pure u64 split amount. We don't decode it for
-                    // metadata, but we verify the input kind is Pure (not an object ref).
                     if m.arguments[1].kind() != ArgumentKind::Input {
                         return None;
                     }
@@ -1023,7 +1031,7 @@ impl Operations {
                     if inputs.get(amount_idx).map(|i| i.kind()) != Some(InputKind::Pure) {
                         return None;
                     }
-                    has_split = true;
+                    has_split_fss = true;
                     phase = Phase::AfterSplit;
                 }
                 Some(Command::MoveCall(m)) if Self::is_redeem_fss_call(m) => {
@@ -1033,7 +1041,6 @@ impl Operations {
                     if m.arguments.len() != 2 {
                         return None;
                     }
-                    // arguments[0] must reference inputs[0] (SUI_SYSTEM_STATE, verified above).
                     if m.arguments[0].kind() != ArgumentKind::Input || m.arguments[0].input() != 0 {
                         return None;
                     }
@@ -1050,8 +1057,34 @@ impl Operations {
                     }
                     phase = Phase::AfterRedeem;
                 }
-                Some(Command::MoveCall(m)) if Self::is_coin_from_balance_sui_call(m) => {
+                Some(Command::MoveCall(m)) if Self::is_balance_split_sui_call(m) => {
                     if phase != Phase::AfterRedeem {
+                        return None;
+                    }
+                    if m.arguments.len() != 2 {
+                        return None;
+                    }
+                    if m.arguments[1].kind() != ArgumentKind::Input {
+                        return None;
+                    }
+                    let amount_idx = m.arguments[1].input() as usize;
+                    if inputs.get(amount_idx).map(|i| i.kind()) != Some(InputKind::Pure) {
+                        return None;
+                    }
+                    phase = Phase::AfterBalanceSplit;
+                }
+                Some(Command::MoveCall(m)) if Self::is_balance_join_sui_call(m) => {
+                    if phase != Phase::AfterBalanceSplit {
+                        return None;
+                    }
+                    if m.arguments.len() != 2 {
+                        return None;
+                    }
+                    has_balance_guard = true;
+                    phase = Phase::AfterBalanceJoin;
+                }
+                Some(Command::MoveCall(m)) if Self::is_coin_from_balance_sui_call(m) => {
+                    if phase != Phase::AfterRedeem && phase != Phase::AfterBalanceJoin {
                         return None;
                     }
                     phase = Phase::AfterFromBalance;
@@ -1097,10 +1130,11 @@ impl Operations {
         }
 
         let fss_ids = Self::input_indices_to_object_ids(inputs, &fss_indices)?;
-        let redeem_mode = if has_split {
-            None
-        } else {
-            Some(RedeemMode::All)
+        let redeem_mode = match (has_split_fss, has_balance_guard) {
+            (false, false) => Some(RedeemMode::All),
+            (true, true) => Some(RedeemMode::AtLeast),
+            (true, false) => Some(RedeemMode::AtMost),
+            (false, true) => return None, // balance guard without prior split is invalid
         };
 
         Some(vec![Operation {
@@ -1289,6 +1323,40 @@ impl Operations {
         // Parse via TypeTag::from_str and compare structurally so any canonicalization
         // of the SUI type (padded, short, or legacy string forms) matches. This
         // future-proofs against encoder changes that emit non-canonical type strings.
+        let Ok(parsed) = sui_types::TypeTag::from_str(&tx.type_arguments[0]) else {
+            return false;
+        };
+        let Ok(expected) = sui_types::TypeTag::from_str("0x2::sui::SUI") else {
+            return false;
+        };
+        parsed == expected
+    }
+
+    /// Recognizes `balance::split<SUI>` calls used as the AtLeast runtime guard
+    /// in `merge_and_redeem_fss_pt`.
+    fn is_balance_split_sui_call(tx: &MoveCall) -> bool {
+        Self::is_balance_op_sui_call(tx, "split")
+    }
+
+    /// Recognizes `balance::join<SUI>` calls that pair with the AtLeast guard
+    /// to put the split-off sub-balance back into the original.
+    fn is_balance_join_sui_call(tx: &MoveCall) -> bool {
+        Self::is_balance_op_sui_call(tx, "join")
+    }
+
+    fn is_balance_op_sui_call(tx: &MoveCall, function: &str) -> bool {
+        let Ok(package_id) = ObjectID::from_str(tx.package()) else {
+            return false;
+        };
+        if package_id != SUI_FRAMEWORK_PACKAGE_ID {
+            return false;
+        }
+        if tx.module() != "balance" || tx.function() != function {
+            return false;
+        }
+        if tx.type_arguments.len() != 1 {
+            return false;
+        }
         let Ok(parsed) = sui_types::TypeTag::from_str(&tx.type_arguments[0]) else {
             return false;
         };
@@ -2007,6 +2075,8 @@ mod tests {
             chain_id: None,
             fss_object_count: None,
             redeem_token_amount: None,
+            redeem_plan: None,
+            bind_epoch: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
@@ -2069,6 +2139,8 @@ mod tests {
             chain_id: None,
             fss_object_count: None,
             redeem_token_amount: None,
+            redeem_plan: None,
+            bind_epoch: None,
         };
         let parsed_data = ops.into_internal()?.try_into_data(metadata)?;
         assert_eq!(data, parsed_data);
@@ -2603,7 +2675,7 @@ mod tests {
     fn test_parse_merge_redeem_single_all() {
         let sender = SuiAddress::random_for_testing_only();
         let fss = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![fss], None).expect("pt");
+        let pt = merge_and_redeem_fss_pt(sender, vec![fss], &RedeemPlan::All).expect("pt");
         assert_merge_redeem_ops(
             &parse_pt(sender, pt),
             sender,
@@ -2616,8 +2688,65 @@ mod tests {
     fn test_parse_merge_redeem_single_partial() {
         let sender = SuiAddress::random_for_testing_only();
         let fss = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![fss], Some(500_000_000)).expect("pt");
-        assert_merge_redeem_ops(&parse_pt(sender, pt), sender, &[fss.0], None);
+        let pt = merge_and_redeem_fss_pt(
+            sender,
+            vec![fss],
+            &RedeemPlan::AtMost {
+                token_amount: 500_000_000,
+                max_sui: 0,
+            },
+        )
+        .expect("pt");
+        assert_merge_redeem_ops(
+            &parse_pt(sender, pt),
+            sender,
+            &[fss.0],
+            Some(RedeemMode::AtMost),
+        );
+    }
+
+    #[test]
+    fn test_parse_merge_redeem_atleast_with_balance_guard() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss = random_object_ref();
+        let pt = merge_and_redeem_fss_pt(
+            sender,
+            vec![fss],
+            &RedeemPlan::AtLeast {
+                token_amount: 500_000_000,
+                min_sui: 1_000_000,
+            },
+        )
+        .expect("pt");
+        assert_merge_redeem_ops(
+            &parse_pt(sender, pt),
+            sender,
+            &[fss.0],
+            Some(RedeemMode::AtLeast),
+        );
+    }
+
+    #[test]
+    fn test_parse_merge_redeem_atleast_three_fss() {
+        let sender = SuiAddress::random_for_testing_only();
+        let a = random_object_ref();
+        let b = random_object_ref();
+        let c = random_object_ref();
+        let pt = merge_and_redeem_fss_pt(
+            sender,
+            vec![a, b, c],
+            &RedeemPlan::AtLeast {
+                token_amount: 500_000_000,
+                min_sui: 1_000_000,
+            },
+        )
+        .expect("pt");
+        assert_merge_redeem_ops(
+            &parse_pt(sender, pt),
+            sender,
+            &[a.0, b.0, c.0],
+            Some(RedeemMode::AtLeast),
+        );
     }
 
     #[test]
@@ -2625,7 +2754,7 @@ mod tests {
         let sender = SuiAddress::random_for_testing_only();
         let a = random_object_ref();
         let b = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![a, b], None).expect("pt");
+        let pt = merge_and_redeem_fss_pt(sender, vec![a, b], &RedeemPlan::All).expect("pt");
         assert_merge_redeem_ops(
             &parse_pt(sender, pt),
             sender,
@@ -2639,8 +2768,21 @@ mod tests {
         let sender = SuiAddress::random_for_testing_only();
         let a = random_object_ref();
         let b = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![a, b], Some(500_000_000)).expect("pt");
-        assert_merge_redeem_ops(&parse_pt(sender, pt), sender, &[a.0, b.0], None);
+        let pt = merge_and_redeem_fss_pt(
+            sender,
+            vec![a, b],
+            &RedeemPlan::AtMost {
+                token_amount: 500_000_000,
+                max_sui: 0,
+            },
+        )
+        .expect("pt");
+        assert_merge_redeem_ops(
+            &parse_pt(sender, pt),
+            sender,
+            &[a.0, b.0],
+            Some(RedeemMode::AtMost),
+        );
     }
 
     #[test]
@@ -2649,7 +2791,7 @@ mod tests {
         let a = random_object_ref();
         let b = random_object_ref();
         let c = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![a, b, c], None).expect("pt");
+        let pt = merge_and_redeem_fss_pt(sender, vec![a, b, c], &RedeemPlan::All).expect("pt");
         assert_merge_redeem_ops(
             &parse_pt(sender, pt),
             sender,
@@ -2664,15 +2806,28 @@ mod tests {
         let a = random_object_ref();
         let b = random_object_ref();
         let c = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![a, b, c], Some(500_000_000)).expect("pt");
-        assert_merge_redeem_ops(&parse_pt(sender, pt), sender, &[a.0, b.0, c.0], None);
+        let pt = merge_and_redeem_fss_pt(
+            sender,
+            vec![a, b, c],
+            &RedeemPlan::AtMost {
+                token_amount: 500_000_000,
+                max_sui: 0,
+            },
+        )
+        .expect("pt");
+        assert_merge_redeem_ops(
+            &parse_pt(sender, pt),
+            sender,
+            &[a.0, b.0, c.0],
+            Some(RedeemMode::AtMost),
+        );
     }
 
     #[test]
     fn test_parse_merge_redeem_five_all() {
         let sender = SuiAddress::random_for_testing_only();
         let refs: Vec<_> = (0..5).map(|_| random_object_ref()).collect();
-        let pt = merge_and_redeem_fss_pt(sender, refs.clone(), None).expect("pt");
+        let pt = merge_and_redeem_fss_pt(sender, refs.clone(), &RedeemPlan::All).expect("pt");
         let expected: Vec<_> = refs.iter().map(|r| r.0).collect();
         assert_merge_redeem_ops(
             &parse_pt(sender, pt),
@@ -2689,7 +2844,7 @@ mod tests {
         let a = random_object_ref();
         let b = random_object_ref();
         let c = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![a, b, c], None).expect("pt");
+        let pt = merge_and_redeem_fss_pt(sender, vec![a, b, c], &RedeemPlan::All).expect("pt");
         let ops = parse_pt(sender, pt);
         let Some(OperationMetadata::MergeAndRedeemFungibleStakedSui { fss_ids, .. }) =
             ops[0].metadata.clone()
@@ -2703,7 +2858,7 @@ mod tests {
     fn test_parse_merge_redeem_sender_account() {
         let sender = SuiAddress::random_for_testing_only();
         let fss = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![fss], None).expect("pt");
+        let pt = merge_and_redeem_fss_pt(sender, vec![fss], &RedeemPlan::All).expect("pt");
         let ops = parse_pt(sender, pt);
         assert_eq!(ops[0].account.as_ref().unwrap().address, sender);
     }
@@ -2712,7 +2867,15 @@ mod tests {
     fn test_parse_merge_redeem_no_amount_in_metadata() {
         let sender = SuiAddress::random_for_testing_only();
         let fss = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![fss], Some(500_000_000)).expect("pt");
+        let pt = merge_and_redeem_fss_pt(
+            sender,
+            vec![fss],
+            &RedeemPlan::AtMost {
+                token_amount: 500_000_000,
+                max_sui: 0,
+            },
+        )
+        .expect("pt");
         let ops = parse_pt(sender, pt);
         let Some(OperationMetadata::MergeAndRedeemFungibleStakedSui { amount, .. }) =
             ops[0].metadata.clone()
@@ -2726,7 +2889,7 @@ mod tests {
     fn test_parse_merge_redeem_no_validator_in_metadata() {
         let sender = SuiAddress::random_for_testing_only();
         let fss = random_object_ref();
-        let pt = merge_and_redeem_fss_pt(sender, vec![fss], None).expect("pt");
+        let pt = merge_and_redeem_fss_pt(sender, vec![fss], &RedeemPlan::All).expect("pt");
         let ops = parse_pt(sender, pt);
         let Some(OperationMetadata::MergeAndRedeemFungibleStakedSui { validator, .. }) =
             ops[0].metadata.clone()

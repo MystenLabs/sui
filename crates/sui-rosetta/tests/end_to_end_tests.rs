@@ -5288,8 +5288,14 @@ async fn test_e2e_parse_merge_redeem_single_fss_atleast() {
         "AtLeast",
     )
     .await;
-    // Partial mode — redeem_mode is None on parse output (AtLeast vs AtMost indistinguishable).
-    assert_merge_redeem_parse_ops(&ops, sender, 1, None);
+    // The PTB carries a balance::split + balance::join guard, so the parser
+    // can distinguish AtLeast from AtMost.
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        1,
+        Some(sui_rosetta::types::RedeemMode::AtLeast),
+    );
 }
 
 /// F=1, AtMost partial redeem.
@@ -5322,7 +5328,12 @@ async fn test_e2e_parse_merge_redeem_single_fss_atmost() {
         "AtMost",
     )
     .await;
-    assert_merge_redeem_parse_ops(&ops, sender, 1, None);
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        1,
+        Some(sui_rosetta::types::RedeemMode::AtMost),
+    );
 }
 
 /// F=3, All mode.
@@ -5381,7 +5392,12 @@ async fn test_e2e_parse_merge_redeem_three_fss_atleast() {
         "AtLeast",
     )
     .await;
-    assert_merge_redeem_parse_ops(&ops, sender, 3, None);
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        3,
+        Some(sui_rosetta::types::RedeemMode::AtLeast),
+    );
 }
 
 /// F=3, AtMost partial.
@@ -5414,7 +5430,12 @@ async fn test_e2e_parse_merge_redeem_three_fss_atmost() {
         "AtMost",
     )
     .await;
-    assert_merge_redeem_parse_ops(&ops, sender, 3, None);
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        3,
+        Some(sui_rosetta::types::RedeemMode::AtMost),
+    );
 }
 
 /// Multi-validator: FSS on both A and B; redeem only from A.
@@ -5625,7 +5646,7 @@ async fn test_e2e_block_merge_redeem_single_fss_atleast() {
         Some(500_000_000),
         "AtLeast",
         1,
-        None,
+        Some(sui_rosetta::types::RedeemMode::AtLeast),
     )
     .await;
 }
@@ -5659,7 +5680,7 @@ async fn test_e2e_block_merge_redeem_single_fss_atmost() {
         Some(500_000_000),
         "AtMost",
         1,
-        None,
+        Some(sui_rosetta::types::RedeemMode::AtMost),
     )
     .await;
 }
@@ -5727,7 +5748,7 @@ async fn test_e2e_block_merge_redeem_three_fss_atleast() {
         Some(500_000_000),
         "AtLeast",
         3,
-        None,
+        Some(sui_rosetta::types::RedeemMode::AtLeast),
     )
     .await;
 }
@@ -5761,7 +5782,7 @@ async fn test_e2e_block_merge_redeem_three_fss_atmost() {
         Some(500_000_000),
         "AtMost",
         3,
-        None,
+        Some(sui_rosetta::types::RedeemMode::AtMost),
     )
     .await;
 }
@@ -5876,9 +5897,9 @@ async fn test_e2e_merge_redeem_errors_atleast_exceeds_balance() {
     );
 }
 
-/// AtMost amount too small (rounds to zero pool tokens) → server should error.
+/// AtMost amount = 0 → rejected before binary search runs.
 #[tokio::test]
-async fn test_e2e_merge_redeem_errors_atmost_too_small() {
+async fn test_e2e_merge_redeem_errors_atmost_zero_amount() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
     let keystore = &test_cluster.wallet.config.keystore;
@@ -5897,7 +5918,6 @@ async fn test_e2e_merge_redeem_errors_atmost_too_small() {
     )
     .await;
 
-    // Amount = 1 MIST; with the typical pool exchange rate this rounds to 0 pool tokens.
     let ops = serde_json::from_value(json!([{
         "operation_identifier": {"index": 0},
         "type": "MergeAndRedeemFungibleStakedSui",
@@ -5905,7 +5925,7 @@ async fn test_e2e_merge_redeem_errors_atmost_too_small() {
         "metadata": {
             "MergeAndRedeemFungibleStakedSui": {
                 "validator": validator.to_string(),
-                "amount": "1",
+                "amount": "0",
                 "redeem_mode": "AtMost",
             }
         }
@@ -5914,7 +5934,7 @@ async fn test_e2e_merge_redeem_errors_atmost_too_small() {
     let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
     assert!(
         flow.metadata.as_ref().is_some_and(|r| r.is_err()),
-        "expected metadata error for AtMost too small, got: {:?}",
+        "expected metadata error for AtMost amount=0, got: {:?}",
         flow.metadata
     );
 }

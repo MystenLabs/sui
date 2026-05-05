@@ -492,6 +492,25 @@ pub enum RedeemMode {
     All,
 }
 
+/// Internal plan describing how `MergeAndRedeemFungibleStakedSui` should execute.
+///
+/// Computed at metadata time (after pool state is read and the actual on-chain
+/// redeem formula is mirrored locally) and threaded through to PTB construction
+/// so the builder can attach mode-specific runtime guards. Only `AtLeast` adds
+/// a `balance::split` chain abort guard; `AtMost` relies on the staking pool
+/// invariant `actual <= floor(token * sui_balance / pool_token_balance)`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum RedeemPlan {
+    /// Redeem all FSS for the validator's pool.
+    All,
+    /// Redeem at least `min_sui` MIST. PTB enforces `balance.value >= min_sui`
+    /// at execution time via `balance::split(min_sui)` and `balance::join`.
+    AtLeast { token_amount: u64, min_sui: u64 },
+    /// Redeem at most `max_sui` MIST. Token count is chosen so the chain
+    /// invariant `actual <= floor(token * SB / PTB) <= max_sui` holds.
+    AtMost { token_amount: u64, max_sui: u64 },
+}
+
 impl From<&TransactionKind> for OperationType {
     fn from(tx: &TransactionKind) -> Self {
         match tx.kind.and_then(|k| Kind::try_from(k).ok()) {
@@ -711,8 +730,22 @@ pub struct ConstructionMetadata {
     pub fss_object_count: Option<u64>,
     /// Pool tokens to redeem. None = redeem all.
     /// Used by MergeAndRedeemFungibleStakedSui.
+    ///
+    /// Kept for serialization compatibility with prior metadata responses, but
+    /// new code paths consult `redeem_plan` instead, which carries the full
+    /// mode-aware plan needed to build runtime guards.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redeem_token_amount: Option<u64>,
+    /// Mode-aware redeem plan for `MergeAndRedeemFungibleStakedSui`.
+    /// Computed in `try_fetch_needed_objects` after mirroring the on-chain
+    /// payout formula and binary-searching for the right token count.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redeem_plan: Option<RedeemPlan>,
+    /// Quote-time epoch. When `Some(N)`, the resulting transaction is bound to
+    /// epoch N via `TransactionExpiration` so amount-sensitive plans cannot be
+    /// replayed in a later epoch with a different exchange rate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bind_epoch: Option<u64>,
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
@@ -1067,6 +1100,8 @@ mod tests {
             chain_id: None,
             fss_object_count: None,
             redeem_token_amount: None,
+            redeem_plan: None,
+            bind_epoch: None,
         };
         let prod_metadata_json = serde_json::to_string(&prod_metadata).unwrap();
 

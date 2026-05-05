@@ -33,7 +33,6 @@ use crate::errors::Error;
 use crate::types::ConstructionMetadata;
 pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
 pub(crate) use consolidate_to_fungible::consolidate_to_fungible_pt;
-pub(crate) use consolidate_to_fungible::get_validator_pool_id;
 pub use merge_and_redeem::MergeAndRedeemFungibleStakedSui;
 pub(crate) use merge_and_redeem::merge_and_redeem_fss_pt;
 pub use pay_coin::PayCoin;
@@ -74,7 +73,15 @@ pub struct TransactionObjectData {
     pub fss_object_count: Option<u64>,
     /// Pool tokens to redeem. None = redeem all.
     /// Used by MergeAndRedeemFungibleStakedSui.
+    ///
+    /// Kept for backward compatibility; new code reads `redeem_plan` instead.
     pub redeem_token_amount: Option<u64>,
+    /// Mode-aware redeem plan (used by `MergeAndRedeemFungibleStakedSui`).
+    /// `None` for other operations.
+    pub redeem_plan: Option<crate::types::RedeemPlan>,
+    /// Quote-time epoch to bind the transaction to (used by amount-sensitive
+    /// `MergeAndRedeemFungibleStakedSui` modes). `None` for other operations.
+    pub bind_epoch: Option<u64>,
 }
 
 #[async_trait]
@@ -227,8 +234,15 @@ impl InternalOperation {
             }
             InternalOperation::MergeAndRedeemFungibleStakedSui(
                 MergeAndRedeemFungibleStakedSui { sender, .. },
-            ) => merge_and_redeem_fss_pt(sender, metadata.objects, metadata.redeem_token_amount)?,
+            ) => {
+                let plan = metadata.redeem_plan.as_ref().ok_or(anyhow!(
+                    "redeem_plan required for MergeAndRedeemFungibleStakedSui"
+                ))?;
+                merge_and_redeem_fss_pt(sender, metadata.objects, plan)?
+            }
         };
+
+        let bind_epoch = metadata.bind_epoch;
 
         if metadata.gas_coins.is_empty() {
             let chain_id_str = metadata
@@ -242,6 +256,22 @@ impl InternalOperation {
                 .ok_or(anyhow!("epoch required for address-balance gas"))?;
             let nonce = rand::thread_rng().r#gen::<u32>();
 
+            // Address-balance gas already binds replay protection to the
+            // current epoch via `ValidDuring{min_epoch=max_epoch=epoch}`. If
+            // `bind_epoch` is set, verify it matches — a mismatch means the
+            // metadata was computed in a different epoch than this signing
+            // call, in which case the quote (token count from exchange rate)
+            // is stale.
+            if let Some(want) = bind_epoch
+                && want != epoch
+            {
+                return Err(anyhow!(
+                    "redeem plan was quoted for epoch {want} but signing in epoch {epoch}; \
+                     re-fetch /construction/metadata"
+                )
+                .into());
+            }
+
             Ok(TransactionData::new_programmable_with_address_balance_gas(
                 metadata.sender,
                 pt,
@@ -252,13 +282,18 @@ impl InternalOperation {
                 nonce,
             ))
         } else {
-            Ok(TransactionData::new_programmable(
+            let mut data = TransactionData::new_programmable(
                 metadata.sender,
                 metadata.gas_coins,
                 pt,
                 metadata.budget,
                 metadata.gas_price,
-            ))
+            );
+            if let Some(epoch) = bind_epoch {
+                use sui_types::transaction::{TransactionDataAPI, TransactionExpiration};
+                *data.expiration_mut() = TransactionExpiration::Epoch(epoch);
+            }
+            Ok(data)
         }
     }
 }
