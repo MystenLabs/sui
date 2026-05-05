@@ -8,9 +8,14 @@ use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, SequenceNumber, SuiAddress},
     coin_reservation::ParsedObjectRefWithdrawal,
-    digests::CheckpointDigest,
+    crypto::default_hash,
+    digests::{CheckpointDigest, TransactionDigest},
     effects::TransactionEffectsAPI,
-    transaction::{Argument, CallArg, Command, ObjectArg, TransactionDataAPI, TransactionKind},
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{
+        Argument, CallArg, Command, GasData, ObjectArg, TransactionData, TransactionDataAPI,
+        TransactionDataV1, TransactionExpiration, TransactionKind,
+    },
 };
 use test_cluster::addr_balance_test_env::{TestEnvBuilder, get_sui_accumulator_object_id};
 
@@ -1362,4 +1367,240 @@ async fn test_mix_coin_reservations_real_coins_and_shared_object() {
     );
 
     test_env.cluster.trigger_reconfiguration().await;
+}
+
+fn build_fake_coin_reservation_pt(
+    chain_id: sui_types::digests::ChainIdentifier,
+) -> TransactionKind {
+    let bogus_accumulator_id = ObjectID::random();
+    let fake_coin_res = ParsedObjectRefWithdrawal::new(bogus_accumulator_id, 0, 100)
+        .encode(SequenceNumber::new(), chain_id);
+
+    let mut pt_builder = ProgrammableTransactionBuilder::new();
+    let coin_arg = pt_builder
+        .obj(ObjectArg::ImmOrOwnedObject(fake_coin_res))
+        .unwrap();
+    let recipient_arg = pt_builder
+        .pure(SuiAddress::random_for_testing_only())
+        .unwrap();
+    pt_builder.command(Command::TransferObjects(vec![coin_arg], recipient_arg));
+    TransactionKind::ProgrammableTransaction(pt_builder.finish())
+}
+
+#[sim_test]
+async fn test_fake_coin_reservation_dry_run_does_not_panic() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let kind = build_fake_coin_reservation_pt(test_env.chain_id);
+    let tx_data = TransactionData::V1(TransactionDataV1 {
+        kind,
+        sender,
+        gas_data: GasData {
+            payment: vec![gas],
+            owner: sender,
+            price: test_env.rgp,
+            budget: 5_000_000_000,
+        },
+        expiration: TransactionExpiration::None,
+    });
+    let digest = TransactionDigest::new(default_hash(&tx_data));
+
+    let state = test_env
+        .cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().clone());
+    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data, digest).await });
+
+    match join.await {
+        Ok(Ok(_)) => panic!("dry-run with fake coin reservation should have errored"),
+        Ok(Err(e)) => {
+            let msg = e.to_string();
+            assert!(
+                msg.contains("InvalidWithdrawReservation") || msg.contains("not found"),
+                "unexpected error: {msg}"
+            );
+        }
+        Err(join_err) if join_err.is_panic() => {
+            panic!(
+                "dryRunTransactionBlock panicked on fake coin reservation: {:?}",
+                join_err
+            );
+        }
+        Err(e) => panic!("unexpected join error: {e:?}"),
+    }
+}
+
+#[sim_test]
+async fn test_fake_coin_reservation_dev_inspect_does_not_panic() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let tx_kind = build_fake_coin_reservation_pt(test_env.chain_id);
+
+    let state = test_env
+        .cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().clone());
+    let join = tokio::task::spawn(async move {
+        state
+            .dev_inspect_transaction_block(
+                sender,
+                tx_kind,
+                None,
+                None,
+                None,
+                None,
+                None,
+                /* skip_checks */ Some(true),
+            )
+            .await
+    });
+
+    match join.await {
+        Ok(Ok(_)) => panic!("dev-inspect with fake coin reservation should have errored"),
+        Ok(Err(e)) => {
+            let msg = e.to_string();
+            assert!(
+                msg.contains("InvalidWithdrawReservation") || msg.contains("not found"),
+                "unexpected error: {msg}"
+            );
+        }
+        Err(join_err) if join_err.is_panic() => {
+            panic!(
+                "devInspectTransactionBlock panicked on fake coin reservation: {:?}",
+                join_err
+            );
+        }
+        Err(e) => panic!("unexpected join error: {e:?}"),
+    }
+}
+
+#[sim_test]
+async fn test_fake_coin_reservation_dry_run_safe_when_flag_disabled() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.disable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let (sender, gas) = test_env.get_sender_and_gas(0);
+    let kind = build_fake_coin_reservation_pt(test_env.chain_id);
+    let tx_data = TransactionData::V1(TransactionDataV1 {
+        kind,
+        sender,
+        gas_data: GasData {
+            payment: vec![gas],
+            owner: sender,
+            price: test_env.rgp,
+            budget: 5_000_000_000,
+        },
+        expiration: TransactionExpiration::None,
+    });
+    let digest = TransactionDigest::new(default_hash(&tx_data));
+
+    let state = test_env
+        .cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().clone());
+    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data, digest).await });
+
+    match join.await {
+        Ok(Ok(_)) => panic!("dry-run with fake coin reservation should have errored"),
+        Ok(Err(e)) => {
+            assert!(
+                e.to_string()
+                    .contains("coin reservation backward compatibility layer is not enabled"),
+                "expected gating rejection, got: {e}"
+            );
+        }
+        Err(join_err) if join_err.is_panic() => {
+            panic!(
+                "dryRunTransactionBlock panicked with coin reservation flag disabled: {:?}",
+                join_err
+            );
+        }
+        Err(e) => panic!("unexpected join error: {e:?}"),
+    }
+}
+
+#[sim_test]
+async fn test_fake_coin_reservation_dev_inspect_safe_when_flag_disabled() {
+    if has_mainnet_protocol_config_override() {
+        return;
+    }
+    let test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.disable_coin_reservation_for_testing();
+            cfg
+        }))
+        .build()
+        .await;
+
+    let sender = test_env.get_sender(0);
+    let tx_kind = build_fake_coin_reservation_pt(test_env.chain_id);
+
+    let state = test_env
+        .cluster
+        .fullnode_handle
+        .sui_node
+        .with(|node| node.state().clone());
+    let join = tokio::task::spawn(async move {
+        state
+            .dev_inspect_transaction_block(
+                sender,
+                tx_kind,
+                None,
+                None,
+                None,
+                None,
+                None,
+                /* skip_checks */ Some(true),
+            )
+            .await
+    });
+
+    match join.await {
+        Ok(Ok(_)) => panic!("dev-inspect with fake coin reservation should have errored"),
+        Ok(Err(e)) => {
+            assert!(
+                e.to_string()
+                    .contains("coin reservation backward compatibility layer is not enabled"),
+                "expected gating rejection, got: {e}"
+            );
+        }
+        Err(join_err) if join_err.is_panic() => {
+            panic!(
+                "devInspectTransactionBlock panicked with coin reservation flag disabled: {:?}",
+                join_err
+            );
+        }
+        Err(e) => panic!("unexpected join error: {e:?}"),
+    }
 }
