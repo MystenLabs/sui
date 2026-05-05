@@ -49,6 +49,8 @@ impl NodeRole {
     }
 
     /// Whether this node should run fork detection and recovery at startup.
+    // Fork detection and recovery is only relevant for validators and full nodes that run in observer mode.
+    // Fullnodes that run in checkpoint state sync mode only don't need fork checking
     pub fn should_check_forks(&self) -> bool {
         matches!(
             self,

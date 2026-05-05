@@ -1915,7 +1915,9 @@ impl SuiNode {
                         .await?,
                     )
                 } else {
-                    info!("This node no longer runs consensus after reconfiguration");
+                    info!(
+                        "This node has new role {new_role} and no longer runs consensus after reconfiguration"
+                    );
                     None
                 }
             } else {
@@ -2451,6 +2453,7 @@ async fn build_http_servers(
     server_version: ServerVersion,
     node_role: NodeRole,
 ) -> Result<(HttpServers, Option<tokio::sync::mpsc::Sender<Checkpoint>>)> {
+    // Validators do not expose these APIs
     if !node_role.should_run_rpc_servers() {
         return Ok((HttpServers::default(), None));
     }
