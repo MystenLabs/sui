@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use sui_rpc::client::Client;
 use sui_rpc::field::FieldMaskUtil;
-use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+use sui_rpc::proto::sui::rpc::v2::{ListDynamicFieldsRequest, ListOwnedObjectsRequest};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::rpc_proto_conversions::ObjectReferenceExt;
@@ -54,8 +54,25 @@ pub struct MergeAndRedeemFungibleStakedSui {
 }
 
 // ============================================================================
-// Mirror of the on-chain exchange-rate formula (pure, no RPC).
+// Mirror of the on-chain exchange-rate and split-floor payout formulae
+// (pure, no RPC).
 // ============================================================================
+
+/// Snapshot of the redeem-relevant state of a staking pool's
+/// `FungibleStakedSuiData` plus the latest exchange rate, sufficient to mirror
+/// the chain's payout formula in pure Rust.
+#[derive(Clone, Debug)]
+pub(crate) struct PoolRedeemData {
+    /// Latest `exchange_rate.sui_amount` (= pool.sui_balance within an epoch).
+    pub rate_sui: u64,
+    /// Latest `exchange_rate.pool_token_amount` (= pool.pool_token_balance).
+    pub rate_token: u64,
+    /// `FungibleStakedSuiData.principal.value()` — current Balance<SUI> in the
+    /// FSS sub-pool. Mutates within an epoch as other users convert/redeem.
+    pub fss_principal: u64,
+    /// `FungibleStakedSuiData.total_supply` — total outstanding FSS pool tokens.
+    pub fss_total_supply: u64,
+}
 
 /// Mirror of `0x3::staking_pool::PoolTokenExchangeRate::get_sui_amount` at
 /// `staking_pool.move:638-646`. Returns the SUI cap for `token_amount` pool
@@ -72,6 +89,68 @@ pub(crate) fn expected_sui_amount(rate_sui: u64, rate_token: u64, token_amount: 
         return token_amount;
     }
     ((token_amount as u128) * (rate_sui as u128) / (rate_token as u128)) as u64
+}
+
+/// Mirror of `0x3::staking_pool::calculate_fungible_staked_sui_withdraw_amount`
+/// at `staking_pool.move:231-271`. Returns the actual SUI the chain will
+/// deliver for `token_amount` FSS pool tokens given the supplied pool state.
+///
+/// The chain splits the payout into a principal share and a rewards share, each
+/// with an independent `floor`, so `actual <= expected` and the gap is bounded
+/// by ~2 MIST per redemption (one MIST per floor, scaled by `token/supply`).
+/// AtLeast selection must use this (not `expected_sui_amount`) to avoid picking
+/// a token count whose actual payout falls below the user's `min_sui`.
+pub(crate) fn mirror_redeem_actual(data: &PoolRedeemData, token_amount: u64) -> u64 {
+    if data.fss_total_supply == 0 {
+        return 0;
+    }
+
+    // total_sui = exchange_rate.get_sui_amount(total_supply)
+    let total_sui = if data.rate_sui == 0 || data.rate_token == 0 {
+        data.fss_total_supply
+    } else {
+        ((data.rate_sui as u128) * (data.fss_total_supply as u128) / (data.rate_token as u128))
+            as u64
+    };
+
+    let principal = data.fss_principal.min(total_sui);
+    let rewards = total_sui - principal;
+
+    let principal_out =
+        ((token_amount as u128) * (principal as u128) / (data.fss_total_supply as u128)) as u64;
+    let rewards_out =
+        ((token_amount as u128) * (rewards as u128) / (data.fss_total_supply as u128)) as u64;
+
+    principal_out + rewards_out
+}
+
+/// Binary-search the smallest `token_amount` in `[1, total_tokens]` such that
+/// `mirror_redeem_actual(data, token_amount) >= target_sui`.
+///
+/// Returns `None` if even redeeming `total_tokens` produces less than
+/// `target_sui` (caller reports "Insufficient FSS balance").
+pub(crate) fn binary_search_at_least(
+    data: &PoolRedeemData,
+    total_tokens: u64,
+    target_sui: u64,
+) -> Option<u64> {
+    if total_tokens == 0 {
+        return None;
+    }
+    if mirror_redeem_actual(data, total_tokens) < target_sui {
+        return None;
+    }
+    let mut lo: u64 = 1;
+    let mut hi: u64 = total_tokens;
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if mirror_redeem_actual(data, mid) >= target_sui {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    Some(lo)
 }
 
 /// Binary-search the largest `token_amount` in `[1, total_tokens]` such that
@@ -170,64 +249,25 @@ async fn list_owned_fss(client: &mut Client, sender: SuiAddress) -> Result<Vec<O
     Ok(out)
 }
 
-/// Snapshot of an active validator pulled out of `system_state.validators.active_validators`.
-#[derive(Clone, Debug)]
-struct ActivePoolEntry {
-    pool_id: ObjectID,
-    validator_addr: SuiAddress,
-}
-
-/// Read active validators and the inactive_validators table id from the system state.
-async fn fetch_validator_index(
-    client: &mut Client,
-) -> Result<(Vec<ActivePoolEntry>, Option<ObjectID>), Error> {
-    use sui_rpc::proto::sui::rpc::v2::GetEpochRequest;
-    let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths([
-        "system_state.validators.active_validators",
-        "system_state.validators.inactive_validators",
-    ]));
-    let response = client
-        .ledger_client()
-        .get_epoch(request)
-        .await?
-        .into_inner();
-    let validators = response.epoch().system_state().validators();
-
-    let mut active = Vec::new();
-    for v in validators.active_validators() {
-        let pool_id = ObjectID::from_str(v.staking_pool().id())
-            .map_err(|e| Error::DataError(format!("Invalid active pool id: {e}")))?;
-        let validator_addr = SuiAddress::from_str(v.address())
-            .map_err(|e| Error::DataError(format!("Invalid active validator address: {e}")))?;
-        active.push(ActivePoolEntry {
-            pool_id,
-            validator_addr,
-        });
-    }
-
-    let inactive_table_id = validators
-        .inactive_validators
-        .as_ref()
-        .and_then(|t| t.id.as_ref())
-        .and_then(|id| ObjectID::from_str(id).ok());
-
-    Ok((active, inactive_table_id))
-}
-
-/// Resolve `validator` to a pool plus the sender's FSS in that pool.
+/// Resolve `validator` to a pool, the sender's FSS in that pool, and the
+/// `(rate_sui, rate_token, epoch)` snapshot — all from a single
+/// `GetEpochRequest::latest()` response.
 ///
-/// Uses the active validator set to map `validator → pool_id`, then groups the
-/// sender's FSS by pool. Returns `(pool_id, fss_refs, total_tokens)`.
+/// **Atomicity is load-bearing**: amount-sensitive plans bind the resulting
+/// transaction to `epoch`, so the rate must come from the same epoch. Splitting
+/// this into separate RPCs creates a race where rate is from epoch N but
+/// `bind_epoch` is N+1, silently violating AtMost caps and aborting AtLeast
+/// guards.
 ///
-/// Inactive validators (deactivated pools) are not currently supported by this
-/// path; the chain still allows redeeming from inactive pools, but the lookup
+/// Inactive validators (deactivated pools) are not supported by this path;
+/// the chain still allows redeeming from inactive pools, but the lookup
 /// requires walking `inactive_validators[pool_id] → ValidatorWrapper` dynamic
 /// fields, which is a follow-up.
-async fn resolve_pool_and_fss(
+async fn resolve_pool_fss_and_rate(
     client: &mut Client,
     sender: SuiAddress,
     target_validator: SuiAddress,
-) -> Result<(ObjectID, Vec<ObjectRef>, u64), Error> {
+) -> Result<PoolFssRateSnapshot, Error> {
     let owned = list_owned_fss(client, sender).await?;
     if owned.is_empty() {
         return Err(Error::InvalidInput(format!(
@@ -235,16 +275,19 @@ async fn resolve_pool_and_fss(
         )));
     }
 
-    let (active, _inactive_table_id) = fetch_validator_index(client).await?;
-    let pool_for_validator = active
+    let (rates, epoch) = crate::account::get_pool_exchange_rates_with_epoch(client).await?;
+
+    let target_validator_addr = sui_sdk_types::Address::from(target_validator);
+    let (pool_id_str, rate_info) = rates
         .iter()
-        .find(|v| v.validator_addr == target_validator)
-        .map(|v| v.pool_id)
+        .find(|(_, info)| info.validator_address == target_validator_addr)
         .ok_or_else(|| {
             Error::InvalidInput(format!(
                 "Validator {target_validator} not found among active validators"
             ))
         })?;
+    let pool_for_validator = ObjectID::from_str(pool_id_str)
+        .map_err(|e| Error::DataError(format!("Invalid active pool id: {e}")))?;
 
     let mut matching: Vec<&OwnedFss> = owned
         .iter()
@@ -259,8 +302,112 @@ async fn resolve_pool_and_fss(
     }
 
     let total_tokens: u64 = matching.iter().map(|f| f.value).sum();
-    let refs: Vec<ObjectRef> = matching.iter().map(|f| f.object_ref).collect();
-    Ok((pool_for_validator, refs, total_tokens))
+    let fss_refs: Vec<ObjectRef> = matching.iter().map(|f| f.object_ref).collect();
+    let pool_extra_fields_id = rate_info
+        .pool_extra_fields_id
+        .as_deref()
+        .and_then(|s| ObjectID::from_str(s).ok());
+    Ok(PoolFssRateSnapshot {
+        fss_refs,
+        total_tokens,
+        rate_sui: rate_info.sui_balance,
+        rate_token: rate_info.pool_token_balance,
+        epoch,
+        pool_extra_fields_id,
+    })
+}
+
+/// Atomic snapshot tying together pool, FSS, exchange rate, and the epoch the
+/// rate was read in. The epoch is the same one the resulting transaction will
+/// be bound to via `TransactionExpiration`.
+struct PoolFssRateSnapshot {
+    fss_refs: Vec<ObjectRef>,
+    total_tokens: u64,
+    rate_sui: u64,
+    rate_token: u64,
+    epoch: u64,
+    /// `pool.extra_fields.id` (the Bag UID), needed to fetch
+    /// `FungibleStakedSuiData` for AtLeast plans.
+    pool_extra_fields_id: Option<ObjectID>,
+}
+
+/// Subset of `0x3::staking_pool::FungibleStakedSuiData` we BCS-deserialize.
+/// Field order MUST match the Move source at `staking_pool.move:98-104`:
+///   `id: UID, total_supply: u64, principal: Balance<SUI>`
+/// where `UID` is a 32-byte address and `Balance<SUI>` is a `{ value: u64 }`
+/// struct (stored positionally as a u64).
+#[derive(Deserialize, Debug)]
+struct FungibleStakedSuiDataBcs {
+    _id: sui_sdk_types::Address,
+    total_supply: u64,
+    principal: BalanceValueBcs,
+}
+
+#[derive(Deserialize, Debug)]
+struct BalanceValueBcs {
+    value: u64,
+}
+
+/// Fetch the `FungibleStakedSuiData` stored at
+/// `pool.extra_fields[FungibleStakedSuiDataKey {}]`. Lists the bag's dynamic
+/// fields and finds the one whose `value_type` matches
+/// `<SUI_SYSTEM_PACKAGE>::staking_pool::FungibleStakedSuiData`, then BCS-
+/// deserializes the value into `(principal_value, total_supply)`.
+///
+/// We list rather than derive the field id locally to avoid coupling to the
+/// dynamic-field hashing rules (which would need a faithful Move-side
+/// `bcs::to_bytes(&FungibleStakedSuiDataKey {})` and TypeTag canonicalization).
+/// The bag normally holds a small number of entries (currently just FSS data),
+/// so the cost is bounded.
+async fn fetch_fss_data(client: &mut Client, bag_id: ObjectID) -> Result<(u64, u64), Error> {
+    let want_type = format!(
+        "{}::staking_pool::FungibleStakedSuiData",
+        SUI_SYSTEM_PACKAGE_ID
+    );
+
+    let request = ListDynamicFieldsRequest::default()
+        .with_parent(bag_id.to_string())
+        .with_page_size(50u32)
+        .with_read_mask(FieldMask::from_paths(["value_type", "value"]));
+    let dynamic_fields: Vec<_> = client
+        .list_dynamic_fields(request)
+        .map_err(Error::from)
+        .try_collect()
+        .await?;
+
+    for df in dynamic_fields {
+        let Some(value_type) = df.value_type.as_deref() else {
+            continue;
+        };
+        if !type_tags_match(value_type, &want_type) {
+            continue;
+        }
+        let bytes = df
+            .value
+            .as_ref()
+            .and_then(|b| b.value.as_deref())
+            .ok_or_else(|| {
+                Error::DataError("FungibleStakedSuiData entry has empty value".to_string())
+            })?;
+        let data: FungibleStakedSuiDataBcs = bcs::from_bytes(bytes)
+            .map_err(|e| Error::DataError(format!("FungibleStakedSuiData decode: {e}")))?;
+        return Ok((data.principal.value, data.total_supply));
+    }
+
+    Err(Error::DataError(format!(
+        "No FungibleStakedSuiData entry found in pool extra_fields bag {bag_id} \
+         (validator has no FSS yet — but sender holds FSS, this should not happen)"
+    )))
+}
+
+/// Compare two Move type tag strings ignoring address normalization differences
+/// (`0x3::...` vs `0x0000...3::...`). Both are valid canonical forms.
+fn type_tags_match(a: &str, b: &str) -> bool {
+    use sui_types::TypeTag;
+    match (TypeTag::from_str(a), TypeTag::from_str(b)) {
+        (Ok(ta), Ok(tb)) => ta == tb,
+        _ => a == b,
+    }
 }
 
 #[async_trait]
@@ -278,17 +425,54 @@ impl TryConstructTransaction for MergeAndRedeemFungibleStakedSui {
             redeem_mode,
         } = self;
 
-        let (pool_id, fss_refs, total_tokens) =
-            resolve_pool_and_fss(client, sender, validator).await?;
+        let snapshot = resolve_pool_fss_and_rate(client, sender, validator).await?;
+        let PoolFssRateSnapshot {
+            fss_refs,
+            total_tokens,
+            rate_sui,
+            rate_token,
+            epoch,
+            pool_extra_fields_id,
+        } = snapshot;
 
-        let (rate_sui, rate_token) = pool_rate(client, pool_id).await?;
+        // AtLeast needs the FSS sub-pool's principal+total_supply to mirror the
+        // chain's split-floor payout formula and pick the minimum token count
+        // whose actual payout >= min_sui. Fetched lazily so All/AtMost paths
+        // skip the extra GetObject.
+        let fss_data = if matches!(redeem_mode, RedeemMode::AtLeast) {
+            let bag_id = pool_extra_fields_id.ok_or_else(|| {
+                Error::DataError(
+                    "Staking pool extra_fields.id missing from system state response — \
+                     cannot locate FungibleStakedSuiData for AtLeast mode"
+                        .to_string(),
+                )
+            })?;
+            let (principal, total_supply) = fetch_fss_data(client, bag_id).await?;
+            Some(PoolRedeemData {
+                rate_sui,
+                rate_token,
+                fss_principal: principal,
+                fss_total_supply: total_supply,
+            })
+        } else {
+            None
+        };
 
-        let plan = build_redeem_plan(redeem_mode, amount, total_tokens, rate_sui, rate_token)?;
+        let plan = build_redeem_plan(
+            redeem_mode,
+            amount,
+            total_tokens,
+            rate_sui,
+            rate_token,
+            fss_data.as_ref(),
+        )?;
+        // Amount-sensitive plans bind to `epoch` so the chain executes against
+        // the same exchange rate the off-chain quote used. `epoch` here comes
+        // from the same RPC response as `(rate_sui, rate_token)`, so there is
+        // no race between rate read and epoch read.
         let bind_epoch = match plan {
             RedeemPlan::All => None,
-            RedeemPlan::AtLeast { .. } | RedeemPlan::AtMost { .. } => {
-                Some(crate::get_current_epoch(client).await?)
-            }
+            RedeemPlan::AtLeast { .. } | RedeemPlan::AtMost { .. } => Some(epoch),
         };
 
         let pt = merge_and_redeem_fss_pt(sender, fss_refs.clone(), &plan)?;
@@ -323,15 +507,25 @@ impl TryConstructTransaction for MergeAndRedeemFungibleStakedSui {
     }
 }
 
-/// Translate a user-supplied `(redeem_mode, amount)` pair into a `RedeemPlan`,
-/// validating amounts and computing token counts via binary search over the
-/// chain's exchange-rate formula.
+/// Translate a user-supplied `(redeem_mode, amount)` pair into a `RedeemPlan`.
+///
+/// `AtLeast` mirrors the chain's split-floor payout formula
+/// (`calculate_fungible_staked_sui_withdraw_amount`) and binary-searches for
+/// the minimum token count whose actual payout is `>= min_sui`. `fss_data`
+/// must be `Some` for AtLeast — without it we'd fall back to the `expected`
+/// formula which can pick a token count whose actual falls 1-2 MIST short,
+/// causing the chain guard to abort needlessly.
+///
+/// `AtMost` searches by `expected` alone — the chain's `actual <= expected`
+/// invariant (`staking_pool.move:264-268`) keeps the cap safe without the FSS
+/// sub-pool data.
 pub(crate) fn build_redeem_plan(
     redeem_mode: RedeemMode,
     amount: Option<u64>,
     total_tokens: u64,
     rate_sui: u64,
     rate_token: u64,
+    fss_data: Option<&PoolRedeemData>,
 ) -> Result<RedeemPlan, Error> {
     match redeem_mode {
         RedeemMode::All => Ok(RedeemPlan::All),
@@ -349,16 +543,20 @@ pub(crate) fn build_redeem_plan(
                     "Pool has zero exchange rate, cannot compute redeem plan".to_string(),
                 ));
             }
-            let numerator = (min_sui as u128) * (rate_token as u128) + (rate_sui as u128) - 1;
-            let tokens = (numerator / rate_sui as u128) as u64;
-            if tokens > total_tokens {
-                return Err(Error::InvalidInput(format!(
-                    "Insufficient FSS balance: AtLeast {min_sui} SUI requires {tokens} tokens \
-                     but only {total_tokens} available",
-                )));
-            }
+            let data = fss_data.ok_or_else(|| {
+                Error::DataError(
+                    "FungibleStakedSuiData required for AtLeast mode but not supplied".to_string(),
+                )
+            })?;
+            let token_amount =
+                binary_search_at_least(data, total_tokens, min_sui).ok_or_else(|| {
+                    Error::InvalidInput(format!(
+                        "Insufficient FSS balance: cannot deliver AtLeast {min_sui} SUI \
+                         from {total_tokens} pool tokens at current exchange rate",
+                    ))
+                })?;
             Ok(RedeemPlan::AtLeast {
-                token_amount: tokens,
+                token_amount,
                 min_sui,
             })
         }
@@ -389,24 +587,6 @@ pub(crate) fn build_redeem_plan(
             })
         }
     }
-}
-
-/// Resolve a pool's `(rate_sui, rate_token)` for the latest exchange rate.
-///
-/// The staking pool's `sui_balance` and `pool_token_balance` fields equal the
-/// latest exchange rate's `(sui_amount, pool_token_amount)` within an epoch,
-/// since exchange rates are only added at epoch boundaries (see
-/// `staking_pool.move::process_pending_stakes_and_withdraws`).
-async fn pool_rate(client: &mut Client, pool_id: ObjectID) -> Result<(u64, u64), Error> {
-    let pool_rates = crate::account::get_pool_exchange_rates(client).await?;
-    let rate = pool_rates.get(&pool_id.to_string()).ok_or_else(|| {
-        Error::DataError(format!(
-            "No exchange rate found for pool {pool_id} \
-             (validator may be inactive — only active validators are supported \
-             for redeeming FungibleStakedSui)"
-        ))
-    })?;
-    Ok((rate.sui_balance, rate.pool_token_balance))
 }
 
 /// Build PTB for merging FSS and redeeming according to a `RedeemPlan`.
@@ -545,17 +725,69 @@ mod tests {
 
     // --- Plan construction ---------------------------------------------------
 
+    fn fss(rate_sui: u64, rate_token: u64, principal: u64, supply: u64) -> PoolRedeemData {
+        PoolRedeemData {
+            rate_sui,
+            rate_token,
+            fss_principal: principal,
+            fss_total_supply: supply,
+        }
+    }
+
     #[test]
-    fn build_plan_atleast_picks_ceiling() {
-        // rate 200:100 means 1 token = 2 SUI. Need 5 SUI → ceil(5*100/200)=3.
-        let plan = build_redeem_plan(RedeemMode::AtLeast, Some(5), 100, 200, 100).unwrap();
+    fn build_plan_atleast_picks_minimum_token_satisfying_actual() {
+        // Pool: 1:1 rate, 100 supply, 50 principal.
+        //   total_sui = floor(100*100/100) = 100
+        //   principal_capped = 50, rewards = 50
+        //   actual(t) = floor(t*50/100) + floor(t*50/100)
+        // For t=5: actual = 2 + 2 = 4 (split-floor underrun!)
+        // For t=6: actual = 3 + 3 = 6 ≥ 5 ✓
+        // The naive `expected = floor(5*100/100) = 5` ceil formula would have
+        // picked t=5, but actual=4 < 5 — the chain guard would abort. The
+        // mirror search correctly picks t=6.
+        let data = fss(100, 100, 50, 100);
+        let plan =
+            build_redeem_plan(RedeemMode::AtLeast, Some(5), 100, 100, 100, Some(&data)).unwrap();
         match plan {
             RedeemPlan::AtLeast {
                 token_amount,
                 min_sui,
             } => {
-                assert_eq!(token_amount, 3);
+                assert_eq!(
+                    token_amount, 6,
+                    "mirror picks t=6 (actual=6) over naive t=5 (actual=4)"
+                );
                 assert_eq!(min_sui, 5);
+                assert!(mirror_redeem_actual(&data, token_amount) >= 5);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn build_plan_atleast_avoids_split_floor_underrun() {
+        // Reproduce the production bug class: rates / FSS state where the simple
+        // expected-rate ceiling underestimates by 1 MIST. Pick a pool where
+        // mirror(t) = expected(t) - 1 for the candidate t, so a naive ceil
+        // formula would pick t but actual(t) < min_sui.
+        //
+        // Setup: rate 7:3 (sui:token), supply 30, principal 7. Each token
+        // expects floor(1*7/3) = 2 MIST cap, but split-floor accounting gives
+        //   total_sui = floor(7*30/3) = 70
+        //   principal_capped = min(7, 70) = 7, rewards = 63
+        //   for t=15: principal_out=floor(15*7/30)=3, rewards_out=floor(15*63/30)=31, actual=34
+        //   for t=16: principal_out=floor(16*7/30)=3, rewards_out=floor(16*63/30)=33, actual=36
+        // Asking for min_sui=35: naive ceil(35*3/7) = 15 picks t=15 → actual=34 < 35 → guard would abort.
+        // Mirror search picks t=16 → actual=36 >= 35 ✓.
+        let data = fss(7, 3, 7, 30);
+        let plan = build_redeem_plan(RedeemMode::AtLeast, Some(35), 30, 7, 3, Some(&data)).unwrap();
+        match plan {
+            RedeemPlan::AtLeast { token_amount, .. } => {
+                assert_eq!(
+                    token_amount, 16,
+                    "mirror search should pick t=16, not naive t=15"
+                );
+                assert!(mirror_redeem_actual(&data, token_amount) >= 35);
             }
             _ => panic!("wrong variant"),
         }
@@ -564,21 +796,30 @@ mod tests {
     #[test]
     fn build_plan_atleast_rejects_when_insufficient_pool() {
         // Need 1000 SUI from a pool with 10 tokens at 1:1 — impossible.
-        let err =
-            build_redeem_plan(RedeemMode::AtLeast, Some(1000), 10, 1, 1).expect_err("should fail");
+        let data = fss(1, 1, 5, 10);
+        let err = build_redeem_plan(RedeemMode::AtLeast, Some(1000), 10, 1, 1, Some(&data))
+            .expect_err("should fail");
         assert!(format!("{err}").contains("Insufficient FSS balance"));
     }
 
     #[test]
     fn build_plan_atleast_rejects_zero_amount() {
-        let err = build_redeem_plan(RedeemMode::AtLeast, Some(0), 100, 200, 100)
+        let data = fss(200, 100, 50, 100);
+        let err = build_redeem_plan(RedeemMode::AtLeast, Some(0), 100, 200, 100, Some(&data))
             .expect_err("should fail");
         assert!(format!("{err}").contains("at least 1 MIST"));
     }
 
     #[test]
+    fn build_plan_atleast_rejects_missing_fss_data() {
+        let err = build_redeem_plan(RedeemMode::AtLeast, Some(5), 100, 200, 100, None)
+            .expect_err("should fail");
+        assert!(format!("{err}").contains("FungibleStakedSuiData required"));
+    }
+
+    #[test]
     fn build_plan_atmost_uses_binary_search() {
-        let plan = build_redeem_plan(RedeemMode::AtMost, Some(100), 99, 200, 99).unwrap();
+        let plan = build_redeem_plan(RedeemMode::AtMost, Some(100), 99, 200, 99, None).unwrap();
         match plan {
             RedeemPlan::AtMost {
                 token_amount,
@@ -593,8 +834,35 @@ mod tests {
 
     #[test]
     fn build_plan_all_returns_all() {
-        let plan = build_redeem_plan(RedeemMode::All, None, 100, 200, 100).unwrap();
+        let plan = build_redeem_plan(RedeemMode::All, None, 100, 200, 100, None).unwrap();
         assert!(matches!(plan, RedeemPlan::All));
+    }
+
+    #[test]
+    fn mirror_invariant_actual_le_expected_with_small_gap() {
+        // Property check: mirror_redeem_actual <= expected_sui_amount across a
+        // grid of plausible pool states, with the gap bounded by ~2 MIST.
+        for rate_sui in [100u64, 199, 1024, 100_003] {
+            for rate_token in [99u64, 100, 1023, 99_997] {
+                let supply = rate_token;
+                for principal_pct in [0u64, 30, 50, 80, 100] {
+                    let principal = supply * principal_pct / 100;
+                    let data = fss(rate_sui, rate_token, principal, supply);
+                    for token in [1u64, 2, supply / 2, supply.saturating_sub(1), supply] {
+                        if token == 0 || token > supply {
+                            continue;
+                        }
+                        let expected = expected_sui_amount(rate_sui, rate_token, token);
+                        let actual = mirror_redeem_actual(&data, token);
+                        assert!(actual <= expected, "actual={actual} > expected={expected}");
+                        assert!(
+                            actual + 2 >= expected,
+                            "gap > 2 MIST: expected={expected} actual={actual}"
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // --- PTB shape -----------------------------------------------------------

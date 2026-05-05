@@ -154,13 +154,32 @@ pub(crate) struct PoolRateInfo {
     pub sui_balance: u64,
     pub pool_token_balance: u64,
     pub validator_address: Address,
+    /// `pool.extra_fields.id` — the Bag's UID, needed by callers that want to
+    /// derive dynamic field ids inside the pool (e.g.,
+    /// `FungibleStakedSuiData`). `None` if the proto omitted the field.
+    pub pool_extra_fields_id: Option<String>,
 }
 
 /// Reads exchange rates for all active validator staking pools.
 pub(crate) async fn get_pool_exchange_rates(
     client: &mut Client,
 ) -> Result<std::collections::HashMap<String, PoolRateInfo>, Error> {
+    Ok(get_pool_exchange_rates_with_epoch(client).await?.0)
+}
+
+/// Reads exchange rates and the epoch they're snapshotted in from a single
+/// `GetEpochRequest::latest()` response. Used by amount-sensitive operations
+/// (e.g. `MergeAndRedeemFungibleStakedSui::AtLeast`/`AtMost`) that must pin
+/// the rate quote to the same epoch the resulting transaction will be bound to.
+///
+/// Reading rate and epoch separately would race: a caller could observe rate
+/// from epoch N, then read epoch N+1, and bind the transaction to N+1 with a
+/// stale N rate, silently violating AtMost caps and aborting AtLeast guards.
+pub(crate) async fn get_pool_exchange_rates_with_epoch(
+    client: &mut Client,
+) -> Result<(std::collections::HashMap<String, PoolRateInfo>, u64), Error> {
     let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths([
+        "epoch",
         "system_state.validators.active_validators",
     ]));
     let response = client
@@ -168,7 +187,9 @@ pub(crate) async fn get_pool_exchange_rates(
         .get_epoch(request)
         .await?
         .into_inner();
-    let system_state = response.epoch().system_state();
+    let epoch_obj = response.epoch();
+    let epoch = epoch_obj.epoch();
+    let system_state = epoch_obj.system_state();
     let validators = system_state.validators().active_validators();
 
     let mut rates = std::collections::HashMap::new();
@@ -177,16 +198,21 @@ pub(crate) async fn get_pool_exchange_rates(
         let pool_id = pool.id().to_string();
         let validator_address = Address::from_str(validator.address())
             .map_err(|e| Error::DataError(format!("Invalid validator address: {}", e)))?;
+        let pool_extra_fields_id = pool
+            .extra_fields_opt()
+            .and_then(|t| t.id_opt())
+            .map(|s| s.to_string());
         rates.insert(
             pool_id,
             PoolRateInfo {
                 sui_balance: pool.sui_balance(),
                 pool_token_balance: pool.pool_token_balance(),
                 validator_address,
+                pool_extra_fields_id,
             },
         );
     }
-    Ok(rates)
+    Ok((rates, epoch))
 }
 
 async fn get_sub_account_balances(

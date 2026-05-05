@@ -256,12 +256,9 @@ impl InternalOperation {
                 .ok_or(anyhow!("epoch required for address-balance gas"))?;
             let nonce = rand::thread_rng().r#gen::<u32>();
 
-            // Address-balance gas already binds replay protection to the
-            // current epoch via `ValidDuring{min_epoch=max_epoch=epoch}`. If
-            // `bind_epoch` is set, verify it matches — a mismatch means the
-            // metadata was computed in a different epoch than this signing
-            // call, in which case the quote (token count from exchange rate)
-            // is stale.
+            // For amount-sensitive plans, verify the metadata epoch matches
+            // the rate-quote epoch — otherwise the rate the off-chain quote
+            // used has rolled over since metadata fetch.
             if let Some(want) = bind_epoch
                 && want != epoch
             {
@@ -272,7 +269,7 @@ impl InternalOperation {
                 .into());
             }
 
-            Ok(TransactionData::new_programmable_with_address_balance_gas(
+            let mut data = TransactionData::new_programmable_with_address_balance_gas(
                 metadata.sender,
                 pt,
                 metadata.budget,
@@ -280,7 +277,37 @@ impl InternalOperation {
                 chain_id,
                 epoch,
                 nonce,
-            ))
+            );
+
+            // The default `new_programmable_with_address_balance_gas` sets
+            // `ValidDuring { min_epoch: epoch, max_epoch: epoch + 1 }`, so the
+            // tx can still execute in `epoch + 1` against a different exchange
+            // rate. Tighten to `min == max == bind_epoch` for amount-sensitive
+            // plans. This stays replay-protected (a one-epoch range satisfies
+            // `TransactionExpiration::is_replay_protected`, see
+            // `sui-types/src/transaction.rs::is_replay_protected`).
+            if let Some(want) = bind_epoch {
+                use sui_types::transaction::{TransactionDataAPI, TransactionExpiration};
+                if let TransactionExpiration::ValidDuring {
+                    chain,
+                    nonce,
+                    min_timestamp,
+                    max_timestamp,
+                    ..
+                } = *data.expiration()
+                {
+                    *data.expiration_mut() = TransactionExpiration::ValidDuring {
+                        min_epoch: Some(want),
+                        max_epoch: Some(want),
+                        min_timestamp,
+                        max_timestamp,
+                        chain,
+                        nonce,
+                    };
+                }
+            }
+
+            Ok(data)
         } else {
             let mut data = TransactionData::new_programmable(
                 metadata.sender,

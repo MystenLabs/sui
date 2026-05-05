@@ -980,6 +980,7 @@ impl Operations {
         let mut fss_seen: BTreeSet<u32> = BTreeSet::new();
         let mut has_split_fss = false;
         let mut has_balance_guard = false;
+        let mut min_sui_recovered: Option<u64> = None;
 
         for (idx, command) in commands.iter().enumerate() {
             if phase == Phase::Done {
@@ -1068,9 +1069,14 @@ impl Operations {
                         return None;
                     }
                     let amount_idx = m.arguments[1].input() as usize;
-                    if inputs.get(amount_idx).map(|i| i.kind()) != Some(InputKind::Pure) {
+                    let pure_input = inputs.get(amount_idx)?;
+                    if pure_input.kind() != InputKind::Pure {
                         return None;
                     }
+                    // Decode min_sui from the Pure u64 input. Failure here means
+                    // the PTB carries a malformed split amount; fall through.
+                    let min_sui = bcs::from_bytes::<u64>(pure_input.pure()).ok()?;
+                    min_sui_recovered = Some(min_sui);
                     phase = Phase::AfterBalanceSplit;
                 }
                 Some(Command::MoveCall(m)) if Self::is_balance_join_sui_call(m) => {
@@ -1130,11 +1136,21 @@ impl Operations {
         }
 
         let fss_ids = Self::input_indices_to_object_ids(inputs, &fss_indices)?;
-        let redeem_mode = match (has_split_fss, has_balance_guard) {
-            (false, false) => Some(RedeemMode::All),
-            (true, true) => Some(RedeemMode::AtLeast),
-            (true, false) => Some(RedeemMode::AtMost),
-            (false, true) => return None, // balance guard without prior split is invalid
+        // PTB → metadata mapping:
+        //   no split, no guard         → All (amount = None)
+        //   split + balance guard      → AtLeast, amount = min_sui from balance::split
+        //   split, no guard            → unknown partial mode (None) — the PTB only
+        //                                encodes token_count, not max_sui, so we cannot
+        //                                round-trip an AtMost cap from bytes alone
+        //   no split + guard           → invalid shape, fall through to generic
+        let (redeem_mode, amount) = match (has_split_fss, has_balance_guard) {
+            (false, false) => (Some(RedeemMode::All), None),
+            (true, true) => (
+                Some(RedeemMode::AtLeast),
+                min_sui_recovered.map(|v| v.to_string()),
+            ),
+            (true, false) => (None, None),
+            (false, true) => return None,
         };
 
         Some(vec![Operation {
@@ -1146,7 +1162,7 @@ impl Operations {
             coin_change: None,
             metadata: Some(OperationMetadata::MergeAndRedeemFungibleStakedSui {
                 validator: None,
-                amount: None,
+                amount,
                 redeem_mode,
                 fss_ids,
             }),
@@ -2645,6 +2661,22 @@ mod tests {
         expected_fss: &[ObjectID],
         expected_mode: Option<RedeemMode>,
     ) {
+        assert_merge_redeem_ops_with_amount(
+            ops,
+            expected_sender,
+            expected_fss,
+            expected_mode,
+            None,
+        );
+    }
+
+    fn assert_merge_redeem_ops_with_amount(
+        ops: &[Operation],
+        expected_sender: SuiAddress,
+        expected_fss: &[ObjectID],
+        expected_mode: Option<RedeemMode>,
+        expected_amount: Option<&str>,
+    ) {
         assert_eq!(ops.len(), 1);
         let op = &ops[0];
         assert_eq!(op.type_, OperationType::MergeAndRedeemFungibleStakedSui);
@@ -2663,9 +2695,10 @@ mod tests {
             panic!("wrong metadata variant: {:?}", op.metadata);
         };
         assert!(validator.is_none(), "validator must be None on parse");
-        assert!(
-            amount.is_none(),
-            "amount must be None on parse (not in PTB)"
+        assert_eq!(
+            amount.as_deref(),
+            expected_amount,
+            "metadata.amount mismatch"
         );
         assert_eq!(redeem_mode, expected_mode);
         assert_eq!(fss_ids, expected_fss);
@@ -2697,12 +2730,7 @@ mod tests {
             },
         )
         .expect("pt");
-        assert_merge_redeem_ops(
-            &parse_pt(sender, pt),
-            sender,
-            &[fss.0],
-            Some(RedeemMode::AtMost),
-        );
+        assert_merge_redeem_ops(&parse_pt(sender, pt), sender, &[fss.0], None);
     }
 
     #[test]
@@ -2718,11 +2746,12 @@ mod tests {
             },
         )
         .expect("pt");
-        assert_merge_redeem_ops(
+        assert_merge_redeem_ops_with_amount(
             &parse_pt(sender, pt),
             sender,
             &[fss.0],
             Some(RedeemMode::AtLeast),
+            Some("1000000"),
         );
     }
 
@@ -2741,11 +2770,12 @@ mod tests {
             },
         )
         .expect("pt");
-        assert_merge_redeem_ops(
+        assert_merge_redeem_ops_with_amount(
             &parse_pt(sender, pt),
             sender,
             &[a.0, b.0, c.0],
             Some(RedeemMode::AtLeast),
+            Some("1000000"),
         );
     }
 
@@ -2777,12 +2807,7 @@ mod tests {
             },
         )
         .expect("pt");
-        assert_merge_redeem_ops(
-            &parse_pt(sender, pt),
-            sender,
-            &[a.0, b.0],
-            Some(RedeemMode::AtMost),
-        );
+        assert_merge_redeem_ops(&parse_pt(sender, pt), sender, &[a.0, b.0], None);
     }
 
     #[test]
@@ -2815,12 +2840,7 @@ mod tests {
             },
         )
         .expect("pt");
-        assert_merge_redeem_ops(
-            &parse_pt(sender, pt),
-            sender,
-            &[a.0, b.0, c.0],
-            Some(RedeemMode::AtMost),
-        );
+        assert_merge_redeem_ops(&parse_pt(sender, pt), sender, &[a.0, b.0, c.0], None);
     }
 
     #[test]
