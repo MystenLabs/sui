@@ -421,6 +421,26 @@ impl BigTableClient {
         Ok(!predicate_matched)
     }
 
+    /// Convenience wrapper over [`Self::cas_write_pipeline_watermark_cells`] for the
+    /// committer-watermark cell bundle. Writes the v1 committer fields + BCS v0 + optional
+    /// bitmap `b` cell atomically, guarded by CAS on `chi`. Returns `true` iff the
+    /// checkpoint strictly advanced.
+    pub async fn set_committer_watermark_cells(
+        &mut self,
+        pipeline: &str,
+        watermark: &sui_indexer_alt_framework_store_traits::CommitterWatermark,
+        bucket_start_cp: Option<u64>,
+    ) -> Result<bool> {
+        let cells = tables::watermarks::encode_committer_cells(watermark, bucket_start_cp)?;
+        self.cas_write_pipeline_watermark_cells(
+            pipeline,
+            tables::watermarks::col::CHECKPOINT_HI,
+            watermark.checkpoint_hi_inclusive,
+            cells,
+        )
+        .await
+    }
+
     /// Returns `true` iff the supplied `chain_id` matches the chain_id stored for `pipeline`.
     /// On the first call (no chain_id cell yet) writes `chain_id` and returns `true`. The
     /// chain_id cell is independent of the v1 watermark cells, so this can be invoked before
@@ -487,6 +507,9 @@ impl BigTableClient {
             };
             cells.push((col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)));
         }
+        if let Some(bucket_start_cp) = new.bucket_start_cp {
+            cells.push((col::BUCKET_START_CP, u64_be(bucket_start_cp)));
+        }
         let mutations = build_set_cell_mutations(cells);
         let predicate = column_exists_filter(tables::watermarks::col::SCHEMA_VERSION);
         // Predicate is "row has any schema-version cell" → false_mutations write the new row.
@@ -500,6 +523,25 @@ impl BigTableClient {
             )
             .await?;
         Ok(!predicate_matched)
+    }
+
+    /// Read the `bucket_start_cp` column for a bitmap-index pipeline, if
+    /// present. Returns `None` for non-bitmap pipelines and for bitmap
+    /// pipelines that haven't yet written the column.
+    pub async fn get_bitmap_bucket_start_cp(&mut self, pipeline: &str) -> Result<Option<u64>> {
+        let pipeline_key = tables::watermarks::encode_key(pipeline);
+
+        let rows = self
+            .multi_get(tables::watermarks::NAME, vec![pipeline_key.clone()], None)
+            .await?;
+
+        for (key, row) in rows {
+            if key.as_ref() == pipeline_key.as_slice() {
+                return Ok(tables::watermarks::decode_v1(&row)?.and_then(|wm| wm.bucket_start_cp));
+            }
+        }
+
+        Ok(None)
     }
 
     /// Issue a `CheckAndMutateRow` request and return whether the predicate matched.

@@ -474,9 +474,10 @@ reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
-roaring = "0.10.6"
+roaring = "0.11.3"
 ron = "0.8.0"
 rstest = "0.16.0"
+rustc-hash = "2"
 rustls = { version = "0.23", default-features = false, features = [
   "std",
   "tls12",

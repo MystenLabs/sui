@@ -183,7 +183,6 @@ impl TestHarness {
         .context("Failed to create BigTableIndexer")?;
 
         let mut service = bigtable_indexer
-            .indexer
             .run()
             .await
             .context("Failed to run indexer")?;
