@@ -26,6 +26,9 @@ pub enum FetchError {
 
     #[error("Error while fetching `{1}`: {0}")]
     GitFailure(GitError, String),
+
+    #[error("On-chain dependencies are not yet supported")]
+    OnChainNotSupported,
 }
 
 pub type FetchResult<T> = Result<T, FetchError>;
@@ -40,6 +43,7 @@ pub async fn fetch(
     chain_id: &EnvironmentID,
 ) -> FetchResult<PackagePath> {
     let path = match &pinned {
+        Pinned::OnChain => return Err(FetchError::OnChainNotSupported),
         Pinned::Git(dep) => dep
             .inner
             .checkout_repo(allow_dirty)

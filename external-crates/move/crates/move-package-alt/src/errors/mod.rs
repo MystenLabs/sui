@@ -130,6 +130,15 @@ pub enum PackageError {
         "Packages with old-style Move.toml files cannot depend on new-style packages. See https://docs.sui.io/references/package-managers/package-manager-migration for instructions."
     )]
     LegacyDependsOnModern,
+
+    #[error(
+        "On-chain dependency `{name}` requires `published-at` and `original-id` addresses. Add a \
+         `[dep-replacements.<env>.{name}]` entry with these fields."
+    )]
+    OnChainDepMissingAddress { name: String },
+
+    #[error("On-chain packages cannot have local transitive dependencies")]
+    OnChainLocalDep,
 }
 
 /// Truncate `s` to the first `head` characters and the last `tail` characters of `s`, separated by

@@ -14,7 +14,7 @@ use crate::{
     git::{GitCache, GitError, GitTree},
     package::paths::PackagePath,
     schema::{
-        EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
+        ConstTrue, EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
         LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
         OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
     },
@@ -48,7 +48,7 @@ pub struct PinnedDependency {
 pub(crate) enum Pinned {
     Local(PinnedLocalDependency),
     Git(PinnedGitDependency),
-    OnChain(OnChainDepInfo),
+    OnChain,
     Root(PackagePath),
 }
 
@@ -95,7 +95,14 @@ impl PinnedDependency {
             let transformed = match dep.dep_info {
                 Resolved::Local(ref loc) => loc.clone().pin(parent, environment_id)?,
                 Resolved::Git(ref git) => git.pin().await?,
-                Resolved::OnChain(_) => todo!(),
+                Resolved::OnChain(_) => {
+                    if dep.context.addresses.is_none() {
+                        return Err(PackageError::OnChainDepMissingAddress {
+                            name: dep.context.name.to_string(),
+                        });
+                    }
+                    Pinned::OnChain
+                }
             };
 
             result.push(PinnedDependency {
@@ -193,7 +200,21 @@ impl PinnedDependency {
 
     /// Return the absolute path to the directory that this dependency would be fetched into.
     pub fn unfetched_path(&self, chain_id: &EnvironmentID) -> PathBuf {
-        self.dep_info.unfetched_path(chain_id)
+        match &self.dep_info {
+            Pinned::OnChain => {
+                let published_at = &self
+                    .context
+                    .addresses
+                    .as_ref()
+                    .expect("on-chain deps have addresses")
+                    .published_at;
+                PathBuf::from(move_command_line_common::env::MOVE_HOME.as_str())
+                    .join("on-chain")
+                    .join(chain_id)
+                    .join(published_at.to_string())
+            }
+            _ => self.dep_info.unfetched_path(chain_id),
+        }
     }
 }
 
@@ -209,7 +230,9 @@ impl Pinned {
         match &self {
             Pinned::Git(dep) => dep.inner.path_to_tree(),
             Pinned::Local(dep) => dep.absolute_path_to_package.clone(),
-            Pinned::OnChain(_dep) => todo!(),
+            Pinned::OnChain => {
+                unreachable!("on-chain deps need context; use PinnedDependency::unfetched_path")
+            }
             Pinned::Root(path) => path.path().to_path_buf(),
         }
     }
@@ -233,7 +256,7 @@ impl Pinned {
                     .clean(),
                 relative_path_from_root_package: loc.local.to_path_buf().clean(),
             })),
-            LockfileDependencyInfo::OnChain(chain) => Ok(Pinned::OnChain(chain.clone())),
+            LockfileDependencyInfo::OnChain(_) => Ok(Pinned::OnChain),
             LockfileDependencyInfo::Git(git) => Ok(Pinned::Git(git.clone().try_into()?)),
             LockfileDependencyInfo::Root(_) => Ok(Pinned::Root(PackagePath::new(
                 containing_file
@@ -257,7 +280,7 @@ impl Pinned {
                 let rev = fmt_truncated(git.inner.sha(), 6, 2);
                 format!(r#"git = "{repo}", path = "{path}", rev = "{rev}""#)
             }
-            Pinned::OnChain(_on_chain) => "on-chain = true".to_string(),
+            Pinned::OnChain => "on-chain = true".to_string(),
             Pinned::Root(_) => "local = \".\"".to_string(),
         }
     }
@@ -318,7 +341,7 @@ impl LocalDepInfo {
                 absolute_path_to_package: parent.unfetched_path(chain_id).join(&self.local).clean(),
                 relative_path_from_root_package: self.local.clean(),
             }),
-            Pinned::OnChain(_) => todo!(),
+            Pinned::OnChain => return Err(PackageError::OnChainLocalDep),
         };
 
         Ok(info)
@@ -342,7 +365,9 @@ impl From<Pinned> for LockfileDependencyInfo {
                 rev: git.inner.sha().clone(),
                 path: git.inner.path_in_repo().to_path_buf(),
             }),
-            Pinned::OnChain(on_chain) => Self::OnChain(on_chain),
+            Pinned::OnChain => Self::OnChain(OnChainDepInfo {
+                on_chain: ConstTrue,
+            }),
             Pinned::Root(_) => Self::Root(RootDepInfo { root: true }),
         }
     }
