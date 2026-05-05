@@ -391,10 +391,18 @@ impl Proposer for ValidatorProposer {
         if !force {
             {
                 let dag_state = self.dag_state.read();
-                if !leader_slots
+                let missing_leader_hosts: Vec<&str> = leader_slots
                     .iter()
-                    .all(|slot| dag_state.contains_cached_block_at_slot(*slot))
-                {
+                    .filter(|slot| !dag_state.contains_cached_block_at_slot(**slot))
+                    .map(|slot| self.context.committee.authority(slot.authority).hostname.as_str())
+                    .collect();
+                if !missing_leader_hosts.is_empty() {
+                    debug!(
+                        "Skipping block proposal for round {} - waiting on leader(s) at round {}: [{}]",
+                        clock_round,
+                        quorum_round,
+                        missing_leader_hosts.join(", "),
+                    );
                     return None;
                 }
             }
@@ -427,8 +435,9 @@ impl Proposer for ValidatorProposer {
                 "Ancestors should have been returned if force is true!"
             );
             debug!(
-                "Skipping block proposal for round {} because no good ancestor is found",
+                "Skipping block proposal for round {} - smart_ancestors_to_propose returned no good ancestors (excluded={}). Likely missing parent-round quorum among non-excluded authorities.",
                 clock_round,
+                excluded_and_equivocating_ancestors.len(),
             );
             return None;
         }
