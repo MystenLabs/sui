@@ -170,6 +170,14 @@ pub(super) fn called_packages(
             None
         }
     }) {
+        // Skip packages already normalized for this request. The same package
+        // can appear in many commands (e.g. the framework `0x2`), and
+        // re-fetching it then redeserializing every module via
+        // `CompiledModule::deserialize_with_config` is unnecessary work.
+        if packages.contains_key(&move_call.package) {
+            continue;
+        }
+
         let package = service
             .reader
             .inner()
