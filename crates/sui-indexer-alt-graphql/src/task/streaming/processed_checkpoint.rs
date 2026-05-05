@@ -21,6 +21,8 @@ pub(crate) struct ProcessedCheckpoint {
     /// Index of `transactions` by global `tx_sequence_number` for O(1) lookup that scales
     /// across many subscribers. Built once at construction.
     by_tx_sequence_number: HashMap<u64, usize>,
+    /// Index of `transactions` by digest. Same rationale as `by_tx_sequence_number`.
+    by_digest: HashMap<TransactionDigest, usize>,
 }
 
 /// A transaction from a streamed checkpoint with pre-deserialized contents.
@@ -33,6 +35,7 @@ pub(crate) struct ProcessedTransaction {
 }
 
 impl ProcessedCheckpoint {
+    /// Construct a checkpoint with both lookup indexes pre-built from `transactions`.
     pub(crate) fn new(
         sequence_number: u64,
         summary: CheckpointSummary,
@@ -45,6 +48,11 @@ impl ProcessedCheckpoint {
             .enumerate()
             .map(|(i, t)| (t.tx_sequence_number, i))
             .collect();
+        let by_digest = transactions
+            .iter()
+            .enumerate()
+            .map(|(i, t)| (t.digest, i))
+            .collect();
         Self {
             sequence_number,
             summary,
@@ -52,12 +60,22 @@ impl ProcessedCheckpoint {
             signature,
             transactions,
             by_tx_sequence_number,
+            by_digest,
         }
     }
 
     /// Lookup a transaction by its global `tx_sequence_number` within this checkpoint.
     pub(crate) fn transaction(&self, tx_sequence_number: u64) -> Option<&ProcessedTransaction> {
         let i = *self.by_tx_sequence_number.get(&tx_sequence_number)?;
+        self.transactions.get(i)
+    }
+
+    /// Lookup a transaction by digest within this checkpoint.
+    pub(crate) fn transaction_by_digest(
+        &self,
+        digest: TransactionDigest,
+    ) -> Option<&ProcessedTransaction> {
+        let i = *self.by_digest.get(&digest)?;
         self.transactions.get(i)
     }
 }

@@ -1,0 +1,28 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/event_subscription.rs
+expression: item
+---
+{
+  "data": {
+    "events": {
+      "transaction": {
+        "digest": "[digest]",
+        "sender": {
+          "address": "[address]"
+        },
+        "kind": {
+          "__typename": "ProgrammableTransaction"
+        },
+        "gasInput": {
+          "gasBudget": "5000000000",
+          "gasPrice": "1000"
+        }
+      },
+      "contents": {
+        "type": {
+          "repr": "[pkg]::emit_test_event::TestEvent"
+        }
+      }
+    }
+  }
+}

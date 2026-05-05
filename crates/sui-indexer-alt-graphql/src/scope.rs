@@ -19,11 +19,13 @@ use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_rpc::proto::sui::rpc::v2::changed_object::OutputObjectState;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
+use sui_types::digests::TransactionDigest;
 use sui_types::object::Object as NativeObject;
 
 use crate::config::Limits;
 use crate::error::RpcError;
 use crate::task::streaming::ProcessedCheckpoint;
+use crate::task::streaming::ProcessedTransaction;
 use crate::task::streaming::StreamingPackageStore;
 use crate::task::watermark::Watermarks;
 
@@ -272,6 +274,19 @@ impl Scope {
     /// Returns `None` in execution context (freshly executed transaction).
     pub(crate) fn checkpoint_viewed_at_exclusive_bound(&self) -> Option<u64> {
         self.checkpoint_viewed_at.map(|cp| cp + 1)
+    }
+
+    /// Lookup a transaction by digest within the streamed checkpoint backing this scope.
+    /// Returns `None` if the scope is not in [`ObjectSource::Streamed`] mode, or if no
+    /// transaction with that digest exists in the checkpoint.
+    pub(crate) fn streamed_transaction_by_digest(
+        &self,
+        digest: TransactionDigest,
+    ) -> Option<&ProcessedTransaction> {
+        match &self.object_source {
+            ObjectSource::Streamed { checkpoint } => checkpoint.transaction_by_digest(digest),
+            ObjectSource::Indexed | ObjectSource::Executed { .. } => None,
+        }
     }
 
     /// The execution objects map active for object lookups in this scope. Resolves through the

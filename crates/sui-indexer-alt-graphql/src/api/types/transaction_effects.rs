@@ -557,6 +557,16 @@ impl EffectsContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
+
+        // Streaming fast path: if the scope is backed by a streamed checkpoint containing this
+        // transaction, hydrate from the in-memory payload instead of hitting the DB.
+        if let Some(tx) = self.scope.streamed_transaction_by_digest(digest) {
+            return Ok(Self {
+                scope: self.scope.clone(),
+                contents: Some(Arc::new(tx.contents.clone())),
+            });
+        }
+
         let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
             return Ok(self.clone());
         };
