@@ -57,6 +57,26 @@ use crate::{
 // TODO: put max RPC response size in protocol config.
 pub(crate) const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
+pub(crate) fn max_fetch_blocks_response_bytes(
+    context: &Context,
+    block_refs: &[BlockRef],
+    fetch_after_rounds: &[Round],
+) -> usize {
+    let max_response_num_blocks = if fetch_after_rounds.is_empty() {
+        block_refs
+            .len()
+            .min(context.parameters.max_blocks_per_fetch)
+    } else if block_refs.is_empty() {
+        context.parameters.max_blocks_per_fetch
+    } else {
+        context.parameters.max_blocks_per_sync
+    };
+
+    max_response_num_blocks
+        .saturating_mul(context.protocol_config.max_transactions_in_block_bytes() as usize)
+        .saturating_mul(2)
+}
+
 const DEFAULT_GRPC_SERVER_TIMEOUT: Duration = Duration::from_secs(300);
 
 // HTTP/2 connection and stream window sizes for both validator and observer servers.
@@ -151,6 +171,8 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
+        let max_allowed_bytes =
+            max_fetch_blocks_response_bytes(&self.context, &block_refs, &fetch_after_rounds);
         let mut request = Request::new(FetchBlocksRequest {
             block_refs: block_refs
                 .iter()
@@ -179,13 +201,6 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             })?
             .into_inner();
 
-        // Allow twice the max total size of transactions in the fetched blocks.
-        let max_allowed_bytes = block_refs.len()
-            * self
-                .context
-                .protocol_config
-                .max_transactions_in_block_bytes() as usize
-            * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
         loop {
@@ -1423,6 +1438,7 @@ mod tests {
     use super::*;
     use crate::{context::Clock, metrics::initialise_metrics};
     use consensus_config::{ConsensusProtocolConfig, Parameters, local_committee_and_keys};
+    use consensus_types::block::BlockDigest;
     use prometheus::Registry;
 
     fn create_test_context_and_client() -> (Arc<Context>, TonicValidatorClient) {
@@ -1446,6 +1462,36 @@ mod tests {
         let client = TonicValidatorClient::new(context.clone(), network_keypair);
 
         (context, client)
+    }
+
+    #[test]
+    fn test_max_fetch_blocks_response_bytes_uses_response_mode_limit() {
+        let (mut context, _keys) = Context::new_for_test(4);
+        context.parameters.max_blocks_per_fetch = 11;
+        context.parameters.max_blocks_per_sync = 7;
+        let context = Arc::new(context);
+        let bytes_per_block =
+            context.protocol_config.max_transactions_in_block_bytes() as usize * 2;
+
+        let block_ref = BlockRef::new(1, AuthorityIndex::new_for_test(0), BlockDigest::MIN);
+        let fetch_after_rounds = vec![0; context.committee.size()];
+
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[block_ref; 3], &[]),
+            3 * bytes_per_block
+        );
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[block_ref; 20], &[]),
+            context.parameters.max_blocks_per_fetch * bytes_per_block
+        );
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[], &fetch_after_rounds),
+            context.parameters.max_blocks_per_fetch * bytes_per_block
+        );
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[block_ref], &fetch_after_rounds),
+            context.parameters.max_blocks_per_sync * bytes_per_block
+        );
     }
 
     #[tokio::test]
