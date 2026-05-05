@@ -34,8 +34,10 @@ RUN cargo build --locked --profile ${PROFILE} \
 # Production Image
 FROM debian:bullseye-slim AS runtime
 # sui-tool needs libpq at runtime and git when fetching Move dependencies.
+# openssh-client is explicit — without it `--no-install-recommends` drops the
+# git→ssh-client recommendation, breaking git@/ssh:// Move sources.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates git libpq5 libpq-dev \
+ && apt-get install -y --no-install-recommends ca-certificates git openssh-client libpq5 libpq-dev \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /sui
 # Source path is hardcoded to /release/ because the bench profile inherits
