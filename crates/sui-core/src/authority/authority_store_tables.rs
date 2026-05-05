@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::storage::MarkerValue;
 use typed_store::metrics::SamplingInterval;
@@ -99,6 +100,9 @@ pub struct AuthorityPerpetualTables {
 
     // Loaded (and unchanged) runtime object references.
     pub(crate) unchanged_loaded_runtime_objects: DBMap<TransactionDigest, Vec<ObjectKey>>,
+
+    // Local execution error metadata, keyed by the digest of the transaction that produced it.
+    pub(crate) execution_error_metadata: DBMap<TransactionDigest, ExecutionErrorMetadata>,
 
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
     /// Please do not add new accessors/callsites.
@@ -323,6 +327,16 @@ impl AuthorityPerpetualTables {
             ),
             (
                 "unchanged_loaded_runtime_objects".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    mutexes,
+                    uniform_key,
+                    KeySpaceConfig::default().with_relocation_filter(|_, _| Decision::Remove),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "execution_error_metadata".to_string(),
                 ThConfig::new_with_rm_prefix(
                     32,
                     mutexes,

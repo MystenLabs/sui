@@ -157,6 +157,7 @@ impl Scenario {
             effects,
             events,
             unchanged_loaded_runtime_objects: Default::default(),
+            execution_error_metadata: None,
             accumulator_events: Default::default(),
             markers: Default::default(),
             wrapped: Default::default(),
@@ -547,6 +548,39 @@ async fn test_committed() {
 
         s.reset_cache();
         s.assert_live(&[1, 2]);
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_execution_error_metadata_round_trip() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        let mut metadata = BTreeMap::new();
+        metadata.insert(
+            "source".to_string(),
+            "Object runtime cached objects limit reached".to_string(),
+        );
+        s.outputs.execution_error_metadata = Some(metadata.clone());
+
+        let tx = s.do_tx().await;
+        assert_eq!(
+            s.cache.get_execution_error_metadata(&tx),
+            Some(metadata.clone())
+        );
+
+        s.commit(tx).await.unwrap();
+        assert_eq!(
+            s.cache.get_execution_error_metadata(&tx),
+            Some(metadata.clone())
+        );
+
+        s.reset_cache();
+        assert_eq!(
+            s.store.get_execution_error_metadata(&tx).unwrap(),
+            Some(metadata.clone())
+        );
+        assert_eq!(s.cache.get_execution_error_metadata(&tx), Some(metadata));
     })
     .await;
 }

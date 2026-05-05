@@ -139,7 +139,7 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionError, ExecutionErrorContext, SuiErrorKind, UserInputError};
 use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
@@ -1461,7 +1461,7 @@ impl AuthorityState {
         certificate: &VerifiedExecutableTransaction,
         mut execution_env: ExecutionEnv,
         epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> ExecutionOutput<(TransactionEffects, Option<ExecutionError>)> {
+    ) -> ExecutionOutput<(TransactionEffects, Option<ExecutionErrorContext>)> {
         let _scope = monitored_scope("Execution::try_execute_immediately");
         let _metrics_guard = self.metrics.internal_execution_latency.start_timer();
 
@@ -1640,7 +1640,10 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
         execution_env: ExecutionEnv,
-    ) -> (VerifiedSignedTransactionEffects, Option<ExecutionError>) {
+    ) -> (
+        VerifiedSignedTransactionEffects,
+        Option<ExecutionErrorContext>,
+    ) {
         let epoch_store = self.epoch_store_for_testing();
         let (effects, execution_error_opt) = self
             .try_execute_immediately(
@@ -1658,7 +1661,10 @@ impl AuthorityState {
         &self,
         executable: &VerifiedExecutableTransaction,
         execution_env: ExecutionEnv,
-    ) -> (VerifiedSignedTransactionEffects, Option<ExecutionError>) {
+    ) -> (
+        VerifiedSignedTransactionEffects,
+        Option<ExecutionErrorContext>,
+    ) {
         let epoch_store = self.epoch_store_for_testing();
         let (effects, execution_error_opt) = self
             .try_execute_immediately(executable, execution_env, &epoch_store)
@@ -1734,7 +1740,7 @@ impl AuthorityState {
     ) -> ExecutionOutput<(
         TransactionOutputs,
         Vec<ExecutionTiming>,
-        Option<ExecutionError>,
+        Option<ExecutionErrorContext>,
     )> {
         let _scope = monitored_scope("Execution::process_certificate");
         let tx_digest = *certificate.digest();
@@ -1905,40 +1911,69 @@ impl AuthorityState {
         rewritten_inputs: Option<Vec<bool>>,
         signer: SuiAddress,
         tx_digest: TransactionDigest,
+        is_fullnode: bool,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
+        Result<(), ExecutionErrorContext>,
     ) {
-        let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
-            // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
-            .execute_transaction_to_effects_and_execution_error(
-                store,
-                protocol_config,
-                self.metrics.execution_metrics.clone(),
-                enable_expensive_checks,
-                execution_params,
-                epoch_id,
-                epoch_timestamp_ms,
-                input_objects,
-                gas_data,
-                gas_status,
-                kind,
-                rewritten_inputs,
-                signer,
-                tx_digest,
-                &mut None,
-            );
+        if is_fullnode {
+            let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
+                .execute_transaction_to_effects_and_execution_error(
+                    store,
+                    protocol_config,
+                    self.metrics.execution_metrics.clone(),
+                    enable_expensive_checks,
+                    execution_params,
+                    epoch_id,
+                    epoch_timestamp_ms,
+                    input_objects,
+                    gas_data,
+                    gas_status,
+                    kind,
+                    rewritten_inputs,
+                    signer,
+                    tx_digest,
+                    &mut None,
+                );
 
-        (
-            inner_temp_store,
-            gas_status,
-            effects,
-            timings,
-            execution_error,
-        )
+            (
+                inner_temp_store,
+                gas_status,
+                effects,
+                timings,
+                execution_error,
+            )
+        } else {
+            let (inner_temp_store, gas_status, effects, timings, execution_failure) = executor
+                .execute_transaction_to_effects(
+                    store,
+                    protocol_config,
+                    self.metrics.execution_metrics.clone(),
+                    enable_expensive_checks,
+                    execution_params,
+                    epoch_id,
+                    epoch_timestamp_ms,
+                    input_objects,
+                    gas_data,
+                    gas_status,
+                    kind,
+                    rewritten_inputs,
+                    signer,
+                    tx_digest,
+                    &mut None,
+                );
+
+            (
+                inner_temp_store,
+                gas_status,
+                effects,
+                timings,
+                execution_failure.map_err(ExecutionErrorContext::from),
+            )
+        }
     }
 
     /// execute_certificate validates the transaction input, and executes the certificate,
@@ -1961,7 +1996,7 @@ impl AuthorityState {
     ) -> ExecutionOutput<(
         TransactionOutputs,
         Vec<ExecutionTiming>,
-        Option<ExecutionError>,
+        Option<ExecutionErrorContext>,
     )> {
         let _scope = monitored_scope("Execution::prepare_certificate");
         let _metrics_guard = self.metrics.prepare_certificate_latency.start_timer();
@@ -2024,8 +2059,7 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
-        #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
+        let (inner_temp_store, _, effects, timings, execution_error_result) = self
             .execute_transaction_to_effects(
                 &**epoch_store.executor(),
                 &tracking_store,
@@ -2048,7 +2082,10 @@ impl AuthorityState {
                 rewritten_inputs,
                 signer,
                 tx_digest,
+                self.is_fullnode(epoch_store),
             );
+
+        let execution_error_opt = execution_error_result.err();
 
         let object_funds_checker = self.object_funds_checker.load();
         if let Some(object_funds_checker) = object_funds_checker.as_ref()
@@ -2127,6 +2164,9 @@ impl AuthorityState {
             );
         }
 
+        #[cfg(msim)]
+        let mut effects = effects;
+
         fail_point_arg!("simulate_fork_during_execution", |(
             forked_validators,
             full_halt,
@@ -2159,6 +2199,10 @@ impl AuthorityState {
                 &tracking_store.into_read_objects(),
             );
 
+        let execution_error_metadata = execution_error_opt
+            .as_ref()
+            .and_then(ExecutionErrorContext::metadata_with_source);
+
         // index certificate
         let _ = self
             .post_process_one_tx(certificate, &effects, &inner_temp_store, epoch_store)
@@ -2174,6 +2218,7 @@ impl AuthorityState {
             effects,
             inner_temp_store,
             unchanged_loaded_runtime_objects,
+            execution_error_metadata,
         );
 
         let elapsed = prepare_certificate_start_time.elapsed().as_micros() as f64;
@@ -2187,7 +2232,7 @@ impl AuthorityState {
             );
         }
 
-        ExecutionOutput::Success((transaction_outputs, timings, execution_error_opt.err()))
+        ExecutionOutput::Success((transaction_outputs, timings, execution_error_opt))
     }
 
     pub fn prepare_certificate_for_benchmark(
@@ -2209,7 +2254,10 @@ impl AuthorityState {
                 epoch_store,
             )
             .unwrap();
-        Ok((transaction_outputs, execution_error_opt))
+        Ok((
+            transaction_outputs,
+            execution_error_opt.map(ExecutionError::from),
+        ))
     }
 
     #[instrument(skip_all)]
@@ -2339,7 +2387,14 @@ impl AuthorityState {
         let execution_error_source = execution_result
             .as_ref()
             .err()
-            .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
+            .and_then(|e| std::error::Error::source(e).map(|e| e.to_string()));
+        if let Some(error) = execution_result.as_ref().err() {
+            debug!(
+                tx_digest = ?tx_digest,
+                execution_error_kind = ?error.kind(),
+                "dry run transaction execution failed"
+            );
+        }
 
         let response = DryRunTransactionBlockResponse {
             suggested_gas_price,

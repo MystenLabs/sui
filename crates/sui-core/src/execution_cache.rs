@@ -26,7 +26,7 @@ use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{FullObjectID, VerifiedExecutionData};
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
+use sui_types::error::{ExecutionErrorMetadata, SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
@@ -533,6 +533,11 @@ pub trait TransactionCacheRead: Send + Sync {
         &self,
         digest: &TransactionDigest,
     ) -> Option<Vec<ObjectKey>>;
+
+    fn get_execution_error_metadata(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Option<ExecutionErrorMetadata>;
 
     fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>>;
 

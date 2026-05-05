@@ -7,6 +7,7 @@ use std::sync::Arc;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{FullObjectID, ObjectRef};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::inner_temporary_store::{InnerTemporaryStore, WrittenObjects};
 use sui_types::storage::{FullObjectKey, MarkerValue, ObjectKey};
@@ -19,6 +20,7 @@ pub struct TransactionOutputs {
     pub effects: TransactionEffects,
     pub events: TransactionEvents,
     pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
+    pub execution_error_metadata: Option<ExecutionErrorMetadata>,
     pub accumulator_events: Mutex<Option<Vec<AccumulatorEvent>>>,
 
     pub markers: Vec<(FullObjectKey, MarkerValue)>,
@@ -36,6 +38,7 @@ impl TransactionOutputs {
         effects: TransactionEffects,
         inner_temporary_store: InnerTemporaryStore,
         unchanged_loaded_runtime_objects: Vec<ObjectKey>,
+        execution_error_metadata: Option<ExecutionErrorMetadata>,
     ) -> TransactionOutputs {
         let InnerTemporaryStore {
             input_objects,
@@ -186,6 +189,7 @@ impl TransactionOutputs {
             effects,
             events,
             unchanged_loaded_runtime_objects,
+            execution_error_metadata,
             accumulator_events: Mutex::new(Some(accumulator_events)),
             markers,
             wrapped,
@@ -210,6 +214,7 @@ impl TransactionOutputs {
             effects,
             events: TransactionEvents { data: vec![] },
             unchanged_loaded_runtime_objects: vec![],
+            execution_error_metadata: None,
             accumulator_events: Mutex::new(Some(vec![])),
             markers: vec![],
             wrapped: vec![],

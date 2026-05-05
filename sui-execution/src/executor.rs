@@ -13,7 +13,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::ExecutionError,
+    error::{ExecutionError, ExecutionErrorContext},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
@@ -79,7 +79,7 @@ pub trait Executor {
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
+        Result<(), ExecutionErrorContext>,
     );
 
     fn dev_inspect_transaction(

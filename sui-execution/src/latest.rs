@@ -14,7 +14,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, ExecutionErrorTrait, SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorContext, ExecutionErrorTrait, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
@@ -134,10 +134,10 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
+        Result<(), ExecutionErrorContext>,
     ) {
         let (store_out, gas_status_out, effects, timings, result) =
-            execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
+            execute_transaction_to_effects::<execution_mode::Normal<ExecutionErrorContext>>(
                 store,
                 input_objects,
                 gas,

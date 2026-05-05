@@ -4190,6 +4190,13 @@ mod tests {
             unimplemented!()
         }
 
+        fn get_execution_error_metadata(
+            &self,
+            _digest: &TransactionDigest,
+        ) -> Option<sui_types::error::ExecutionErrorMetadata> {
+            unimplemented!()
+        }
+
         fn transaction_executed_in_last_epoch(&self, _: &TransactionDigest, _: EpochId) -> bool {
             unimplemented!()
         }

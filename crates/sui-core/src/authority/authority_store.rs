@@ -22,7 +22,7 @@ use move_core_types::resolver::{ModuleResolver, SerializedPackage};
 use serde::{Deserialize, Serialize};
 use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_arg;
-use sui_types::error::{SuiErrorKind, UserInputError};
+use sui_types::error::{ExecutionErrorMetadata, SuiErrorKind, UserInputError};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::message_envelope::Message;
@@ -342,6 +342,13 @@ impl AuthorityStore {
         self.perpetual_tables
             .unchanged_loaded_runtime_objects
             .get(digest)
+    }
+
+    pub fn get_execution_error_metadata(
+        &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<ExecutionErrorMetadata>, TypedStoreError> {
+        self.perpetual_tables.execution_error_metadata.get(digest)
     }
 
     pub fn multi_get_effects<'a>(
@@ -791,6 +798,7 @@ impl AuthorityStore {
             written,
             events,
             unchanged_loaded_runtime_objects,
+            execution_error_metadata,
             locks_to_delete,
             new_locks_to_init,
             ..
@@ -860,6 +868,15 @@ impl AuthorityStore {
             write_batch.insert_batch(
                 &self.perpetual_tables.unchanged_loaded_runtime_objects,
                 [(transaction_digest, unchanged_loaded_runtime_objects)],
+            )?;
+        }
+
+        if let Some(metadata) = execution_error_metadata
+            && !metadata.is_empty()
+        {
+            write_batch.insert_batch(
+                &self.perpetual_tables.execution_error_metadata,
+                [(transaction_digest, metadata)],
             )?;
         }
 
