@@ -3,7 +3,8 @@
 
 //! Watermarks table: stores per-pipeline watermarks indexed by pipeline name.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
+use anyhow::bail;
 use bytes::Bytes;
 
 use crate::Watermark;
@@ -23,6 +24,10 @@ pub fn encode(watermark: &Watermark) -> Result<[(&'static str, Bytes); 1]> {
 }
 
 pub fn decode(row: &[(Bytes, Bytes)]) -> Result<Watermark> {
-    let (_, value) = row.first().context("empty row")?;
-    Ok(bcs::from_bytes(value)?)
+    for (col, value) in row {
+        if col.as_ref() == col::WATERMARK.as_bytes() {
+            return Ok(bcs::from_bytes(value)?);
+        }
+    }
+    bail!("`{}` column missing from watermark row", col::WATERMARK)
 }
