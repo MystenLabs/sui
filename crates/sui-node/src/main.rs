@@ -118,7 +118,7 @@ fn main() {
         config.network_address = listen_address;
     }
 
-    let is_validator = config.node_role() == sui_types::node_role::NodeRole::Validator;
+    let is_validator = config.node_role().is_validator();
 
     let admin_interface_port = config.admin_interface_port;
 

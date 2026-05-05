@@ -187,7 +187,7 @@ impl ConsensusManager {
         ));
         let client = Arc::new(LazyMysticetiClient::new());
         let (consumer_monitor_sender, _) = broadcast::channel(1);
-        let protocol_keypair = if node_role == NodeRole::Validator {
+        let protocol_keypair = if node_role.is_validator() {
             Some(ProtocolKeyPair::new(node_config.worker_key_pair().copy()))
         } else {
             None

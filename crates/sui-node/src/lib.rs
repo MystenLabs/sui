@@ -518,7 +518,7 @@ impl SuiNode {
             .unwrap_or(preliminary_role.runs_consensus());
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
-            is_validator: preliminary_role == NodeRole::Validator,
+            is_validator: preliminary_role.is_validator(),
         };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
             &config.db_path().join("store"),
@@ -815,19 +815,19 @@ impl SuiNode {
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
-        let transaction_orchestrator =
-            if preliminary_role.should_enable_index_processing() && run_with_range.is_none() {
-                Some(Arc::new(TransactionOrchestrator::new_with_auth_aggregator(
-                    auth_agg.load_full(),
-                    state.clone(),
-                    end_of_epoch_receiver,
-                    &config.db_path(),
-                    &prometheus_registry,
-                    &config,
-                )))
-            } else {
-                None
-            };
+        let transaction_orchestrator = if preliminary_role.is_fullnode() && run_with_range.is_none()
+        {
+            Some(Arc::new(TransactionOrchestrator::new_with_auth_aggregator(
+                auth_agg.load_full(),
+                state.clone(),
+                end_of_epoch_receiver,
+                &config.db_path(),
+                &prometheus_registry,
+                &config,
+            )))
+        } else {
+            None
+        };
 
         let (http_servers, subscription_service_checkpoint_sender) = build_http_servers(
             state.clone(),

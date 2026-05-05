@@ -26,6 +26,13 @@ pub enum NodeRole {
 }
 
 impl NodeRole {
+    pub fn is_fullnode(&self) -> bool {
+        matches!(self, Self::FullNode(_))
+    }
+
+    pub fn is_validator(&self) -> bool {
+        matches!(self, Self::Validator)
+    }
     // --- Capability methods ---
 
     /// Whether this node participates in the consensus protocol.

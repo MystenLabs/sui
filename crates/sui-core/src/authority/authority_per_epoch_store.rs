@@ -3864,7 +3864,7 @@ impl AuthorityPerEpochStore {
 
     /// Whether this node is a validator in this epoch.
     pub fn is_validator(&self) -> bool {
-        self.node_role() == NodeRole::Validator
+        self.node_role().is_validator()
     }
 }
 
