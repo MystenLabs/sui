@@ -25,8 +25,7 @@ ENV GIT_REVISION=$GIT_REVISION
 ENV USE_TIDEHUNTER=1
 RUN cargo build --locked --profile ${PROFILE} \
     --features typed-store/tidehunter \
-    --bin sui-node --bin sui --bin sui-tool --bin stress \
-    --target-dir target/tidehunter
+    --bin sui-node --bin sui --bin sui-tool --bin stress
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
@@ -39,10 +38,10 @@ WORKDIR /sui
 # silent swap at /opt/sui/bin/sui-node could corrupt unrelated databases.
 # Source path is hardcoded to /release/ because the release and bench
 # profiles both emit there (bench inherits release's dir-name).
-COPY --from=builder /sui/target/tidehunter/release/sui-node /opt/sui/bin/sui-node-th
-COPY --from=builder /sui/target/tidehunter/release/sui      /opt/sui/bin/sui-th
-COPY --from=builder /sui/target/tidehunter/release/sui-tool /opt/sui/bin/sui-tool-th
-COPY --from=builder /sui/target/tidehunter/release/stress   /opt/sui/bin/stress-th
+COPY --from=builder /sui/target/release/sui-node /opt/sui/bin/sui-node-th
+COPY --from=builder /sui/target/release/sui      /opt/sui/bin/sui-th
+COPY --from=builder /sui/target/release/sui-tool /opt/sui/bin/sui-tool-th
+COPY --from=builder /sui/target/release/stress   /opt/sui/bin/stress-th
 
 ARG BUILD_DATE
 ARG GIT_REVISION
