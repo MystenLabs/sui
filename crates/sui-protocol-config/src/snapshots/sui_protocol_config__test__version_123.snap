@@ -168,8 +168,6 @@ feature_flags:
   gasless_verify_remaining_balance: true
   disallow_jump_orphans: true
   early_return_receive_object_mismatched_type: true
-  timestamp_based_epoch_close: true
-  limit_groth16_pvk_inputs: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -253,7 +251,7 @@ obj_access_cost_delete_per_byte: 40
 obj_access_cost_verify_per_byte: 200
 max_type_to_layout_nodes: 512
 max_ptb_value_size: 1048576
-gas_model_version: 12
+gas_model_version: 13
 obj_data_cost_refundable: 100
 obj_metadata_cost_non_refundable: 50
 storage_rebate_rate: 9900
