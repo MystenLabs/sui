@@ -71,3 +71,8 @@ pub fn native_function_threshold_exceeded(gas_model_version: u64, num_native_cal
         false
     }
 }
+
+/// If true, re-read the gas payment location before final charging.
+pub fn refresh_gas_payment_location(gas_model_version: u64) -> bool {
+    gas_model_version >= 13
+}

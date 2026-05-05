@@ -17,7 +17,7 @@ pub mod checked {
     use sui_types::error::ExecutionErrorTrait;
     use sui_types::gas::{GasCostSummary, SuiGasStatus, deduct_gas};
     use sui_types::gas_model::gas_predicates::{
-        charge_upgrades, dont_charge_budget_on_storage_oog,
+        charge_upgrades, dont_charge_budget_on_storage_oog, refresh_gas_payment_location,
     };
     use sui_types::{
         accumulator_event::AccumulatorEvent,
@@ -202,6 +202,13 @@ pub mod checked {
             }
         }
 
+        fn gas_payment_location(&self) -> Option<PaymentLocation> {
+            match &self.payment {
+                PaymentMetadata::Unmetered | PaymentMetadata::Gasless => None,
+                PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
+            }
+        }
+
         pub fn gas_budget(&self) -> u64 {
             self.gas_status.gas_budget()
         }
@@ -375,13 +382,10 @@ pub mod checked {
             temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
 
-            let gas_payment_location = match &self.payment {
-                PaymentMetadata::Unmetered => {
-                    return GasCostSummary::default();
-                }
-                PaymentMetadata::Gasless => None,
-                PaymentMetadata::Smash(metadata) => Some(metadata.gas_charge_location),
-            };
+            if matches!(&self.payment, PaymentMetadata::Unmetered) {
+                return GasCostSummary::default();
+            }
+            let gas_payment_location = self.gas_payment_location();
             if let Some(PaymentLocation::Coin(_)) = gas_payment_location {
                 #[skip_checked_arithmetic]
                 trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
@@ -404,6 +408,12 @@ pub mod checked {
             }
 
             self.compute_storage_and_rebate(temporary_store, execution_result);
+
+            let gas_payment_location = if refresh_gas_payment_location(self.gas_model_version) {
+                self.gas_payment_location()
+            } else {
+                gas_payment_location
+            };
 
             let cost_summary = self.gas_status.summary();
 
