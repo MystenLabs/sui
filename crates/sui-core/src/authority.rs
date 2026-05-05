@@ -1682,11 +1682,6 @@ impl AuthorityState {
             .expect("must return correct number of effects")
     }
 
-    fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        self.get_object_cache_reader()
-            .check_owned_objects_are_live(owned_object_refs)
-    }
-
     /// This function captures the required state to debug a forked transaction.
     /// The dump is written to a file in dir `path`, with name prefixed by the transaction digest.
     /// NOTE: Since this info escapes the validator context,
@@ -2001,10 +1996,6 @@ impl AuthorityState {
             Err(e) => return ExecutionOutput::Fatal(e),
         };
 
-        let owned_object_refs = input_objects.inner().filter_owned_objects();
-        if let Err(e) = self.check_owned_locks(&owned_object_refs) {
-            return ExecutionOutput::Fatal(e);
-        }
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
