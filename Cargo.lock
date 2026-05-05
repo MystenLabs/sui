@@ -14829,7 +14829,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-forking"
+name = "sui-fork"
 version = "1.72.0"
 dependencies = [
  "anyhow",

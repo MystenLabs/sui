@@ -10,9 +10,10 @@ use clap::Parser;
 use clap::Subcommand;
 use reqwest::Url;
 use serde::Serialize;
+use tracing::info;
+
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
-use tracing::info;
 
 use crate::AdvanceCheckpointRequest;
 use crate::AdvanceClockRequest;
@@ -26,7 +27,7 @@ use crate::seed::SeedInput;
 pub const DEFAULT_RPC_ADDR: &str = "127.0.0.1:9000";
 
 #[derive(Parser)]
-#[command(name = "sui-forking", about = "Fork and interact with a Sui network")]
+#[command(name = "sui-fork", about = "Fork and interact with a Sui network")]
 pub struct Cli {
     /// Output results as JSON
     #[arg(long = "json", global = true)]
@@ -351,7 +352,7 @@ mod tests {
     #[test]
     fn client_commands_accept_default_rpc_addr() {
         for command in ["advance-clock", "advance-checkpoint", "status"] {
-            let cli = Cli::try_parse_from(["sui-forking", command]).unwrap();
+            let cli = Cli::try_parse_from(["sui-fork", command]).unwrap();
             let rpc_addr = match cli.command {
                 Command::AdvanceClock { rpc_addr, .. }
                 | Command::AdvanceCheckpoint { rpc_addr }

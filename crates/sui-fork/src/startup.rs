@@ -121,7 +121,7 @@ pub async fn run(
         Arc::new(sim.store().clone())
     };
     let mut service = RpcService::new(reader);
-    service.with_server_version(ServerVersion::new("sui-forking", version));
+    service.with_server_version(ServerVersion::new("sui-fork", version));
     service.with_subscription_service(subscription_handle);
     let context = Arc::new(context);
     service.with_executor(Arc::new(ForkedTransactionExecutor::new(context.clone())));

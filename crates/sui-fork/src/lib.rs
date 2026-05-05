@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Building blocks for the experimental `sui-forking` tool.
+//! Building blocks for the experimental `sui-fork` tool.
 
 #![allow(unused)]
 

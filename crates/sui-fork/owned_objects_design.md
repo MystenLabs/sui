@@ -6,7 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 # Owned Object Index Design
 
 This document describes the first-version owned-object index design for
-`sui-forking`. The design is intentionally small: it supports owned object
+`sui-fork`. The design is intentionally small: it supports owned object
 enumeration for locally materialized post-fork state while preserving the
 existing object-version cache.
 

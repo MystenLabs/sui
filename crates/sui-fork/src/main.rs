@@ -4,7 +4,7 @@
 use anyhow::Result;
 use clap::Parser;
 
-use sui_forking::cli::Cli;
+use sui_fork::cli::Cli;
 
 bin_version::bin_version!();
 

@@ -1,5 +1,5 @@
 [package]
-name = "sui-forking"
+name = "sui-fork"
 version.workspace = true
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"

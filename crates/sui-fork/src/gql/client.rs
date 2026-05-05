@@ -9,6 +9,7 @@ use cynic::Operation;
 use reqwest::header::USER_AGENT;
 
 use sui_protocol_config::Chain;
+use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEvents;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -24,7 +25,6 @@ use crate::TransactionInfo;
 use crate::TransactionRead;
 use crate::gql::AddressOwnedObject;
 use crate::gql::queries;
-use sui_types::base_types::SuiAddress;
 
 macro_rules! block_on {
     ($expr:expr) => {{
@@ -99,7 +99,7 @@ impl GraphQLClient {
     {
         client
             .post(rpc.clone())
-            .header(USER_AGENT, format!("sui-forking-v{}", version))
+            .header(USER_AGENT, format!("sui-fork-v{}", version))
             .json(operation)
             .send()
             .await
@@ -296,7 +296,7 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("POST"))
             .and(path("/"))
-            .and(header("user-agent", "sui-forking-vtest-version"))
+            .and(header("user-agent", "sui-fork-vtest-version"))
             .and(body_partial_json(json!({
                 "variables": {
                     "sequenceNumber": 7,
@@ -390,7 +390,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/"))
-            .and(header("user-agent", "sui-forking-vtest-version"))
+            .and(header("user-agent", "sui-fork-vtest-version"))
             .and(body_partial_json(json!({
                 "variables": {
                     "keys": [
@@ -471,7 +471,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/"))
-            .and(header("user-agent", "sui-forking-vtest-version"))
+            .and(header("user-agent", "sui-fork-vtest-version"))
             .and(body_partial_json(json!({
                 "variables": {
                     "sequenceNumber": 31,
@@ -607,7 +607,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/"))
-            .and(header("user-agent", "sui-forking-vtest-version"))
+            .and(header("user-agent", "sui-fork-vtest-version"))
             .and(body_partial_json(json!({
                 "variables": {
                     "digest": digest,

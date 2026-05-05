@@ -12,9 +12,12 @@
 
 #![allow(unused)]
 
-use anyhow::{Context, Error, anyhow};
+use anyhow::Context;
+use anyhow::Error;
+use anyhow::anyhow;
 use cynic::QueryBuilder;
-use fastcrypto::encoding::{Base64 as FastCryptoBase64, Encoding};
+use fastcrypto::encoding::Base64 as FastCryptoBase64;
+use fastcrypto::encoding::Encoding;
 use itertools::Itertools;
 
 use crate::gql::client::GraphQLClient;
