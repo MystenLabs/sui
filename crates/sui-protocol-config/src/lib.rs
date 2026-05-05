@@ -5555,10 +5555,11 @@ mod test {
             };
             for i in MIN_PROTOCOL_VERSION..=MAX_PROTOCOL_VERSION {
                 let cur = ProtocolVersion::new(i);
-                assert_yaml_snapshot!(
-                    format!("{}version_{}", chain_str, cur.as_u64()),
-                    ProtocolConfig::get_for_version(cur, *chain_id)
-                );
+                // Bypass `get_for_version` so a concurrent test that installs a
+                // `CONFIG_OVERRIDE` cannot mutate the snapshotted config.
+                let mut cfg = ProtocolConfig::get_for_version_impl(cur, *chain_id);
+                cfg.version = cur;
+                assert_yaml_snapshot!(format!("{}version_{}", chain_str, cur.as_u64()), cfg);
             }
         }
     }
