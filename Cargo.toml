@@ -139,6 +139,7 @@ members = [
     "crates/sui-indexer-alt-object-store",
     "crates/sui-indexer-alt-reader",
     "crates/sui-indexer-alt-schema",
+    "crates/sui-inverted-index",
     "crates/sui-json",
     "crates/sui-json-rpc",
     "crates/sui-json-rpc-api",
@@ -697,6 +698,7 @@ sui-json-rpc = { path = "crates/sui-json-rpc" }
 sui-json-rpc-api = { path = "crates/sui-json-rpc-api" }
 sui-json-rpc-types = { path = "crates/sui-json-rpc-types" }
 sui-keys = { path = "crates/sui-keys" }
+sui-inverted-index = { path = "crates/sui-inverted-index" }
 sui-kvstore = { path = "crates/sui-kvstore" }
 sui-kv-rpc = { path = "crates/sui-kv-rpc" }
 sui-light-client = { path = "crates/sui-light-client" }
@@ -776,4 +778,3 @@ tonic-reflection = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce6
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
-

@@ -1,0 +1,15 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "sui-inverted-index"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+bcs.workspace = true
+move-core-types.workspace = true
+sui-types.workspace = true

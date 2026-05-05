@@ -15429,6 +15429,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-inverted-index"
+version = "1.73.0"
+dependencies = [
+ "bcs",
+ "move-core-types",
+ "sui-types",
+]
+
+[[package]]
 name = "sui-json"
 version = "0.0.0"
 dependencies = [
