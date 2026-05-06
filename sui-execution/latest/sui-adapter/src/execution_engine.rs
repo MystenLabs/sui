@@ -405,10 +405,9 @@ mod checked {
                         Mode::ExecutionResults,
                         Mode::Error,
                     > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => Err((
-                            ExecutionError::new(early_execution_error, None).into(),
-                            vec![],
-                        )),
+                        ExecutionOrEarlyError::Err(early_execution_error) => {
+                            Err((Mode::Error::from_kind(early_execution_error), vec![]))
+                        }
                         ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                             store,
                             temporary_store,
@@ -457,9 +456,10 @@ mod checked {
             && result.is_ok()
             && let Err(msg) = temporary_store.check_gasless_execution_requirements()
         {
-            result = Err(
-                ExecutionError::new_with_source(ExecutionErrorKind::InsufficientGas, msg).into(),
-            );
+            result = Err(Mode::Error::new_with_source(
+                ExecutionErrorKind::InsufficientGas,
+                msg,
+            ));
         }
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
@@ -592,14 +592,13 @@ mod checked {
                 );
                 Ok(())
             }
-            LimitThresholdCrossed::Hard(_, lim) => Err(ExecutionError::new_with_source(
+            LimitThresholdCrossed::Hard(_, lim) => Err(Mode::Error::new_with_source(
                 ExecutionErrorKind::EffectsTooLarge {
                     current_size: effects_estimated_size as u64,
                     max_size: lim as u64,
                 },
                 "Transaction effects are too large",
-            )
-            .into()),
+            )),
         }
     }
 
@@ -632,14 +631,13 @@ mod checked {
                     )
                 }
                 LimitThresholdCrossed::Hard(_, lim) => {
-                    return Err(ExecutionError::new_with_source(
+                    return Err(Mode::Error::new_with_source(
                         ExecutionErrorKind::WrittenObjectsTooLarge {
                             current_size: written_objects_size as u64,
                             max_size: lim as u64,
                         },
                         "Written objects size crossed hard limit",
-                    )
-                    .into());
+                    ));
                 }
             };
         }

@@ -18,7 +18,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     coin::{COIN_MODULE_NAME, SEND_FUNDS_FUNC_NAME},
-    error::{ExecutionError, ExecutionErrorTrait, SafeIndex, command_argument_error},
+    error::{ExecutionErrorTrait, SafeIndex, command_argument_error},
     execution_status::{CommandArgumentError, ExecutionErrorKind},
     id::RESOLVED_SUI_ID,
     transfer::RESOLVED_RECEIVING_STRUCT,
@@ -144,14 +144,13 @@ fn check_pure_bytes<Mode: ExecutionMode>(
         let msg = format!(
             "Invalid usage of `Pure` argument for a non-primitive argument type at index {command_arg_idx}.",
         );
-        return Err(ExecutionError::new_with_source(
+        return Err(Mode::Error::new_with_source(
             ExecutionErrorKind::command_argument_error(
                 CommandArgumentError::InvalidUsageOfPureArg,
                 command_arg_idx,
             ),
             msg,
-        )
-        .into());
+        ));
     };
     bcs_argument_validate(bytes, command_arg_idx, layout)?;
     Ok(())
