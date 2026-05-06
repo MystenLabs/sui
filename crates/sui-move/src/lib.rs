@@ -12,6 +12,7 @@ pub mod build;
 pub mod cache_package;
 pub mod coverage;
 pub mod disassemble;
+pub mod format;
 pub mod migrate;
 pub mod new;
 pub mod summary;
@@ -25,6 +26,7 @@ pub enum Command {
     #[command(hide = true)]
     CachePackage(cache_package::CachePackage),
     Disassemble(disassemble::Disassemble),
+    Format(format::Format),
     Migrate(migrate::Migrate),
     New(new::New),
     Test(unit_test::Test),
@@ -51,6 +53,7 @@ pub async fn execute_move_command(
         Command::CachePackage(c) => c.execute(flavor).await,
         Command::Coverage(c) => c.execute(package_path, build_config, flavor).await,
         Command::Disassemble(c) => c.execute(package_path, build_config, flavor).await,
+        Command::Format(c) => c.execute().await,
         Command::Migrate(c) => c.execute(package_path, build_config, flavor).await,
         Command::New(c) => c.execute(package_path),
         Command::Summary(s) => {
