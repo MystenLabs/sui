@@ -169,7 +169,7 @@ pub struct ConsensusManager {
 
     // Persistent storage for address updates across epoch changes.
     // Keyed by NetworkPublicKey and then by AddressSource.
-    address_overrides: Mutex<AddressOverridesMap>,
+    address_overrides: parking_lot::Mutex<AddressOverridesMap>,
 }
 
 impl ConsensusManager {
@@ -199,7 +199,7 @@ impl ConsensusManager {
             consumer_monitor_sender,
             running: Mutex::new(Running::False),
             boot_counter: Mutex::new(0),
-            address_overrides: Mutex::new(AddressOverridesMap::new()),
+            address_overrides: parking_lot::Mutex::new(AddressOverridesMap::new()),
         }
     }
 
@@ -314,8 +314,10 @@ impl ConsensusManager {
         self.authority.swap(Some(registered_authority.clone()));
 
         // Reapply all stored address updates to the new consensus instance.
-        let address_overrides = self.address_overrides.lock().await;
-        let highest_priority_addresses = address_overrides.get_all_highest_priority_addresses();
+        let highest_priority_addresses = self
+            .address_overrides
+            .lock()
+            .get_all_highest_priority_addresses();
         for (network_pubkey, address) in highest_priority_addresses {
             registered_authority
                 .0
@@ -425,7 +427,7 @@ impl ConsensusAddressUpdater for ConsensusManager {
 
         // Determine what address should be used after this update (if any)
         let address_to_apply = {
-            let mut address_overrides = self.address_overrides.blocking_lock();
+            let mut address_overrides = self.address_overrides.lock();
 
             if addresses.is_empty() {
                 address_overrides.remove(network_pubkey.clone(), source);
