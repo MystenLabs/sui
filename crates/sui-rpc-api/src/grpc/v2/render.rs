@@ -46,6 +46,24 @@ impl RpcService {
         contents: &[u8],
         output_objects: &ObjectSet,
     ) -> Option<prost_types::Value> {
+        let mut budget = self.config.max_json_move_value_size();
+        self.render_json_with_budget(struct_tag, contents, output_objects, &mut budget)
+    }
+
+    /// Render a Move value as JSON, drawing the size budget from a caller-owned
+    /// counter. Endpoints that render many Move values in a single response
+    /// (e.g. every event in a checkpoint) share one budget across all renders
+    /// to bound the aggregate response memory rather than multiplying the
+    /// per-render limit by the number of items. The budget is updated in place
+    /// to reflect bytes consumed; once it reaches zero subsequent calls fail
+    /// fast and return `None`.
+    pub fn render_json_with_budget(
+        &self,
+        struct_tag: &move_core_types::language_storage::StructTag,
+        contents: &[u8],
+        output_objects: &ObjectSet,
+        size_budget: &mut usize,
+    ) -> Option<prost_types::Value> {
         let layout = self
             .reader
             .inner()
@@ -53,11 +71,13 @@ impl RpcService {
             .ok()
             .flatten()?;
 
-        let bound = self.config.max_json_move_value_size();
-        sui_types::object::rpc_visitor::proto::ProtoVisitor::new(bound)
-            .deserialize_value(contents, &layout)
-            .map_err(|e| tracing::debug!("unable to convert move value to JSON: {e}"))
-            .ok()
+        sui_types::object::rpc_visitor::proto::ProtoVisitor::deserialize_value_with_budget(
+            contents,
+            &layout,
+            size_budget,
+        )
+        .map_err(|e| tracing::debug!("unable to convert move value to JSON: {e}"))
+        .ok()
     }
 
     pub fn render_object_display(&self, object: &sui_types::object::Object) -> Option<Display> {

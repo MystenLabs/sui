@@ -150,7 +150,7 @@ export default {
       items: [
         'develop/transaction-payment/gas-in-sui',
         'develop/transaction-payment/local-fee-markets',
-        'develop/transaction-payment/gasless-transactions',
+        'develop/transaction-payment/gasless-stablecoin-transfers',
         'develop/transaction-payment/sponsor-txn',
         'develop/transaction-payment/gas-smashing',
       ],
@@ -471,6 +471,7 @@ export default {
       ],
     },
     'onchain-finance/payment-kit',
+	'onchain-finance/payment-intents',
   ],
 
   suiStackSidebar: [

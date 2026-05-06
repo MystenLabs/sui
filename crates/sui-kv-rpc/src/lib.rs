@@ -186,7 +186,9 @@ impl KvRpcServer {
         config: ServerConfig,
     ) -> anyhow::Result<sui_futures::service::Service> {
         use mysten_network::callback::CallbackLayer;
-        use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler};
+        use sui_rpc_api::{
+            RpcMetrics, RpcMetricsMakeCallbackHandler, grpc_method_paths_from_file_descriptor_sets,
+        };
 
         let mut builder = Server::builder();
 
@@ -194,39 +196,41 @@ impl KvRpcServer {
             builder = builder.tls_config(ServerTlsConfig::new().identity(identity))?;
         }
 
+        // Single source of truth for every encoded FileDescriptorSet that
+        // backs a gRPC service mounted below. Consumed by both the
+        // reflection services and the metrics allowlist so they cannot drift
+        // out of sync.
+        let file_descriptor_sets: &[&[u8]] = &[
+            sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+            sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
+        ];
+
         let registry = config.metrics_registry.unwrap_or_default();
+        let grpc_method_allowlist = Arc::new(grpc_method_paths_from_file_descriptor_sets(
+            file_descriptor_sets,
+        )?);
         let mut router = builder
-            .layer(CallbackLayer::new(RpcMetricsMakeCallbackHandler::new(
-                Arc::new(RpcMetrics::new(&registry)),
-            )))
+            .layer(CallbackLayer::new(
+                RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
+                    Arc::new(RpcMetrics::new(&registry)),
+                    grpc_method_allowlist,
+                ),
+            ))
             .add_service(LedgerServiceServer::new(self));
 
         if config.enable_reflection {
-            let reflection_v1 = tonic_reflection::server::Builder::configure()
-                .register_encoded_file_descriptor_set(
-                    sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
-                .build_v1()?;
-            let reflection_v1alpha = tonic_reflection::server::Builder::configure()
-                .register_encoded_file_descriptor_set(
-                    sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
-                .build_v1alpha()?;
+            let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();
+            let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure();
+            for fds in file_descriptor_sets {
+                reflection_v1_builder =
+                    reflection_v1_builder.register_encoded_file_descriptor_set(fds);
+                reflection_v1alpha_builder =
+                    reflection_v1alpha_builder.register_encoded_file_descriptor_set(fds);
+            }
             router = router
-                .add_service(reflection_v1)
-                .add_service(reflection_v1alpha);
+                .add_service(reflection_v1_builder.build_v1()?)
+                .add_service(reflection_v1alpha_builder.build_v1alpha()?);
         }
 
         let (tx, rx) = tokio::sync::oneshot::channel::<()>();
