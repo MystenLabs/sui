@@ -32,7 +32,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 125;
+const MAX_PROTOCOL_VERSION: u64 = 124;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
@@ -327,7 +327,7 @@ const TESTNET_USDC: &str =
 // Version 124: Add timestamp_based_epoch_close feature flag and enable in tests.
 //              Fix native call double-pop in gas meter stack height tracking (gas_model v14).
 //              Limit public inputs in groth16::prepare_verifying_key.
-// Version 125: Enable address balances, free tier (gasless), and coin reservations on mainnet.
+//              Enable address balances, free tier (gasless), and coin reservations on mainnet.
 //              Enables enable_accumulators, enable_address_balance_gas_payments,
 //              enable_authenticated_event_streams, enable_coin_reservation_obj_refs,
 //              enable_object_funds_withdraw, convert_withdrawal_compatibility_ptb_arguments,
@@ -4903,8 +4903,7 @@ impl ProtocolConfig {
                     }
                     cfg.gas_model_version = Some(14);
                     cfg.feature_flags.limit_groth16_pvk_inputs = true;
-                }
-                125 => {
+
                     // Bring mainnet in line with testnet: enable address balances, the
                     // gasless "free tier", coin reservations, and the rest of the
                     // accumulator/withdraw stack. These are all already enabled on

@@ -110,7 +110,11 @@ feature_flags:
   enable_party_transfer: true
   allow_unbounded_system_objects: true
   type_tags_in_object_runtime: true
+  enable_accumulators: true
+  enable_coin_reservation_obj_refs: true
   create_root_accumulator_object: true
+  enable_authenticated_event_streams: true
+  enable_address_balance_gas_payments: true
   address_balance_gas_check_rgp_at_signing: true
   enable_multi_epoch_transaction_expiration: true
   relax_valid_during_for_owned_inputs: true
@@ -123,6 +127,7 @@ feature_flags:
   debug_fatal_on_move_invariant_violation: true
   additional_consensus_digest_indirect_state: true
   check_for_init_during_upgrade: true
+  include_checkpoint_artifacts_digest_in_summary: true
   use_mfp_txns_in_load_initial_object_debts: true
   cancel_for_failed_dkg_early: true
   enable_coin_registry: true
@@ -140,11 +145,14 @@ feature_flags:
   include_cancelled_randomness_txns_in_prologue: true
   address_aliases: true
   fix_checkpoint_signature_mapping: true
+  enable_object_funds_withdraw: true
   consensus_skip_gced_blocks_in_direct_finalization: true
   gas_rounding_halve_digits: true
   flexible_tx_context_positions: true
   disable_entry_point_signature_check: true
+  convert_withdrawal_compatibility_ptb_arguments: true
   restrict_hot_or_not_entry_functions: true
+  split_checkpoints_in_consensus_handler: true
   consensus_always_accept_system_transactions: true
   validator_metadata_verify_v2: true
   defer_unpaid_amplification: true
@@ -152,6 +160,7 @@ feature_flags:
   gasless_transaction_drop_safety: true
   merge_randomness_into_checkpoint: true
   use_coin_party_owner: true
+  enable_gasless: true
   gasless_verify_remaining_balance: true
   disallow_jump_orphans: true
   early_return_receive_object_mismatched_type: true
@@ -679,6 +688,7 @@ translation_per_reference_node_charge: 1
 translation_per_linkage_entry_charge: 10
 max_updates_per_settlement_txn: 100
 gasless_max_computation_units: 5000
+gasless_allowed_token_types: []
 gasless_max_unused_inputs: 1
 gasless_max_pure_input_bytes: 32
 gasless_max_tps: 300
