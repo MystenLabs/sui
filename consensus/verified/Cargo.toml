@@ -1,0 +1,21 @@
+[package]
+name = "consensus-verified"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+edition = "2024"
+publish = false
+
+[lints]
+workspace = true
+
+# Crates following the `-verified` naming convention contain code whose
+# correctness is checked by Verus. CI runs `cargo verus check` on this crate
+# (see scripts/verus-check.sh). Stable `cargo build` ignores Verus annotations:
+# the `verus!` macro erases all spec/proof material in non-Verus builds.
+[package.metadata.verus]
+verify = true
+
+[dependencies]
+consensus-config.workspace = true
+vstd.workspace = true

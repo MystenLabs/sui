@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 arc-swap.workspace = true
+consensus-verified.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 bcs.workspace = true

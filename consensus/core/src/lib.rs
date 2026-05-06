@@ -32,7 +32,10 @@ mod peers_pool;
 mod proposer;
 mod round_prober;
 mod round_tracker;
-mod stake_aggregator;
+// `stake_aggregator` lives in `consensus-verified` (the Verus-checked
+// sister crate). Re-export at the same crate-relative path so existing
+// `crate::stake_aggregator::...` imports continue to resolve.
+pub(crate) use consensus_verified::stake_aggregator;
 pub mod storage;
 mod subscriber;
 mod synchronizer;

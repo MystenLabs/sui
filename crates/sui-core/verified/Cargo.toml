@@ -1,0 +1,26 @@
+[package]
+name = "sui-core-verified"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lints]
+workspace = true
+
+# This crate's correctness is checked by Verus. CI runs `cargo verus check`
+# (see scripts/verus-check.sh). Stable `cargo build` ignores Verus annotations:
+# the `verus!` macro erases all spec/proof material in non-Verus builds.
+[package.metadata.verus]
+verify = true
+
+[dependencies]
+fastcrypto.workspace = true
+serde.workspace = true
+shared-crypto.workspace = true
+sui-types-verified.workspace = true
+sui-types.workspace = true
+tracing.workspace = true
+typed-store.workspace = true
+typed-store-error.workspace = true
+vstd.workspace = true

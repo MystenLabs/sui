@@ -3,7 +3,6 @@
 
 use serde::Serialize;
 use shared_crypto::intent::Intent;
-use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
@@ -15,14 +14,130 @@ use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::message_envelope::{Envelope, Message};
 use tracing::warn;
 use typed_store::TypedStoreError;
+use vstd::prelude::*;
+
+verus! {
+
+#[cfg(verus_only)]
+use crate::verus_shims::{
+    committee_threshold_spec, committee_unique, committee_weight_of,
+    lemma_voted_weight_empty, lemma_voted_weight_insert, voted_weight,
+};
+
+// ---------------------------------------------------------------------------
+// AuthorityMap
+// ---------------------------------------------------------------------------
+//
+// Thin wrapper around `HashMap<AuthorityName, S>` that adds the iteration
+// API (`values`, `keys`, etc.) missing from `HashMapWithView`, while still
+// giving verified code a clean `Map<AuthorityName, S>` view.
+//
+// Why not just use `HashMapWithView<AuthorityName, S>` directly?
+// vstd's `HashMapWithView` has no `iter()` / `values()` / `IntoIterator`
+// — the unverified `AuthoritySignInfo` specialisation below needs those.
+// `AuthorityMap` bridges the gap: verified code uses the specced methods
+// below; unverified code reaches `self.data.inner` for iteration.
+//
+// The view is `open` and delegates to the raw HashMap's own view (which
+// vstd provides in `vstd::view`). With `obeys_key_model::<AuthorityName>()`
+// axiomatised in `verus_shims`, no further axioms are needed for the
+// view to be consistent.
+
+#[derive(Debug)]
+pub struct AuthorityMap<S> {
+    pub inner: HashMap<AuthorityName, S>,
+}
+
+impl<S> View for AuthorityMap<S> {
+    type V = Map<AuthorityName, S>;
+    // Transparent: self@ unfolds to self.inner@ (the raw HashMap's view).
+    // No uninterpreted axiom needed — the HashMap view is grounded in vstd.
+    open spec fn view(&self) -> Map<AuthorityName, S> { self.inner@ }
+}
+
+impl<S> AuthorityMap<S> {
+    #[verifier::external_body]
+    pub fn new() -> (out: Self)
+        ensures
+            // Fresh map is empty and finite.
+            out@ =~= Map::<AuthorityName, S>::empty(),
+            out@.dom().finite(),
+    {
+        Self { inner: HashMap::new() }
+    }
+
+    #[verifier::external_body]
+    pub fn contains_key(&self, name: &AuthorityName) -> (b: bool)
+        // Result mirrors the ghost map.
+        ensures b == self@.contains_key(*name),
+    {
+        self.inner.contains_key(name)
+    }
+
+    #[verifier::external_body]
+    pub fn insert_new(&mut self, name: AuthorityName, value: S)
+        requires
+            // Caller promises the name is not already present.
+            !old(self)@.contains_key(name),
+            old(self)@.dom().finite(),
+        ensures
+            // After insert: view extends by (name, value); finiteness preserved.
+            self@ =~= old(self)@.insert(name, value),
+            self@.dom().finite(),
+    {
+        self.inner.insert(name, value);
+    }
+
+    /// Production uses this only for the `conflicting_sig` metadata in
+    /// errors, which does not affect the sum invariant. No useful spec.
+    #[verifier::external_body]
+    pub fn get_value<'a>(&'a self, name: &AuthorityName) -> (out: Option<&'a S>) {
+        self.inner.get(name)
+    }
+}
+
+impl<S> Default for AuthorityMap<S> {
+    #[verifier::external_body]
+    fn default() -> (out: Self)
+        // Default == new(): empty map.
+        ensures
+            out@ =~= Map::<AuthorityName, S>::empty(),
+            out@.dom().finite(),
+    {
+        Self::new()
+    }
+}
+
+// Verus cannot construct opaque external types directly. These wrappers
+// build the SuiErrors used by `insert_generic`'s error branches. Bodies
+// are unverified — error construction is exec-only metadata that does
+// not affect the sum invariant.
+
+#[verifier::external_body]
+fn err_repeated_signer(signer: AuthorityName, conflicting_sig: bool) -> (out: SuiError) {
+    SuiErrorKind::StakeAggregatorRepeatedSigner {
+        signer,
+        conflicting_sig,
+    }
+    .into()
+}
+
+#[verifier::external_body]
+fn err_invalid_authenticator() -> (out: SuiError) {
+    SuiErrorKind::InvalidAuthenticator.into()
+}
+
+} // verus!
+
+verus! {
 
 /// StakeAggregator allows us to keep track of the total stake of a set of validators.
 /// STRENGTH indicates whether we want a strong quorum (2f+1) or a weak quorum (f+1).
 #[derive(Debug)]
 pub struct StakeAggregator<S, const STRENGTH: bool> {
-    data: HashMap<AuthorityName, S>,
-    total_votes: StakeUnit,
-    committee: Arc<Committee>,
+    pub data: AuthorityMap<S>,
+    pub total_votes: StakeUnit,
+    pub committee: Arc<Committee>,
 }
 
 /// StakeAggregator is a utility data structure that allows us to aggregate a list of validator
@@ -31,24 +146,31 @@ pub struct StakeAggregator<S, const STRENGTH: bool> {
 /// an actual signature, but just an indication that a specific validator has voted. A specialized
 /// implementation for `AuthoritySignInfo` is followed below.
 impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
-    pub fn new(committee: Arc<Committee>) -> Self {
-        Self {
-            data: Default::default(),
-            total_votes: Default::default(),
-            committee,
-        }
+    /// Sum invariant: `total_votes` equals the total committee weight of every
+    /// authority recorded in `data`.
+    pub open spec fn invariant_holds(&self) -> bool {
+        // Voter set must be finite for the spec sum to be well-defined.
+        self.data@.dom().finite()
+        // Running total matches the spec sum over the recorded voters.
+        && self.total_votes as int == voted_weight(&self.committee, self.data@.dom())
     }
 
-    pub fn from_iter<I: Iterator<Item = Result<(AuthorityName, S), TypedStoreError>>>(
-        committee: Arc<Committee>,
-        data: I,
-    ) -> SuiResult<Self> {
-        let mut this = Self::new(committee);
-        for item in data {
-            let (authority, s) = item?;
-            this.insert_generic(authority, s);
+    pub fn new(committee: Arc<Committee>) -> (out: Self)
+        ensures
+            // Fresh aggregator: zero votes, empty data, invariant holds.
+            out.total_votes == 0,
+            out.data@ =~= Map::<AuthorityName, S>::empty(),
+            out.invariant_holds(),
+            // Committee reference preserved.
+            out.committee == committee,
+    {
+        // sum_stakes(c, empty) == 0 for any committee, so the invariant follows.
+        broadcast use lemma_voted_weight_empty;
+        Self {
+            data: AuthorityMap::default(),
+            total_votes: 0,
+            committee,
         }
-        Ok(this)
     }
 
     /// A generic version of inserting arbitrary type of V (e.g. void type).
@@ -56,66 +178,172 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
     /// checks and aggregations in the end.
     /// Returns Map authority -> S, without aggregating it.
     /// If you want to get an aggregated signature instead, use `StakeAggregator::insert`
-    pub fn insert_generic(
-        &mut self,
+    pub fn insert_generic<'a>(
+        &'a mut self,
         authority: AuthorityName,
         s: S,
-    ) -> InsertResult<&HashMap<AuthorityName, S>> {
-        match self.data.entry(authority) {
-            Entry::Occupied(oc) => {
-                return InsertResult::Failed {
-                    error: SuiErrorKind::StakeAggregatorRepeatedSigner {
-                        signer: authority,
-                        conflicting_sig: oc.get() != &s,
-                    }
-                    .into(),
-                };
+    ) -> (out: InsertResult<&'a HashMap<AuthorityName, S>>)
+        requires
+            // Aggregator was already in a valid state.
+            old(self).invariant_holds(),
+            // Real Committee has unique authority names (sorted by name).
+            committee_unique(&old(self).committee),
+            // No overflow when this authority's weight is added.
+            old(self).total_votes as int
+                + committee_weight_of(&old(self).committee, authority)
+                <= u64::MAX as int,
+        ensures
+            // Invariant survives all three branches.
+            self.invariant_holds(),
+            // Committee reference unchanged.
+            self.committee == old(self).committee,
+            // Variant-specific guarantees describing what each return tells the caller.
+            match out {
+                // Quorum reached: the authority was new, had positive weight, and
+                // the total now meets or exceeds the threshold.
+                InsertResult::QuorumReached(_) =>
+                    !old(self).data@.contains_key(authority)
+                    && committee_weight_of(&self.committee, authority) > 0
+                    && self.total_votes
+                        >= committee_threshold_spec(&self.committee, STRENGTH),
+                // Counted but below threshold: same as above but total < threshold,
+                // and the bookkeeping fields are zero/empty (no bad signatures yet).
+                InsertResult::NotEnoughVotes { bad_votes, bad_authorities } =>
+                    !old(self).data@.contains_key(authority)
+                    && committee_weight_of(&self.committee, authority) > 0
+                    && self.total_votes
+                        < committee_threshold_spec(&self.committee, STRENGTH)
+                    && bad_votes == 0
+                    && bad_authorities@.len() == 0,
+                // Failed: either the signer was already present (state fully
+                // unchanged) or the authority has zero weight (domain extended,
+                // total unchanged). Total is always preserved.
+                InsertResult::Failed { .. } =>
+                    self.total_votes == old(self).total_votes
+                    && (
+                        (old(self).data@.contains_key(authority)
+                            && self.data@ =~= old(self).data@)
+                        || (committee_weight_of(&self.committee, authority) == 0
+                            && self.data@.dom()
+                                =~= old(self).data@.dom().insert(authority))
+                    ),
+            },
+    {
+        if self.data.contains_key(&authority) {
+            // Repeated signer. The conflict bit is exec-only metadata.
+            let conflicting_sig = match self.data.get_value(&authority) {
+                Some(v) => v != &s,
+                None => false,
+            };
+            proof {
+                // No state change in the duplicate path; old invariant carries over.
+                assert(self.data@ =~= old(self).data@);
+                assert(self.total_votes == old(self).total_votes);
+                // Pin down the variant-specific fact: signer was already present.
+                assert(old(self).data@.contains_key(authority));
             }
-            Entry::Vacant(va) => {
-                va.insert(s);
-            }
+            return InsertResult::Failed {
+                error: err_repeated_signer(authority, conflicting_sig),
+            };
         }
+        self.data.insert_new(authority, s);
         let votes = self.committee.weight(&authority);
+        proof {
+            // dom() grew by exactly {authority}; sum grows by weight(authority).
+            let before_dom = old(self).data@.dom();
+            lemma_voted_weight_insert(&old(self).committee, before_dom, authority);
+            // The vacant-path facts shared by all three downstream branches.
+            assert(!old(self).data@.contains_key(authority));
+            assert(self.data@.dom() =~= old(self).data@.dom().insert(authority));
+        }
         if votes > 0 {
-            self.total_votes += votes;
+            self.total_votes = self.total_votes + votes;
+            proof {
+                // total_votes now equals the new sum, and weight is positive.
+                assert(self.invariant_holds());
+                assert(committee_weight_of(&self.committee, authority) > 0);
+            }
             if self.total_votes >= self.committee.threshold::<STRENGTH>() {
-                InsertResult::QuorumReached(&self.data)
+                InsertResult::QuorumReached(&self.data.inner)
             } else {
                 InsertResult::NotEnoughVotes {
                     bad_votes: 0,
-                    bad_authorities: vec![],
+                    bad_authorities: Vec::new(),
                 }
             }
         } else {
+            // Weight 0: data extended but total_votes unchanged. The lemma added
+            // 0 to the sum, matching unchanged total — invariant still holds.
+            proof {
+                assert(self.invariant_holds());
+                assert(committee_weight_of(&self.committee, authority) == 0);
+                assert(self.total_votes == old(self).total_votes);
+            }
             InsertResult::Failed {
-                error: SuiErrorKind::InvalidAuthenticator.into(),
+                error: err_invalid_authenticator(),
             }
         }
     }
 
-    pub fn contains_key(&self, authority: &AuthorityName) -> bool {
+    pub fn contains_key(&self, authority: &AuthorityName) -> (b: bool)
+        // Result mirrors the underlying map.
+        ensures b == self.data@.contains_key(*authority),
+    {
         self.data.contains_key(authority)
     }
 
+    pub fn total_votes(&self) -> (v: StakeUnit)
+        // Trivial getter.
+        ensures v == self.total_votes,
+    {
+        self.total_votes
+    }
+
+    pub fn has_quorum(&self) -> (b: bool)
+        // True iff total_votes meets the threshold for this STRENGTH.
+        ensures b == (self.total_votes >= committee_threshold_spec(&self.committee, STRENGTH)),
+    {
+        self.total_votes >= self.committee.threshold::<STRENGTH>()
+    }
+
+    /// Construct an aggregator from a stream of (authority, S) pairs. Body is
+    /// `external_body` because Result threading via `?` is outside the verified
+    /// subset; the contract guarantees the invariant holds on success.
+    #[verifier::external_body]
+    pub fn from_iter<I: Iterator<Item = Result<(AuthorityName, S), TypedStoreError>>>(
+        committee: Arc<Committee>,
+        data: I,
+    ) -> (out: SuiResult<Self>)
+        ensures
+            // On success, the constructed aggregator obeys the invariant.
+            match out {
+                Ok(this) => this.invariant_holds() && this.committee == committee,
+                Err(_) => true,
+            },
+    {
+        let mut this = Self::new(committee);
+        for item in data {
+            let (authority, s) = item?;
+            this.insert_generic(authority, s);
+        }
+        Ok(this)
+    }
+}
+
+} // verus!
+
+impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
     pub fn keys(&self) -> impl Iterator<Item = &AuthorityName> {
-        self.data.keys()
+        self.data.inner.keys()
     }
 
     pub fn committee(&self) -> &Committee {
         &self.committee
     }
 
-    pub fn total_votes(&self) -> StakeUnit {
-        self.total_votes
-    }
-
-    pub fn has_quorum(&self) -> bool {
-        self.total_votes >= self.committee.threshold::<STRENGTH>()
-    }
-
     #[cfg(test)]
     pub fn validator_sig_count(&self) -> usize {
-        self.data.len()
+        self.data.inner.len()
     }
 }
 
@@ -140,7 +368,7 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
         match self.insert_generic(sig.authority, sig) {
             InsertResult::QuorumReached(_) => {
                 match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
-                    self.data.values().cloned().collect(),
+                    self.data.inner.values().cloned().collect(),
                     self.committee(),
                 ) {
                     Ok(aggregated) => {
@@ -163,7 +391,7 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                                 // result only verify the net new ones.
                                 let mut bad_votes = 0;
                                 let mut bad_authorities = vec![];
-                                for (name, sig) in &self.data.clone() {
+                                for (name, sig) in &self.data.inner.clone() {
                                     if let Err(err) = sig.verify_secure(
                                         &data,
                                         Intent::sui_app(T::SCOPE),
@@ -173,7 +401,7 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                                         // always returns an invalid signature other than saving to errors in state. It
                                         // is possible to add the authority to a denylist or  punish the byzantine authority.
                                         warn!(name=?name.concise(), "Bad stake from validator: {:?}", err);
-                                        self.data.remove(name);
+                                        self.data.inner.remove(name);
                                         let votes = self.committee.weight(name);
                                         self.total_votes -= votes;
                                         bad_votes += votes;
@@ -203,6 +431,8 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
     }
 }
 
+verus! {
+
 pub enum InsertResult<CertT> {
     QuorumReached(CertT),
     Failed {
@@ -215,10 +445,14 @@ pub enum InsertResult<CertT> {
 }
 
 impl<CertT> InsertResult<CertT> {
-    pub fn is_quorum_reached(&self) -> bool {
+    pub fn is_quorum_reached(&self) -> (b: bool)
+        ensures b == matches!(self, Self::QuorumReached(..)),
+    {
         matches!(self, Self::QuorumReached(..))
     }
 }
+
+} // verus!
 
 /// MultiStakeAggregator is a utility data structure that tracks the stake accumulation of
 /// potentially multiple different values (usually due to byzantine/corrupted responses). Each
@@ -289,7 +523,12 @@ where
     pub fn get_all_unique_values(&self) -> BTreeMap<K, (Vec<AuthorityName>, StakeUnit)> {
         self.stake_maps
             .iter()
-            .map(|(k, (_, s))| (k.clone(), (s.data.keys().copied().collect(), s.total_votes)))
+            .map(|(k, (_, s))| {
+                (
+                    k.clone(),
+                    (s.data.inner.keys().copied().collect(), s.total_votes),
+                )
+            })
             .collect()
     }
 }

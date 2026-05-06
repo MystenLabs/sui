@@ -14,6 +14,7 @@ antithesis_sdk.workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
 arc-swap.workspace = true
 async-trait.workspace = true
+sui-core-verified.workspace = true
 async-stream.workspace = true
 axum.workspace = true
 bcs.workspace = true

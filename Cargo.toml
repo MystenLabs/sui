@@ -86,6 +86,9 @@ members = [
     "consensus/core",
     "consensus/simtests",
     "consensus/types",
+    "consensus/verified",
+    "crates/sui-types/verified",
+    "crates/sui-core/verified",
     "crates/anemo-benchmark",
     "crates/bin-version",
     "crates/mysten-common",
@@ -281,6 +284,12 @@ opt-level = 1
 unexpected_cfgs = { level = "warn", check-cfg = [
   'cfg(msim)',
   'cfg(fail_points)',
+  # Verus sets these cfgs while running `cargo verus check`. Stable
+  # `cargo build` ignores them. See consensus/core/src/verus_shims.rs.
+  'cfg(verus_only)',
+  'cfg(verus_keep_ghost)',
+  'cfg(verus_keep_ghost_body)',
+  'cfg(verus_verify_core)',
 ] }
 
 # Dependencies that should be kept in sync through the whole workspace
@@ -665,6 +674,8 @@ sui-bridge-schema = { path = "crates/sui-bridge-schema" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
 sui-core = { path = "crates/sui-core" }
+sui-types-verified = { path = "crates/sui-types/verified" }
+sui-core-verified = { path = "crates/sui-core/verified" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-data-store = { path = "crates/sui-data-store" }
@@ -758,6 +769,14 @@ consensus-config = { path = "consensus/config" }
 consensus-core = { path = "consensus/core" }
 consensus-types = { path = "consensus/types" }
 consensus-simtests = { path = "consensus/simtests" }
+consensus-verified = { path = "consensus/verified" }
+
+# Verus formal verification deps. The `verus!` macro is a no-op for stable
+# `cargo build`; these crates only carry weight when invoked through
+# `cargo verus check`.
+vstd = "=0.0.0-2026-04-20-1748"
+verus_builtin = "=0.0.0-2026-04-12-0118"
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 
 sui-execution = { path = "sui-execution" }
 # sui-move-natives = { path = "sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
