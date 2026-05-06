@@ -9,28 +9,22 @@ repo: https://github.com/MystenLabs/plinko-poc
 path: /
 languages: [move, typescript]
 concepts: [onchain_randomness, sponsored_transactions, shared_objects, dynamic_object_fields, events, house_pattern]
-entry_functions:
-  - { module: plinko, name: start_game, file: "plinko/sources/plinko.move" }
-  - { module: plinko, name: finish_game, file: "plinko/sources/plinko.move" }
-  - { module: house_data, name: initialize_house_data, file: "plinko/sources/house_data.move" }
-  - { module: house_data, name: top_up, file: "plinko/sources/house_data.move" }
-events_emitted:
-  - { module: plinko, name: NewGameStarted }
-  - { module: plinko, name: GameFinished }
-shared_objects:
-  - { struct: HouseData, module: house_data }
 ---
 
-Plinko is a casino-style game where a ball is dropped through a pin board, randomly landing on a prize at the bottom. This Plinko example written in Move demonstrates Sui's onchain randomness and sponsored transactions. Players bet SUI tokens and drop balls through the pin board, where each ball lands in a multiplier bucket determined entirely by Sui's onchain random number generator.
+Plinko is a casino-style game where a ball is dropped through a pin board, randomly landing on a prize at the bottom. This Plinko example written in Move demonstrates Sui's [onchain randomness](/sui-stack/on-chain-primitives/randomness-onchain) and [sponsored transactions](/develop/transaction-payment/sponsor-txn). Players bet SUI tokens and drop balls through the pin board, where each ball lands in a multiplier bucket determined entirely by Sui's onchain random number generator.
 
 ## When to use this pattern
 
 Use this pattern when you need to:
 
 - Generate verifiable random outcomes onchain without an external oracle.
+
 - Build a game or lottery where neither the operator nor the player can influence results after the transaction starts.
+
 - Implement a house-managed treasury with configurable stake limits, fee collection, and payout tables.
+
 - Sponsor transactions through Enoki so users interact without holding SUI for gas.
+
 - Store active game state as dynamic object fields tied to a shared treasury object.
 
 ## What you learn
@@ -38,10 +32,49 @@ Use this pattern when you need to:
 This example teaches:
 
 - **Onchain randomness:** Sui's `Random` module provides verifiable, unbiasable random numbers that the contract consumes directly. No external oracle is needed.
+
 - **House pattern:** A shared `HouseData` object acts as the treasury. It holds the house balance, enforces stake limits, tracks fees, and stores the multiplier table.
+
 - **Dynamic object fields:** Each active game is a `Game` object attached to `HouseData` as a dynamic object field, which ties game lifecycle to the house.
+
 - **Sponsored transactions:** The backend sponsors both the player's `start_game` transaction and the house's `finish_game` transaction through Enoki, so players pay no gas.
+
 - **Events:** The contract emits `NewGameStarted` and `GameFinished` events. The frontend reads the `GameFinished` event to extract the random trace that drives the ball animation.
+
+## Architecture
+
+The example has 3 actors that interact with 1 onchain package. The following diagram shows the components and the calls between them.
+
+````mermaid
+graph LR
+  user([Player])
+  frontend[Next.js frontend]
+  backend[Next.js API routes]
+  enoki([Enoki])
+  package[plinko Move package]
+  random([Random module])
+
+  user --> frontend
+  frontend --> backend
+  backend --> enoki
+  enoki --> package
+  frontend --> enoki
+  package --> random
+````
+
+Two trust boundaries shape the design: the player never touches the package directly, and the house key pair lives only in the backend.
+
+The Next.js frontend renders the Plinko board with a Matter.js physics simulation and handles wallet connection through Enoki zkLogin. The Next.js API routes act as the backend. They sponsor transactions through Enoki and execute the house-side `finish_game` call with the house key pair.
+
+The `plinko` Move package holds game state, enforces betting rules, and computes payouts. The Random module is a Sui framework object that provides verifiable random bytes. The contract uses these bytes to determine ball paths, so anyone can reproduce outcomes onchain rather than relying on offchain decisions.
+
+### How onchain randomness works
+
+Sui provides a built-in `Random` shared object that any Move function can consume. The contract calls `random.new_generator(ctx)` to create a generator scoped to the current transaction, then calls methods like `generate_u8_in_range` to produce random values. The randomness is verifiable, unbiased, and scoped to each transaction.
+
+In this Plinko, the `finish_game` function generates 12 random bytes per ball. Each byte is checked for evenness. The count of even bytes determines which multiplier bucket the ball lands in. This maps to the 13-bucket layout on the board (0 through 12 even bytes out of 12 total).
+
+For more details on the randomness API, see [Onchain Randomness](/develop/smart-contracts/randomness).
 
 ## Prerequisites
 
@@ -70,45 +103,12 @@ This example teaches:
 
 - [x] [Download and install Git](https://git-scm.com/downloads).
 
-- [x] Node.js 18 or later
+- [x] [Node.js](https://nodejs.org/) 18 or later
 
 - [x] [Enoki developer portal access](https://portal.enoki.mystenlabs.com/).
 
 </TabItem>
 </Tabs>
-
-The example has three actors that interact with one onchain package. The following diagram shows the components and the calls between them.
-
-````mermaid
-graph LR
-  user([Player])
-  frontend[Next.js frontend]
-  backend[Next.js API routes]
-  enoki([Enoki])
-  package[plinko Move package]
-  random([Random module])
-
-  user --> frontend
-  frontend --> backend
-  backend --> enoki
-  enoki --> package
-  frontend --> enoki
-  package --> random
-````
-
-Two trust boundaries shape the design: the player never touches the package directly, and the house key pair lives only in the backend.
-
-The Next.js frontend renders the Plinko board with a Matter.js physics simulation and handles wallet connection through Enoki zkLogin. The Next.js API routes act as the backend. They sponsor transactions through Enoki and execute the house-side `finish_game` call with the house key pair.
-
-The `plinko` Move package holds game state, enforces betting rules, and computes payouts. The Random module is a Sui framework object that provides verifiable random bytes. The contract uses these bytes to determine ball paths, so outcomes are reproducible onchain rather than decided offchain.
-
-## How onchain randomness works
-
-Sui provides a built-in `Random` shared object that any Move function can consume. The contract calls `random.new_generator(ctx)` to create a generator scoped to the current transaction, then calls methods like `generate_u8_in_range` to produce random values. The randomness is verifiable, unbiased, and scoped to each transaction.
-
-In this Plinko, the `finish_game` function generates 12 random bytes per ball. Each byte is checked for evenness. The count of even bytes determines which multiplier bucket the ball lands in. This maps to the 13-bucket layout on the board (0 through 12 even bytes out of 12 total).
-
-For more details on the randomness API, see [Onchain Randomness](/develop/smart-contracts/randomness).
 
 ## Setup
 
@@ -184,7 +184,7 @@ To get your base64 private key, first export your key as base32:
 $ sui keytool export --key-identity YOUR_WALLET_ADDRESS
 ```
 
-Then, convert it to base64 format:
+Then, convert it to base64 format and record the `publicBase64Key` value:
 
 ```bash
 $ sui keytool convert YOUR_BASE32_PRIVATE_KEY
@@ -293,4 +293,3 @@ The backend signs `finish_game` with the house key pair because only the house c
 **Cause:** The Enoki API key is invalid, the Enoki secret key on the backend is wrong, or Enoki rate limits the request.
 
 **Fix:** Verify `ENOKI_SECRET_KEY` in the `.env` files. Check the Enoki dashboard for rate limit status. If rate-limited, wait and retry.
-

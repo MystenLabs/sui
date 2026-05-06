@@ -7,19 +7,7 @@ example_id: sui-stack-messaging-chat
 last_verified: 2026-04-28
 repo: https://github.com/MystenLabs/sui-stack-messaging
 path: /chat-app
-languages: [move, typescript, rust]
 concepts: [end_to_end_encryption, seal_threshold_encryption, permissioned_groups, dynamic_fields, events, walrus_storage, relayer_pattern, session_keys]
-entry_functions:
-  - { module: messaging, name: create_group, file: "move/packages/sui_stack_messaging/sources/messaging.move" }
-  - { module: messaging, name: rotate_encryption_key, file: "move/packages/sui_stack_messaging/sources/messaging.move" }
-  - { module: messaging, name: leave, file: "move/packages/sui_stack_messaging/sources/messaging.move" }
-  - { module: seal_policies, name: seal_approve_reader, file: "move/packages/sui_stack_messaging/sources/seal_policies.move" }
-events_emitted:
-  - { module: encryption_history, name: EncryptionHistoryCreated }
-  - { module: encryption_history, name: EncryptionKeyRotated }
-shared_objects:
-  - { struct: EncryptionHistory, module: encryption_history }
-  - { struct: Version, module: version }
 ---
 
 This example builds an end-to-end encrypted group chat app on Sui. Messages are encrypted client-side with AES-256-GCM before leaving the browser, routed through an offchain relayer that never sees plaintext, and archived to Walrus for decentralized persistence. Onchain Move contracts manage group membership, 7 granular permission types, and versioned encryption keys through Seal threshold encryption.
@@ -70,16 +58,16 @@ This example teaches:
 
 - [x] [Download and install Git](https://git-scm.com/downloads).
 
-- [x] Node.js 18 or later
+- [x] [Node.js](https://nodejs.org/) 18 or later
 
-- [x] Rust toolchain (for the relayer service)
+- [x] [Rust toolchain](https://rustup.rs/) (for the relayer service)
 
-- [x] A Sui wallet (Slush Wallet or another compatible wallet)
+- [x] A Sui wallet ([Slush Wallet](https://slush.app/) or another compatible wallet)
 
 </TabItem>
 </Tabs>
 
-The example has 3 layers and 5 actors. The diagram below shows the components and the data flow between them.
+This example has 3 layers and 5 actors. The diagram below shows the components and the data flow between them.
 
 ```mermaid
 graph LR
@@ -189,9 +177,9 @@ $ npm run dev
 
 ## Run the example
 
-Open `http://localhost:5173` in a browser and connect your wallet. Slush is the recommended wallet for this application. If using Slush, you must use a passphrase or imported wallet. If you use a wallet with zkLogin (login with Google, etc), then you will get the error `Invalid public key format: Unknown signature scheme flag: 0x05`. If you use another wallet like Suilet, it might not be supported and once logged in, the app might be blank.
+Open `http://localhost:5173` in a browser and connect your wallet. Slush is the recommended wallet for this application. If using Slush, you must use a passphrase or imported wallet. If you use a wallet with zkLogin (such as login with Google), then you get the error `Invalid public key format: Unknown signature scheme flag: 0x05`. If you use another wallet like Suilet, it might not be supported and once logged in, the app might be blank.
 
-Click **+ New** in the sidebar to create a group. Enter a group name and optionally add member addresses. **You must add at least your wallet address as a group member, otherwise you cannot message the group.** The app creates a `PermissionedGroup<Messaging>` onchain, generates an encrypted DEK through Seal, and stores the encryption history onchain.
+Click **+ New** in the sidebar to create a group. Enter a group name and optionally add member addresses. **You must add at least your wallet address as a group member, otherwise you cannot message the group.** The app creates a `PermissionedGroup<Messaging>` onchain, generates an encrypted DEK through [Seal](/sui-stack/nautilus/seal), and stores the encryption history onchain.
 
 Select the group from the sidebar to open the chat. Type a message and press **Enter**. The frontend encrypts the message with the group DEK, signs it with your wallet, and sends the ciphertext to the relayer. Other group members see the message appear in real time through polling, and their clients decrypt it locally.
 
@@ -247,7 +235,7 @@ The `MessagingClientProvider` initializes the SDK client with Seal, Walrus, and 
 
 The provider creates a `SuiStackMessagingClient` that composes the Sui client with Seal (for DEK encryption and decryption), a Walrus storage adapter (for file attachments), and an HTTP relayer transport. The `DappKitSigner` bridges the wallet's signing capability to the SDK's signer interface.
 
-### Ssending and receiving messages
+### Sending and receiving messages
 
 The `useMessages` hook manages the full message lifecycle: fetching history, subscribing for updates, sending, editing, and deleting.
 
@@ -291,7 +279,7 @@ The hook calls `client.sendMessage()` which encrypts the text with AES-256-GCM u
 
 ### File attachment upload fails
 
-**Symptom:** Sending a message with attachments fails or shows "uploading files" indefinitely.
+**Symptom:** Sending a message with attachments fails or shows an uploading files message indefinitely.
 
 **Cause:** The file exceeds the 5MB per-file or 50MB total limit, the Walrus publisher is unreachable, or the publisher URL is misconfigured.
 
@@ -313,4 +301,4 @@ The hook calls `client.sendMessage()` which encrypts the text with AES-256-GCM u
 
 **Cause:** You've connected an unsupported wallet to the application.
 
-**Fix:** Restart the application and connect a known supported wallet, such as Slush, to the application instead. 
+**Fix:** Restart the application and connect a known supported wallet, such as Slush, to the application instead.
