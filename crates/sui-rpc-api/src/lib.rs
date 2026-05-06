@@ -28,7 +28,10 @@ pub use config::Config;
 pub use error::{
     CheckpointNotFoundError, ErrorDetails, ErrorReason, ObjectNotFoundError, Result, RpcError,
 };
-pub use metrics::{RpcMetrics, RpcMetricsMakeCallbackHandler};
+pub use metrics::{
+    GrpcMethodAllowlist, RpcMetrics, RpcMetricsMakeCallbackHandler,
+    grpc_method_paths_from_file_descriptor_sets,
+};
 pub use reader::TransactionNotFoundError;
 pub use sui_rpc::proto;
 
@@ -142,7 +145,27 @@ impl RpcService {
         let metrics = self.metrics.clone();
         let extra_routes = std::mem::take(&mut self.extra_routes);
         let extra_service_names = std::mem::take(&mut self.extra_service_names);
-        let extra_file_descriptor_sets = std::mem::take(&mut self.extra_file_descriptor_sets);
+
+        // Single source of truth for every encoded FileDescriptorSet that
+        // backs a gRPC service mounted below. Consumed by both the
+        // reflection services and the metrics allowlist so they cannot drift
+        // out of sync.
+        let file_descriptor_sets: Vec<&[u8]> = [
+            crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
+            crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
+            sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
+            tonic_health::pb::FILE_DESCRIPTOR_SET,
+        ]
+        .into_iter()
+        .chain(std::mem::take(&mut self.extra_file_descriptor_sets))
+        .collect();
+
+        // Allowlist of `/Service/Method` paths used by the metrics middleware
+        // to bound prometheus label cardinality.
+        let grpc_method_allowlist = Arc::new(
+            metrics::grpc_method_paths_from_file_descriptor_sets(&file_descriptor_sets)
+                .expect("registered FileDescriptorSet bytes must be valid protobuf"),
+        );
 
         let router = {
             let ledger_service =
@@ -178,31 +201,9 @@ impl RpcService {
 
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
-            let mut reflection_v1_builder = tonic_reflection::server::Builder::configure()
-                .register_encoded_file_descriptor_set(
-                    crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET);
-
-            let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure()
-                .register_encoded_file_descriptor_set(
-                    crate::proto::google::protobuf::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(
-                    sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET,
-                )
-                .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET);
-
-            for fds in &extra_file_descriptor_sets {
+            let mut reflection_v1_builder = tonic_reflection::server::Builder::configure();
+            let mut reflection_v1alpha_builder = tonic_reflection::server::Builder::configure();
+            for fds in &file_descriptor_sets {
                 reflection_v1_builder =
                     reflection_v1_builder.register_encoded_file_descriptor_set(fds);
                 reflection_v1alpha_builder =
@@ -286,7 +287,10 @@ sui_rpc::proto::sui::rpc::v2::subscription_service_server::SubscriptionServiceSe
             .pipe(|router| {
                 if let Some(metrics) = metrics {
                     router.layer(CallbackLayer::new(
-                        metrics::RpcMetricsMakeCallbackHandler::new(metrics),
+                        metrics::RpcMetricsMakeCallbackHandler::with_grpc_method_allowlist(
+                            metrics,
+                            grpc_method_allowlist,
+                        ),
                     ))
                 } else {
                     router
