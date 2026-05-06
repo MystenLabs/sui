@@ -14,7 +14,7 @@ use crate::{
     git::{GitCache, GitError, GitTree},
     package::paths::PackagePath,
     schema::{
-        EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
+        Environment, EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
         LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
         OnChainDepInfo, PackageName, RenderToml, RootDepInfo,
     },
@@ -73,27 +73,26 @@ pub struct PinnedLocalDependency {
 
 impl PinnedDependency {
     /// Replace all dependencies in `deps` with their pinned versions:
-    ///  - first, all external dependencies are resolved (in environment `environment_id`)
+    ///  - first, all external dependencies are resolved (in environment `env`)
     ///  - next, the revisions for git dependencies are replaced with 40-character shas
     ///  - finally, local dependencies are transformed relative to `parent`
     pub(crate) async fn pin<F: MoveFlavor>(
         parent: &Pinned,
         deps: Vec<CombinedDependency>,
-        environment_id: &EnvironmentID,
+        env: &Environment,
         flavor: &F,
     ) -> PackageResult<Vec<PinnedDependency>> {
         debug!("pinning dependencies");
         // replace all system dependencies using the flavor
-        let (non_system_deps, mut result) =
-            Self::replace_system_deps(deps, environment_id, flavor).await?;
+        let (non_system_deps, mut result) = Self::replace_system_deps(deps, env, flavor).await?;
 
         // resolution - replace all externally resolved dependencies with internal dependencies
-        let deps = ResolvedDependency::resolve(non_system_deps, environment_id).await?;
+        let deps = ResolvedDependency::resolve(non_system_deps, env).await?;
 
         // pinning - fix git shas and normalize local deps
         for dep in deps.into_iter() {
             let transformed = match dep.dep_info {
-                Resolved::Local(ref loc) => loc.clone().pin(parent, environment_id)?,
+                Resolved::Local(ref loc) => loc.clone().pin(parent, env.id())?,
                 Resolved::Git(ref git) => git.pin().await?,
                 Resolved::OnChain(_) => todo!(),
             };
@@ -120,10 +119,10 @@ impl PinnedDependency {
     /// the system dependencies using `flavor`.
     async fn replace_system_deps<F: MoveFlavor>(
         deps: Vec<CombinedDependency>,
-        environment_id: &EnvironmentID,
+        env: &Environment,
         flavor: &F,
     ) -> PackageResult<(Vec<CombinedDependency>, Vec<PinnedDependency>)> {
-        let all_system_deps = flavor.system_deps(environment_id).await;
+        let all_system_deps = flavor.system_deps(env.id()).await;
         let valid_list = move_compiler::format_oxford_list!(
             "and",
             "{}",

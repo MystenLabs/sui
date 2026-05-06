@@ -293,7 +293,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         let pinned = PinnedDependency::pin(
             package.dep_for_self(),
             package.direct_deps().clone(),
-            env.id(),
+            env,
             &*self.config.flavor,
         )
         .await

@@ -337,7 +337,7 @@ pub async fn cache_package<F: MoveFlavor>(
     // pin
     let root = Pinned::Root(dummy_path.clone());
     let flavor = Arc::new(flavor);
-    let deps = PinnedDependency::pin(&root, vec![combined], env.id(), &*flavor).await?;
+    let deps = PinnedDependency::pin(&root, vec![combined], env, &*flavor).await?;
 
     // load
     let package = Package::<F>::load(

@@ -21,10 +21,10 @@ use tracing::debug;
 
 use crate::{
     logging::user_info,
-    package::{EnvironmentID, EnvironmentName},
+    package::EnvironmentName,
     schema::{
-        EXTERNAL_RESOLVE_ARG, PackageName, ResolveRequest, ResolveResponse, ResolverDependencyInfo,
-        ResolverName,
+        EXTERNAL_RESOLVE_ARG, Environment, PackageName, ResolveRequest, ResolveResponse,
+        ResolverDependencyInfo, ResolverName,
     },
 };
 
@@ -89,7 +89,7 @@ impl ResolvedDependency {
     /// Precondition: there are no `System` dependencies (TODO: this needs better design)
     pub async fn resolve(
         deps: Vec<CombinedDependency>,
-        environment_id: &EnvironmentID,
+        env: &Environment,
     ) -> ResolverResult<Vec<ResolvedDependency>> {
         // iterate over [deps] to collect queries for external resolvers
         let mut requests: BTreeMap<ResolverName, BTreeMap<PackageName, ResolveRequest>> =
@@ -100,7 +100,8 @@ impl ResolvedDependency {
                 requests.entry(ext.resolver.clone()).or_default().insert(
                     dep.context.name.clone(),
                     ResolveRequest {
-                        env: environment_id.clone(),
+                        env: env.id().clone(),
+                        env_name: env.name().clone(),
                         data: ext.data.clone(),
                     },
                 );
