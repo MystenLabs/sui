@@ -4079,3 +4079,214 @@ async fn test_explicit_withdrawal_plus_implicit_gas_exceeds_balance() {
 
     test_env.trigger_reconfiguration().await;
 }
+
+// gas-coin `send_funds` override + storage out-of-gas must not charge the receiver's address
+// balance.
+#[sim_test]
+async fn gas_coin_send_funds_storage_out_of_gas_charges_sender_not_receiver() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let gas_package_id = test_env.setup_test_package(move_test_code_path()).await;
+    let (sender, sender_gas) = test_env.get_sender_and_gas(0);
+    let (receiver, receiver_gas) = test_env.get_sender_and_gas(1);
+
+    let receiver_initial_balance = 100_000_000u64;
+    let deposit_tx = test_env
+        .tx_builder(receiver)
+        .transfer_sui_to_address_balance(
+            FundSource::coin(receiver_gas),
+            vec![(receiver_initial_balance, receiver)],
+        )
+        .build();
+    test_env.exec_tx_directly(deposit_tx).await.unwrap();
+    test_env.verify_accumulator_exists(receiver, receiver_initial_balance);
+
+    let create_input_tx =
+        create_storage_test_transaction_gas(sender, gas_package_id, sender_gas, test_env.rgp);
+    let (create_input_digest, create_input_effects) =
+        test_env.exec_tx_directly(create_input_tx).await.unwrap();
+    assert!(create_input_effects.status().is_ok());
+    let created_obj = create_input_effects.created()[0].0;
+    test_env
+        .cluster
+        .wait_for_tx_settlement(&[create_input_digest])
+        .await;
+    test_env.update_all_gas().await;
+    let (_, sender_gas) = test_env.get_sender_and_gas(0);
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let receiver_arg = builder.pure(receiver).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("coin").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![GAS::type_tag()],
+        vec![Argument::GasCoin, receiver_arg],
+    );
+
+    let obj_arg = builder
+        .obj(ObjectArg::ImmOrOwnedObject(created_obj))
+        .unwrap();
+    builder.programmable_move_call(
+        gas_package_id,
+        Identifier::new("gas_test").unwrap(),
+        Identifier::new("delete_object").unwrap(),
+        vec![],
+        vec![obj_arg],
+    );
+
+    let value = builder.pure(42u64).unwrap();
+    let large_data = vec![0u8; 200];
+    let data_arg = builder.pure(large_data).unwrap();
+    builder.programmable_move_call(
+        gas_package_id,
+        Identifier::new("gas_test").unwrap(),
+        Identifier::new("create_object_with_large_storage").unwrap(),
+        vec![],
+        vec![value, data_arg],
+    );
+
+    let low_budget = 2_500_000u64;
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+    let tx = TransactionData::new(tx_kind, sender, sender_gas, low_budget, test_env.rgp);
+    let (_, effects) = test_env.exec_tx_directly(tx).await.unwrap();
+
+    let (error_kind, _) = effects.status().clone().unwrap_err();
+    assert!(
+        matches!(
+            error_kind,
+            sui_types::execution_status::ExecutionErrorKind::InsufficientGas
+        ),
+        "Expected InsufficientGas, got: {:?}",
+        error_kind
+    );
+
+    let gas_summary = effects.gas_cost_summary();
+    assert!(
+        gas_summary.storage_cost > 0,
+        "Storage cost should be non-zero"
+    );
+
+    let acc_events = effects.accumulator_events();
+    for event in &acc_events {
+        assert_ne!(
+            event.write.address.address, receiver,
+            "receiver must not be charged; events: {:?}",
+            acc_events
+        );
+    }
+
+    test_env.verify_accumulator_exists(receiver, receiver_initial_balance);
+    // Reconfig runs SUI conservation invariant checks across the epoch boundary
+    test_env.cluster.trigger_reconfiguration().await;
+}
+
+// address-balance gas + `TransferObjects([GasCoin], receiver)` + storage out-of-gas must not
+// panic.
+#[sim_test]
+async fn address_balance_gas_transfer_storage_objects_out_of_gas_no_panic() {
+    let mut test_env = TestEnvBuilder::new()
+        .with_proto_override_cb(Box::new(|_, mut cfg| {
+            cfg.enable_address_balance_gas_payments_for_testing();
+            cfg
+        }))
+        .with_num_validators(1)
+        .build()
+        .await;
+
+    let gas_package_id = test_env.setup_test_package(move_test_code_path()).await;
+
+    let (sender, sender_gas) = test_env.get_sender_and_gas(0);
+
+    let sender_initial_balance = 100_000_000u64;
+    let deposit_tx = test_env
+        .tx_builder(sender)
+        .transfer_sui_to_address_balance(
+            FundSource::coin(sender_gas),
+            vec![(sender_initial_balance, sender)],
+        )
+        .build();
+    test_env.exec_tx_directly(deposit_tx).await.unwrap();
+    test_env.verify_accumulator_exists(sender, sender_initial_balance);
+
+    let receiver = SuiAddress::random_for_testing_only();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let receiver_arg = builder.pure(receiver).unwrap();
+    builder.command(Command::TransferObjects(
+        vec![Argument::GasCoin],
+        receiver_arg,
+    ));
+
+    let value = builder.pure(42u64).unwrap();
+    let large_data = vec![0u8; 200];
+    let data_arg = builder.pure(large_data).unwrap();
+    builder.programmable_move_call(
+        gas_package_id,
+        Identifier::new("gas_test").unwrap(),
+        Identifier::new("create_object_with_large_storage").unwrap(),
+        vec![],
+        vec![value, data_arg],
+    );
+
+    let low_budget = 2_500_000u64;
+    let tx_kind = TransactionKind::ProgrammableTransaction(builder.finish());
+    let tx = create_address_balance_transaction(
+        tx_kind,
+        sender,
+        low_budget,
+        test_env.rgp,
+        test_env.chain_id,
+    );
+
+    let (_, effects) = test_env
+        .exec_tx_directly(tx)
+        .await
+        .expect("execution must not panic");
+
+    let (error_kind, _) = effects.status().clone().unwrap_err();
+    assert!(
+        matches!(
+            error_kind,
+            sui_types::execution_status::ExecutionErrorKind::InsufficientGas
+        ),
+        "Expected InsufficientGas, got: {:?}",
+        error_kind
+    );
+
+    let acc_events = effects.accumulator_events();
+    let sender_debit: i128 = acc_events
+        .iter()
+        .filter(|e| e.write.address.address == sender)
+        .filter_map(|e| match (&e.write.operation, &e.write.value) {
+            (
+                sui_types::effects::AccumulatorOperation::Split,
+                sui_types::effects::AccumulatorValue::Integer(v),
+            ) => Some(*v as i128),
+            _ => None,
+        })
+        .sum();
+    assert!(
+        sender_debit > 0,
+        "sender's address balance should be debited for gas; events: {:?}",
+        acc_events
+    );
+
+    for event in &acc_events {
+        assert_ne!(
+            event.write.address.address, receiver,
+            "receiver must not be charged; events: {:?}",
+            acc_events
+        );
+    }
+
+    // Reconfig runs SUI conservation invariant checks across the epoch boundary
+    test_env.cluster.trigger_reconfiguration().await;
+}
