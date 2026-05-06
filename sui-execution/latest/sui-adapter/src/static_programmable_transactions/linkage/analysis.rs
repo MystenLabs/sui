@@ -345,17 +345,22 @@ mod input_type_resolution_analysis {
             // `Env::get_type_linkage` calls (which see defining-ID tags after type-origin rewrite)
             // hit the cache. In the common case where raw == defining IDs, this is the same key as
             // above and is a cheap cache hit; otherwise it walks once and caches.
-            if cache.is_enabled() {
-                let defining_tag = cache.type_input_to_defining_tag(ty, idx, package_store)?;
+            //
+            // Pre-warming is purely an optimization — any failure (e.g. a missing type, an
+            // invalid package address) is swallowed here and surfaces later through the normal
+            // loading path, where it can be reported with the correct command/argument context.
+            if cache.is_enabled()
+                && let Ok(defining_tag) = cache.type_input_to_defining_tag(ty, idx, package_store)
+            {
                 let defining_addrs = defining_tag.all_addresses();
                 let key = TypeLinkageCacheKey::new(&defining_addrs);
-                cache.get_or_compute_type_resolution(key, || {
+                let _ = cache.get_or_compute_type_resolution(key, || {
                     ResolutionTable::for_type_addresses(
                         analyzer.config().clone(),
                         defining_addrs.iter().copied().map(ObjectID::from),
                         package_store,
                     )
-                })?;
+                });
             }
             Ok(())
         };
