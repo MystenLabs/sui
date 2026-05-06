@@ -74,14 +74,7 @@ fn build_no_gas_coin_ptb(
 
 #[sim_test]
 async fn test_has_ab_has_coins_uses_gas_coin() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -168,15 +161,7 @@ async fn test_has_ab_has_coins_uses_gas_coin() {
 
 #[sim_test]
 async fn test_has_ab_has_coins_no_gas_coin() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -282,15 +267,7 @@ async fn test_has_ab_no_coins() {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::transaction::TransactionExpiration;
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
 
@@ -411,15 +388,7 @@ async fn test_has_ab_no_coins() {
 
 #[sim_test]
 async fn test_no_ab_has_coins() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let (sender, _gas) = test_env.get_sender_and_gas(0);
     let recipient = SuiAddress::random_for_testing_only();
@@ -481,15 +450,7 @@ async fn test_no_ab_has_coins() {
 
 #[sim_test]
 async fn test_insufficient_funds() {
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -600,14 +561,7 @@ async fn test_combined_ab_and_coins_needed() {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::crypto::{AccountKeyPair, SuiKeyPair, get_key_pair};
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
 
@@ -721,15 +675,7 @@ async fn test_ab_only_budget_exceeds_half_balance() {
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::transaction::TransactionExpiration;
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
 
@@ -852,15 +798,7 @@ async fn test_resolve_handles_coin_reservation_in_gas_payment() {
         SimulateTransactionRequest, Transaction, TransactionKind,
     };
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -961,15 +899,7 @@ async fn test_resolve_handles_coin_reservation_in_ptb_input() {
         Transaction, TransactionKind,
     };
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let (sender, _) = test_env.get_sender_and_gas(0);
@@ -1061,15 +991,7 @@ async fn test_estimated_budget_excludes_mock_gas_coin_storage_for_address_balanc
         Transaction, TransactionKind, TransferObjects,
     };
 
-    let test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.create_root_accumulator_object_for_testing();
-            cfg.enable_coin_reservation_for_testing();
-            cfg.enable_address_balance_gas_payments_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let test_env = TestEnvBuilder::new().build().await;
 
     let mut test_env = test_env;
     let recipient = SuiAddress::random_for_testing_only();
