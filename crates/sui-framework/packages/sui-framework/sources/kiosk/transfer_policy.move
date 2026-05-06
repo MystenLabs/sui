@@ -244,7 +244,7 @@ public fun add_receipt<T, Rule: drop>(_: Rule, request: &mut TransferRequest<T>)
 
 /// Check whether a custom rule has been added to the `TransferPolicy`.
 public fun has_rule<T, Rule: drop>(policy: &TransferPolicy<T>): bool {
-    df::exists_(&policy.id, RuleKey<Rule> {})
+    df::exists(&policy.id, RuleKey<Rule> {})
 }
 
 /// Remove the Rule from the `TransferPolicy`.

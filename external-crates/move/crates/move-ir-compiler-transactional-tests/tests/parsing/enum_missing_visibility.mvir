@@ -1,0 +1,5 @@
+//# print-bytecode
+// Enum declarations require an explicit `public` visibility.
+mvir 0x42::M {
+    enum E { V { } }
+}

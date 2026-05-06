@@ -76,7 +76,7 @@ pub async fn payloads(
     let intent_msg_bytes = bcs::to_bytes(&intent_msg)?;
 
     let mut hasher = DefaultHash::default();
-    hasher.update(bcs::to_bytes(&intent_msg).expect("Message serialization should not fail"));
+    bcs::serialize_into(&mut hasher, &intent_msg).expect("Message serialization should not fail");
     let digest = hasher.finalize().digest;
 
     Ok(ConstructionPayloadsResponse {

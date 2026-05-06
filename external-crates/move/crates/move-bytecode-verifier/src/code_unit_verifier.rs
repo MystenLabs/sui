@@ -7,8 +7,8 @@
 //! abstract_interpreter.rs. CodeUnitVerifier simply orchestrates calls into these two files.
 use crate::{
     ability_cache::AbilityCache, absint::FunctionContext, acquires_list_verifier::AcquiresVerifier,
-    control_flow, locals_safety, reference_safety, regex_reference_safety,
-    stack_usage_verifier::StackUsageVerifier, type_safety,
+    control_flow, jump_table_usage_verifier, locals_safety, reference_safety,
+    regex_reference_safety, stack_usage_verifier::StackUsageVerifier, type_safety,
 };
 use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
 use move_binary_format::{
@@ -180,6 +180,14 @@ impl<'env> CodeUnitVerifier<'env, '_> {
             meter,
         )?;
         locals_safety::verify(self.module, &self.function_context, ability_cache, meter)?;
+        if verifier_config.disallow_jump_orphans {
+            jump_table_usage_verifier::verify(
+                verifier_config,
+                self.module,
+                &self.function_context,
+                meter,
+            )?;
+        }
         if verifier_config.switch_to_regex_reference_safety {
             regex_reference_safety::verify(
                 verifier_config,

@@ -20,7 +20,6 @@ use move_core_types::visitor_default;
 use sui_types::TypeTag;
 use sui_types::id::ID;
 use sui_types::id::UID;
-use sui_types::object::option_visitor as OV;
 use sui_types::object::rpc_visitor as RV;
 use tokio::join;
 
@@ -62,11 +61,6 @@ struct JsonVisitor {
     depth_budget: usize,
 }
 
-struct JsonWriter<'b> {
-    size_budget: &'b mut usize,
-    depth_budget: usize,
-}
-
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
     #[error("Display error: {0}")]
@@ -80,21 +74,6 @@ pub(crate) enum Error {
 
     #[error("Extracted value is not a slice of existing on-chain data")]
     NotASlice,
-}
-
-#[derive(thiserror::Error, Debug)]
-enum VisitorError {
-    #[error(transparent)]
-    Visitor(#[from] AV::Error),
-
-    #[error("Unexpected type")]
-    UnexpectedType,
-
-    #[error("Value too big")]
-    TooBig,
-
-    #[error("Value too deep")]
-    TooDeep,
 }
 
 #[Object]
@@ -251,11 +230,7 @@ impl MoveValue {
             if let Some(display_v2) = display_v2.map_err(upcast)? {
                 let store = DisplayStore::new(ctx, &self.type_.scope);
 
-                let root = sui_display::v2::OwnedSlice {
-                    bytes: self.native.clone(),
-                    layout,
-                };
-
+                let root = sui_display::v2::OwnedSlice::new(layout, self.native.clone());
                 let interpreter = sui_display::v2::Interpreter::new(root, store);
 
                 for (field, value) in
@@ -337,13 +312,10 @@ impl MoveValue {
             let store = DisplayStore::new(ctx, &self.type_.scope);
 
             // Create an interpreter that combines the root value with the store
-            let root = sui_display::v2::OwnedSlice {
-                bytes: self.native.clone(),
-                layout,
-            };
+            let root = sui_display::v2::OwnedSlice::new(layout, self.native.clone());
+            let interpreter = sui_display::v2::Interpreter::new(root, store);
 
             // Evaluate the extraction and convert to an owned slice
-            let interpreter = sui_display::v2::Interpreter::new(root, store);
             let Some(value) = extract
                 .extract(&interpreter)
                 .await
@@ -355,12 +327,19 @@ impl MoveValue {
             let Some(sui_display::v2::OwnedSlice {
                 layout,
                 bytes: native,
+                scoped,
             }) = value.into_owned_slice()
             else {
                 return Err(bad_user_input(Error::NotASlice));
             };
 
-            let type_ = MoveType::from_layout(layout, self.type_.scope.clone());
+            let scope = if scoped {
+                self.type_.scope.clone()
+            } else {
+                self.type_.scope.without_root_bound()
+            };
+
+            let type_ = MoveType::from_layout(layout, scope);
             Ok(Some(MoveValue { type_, native }))
         }
         .await
@@ -385,11 +364,7 @@ impl MoveValue {
             };
 
             let store = DisplayStore::new(ctx, &self.type_.scope);
-            let root = sui_display::v2::OwnedSlice {
-                bytes: self.native.clone(),
-                layout,
-            };
-
+            let root = sui_display::v2::OwnedSlice::new(layout, self.native.clone());
             let interpreter = sui_display::v2::Interpreter::new(root, store);
             let value = parsed
                 .format::<serde_json::Value>(
@@ -428,8 +403,10 @@ impl MoveValue {
             let value = JsonVisitor::new(limits)
                 .deserialize_value(&self.native, &layout)
                 .map_err(|e| match &e {
-                    VisitorError::Visitor(_) | VisitorError::UnexpectedType => anyhow!(e).into(),
-                    VisitorError::TooBig | VisitorError::TooDeep => resource_exhausted(e),
+                    RV::Error::Meter(_) => resource_exhausted(e),
+                    RV::Error::Visitor(_) | RV::Error::Option(_) | RV::Error::UnexpectedType => {
+                        anyhow!(e).into()
+                    }
                 })?;
 
             Ok(Some(Json::try_from(value)?))
@@ -454,52 +431,15 @@ impl<'f, 'r> DisplayStore<'f, 'r> {
     fn new(ctx: &'f Context<'r>, scope: &'f Scope) -> Self {
         Self { ctx, scope }
     }
-}
 
-impl JsonVisitor {
-    fn new(limits: &Limits) -> Self {
-        Self {
-            size_budget: limits.max_move_value_bound,
-            depth_budget: limits.max_move_value_depth,
-        }
-    }
-
-    fn deserialize_value(
-        &mut self,
-        bytes: &[u8],
-        layout: &A::MoveTypeLayout,
-    ) -> Result<serde_json::Value, VisitorError> {
-        A::MoveValue::visit_deserialize(
-            bytes,
-            layout,
-            &mut RV::RpcVisitor::new(JsonWriter {
-                size_budget: &mut self.size_budget,
-                depth_budget: self.depth_budget,
-            }),
-        )
-    }
-}
-
-impl JsonWriter<'_> {
-    fn debit(&mut self, size: usize) -> Result<(), VisitorError> {
-        if *self.size_budget < size {
-            return Err(VisitorError::TooBig);
-        }
-
-        *self.size_budget -= size;
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
-    async fn object(
+    async fn fetch(
         &self,
+        scope: Scope,
         id: AccountAddress,
-    ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+    ) -> anyhow::Result<Option<(A::MoveTypeLayout, Vec<u8>)>> {
         // NOTE: We can't use `anyhow::Context` here because `RpcError` doesn't implement
         // `std::error::Error`.
-        let object = Object::latest(self.ctx, self.scope.clone(), id.into())
+        let object = Object::latest(self.ctx, scope, id.into())
             .await
             .map_err(|e| anyhow!("Failed to fetch object: {e:?}"))?;
 
@@ -533,99 +473,48 @@ impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
         };
 
         let bytes = move_object.contents().to_owned();
-        Ok(Some(sui_display::v2::OwnedSlice { layout, bytes }))
+        Ok(Some((layout, bytes)))
     }
 }
 
-impl RV::Writer for JsonWriter<'_> {
-    type Value = serde_json::Value;
-    type Error = VisitorError;
-
-    type Vec = Vec<serde_json::Value>;
-    type Map = serde_json::Map<String, serde_json::Value>;
-
-    type Nested<'b>
-        = JsonWriter<'b>
-    where
-        Self: 'b;
-
-    fn nest(&mut self) -> Result<Self::Nested<'_>, Self::Error> {
-        if self.depth_budget == 0 {
-            return Err(VisitorError::TooDeep);
+impl JsonVisitor {
+    fn new(limits: &Limits) -> Self {
+        Self {
+            size_budget: limits.max_move_value_bound,
+            depth_budget: limits.max_move_value_depth,
         }
-
-        Ok(JsonWriter {
-            size_budget: self.size_budget,
-            depth_budget: self.depth_budget - 1,
-        })
     }
 
-    fn write_null(&mut self) -> Result<Self::Value, Self::Error> {
-        self.debit("null".len())?;
-        Ok(serde_json::Value::Null)
-    }
-
-    fn write_bool(&mut self, value: bool) -> Result<Self::Value, Self::Error> {
-        self.debit(if value { "true".len() } else { "false".len() })?;
-        Ok(serde_json::Value::Bool(value))
-    }
-
-    fn write_number(&mut self, value: u32) -> Result<Self::Value, Self::Error> {
-        self.debit(if value == 0 { 1 } else { value.ilog10() } as usize)?;
-        Ok(serde_json::Value::Number(value.into()))
-    }
-
-    fn write_str(&mut self, value: String) -> Result<Self::Value, Self::Error> {
-        // Account for the quotes around the string.
-        self.debit(2 + value.len())?;
-        Ok(serde_json::Value::String(value))
-    }
-
-    fn write_vec(&mut self, value: Self::Vec) -> Result<Self::Value, Self::Error> {
-        // Account for the opening bracket.
-        self.debit(1)?;
-        Ok(serde_json::Value::Array(value))
-    }
-
-    fn write_map(&mut self, value: Self::Map) -> Result<Self::Value, Self::Error> {
-        // Account for the opening brace.
-        self.debit(1)?;
-        Ok(serde_json::Value::Object(value))
-    }
-
-    fn vec_push_element(
+    fn deserialize_value(
         &mut self,
-        vec: &mut Self::Vec,
-        val: Self::Value,
-    ) -> Result<(), Self::Error> {
-        // Account for comma (or closing bracket).
-        self.debit(1)?;
-        vec.push(val);
-        Ok(())
-    }
-
-    fn map_push_field(
-        &mut self,
-        map: &mut Self::Map,
-        key: String,
-        val: Self::Value,
-    ) -> Result<(), Self::Error> {
-        // Account for quotes, colon, and comma (or closing brace).
-        self.debit(4 + key.len())?;
-        map.insert(key, val);
-        Ok(())
+        bytes: &[u8],
+        layout: &A::MoveTypeLayout,
+    ) -> Result<serde_json::Value, RV::Error> {
+        A::MoveValue::visit_deserialize(
+            bytes,
+            layout,
+            &mut RV::RpcVisitor::new(RV::LocalMeter::new(
+                &mut self.size_budget,
+                self.depth_budget,
+            )),
+        )
     }
 }
 
-impl From<OV::Error> for VisitorError {
-    fn from(OV::Error: OV::Error) -> Self {
-        VisitorError::UnexpectedType
+#[async_trait]
+impl<'f, 'r> sui_display::v2::Store for DisplayStore<'f, 'r> {
+    async fn latest(
+        &self,
+        id: AccountAddress,
+    ) -> anyhow::Result<Option<(A::MoveTypeLayout, Vec<u8>)>> {
+        self.fetch(self.scope.without_root_bound(), id).await
     }
-}
 
-impl From<RV::Error> for VisitorError {
-    fn from(RV::Error: RV::Error) -> Self {
-        VisitorError::UnexpectedType
+    async fn scoped(
+        &self,
+        id: AccountAddress,
+    ) -> anyhow::Result<Option<(A::MoveTypeLayout, Vec<u8>)>> {
+        self.fetch(self.scope.clone(), id).await
     }
 }
 

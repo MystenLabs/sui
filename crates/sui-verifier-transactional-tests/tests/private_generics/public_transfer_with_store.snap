@@ -1,5 +1,6 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
 ---
 processed 5 tasks
 
@@ -7,28 +8,28 @@ task 0, lines 7-17:
 //# publish
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4461200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 4468800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 1, lines 19-29:
 //# publish
 created: object(2,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4187600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4195200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 2, lines 31-41:
 //# publish
 created: object(3,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4180000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4187600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 3, lines 43-55:
 //# publish
 created: object(4,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4582800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4590400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4, lines 57-68:
 //# publish
 created: object(5,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 4415600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+gas summary: computation_cost: 1000000, storage_cost: 4423200,  storage_rebate: 978120, non_refundable_storage_fee: 9880

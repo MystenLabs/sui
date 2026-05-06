@@ -15,10 +15,11 @@ use sui_types::{
     effects::TransactionEffects,
     error::ExecutionError,
     execution::{ExecutionResult, TypeLayoutStore},
+    execution_status::ExecutionFailure,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
@@ -29,7 +30,7 @@ pub trait Executor {
         store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         // Epoch
@@ -42,6 +43,34 @@ pub trait Executor {
         gas_status: SuiGasStatus,
         // Transaction
         transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionFailure>,
+    );
+
+    /// Execution mode returns greater error information, primarily used in fullnode execution
+    /// as opposed to `execute_transaction_to_effects` which only includes basic `ExecutionFailure` error.
+    fn execute_transaction_to_effects_and_execution_error(
+        &self,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        gas: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -58,7 +87,7 @@ pub trait Executor {
         store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         // Epoch
@@ -71,6 +100,7 @@ pub trait Executor {
         gas_status: SuiGasStatus,
         // Transaction
         transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,
@@ -86,7 +116,7 @@ pub trait Executor {
         store: &dyn BackingStore,
         // Configuration
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         // Epoch
         epoch_id: EpochId,
         epoch_timestamp_ms: u64,
@@ -99,6 +129,7 @@ pub trait Executor {
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
         &'vm self,
+        protocol_config: &'vm ProtocolConfig,
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r>;
 }

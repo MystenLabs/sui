@@ -88,14 +88,6 @@ impl LeaderSchedule {
             .unwrap() as usize
     }
 
-    /// Checks whether the dag state sub dags list is empty. If yes then that means that
-    /// either (1) the system has just started and there is no unscored sub dag available (2) the
-    /// schedule has updated - new scores have been calculated. Both cases we consider as valid cases
-    /// where the schedule has been updated.
-    pub(crate) fn leader_schedule_updated(&self, dag_state: &RwLock<DagState>) -> bool {
-        dag_state.read().is_scoring_subdag_empty()
-    }
-
     pub(crate) fn update_leader_schedule_v2(&self, dag_state: &RwLock<DagState>) {
         let _s = self
             .context
@@ -223,10 +215,6 @@ pub(crate) struct LeaderSwapTable {
     /// Storing the hostname & stake along side the authority index for debugging.
     pub(crate) bad_nodes: BTreeMap<AuthorityIndex, (String, Stake)>,
 
-    /// Scores by authority in descending order, needed by other parts of the system
-    /// for a consistent view on how each validator performs in consensus.
-    pub(crate) reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
-
     // The scores for which the leader swap table was built from. This struct is
     // used for debugging purposes. Once `good_nodes` & `bad_nodes` are identified
     // the `reputation_scores` are no longer needed functionally for the swap table.
@@ -243,9 +231,7 @@ impl LeaderSwapTable {
         commit_index: CommitIndex,
         reputation_scores: ReputationScores,
     ) -> Self {
-        let swap_stake_threshold = context
-            .protocol_config
-            .consensus_bad_nodes_stake_threshold();
+        let swap_stake_threshold = context.protocol_config.bad_nodes_stake_threshold();
         Self::new_inner(
             context,
             swap_stake_threshold,
@@ -328,7 +314,6 @@ impl LeaderSwapTable {
         Self {
             good_nodes,
             bad_nodes,
-            reputation_scores_desc: authorities_by_score,
             reputation_scores,
         }
     }
@@ -497,7 +482,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -576,7 +561,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -605,7 +590,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
@@ -676,7 +661,6 @@ mod tests {
             vec![],
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
-            true,
         )];
         dag_state.write().add_scoring_subdags(unscored_subdags);
 
@@ -691,7 +675,7 @@ mod tests {
         let mut context = Context::new_for_test(4).0;
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let leader_schedule = Arc::new(LeaderSchedule::new(
             context.clone(),
@@ -772,7 +756,6 @@ mod tests {
             blocks,
             context.clock.timestamp_utc_ms(),
             last_commit.reference(),
-            true,
         )];
 
         let mut dag_state_write = dag_state.write();

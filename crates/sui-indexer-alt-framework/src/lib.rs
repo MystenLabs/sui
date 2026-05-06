@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::ops::Bound;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,10 +15,10 @@ use ingestion::IngestionService;
 use ingestion::ingestion_client::IngestionClient;
 use metrics::IndexerMetrics;
 use prometheus::Registry;
+use sui_indexer_alt_framework_store_traits::ConcurrentStore;
 use sui_indexer_alt_framework_store_traits::Connection;
-use sui_indexer_alt_framework_store_traits::InitWatermark;
+use sui_indexer_alt_framework_store_traits::SequentialStore;
 use sui_indexer_alt_framework_store_traits::Store;
-use sui_indexer_alt_framework_store_traits::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::pipeline_task;
 use tracing::info;
 
@@ -25,12 +26,10 @@ use crate::metrics::IngestionMetrics;
 use crate::pipeline::Processor;
 use crate::pipeline::concurrent::ConcurrentConfig;
 use crate::pipeline::concurrent::{self};
-use crate::pipeline::sequential::Handler;
 use crate::pipeline::sequential::SequentialConfig;
 use crate::pipeline::sequential::{self};
 use crate::service::Service;
 
-pub use anyhow::Result;
 pub use sui_field_count::FieldCount;
 pub use sui_futures::service;
 /// External users access the store trait through framework::store
@@ -119,17 +118,24 @@ pub struct Indexer<S: Store> {
     /// Service for downloading and disseminating checkpoint data.
     ingestion_service: IngestionService,
 
-    /// The next checkpoint for a pipeline without a committer watermark to start processing from,
-    /// which will be 0 by default. Pipelines with existing watermarks will ignore this setting and
-    /// always resume from their committer watermark + 1.
-    ///
-    /// Setting this value indirectly affects ingestion, as the checkpoint to start ingesting from
-    /// is the minimum across all pipelines' next checkpoints.
-    default_next_checkpoint: u64,
+    /// Optional override of the checkpoint lowerbound. When set, pipelines without a committer
+    /// watermark will start processing at this checkpoint.
+    first_checkpoint: Option<u64>,
 
     /// Optional override of the checkpoint upperbound. When set, the indexer will stop ingestion at
     /// this checkpoint.
     last_checkpoint: Option<u64>,
+
+    /// The network's latest checkpoint, when the indexer was started.
+    latest_checkpoint: u64,
+
+    /// The minimum `next_checkpoint` across all pipelines. This is the checkpoint for the indexer
+    /// to start ingesting from.
+    next_checkpoint: u64,
+
+    /// The minimum `next_checkpoint` across all sequential pipelines. This is used to initialize
+    /// the regulator to prevent ingestion from running too far ahead of sequential pipelines.
+    next_sequential_checkpoint: Option<u64>,
 
     /// An optional task name for this indexer. When set, pipelines will record watermarks using the
     /// delimiter defined on the store. This allows the same pipelines to run under multiple
@@ -152,15 +158,6 @@ pub struct Indexer<S: Store> {
     /// Pipelines that have already been registered with the indexer. Used to make sure a pipeline
     /// with the same name isn't added twice.
     added_pipelines: BTreeSet<&'static str>,
-
-    /// The checkpoint for the indexer to start ingesting from. This is derived from the committer
-    /// watermarks of pipelines added to the indexer. Pipelines without watermarks default to 0,
-    /// unless overridden by [Self::default_next_checkpoint].
-    first_ingestion_checkpoint: u64,
-
-    /// The minimum next_checkpoint across all sequential pipelines. This is used to initialize
-    /// the regulator to prevent ingestion from running too far ahead of sequential pipelines.
-    next_sequential_checkpoint: Option<u64>,
 
     /// The service handles for every pipeline, used to manage lifetimes and graceful shutdown.
     pipelines: Vec<Service>,
@@ -212,7 +209,7 @@ impl<S: Store> Indexer<S> {
         ingestion_config: IngestionConfig,
         metrics_prefix: Option<&str>,
         registry: &Registry,
-    ) -> Result<Self> {
+    ) -> anyhow::Result<Self> {
         let IndexerArgs {
             first_checkpoint,
             last_checkpoint,
@@ -225,12 +222,19 @@ impl<S: Store> Indexer<S> {
         let ingestion_service =
             IngestionService::new(client_args, ingestion_config, metrics_prefix, registry)?;
 
+        let latest_checkpoint = ingestion_service.latest_checkpoint_number().await?;
+
+        info!(latest_checkpoint);
+
         Ok(Self {
             store,
             metrics,
             ingestion_service,
-            default_next_checkpoint: first_checkpoint.unwrap_or_default(),
+            first_checkpoint,
             last_checkpoint,
+            latest_checkpoint,
+            next_checkpoint: u64::MAX,
+            next_sequential_checkpoint: None,
             task: task.into_task(),
             enabled_pipelines: if pipeline.is_empty() {
                 None
@@ -238,8 +242,6 @@ impl<S: Store> Indexer<S> {
                 Some(pipeline.into_iter().collect())
             },
             added_pipelines: BTreeSet::new(),
-            first_ingestion_checkpoint: u64::MAX,
-            next_sequential_checkpoint: None,
             pipelines: vec![],
         })
     }
@@ -280,43 +282,12 @@ impl<S: Store> Indexer<S> {
         self.next_sequential_checkpoint
     }
 
-    /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
-    /// they will be idle until the ingestion service starts, and serves it checkpoint data.
-    ///
-    /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
-    /// keep the watermark table up-to-date with the highest point they can guarantee all data
-    /// exists for, for their pipeline.
-    pub async fn concurrent_pipeline<H>(
-        &mut self,
-        handler: H,
-        config: ConcurrentConfig,
-    ) -> Result<()>
-    where
-        H: concurrent::Handler<Store = S> + Send + Sync + 'static,
-    {
-        let Some(next_checkpoint) = self.add_pipeline::<H>().await? else {
-            return Ok(());
-        };
-
-        self.pipelines.push(concurrent::pipeline::<H>(
-            handler,
-            next_checkpoint,
-            config,
-            self.store.clone(),
-            self.task.clone(),
-            self.ingestion_service.subscribe().0,
-            self.metrics.clone(),
-        ));
-
-        Ok(())
-    }
-
-    /// Start ingesting checkpoints from `first_ingestion_checkpoint`. Individual pipelines
+    /// Start ingesting checkpoints from `next_checkpoint`. Individual pipelines
     /// will start processing and committing once the ingestion service has caught up to their
     /// respective watermarks.
     ///
     /// Ingestion will stop after consuming the configured `last_checkpoint` if one is provided.
-    pub async fn run(self) -> Result<Service> {
+    pub async fn run(self) -> anyhow::Result<Service> {
         if let Some(enabled_pipelines) = self.enabled_pipelines {
             ensure!(
                 enabled_pipelines.is_empty(),
@@ -325,16 +296,16 @@ impl<S: Store> Indexer<S> {
             );
         }
 
-        let last_checkpoint = self.last_checkpoint.unwrap_or(u64::MAX);
-
-        info!(self.first_ingestion_checkpoint, last_checkpoint = ?self.last_checkpoint, "Ingestion range");
+        let start = self.next_checkpoint;
+        let end = self.last_checkpoint;
+        info!(start, end, "Ingestion range");
 
         let mut service = self
             .ingestion_service
-            .run(
-                self.first_ingestion_checkpoint..=last_checkpoint,
-                self.next_sequential_checkpoint,
-            )
+            .run((
+                Bound::Included(start),
+                end.map_or(Bound::Unbounded, Bound::Included),
+            ))
             .await
             .context("Failed to start ingestion service")?;
 
@@ -353,7 +324,11 @@ impl<S: Store> Indexer<S> {
     /// calculated above.
     ///
     /// Returns `Ok(None)` if the pipeline is disabled.
-    async fn add_pipeline<P: Processor + 'static>(&mut self) -> Result<Option<u64>> {
+    async fn add_pipeline<P: Processor + 'static>(
+        &mut self,
+        pipeline_task: String,
+        retention: Option<u64>,
+    ) -> anyhow::Result<Option<u64>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
             "Pipeline {:?} already added",
@@ -367,38 +342,75 @@ impl<S: Store> Indexer<S> {
             return Ok(None);
         }
 
-        let mut conn = self
-            .store
-            .connect()
-            .await
-            .context("Failed to establish connection to store")?;
-
-        let pipeline_task =
-            pipeline_task::<S>(P::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
-
-        let InitWatermark {
-            checkpoint_hi_inclusive,
-            reader_lo,
-        } = conn
-            .init_watermark(
-                &pipeline_task,
-                InitWatermark {
-                    checkpoint_hi_inclusive: self.default_next_checkpoint.checked_sub(1),
-                    reader_lo: self.default_next_checkpoint,
-                },
-            )
+        // Create a new record based on `proposed_next_checkpoint` if one does not exist.
+        // Otherwise, use the existing record and disregard the proposed value.
+        let proposed_next_checkpoint = if let Some(first_checkpoint) = self.first_checkpoint {
+            first_checkpoint
+        } else if let Some(retention) = retention {
+            self.latest_checkpoint.saturating_sub(retention)
+        } else {
+            0
+        };
+        let mut conn = self.store.connect().await?;
+        let init_watermark = conn
+            .init_watermark(&pipeline_task, proposed_next_checkpoint.checked_sub(1))
             .await
             .with_context(|| format!("Failed to init watermark for {pipeline_task}"))?;
 
-        let next_checkpoint = checkpoint_hi_inclusive.map_or(reader_lo, |c| c + 1);
+        let next_checkpoint = if let Some(init_watermark) = init_watermark {
+            if let Some(checkpoint_hi_inclusive) = init_watermark.checkpoint_hi_inclusive {
+                checkpoint_hi_inclusive + 1
+            } else {
+                0
+            }
+        } else {
+            proposed_next_checkpoint
+        };
 
-        self.first_ingestion_checkpoint = next_checkpoint.min(self.first_ingestion_checkpoint);
+        self.next_checkpoint = next_checkpoint.min(self.next_checkpoint);
 
         Ok(Some(next_checkpoint))
     }
 }
 
-impl<T: TransactionalStore> Indexer<T> {
+impl<S: ConcurrentStore> Indexer<S> {
+    /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
+    /// they will be idle until the ingestion service starts, and serves it checkpoint data.
+    ///
+    /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
+    /// keep the watermark table up-to-date with the highest point they can guarantee all data
+    /// exists for, for their pipeline.
+    pub async fn concurrent_pipeline<H: concurrent::Handler<Store = S>>(
+        &mut self,
+        handler: H,
+        config: ConcurrentConfig,
+    ) -> anyhow::Result<()> {
+        let pipeline_task =
+            pipeline_task::<S>(H::NAME, self.task.as_ref().map(|t| t.task.as_str()))?;
+        let retention = config.pruner.as_ref().map(|p| p.retention);
+        let Some(next_checkpoint) = self.add_pipeline::<H>(pipeline_task, retention).await? else {
+            return Ok(());
+        };
+
+        let checkpoint_rx = self
+            .ingestion_service
+            .subscribe_bounded(config.ingestion.subscriber_channel_size());
+
+        self.pipelines.push(concurrent::pipeline::<H>(
+            handler,
+            next_checkpoint,
+            config,
+            self.store.clone(),
+            self.task.clone(),
+            checkpoint_rx,
+            self.metrics.clone(),
+        ));
+
+        Ok(())
+    }
+}
+
+impl<T: SequentialStore> Indexer<T> {
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
     /// they will be idle until the ingestion service starts, and serves it checkpoint data.
     ///
@@ -406,21 +418,11 @@ impl<T: TransactionalStore> Indexer<T> {
     /// required to handle pipelines that modify data in-place (where each update is not an insert,
     /// but could be a modification of an existing row, where ordering between updates is
     /// important).
-    ///
-    /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
-    /// number of checkpoints (configured by `checkpoint_lag`).
-    pub async fn sequential_pipeline<H>(
+    pub async fn sequential_pipeline<H: sequential::Handler<Store = T>>(
         &mut self,
         handler: H,
         config: SequentialConfig,
-    ) -> Result<()>
-    where
-        H: Handler<Store = T> + Send + Sync + 'static,
-    {
-        let Some(next_checkpoint) = self.add_pipeline::<H>().await? else {
-            return Ok(());
-        };
-
+    ) -> anyhow::Result<()> {
         if self.task.is_some() {
             bail!(
                 "Sequential pipelines do not support pipeline tasks. \
@@ -429,13 +431,19 @@ impl<T: TransactionalStore> Indexer<T> {
             );
         }
 
+        let Some(next_checkpoint) = self.add_pipeline::<H>(H::NAME.to_owned(), None).await? else {
+            return Ok(());
+        };
+
         // Track the minimum next_checkpoint across all sequential pipelines
         self.next_sequential_checkpoint = Some(
             self.next_sequential_checkpoint
                 .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
         );
 
-        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe();
+        let checkpoint_rx = self
+            .ingestion_service
+            .subscribe_bounded(config.ingestion.subscriber_channel_size());
 
         self.pipelines.push(sequential::pipeline::<H>(
             handler,
@@ -443,7 +451,6 @@ impl<T: TransactionalStore> Indexer<T> {
             config,
             self.store.clone(),
             checkpoint_rx,
-            commit_hi_tx,
             self.metrics.clone(),
         ));
 
@@ -464,11 +471,15 @@ mod tests {
     use crate::FieldCount;
     use crate::config::ConcurrencyConfig;
     use crate::ingestion::ingestion_client::IngestionClientArgs;
-    use crate::mocks::store::MockStore;
+    use crate::ingestion::store_client::ObjectStoreWatermark;
+    use crate::ingestion::store_client::WATERMARK_PATH;
+    use crate::mocks::store::FallibleMockStore;
     use crate::pipeline::CommitterConfig;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::ConcurrentConfig;
     use crate::store::CommitterWatermark;
+    use crate::store::ConcurrentConnection as _;
+    use crate::store::Connection as _;
 
     use super::*;
 
@@ -512,17 +523,17 @@ mod tests {
     }
 
     #[async_trait]
-    impl crate::pipeline::concurrent::Handler for ControllableHandler {
-        type Store = MockStore;
+    impl concurrent::Handler for ControllableHandler {
+        type Store = FallibleMockStore;
         type Batch = Vec<MockValue>;
 
         fn batch(
             &self,
             batch: &mut Self::Batch,
             values: &mut std::vec::IntoIter<Self::Value>,
-        ) -> crate::pipeline::concurrent::BatchStatus {
+        ) -> concurrent::BatchStatus {
             batch.extend(values);
-            crate::pipeline::concurrent::BatchStatus::Ready
+            concurrent::BatchStatus::Ready
         }
 
         async fn commit<'a>(
@@ -557,7 +568,7 @@ mod tests {
 
             #[async_trait]
             impl crate::pipeline::concurrent::Handler for $handler {
-                type Store = MockStore;
+                type Store = FallibleMockStore;
                 type Batch = Vec<Self::Value>;
 
                 fn batch(
@@ -585,7 +596,7 @@ mod tests {
 
             #[async_trait]
             impl crate::pipeline::sequential::Handler for $handler {
-                type Store = MockStore;
+                type Store = FallibleMockStore;
                 type Batch = Vec<Self::Value>;
 
                 fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
@@ -607,12 +618,112 @@ mod tests {
     test_pipeline!(SequentialHandler, "sequential_handler");
     test_pipeline!(MockCheckpointSequenceNumberHandler, "test");
 
+    fn init_ingestion_dir(latest_checkpoint: Option<u64>) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        if let Some(cp) = latest_checkpoint {
+            let watermark_path = dir.path().join(WATERMARK_PATH);
+            std::fs::create_dir_all(watermark_path.parent().unwrap()).unwrap();
+            let watermark = ObjectStoreWatermark {
+                checkpoint_hi_inclusive: cp,
+            };
+            std::fs::write(watermark_path, serde_json::to_string(&watermark).unwrap()).unwrap();
+        }
+        dir
+    }
+
+    /// If `ingestion_data` is `Some((num_checkpoints, checkpoint_size))`, synthetic ingestion
+    /// data will be generated in the temp directory before creating the indexer.
+    async fn create_test_indexer(
+        store: FallibleMockStore,
+        indexer_args: IndexerArgs,
+        registry: &Registry,
+        ingestion_data: Option<(u64, u64)>,
+    ) -> (Indexer<FallibleMockStore>, tempfile::TempDir) {
+        let temp_dir = init_ingestion_dir(None);
+        if let Some((num_checkpoints, checkpoint_size)) = ingestion_data {
+            synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
+                ingestion_dir: temp_dir.path().to_owned(),
+                starting_checkpoint: 0,
+                num_checkpoints,
+                checkpoint_size,
+            })
+            .await;
+        }
+        let client_args = ClientArgs {
+            ingestion: IngestionClientArgs {
+                local_ingestion_path: Some(temp_dir.path().to_owned()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let indexer = Indexer::new(
+            store,
+            indexer_args,
+            client_args,
+            IngestionConfig::default(),
+            None,
+            registry,
+        )
+        .await
+        .unwrap();
+        (indexer, temp_dir)
+    }
+
+    async fn set_committer_watermark(
+        conn: &mut <FallibleMockStore as Store>::Connection<'_>,
+        name: &str,
+        hi: u64,
+    ) {
+        conn.set_committer_watermark(
+            name,
+            CommitterWatermark {
+                checkpoint_hi_inclusive: hi,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    }
+
+    async fn add_concurrent<H: concurrent::Handler<Store = FallibleMockStore>>(
+        indexer: &mut Indexer<FallibleMockStore>,
+        handler: H,
+    ) {
+        indexer
+            .concurrent_pipeline(handler, ConcurrentConfig::default())
+            .await
+            .unwrap();
+    }
+
+    async fn add_sequential<H: sequential::Handler<Store = FallibleMockStore>>(
+        indexer: &mut Indexer<FallibleMockStore>,
+        handler: H,
+    ) {
+        indexer
+            .sequential_pipeline(handler, SequentialConfig::default())
+            .await
+            .unwrap();
+    }
+
+    macro_rules! assert_out_of_order {
+        ($metrics:expr, $pipeline:expr, $expected:expr) => {
+            assert_eq!(
+                $metrics
+                    .total_watermarks_out_of_order
+                    .get_metric_with_label_values(&[$pipeline])
+                    .unwrap()
+                    .get(),
+                $expected,
+            );
+        };
+    }
+
     async fn test_init_watermark(
         first_checkpoint: Option<u64>,
         is_concurrent: bool,
     ) -> (Option<CommitterWatermark>, Option<PrunerWatermark>) {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "pipeline_name");
 
@@ -622,37 +733,13 @@ mod tests {
             first_checkpoint,
             ..IndexerArgs::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let ingestion_config = IngestionConfig::default();
-
-        let mut indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, None).await;
 
         if is_concurrent {
-            indexer
-                .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-                .await
-                .unwrap();
+            add_concurrent(&mut indexer, A).await;
         } else {
-            indexer
-                .sequential_pipeline::<A>(A, SequentialConfig::default())
-                .await
-                .unwrap();
+            add_sequential(&mut indexer, A).await;
         }
 
         (
@@ -661,6 +748,76 @@ mod tests {
                 .await
                 .unwrap(),
         )
+    }
+
+    const LATEST_CHECKPOINT: u64 = 10;
+
+    /// Set up an indexer as if the network is at `latest_checkpoint` (the next checkpoint to
+    /// ingest). Runs a single concurrent pipeline with the given config. If `watermark` is
+    /// provided, the pipeline's high watermark is pre-set; `first_checkpoint` controls where
+    /// ingestion begins.
+    async fn test_next_checkpoint(
+        watermark: Option<u64>,
+        first_checkpoint: Option<u64>,
+        concurrent_config: ConcurrentConfig,
+    ) -> Indexer<FallibleMockStore> {
+        let registry = Registry::new();
+        let store = FallibleMockStore::default();
+
+        test_pipeline!(A, "concurrent_a");
+
+        if let Some(checkpoint_hi_inclusive) = watermark {
+            let mut conn = store.connect().await.unwrap();
+            conn.set_committer_watermark(
+                A::NAME,
+                CommitterWatermark {
+                    checkpoint_hi_inclusive,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        }
+
+        let temp_dir = init_ingestion_dir(Some(LATEST_CHECKPOINT));
+        let mut indexer = Indexer::new(
+            store,
+            IndexerArgs {
+                first_checkpoint,
+                ..Default::default()
+            },
+            ClientArgs {
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(temp_dir.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            IngestionConfig::default(),
+            None,
+            &registry,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(indexer.latest_checkpoint, LATEST_CHECKPOINT);
+
+        indexer
+            .concurrent_pipeline::<A>(A, concurrent_config)
+            .await
+            .unwrap();
+
+        indexer
+    }
+
+    fn pruner_config(retention: u64) -> ConcurrentConfig {
+        ConcurrentConfig {
+            pruner: Some(concurrent::PrunerConfig {
+                retention,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -695,11 +852,11 @@ mod tests {
         assert_eq!(args.indexer.task.reader_interval_ms, Some(5000));
     }
 
-    /// first_ingestion_checkpoint is smallest among existing watermarks + 1.
+    /// next_checkpoint is smallest among existing watermarks + 1.
     #[tokio::test]
-    async fn test_first_ingestion_checkpoint_all_pipelines_have_watermarks() {
+    async fn test_next_checkpoint_all_pipelines_have_watermarks() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -708,105 +865,38 @@ mod tests {
 
         let mut conn = store.connect().await.unwrap();
 
-        conn.init_watermark(A::NAME, InitWatermark::default())
-            .await
-            .unwrap();
-        conn.set_committer_watermark(
-            A::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 100,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        conn.init_watermark(A::NAME, Some(0)).await.unwrap();
+        set_committer_watermark(&mut conn, A::NAME, 100).await;
 
-        conn.init_watermark(B::NAME, InitWatermark::default())
-            .await
-            .unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        conn.init_watermark(B::NAME, Some(0)).await.unwrap();
+        set_committer_watermark(&mut conn, B::NAME, 10).await;
 
-        conn.init_watermark(C::NAME, InitWatermark::default())
-            .await
-            .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 1,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        conn.init_watermark(C::NAME, Some(0)).await.unwrap();
+        set_committer_watermark(&mut conn, C::NAME, 1).await;
 
-        conn.init_watermark(D::NAME, InitWatermark::default())
-            .await
-            .unwrap();
-        conn.set_committer_watermark(
-            D::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 50,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        conn.init_watermark(D::NAME, Some(0)).await.unwrap();
+        set_committer_watermark(&mut conn, D::NAME, 50).await;
 
-        let indexer_args = IndexerArgs::default();
-        let temp_dir = tempfile::tempdir().unwrap();
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let ingestion_config = IngestionConfig::default();
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store, IndexerArgs::default(), &registry, None).await;
 
-        let mut indexer = Indexer::new(
-            store,
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+        add_sequential(&mut indexer, D).await;
 
-        indexer
-            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<D>(D, SequentialConfig::default())
-            .await
-            .unwrap();
-
-        assert_eq!(indexer.first_ingestion_checkpoint, 2);
+        assert_eq!(indexer.first_checkpoint, None);
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, 0);
+        assert_eq!(indexer.next_checkpoint, 2);
+        assert_eq!(indexer.next_sequential_checkpoint, Some(2));
     }
 
-    /// first_ingestion_checkpoint is 0 when at least one pipeline has no watermark.
+    /// next_checkpoint is 0 when at least one pipeline has no watermark.
     #[tokio::test]
-    async fn test_first_ingestion_checkpoint_not_all_pipelines_have_watermarks() {
+    async fn test_next_checkpoint_not_all_pipelines_have_watermarks() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -814,72 +904,29 @@ mod tests {
         test_pipeline!(D, "sequential_d");
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 1,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        set_committer_watermark(&mut conn, B::NAME, 10).await;
+        set_committer_watermark(&mut conn, C::NAME, 1).await;
 
-        let indexer_args = IndexerArgs::default();
-        let temp_dir = tempfile::tempdir().unwrap();
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let ingestion_config = IngestionConfig::default();
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store, IndexerArgs::default(), &registry, None).await;
 
-        let mut indexer = Indexer::new(
-            store,
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+        add_sequential(&mut indexer, D).await;
 
-        indexer
-            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<D>(D, SequentialConfig::default())
-            .await
-            .unwrap();
-
-        assert_eq!(indexer.first_ingestion_checkpoint, 0);
+        assert_eq!(indexer.first_checkpoint, None);
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, 0);
+        assert_eq!(indexer.next_checkpoint, 0);
+        assert_eq!(indexer.next_sequential_checkpoint, Some(0));
     }
 
-    /// first_ingestion_checkpoint is 1 when smallest committer watermark is 0.
+    /// next_checkpoint is 1 when smallest committer watermark is 0.
     #[tokio::test]
-    async fn test_first_ingestion_checkpoint_smallest_is_0() {
+    async fn test_next_checkpoint_smallest_is_0() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -887,85 +934,28 @@ mod tests {
         test_pipeline!(D, "sequential_d");
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            A::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 100,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 1,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(D::NAME, CommitterWatermark::default())
-            .await
-            .unwrap();
+        set_committer_watermark(&mut conn, A::NAME, 100).await;
+        set_committer_watermark(&mut conn, B::NAME, 10).await;
+        set_committer_watermark(&mut conn, C::NAME, 1).await;
+        set_committer_watermark(&mut conn, D::NAME, 0).await;
 
-        let indexer_args = IndexerArgs::default();
-        let temp_dir = tempfile::tempdir().unwrap();
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let ingestion_config = IngestionConfig::default();
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store, IndexerArgs::default(), &registry, None).await;
 
-        let mut indexer = Indexer::new(
-            store,
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+        add_sequential(&mut indexer, D).await;
 
-        indexer
-            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<D>(D, SequentialConfig::default())
-            .await
-            .unwrap();
-
-        assert_eq!(indexer.first_ingestion_checkpoint, 1);
+        assert_eq!(indexer.next_checkpoint, 1);
     }
 
-    /// first_ingestion_checkpoint is first_checkpoint when at least one pipeline has no
+    /// next_checkpoint is first_checkpoint when at least one pipeline has no
     /// watermark, and first_checkpoint is smallest.
     #[tokio::test]
-    async fn test_first_ingestion_checkpoint_first_checkpoint_and_no_watermark() {
+    async fn test_next_checkpoint_first_checkpoint_and_no_watermark() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -973,217 +963,165 @@ mod tests {
         test_pipeline!(D, "sequential_d");
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 50,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        set_committer_watermark(&mut conn, B::NAME, 50).await;
+        set_committer_watermark(&mut conn, C::NAME, 10).await;
 
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(5),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let ingestion_config = IngestionConfig::default();
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store, indexer_args, &registry, None).await;
 
-        let mut indexer = Indexer::new(
-            store,
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+        add_sequential(&mut indexer, D).await;
 
-        indexer
-            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<D>(D, SequentialConfig::default())
-            .await
-            .unwrap();
-
-        assert_eq!(indexer.first_ingestion_checkpoint, 5);
+        assert_eq!(indexer.first_checkpoint, Some(5));
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, 0);
+        assert_eq!(indexer.next_checkpoint, 5);
+        assert_eq!(indexer.next_sequential_checkpoint, Some(5));
     }
 
-    /// first_ingestion_checkpoint is smallest among existing watermarks + 1 if
-    /// first_checkpoint but all pipelines have watermarks (ignores first_checkpoint).
+    /// next_checkpoint is smallest among existing watermarks + 1 if
+    /// all pipelines have watermarks (ignores first_checkpoint).
     #[tokio::test]
-    async fn test_first_ingestion_checkpoint_ignore_first_checkpoint() {
+    async fn test_next_checkpoint_ignore_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(B, "concurrent_b");
         test_pipeline!(C, "sequential_c");
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 50,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        set_committer_watermark(&mut conn, B::NAME, 50).await;
+        set_committer_watermark(&mut conn, C::NAME, 10).await;
 
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(5),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let ingestion_config = IngestionConfig::default();
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store, indexer_args, &registry, None).await;
 
-        let mut indexer = Indexer::new(
-            store,
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
 
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
-
-        assert_eq!(indexer.first_ingestion_checkpoint, 11);
+        assert_eq!(indexer.first_checkpoint, Some(5));
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, 0);
+        assert_eq!(indexer.next_checkpoint, 11);
+        assert_eq!(indexer.next_sequential_checkpoint, Some(11));
     }
 
     /// If the first_checkpoint is being considered, because pipelines are missing watermarks, it
     /// will not be used as the starting point if it is not the smallest valid committer watermark
     /// to resume ingesting from.
     #[tokio::test]
-    async fn test_first_ingestion_checkpoint_large_first_checkpoint() {
+    async fn test_next_checkpoint_large_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
         test_pipeline!(C, "sequential_c");
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 50,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        set_committer_watermark(&mut conn, B::NAME, 50).await;
+        set_committer_watermark(&mut conn, C::NAME, 10).await;
 
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(24),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store, indexer_args, &registry, None).await;
+
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+
+        assert_eq!(indexer.first_checkpoint, Some(24));
+        assert_eq!(indexer.last_checkpoint, None);
+        assert_eq!(indexer.latest_checkpoint, 0);
+        assert_eq!(indexer.next_checkpoint, 11);
+        assert_eq!(indexer.next_sequential_checkpoint, Some(11));
+    }
+
+    /// latest_checkpoint is read from the watermark file.
+    #[tokio::test]
+    async fn test_latest_checkpoint_from_watermark() {
+        let registry = Registry::new();
+        let store = FallibleMockStore::default();
+        let temp_dir = init_ingestion_dir(Some(30));
+        let indexer = Indexer::new(
+            store,
+            IndexerArgs::default(),
+            ClientArgs {
+                ingestion: IngestionClientArgs {
+                    local_ingestion_path: Some(temp_dir.path().to_owned()),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
-            ..Default::default()
-        };
-        let ingestion_config = IngestionConfig::default();
-
-        let mut indexer = Indexer::new(
-            store,
-            indexer_args,
-            client_args,
-            ingestion_config,
+            IngestionConfig::default(),
             None,
             &registry,
         )
         .await
         .unwrap();
 
-        indexer
-            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-            .await
-            .unwrap();
+        assert_eq!(indexer.latest_checkpoint, 30);
+    }
 
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
+    /// No watermark, no first_checkpoint, pruner with retention:
+    /// next_checkpoint = LATEST_CHECKPOINT - retention.
+    #[tokio::test]
+    async fn test_next_checkpoint_with_pruner_uses_retention() {
+        let retention = LATEST_CHECKPOINT - 1;
+        let indexer = test_next_checkpoint(None, None, pruner_config(retention)).await;
+        assert_eq!(indexer.next_checkpoint, LATEST_CHECKPOINT - retention);
+    }
 
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
+    /// No watermark, no first_checkpoint, no pruner: falls back to 0.
+    #[tokio::test]
+    async fn test_next_checkpoint_without_pruner_falls_back_to_genesis() {
+        let indexer = test_next_checkpoint(None, None, ConcurrentConfig::default()).await;
+        assert_eq!(indexer.next_checkpoint, 0);
+    }
 
-        assert_eq!(indexer.first_ingestion_checkpoint, 11);
+    /// Watermark at 5 takes priority over latest_checkpoint - retention.
+    #[tokio::test]
+    async fn test_next_checkpoint_watermark_takes_priority_over_pruner() {
+        let retention = LATEST_CHECKPOINT - 1;
+        let indexer = test_next_checkpoint(Some(5), None, pruner_config(retention)).await;
+        assert_eq!(indexer.next_checkpoint, 6);
+    }
+
+    /// first_checkpoint takes priority over latest_checkpoint - retention when
+    /// there's no watermark.
+    #[tokio::test]
+    async fn test_next_checkpoint_first_checkpoint_takes_priority_over_pruner() {
+        let retention = LATEST_CHECKPOINT - 1;
+        let indexer = test_next_checkpoint(None, Some(2), pruner_config(retention)).await;
+        assert_eq!(indexer.next_checkpoint, 2);
+    }
+
+    /// When retention exceeds latest_checkpoint, saturating_sub clamps to 0.
+    #[tokio::test]
+    async fn test_next_checkpoint_retention_exceeds_latest_checkpoint() {
+        let retention = LATEST_CHECKPOINT + 1;
+        let indexer = test_next_checkpoint(None, None, pruner_config(retention)).await;
+        assert_eq!(indexer.next_checkpoint, 0);
     }
 
     // test ingestion, all pipelines have watermarks, no first_checkpoint provided
     #[tokio::test]
     async fn test_indexer_ingestion_existing_watermarks_no_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -1191,95 +1129,22 @@ mod tests {
         test_pipeline!(D, "sequential_d");
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            A::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 5,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 15,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            D::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 20,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-
-        // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
-        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
-            ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 0,
-            num_checkpoints: 30,
-            checkpoint_size: 1,
-        })
-        .await;
+        set_committer_watermark(&mut conn, A::NAME, 5).await;
+        set_committer_watermark(&mut conn, B::NAME, 10).await;
+        set_committer_watermark(&mut conn, C::NAME, 15).await;
+        set_committer_watermark(&mut conn, D::NAME, 20).await;
 
         let indexer_args = IndexerArgs {
             last_checkpoint: Some(29),
             ..Default::default()
         };
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, Some((30, 1))).await;
 
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let ingestion_config = IngestionConfig::default();
-
-        let mut indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
-
-        indexer
-            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<D>(D, SequentialConfig::default())
-            .await
-            .unwrap();
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+        add_sequential(&mut indexer, D).await;
 
         let ingestion_metrics = indexer.ingestion_metrics().clone();
         let indexer_metrics = indexer.indexer_metrics().clone();
@@ -1287,45 +1152,17 @@ mod tests {
         indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 24);
-        assert_eq!(
-            indexer_metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[A::NAME])
-                .unwrap()
-                .get(),
-            0
-        );
-        assert_eq!(
-            indexer_metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[B::NAME])
-                .unwrap()
-                .get(),
-            5
-        );
-        assert_eq!(
-            indexer_metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[C::NAME])
-                .unwrap()
-                .get(),
-            10
-        );
-        assert_eq!(
-            indexer_metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[D::NAME])
-                .unwrap()
-                .get(),
-            15
-        );
+        assert_out_of_order!(indexer_metrics, A::NAME, 0);
+        assert_out_of_order!(indexer_metrics, B::NAME, 5);
+        assert_out_of_order!(indexer_metrics, C::NAME, 10);
+        assert_out_of_order!(indexer_metrics, D::NAME, 15);
     }
 
     // test ingestion, no pipelines missing watermarks, first_checkpoint provided
     #[tokio::test]
     async fn test_indexer_ingestion_existing_watermarks_ignore_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -1333,141 +1170,40 @@ mod tests {
         test_pipeline!(D, "sequential_d");
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            A::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 5,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 15,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            D::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 20,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-
-        // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
-        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
-            ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 0,
-            num_checkpoints: 30,
-            checkpoint_size: 1,
-        })
-        .await;
+        set_committer_watermark(&mut conn, A::NAME, 5).await;
+        set_committer_watermark(&mut conn, B::NAME, 10).await;
+        set_committer_watermark(&mut conn, C::NAME, 15).await;
+        set_committer_watermark(&mut conn, D::NAME, 20).await;
 
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(3),
             last_checkpoint: Some(29),
             ..Default::default()
         };
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, Some((30, 1))).await;
 
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let ingestion_config = IngestionConfig::default();
-
-        let mut indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
-
-        indexer
-            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<D>(D, SequentialConfig::default())
-            .await
-            .unwrap();
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+        add_sequential(&mut indexer, D).await;
 
         let ingestion_metrics = indexer.ingestion_metrics().clone();
         let metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 24);
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[A::NAME])
-                .unwrap()
-                .get(),
-            0
-        );
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[B::NAME])
-                .unwrap()
-                .get(),
-            5
-        );
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[C::NAME])
-                .unwrap()
-                .get(),
-            10
-        );
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[D::NAME])
-                .unwrap()
-                .get(),
-            15
-        );
+        assert_out_of_order!(metrics, A::NAME, 0);
+        assert_out_of_order!(metrics, B::NAME, 5);
+        assert_out_of_order!(metrics, C::NAME, 10);
+        assert_out_of_order!(metrics, D::NAME, 15);
     }
 
     // test ingestion, some pipelines missing watermarks, no first_checkpoint provided
     #[tokio::test]
     async fn test_indexer_ingestion_missing_watermarks_no_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -1475,131 +1211,38 @@ mod tests {
         test_pipeline!(D, "sequential_d");
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 15,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            D::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 20,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-
-        // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
-        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
-            ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 0,
-            num_checkpoints: 30,
-            checkpoint_size: 1,
-        })
-        .await;
+        set_committer_watermark(&mut conn, B::NAME, 10).await;
+        set_committer_watermark(&mut conn, C::NAME, 15).await;
+        set_committer_watermark(&mut conn, D::NAME, 20).await;
 
         let indexer_args = IndexerArgs {
             last_checkpoint: Some(29),
             ..Default::default()
         };
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, Some((30, 1))).await;
 
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let ingestion_config = IngestionConfig::default();
-
-        let mut indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
-
-        indexer
-            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<D>(D, SequentialConfig::default())
-            .await
-            .unwrap();
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+        add_sequential(&mut indexer, D).await;
 
         let ingestion_metrics = indexer.ingestion_metrics().clone();
         let metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 30);
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[A::NAME])
-                .unwrap()
-                .get(),
-            0
-        );
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[B::NAME])
-                .unwrap()
-                .get(),
-            11
-        );
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[C::NAME])
-                .unwrap()
-                .get(),
-            16
-        );
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[D::NAME])
-                .unwrap()
-                .get(),
-            21
-        );
+        assert_out_of_order!(metrics, A::NAME, 0);
+        assert_out_of_order!(metrics, B::NAME, 11);
+        assert_out_of_order!(metrics, C::NAME, 16);
+        assert_out_of_order!(metrics, D::NAME, 21);
     }
 
     // test ingestion, some pipelines missing watermarks, use first_checkpoint
     #[tokio::test]
     async fn test_indexer_ingestion_use_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -1607,125 +1250,32 @@ mod tests {
         test_pipeline!(D, "sequential_d");
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            B::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            C::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 15,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-        conn.set_committer_watermark(
-            D::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 20,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
-
-        // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
-        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
-            ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 0,
-            num_checkpoints: 30,
-            checkpoint_size: 1,
-        })
-        .await;
+        set_committer_watermark(&mut conn, B::NAME, 10).await;
+        set_committer_watermark(&mut conn, C::NAME, 15).await;
+        set_committer_watermark(&mut conn, D::NAME, 20).await;
 
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(10),
             last_checkpoint: Some(29),
             ..Default::default()
         };
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, Some((30, 1))).await;
 
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let ingestion_config = IngestionConfig::default();
-
-        let mut indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
-
-        indexer
-            .concurrent_pipeline::<A>(A, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .concurrent_pipeline::<B>(B, ConcurrentConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<C>(C, SequentialConfig::default())
-            .await
-            .unwrap();
-        indexer
-            .sequential_pipeline::<D>(D, SequentialConfig::default())
-            .await
-            .unwrap();
+        add_concurrent(&mut indexer, A).await;
+        add_concurrent(&mut indexer, B).await;
+        add_sequential(&mut indexer, C).await;
+        add_sequential(&mut indexer, D).await;
 
         let ingestion_metrics = indexer.ingestion_metrics().clone();
         let metrics = indexer.indexer_metrics().clone();
         indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 20);
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[A::NAME])
-                .unwrap()
-                .get(),
-            0
-        );
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[B::NAME])
-                .unwrap()
-                .get(),
-            1
-        );
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[C::NAME])
-                .unwrap()
-                .get(),
-            6
-        );
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&[D::NAME])
-                .unwrap()
-                .get(),
-            11
-        );
+        assert_out_of_order!(metrics, A::NAME, 0);
+        assert_out_of_order!(metrics, B::NAME, 1);
+        assert_out_of_order!(metrics, C::NAME, 6);
+        assert_out_of_order!(metrics, D::NAME, 11);
     }
 
     #[tokio::test]
@@ -1769,46 +1319,11 @@ mod tests {
     #[tokio::test]
     async fn test_multiple_sequential_pipelines_next_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
-        // Set up different watermarks for three different sequential pipelines
         let mut conn = store.connect().await.unwrap();
-
-        // First handler at checkpoint 10
-        conn.set_committer_watermark(
-            MockHandler::NAME,
-            CommitterWatermark {
-                epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive: 10,
-                tx_hi: 20,
-                timestamp_ms_hi_inclusive: 10000,
-            },
-        )
-        .await
-        .unwrap();
-
-        // SequentialHandler at checkpoint 5
-        conn.set_committer_watermark(
-            SequentialHandler::NAME,
-            CommitterWatermark {
-                epoch_hi_inclusive: 0,
-                checkpoint_hi_inclusive: 5,
-                tx_hi: 10,
-                timestamp_ms_hi_inclusive: 5000,
-            },
-        )
-        .await
-        .unwrap();
-
-        // Create synthetic ingestion data
-        let temp_dir = tempfile::tempdir().unwrap();
-        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
-            ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 0,
-            num_checkpoints: 20,
-            checkpoint_size: 2,
-        })
-        .await;
+        set_committer_watermark(&mut conn, MockHandler::NAME, 10).await;
+        set_committer_watermark(&mut conn, SequentialHandler::NAME, 5).await;
 
         let indexer_args = IndexerArgs {
             first_checkpoint: None,
@@ -1816,36 +1331,11 @@ mod tests {
             pipeline: vec![],
             ..Default::default()
         };
-
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let ingestion_config = IngestionConfig::default();
-
-        let mut indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
+        let (mut indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, Some((20, 2))).await;
 
         // Add first sequential pipeline
-        indexer
-            .sequential_pipeline(
-                MockHandler,
-                pipeline::sequential::SequentialConfig::default(),
-            )
-            .await
-            .unwrap();
+        add_sequential(&mut indexer, MockHandler).await;
 
         // Verify next_sequential_checkpoint is set correctly (10 + 1 = 11)
         assert_eq!(
@@ -1855,13 +1345,7 @@ mod tests {
         );
 
         // Add second sequential pipeline
-        indexer
-            .sequential_pipeline(
-                SequentialHandler,
-                pipeline::sequential::SequentialConfig::default(),
-            )
-            .await
-            .unwrap();
+        add_sequential(&mut indexer, SequentialHandler).await;
 
         // Should change to 6 (minimum of 6 and 11)
         assert_eq!(
@@ -1890,20 +1374,12 @@ mod tests {
     #[tokio::test]
     async fn test_tasked_pipelines_ignore_below_main_reader_lo() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         // Mock the store as if we have a main pipeline with a committer watermark at `10` and a
         // reader watermark at `7`.
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            MockCheckpointSequenceNumberHandler::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        set_committer_watermark(&mut conn, MockCheckpointSequenceNumberHandler::NAME, 10).await;
         conn.set_reader_watermark(MockCheckpointSequenceNumberHandler::NAME, 7)
             .await
             .unwrap();
@@ -1916,42 +1392,10 @@ mod tests {
             task: TaskArgs::tasked("task".to_string(), 10),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
-        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
-            ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 0,
-            num_checkpoints: 16,
-            checkpoint_size: 2,
-        })
-        .await;
+        let (mut tasked_indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, Some((16, 2))).await;
 
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let ingestion_config = IngestionConfig::default();
-
-        let mut tasked_indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
-
-        let _ = tasked_indexer
-            .concurrent_pipeline(
-                MockCheckpointSequenceNumberHandler,
-                ConcurrentConfig::default(),
-            )
-            .await;
+        add_concurrent(&mut tasked_indexer, MockCheckpointSequenceNumberHandler).await;
 
         let ingestion_metrics = tasked_indexer.ingestion_metrics().clone();
         let metrics = tasked_indexer.indexer_metrics().clone();
@@ -1984,18 +1428,10 @@ mod tests {
     #[tokio::test]
     async fn test_tasked_pipelines_surpass_main_pipeline_committer_hi() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         let mut conn = store.connect().await.unwrap();
-        conn.set_committer_watermark(
-            "test",
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 10,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        set_committer_watermark(&mut conn, "test", 10).await;
         conn.set_reader_watermark("test", 5).await.unwrap();
 
         // Start a tasked indexer that will ingest from checkpoint 9 and go past the main pipeline's
@@ -2006,42 +1442,10 @@ mod tests {
             task: TaskArgs::tasked("task".to_string(), 10),
             ..Default::default()
         };
-        let temp_dir = tempfile::tempdir().unwrap();
-        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
-            ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 0,
-            num_checkpoints: 26,
-            checkpoint_size: 2,
-        })
-        .await;
+        let (mut tasked_indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, Some((26, 2))).await;
 
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-
-        let ingestion_config = IngestionConfig::default();
-
-        let mut tasked_indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
-
-        let _ = tasked_indexer
-            .concurrent_pipeline(
-                MockCheckpointSequenceNumberHandler,
-                ConcurrentConfig::default(),
-            )
-            .await;
+        add_concurrent(&mut tasked_indexer, MockCheckpointSequenceNumberHandler).await;
 
         let ingestion_metrics = tasked_indexer.ingestion_metrics().clone();
         let metrics = tasked_indexer.indexer_metrics().clone();
@@ -2049,14 +1453,7 @@ mod tests {
         tasked_indexer.run().await.unwrap().join().await.unwrap();
 
         assert_eq!(ingestion_metrics.total_ingested_checkpoints.get(), 17);
-        assert_eq!(
-            metrics
-                .total_watermarks_out_of_order
-                .get_metric_with_label_values(&["test"])
-                .unwrap()
-                .get(),
-            0
-        );
+        assert_out_of_order!(metrics, "test", 0);
         assert_eq!(
             metrics
                 .total_collector_skipped_checkpoints
@@ -2067,7 +1464,7 @@ mod tests {
         );
 
         let data = store.data.get("test").unwrap();
-        assert!(data.len() == 17);
+        assert_eq!(data.len(), 17);
         for i in 0..9 {
             assert!(data.get(&i).is_none());
         }
@@ -2088,52 +1485,20 @@ mod tests {
     #[tokio::test]
     async fn test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
         let mut conn = store.connect().await.unwrap();
         // Set the main pipeline watermark.
-        conn.set_committer_watermark(
-            ControllableHandler::NAME,
-            CommitterWatermark {
-                checkpoint_hi_inclusive: 11,
-                ..Default::default()
-            },
-        )
-        .await
-        .unwrap();
+        set_committer_watermark(&mut conn, ControllableHandler::NAME, 11).await;
 
         // Generate 500 checkpoints upfront, for the indexer to process all at once.
-        let temp_dir = tempfile::tempdir().unwrap();
-        synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
-            ingestion_dir: temp_dir.path().to_owned(),
-            starting_checkpoint: 0,
-            num_checkpoints: 501,
-            checkpoint_size: 2,
-        })
-        .await;
         let indexer_args = IndexerArgs {
             first_checkpoint: Some(0),
             last_checkpoint: Some(500),
             task: TaskArgs::tasked("task".to_string(), 10 /* reader_interval_ms */),
             ..Default::default()
         };
-        let client_args = ClientArgs {
-            ingestion: IngestionClientArgs {
-                local_ingestion_path: Some(temp_dir.path().to_owned()),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let ingestion_config = IngestionConfig::default();
-        let mut tasked_indexer = Indexer::new(
-            store.clone(),
-            indexer_args,
-            client_args,
-            ingestion_config,
-            None,
-            &registry,
-        )
-        .await
-        .unwrap();
+        let (mut tasked_indexer, _temp_dir) =
+            create_test_indexer(store.clone(), indexer_args, &registry, Some((501, 2))).await;
         let mut allow_process = 10;
         // Limit the pipeline to process only checkpoints `[0, 10]`.
         let (controllable_handler, process_below) = ControllableHandler::with_limit(allow_process);
@@ -2162,9 +1527,10 @@ mod tests {
         // committed.
         store
             .wait_for_watermark(
-                &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
+                &pipeline_task::<FallibleMockStore>(ControllableHandler::NAME, Some("task"))
+                    .unwrap(),
                 10,
-                std::time::Duration::from_secs(10),
+                Duration::from_secs(10),
             )
             .await;
 
@@ -2183,7 +1549,7 @@ mod tests {
         // Send checkpoints one at a time at 10ms intervals. The tasked indexer has a reader refresh
         // interval of 10ms as well, so the collector should pick up the new reader_lo after a few
         // checkpoints have been processed.
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(10));
+        let mut interval = tokio::time::interval(Duration::from_millis(10));
         while reader_lo.get() != 250 {
             interval.tick().await;
             // allow_process is initialized to 11, bump to 11 for the next checkpoint

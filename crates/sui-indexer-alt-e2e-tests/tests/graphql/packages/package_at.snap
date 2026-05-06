@@ -10,13 +10,13 @@ task 1, lines 6-9:
 //# publish --upgradeable --sender A
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 11-14:
 //# upgrade --package P1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 3, line 16:
 //# create-checkpoint
@@ -26,7 +26,7 @@ task 4, lines 18-21:
 //# upgrade --package P2 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5092000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5099600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 5, line 23:
 //# create-checkpoint
@@ -37,15 +37,15 @@ task 6, lines 25-41:
 Response: {
   "data": {
     "p1": {
-      "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
+      "address": "0xeb5db227847b9d91a026b27a44398de49ad829edc86292a9952680f5ee59e949",
       "version": 1
     },
     "p2": {
-      "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
+      "address": "0xf6446ccfba8d673c9e22e91159644fc0d1a3d95fcf64bd49633f775f695aa706",
       "version": 2
     },
     "p3": {
-      "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
+      "address": "0xa259da138eccdc52e3339898cdf055f050f3c978d544d3878ad06935a5471850",
       "version": 3
     }
   }
@@ -56,14 +56,14 @@ task 7, lines 43-59:
 Response: {
   "data": {
     "package": {
-      "address": "0x9cd2fb6b96b89a0592dc030154b68ea00963f5b11aaaa5abde8bd078b1c3381b",
+      "address": "0xa259da138eccdc52e3339898cdf055f050f3c978d544d3878ad06935a5471850",
       "version": 3,
       "initial": {
-        "address": "0x88b35a89f3f9154bea12a982c3997a16be6e788d102b7b3aac778285111a2586",
+        "address": "0xeb5db227847b9d91a026b27a44398de49ad829edc86292a9952680f5ee59e949",
         "version": 1
       },
       "byCheckpoint": {
-        "address": "0x22a0d7ab729ca0c987a2cc9028028481e6d3074978783673c043dbc2b34b7ce5",
+        "address": "0xf6446ccfba8d673c9e22e91159644fc0d1a3d95fcf64bd49633f775f695aa706",
         "version": 2
       }
     }

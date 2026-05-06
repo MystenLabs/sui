@@ -12,7 +12,7 @@ use crate::{
     },
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
-        constants::TYPE_DEPTH_MAX,
+        TypeSize,
         safe_ops::SafeArithmetic as _,
         types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
@@ -981,28 +981,39 @@ impl VariantInstantiation {
 
 impl ArenaType {
     /// Convert to a runtime type by performing a deep copy
-    pub fn to_type(&self) -> Type {
-        match self {
-            ArenaType::TyParam(idx) => Type::TyParam(*idx),
-            ArenaType::Bool => Type::Bool,
-            ArenaType::U8 => Type::U8,
-            ArenaType::U16 => Type::U16,
-            ArenaType::U32 => Type::U32,
-            ArenaType::U64 => Type::U64,
-            ArenaType::U128 => Type::U128,
-            ArenaType::U256 => Type::U256,
-            ArenaType::Address => Type::Address,
-            ArenaType::Signer => Type::Signer,
-            ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type())),
-            ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type())),
-            ArenaType::MutableReference(ty) => Type::MutableReference(Box::new(ty.to_type())),
-            ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
-            ArenaType::DatatypeInstantiation(def_inst) => {
-                let (def_idx, instantiation) = &**def_inst;
-                let inst = instantiation.iter().map(|ty| ty.to_type()).collect();
-                Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
-            }
-        }
+    pub fn to_type(&self) -> PartialVMResult<Type> {
+        self.to_type_impl(&mut TypeSize::for_type_traversal())
+    }
+
+    fn to_type_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<Type> {
+        type_size.enter_type(|type_size| {
+            Ok(match self {
+                ArenaType::TyParam(idx) => Type::TyParam(*idx),
+                ArenaType::Bool => Type::Bool,
+                ArenaType::U8 => Type::U8,
+                ArenaType::U16 => Type::U16,
+                ArenaType::U32 => Type::U32,
+                ArenaType::U64 => Type::U64,
+                ArenaType::U128 => Type::U128,
+                ArenaType::U256 => Type::U256,
+                ArenaType::Address => Type::Address,
+                ArenaType::Signer => Type::Signer,
+                ArenaType::Vector(ty) => Type::Vector(Box::new(ty.to_type_impl(type_size)?)),
+                ArenaType::Reference(ty) => Type::Reference(Box::new(ty.to_type_impl(type_size)?)),
+                ArenaType::MutableReference(ty) => {
+                    Type::MutableReference(Box::new(ty.to_type_impl(type_size)?))
+                }
+                ArenaType::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+                ArenaType::DatatypeInstantiation(def_inst) => {
+                    let (def_idx, instantiation) = &**def_inst;
+                    let inst = instantiation
+                        .iter()
+                        .map(|ty| ty.to_type_impl(type_size))
+                        .collect::<PartialVMResult<Vec<_>>>()?;
+                    Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+                }
+            })
+        })
     }
 }
 
@@ -1078,58 +1089,77 @@ impl Type {
     ///
     /// This kept only for legacy reasons.
     /// New applications should not use this.
-    ///
+    pub fn size(&self) -> PartialVMResult<AbstractMemorySize> {
+        self.size_impl(&mut TypeSize::for_type_traversal())
+    }
+
     /// SAFETY: Addition over `AbstractMemorySize` is saturating and so this is safe against
     /// overflow. See the implementation of [`Add`] for [`AbstractMemorySize`] in the
     /// [`move_core_types::gas_algebra`] module for more details on this and why this is safe.
     #[allow(clippy::arithmetic_side_effects)]
-    pub fn size(&self) -> AbstractMemorySize {
+    fn size_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<AbstractMemorySize> {
         use Type::*;
 
-        match self {
-            TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => {
-                Self::LEGACY_BASE_MEMORY_SIZE
-            }
-            Vector(ty) | Reference(ty) | MutableReference(ty) => {
-                Self::LEGACY_BASE_MEMORY_SIZE + ty.size()
-            }
-            Datatype(_) => Self::LEGACY_BASE_MEMORY_SIZE,
-            DatatypeInstantiation(inst) => {
-                let (_, tys) = &**inst;
-                tys.iter()
-                    .fold(Self::LEGACY_BASE_MEMORY_SIZE, |acc, ty| acc + ty.size())
-            }
-        }
+        type_size.enter_type(|type_size| {
+            Ok(match self {
+                TyParam(_) | Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer => {
+                    Self::LEGACY_BASE_MEMORY_SIZE
+                }
+                Vector(ty) | Reference(ty) | MutableReference(ty) => {
+                    Self::LEGACY_BASE_MEMORY_SIZE + ty.size_impl(type_size)?
+                }
+                Datatype(_) => Self::LEGACY_BASE_MEMORY_SIZE,
+                DatatypeInstantiation(inst) => {
+                    let (_, tys) = &**inst;
+                    let mut acc = Self::LEGACY_BASE_MEMORY_SIZE;
+                    for ty in tys {
+                        acc += ty.size_impl(type_size)?;
+                    }
+                    acc
+                }
+            })
+        })
     }
 
     pub fn from_const_signature(constant_signature: &SignatureToken) -> PartialVMResult<Self> {
+        Self::from_const_signature_impl(constant_signature, &mut TypeSize::for_type_traversal())
+    }
+
+    fn from_const_signature_impl(
+        constant_signature: &SignatureToken,
+        type_size: &mut TypeSize,
+    ) -> PartialVMResult<Self> {
         use SignatureToken as S;
         use Type as L;
 
-        Ok(match constant_signature {
-            S::Bool => L::Bool,
-            S::U8 => L::U8,
-            S::U16 => L::U16,
-            S::U32 => L::U32,
-            S::U64 => L::U64,
-            S::U128 => L::U128,
-            S::U256 => L::U256,
-            S::Address => L::Address,
-            S::Vector(inner) => L::Vector(Box::new(Self::from_const_signature(inner)?)),
-            // Not yet supported
-            S::Datatype(_) | S::DatatypeInstantiation(_) => {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Unable to load const type signature"
-                ));
-            }
-            // Not allowed/Not meaningful
-            S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
-                return Err(partial_vm_error!(
-                    UNKNOWN_INVARIANT_VIOLATION_ERROR,
-                    "Unable to load const type signature"
-                ));
-            }
+        type_size.enter_type(|type_size| {
+            Ok(match constant_signature {
+                S::Bool => L::Bool,
+                S::U8 => L::U8,
+                S::U16 => L::U16,
+                S::U32 => L::U32,
+                S::U64 => L::U64,
+                S::U128 => L::U128,
+                S::U256 => L::U256,
+                S::Address => L::Address,
+                S::Vector(inner) => {
+                    L::Vector(Box::new(Self::from_const_signature_impl(inner, type_size)?))
+                }
+                // Not yet supported
+                S::Datatype(_) | S::DatatypeInstantiation(_) => {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Unable to load const type signature"
+                    ));
+                }
+                // Not allowed/Not meaningful
+                S::TypeParameter(_) | S::Reference(_) | S::MutableReference(_) | S::Signer => {
+                    return Err(partial_vm_error!(
+                        UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                        "Unable to load const type signature"
+                    ));
+                }
+            })
         })
     }
 
@@ -1210,10 +1240,10 @@ impl DatatypeDescriptor {
 // -------------------------------------------------------------------------------------------------
 
 pub trait TypeSubst {
-    fn clone_impl(&self, depth: usize) -> PartialVMResult<Type>;
-    fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
+    fn clone_impl(&self, type_size: &mut TypeSize) -> PartialVMResult<Type>;
+    fn apply_subst<F>(&self, subst: F, type_size: &mut TypeSize) -> PartialVMResult<Type>
     where
-        F: Fn(u16, usize) -> PartialVMResult<Type> + Copy;
+        F: Fn(u16, &mut TypeSize) -> PartialVMResult<Type> + Copy;
     fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type>;
 }
 
@@ -1221,54 +1251,60 @@ pub trait TypeSubst {
 macro_rules! impl_deep_subst {
     ($ty:ident) => {
         impl TypeSubst for $ty {
-            fn clone_impl(&self, depth: usize) -> PartialVMResult<Type> {
-                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), depth.safe_add(1)?)
+            fn clone_impl(
+                &self,
+                type_size: &mut $crate::shared::TypeSize,
+            ) -> PartialVMResult<Type> {
+                self.apply_subst(|idx, _| Ok(Type::TyParam(idx)), type_size)
             }
 
-            fn apply_subst<F>(&self, subst: F, depth: usize) -> PartialVMResult<Type>
+            fn apply_subst<F>(
+                &self,
+                subst: F,
+                type_size: &mut $crate::shared::TypeSize,
+            ) -> PartialVMResult<Type>
             where
-                F: Fn(u16, usize) -> PartialVMResult<Type> + Copy,
+                F: Fn(u16, &mut $crate::shared::TypeSize) -> PartialVMResult<Type> + Copy,
             {
-                if depth > TYPE_DEPTH_MAX {
-                    return Err(partial_vm_error!(VM_MAX_TYPE_DEPTH_REACHED));
-                }
-                let res = match self {
-                    $ty::TyParam(idx) => subst(*idx, depth)?,
-                    $ty::Bool => Type::Bool,
-                    $ty::U8 => Type::U8,
-                    $ty::U16 => Type::U16,
-                    $ty::U32 => Type::U32,
-                    $ty::U64 => Type::U64,
-                    $ty::U128 => Type::U128,
-                    $ty::U256 => Type::U256,
-                    $ty::Address => Type::Address,
-                    $ty::Signer => Type::Signer,
-                    $ty::Vector(ty) => {
-                        Type::Vector(Box::new(ty.apply_subst(subst, depth.safe_add(1)?)?))
-                    }
-                    $ty::Reference(ty) => {
-                        Type::Reference(Box::new(ty.apply_subst(subst, depth.safe_add(1)?)?))
-                    }
-                    $ty::MutableReference(ty) => {
-                        Type::MutableReference(Box::new(ty.apply_subst(subst, depth.safe_add(1)?)?))
-                    }
-                    $ty::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
-                    $ty::DatatypeInstantiation(def_inst) => {
-                        let (def_idx, instantiation) = &**def_inst;
-                        let inst = instantiation
-                            .iter()
-                            .map(|ty| ty.apply_subst(subst, depth.safe_add(1)?))
-                            .collect::<PartialVMResult<Vec<_>>>()?;
-                        Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
-                    }
-                };
-                Ok(res)
+                type_size.enter_type(|type_size| {
+                    let res = match self {
+                        $ty::TyParam(idx) => subst(*idx, type_size)?,
+                        $ty::Bool => Type::Bool,
+                        $ty::U8 => Type::U8,
+                        $ty::U16 => Type::U16,
+                        $ty::U32 => Type::U32,
+                        $ty::U64 => Type::U64,
+                        $ty::U128 => Type::U128,
+                        $ty::U256 => Type::U256,
+                        $ty::Address => Type::Address,
+                        $ty::Signer => Type::Signer,
+                        $ty::Vector(ty) => {
+                            Type::Vector(Box::new(ty.apply_subst(subst, type_size)?))
+                        }
+                        $ty::Reference(ty) => {
+                            Type::Reference(Box::new(ty.apply_subst(subst, type_size)?))
+                        }
+                        $ty::MutableReference(ty) => {
+                            Type::MutableReference(Box::new(ty.apply_subst(subst, type_size)?))
+                        }
+                        $ty::Datatype(def_idx) => Type::Datatype(def_idx.clone()),
+                        $ty::DatatypeInstantiation(def_inst) => {
+                            let (def_idx, instantiation) = &**def_inst;
+                            let inst = instantiation
+                                .iter()
+                                .map(|ty| ty.apply_subst(subst, type_size))
+                                .collect::<PartialVMResult<Vec<_>>>()?;
+                            Type::DatatypeInstantiation(Box::new((def_idx.clone(), inst)))
+                        }
+                    };
+                    Ok(res)
+                })
             }
 
             fn subst(&self, ty_args: &[Type]) -> PartialVMResult<Type> {
                 self.apply_subst(
-                    |idx, depth| match ty_args.get(idx as usize) {
-                        Some(ty) => ty.clone_impl(depth),
+                    |idx, type_size| match ty_args.get(idx as usize) {
+                        Some(ty) => ty.clone_impl(type_size),
                         None => Err(move_binary_format::partial_vm_error!(
                             UNKNOWN_INVARIANT_VIOLATION_ERROR,
                             "type substitution failed: index out of bounds -- len {} got {}",
@@ -1276,7 +1312,7 @@ macro_rules! impl_deep_subst {
                             idx
                         )),
                     },
-                    1,
+                    &mut $crate::shared::TypeSize::for_type_traversal(),
                 )
             }
         }

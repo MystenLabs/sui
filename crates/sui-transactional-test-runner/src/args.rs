@@ -99,6 +99,21 @@ pub struct SuiInitArgs {
     /// Enable using address balance as gas payments feature for testing
     #[clap(long = "enable-address-balance-gas-payments")]
     pub enable_address_balance_gas_payments: bool,
+    /// Enable coin reservations for gas payment
+    #[clap(long = "enable-coin-reservations")]
+    pub enable_coin_reservations: bool,
+    /// Override the file format version used when serializing compiled modules
+    #[clap(long = "file-format")]
+    pub file_format_version: Option<u32>,
+    /// Enable gasless feature for testing
+    #[clap(long = "enable-gasless")]
+    pub enable_gasless: bool,
+    /// Set maximum size in bytes for Pure inputs in gasless transactions
+    #[clap(long = "gasless-max-pure-input-bytes")]
+    pub gasless_max_pure_input_bytes: Option<u64>,
+    /// Set maximum number of unused Pure inputs in gasless transactions
+    #[clap(long = "gasless-max-unused-inputs")]
+    pub gasless_max_unused_inputs: Option<u64>,
 }
 
 #[derive(Debug, clap::Parser)]
@@ -296,6 +311,14 @@ pub struct AuthenticatorStateUpdateCommand {
     pub authenticator_obj_initial_shared_version: Option<u64>,
 }
 
+#[derive(Debug, clap::Parser)]
+pub struct GaslessAllowTokenCommand {
+    #[clap(value_parser = ParsedType::parse)]
+    pub token_type: ParsedType,
+    #[clap(long = "min-transfer", default_value = "0")]
+    pub min_transfer: u64,
+}
+
 #[derive(Debug)]
 pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     ViewObject(ViewObjectCommand),
@@ -311,10 +334,12 @@ pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     AdvanceClock(AdvanceClockCommand),
     SetRandomState(SetRandomStateCommand),
     AuthenticatorStateUpdate(AuthenticatorStateUpdateCommand),
+    GaslessAllowToken(GaslessAllowTokenCommand),
     ViewCheckpoint,
     RunGraphql(RunGraphqlCommand),
     RunJsonRpc(RunJsonRpcCommand),
     Bench(RunCommand<ExtraValueArgs>, ExtraRunArgs),
+    BenchProgrammable(ProgrammableTransactionCommand),
 }
 
 impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
@@ -363,6 +388,9 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
                     AuthenticatorStateUpdateCommand::from_arg_matches(matches)?,
                 )
             }
+            Some(("gasless-allow-token", matches)) => SuiSubcommand::GaslessAllowToken(
+                GaslessAllowTokenCommand::from_arg_matches(matches)?,
+            ),
             Some(("view-checkpoint", _)) => SuiSubcommand::ViewCheckpoint,
             Some(("run-graphql", matches)) => {
                 SuiSubcommand::RunGraphql(RunGraphqlCommand::from_arg_matches(matches)?)
@@ -370,10 +398,15 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
             Some(("run-jsonrpc", matches)) => {
                 SuiSubcommand::RunJsonRpc(RunJsonRpcCommand::from_arg_matches(matches)?)
             }
-            Some(("bench", matches)) => SuiSubcommand::Bench(
-                RunCommand::from_arg_matches(matches)?,
-                ExtraRunArgs::from_arg_matches(matches)?,
-            ),
+            Some(("bench", matches)) => match matches.subcommand() {
+                Some(("ptb", sub_matches)) => SuiSubcommand::BenchProgrammable(
+                    ProgrammableTransactionCommand::from_arg_matches(sub_matches)?,
+                ),
+                _ => SuiSubcommand::Bench(
+                    RunCommand::from_arg_matches(matches)?,
+                    ExtraRunArgs::from_arg_matches(matches)?,
+                ),
+            },
             _ => {
                 return Err(clap::Error::raw(
                     clap::error::ErrorKind::InvalidSubcommand,
@@ -409,11 +442,15 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
             .subcommand(
                 AuthenticatorStateUpdateCommand::command().name("authenticator-state-update"),
             )
+            .subcommand(GaslessAllowTokenCommand::command().name("gasless-allow-token"))
             .subcommand(clap::Command::new("view-checkpoint"))
             .subcommand(RunGraphqlCommand::command().name("run-graphql"))
             .subcommand(RunJsonRpcCommand::command().name("run-jsonrpc"))
             .subcommand(
-                RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command()).name("bench"),
+                RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command())
+                    .name("bench")
+                    .args_conflicts_with_subcommands(true)
+                    .subcommand(ProgrammableTransactionCommand::command().name("ptb")),
             )
     }
 

@@ -3,6 +3,8 @@
 
 use std::rc::Rc;
 
+use mysten_common::ZipDebugEqIteratorExt;
+
 use crate::{
     execution_mode::ExecutionMode,
     sp,
@@ -65,6 +67,7 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
         pure,
         receiving,
         withdrawal_compatibility_conversions,
+        original_command_len: _,
         commands,
     } = txn;
     for obj in objects {
@@ -79,7 +82,13 @@ fn verify_<Mode: ExecutionMode>(env: &Env, txn: &T::Transaction) -> anyhow::Resu
     for r in receiving {
         receiving_input(r)?;
     }
+    let mut prev_index = 0;
     for c in commands {
+        debug_assert!(
+            prev_index <= c.idx,
+            "command indices should be monotonically increasing"
+        );
+        prev_index = prev_index.max(c.idx);
         command::<Mode>(env, &context, c)?;
     }
     for (withdrawal, conversion) in withdrawal_compatibility_conversions {
@@ -152,7 +161,7 @@ fn command<Mode: ExecutionMode>(
                 parameters.len(),
                 arguments.len()
             );
-            for (arg, param) in arguments.iter().zip(parameters) {
+            for (arg, param) in arguments.iter().zip_debug_eq(parameters) {
                 argument(env, context, arg, param)?;
             }
             anyhow::ensure!(
@@ -161,7 +170,7 @@ fn command<Mode: ExecutionMode>(
                 return_.len(),
                 result_tys.len()
             );
-            for (actual, expected) in return_.iter().zip(result_tys) {
+            for (actual, expected) in return_.iter().zip_debug_eq(result_tys) {
                 anyhow::ensure!(
                     actual == expected,
                     "return type mismatch. Expected {expected:?}, got {actual:?}"
@@ -288,7 +297,7 @@ fn command<Mode: ExecutionMode>(
         c.drop_values.len(),
         result_tys.len()
     );
-    for (drop_value, result_ty) in c.drop_values.iter().copied().zip(result_tys) {
+    for (drop_value, result_ty) in c.drop_values.iter().copied().zip_debug_eq(result_tys) {
         // drop value ==> `ty: drop`
         assert_invariant!(
             !drop_value || result_ty.abilities().has_drop(),

@@ -51,12 +51,16 @@ SUI_SKIP_SIMTESTS=1 cargo nextest run
 # Formats & lints all Rust & Move, run before commit:
 ./scripts/lint.sh
 
-# Alternatively, run individual lints:
-cargo fmt --all -- --check
+# Alternatively, run individual lints on specific crates (much faster than linting the whole repo):
+# For crates in `crates/`: cd into the crate directory and run:
 cargo xclippy
+# For crates in `external-crates/`: cd into the crate directory and run:
+cargo move-clippy
+# For formatting:
+cargo fmt --all -- --check
 ```
 
-`cargo xclippy does not recognize -p option` - This is a known issue with some clippy command variations
+`cargo xclippy` does not recognize the `-p` option - cd into the crate directory instead.
 
 ## High-Level Architecture
 
@@ -100,6 +104,10 @@ sui/
    - Transaction validation → Certificate creation → Execution → Effects commitment
    - Move VM executes smart contracts with gas metering
    - Parallel execution for non-conflicting transactions
+
+### Test-Only Code
+
+Use `#[cfg(test)]` for test-only code used within the same crate. Use `#[cfg(feature = "testing")]` for test-only code that must be callable cross-crate. For the `testing` feature: define `testing = []` in the crate's `Cargo.toml`, and callers must propagate it via `features = ["testing"]` in their dependency declaration.
 
 ### Critical Development Notes
 1. **Testing Requirements**:

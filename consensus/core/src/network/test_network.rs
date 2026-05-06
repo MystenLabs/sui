@@ -13,7 +13,7 @@ use crate::{
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{
-        BlockRequestStream, BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService,
+        BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService, PeerId,
         ValidatorNetworkService,
     },
 };
@@ -25,6 +25,7 @@ pub(crate) struct TestService {
     pub(crate) handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
     pub(crate) handle_subscribe_blocks: Vec<(AuthorityIndex, Round)>,
     pub(crate) handle_fetch_commits: Vec<(AuthorityIndex, CommitRange)>,
+    pub(crate) handle_stream_blocks: Vec<NodeId>,
     pub(crate) own_blocks: Vec<ExtendedSerializedBlock>,
 }
 
@@ -35,6 +36,7 @@ impl TestService {
             handle_fetch_blocks: Vec::new(),
             handle_subscribe_blocks: Vec::new(),
             handle_fetch_commits: Vec::new(),
+            handle_stream_blocks: Vec::new(),
             own_blocks: Vec::new(),
         }
     }
@@ -78,8 +80,8 @@ impl ValidatorNetworkService for Mutex<TestService> {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
-        _highest_accepted_rounds: Vec<Round>,
-        _breadth_first: bool,
+        _fetch_after_rounds: Vec<Round>,
+        _fetch_missing_ancestors: bool,
     ) -> ConsensusResult<Vec<Bytes>> {
         self.lock().handle_fetch_blocks.push((peer, block_refs));
         Ok(vec![])
@@ -112,20 +114,55 @@ impl ValidatorNetworkService for Mutex<TestService> {
 
 #[async_trait]
 impl ObserverNetworkService for Mutex<TestService> {
+    async fn handle_block(&self, _peer: PeerId, _block: Bytes) -> ConsensusResult<()> {
+        unimplemented!("ObserverNetworkService handle_block not implemented for TestService")
+    }
+
     async fn handle_stream_blocks(
         &self,
-        _peer: NodeId,
-        _request_stream: BlockRequestStream,
+        peer: NodeId,
+        highest_round_per_authority: Vec<u64>,
     ) -> ConsensusResult<ObserverBlockStream> {
-        unimplemented!("ObserverNetworkService not implemented for TestService")
+        use futures::stream;
+
+        {
+            let mut state = self.lock();
+            state.handle_stream_blocks.push(peer);
+        }
+
+        let blocks_to_send = {
+            let state = self.lock();
+            let min_round = highest_round_per_authority
+                .iter()
+                .min()
+                .copied()
+                .unwrap_or(0);
+
+            state
+                .own_blocks
+                .iter()
+                .skip(min_round as usize + 1)
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+
+        let block_stream = stream::iter(
+            blocks_to_send
+                .into_iter()
+                .map(|extended_block| vec![extended_block.block]),
+        );
+
+        Ok(Box::pin(block_stream))
     }
 
     async fn handle_fetch_blocks(
         &self,
         _peer: NodeId,
         _block_refs: Vec<BlockRef>,
+        _fetch_after_rounds: Vec<Round>,
+        _fetch_missing_ancestors: bool,
     ) -> ConsensusResult<Vec<Bytes>> {
-        unimplemented!("ObserverNetworkService not implemented for TestService")
+        unimplemented!("ObserverNetworkService fetch_blocks not implemented for TestService")
     }
 
     async fn handle_fetch_commits(
@@ -133,6 +170,6 @@ impl ObserverNetworkService for Mutex<TestService> {
         _peer: NodeId,
         _commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
-        unimplemented!("ObserverNetworkService not implemented for TestService")
+        unimplemented!("ObserverNetworkService fetch_commits not implemented for TestService")
     }
 }

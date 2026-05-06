@@ -1268,10 +1268,26 @@ impl<'env> Docgen<'env> {
         }
     }
 
+    /// Returns the minimum leading whitespace count across all non-empty lines.
+    fn min_indent(text: &str) -> usize {
+        text.lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| line.len() - line.trim_start().len())
+            .min()
+            .unwrap_or(0)
+    }
+
     /// Outputs documentation text.
     fn doc_text_general(&mut self, env: &Model, for_root: bool, text: &str) {
-        for line in self.decorate_text(env, text).lines() {
-            let line = line.trim();
+        let decorated = self.decorate_text(env, text);
+        let min_indent = Self::min_indent(&decorated);
+        for line in decorated.lines() {
+            let line = if line.trim().is_empty() {
+                ""
+            } else {
+                &line[min_indent..]
+            };
+            let line = line.trim_end();
             if line.starts_with('#') {
                 let mut i = 1;
                 while line[i..].starts_with('#') {

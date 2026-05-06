@@ -28,7 +28,7 @@ Alternative install methods include:
 The following extensions are included in the Move extension install:
 
 - [Move Syntax](https://marketplace.visualstudio.com/items?itemName=damirka.move-syntax)
-- [Move Trace Debugger](/references/ide/debugger.mdx)
+- [Move Trace Debugger](/references/ide/debugger)
 
 ### Install move-analyzer
 
@@ -52,7 +52,7 @@ The Move extension installs command palette commands for building, testing, and 
 
 These commands find the `Move.toml` file for the open Move source file and open a terminal to run the appropriate `sui move` command.
 
-To execute these commands you must have `sui` binary installed, in particular, to generate a trace, the `sui` binary version must be trace-generation capable. See [Debugger](./debugger.mdx#install) for installation instructions. The extension will search for the `sui` binary on a system path but you can configure the extension to use a different path.
+To execute these commands you must have `sui` binary installed, in particular, to generate a trace, the `sui` binary version must be trace-generation capable. See [Debugger](/references/ide/debugger#install) for installation instructions. The extension will search for the `sui` binary on a system path but you can configure the extension to use a different path.
 
 ### Syntax highlighting
 
@@ -84,7 +84,7 @@ The Move extension also autocompletes after a `::` operator.
 
 ![Type completion](./images/colon_completion.png)
 
-Finally, the Move extension provides _inlay hints_, where the plugin automatically inserts the correct type after a variable declaration, unpack, function parameters, and other places.
+Finally, the Move extension provides inlay hints, where the plugin automatically inserts the correct type after a variable declaration, unpack, function parameters, and other places.
 
 ![Inlay hints](./images/inlay_hint.png)
 

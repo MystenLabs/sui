@@ -5,6 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::executor::{ExecutionResult, Executor};
+use mysten_common::ZipDebugEqIteratorExt;
 use once_cell::sync::Lazy;
 use proptest::{prelude::*, strategy::Union};
 use std::{fmt, sync::Arc};
@@ -110,7 +111,7 @@ pub fn run_and_assert_universe(
     let outputs = executor.execute_transactions(transactions);
     prop_assert_eq!(outputs.len(), expected_values.len());
 
-    for (idx, (output, expected)) in outputs.iter().zip(&expected_values).enumerate() {
+    for (idx, (output, expected)) in outputs.iter().zip_debug_eq(&expected_values).enumerate() {
         prop_assert!(
             output == expected,
             "unexpected status for transaction {} expected {:#?} but got {:#?}",
@@ -130,9 +131,10 @@ pub fn assert_accounts_match(
     let backing_package_store = state.get_backing_package_store();
     let object_store = state.get_object_store();
     let epoch_store = state.load_epoch_store_one_call_per_task();
-    let mut layout_resolver = epoch_store
-        .executor()
-        .type_layout_resolver(Box::new(backing_package_store.as_ref()));
+    let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+        epoch_store.protocol_config(),
+        Box::new(backing_package_store.as_ref()),
+    );
     for (idx, account) in universe.accounts().iter().enumerate() {
         for (balance_idx, acc_object) in account.current_coins.iter().enumerate() {
             let object = object_store.get_object(&acc_object.id()).unwrap();

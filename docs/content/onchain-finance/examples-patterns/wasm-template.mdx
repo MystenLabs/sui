@@ -1,0 +1,142 @@
+---
+title: WebAssembly and Template Pattern
+description: This feature was developed to enable Move bytecode serialization and deserialization on the web. In essence, this feature allows you to edit existing contracts in a web environment.
+keywords: [asset tokenization, WASM, bytecode template]
+---
+
+This feature was developed to enable Move bytecode serialization and deserialization on the web. In essence, this feature allows you to edit existing contracts in a web environment.
+
+In the case of asset tokenization, these edits allow you to create and publish new types that represent physical or digital assets that you want to tokenize.
+
+## Bytecode manipulation {#bytecode-manipulation}
+
+:::caution
+
+When you make modifications to the template package, you must repeat this process. Some alterations, like changing a constant name, do not affect the produced bytecode.
+
+:::
+
+Before proceeding to how to make these edits, understand how the library exposes the template module bytecode. The process is currently manual. You must build and retrieve the compiled bytecode. To do this, navigate inside the template folder and run the following command:
+
+```sh
+$ xxd -c 0 -p build/template/bytecode_modules/template.mv | head -n 1
+```
+
+<details>
+  <summary>
+  Console response
+  </summary>
+
+The response you receive looks similar to the following:
+
+```sh
+a11ceb0b060000000a010010021026033637046d0a05776807df01ec0108cb03800106cb043
+e0a8905050c8e0549001303140107010d01120215021602170004020001000c01000101010c
+010001020307000302070100000403070006050200070607000009000100010a0a0b0102021
+2050700030c010401000311060401000418050800050e0601010c050f1001010c06100d0e00
+070b050300030304030109060c070f02080007080600040b040108070b010108000b0201080
+00b04010807010807010b04010900010a020109000108030108050108000809000308030805
+08050b0401080701070806020b010109000b02010900010b02010800010608060105010b010
+10800020900050841737365744361700d41737365744d65746164617461064f7074696f6e06
+537472696e670854454d504c415445095478436f6e746578740355726c0561736369690b647
+56d6d795f6669656c6404696e6974096e65775f6173736574156e65775f756e736166655f66
+726f6d5f6279746573046e6f6e65066f7074696f6e137075626c69635f73686172655f6f626
+a6563740f7075626c69635f7472616e736665720673656e64657204736f6d6506737472696e
+670874656d706c6174650f746f6b656e697a65645f6173736574087472616e736665720a747
+85f636f6e746578740375726c04757466380000000000000000000000000000000000000000
+000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000000100000000000000000000000000000000000000000000000000000000000000
+02d9ebdef1e3cb5eb135362572b18faeb61259afe651a463f1384745ebd7fd51da030864000
+000000000000a02070653796d626f6c0a0205044e616d650a020c0b4465736372697074696f
+6e0a02090869636f6e5f75726c0101010a02010000020108010000000002230704070621040
+738000c02050b0704110938010c020b020c050b0007000701110207021105070311050b0507
+050a0138020c040c030b0438030b030b012e110838040200
+```
+
+</details>
+
+Copy the output you receive and paste it in the return instruction of the `getBytecode` method, which is located inside the [bytecode-template.ts](https://github.com/MystenLabs/asset-tokenization/blob/main/setup/src/utils/bytecode-template.ts) file.
+
+Because the template package contains two modules and therefore has another dependency, you also need to retrieve the bytecode of the genesis module in a similar fashion. This module bytecode is not edited and is used as-is. This operation is not directly relevant to the WASM library but is necessary to successfully deploy the edited template module. To acquire the bytecode for genesis, navigate to the `template` folder and run:
+
+```sh
+$ xxd -c 0 -p build/template/bytecode_modules/genesis.mv | head -n 1
+```
+
+The output format is similar to the template module but smaller in length. Copy this output and paste it in the bytecode constant variable located in the [genesis_bytecode.ts](https://github.com/MystenLabs/asset-tokenization/blob/main/setup/src/utils/genesis_bytecode.ts) file.
+
+With the above setup, the library can now manipulate the bytecode by deserializing it, editing it, and serializing it again so that you can publish it.
+
+### Closer view of the template module
+
+Taking a look at the template module, you should see that a few constants have been defined:
+
+```rust
+...
+const TOTAL_SUPPLY: u64 = 100;
+const SYMBOL: vector<u8> = b"Symbol";
+const NAME: vector<u8> = b"Name";
+const DESCRIPTION: vector<u8> = b"Description";
+const ICON_URL: vector<u8> = b"icon_url";
+const BURNABLE: bool = true;
+...
+```
+
+These constants act as a reference point that the WASM library can modify. If you look at the TypeScript code that performs the edit and deploys, you can see in action how these fields are identified and updated:
+
+```tsx
+...
+const template = getBytecode();
+
+const compiledModule = new CompiledModule(
+  JSON.parse(wasm.deserialize(template))
+)
+  .updateConstant(0, totalSupply, "100", "u64")
+  .updateConstant(1, symbol, "Symbol", "string")
+  .updateConstant(2, asset_name, "Name", "string")
+  .updateConstant(3, description, "Description", "string")
+  .updateConstant(4, iconUrl, "icon_url", "string")
+  .updateConstant(5, burnable, "true", "bool")
+  .changeIdentifiers({
+    template: moduleName,
+    TEMPLATE: moduleName.toUpperCase(),
+  });
+
+const bytesToPublish = wasm.serialize(JSON.stringify(compiledModule));
+...
+```
+
+The `updateConstant` method updates constants and takes four arguments:
+
+- `idx` (index): The position the declared constant has in the constant pool. The order is sequential, starting from 0 for the first constant defined in the Move file and incrementing by one for each consecutive constant.
+- `value`: The updated value of the constant you want to change.
+- `expectedValue`: The current value of the constant.
+- `expectedType`: The current type of the constant.
+
+The last two arguments are required to minimize the risk of accidentally updating the wrong constant because this library directly manipulates compiled bytecode.
+
+The `changeIdentifiers` method updates identifiers, which in this case are the module name and the struct name. This method takes a JSON object as an argument with keys of the current identifier names in the module and values being the desired names you want to change them to.
+
+To deploy the changed template module, build and publish:
+
+```tsx
+...
+const tx = new Transaction();
+  tx.setGasBudget(100000000);
+  const [upgradeCap] = tx.publish({
+    modules: [[...fromHex(bytesToPublish)], [...fromHex(genesis_bytecode)]],
+    dependencies: [
+      normalizeSuiObjectId("0x1"),
+      normalizeSuiObjectId("0x2"),
+      normalizeSuiObjectId(packageId),
+    ],
+  });
+
+  tx.transferObjects(
+    [upgradeCap],
+    tx.pure(signer.getPublicKey().toSuiAddress(), "address")
+  );
+...
+```
+
+As mentioned in the [Bytecode manipulation](#bytecode-manipulation) section, the modules that you need to publish are the template and the genesis, which is why the `modules` array has 2 elements. It is also important to include any dependencies defined in the `Move.toml` file of the involved packages. The `packageId` used is the address the `asset_tokenization` package has been deployed to.

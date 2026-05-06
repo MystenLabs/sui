@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.69.0"
+    "version": "1.72.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "118",
+              "maxSupportedProtocolVersion": "124",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1347,8 +1347,10 @@
                 "disable_preconsensus_locking": false,
                 "disallow_adding_abilities_on_upgrade": false,
                 "disallow_change_struct_type_params_on_upgrade": false,
+                "disallow_jump_orphans": false,
                 "disallow_new_modules_in_deps_only_packages": false,
                 "disallow_self_identifier": false,
+                "early_return_receive_object_mismatched_type": false,
                 "enable_accumulators": false,
                 "enable_address_balance_gas_payments": false,
                 "enable_authenticated_event_streams": false,
@@ -1358,6 +1360,7 @@
                 "enable_coin_reservation_obj_refs": false,
                 "enable_display_registry": false,
                 "enable_effects_v2": false,
+                "enable_gasless": false,
                 "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
@@ -1373,6 +1376,7 @@
                 "enable_ptb_execution_v2": false,
                 "enable_ristretto255_group_ops": false,
                 "enable_vdf": false,
+                "enable_verify_bulletproofs_ristretto255": false,
                 "end_of_epoch_transaction_supported": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fix_checkpoint_signature_mapping": false,
@@ -1380,12 +1384,14 @@
                 "fresh_vm_on_framework_upgrade": false,
                 "gas_rounding_halve_digits": false,
                 "gasless_transaction_drop_safety": false,
+                "gasless_verify_remaining_balance": false,
                 "generate_df_type_layouts": false,
                 "hardened_otw_check": false,
                 "ignore_execution_time_observations_after_certs_closed": false,
                 "include_cancelled_randomness_txns_in_prologue": false,
                 "include_checkpoint_artifacts_digest_in_summary": false,
                 "include_consensus_digest_in_prologue": false,
+                "limit_groth16_pvk_inputs": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
@@ -1434,10 +1440,12 @@
                 "soft_bundle": false,
                 "split_checkpoints_in_consensus_handler": false,
                 "throughput_aware_consensus_submission": false,
+                "timestamp_based_epoch_close": false,
                 "txn_base_cost_as_multiplier": false,
                 "type_tags_in_object_runtime": false,
                 "uncompressed_g1_group_elements": false,
                 "upgraded_multisig_supported": false,
+                "use_coin_party_owner": false,
                 "use_mfp_txns_in_load_initial_object_debts": false,
                 "use_new_commit_handler": false,
                 "validate_identifier_inputs": false,
@@ -1692,6 +1700,11 @@
                   "u64": "5"
                 },
                 "gas_rounding_step": null,
+                "gasless_max_computation_units": null,
+                "gasless_max_pure_input_bytes": null,
+                "gasless_max_tps": null,
+                "gasless_max_tx_size_bytes": null,
+                "gasless_max_unused_inputs": null,
                 "groth16_prepare_verifying_key_bls12381_cost_base": {
                   "u64": "52"
                 },
@@ -2029,6 +2042,8 @@
                 },
                 "transfer_party_transfer_internal_cost_base": null,
                 "transfer_receive_object_cost_base": null,
+                "transfer_receive_object_cost_per_byte": null,
+                "transfer_receive_object_type_cost_per_byte": null,
                 "transfer_share_object_cost_base": {
                   "u64": "52"
                 },
@@ -2082,7 +2097,9 @@
                 "vector_pop_back_base_cost": null,
                 "vector_push_back_base_cost": null,
                 "vector_push_back_legacy_per_abstract_memory_unit_cost": null,
-                "vector_swap_base_cost": null
+                "vector_swap_base_cost": null,
+                "verify_bulletproofs_ristretto255_base_cost": null,
+                "verify_bulletproofs_ristretto255_cost_per_bit_and_commitment": null
               }
             }
           }

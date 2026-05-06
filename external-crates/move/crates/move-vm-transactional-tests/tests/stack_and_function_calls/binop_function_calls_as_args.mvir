@@ -1,6 +1,6 @@
 //# publish
-module 0x5.A {
-    public div_by_two(v: u64): bool {
+mvir 0x5::A {
+    public fun div_by_two(v: u64): bool {
     label b0:
         jump_if (move(v) % 2 == 0) b2;
     label b1:
@@ -9,7 +9,7 @@ module 0x5.A {
         return true;
     }
 
-    public div_by_three(k: u64): bool {
+    public fun div_by_three(k: u64): bool {
     label b0:
         jump_if (move(k) % 3 == 0) b2;
     label b1:
@@ -18,7 +18,7 @@ module 0x5.A {
         return true;
     }
 
-    public div_by_six(b: bool): bool {
+    public fun div_by_six(b: bool): bool {
     label b0:
         return move(b);
     }
@@ -26,15 +26,15 @@ module 0x5.A {
 
 
 //# run
-module 0x42.m {
-import 0x5.A;
+mvir 0x42::m {
+import 0x5::A;
 
-entry foo() {
+entry fun foo() {
     let x: u64;
     let y: bool;
 label b0:
     x = 42;
-    y = A.div_by_six(A.div_by_two(copy(x)) && A.div_by_three(move(x)));
+    y = A::div_by_six(A::div_by_two(copy(x)) && A::div_by_three(move(x)));
     assert(move(y) == true, 42);
     return;
 }

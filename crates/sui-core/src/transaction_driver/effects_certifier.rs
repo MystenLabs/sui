@@ -60,10 +60,9 @@ const MAX_WAIT_FOR_EFFECTS_RETRY_DELAY: Duration = Duration::from_secs(2);
 const GET_FULL_EFFECTS_FALLBACK_DELAY: Duration = Duration::from_millis(200);
 
 /// Result type for get_full_effects requests.
-/// The tuple contains (effects_digest, executed_data, fast_path) where fast_path
-/// boolean indicateswhether the transaction was executed via the fast path.
+/// The tuple contains (effects_digest, executed_data).
 type FullEffectsResult =
-    Result<(TransactionEffectsDigest, Box<ExecutedData>, bool), TransactionRequestError>;
+    Result<(TransactionEffectsDigest, Box<ExecutedData>), TransactionRequestError>;
 
 pub(crate) struct EffectsCertifier {
     metrics: Arc<TransactionDriverMetrics>,
@@ -98,9 +97,8 @@ impl EffectsCertifier {
             SubmitTxResult::Executed {
                 effects_digest,
                 details,
-                fast_path,
             } => match details {
-                Some(details) => (None, Some((effects_digest, details, fast_path))),
+                Some(details) => (None, Some((effects_digest, details))),
                 // Details should always be set in correct responses.
                 // But if it is not set, continuing to get full effects and certify the digest are still correct.
                 None => (None, None),
@@ -116,7 +114,7 @@ impl EffectsCertifier {
         };
 
         let mut retrier = RequestRetrier::new(authority_aggregator, client_monitor, vec![], vec![]);
-        let ping_type = get_ping_type(&tx_digest, tx_type);
+        let ping_type = get_ping_type(&tx_digest);
 
         // Channel for wait_for_acknowledgments to notify which validators have acked.
         // These validators are known to have executed the transaction, making them good
@@ -176,7 +174,7 @@ impl EffectsCertifier {
         loop {
             let display_name = authority_aggregator.get_display_name(&current_target);
             match full_effects_result {
-                Ok((effects_digest, executed_data, _fast_path)) => {
+                Ok((effects_digest, executed_data)) => {
                     if effects_digest != certified_digest {
                         tracing::warn!(
                             ?current_target,
@@ -243,14 +241,14 @@ impl EffectsCertifier {
         &self,
         client: Arc<SafeClient<A>>,
         tx_digest: Option<TransactionDigest>,
-        tx_type: TxType,
+        _tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
     ) -> FullEffectsResult
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let ping_type = get_ping_type(&tx_digest, tx_type);
+        let ping_type = get_ping_type(&tx_digest);
         let request = WaitForEffectsRequest {
             transaction_digest: tx_digest,
             consensus_position,
@@ -268,12 +266,11 @@ impl EffectsCertifier {
                 WaitForEffectsResponse::Executed {
                     effects_digest,
                     details,
-                    fast_path,
                 } => {
                     if let Some(details) = details {
                         tracing::Span::current()
                             .record("ret_effects_digest", format!("{:?}", effects_digest));
-                        Ok((effects_digest, details, fast_path))
+                        Ok((effects_digest, details))
                     } else {
                         tracing::debug!("Execution data not found, retrying...");
                         Err(TransactionRequestError::ValidatorInternal(
@@ -392,13 +389,13 @@ impl EffectsCertifier {
         tx_type: TxType,
         consensus_position: Option<ConsensusPosition>,
         options: &SubmitTransactionOptions,
-        submitted_tx_to_validator: AuthorityName,
+        _submitted_tx_to_validator: AuthorityName,
         acked_validators_tx: Sender<AuthorityName>,
     ) -> Result<TransactionEffectsDigest, TransactionDriverError>
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
-        let ping_type = get_ping_type(&tx_digest, tx_type);
+        let ping_type = get_ping_type(&tx_digest);
         let ping_label = if tx_digest.is_none() { "true" } else { "false" };
         self.metrics
             .certified_effects_ack_attempts
@@ -473,8 +470,6 @@ impl EffectsCertifier {
         // but do not have a local reason to reject the transaction. The validator could have
         // accepted the transaction during voting, or the reason has been lost.
         let mut reason_not_found_aggregator = StatusAggregator::<()>::new(committee.clone());
-        // Collect responses from validators which observed the transaction getting executed using fast path.
-        let mut fast_path_aggregator = StatusAggregator::<()>::new(committee.clone());
 
         // Every validator returns at most one WaitForEffectsResponse.
         while let Some((name, response)) = futures.next().await {
@@ -482,7 +477,6 @@ impl EffectsCertifier {
                 Ok(WaitForEffectsResponse::Executed {
                     effects_digest,
                     details: _,
-                    fast_path,
                 }) => {
                     // Notify that this validator has successfully executed the transaction.
                     // This allows get_full_effects_with_fallback to use this validator as a
@@ -490,16 +484,6 @@ impl EffectsCertifier {
                     // Using try_send since the channel is bounded by committee size and we don't
                     // want to block - if the channel is somehow full, it's fine to skip.
                     let _ = acked_validators_tx.try_send(name);
-
-                    if fast_path {
-                        if tx_type != TxType::SingleWriter {
-                            tracing::warn!(
-                                "Fast path is only supported for single writer transactions, name={name}"
-                            );
-                        } else {
-                            fast_path_aggregator.insert(name, ());
-                        }
-                    }
 
                     let aggregator = effects_digest_aggregators
                         .entry(effects_digest)
@@ -528,17 +512,6 @@ impl EffectsCertifier {
                             .certified_effects_ack_latency
                             .with_label_values(&[tx_type.as_str(), ping_label])
                             .observe(timer.elapsed().as_secs_f64());
-
-                        if fast_path_aggregator.reached_quorum_threshold() {
-                            // get the display name of the validator that the transaction has been submitted to
-                            let display_name =
-                                authority_aggregator.get_display_name(&submitted_tx_to_validator);
-
-                            self.metrics
-                                .transaction_fastpath_acked
-                                .with_label_values(&[display_name.as_str(), ping_label])
-                                .inc();
-                        }
 
                         return Ok(effects_digest);
                     }
@@ -786,12 +759,9 @@ impl EffectsCertifier {
     }
 }
 
-fn get_ping_type(tx_digest: &Option<TransactionDigest>, tx_type: TxType) -> Option<PingType> {
+fn get_ping_type(tx_digest: &Option<TransactionDigest>) -> Option<PingType> {
     if tx_digest.is_none() {
-        Some(match tx_type {
-            TxType::SingleWriter => PingType::FastPath,
-            TxType::SharedObject => PingType::Consensus,
-        })
+        Some(PingType::Consensus)
     } else {
         None
     }

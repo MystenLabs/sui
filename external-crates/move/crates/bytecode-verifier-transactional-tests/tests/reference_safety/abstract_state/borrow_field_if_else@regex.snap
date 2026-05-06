@@ -6,7 +6,7 @@ processed 2 tasks
 task 1, line 28:
 //# view-abstract-state 0x2::borrow_field_if_else::t
 {
-  "0": {
+  "l0": {
     "local_root": "ROOT",
     "locals": {
       "s": {
@@ -21,7 +21,7 @@ task 1, line 28:
       "outgoing": {}
     }
   },
-  "2": {
+  "l1": {
     "local_root": "ROOT",
     "locals": {
       "s": {
@@ -36,7 +36,7 @@ task 1, line 28:
       "outgoing": {}
     }
   },
-  "6": {
+  "l2": {
     "local_root": "ROOT",
     "locals": {
       "s": {
@@ -51,7 +51,7 @@ task 1, line 28:
       "outgoing": {}
     }
   },
-  "9": {
+  "l3": {
     "local_root": "ROOT",
     "locals": {
       "s": {

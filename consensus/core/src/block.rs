@@ -384,7 +384,7 @@ struct InnerBlockDigest([u8; consensus_config::DIGEST_LENGTH]);
 /// Computes the digest of a Block, only for signing and verifications.
 fn compute_inner_block_digest(block: &Block) -> ConsensusResult<InnerBlockDigest> {
     let mut hasher = DefaultHashFunction::new();
-    hasher.update(bcs::to_bytes(block).map_err(ConsensusError::SerializationFailure)?);
+    bcs::serialize_into(&mut hasher, block).map_err(ConsensusError::SerializationFailure)?;
     Ok(InnerBlockDigest(hasher.finalize().into()))
 }
 
@@ -549,7 +549,7 @@ pub(crate) fn genesis_blocks(context: &Context) -> Vec<VerifiedBlock> {
         .committee
         .authorities()
         .map(|(authority_index, _)| {
-            let block = if context.protocol_config.mysticeti_fastpath() {
+            let block = if context.protocol_config.transaction_voting_enabled() {
                 Block::V2(BlockV2::genesis_block(context, authority_index))
             } else {
                 Block::V1(BlockV1::genesis_block(context, authority_index))
@@ -562,26 +562,6 @@ pub(crate) fn genesis_blocks(context: &Context) -> Vec<VerifiedBlock> {
             VerifiedBlock::new_verified(signed_block, serialized)
         })
         .collect::<Vec<VerifiedBlock>>()
-}
-
-/// A block certified by consensus for fast path execution.
-#[derive(Clone)]
-pub struct CertifiedBlock {
-    /// All transactions in the block have a quorum of accept or reject votes.
-    pub block: VerifiedBlock,
-    /// Sorted transaction indices that indicate the transactions rejected by a quorum.
-    pub rejected: Vec<TransactionIndex>,
-}
-
-impl CertifiedBlock {
-    pub fn new(block: VerifiedBlock, rejected: Vec<TransactionIndex>) -> Self {
-        Self { block, rejected }
-    }
-}
-
-/// A batch of certified blocks output by consensus for processing.
-pub struct CertifiedBlocksOutput {
-    pub blocks: Vec<CertifiedBlock>,
 }
 
 /// Creates fake blocks for testing.

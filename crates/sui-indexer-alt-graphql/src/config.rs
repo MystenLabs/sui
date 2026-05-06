@@ -38,6 +38,9 @@ pub struct RpcConfig {
 
     /// Configuration for zkLogin verification.
     pub zklogin: ZkLoginConfig,
+
+    /// Configuration for streaming subscriptions.
+    pub subscription: SubscriptionConfig,
 }
 
 #[DefaultConfig]
@@ -49,6 +52,7 @@ pub struct RpcLayer {
     pub name_service: NameServiceLayer,
     pub watermark: WatermarkLayer,
     pub zklogin: ZkLoginLayer,
+    pub subscription: SubscriptionLayer,
 }
 
 #[derive(Clone)]
@@ -92,8 +96,9 @@ pub struct Limits {
     pub max_output_nodes: u32,
 
     /// Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an
-    /// `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature`
-    /// parameters of a `verifyZkLoginSignature` field.
+    /// `executeTransaction` or `simulateTransaction` field, the `message` and `signature`
+    /// parameters of a `verifySignature` field, or the `bytes` and `signature` parameters of a
+    /// `verifyZkLoginSignature` field.
     ///
     /// This is cumulative across all matching fields in a single GraphQL request.
     pub max_tx_payload_size: u32,
@@ -223,6 +228,54 @@ pub struct ZkLoginLayer {
     pub max_epoch_upper_bound_delta: Option<Option<u64>>,
 }
 
+pub struct SubscriptionConfig {
+    /// Number of checkpoints the broadcast channel can buffer before slow subscribers are
+    /// dropped. Higher values give subscribers more time to catch up but use more memory,
+    /// as each buffered checkpoint's data is kept alive until it leaves the buffer.
+    /// Subscribers that fall behind by this many checkpoints receive a lagged error.
+    pub broadcast_buffer: usize,
+
+    /// How often (in milliseconds) the eviction task checks the `kv_packages` watermark
+    /// and evicts indexed packages from the streaming index.
+    pub package_eviction_interval_ms: u64,
+
+    /// Number of checkpoints fetched concurrently per chunk during upstream gap recovery.
+    pub gap_recovery_chunk_size: usize,
+}
+
+impl Default for SubscriptionConfig {
+    fn default() -> Self {
+        Self {
+            broadcast_buffer: 256,
+            package_eviction_interval_ms: 300_000,
+            gap_recovery_chunk_size: 50,
+        }
+    }
+}
+
+#[DefaultConfig]
+#[derive(Default, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct SubscriptionLayer {
+    pub broadcast_buffer: Option<usize>,
+    pub package_eviction_interval_ms: Option<u64>,
+    pub gap_recovery_chunk_size: Option<usize>,
+}
+
+impl SubscriptionLayer {
+    pub(crate) fn finish(self, base: SubscriptionConfig) -> SubscriptionConfig {
+        SubscriptionConfig {
+            broadcast_buffer: self.broadcast_buffer.unwrap_or(base.broadcast_buffer),
+            package_eviction_interval_ms: self
+                .package_eviction_interval_ms
+                .unwrap_or(base.package_eviction_interval_ms),
+            gap_recovery_chunk_size: self
+                .gap_recovery_chunk_size
+                .unwrap_or(base.gap_recovery_chunk_size),
+        }
+    }
+}
+
 impl RpcLayer {
     pub fn example() -> Self {
         Self {
@@ -231,6 +284,7 @@ impl RpcLayer {
             name_service: NameServiceConfig::default().into(),
             watermark: WatermarkConfig::default().into(),
             zklogin: ZkLoginConfig::default().into(),
+            subscription: SubscriptionConfig::default().into(),
         }
     }
 
@@ -241,6 +295,7 @@ impl RpcLayer {
             name_service: self.name_service.finish(NameServiceConfig::default()),
             watermark: self.watermark.finish(WatermarkConfig::default()),
             zklogin: self.zklogin.finish(ZkLoginConfig::default()),
+            subscription: self.subscription.finish(SubscriptionConfig::default()),
         }
     }
 }
@@ -282,6 +337,8 @@ impl Limits {
                 ("Mutation", "executeTransaction", "transactionDataBcs"),
                 ("Mutation", "executeTransaction", "signatures"),
                 ("Query", "simulateTransaction", "transaction"),
+                ("Query", "verifySignature", "message"),
+                ("Query", "verifySignature", "signature"),
                 ("Query", "verifyZkLoginSignature", "bytes"),
                 ("Query", "verifyZkLoginSignature", "signature"),
             ]),
@@ -479,6 +536,16 @@ impl From<ZkLoginConfig> for ZkLoginLayer {
         Self {
             env: Some(value.env),
             max_epoch_upper_bound_delta: Some(value.max_epoch_upper_bound_delta),
+        }
+    }
+}
+
+impl From<SubscriptionConfig> for SubscriptionLayer {
+    fn from(value: SubscriptionConfig) -> Self {
+        Self {
+            broadcast_buffer: Some(value.broadcast_buffer),
+            package_eviction_interval_ms: Some(value.package_eviction_interval_ms),
+            gap_recovery_chunk_size: Some(value.gap_recovery_chunk_size),
         }
     }
 }

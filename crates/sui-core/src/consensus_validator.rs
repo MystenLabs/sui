@@ -10,6 +10,7 @@ use consensus_core::{TransactionVerifier, ValidationError};
 use consensus_types::block::{BlockRef, TransactionIndex};
 use fastcrypto_tbls::dkg_v1;
 use itertools::Itertools;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::assert_reachable;
 use mysten_metrics::monitored_scope;
 use nonempty::NonEmpty;
@@ -26,7 +27,6 @@ use sui_types::{
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
     transaction::{
         CertifiedTransaction, InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI,
-        TransactionWithClaims,
     },
 };
 use tap::TapFallible;
@@ -35,7 +35,6 @@ use tracing::{debug, info, instrument, warn};
 use crate::{
     authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
     checkpoints::CheckpointServiceNotify,
-    consensus_adapter::{ConsensusOverloadChecker, NoopConsensusOverloadChecker},
 };
 
 /// Validates transactions from consensus and votes on whether to execute the transactions
@@ -44,7 +43,6 @@ use crate::{
 pub struct SuiTxValidator {
     authority_state: Arc<AuthorityState>,
     epoch_store: Arc<AuthorityPerEpochStore>,
-    consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
@@ -60,12 +58,9 @@ impl SuiTxValidator {
             "SuiTxValidator constructed for epoch {}",
             epoch_store.epoch()
         );
-        // Intentionally do not check consensus overload, because this is validating transactions already in consensus.
-        let consensus_overload_checker = Arc::new(NoopConsensusOverloadChecker {});
         Self {
             authority_state,
             epoch_store,
-            consensus_overload_checker,
             checkpoint_service,
             metrics,
         }
@@ -215,16 +210,9 @@ impl SuiTxValidator {
         txs: Vec<ConsensusTransactionKind>,
     ) -> Vec<TransactionIndex> {
         let epoch_store = &self.epoch_store;
-        if !epoch_store.protocol_config().mysticeti_fastpath() {
-            return vec![];
-        }
-
         let mut reject_txn_votes = Vec::new();
         for (i, tx) in txs.into_iter().enumerate() {
             let tx: PlainTransactionWithClaims = match tx {
-                ConsensusTransactionKind::UserTransaction(tx) => {
-                    TransactionWithClaims::no_aliases(*tx)
-                }
                 ConsensusTransactionKind::UserTransactionV2(tx) => *tx,
                 _ => continue,
             };
@@ -271,7 +259,6 @@ impl SuiTxValidator {
         inner_tx.validity_check(&epoch_store.tx_validity_check_context())?;
 
         self.authority_state.check_system_overload(
-            &*self.consensus_overload_checker,
             inner_tx.data(),
             self.authority_state.check_system_overload_at_signing(),
         )?;
@@ -386,7 +373,7 @@ impl SuiTxValidator {
         let claimed_immutable_ids = claimed_ids.iter().cloned().collect::<BTreeSet<_>>();
         let mut found_immutable_ids = BTreeSet::new();
 
-        for (obj_opt, object_id) in objects.into_iter().zip(input_ids.iter()) {
+        for (obj_opt, object_id) in objects.into_iter().zip_debug_eq(input_ids.iter()) {
             let input_ref = input_refs_by_id.get(object_id).unwrap();
             match obj_opt {
                 Some(o) => {

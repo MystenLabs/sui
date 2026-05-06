@@ -39,6 +39,7 @@ use std::{
     collections::BTreeMap,
     convert::identity,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use heck::CamelCase;
@@ -778,19 +779,18 @@ impl Scenario {
     ) -> PackageResult<PackageGraph<Vanilla>> {
         let path = PackagePath::new(self.path_for(&package)).unwrap();
 
-        let config = PackageLoader::new(self.path_for(&package), Vanilla::default_environment())
-            .config()
-            .clone();
+        let config = PackageLoader::new(
+            self.path_for(&package),
+            Vanilla::default_environment(),
+            Vanilla,
+        )
+        .config()
+        .clone();
 
         let mtx = path.lock().unwrap();
 
-        PackageGraph::<Vanilla>::load_from_manifests(
-            &path,
-            &Vanilla::default_environment(),
-            &mtx,
-            &config,
-        )
-        .await
+        PackageGraph::load_from_manifests(&path, &Vanilla::default_environment(), &mtx, &config)
+            .await
     }
 
     /// Loads the root package for `package` in the default environment and with no modes
@@ -804,7 +804,7 @@ impl Scenario {
     pub async fn root_package_with_config(
         &self,
         package: impl AsRef<str>,
-        config: impl Fn(PackageLoader) -> PackageLoader,
+        config: impl Fn(PackageLoader<Vanilla>) -> PackageLoader<Vanilla>,
     ) -> RootPackage<Vanilla> {
         self.try_root_package(package, config)
             .await
@@ -823,15 +823,17 @@ impl Scenario {
         }
     }
 
-    /// Loads the root package for `package` in the default environment and with no modes
+    /// Loads the root package for `package` in the default environment and with no modes.
+    /// Uses `Vanilla` flavor by default.
     pub async fn try_root_package(
         &self,
         package: impl AsRef<str>,
-        config: impl Fn(PackageLoader) -> PackageLoader,
+        config: impl Fn(PackageLoader<Vanilla>) -> PackageLoader<Vanilla>,
     ) -> PackageResult<RootPackage<Vanilla>> {
         config(PackageLoader::new(
             self.path_for(package),
             Vanilla::default_environment(),
+            Vanilla,
         ))
         .load()
         .await

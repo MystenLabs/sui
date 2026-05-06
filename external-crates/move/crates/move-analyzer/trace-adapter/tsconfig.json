@@ -12,6 +12,7 @@
         "rootDir": "src",
         "esModuleInterop": true,
         "resolveJsonModule": true,
+        "skipLibCheck": true,
         "strict": true /* enable all strict type-checking options */
     },
     "exclude": [

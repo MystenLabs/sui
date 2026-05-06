@@ -54,10 +54,12 @@ use dashmap::DashMap;
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use futures::{FutureExt, future::BoxFuture};
 use moka::sync::SegmentedCache as MokaCache;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::debug_fatal;
 use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
+use rayon::prelude::*;
 use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
@@ -1060,7 +1062,9 @@ impl WritebackCache {
 
         let _metrics_guard =
             mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs::flush");
-        for outputs in all_outputs.iter() {
+        // Parallel phase: tx-level metadata is keyed by unique tx_digest/effects_digest,
+        // so there are no cross-transaction ordering constraints.
+        all_outputs.par_iter().with_min_len(16).for_each(|outputs| {
             let tx_digest = outputs.transaction.digest();
             assert!(
                 self.dirty
@@ -1068,7 +1072,15 @@ impl WritebackCache {
                     .remove(tx_digest)
                     .is_some()
             );
-            self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, outputs);
+            self.flush_tx_metadata_from_dirty_to_cached(*tx_digest, outputs);
+        });
+
+        // Sequential phase: object/marker versions must be popped in causal order
+        // (oldest first) per object_id. Multiple transactions in the batch can touch
+        // the same shared object at consecutive versions, so this loop must preserve
+        // the order of all_outputs.
+        for outputs in all_outputs.iter() {
+            self.flush_objects_from_dirty_to_cached(epoch, outputs);
         }
 
         let num_outputs = all_outputs.len() as u64;
@@ -1110,21 +1122,18 @@ impl WritebackCache {
             .set(if backpressure { 1 } else { 0 });
     }
 
-    fn flush_transactions_from_dirty_to_cached(
+    // Flushes tx-level metadata for a single transaction from dirty to cache.
+    // All keys are unique per transaction (tx_digest, effects_digest), so this
+    // is safe to call in parallel across transactions.
+    fn flush_tx_metadata_from_dirty_to_cached(
         &self,
-        epoch: EpochId,
         tx_digest: TransactionDigest,
         outputs: &TransactionOutputs,
     ) {
-        // Now, remove each piece of committed data from the dirty state and insert it into the cache.
         // TODO: outputs should have a strong count of 1 so we should be able to move out of it
         let TransactionOutputs {
             transaction,
             effects,
-            markers,
-            written,
-            deleted,
-            wrapped,
             events,
             ..
         } = outputs;
@@ -1185,8 +1194,20 @@ impl WritebackCache {
             .executed_effects_digests
             .remove(&tx_digest)
             .expect("executed effects must exist");
+    }
 
-        // Move dirty markers to cache
+    // Flushes object and marker versions for a single transaction from dirty to cache.
+    // Multiple transactions in the same batch can modify the same shared object at
+    // consecutive versions, so callers must invoke this in causal (checkpoint) order.
+    fn flush_objects_from_dirty_to_cached(&self, epoch: EpochId, outputs: &TransactionOutputs) {
+        let TransactionOutputs {
+            markers,
+            written,
+            deleted,
+            wrapped,
+            ..
+        } = outputs;
+
         for (object_key, marker_value) in markers.iter() {
             Self::move_version_from_dirty_to_cache(
                 &self.dirty.markers,
@@ -1363,27 +1384,47 @@ impl WritebackCache {
 
 impl AccountFundsRead for WritebackCache {
     fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber) {
+        // Settlement is not atomic. A settlement transaction writes the accumulator
+        // objects at version V+1 first, and then a later barrier transaction bumps the
+        // root from V to V+1. A reader that observes the state in between sees
+        // post-settlement account objects alongside the pre-settlement root version,
+        // and reading the "latest" account can therefore disagree with the root we
+        // just captured.
+        //
+        // We handle this with two pieces:
+        //
+        // 1. MVCC read capped at the captured root version (see the call site below).
+        //    By construction of the settlement/barrier ordering, every account object's
+        //    version is <= the root version after the corresponding barrier runs, so
+        //    capping at the captured root strips away any newer-settlement writes that
+        //    have raced ahead of the barrier — we get the balance consistent with the
+        //    root version we captured.
+        //
+        // 2. Root-version stability check (pre == post). `get_account_amount_at_version`
+        //    is only safe to call when the target version has not been pruned. Pruning
+        //    is tied to root advancement, so by reading the root before and after the
+        //    MVCC read and retrying on mismatch, we ensure that no root advance (and
+        //    therefore no pruning of the version we read at) could have happened while
+        //    we were reading — the data we read is still live in the system (memory or
+        //    db) throughout the call.
         let mut pre_root_version =
             ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                 .unwrap()
                 .version();
         let mut loop_iter = 0;
         loop {
-            let account_obj = ObjectCacheRead::get_object(self, account_id.inner());
-            if let Some(account_obj) = account_obj {
-                let (_, AccumulatorValue::U128(value)) =
-                    account_obj.data.try_as_move().unwrap().try_into().unwrap();
-                return (value.value, account_obj.version());
-            }
+            // Safe because of (1) and (2) above: the stability check below bounds the
+            // lifetime of `pre_root_version` to a window in which no pruning happens.
+            let value = self.get_account_amount_at_version(account_id, pre_root_version);
             let post_root_version =
                 ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                     .unwrap()
                     .version();
             if pre_root_version == post_root_version {
-                return (0, pre_root_version);
+                return (value, pre_root_version);
             }
             debug!(
-                "Root version changed from {} to {} while reading account amount, retrying",
+                "Root version changed from {} to {} during MVCC read, retrying",
                 pre_root_version, post_root_version
             );
             pre_root_version = post_root_version;
@@ -1995,7 +2036,7 @@ impl TransactionCacheRead for WritebackCache {
                     .into_iter()
                     .map(|o| o.map(Arc::new))
                     .collect();
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached.transactions.insert(digest, None, *ticket).ok();
                     }
@@ -2058,7 +2099,7 @@ impl TransactionCacheRead for WritebackCache {
                     .record_db_multi_get("executed_effects_digests", remaining.len())
                     .multi_get_executed_effects_digests(&remaining_digests)
                     .expect("db error");
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached
                             .executed_effects_digests
@@ -2119,7 +2160,7 @@ impl TransactionCacheRead for WritebackCache {
                     .record_db_multi_get("transaction_effects", remaining.len())
                     .multi_get_effects(remaining_digests.iter())
                     .expect("db error");
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached
                             .transaction_effects
@@ -2240,7 +2281,7 @@ impl TransactionCacheRead for WritebackCache {
                     .store
                     .multi_get_events(&remaining_digests)
                     .expect("db error");
-                for ((digest, ticket), result) in remaining.iter().zip(results.iter()) {
+                for ((digest, ticket), result) in remaining.iter().zip_debug_eq(results.iter()) {
                     if result.is_none() {
                         self.cached
                             .transaction_events

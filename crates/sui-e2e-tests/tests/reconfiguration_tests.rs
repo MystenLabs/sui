@@ -485,6 +485,8 @@ async fn test_reconfig_with_voting_power_decrease() {
     execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_join_stake))
         .await;
 
+    let _new_validator_handle = test_cluster.spawn_new_validator(new_validator).await;
+
     test_cluster.trigger_reconfiguration().await;
 
     // Check that a new validator has joined the committee.
@@ -645,6 +647,8 @@ async fn test_reconfig_with_voting_power_decrease_immediate_removal() {
 
     execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_join_stake))
         .await;
+
+    let _new_validator_handle = test_cluster.spawn_new_validator(new_validator).await;
 
     test_cluster.trigger_reconfiguration().await;
 

@@ -187,6 +187,7 @@ Command `disassemble --package Test --name m --bytecode-map`:
         ]
       ],
       "nops": {},
+      "labels": {},
       "code_map": {
         "0": {
           "file_hash": "a3e27676cbc6a7d65269d2e7374f089b04bfe0d38f86dcc63227a4e912b5adb1",
@@ -377,6 +378,7 @@ Command `disassemble --package Test --name m --bytecode-map`:
       "returns": [],
       "locals": [],
       "nops": {},
+      "labels": {},
       "code_map": {},
       "is_native": true
     }

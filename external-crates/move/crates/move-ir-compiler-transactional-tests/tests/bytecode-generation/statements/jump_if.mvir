@@ -1,5 +1,5 @@
 //# print-bytecode
-module 0x6.m {
+mvir 0x6::m {
 // This is roughly equivalent to the following Move program:
 // ```
 // if (42 > 0) { x = 1; } else { x = 2; }
@@ -7,7 +7,7 @@ module 0x6.m {
 // ```
 // This program uses `jump` statements between blocks, which is valid. Each
 // `jump` statement is translated to a bytecode instruction.
-entry foo() {
+entry fun foo() {
     let x: u64;
 label b0:
     jump_if (42 > 0) b1;
@@ -24,14 +24,14 @@ label b3:
 }
 
 //# print-bytecode
-module 0x7.m {
+mvir 0x7::m {
 // This is roughly equivalent to the following Move program:
 // ```
 // if (42 > 0) { x = 1; } else { x = 2; }
 // return;
 // ```
 // This program uses fallthrough instead of `jump` statements.
-entry foo() {
+entry fun foo() {
     let x: u64;
 label b0:
     jump_if (42 > 0) b1;
@@ -45,9 +45,9 @@ label b2:
 }
 
 //# print-bytecode
-module 0x8.m {
+mvir 0x8::m {
 // `jump_if` statements can be sequenced, akin to "nested" `if` statements in Move.
-entry foo() {
+entry fun foo() {
     let x: u64;
 label begin:
     jump_if (0 < 1) then_0;
@@ -65,9 +65,9 @@ label end:
 }
 
 //# print-bytecode
-module 0x9.m {
+mvir 0x9::m {
 // `return` statements can appear anywhere, including within a jump destination's block.
-entry foo() {
+entry fun foo() {
     let x: u64;
 label b0:
     jump_if (0 != 1) b1;

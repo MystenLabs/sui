@@ -30,4 +30,5 @@ tempfile.workspace = true
 telemetry-subscribers.workspace = true
 
 [dev-dependencies]
+fastcrypto.workspace = true
 rand.workspace = true

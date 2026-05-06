@@ -12,6 +12,7 @@ use crate::global_state_hasher::GlobalStateHashStore;
 use crate::transaction_outputs::TransactionOutputs;
 use either::Either;
 use itertools::Itertools;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::bridge::Bridge;
 
@@ -217,7 +218,7 @@ pub trait ObjectCacheRead: Send + Sync {
         let objects = self
             .multi_get_objects_by_key(&object_refs.iter().map(ObjectKey::from).collect::<Vec<_>>());
         let mut result = Vec::new();
-        for (object_opt, object_ref) in objects.into_iter().zip(object_refs) {
+        for (object_opt, object_ref) in objects.into_iter().zip_debug_eq(object_refs) {
             match object_opt {
                 None => {
                     let live_objref = self._get_live_objref(object_ref.0)?;
@@ -268,7 +269,7 @@ pub trait ObjectCacheRead: Send + Sync {
                 InputKey::Package { id } => Either::Right((idx, id)),
             });
 
-        for ((idx, (id, version)), has_key) in move_object_keys.iter().zip(
+        for ((idx, (id, version)), has_key) in move_object_keys.iter().zip_debug_eq(
             self.multi_object_exists_by_key(
                 &move_object_keys
                     .iter()
@@ -490,7 +491,7 @@ pub trait TransactionCacheRead: Send + Sync {
         }
 
         let effects = self.multi_get_effects(&fetch_digests);
-        for (i, effects) in fetch_indices.into_iter().zip(effects.into_iter()) {
+        for (i, effects) in fetch_indices.into_iter().zip_debug_eq(effects.into_iter()) {
             results[i] = effects;
         }
 
@@ -581,7 +582,7 @@ pub trait TransactionCacheRead: Send + Sync {
                 .await;
             self.multi_get_effects(&effects_digests)
                 .into_iter()
-                .zip(digests)
+                .zip_debug_eq(digests)
                 .map(|(e, digest)| {
                     e.ok_or_else(|| {
                         SuiError::from(SuiErrorKind::TransactionEffectsNotFound { digest: *digest })

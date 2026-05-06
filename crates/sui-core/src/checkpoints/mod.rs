@@ -25,6 +25,7 @@ use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use consensus_core::CommitRef;
 use diffy::create_patch;
 use itertools::Itertools;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::{CHECKPOINT_BUILDER_NOTIFY_READ_TASK_NAME, NotifyRead};
 use mysten_common::{assert_reachable, debug_fatal, fatal, in_antithesis};
@@ -35,7 +36,6 @@ use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use sui_macros::fail_point_arg;
 use sui_network::default_mysten_network_config;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::{ConciseableName, SequenceNumber};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
@@ -43,6 +43,7 @@ use sui_types::messages_checkpoint::{
     CheckpointArtifacts, CheckpointCommitment, VersionedFullCheckpointContents,
 };
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_metadata};
 use tokio::sync::{mpsc, watch};
 use typed_store::rocks::{DBOptions, ReadWriteOptions, default_db_options};
 
@@ -227,10 +228,10 @@ impl CheckpointStoreTables {
             Decision, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,
             default_mutex_count, default_value_cache_size,
         };
-        let mutexes = default_mutex_count() * 4;
+        let mutexes = default_mutex_count();
         let u64_sequence_key = KeyType::from_prefix_bits(6 * 8);
         let override_dirty_keys_config = KeySpaceConfig::new()
-            .with_max_dirty_keys(64_000)
+            .with_max_dirty_keys(16_000)
             .with_value_cache_size(default_value_cache_size());
         let config_u64 = ThConfig::new_with_config(
             8,
@@ -248,14 +249,12 @@ impl CheckpointStoreTables {
         let watermarks_config = KeySpaceConfig::new()
             .with_value_cache_size(10)
             .disable_unload();
-        let lru_config = KeySpaceConfig::new().with_value_cache_size(default_value_cache_size());
+        let lru_config = KeySpaceConfig::new().with_value_cache_size(100);
         let configs = vec![
             (
                 "checkpoint_content",
                 digest_config.clone().with_config(
-                    lru_config
-                        .clone()
-                        .with_relocation_filter(|_, _| Decision::Remove),
+                    KeySpaceConfig::new().with_relocation_filter(|_, _| Decision::Remove),
                 ),
             ),
             (
@@ -1665,6 +1664,10 @@ impl CheckpointBuilder {
             tx_key,
         )
         .await;
+        let (accounts_created, accounts_deleted) =
+            accumulators::count_accumulator_object_changes(&settlement_effects);
+        self.metrics
+            .report_accumulator_account_changes(accounts_created, accounts_deleted);
 
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
             epoch,
@@ -1690,13 +1693,13 @@ impl CheckpointBuilder {
         )
         .await;
 
-        let settlement_effects: Vec<_> = settlement_effects
+        let settlement_and_barrier_effects: Vec<_> = settlement_effects
             .into_iter()
             .chain(barrier_effects)
             .collect();
 
         let mut next_accumulator_version = None;
-        for fx in settlement_effects.iter() {
+        for fx in settlement_and_barrier_effects.iter() {
             assert!(
                 fx.status().is_ok(),
                 "settlement transaction cannot fail (digest: {:?}) {:#?}",
@@ -1725,7 +1728,7 @@ impl CheckpointBuilder {
             .execution_scheduler()
             .settle_address_funds(settlements);
 
-        (tx_key, settlement_effects)
+        (tx_key, settlement_and_barrier_effects)
     }
 
     // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
@@ -2020,12 +2023,12 @@ impl CheckpointBuilder {
         debug!(
             ?settlement_digests,
             ?settlement_key,
-            "fallback: reading settlement effects from cache"
+            "reading settlement effects from cache"
         );
 
         let settlement_effects = wait_for_effects_with_retry(
             self.effects_store.as_ref(),
-            "CheckpointBuilder::fallback_settlement_effects",
+            "CheckpointBuilder::settlement_effects",
             &settlement_digests,
             settlement_key,
         )
@@ -2043,7 +2046,7 @@ impl CheckpointBuilder {
 
         let barrier_effects = wait_for_effects_with_retry(
             self.effects_store.as_ref(),
-            "CheckpointBuilder::fallback_barrier_effects",
+            "CheckpointBuilder::barrier_effects",
             &[barrier_digest],
             settlement_key,
         )
@@ -2190,7 +2193,7 @@ impl CheckpointBuilder {
         {
             let chunk: Vec<_> = effects_and_transaction_sizes
                 .into_iter()
-                .zip(signatures)
+                .zip_debug_eq(signatures)
                 .map(|((effects, _size), sigs)| (effects, sigs))
                 .collect();
             return Ok(vec![chunk]);
@@ -2200,7 +2203,7 @@ impl CheckpointBuilder {
         let mut chunk_size: usize = 0;
         for ((effects, transaction_size), signatures) in effects_and_transaction_sizes
             .into_iter()
-            .zip(signatures.into_iter())
+            .zip_debug_eq(signatures.into_iter())
         {
             // Roll over to a new chunk after either max count or max size is reached.
             // The size calculation here is intended to estimate the size of the
@@ -2315,7 +2318,7 @@ impl CheckpointBuilder {
 
             for (effects, transaction_and_size) in all_effects
                 .into_iter()
-                .zip(transactions_and_sizes.into_iter())
+                .zip_debug_eq(transactions_and_sizes.into_iter())
             {
                 let (transaction, size) = transaction_and_size
                     .unwrap_or_else(|| panic!("Could not find executed transaction {:?}", effects));
@@ -2668,7 +2671,10 @@ impl CheckpointBuilder {
                     roots.iter().map(|e| e.transaction_digest()),
                 )?;
 
-            for (effect, tx_included) in roots.into_iter().zip(transactions_included.into_iter()) {
+            for (effect, tx_included) in roots
+                .into_iter()
+                .zip_debug_eq(transactions_included.into_iter())
+            {
                 let digest = effect.transaction_digest();
                 // Unnecessary to read effects of a dependency if the effect is already processed.
                 seen.insert(*digest);
@@ -2687,8 +2693,10 @@ impl CheckpointBuilder {
                     .epoch_store
                     .transactions_executed_in_cur_epoch(effect.dependencies())?;
 
-                for (dependency, effects_signature_exists) in
-                    effect.dependencies().iter().zip(existing_effects.iter())
+                for (dependency, effects_signature_exists) in effect
+                    .dependencies()
+                    .iter()
+                    .zip_debug_eq(existing_effects.iter())
                 {
                     // Skip here if dependency not executed in the current epoch.
                     // Note that the existence of an effects signature in the
@@ -2710,7 +2718,7 @@ impl CheckpointBuilder {
             let effects = self.effects_store.multi_get_executed_effects(&pending);
             let effects = effects
                 .into_iter()
-                .zip(pending)
+                .zip_debug_eq(pending)
                 .map(|(opt, digest)| match opt {
                     Some(x) => x,
                     None => panic!(
@@ -3207,7 +3215,7 @@ async fn diagnose_split_brain(
     let response_data = futures::future::join_all(response_futures)
         .await
         .into_iter()
-        .zip(digest_name_pair)
+        .zip_debug_eq(digest_name_pair)
         .filter_map(|(response, (digest, name))| match response {
             Ok(response) => match response {
                 CheckpointResponseV2 {
@@ -3396,6 +3404,7 @@ impl CheckpointService {
         info!(
             "Starting checkpoint service with {max_transactions_per_checkpoint} max_transactions_per_checkpoint and {max_checkpoint_size_bytes} max_checkpoint_size_bytes"
         );
+        Self::initialize_accumulator_account_metrics(&state, &epoch_store, &metrics);
         let notify_builder = Arc::new(Notify::new());
         let notify_aggregator = Arc::new(Notify::new());
 
@@ -3463,6 +3472,23 @@ impl CheckpointService {
                 ckpt_state_hasher,
             ))),
         })
+    }
+
+    fn initialize_accumulator_account_metrics(
+        state: &AuthorityState,
+        epoch_store: &AuthorityPerEpochStore,
+        metrics: &CheckpointMetrics,
+    ) {
+        if !epoch_store.protocol_config().enable_accumulators() {
+            return;
+        }
+
+        let object_store = state.get_object_store();
+        match accumulator_metadata::get_accumulator_object_count(object_store.as_ref()) {
+            Ok(Some(count)) => metrics.initialize_accumulator_accounts_live(count),
+            Ok(None) => {}
+            Err(e) => fatal!("failed to initialize accumulator account metrics: {e}"),
+        }
     }
 
     /// Starts the CheckpointService.

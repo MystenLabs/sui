@@ -28,6 +28,9 @@ checkpoint-executor-config:
 db-checkpoint-config:
   perform-db-checkpoints-at-epoch-end: false
 indirect-objects-threshold: 18446744073709551615
+state-archive-read-config:
+  - ingestion-url: "https://checkpoints.mainnet.sui.io" # or https://checkpoints.testnet.sui.io
+    concurrency: 5
 metrics:
   push-interval-seconds: 60
   # push-url: https://metrics-proxy.testnet.sui.io:8443/publish/metrics

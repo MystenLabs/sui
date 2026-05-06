@@ -199,8 +199,8 @@ impl<A: Clone> ValidatorClientMonitor<A> {
             OperationType::Submit => "submit",
             OperationType::Effects => "effects",
             OperationType::HealthCheck => "health_check",
-            OperationType::FastPath => "fast_path",
-            OperationType::Consensus => "consensus",
+            OperationType::SingleWriterFinality => "single_writer_finality",
+            OperationType::SharedObjectFinality => "shared_object_finality",
         };
         let ping_label = if feedback.ping_type.is_some() {
             "true"

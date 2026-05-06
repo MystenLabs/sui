@@ -90,13 +90,13 @@ module test::mod {
 //# run-jsonrpc
 {
   "method": "sui_getObject",
-  "params": ["@{obj_1_1}", { "showType": true }]
+  "params": ["@{obj_1_2}", { "showType": true }]
 }
 
 //# run-jsonrpc
 {
   "method": "sui_getObject",
-  "params": ["@{obj_1_2}", { "showType": true }]
+  "params": ["@{obj_1_1}", { "showType": true }]
 }
 
 //# run-jsonrpc
@@ -111,7 +111,7 @@ module test::mod {
   "params": ["@{obj_3_0}", { "showDisplay": true }]
 }
 
-//# programmable --sender A --inputs object(1,1) "quy" "{bar.baz.qux.quy.val}!"
+//# programmable --sender A --inputs object(1,2) "quy" "{bar.baz.qux.quy.val}!"
 //> 0: sui::display::edit<test::mod::Foo>(Input(0), Input(1), Input(2));
 //> 1: sui::display::update_version<test::mod::Foo>(Input(0));
 

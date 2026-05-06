@@ -1,7 +1,7 @@
 //# run
-module 0x6.m {
+mvir 0x6::m {
 
-entry foo() {
+entry fun foo() {
     let x: vector<u64>;
     let r: &vector<u64>;
     label start:
@@ -16,9 +16,9 @@ entry foo() {
 
 }
 //# run
-module 0x7.m {
+mvir 0x7::m {
 
-entry foo() {
+entry fun foo() {
     let x: vector<u64>;
     let r: &vector<u64>;
     label start:

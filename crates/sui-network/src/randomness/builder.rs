@@ -47,7 +47,7 @@ impl Builder {
         self
     }
 
-    pub fn build(self) -> (UnstartedRandomness, anemo::Router) {
+    pub fn build(self) -> (UnstartedRandomness, anemo::Router<anemo::ServicesSealed>) {
         let Builder {
             name,
             config,
@@ -73,8 +73,8 @@ impl Builder {
 
         let allowed_peers = AllowedPeersUpdatable::new(Arc::new(HashSet::new()));
         let router = anemo::Router::new()
-            .route_layer(RequireAuthorizationLayer::new(allowed_peers.clone()))
-            .add_rpc_service(randomness_server);
+            .add_rpc_service(randomness_server)
+            .route_layer(RequireAuthorizationLayer::new(allowed_peers.clone()));
 
         (
             UnstartedRandomness {

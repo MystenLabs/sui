@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use std::{num::NonZeroUsize, path::Path, sync::Arc};
 
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::in_test_configuration;
 use rand::rngs::OsRng;
 use sui_config::ExecutionCacheConfig;
@@ -105,8 +106,6 @@ pub struct ConfigBuilder<R = OsRng> {
     data_ingestion_dir: Option<PathBuf>,
     policy_config: Option<PolicyConfig>,
     firewall_config: Option<RemoteFirewallConfig>,
-    max_submit_position: Option<usize>,
-    submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2_enabled_config: Option<GlobalStateHashV2EnabledConfig>,
     funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
@@ -151,8 +150,6 @@ impl ConfigBuilder {
             data_ingestion_dir: None,
             policy_config: None,
             firewall_config: None,
-            max_submit_position: None,
-            submit_delay_step_override_millis: None,
             global_state_hash_v2_enabled_config: None,
             funds_withdraw_scheduler_type_config,
             state_sync_config: None,
@@ -356,19 +353,6 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
-        self.max_submit_position = Some(max_submit_position);
-        self
-    }
-
-    pub fn with_submit_delay_step_override_millis(
-        mut self,
-        submit_delay_step_override_millis: u64,
-    ) -> Self {
-        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
-        self
-    }
-
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -386,8 +370,6 @@ impl<R> ConfigBuilder<R> {
             data_ingestion_dir: self.data_ingestion_dir,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
-            max_submit_position: self.max_submit_position,
-            submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
             funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             state_sync_config: self.state_sync_config,
@@ -441,7 +423,7 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 // See above re fixed protocol keys
                 let (_, protocol_keys) = Committee::new_simple_test_committee_of_size(keys.len());
                 keys.into_iter()
-                    .zip(protocol_keys)
+                    .zip_debug_eq(protocol_keys)
                     .map(|(account_key, protocol_key)| {
                         let mut builder = ValidatorGenesisConfigBuilder::new()
                             .with_protocol_key_pair(protocol_key)
@@ -550,17 +532,6 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
 
                 if let Some(chain) = self.chain_override {
                     builder = builder.with_chain_override(chain);
-                }
-
-                if let Some(max_submit_position) = self.max_submit_position {
-                    builder = builder.with_max_submit_position(max_submit_position);
-                }
-
-                if let Some(submit_delay_step_override_millis) =
-                    self.submit_delay_step_override_millis
-                {
-                    builder = builder
-                        .with_submit_delay_step_override_millis(submit_delay_step_override_millis);
                 }
 
                 if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {
@@ -691,7 +662,7 @@ mod test {
     use sui_types::execution_params::ExecutionOrEarlyError;
     use sui_types::gas::SuiGasStatus;
     use sui_types::in_memory_storage::InMemoryStorage;
-    use sui_types::metrics::LimitsMetrics;
+    use sui_types::metrics::ExecutionMetrics;
     use sui_types::sui_system_state::SuiSystemStateTrait;
     use sui_types::transaction::CheckedInputObjects;
 
@@ -726,7 +697,7 @@ mod test {
 
         // Use a throwaway metrics registry for genesis transaction execution.
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let metrics = Arc::new(ExecutionMetrics::new(&registry));
         let expensive_checks = false;
         let epoch = EpochData::new_test();
         let transaction_data = &genesis_transaction.data().intent_message().value;
@@ -747,6 +718,7 @@ mod test {
                 gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,
+                None, // compat_args
                 signer,
                 genesis_digest,
                 &mut None,

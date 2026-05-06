@@ -20,7 +20,6 @@ pub enum Tok {
     U256Value,
     NameValue,
     NameBeginTyValue,
-    DotNameValue,
     ByteArrayValue,
     Exclaim,
     ExclaimEqual,
@@ -37,6 +36,7 @@ pub enum Tok {
     Period,
     Slash,
     Colon,
+    ColonColon,
     Semicolon,
     Less,
     LessEqual,
@@ -67,7 +67,10 @@ pub enum Tok {
     JumpIfFalse,
     Label,
     Let,
-    Module,
+    /// IR-side equivalent of Move source's `module` keyword. The distinct
+    /// spelling makes it visually obvious whether a snippet is Move source
+    /// or Move IR.
+    Mvir,
     Move,
     Native,
     Public,
@@ -238,14 +241,6 @@ impl<'input> Lexer<'input> {
                                 (get_name_token(name), len)
                             }
                         }
-                        Some('.') => {
-                            let len2 = get_name_len(&text[(len + 1)..]);
-                            if len2 > 0 {
-                                (Tok::DotNameValue, len + 1 + len2)
-                            } else {
-                                (get_name_token(name), len)
-                            }
-                        }
                         Some('<') => match name {
                             "vec_len" => (Tok::VecLen, len),
                             "vec_imm_borrow" => (Tok::VecImmBorrow, len),
@@ -341,7 +336,13 @@ impl<'input> Lexer<'input> {
             '-' => (Tok::Minus, 1),
             '.' => (Tok::Period, 1),
             '/' => (Tok::Slash, 1),
-            ':' => (Tok::Colon, 1),
+            ':' => {
+                if text.starts_with("::") {
+                    (Tok::ColonColon, 2)
+                } else {
+                    (Tok::Colon, 1)
+                }
+            }
             ';' => (Tok::Semicolon, 1),
             '^' => (Tok::Caret, 1),
             '{' => (Tok::LBrace, 1),
@@ -436,7 +437,7 @@ fn get_name_token(name: &str) -> Tok {
         "jump_if_false" => Tok::JumpIfFalse,
         "label" => Tok::Label,
         "let" => Tok::Let,
-        "module" => Tok::Module,
+        "mvir" => Tok::Mvir,
         "native" => Tok::Native,
         "public" => Tok::Public,
         "return" => Tok::Return,

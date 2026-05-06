@@ -25,7 +25,6 @@ pub(crate) trait ConsensusCommitAPI: Display {
     /// Returns the ref of consensus output.
     fn commit_ref(&self) -> CommitRef;
 
-    fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>>;
     fn leader_round(&self) -> u64;
     fn leader_author_index(&self) -> AuthorityIndex;
 
@@ -46,19 +45,6 @@ pub(crate) trait ConsensusCommitAPI: Display {
 impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
     fn commit_ref(&self) -> CommitRef {
         self.commit_ref
-    }
-
-    fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-        if !self.reputation_scores_desc.is_empty() {
-            Some(
-                self.reputation_scores_desc
-                    .iter()
-                    .map(|(id, score)| (id.value() as AuthorityIndex, *score))
-                    .collect(),
-            )
-        } else {
-            None
-        }
     }
 
     fn leader_round(&self) -> u64 {
@@ -89,11 +75,7 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
                     .unwrap_or(&no_transaction);
                 (
                     block.reference(),
-                    parse_block_transactions(
-                        block,
-                        rejected_transactions,
-                        self.always_accept_system_transactions,
-                    ),
+                    parse_block_transactions(block, rejected_transactions),
                 )
             })
             .collect()
@@ -128,13 +110,10 @@ impl ConsensusCommitAPI for consensus_core::CommittedSubDag {
 pub(crate) fn parse_block_transactions(
     block: &VerifiedBlock,
     rejected_transactions: &[TransactionIndex],
-    always_accept_system_transactions: bool,
 ) -> Vec<ParsedTransaction> {
     let round = block.round();
     let authority = block.author().value() as AuthorityIndex;
 
-    // rejected_transactions contains sorted indices and can be checked more efficiently.
-    // But for simplicity, check rejection status from a BTreeSet.
     let rejected_transaction_indices = BTreeSet::from_iter(rejected_transactions.iter().cloned());
     block
         .transactions()
@@ -146,7 +125,8 @@ pub(crate) fn parse_block_transactions(
                     panic!("Failed to deserialize sequenced consensus transaction(this should not happen) {err} from {authority} at {round}");
                 },
             };
-            let rejected = rejected_transaction_indices.contains(&(index as TransactionIndex)) && (transaction.is_user_transaction() || !always_accept_system_transactions);
+            // System transactions are always accepted; only user transactions can be rejected.
+            let rejected = transaction.is_user_transaction() && rejected_transaction_indices.contains(&(index as TransactionIndex));
             ParsedTransaction {
                 transaction,
                 rejected,

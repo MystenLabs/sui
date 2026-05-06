@@ -45,7 +45,7 @@ module Test::fake {
   "params": ["@{A}", "@{Test}::fake::FAKE"]
 }
 
-//# transfer-object 1,1 --sender A --recipient B
+//# transfer-object 1,3 --sender A --recipient B
 
 //# create-checkpoint
 

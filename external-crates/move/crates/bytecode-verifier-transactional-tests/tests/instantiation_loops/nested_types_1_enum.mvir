@@ -1,11 +1,11 @@
 //# publish
-module 0x6.M {
-    enum S<T> { V { b: bool }, R { } }
+mvir 0x6::M {
+    public enum S<T> { V { b: bool }, R { } }
 
-    foo<T>() {
+    fun foo<T>() {
     label b0:
         // loop
-        Self.foo<Self.S<Self.S<T>>>();
+        Self::foo<Self::S<Self::S<T>>>();
         return;
     }
 }

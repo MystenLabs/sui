@@ -14,7 +14,6 @@ anyhow.workspace = true
 bcs.workspace = true
 camino.workspace = true
 fastcrypto.workspace = true
-move-binary-format.workspace = true
 move-core-types.workspace = true
 rand.workspace = true
 serde.workspace = true
@@ -24,6 +23,7 @@ tempfile.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 
+mysten-common.workspace = true
 shared-crypto.workspace = true
 sui-config.workspace = true
 sui-execution.workspace = true

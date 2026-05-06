@@ -6,12 +6,9 @@
 use anyhow::Result;
 use bytes::Bytes;
 use sui_types::committee::EpochId;
-use sui_types::storage::EpochInfo;
-
 use sui_types::sui_system_state::SuiSystemState;
 
 use crate::EpochData;
-use crate::tables::DEFAULT_COLUMN;
 
 pub const NAME: &str = "epochs";
 
@@ -48,11 +45,6 @@ pub fn encode_key(epoch_id: EpochId) -> Vec<u8> {
 
 pub fn encode_key_upper_bound() -> Bytes {
     Bytes::from(u64::MAX.to_be_bytes().to_vec())
-}
-
-/// Encode full epoch info (legacy format).
-pub fn encode(epoch: &EpochInfo) -> Result<[(&'static str, Bytes); 1]> {
-    Ok([(DEFAULT_COLUMN, Bytes::from(bcs::to_bytes(epoch)?))])
 }
 
 /// Encode epoch start data to individual columns.
@@ -155,19 +147,6 @@ pub fn decode(row: &[(Bytes, Bytes)]) -> Result<EpochData> {
 
     for (col, value) in row {
         match col.as_ref() {
-            // Legacy format: empty column contains BCS-serialized EpochInfo
-            b"" => {
-                let info: EpochInfo = bcs::from_bytes(value)?;
-                data.epoch = Some(info.epoch);
-                data.protocol_version = info.protocol_version;
-                data.start_timestamp_ms = info.start_timestamp_ms;
-                data.start_checkpoint = info.start_checkpoint;
-                data.reference_gas_price = info.reference_gas_price;
-                data.system_state = info.system_state;
-                data.end_timestamp_ms = info.end_timestamp_ms;
-                data.end_checkpoint = info.end_checkpoint;
-            }
-            // New format: individual columns
             b"ep" => data.epoch = Some(u64::from_be_bytes(value.as_ref().try_into()?)),
             b"pv" => data.protocol_version = Some(u64::from_be_bytes(value.as_ref().try_into()?)),
             b"st" => data.start_timestamp_ms = Some(u64::from_be_bytes(value.as_ref().try_into()?)),

@@ -1,0 +1,33 @@
+Command `lint`:
+BUILDING LintTest
+warning[Lint W04004]: unneeded return
+  ┌─ ./sources/example.move:8:24
+  │
+8 │ public fun t1(): u64 { return EXAMPLE }
+  │                        ^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+  │
+  = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+Command `lint --mode custom`:
+BUILDING LintTest
+warning[Lint W04004]: unneeded return
+  ┌─ ./sources/example.move:8:24
+  │
+8 │ public fun t1(): u64 { return EXAMPLE }
+  │                        ^^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+  │
+  = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04004]: unneeded return
+   ┌─ ./sources/example.move:17:24
+   │
+17 │ public fun t3(): u64 { return CUSTOM }
+   │                        ^^^^^^^^^^^^^ Remove unnecessary 'return', the expression is already in a 'return' position
+   │
+   = This warning can be suppressed with '#[allow(lint(unneeded_return))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+External Command `LC_ALL=C ls -A1`:
+Move.toml
+args.exp
+args.txt
+sources

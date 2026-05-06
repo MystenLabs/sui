@@ -6,9 +6,11 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
+use prometheus::Registry;
 use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::TransactionData as KVTransactionData;
 use sui_kvstore::TransactionEventsData as KVTransactionEventsData;
+use sui_kvstore::validate_pipeline_name;
 use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::base_types::ObjectID;
@@ -25,17 +27,63 @@ use sui_types::messages_checkpoint::CheckpointSummary;
 use sui_types::object::Object;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
+use tonic::transport::Uri;
 
+use crate::bigtable_reader::BigtableArgs;
 use crate::bigtable_reader::BigtableReader;
 use crate::checkpoints::CheckpointKey;
 use crate::error::Error;
 use crate::events::StoredTransactionEvents;
 use crate::events::TransactionEventsKey;
 use crate::ledger_grpc_reader::CheckpointedTransaction;
+use crate::ledger_grpc_reader::LedgerGrpcArgs;
 use crate::ledger_grpc_reader::LedgerGrpcReader;
 use crate::objects::VersionedObjectKey;
 use crate::pg_reader::PgReader;
 use crate::transactions::TransactionKey;
+
+/// Arguments for configuring KV store access (either Bigtable or Ledger gRPC).
+///
+/// These options are mutually exclusive - only one KV store source can be configured at a time.
+#[derive(clap::Args, Debug, Clone, Default)]
+#[group(required = false)]
+pub struct KvArgs {
+    /// Bigtable instance ID to make KV store requests to.
+    #[arg(long, group = "kv_source")]
+    pub bigtable_instance: Option<String>,
+
+    /// GCP project ID for the BigTable instance (defaults to the token provider's project).
+    #[arg(long)]
+    pub bigtable_project: Option<String>,
+
+    /// App profile ID to use for Bigtable client. If not provided, the default profile will be used.
+    #[arg(long)]
+    pub bigtable_app_profile_id: Option<String>,
+
+    /// Maximum gRPC decoding message size for KV responses, in bytes.
+    ///
+    /// Applies to both Bigtable and Ledger gRPC readers.
+    #[arg(long, alias = "bigtable-max-decoding-message-size")]
+    pub kv_max_decoding_message_size: Option<usize>,
+
+    /// Bigtable pipeline watermark to include when reporting the Bigtable reader watermark.
+    /// Repeat to include multiple pipelines.
+    #[arg(
+        long = "bigtable-watermark-pipeline",
+        value_name = "PIPELINE",
+        value_delimiter = ',',
+        value_parser = validate_pipeline_name
+    )]
+    pub bigtable_watermark_pipeline: Vec<&'static str>,
+
+    /// gRPC endpoint URL for the ledger service (e.g., archive.mainnet.sui.io)
+    #[arg(long, group = "kv_source")]
+    pub ledger_grpc_url: Option<Uri>,
+
+    /// Time spent waiting for a request to the kv store to complete, in milliseconds.
+    #[arg(long, alias = "bigtable-statement-timeout-ms")]
+    pub kv_statement_timeout_ms: Option<u64>,
+}
 
 /// A loader for point lookups in kv stores backed by either Bigtable, Postgres, or KV gRPC.
 /// Supported lookups:
@@ -56,19 +104,27 @@ pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),
     LedgerGrpc(CheckpointedTransaction),
-    ExecutedTransaction {
-        effects: Box<TransactionEffects>,
-        events: Option<Vec<Event>>,
-        transaction_data: Box<TransactionData>,
-        signatures: Vec<GenericSignature>,
-        balance_changes: Vec<grpc::BalanceChange>,
-        /// The proto TransactionEffects from gRPC, if available.
-        /// Contains fully-rendered effects with object types and clever errors.
-        proto_effects: Option<grpc::TransactionEffects>,
-        /// The proto Transaction from gRPC, if available.
-        /// Contains the fully-rendered transaction.
-        proto_transaction: Option<grpc::Transaction>,
-    },
+    ExecutedTransaction(ExecutedTransactionData),
+}
+
+/// Transaction data from a gRPC execution or streaming response.
+#[derive(Clone)]
+pub struct ExecutedTransactionData {
+    pub effects: Box<TransactionEffects>,
+    pub events: Vec<Arc<Event>>,
+    pub transaction_data: Box<TransactionData>,
+    pub signatures: Vec<GenericSignature>,
+    pub balance_changes: Vec<grpc::BalanceChange>,
+    /// The proto TransactionEffects from gRPC, if available.
+    /// Contains fully-rendered effects with object types and clever errors.
+    pub proto_effects: Option<grpc::TransactionEffects>,
+    /// The proto Transaction from gRPC, if available.
+    /// Contains the fully-rendered transaction.
+    pub proto_transaction: Option<grpc::Transaction>,
+    /// Checkpoint timestamp. Set for streamed/checkpointed transactions, None for mutations.
+    pub timestamp_ms: Option<u64>,
+    /// Checkpoint sequence number. Set for streamed/checkpointed transactions, None for mutations.
+    pub cp_sequence_number: Option<u64>,
 }
 
 /// A wrapper for the contents of a transaction's events, either from Bigtable or Postgres.
@@ -84,17 +140,80 @@ pub enum BalanceChangeContents {
     Native(NativeBalanceChange),
 }
 
+impl KvArgs {
+    pub async fn bigtable_reader(
+        &self,
+        client_name: String,
+        registry: &Registry,
+    ) -> anyhow::Result<Option<BigtableReader>> {
+        let Some(instance_id) = self.bigtable_instance.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            BigtableReader::new(
+                instance_id.clone(),
+                client_name,
+                self.bigtable_args(),
+                registry,
+            )
+            .await?,
+        ))
+    }
+
+    pub async fn ledger_grpc_reader(
+        &self,
+        prefix: Option<&str>,
+        registry: &Registry,
+    ) -> anyhow::Result<Option<LedgerGrpcReader>> {
+        let Some(ledger_grpc_url) = self.ledger_grpc_url.as_ref() else {
+            return Ok(None);
+        };
+
+        Ok(Some(
+            LedgerGrpcReader::new(
+                ledger_grpc_url.clone(),
+                self.ledger_grpc_args(),
+                prefix,
+                registry,
+            )
+            .await?,
+        ))
+    }
+
+    fn bigtable_args(&self) -> BigtableArgs {
+        BigtableArgs {
+            bigtable_statement_timeout_ms: self.kv_statement_timeout_ms,
+            bigtable_project: self.bigtable_project.clone(),
+            bigtable_app_profile_id: self.bigtable_app_profile_id.clone(),
+            bigtable_max_decoding_message_size: self.kv_max_decoding_message_size,
+            bigtable_watermark_pipeline: self.bigtable_watermark_pipeline.clone(),
+        }
+    }
+
+    fn ledger_grpc_args(&self) -> LedgerGrpcArgs {
+        LedgerGrpcArgs {
+            ledger_grpc_statement_timeout_ms: self.kv_statement_timeout_ms,
+            ledger_grpc_max_decoding_message_size: self.kv_max_decoding_message_size,
+        }
+    }
+}
+
 impl KvLoader {
-    pub fn new_with_bigtable(bigtable_loader: Arc<DataLoader<BigtableReader>>) -> Self {
-        Self::Bigtable(bigtable_loader)
-    }
-
-    pub fn new_with_pg(pg_loader: Arc<DataLoader<PgReader>>) -> Self {
-        Self::Pg(pg_loader)
-    }
-
-    pub fn new_with_ledger_grpc(ledger_grpc_loader: Arc<DataLoader<LedgerGrpcReader>>) -> Self {
-        Self::LedgerGrpc(ledger_grpc_loader)
+    /// Create a KvLoader from the available KV sources, preferring Bigtable, then Ledger gRPC, with
+    /// a fallback to the shared Postgres `DataLoader`.
+    pub fn from_kv_sources(
+        bigtable: Option<BigtableReader>,
+        ledger_grpc: Option<LedgerGrpcReader>,
+        pg_loader: Arc<DataLoader<PgReader>>,
+    ) -> Self {
+        if let Some(reader) = bigtable {
+            Self::Bigtable(Arc::new(reader.as_data_loader()))
+        } else if let Some(reader) = ledger_grpc {
+            Self::LedgerGrpc(Arc::new(reader.as_data_loader()))
+        } else {
+            Self::Pg(pg_loader)
+        }
     }
 
     pub async fn load_one_object(
@@ -274,14 +393,15 @@ impl TransactionContents {
             .deserialize()
             .context("Effects BCS should be valid")?;
 
-        // Parse events from BCS if present
-        let events = executed_transaction
+        // Parse events from BCS if present, defaulting to empty when absent.
+        let events: Vec<Arc<Event>> = executed_transaction
             .events
             .as_ref()
             .and_then(|events| events.bcs.as_ref())
             .map(|bcs| bcs.deserialize().context("Events BCS should be valid"))
             .transpose()?
-            .map(|events: TransactionEvents| events.data);
+            .map(|events: TransactionEvents| events.data.into_iter().map(Arc::new).collect())
+            .unwrap_or_default();
 
         let balance_changes = executed_transaction.balance_changes.clone();
 
@@ -289,7 +409,7 @@ impl TransactionContents {
         let proto_effects = executed_transaction.effects.clone();
         let proto_transaction = executed_transaction.transaction.clone();
 
-        Ok(Self::ExecutedTransaction {
+        Ok(Self::ExecutedTransaction(ExecutedTransactionData {
             effects: Box::new(effects),
             events,
             transaction_data: Box::new(transaction_data),
@@ -297,18 +417,21 @@ impl TransactionContents {
             balance_changes,
             proto_effects,
             proto_transaction,
-        })
+            timestamp_ms: None,
+            cp_sequence_number: None,
+        }))
     }
 
     pub fn data(&self) -> anyhow::Result<TransactionData> {
         match self {
             Self::Pg(stored) => bcs::from_bytes(&stored.raw_transaction)
                 .context("Failed to deserialize transaction data"),
-            Self::Bigtable(kv) => Ok(kv.transaction.data().transaction_data().clone()),
+            Self::Bigtable(kv) => kv
+                .transaction_data
+                .clone()
+                .context("transaction_data missing from bigtable data"),
             Self::LedgerGrpc(txn) => Ok(txn.transaction_data.as_ref().clone()),
-            Self::ExecutedTransaction {
-                transaction_data, ..
-            } => Ok(transaction_data.as_ref().clone()),
+            Self::ExecutedTransaction(tx) => Ok(tx.transaction_data.as_ref().clone()),
         }
     }
 
@@ -316,9 +439,9 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => TransactionDigest::try_from(stored.tx_digest.clone())
                 .context("Failed to deserialize transaction digest"),
-            Self::Bigtable(kv) => Ok(*kv.transaction.digest()),
+            Self::Bigtable(kv) => Ok(kv.digest),
             Self::LedgerGrpc(txn) => Ok(*txn.effects.as_ref().transaction_digest()),
-            Self::ExecutedTransaction { effects, .. } => Ok(*effects.as_ref().transaction_digest()),
+            Self::ExecutedTransaction(tx) => Ok(*tx.effects.as_ref().transaction_digest()),
         }
     }
 
@@ -330,9 +453,13 @@ impl TransactionContents {
 
                 Ok(effects.digest())
             }
-            Self::Bigtable(kv) => Ok(kv.effects.digest()),
+            Self::Bigtable(kv) => Ok(kv
+                .effects
+                .as_ref()
+                .context("effects missing from bigtable data")?
+                .digest()),
             Self::LedgerGrpc(txn) => Ok(txn.effects.digest()),
-            Self::ExecutedTransaction { effects, .. } => Ok(effects.digest()),
+            Self::ExecutedTransaction(tx) => Ok(tx.effects.digest()),
         }
     }
 
@@ -341,9 +468,12 @@ impl TransactionContents {
             Self::Pg(stored) => {
                 bcs::from_bytes(&stored.user_signatures).context("Failed to deserialize signatures")
             }
-            Self::Bigtable(kv) => Ok(kv.transaction.tx_signatures().to_vec()),
+            Self::Bigtable(kv) => kv
+                .signatures
+                .clone()
+                .context("signatures missing from bigtable data"),
             Self::LedgerGrpc(txn) => Ok(txn.signatures.clone()),
-            Self::ExecutedTransaction { signatures, .. } => Ok(signatures.clone()),
+            Self::ExecutedTransaction(tx) => Ok(tx.signatures.clone()),
         }
     }
 
@@ -352,29 +482,37 @@ impl TransactionContents {
             Self::Pg(stored) => {
                 bcs::from_bytes(&stored.raw_effects).context("Failed to deserialize effects")
             }
-            Self::Bigtable(kv) => Ok(kv.effects.clone()),
+            Self::Bigtable(kv) => kv
+                .effects
+                .clone()
+                .context("effects missing from bigtable data"),
             Self::LedgerGrpc(txn) => Ok(txn.effects.as_ref().clone()),
-            Self::ExecutedTransaction { effects, .. } => Ok(effects.as_ref().clone()),
+            Self::ExecutedTransaction(tx) => Ok(tx.effects.as_ref().clone()),
         }
     }
 
-    pub fn events(&self) -> anyhow::Result<Vec<Event>> {
+    /// Returns the events for this transaction. Each `Event` is wrapped in an `Arc` so
+    /// callers fanning the same transaction out to multiple consumers (e.g., subscription
+    /// resolvers serving different subscribers) share the underlying event allocation
+    /// rather than each performing a deep clone.
+    pub fn events(&self) -> anyhow::Result<Vec<Arc<Event>>> {
+        fn wrap(events: Vec<Event>) -> Vec<Arc<Event>> {
+            events.into_iter().map(Arc::new).collect()
+        }
         match self {
-            Self::Pg(stored) => {
-                bcs::from_bytes(&stored.events).context("Failed to deserialize events")
-            }
-            Self::Bigtable(kv) => Ok(kv.events.clone().unwrap_or_default().data),
-            Self::LedgerGrpc(txn) => Ok(txn.events.clone().unwrap_or_default()),
-            Self::ExecutedTransaction { events, .. } => Ok(events.clone().unwrap_or_default()),
+            Self::Pg(stored) => bcs::from_bytes(&stored.events)
+                .context("Failed to deserialize events")
+                .map(wrap),
+            Self::Bigtable(kv) => Ok(wrap(kv.events.clone().unwrap_or_default().data)),
+            Self::LedgerGrpc(txn) => Ok(wrap(txn.events.clone().unwrap_or_default())),
+            Self::ExecutedTransaction(tx) => Ok(tx.events.clone()),
         }
     }
 
     pub fn balance_changes(&self) -> Option<Vec<BalanceChangeContents>> {
         match self {
-            Self::ExecutedTransaction {
-                balance_changes, ..
-            } => Some(
-                balance_changes
+            Self::ExecutedTransaction(tx) => Some(
+                tx.balance_changes
                     .iter()
                     .map(|c| BalanceChangeContents::Grpc(c.clone()))
                     .collect(),
@@ -401,9 +539,9 @@ impl TransactionContents {
     /// For other sources, converts native effects to proto.
     pub fn proto_effects(&self) -> anyhow::Result<grpc::TransactionEffects> {
         match self {
-            Self::ExecutedTransaction { proto_effects, .. } => {
+            Self::ExecutedTransaction(tx) => {
                 // Use cached proto if available, otherwise convert from native
-                if let Some(proto) = proto_effects {
+                if let Some(proto) = &tx.proto_effects {
                     Ok(proto.clone())
                 } else {
                     Ok(self.effects()?.into())
@@ -419,11 +557,9 @@ impl TransactionContents {
     /// For other sources, converts native transaction to proto.
     pub fn proto_transaction(&self) -> anyhow::Result<grpc::Transaction> {
         match self {
-            Self::ExecutedTransaction {
-                proto_transaction, ..
-            } => {
+            Self::ExecutedTransaction(tx) => {
                 // Use cached proto if available, otherwise convert from native
-                if let Some(proto) = proto_transaction {
+                if let Some(proto) = &tx.proto_transaction {
                     Ok(proto.clone())
                 } else {
                     Ok(self.data()?.into())
@@ -436,27 +572,35 @@ impl TransactionContents {
     pub fn raw_transaction(&self) -> anyhow::Result<Vec<u8>> {
         match self {
             Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
-            Self::Bigtable(kv) => bcs::to_bytes(kv.transaction.data().transaction_data())
-                .context("Failed to serialize transaction"),
+            Self::Bigtable(kv) => {
+                let tx_data = kv
+                    .transaction_data
+                    .as_ref()
+                    .context("transaction_data missing from bigtable data")?;
+                bcs::to_bytes(tx_data).context("Failed to serialize transaction")
+            }
             Self::LedgerGrpc(txn) => bcs::to_bytes(txn.transaction_data.as_ref())
                 .context("Failed to serialize transaction"),
-            Self::ExecutedTransaction {
-                transaction_data, ..
-            } => {
-                bcs::to_bytes(transaction_data.as_ref()).context("Failed to serialize transaction")
-            }
+            Self::ExecutedTransaction(tx) => bcs::to_bytes(tx.transaction_data.as_ref())
+                .context("Failed to serialize transaction"),
         }
     }
 
     pub fn raw_effects(&self) -> anyhow::Result<Vec<u8>> {
         match self {
             Self::Pg(stored) => Ok(stored.raw_effects.clone()),
-            Self::Bigtable(kv) => bcs::to_bytes(&kv.effects).context("Failed to serialize effects"),
+            Self::Bigtable(kv) => {
+                let effects = kv
+                    .effects
+                    .as_ref()
+                    .context("effects missing from bigtable data")?;
+                bcs::to_bytes(effects).context("Failed to serialize effects")
+            }
             Self::LedgerGrpc(txn) => {
                 bcs::to_bytes(txn.effects.as_ref()).context("Failed to serialize effects")
             }
-            Self::ExecutedTransaction { effects, .. } => {
-                bcs::to_bytes(effects.as_ref()).context("Failed to serialize effects")
+            Self::ExecutedTransaction(tx) => {
+                bcs::to_bytes(tx.effects.as_ref()).context("Failed to serialize effects")
             }
         }
     }
@@ -466,7 +610,7 @@ impl TransactionContents {
             Self::Pg(stored) => Some(stored.timestamp_ms as u64),
             Self::Bigtable(kv) => Some(kv.timestamp),
             Self::LedgerGrpc(txn) => txn.timestamp_ms,
-            Self::ExecutedTransaction { .. } => None, // No timestamp until checkpointed
+            Self::ExecutedTransaction(tx) => tx.timestamp_ms,
         }
     }
 
@@ -475,7 +619,7 @@ impl TransactionContents {
             Self::Pg(stored) => Some(stored.cp_sequence_number as u64),
             Self::Bigtable(kv) => Some(kv.checkpoint_number),
             Self::LedgerGrpc(txn) => txn.cp_sequence_number,
-            Self::ExecutedTransaction { .. } => None,
+            Self::ExecutedTransaction(tx) => tx.cp_sequence_number,
         }
     }
 }

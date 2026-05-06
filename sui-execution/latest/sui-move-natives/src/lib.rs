@@ -42,6 +42,7 @@ use self::{
 };
 use crate::crypto::group_ops::GroupOpsCostParams;
 use crate::crypto::poseidon::PoseidonBN254CostParams;
+use crate::crypto::rangeproofs::{self, BulletproofsCostParams};
 use crate::crypto::zklogin;
 use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostParams};
 use crate::{crypto::group_ops, transfer::PartyTransferInternalCostParams};
@@ -49,6 +50,7 @@ use better_any::{Tid, TidAble};
 use crypto::nitro_attestation::{self, NitroAttestationCostParams};
 use crypto::vdf::{self, VDFCostParams};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_binary_format::safe_unwrap;
 use move_core_types::{
     annotated_value as A,
     gas_algebra::{AbstractMemorySize, InternalGas},
@@ -199,6 +201,9 @@ pub struct NativesCostTable {
 
     // nitro attestation
     pub nitro_attestation_cost_params: NitroAttestationCostParams,
+
+    // bulletproofs range proofs
+    pub bulletproofs_cost_params: BulletproofsCostParams,
 }
 
 impl NativeExtensionMarker<'_> for NativesCostTable {}
@@ -603,6 +608,14 @@ impl NativesCostTable {
                     .transfer_receive_object_cost_base_as_option()
                     .unwrap_or(0)
                     .into(),
+                transfer_receive_object_internal_cost_per_byte: protocol_config
+                    .transfer_receive_object_cost_per_byte_as_option()
+                    .unwrap_or(0)
+                    .into(),
+                transfer_receive_object_internal_type_cost_per_byte: protocol_config
+                    .transfer_receive_object_type_cost_per_byte_as_option()
+                    .unwrap_or(0)
+                    .into(),
             },
             check_zklogin_id_cost_params: CheckZkloginIdCostParams {
                 check_zklogin_id_cost_base: protocol_config
@@ -776,6 +789,14 @@ impl NativesCostTable {
                     .map(Into::into),
                 verify_cost_per_cert: protocol_config
                     .nitro_attestation_verify_cost_per_cert_as_option()
+                    .map(Into::into),
+            },
+            bulletproofs_cost_params: BulletproofsCostParams {
+                verify_bulletproofs_ristretto255_base_cost: protocol_config
+                    .verify_bulletproofs_ristretto255_base_cost_as_option()
+                    .map(Into::into),
+                verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: protocol_config
+                    .verify_bulletproofs_ristretto255_cost_per_bit_and_commitment_as_option()
                     .map(Into::into),
             },
         }
@@ -1280,6 +1301,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "load_nitro_attestation_internal",
             make_native!(nitro_attestation::load_nitro_attestation_internal),
         ),
+        (
+            "rangeproofs",
+            "verify_bulletproofs_ristretto255_internal",
+            make_native!(rangeproofs::verify_bulletproofs_ristretto255),
+        ),
     ];
     let sui_framework_natives_iter =
         sui_framework_natives
@@ -1288,6 +1314,7 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             .map(|(module_name, func_name, func)| {
                 (
                     SUI_FRAMEWORK_ADDRESS,
+                    // Safe: string literals are always valid identifiers
                     Identifier::new(module_name).unwrap(),
                     Identifier::new(func_name).unwrap(),
                     func,
@@ -1304,6 +1331,7 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         .map(|(module_name, func_name, func)| {
             (
                 SUI_SYSTEM_ADDRESS,
+                // Safe: string literals are always valid identifiers
                 Identifier::new(module_name).unwrap(),
                 Identifier::new(func_name).unwrap(),
                 func,
@@ -1343,7 +1371,7 @@ pub fn get_nested_struct_field(mut v: Value, offsets: &[usize]) -> Result<Value,
 
 pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError> {
     let mut itr = v.value_as::<Struct>()?.unpack();
-    Ok(itr.nth(n).unwrap())
+    Ok(safe_unwrap!(itr.nth(n)))
 }
 
 /// Returns the struct tag, non-annotated type layout, and fully annotated type layout of `ty`.

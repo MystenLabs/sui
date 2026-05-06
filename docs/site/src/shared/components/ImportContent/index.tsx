@@ -125,13 +125,14 @@ type Props = {
   dep?: string;
   test?: string; // target test blocks
   highlight?: string;
+  lines?: string; // line range to extract, e.g. "29-38"
   noComments?: boolean; // if included, remove ALL code comments
   noTests?: boolean; // if included, don't include tests
   noTitle?: boolean;
   style?: string;
   org?: string;
   repo?: string;
-  ref?: string;
+  branch?: string;
   signatureOnly?: boolean; // if included, only display function signature
 };
 
@@ -155,10 +156,11 @@ export default function ImportContent({
   component,
   test,
   highlight,
+  lines,
   style,
   org,
   repo,
-  ref,
+  branch,
   signatureOnly,
 }: Props) {
   const md = React.useMemo(
@@ -178,9 +180,9 @@ export default function ImportContent({
       setGhLoading(true);
       setGhErr(null);
       try {
-        const branch = ref || "main";
+        const branchName = branch || "main";
         const path = String(source || "").replace(/^\.\/?/, "");
-        const url = `https://raw.githubusercontent.com/${org}/${repo}/${branch}/${path}`;
+        const url = `https://raw.githubusercontent.com/${org}/${repo}/${branchName}/${path}`;
         const headers: Record<string, string> = {};
 
         const res = await fetch(url, { headers });
@@ -197,7 +199,7 @@ export default function ImportContent({
     return () => {
       cancelled = true;
     };
-  }, [isGitHub, org, repo, ref, source]);
+  }, [isGitHub, org, repo, branch, source]);
 
   // Handle snippet mode
   if (mode === "snippet") {
@@ -323,6 +325,18 @@ export default function ImportContent({
       /\[dependencies\]\nsui\s?=\s?{\s?local\s?=.*sui-framework.*\n/i,
       "[dependencies]",
     );
+
+  if (lines) {
+    const parts = lines.split("-").map((n) => parseInt(n, 10));
+    const start = parts[0];
+    const end = parts[1] ?? parts[0];
+    if (!isNaN(start) && !isNaN(end)) {
+      out = out
+        .split("\n")
+        .slice(start - 1, end)
+        .join("\n");
+    }
+  }
 
   if (tag) {
     out = utils.returnTag(out, tag);

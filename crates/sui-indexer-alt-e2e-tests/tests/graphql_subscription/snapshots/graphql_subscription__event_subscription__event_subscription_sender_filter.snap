@@ -1,0 +1,18 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/event_subscription.rs
+expression: item
+---
+{
+  "data": {
+    "events": {
+      "sender": {
+        "address": "[address]"
+      },
+      "contents": {
+        "type": {
+          "repr": "[pkg]::emit_test_event::TestEvent"
+        }
+      }
+    }
+  }
+}

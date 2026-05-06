@@ -415,6 +415,15 @@ impl Database {
     }
 
     #[cfg(tidehunter)]
+    pub fn force_rebuild_control_region(&self) -> anyhow::Result<()> {
+        if let Storage::TideHunter(db) = &self.storage {
+            db.force_rebuild_control_region()
+                .map_err(|e| anyhow::anyhow!("{:?}", e))?;
+        }
+        Ok(())
+    }
+
+    #[cfg(tidehunter)]
     pub fn drop_cells_in_range(
         &self,
         ks: KeySpace,
@@ -706,6 +715,20 @@ impl<K, V> DBMap<K, V> {
         if let ColumnFamily::TideHunter((ks, _)) = &self.column_family {
             self.db
                 .drop_cells_in_range(*ks, &from_buf, &to_buf)
+                .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
+        }
+        Ok(())
+    }
+
+    #[cfg(tidehunter)]
+    pub fn drop_cells_in_range_raw(
+        &self,
+        from_inclusive: &[u8],
+        to_inclusive: &[u8],
+    ) -> Result<(), TypedStoreError> {
+        if let ColumnFamily::TideHunter((ks, _)) = &self.column_family {
+            self.db
+                .drop_cells_in_range(*ks, from_inclusive, to_inclusive)
                 .map_err(|e| TypedStoreError::RocksDBError(e.to_string()))?;
         }
         Ok(())
@@ -1122,7 +1145,7 @@ impl<K, V> DBMap<K, V> {
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
+                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound, prefix);
                     iter.reverse();
                     Ok(Box::new(transform_th_iterator(
                         iter,
@@ -1806,7 +1829,7 @@ where
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound, prefix);
                     Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
@@ -1839,7 +1862,7 @@ where
             Storage::TideHunter(db) => match &self.column_family {
                 ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
-                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound, prefix);
                     Box::new(transform_th_iterator(iter, prefix, self.start_iter_timer()))
                 }
                 _ => unreachable!("storage backend invariant violation"),
@@ -2024,8 +2047,19 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
 }
 
 // Drops a database if there is no other handle to it, with retries and timeout.
-#[cfg(not(tidehunter))]
-pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksdb::Error> {
+// Detects the storage variant (RocksDB vs. tidehunter) from the directory
+// contents and dispatches to the matching cleanup. Both variants coexist in
+// tidehunter builds — some stores (e.g. rpc-index) are pure RocksDB even when
+// the tidehunter feature is enabled elsewhere in the binary.
+pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
+    #[cfg(tidehunter)]
+    if is_tidehunter_db(&path) {
+        return safe_drop_tidehunter_db(path, timeout).await;
+    }
+    safe_drop_rocksdb(path, timeout).await
+}
+
+async fn safe_drop_rocksdb(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
         ..Default::default()
@@ -2035,31 +2069,41 @@ pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksd
             Ok(()) => return Ok(()),
             Err(err) => match backoff.next_backoff() {
                 Some(duration) => tokio::time::sleep(duration).await,
-                None => return Err(err),
+                None => return Err(std::io::Error::other(err)),
             },
         }
     }
 }
 
 #[cfg(tidehunter)]
-pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
+fn is_tidehunter_db(path: &Path) -> bool {
+    // `shape.yaml` is written by TideHunterDb::open and is the canonical marker
+    // for a tidehunter DB directory; RocksDB never creates it.
+    path.join("shape.yaml").exists()
+}
+
+#[cfg(tidehunter)]
+async fn safe_drop_tidehunter_db(path: PathBuf, timeout: Duration) -> Result<(), std::io::Error> {
     let mut backoff = backoff::ExponentialBackoff {
         max_elapsed_time: Some(timeout),
         ..Default::default()
     };
     loop {
-        if !path.join("LOCK").exists() {
-            return std::fs::remove_dir_all(path);
-        }
-        match backoff.next_backoff() {
-            Some(duration) => tokio::time::sleep(duration).await,
-            None => {
-                warn!(
-                    "LOCK file present after timeout ({:?}), forcefully removing: {:?}",
-                    timeout, path
-                );
-                return std::fs::remove_dir_all(&path);
+        match TideHunterDb::drop_db(&path) {
+            Ok(()) => return Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                match backoff.next_backoff() {
+                    Some(duration) => tokio::time::sleep(duration).await,
+                    None => {
+                        warn!(
+                            "Database at {:?} is still locked after timeout ({:?})",
+                            path, timeout
+                        );
+                        return Err(err);
+                    }
+                }
             }
+            Err(err) => return Err(err),
         }
     }
 }

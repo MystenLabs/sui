@@ -173,13 +173,20 @@ fn function<S: SourceKind>(
         move_model_2::pretty_printer::fun_header(model_fun, /* use_param_names */ false);
 
     let crate::ast::Function { name: _, code } = fun;
-    let exp_doc = exp(context, code);
 
-    header
-        .concat_space(Doc::text("{"))
-        .concat(Doc::nest(Doc::line().concat(exp_doc), 4))
-        .concat(Doc::line())
-        .concat(Doc::text("}"))
+    // Three cases for the body to avoid double-bracing:
+    // - empty Seq (e.g., from a refined-away trailing `return`) -> just `{}`
+    // - non-empty Seq -> already renders as `{ ... }`, use it as-is
+    // - any other Exp -> wrap in our own braces
+    match code {
+        Exp::Seq(seq) if seq.is_empty() => header.concat_space(Doc::text("{}")),
+        Exp::Seq(_) => header.concat_space(exp(context, code)),
+        _ => header
+            .concat_space(Doc::text("{"))
+            .concat(Doc::nest(Doc::line().concat(exp(context, code)), 4))
+            .concat(Doc::line())
+            .concat(Doc::text("}")),
+    }
 }
 
 fn exp(context: &Context, exp: &Exp) -> Doc {
@@ -263,16 +270,16 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
             Exp::Loop(b) => D::text("loop").concat_space(e_block(context, b)),
             Exp::While(c, b) => while_doc(context, c, b),
             Exp::IfElse(c, t, e) => if_doc(context, c, t, e),
-            Exp::Switch(subject, (mid, enum_), arms) => {
+            Exp::Switch(subject, (_mid, enum_), arms) => {
                 let arms_doc = Doc::intersperse(
                     arms.iter().map(|(variant, body)| {
-                        D::text(variant.as_str())
+                        D::text(format!("{enum_}::{variant}"))
                             .concat_space(D::text("=>"))
                             .concat_space(e_block(context, body))
                     }),
                     D::text(",").concat(D::line()),
                 );
-                D::text(format!("switch {mid}::{enum_}"))
+                D::text("match")
                     .concat_space(D::parens(recur(context, subject)))
                     .concat_space(braces_block(arms_doc))
             }
@@ -427,7 +434,7 @@ fn data_op_doc(context: &Context, op: &DataOp, args: &[Exp]) -> Doc {
             .concat(D::text("."))
             .concat(D::text(field_ref.field.name.as_str())),
 
-        DataOp::VecPack(_) => D::text("vec![")
+        DataOp::VecPack(_) => D::text("vector[")
             .concat(exp_list(context, args))
             .concat(D::text("]")),
 
@@ -560,7 +567,7 @@ fn value(v: &Value) -> Doc {
         Value::U128(u) => D::text(u.to_string()).concat(D::text("u128")),
         Value::U256(u) => D::text(u.to_string()).concat(D::text("u256")),
         Value::Address(a) => D::text(format!("@{:X}", a)),
-        Value::Vector(values) => D::text("vec![")
+        Value::Vector(values) => D::text("vector[")
             .concat(D::intersperse(
                 values.iter().map(value),
                 D::text(",").concat(D::space()),

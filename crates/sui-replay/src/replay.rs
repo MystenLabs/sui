@@ -56,7 +56,7 @@ use sui_types::{
     executable_transaction::VerifiedExecutableTransaction,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     object::{Object, Owner},
     storage::get_module_by_id,
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
@@ -246,7 +246,7 @@ pub struct LocalExec {
     // Debug events
     pub exec_store_events: Arc<Mutex<Vec<ExecutionStoreEvent>>>,
     // Debug events
-    pub metrics: Arc<LimitsMetrics>,
+    pub metrics: Arc<ExecutionMetrics>,
     // Used for fetching data from the network or remote store
     pub fetcher: Fetchers,
 
@@ -384,7 +384,7 @@ impl LocalExec {
     ) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
         let fetcher = remote_fetcher.unwrap_or(RemoteFetcher::new(client.clone()));
 
@@ -412,7 +412,7 @@ impl LocalExec {
     ) -> Result<Self, ReplayEngineError> {
         // Use a throwaway metrics registry for local execution.
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
         let state = NodeStateDump::read_from_file(&PathBuf::from(path))?;
         let current_protocol_version = state.protocol_version;
@@ -793,7 +793,7 @@ impl LocalExec {
             None => ExecutionOrEarlyError::Ok(()),
         };
         let (inner_store, gas_status, effects, _timings, result) = executor
-            .execute_transaction_to_effects(
+            .execute_transaction_to_effects_and_execution_error(
                 &self,
                 protocol_config,
                 metrics.clone(),
@@ -805,6 +805,7 @@ impl LocalExec {
                 gas_data,
                 gas_status,
                 transaction_kind.clone(),
+                None, // compat_args
                 tx_info.sender,
                 *tx_digest,
                 &mut None,
@@ -844,7 +845,7 @@ impl LocalExec {
         tx_info: &OnChainTransactionInfo,
         transaction_kind: &TransactionKind,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         expensive_checks: bool,
         input_objects: InputObjects,
     ) -> anyhow::Result<()> {
@@ -876,6 +877,7 @@ impl LocalExec {
                 Pretty(&FullPTB {
                     ptb: pt.clone(),
                     results: transform_command_results_to_annotated(
+                        protocol_config,
                         executor,
                         &self.clone(),
                         executor.dev_inspect_transaction(
@@ -895,6 +897,7 @@ impl LocalExec {
                                 protocol_config,
                             )?,
                             transaction_kind.clone(),
+                            None, // compat_args
                             tx_info.sender,
                             tx_info.sender_signed_data.digest(),
                             skip_checks,
@@ -985,22 +988,24 @@ impl LocalExec {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (_, _, effects, _timings, exec_res) = executor.execute_transaction_to_effects(
-            &store,
-            &protocol_config,
-            Arc::new(LimitsMetrics::new(&Registry::new())),
-            true,
-            execution_params,
-            &executed_epoch,
-            epoch_start_timestamp,
-            input_objects,
-            gas_data,
-            gas_status,
-            kind,
-            signer,
-            *executable.digest(),
-            &mut None,
-        );
+        let (_, _, effects, _timings, exec_res) = executor
+            .execute_transaction_to_effects_and_execution_error(
+                &store,
+                &protocol_config,
+                Arc::new(ExecutionMetrics::new(&Registry::new())),
+                true,
+                execution_params,
+                &executed_epoch,
+                epoch_start_timestamp,
+                input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                None, // compat_args
+                signer,
+                *executable.digest(),
+                &mut None,
+            );
 
         let effects =
             SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;

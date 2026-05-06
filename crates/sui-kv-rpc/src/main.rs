@@ -1,16 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use anyhow::Result;
 use axum::Router;
 use axum::routing::get;
 use clap::Parser;
-use mysten_network::callback::CallbackLayer;
 use prometheus::Registry;
-use std::sync::Arc;
-use std::time::Duration;
-use sui_kv_rpc::{KvRpcServer, PoolConfig};
-use sui_rpc_api::{RpcMetrics, RpcMetricsMakeCallbackHandler, ServerVersion};
+use sui_kv_rpc::DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES;
+use sui_kv_rpc::KvRpcServer;
+use sui_kv_rpc::PoolConfig;
+use sui_kv_rpc::ServerConfig;
+use sui_kvstore::validate_pipeline_name;
+use sui_rpc_api::ServerVersion;
+use telemetry_subscribers::TelemetryConfig;
+use tonic::transport::Identity;
 
 #[derive(Parser)]
 struct PoolArgs {
@@ -35,8 +40,6 @@ impl From<PoolArgs> for PoolConfig {
         }
     }
 }
-use telemetry_subscribers::TelemetryConfig;
-use tonic::transport::{Identity, Server, ServerTlsConfig};
 
 bin_version::bin_version!();
 
@@ -64,6 +67,15 @@ struct App {
     app_profile_id: Option<String>,
     #[clap(long = "checkpoint-bucket")]
     checkpoint_bucket: Option<String>,
+    /// Pipeline watermark to include when reporting GetServiceInfo checkpoint height. Repeat to
+    /// include multiple pipelines.
+    #[clap(
+        long = "watermark-pipeline",
+        value_name = "PIPELINE",
+        value_delimiter = ',',
+        value_parser = validate_pipeline_name
+    )]
+    watermark_pipeline: Vec<&'static str>,
     /// Channel-level timeout in milliseconds for BigTable gRPC calls (default: 60000)
     #[clap(long = "bigtable-channel-timeout-ms")]
     bigtable_channel_timeout_ms: Option<u64>,
@@ -90,6 +102,11 @@ async fn main() -> Result<()> {
     mysten_metrics::init_metrics(&registry);
     let channel_timeout = app.bigtable_channel_timeout_ms.map(Duration::from_millis);
     let pool_config: PoolConfig = app.pool.into();
+    let service_info_watermark_pipelines = if app.watermark_pipeline.is_empty() {
+        DEFAULT_SERVICE_INFO_WATERMARK_PIPELINES.to_vec()
+    } else {
+        app.watermark_pipeline
+    };
 
     let server = KvRpcServer::new(
         app.instance_id,
@@ -101,30 +118,25 @@ async fn main() -> Result<()> {
         &registry,
         app.credentials,
         pool_config,
+        service_info_watermark_pipelines,
     )
     .await?;
-    let addr = app.address.parse()?;
-    let mut builder = Server::builder();
-    if !app.tls_cert.is_empty() && !app.tls_key.is_empty() {
-        let identity =
-            Identity::from_pem(std::fs::read(app.tls_cert)?, std::fs::read(app.tls_key)?);
-        let tls_config = ServerTlsConfig::new().identity(identity);
-        builder = builder.tls_config(tls_config)?;
-    }
-    let reflection_v1 = tonic_reflection::server::Builder::configure()
-        .register_encoded_file_descriptor_set(
-            sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
-        )
-        .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
-        .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
-        .build_v1()?;
-    let reflection_v1alpha = tonic_reflection::server::Builder::configure()
-        .register_encoded_file_descriptor_set(
-            sui_rpc_api::proto::google::protobuf::FILE_DESCRIPTOR_SET,
-        )
-        .register_encoded_file_descriptor_set(sui_rpc_api::proto::google::rpc::FILE_DESCRIPTOR_SET)
-        .register_encoded_file_descriptor_set(sui_rpc::proto::sui::rpc::v2::FILE_DESCRIPTOR_SET)
-        .build_v1alpha()?;
+
+    let tls_identity = if !app.tls_cert.is_empty() && !app.tls_key.is_empty() {
+        Some(Identity::from_pem(
+            std::fs::read(app.tls_cert)?,
+            std::fs::read(app.tls_key)?,
+        ))
+    } else {
+        None
+    };
+
+    let config = ServerConfig {
+        tls_identity,
+        metrics_registry: Some(registry),
+        enable_reflection: true,
+    };
+
     tokio::spawn(async {
         let web_server = Router::new().route("/health", get(health_check));
         let listener = tokio::net::TcpListener::bind("0.0.0.0:8081")
@@ -134,16 +146,8 @@ async fn main() -> Result<()> {
             .await
             .expect("healh check service failed");
     });
-    builder
-        .layer(CallbackLayer::new(RpcMetricsMakeCallbackHandler::new(
-            Arc::new(RpcMetrics::new(&registry)),
-        )))
-        .add_service(
-            sui_rpc::proto::sui::rpc::v2::ledger_service_server::LedgerServiceServer::new(server),
-        )
-        .add_service(reflection_v1)
-        .add_service(reflection_v1alpha)
-        .serve(addr)
-        .await?;
+
+    let addr = app.address.parse()?;
+    server.start_service(addr, config).await?.main().await?;
     Ok(())
 }

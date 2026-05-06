@@ -60,7 +60,7 @@ public(package) fun add_for_next_epoch<
     ctx: &mut TxContext,
 ): Option<Value> {
     let epoch = ctx.epoch();
-    if (!field::exists_(&config.id, name)) {
+    if (!field::exists(&config.id, name)) {
         let sobj = Setting {
             data: option::some(SettingData {
                 newer_value_epoch: epoch,
@@ -110,7 +110,7 @@ public(package) fun remove_for_next_epoch<
     ctx: &mut TxContext,
 ): Option<Value> {
     let epoch = ctx.epoch();
-    if (!field::exists_(&config.id, name)) return option::none();
+    if (!field::exists(&config.id, name)) return option::none();
     let sobj: &mut Setting<Value> = field::borrow_mut(&mut config.id, name);
     let SettingData {
         newer_value_epoch,

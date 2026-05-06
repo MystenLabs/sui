@@ -3,7 +3,7 @@
 
 // tests vector of objects
 
-//# init --addresses Test=0x0 --accounts A --protocol-version 20
+//# init --addresses Test=0x0 --accounts A --protocol-version 20 --file-format 6
 
 //# publish
 module Test::M {

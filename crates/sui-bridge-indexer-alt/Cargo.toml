@@ -21,7 +21,6 @@ diesel.workspace = true
 diesel-async.workspace = true
 clap.workspace = true
 url.workspace = true
-mysten-metrics.workspace = true
 telemetry-subscribers.workspace = true
 prometheus.workspace = true
 serde_json.workspace = true

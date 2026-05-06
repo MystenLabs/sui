@@ -28,6 +28,7 @@ use move_core_types::{
     },
 };
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_rpc_api::Client;
@@ -581,7 +582,7 @@ impl<'a> PTBBuilder<'a> {
         }
 
         let mut call_args = vec![];
-        for (param, arg) in parameters.iter().zip(args.into_iter()) {
+        for (param, arg) in parameters.iter().zip_debug_eq(args.into_iter()) {
             let call_arg = self
                 .resolve_move_call_arg(&module, ty_args, arg, param)
                 .await?;

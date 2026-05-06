@@ -21,6 +21,7 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::{MoveStructLayout, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
+use mysten_common::ZipDebugEqIteratorExt;
 use once_cell::sync::Lazy;
 use serde_json::Value as Json;
 use shared_crypto::intent::{IntentMessage, PersonalMessage};
@@ -162,10 +163,10 @@ impl<'s> DisplayStore<'s> {
 
 #[async_trait]
 impl sui_display::v2::Store for DisplayStore<'_> {
-    async fn object(
+    async fn latest(
         &self,
         id: AccountAddress,
-    ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+    ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
         let read = self.state.get_object_read(&id.into())?;
         let ObjectRead::Exists(_, object, Some(layout)) = read else {
             return Ok(None);
@@ -175,10 +176,10 @@ impl sui_display::v2::Store for DisplayStore<'_> {
             return Ok(None);
         };
 
-        Ok(Some(sui_display::v2::OwnedSlice {
-            bytes: move_object.contents().to_vec(),
-            layout: MoveTypeLayout::Struct(Box::new(layout)),
-        }))
+        Ok(Some((
+            MoveTypeLayout::Struct(Box::new(layout)),
+            move_object.contents().to_vec(),
+        )))
     }
 }
 
@@ -301,7 +302,7 @@ impl ReadApi {
 
         for (summary_and_sig, content) in checkpoint_summaries_and_signatures
             .into_iter()
-            .zip(contents.into_iter())
+            .zip_debug_eq(contents.into_iter())
         {
             checkpoints.push(Checkpoint::from((
                 summary_and_sig.0,
@@ -352,8 +353,9 @@ impl ReadApi {
                     |err| debug!(digests=?digests_clone, "Failed to multi get transactions: {:?}", err),
                 )?;
 
-            for ((_digest, cache_entry), txn) in
-                temp_response.iter_mut().zip(transactions.into_iter())
+            for ((_digest, cache_entry), txn) in temp_response
+                .iter_mut()
+                .zip_debug_eq(transactions.into_iter())
             {
                 cache_entry.transaction = txn;
             }
@@ -369,8 +371,9 @@ impl ReadApi {
                 .tap_err(
                     |err| debug!(digests=?digests_clone, "Failed to multi get effects for transactions: {:?}", err),
                 )?;
-            for ((_digest, cache_entry), e) in
-                temp_response.iter_mut().zip(effects_list.into_iter())
+            for ((_digest, cache_entry), e) in temp_response
+                .iter_mut()
+                .zip_debug_eq(effects_list.into_iter())
             {
                 cache_entry.effects = e;
             }
@@ -385,7 +388,7 @@ impl ReadApi {
                 |err| debug!(digests=?digests, "Failed to multi get checkpoint sequence number: {:?}", err))?;
         for ((_digest, cache_entry), seq) in temp_response
             .iter_mut()
-            .zip(checkpoint_seq_list.into_iter())
+            .zip_debug_eq(checkpoint_seq_list.into_iter())
         {
             cache_entry.checkpoint_seq = seq;
         }
@@ -413,7 +416,7 @@ impl ReadApi {
         // construct a hashmap of checkpoint -> timestamp for fast lookup
         let checkpoint_to_timestamp = unique_checkpoint_numbers
             .into_iter()
-            .zip(timestamps)
+            .zip_debug_eq(timestamps)
             .collect::<HashMap<_, _>>();
 
         // fill cache with the timestamp
@@ -559,7 +562,7 @@ impl ReadApi {
                 ));
             }
             let results = join_all(results).await;
-            for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
+            for (result, entry) in results.into_iter().zip_debug_eq(temp_response.iter_mut()) {
                 match result {
                     Ok(balance_changes) => entry.1.balance_changes = Some(balance_changes),
                     Err(e) => entry
@@ -602,7 +605,7 @@ impl ReadApi {
                 ));
             }
             let results = join_all(results).await;
-            for (result, entry) in results.into_iter().zip(temp_response.iter_mut()) {
+            for (result, entry) in results.into_iter().zip_debug_eq(temp_response.iter_mut()) {
                 match result {
                     Ok(object_changes) => entry.1.object_changes = Some(object_changes),
                     Err(e) => entry
@@ -1036,9 +1039,11 @@ impl ReadApiServer for ReadApi {
                         .map(|(seq, e)| {
                             let layout = store
                                 .executor()
-                                .type_layout_resolver(Box::new(
-                                    &state.get_backing_package_store().as_ref(),
-                                ))
+                                .type_layout_resolver(
+                                    store.protocol_config(),
+                                    Box::new(
+                                        &state.get_backing_package_store().as_ref(),
+                                    ))
                                 .get_annotated_layout(&e.type_)?;
                             SuiEvent::try_from(e, transaction_digest, seq as u64, None, layout)
                         })
@@ -1292,9 +1297,10 @@ fn to_sui_transaction_events(
 ) -> Result<SuiTransactionBlockEvents, Error> {
     let epoch_store = fullnode_api.state.load_epoch_store_one_call_per_task();
     let backing_package_store = fullnode_api.state.get_backing_package_store();
-    let mut layout_resolver = epoch_store
-        .executor()
-        .type_layout_resolver(Box::new(backing_package_store.as_ref()));
+    let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+        epoch_store.protocol_config(),
+        Box::new(backing_package_store.as_ref()),
+    );
     Ok(SuiTransactionBlockEvents::try_from(
         events,
         tx_digest,
@@ -1351,11 +1357,7 @@ async fn get_display_fields(
 
     let display: Vec<(String, Result<Json, anyhow::Error>)> =
         if let Some(display_object) = get_display_object_v2_by_type(fullnode_api, type_)? {
-            let root = sui_display::v2::OwnedSlice {
-                bytes: move_object.contents().to_owned(),
-                layout,
-            };
-
+            let root = sui_display::v2::OwnedSlice::new(layout, move_object.contents().to_owned());
             let store = DisplayStore::new(fullnode_api.state.as_ref());
             let interpreter = sui_display::v2::Interpreter::new(root, store);
             let limits = sui_display::v2::Limits {

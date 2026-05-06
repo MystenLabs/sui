@@ -22,7 +22,7 @@ module entry_point_types::entry_point_types {
         total_len: u64,
         _: &mut TxContext
     ) {
-        let mut concat = string::utf8(vector::empty());
+        let mut concat = string::utf8(vector[]);
         while (!vector::is_empty(&v)) {
             let s = vector::pop_back(&mut v);
             string::append(&mut concat, s);

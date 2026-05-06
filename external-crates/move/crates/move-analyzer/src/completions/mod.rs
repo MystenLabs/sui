@@ -14,6 +14,7 @@ use crate::{
         self, Symbols, compilation::CachedPackages, cursor::CursorContext,
         runner::SymbolicatorRunner,
     },
+    utils::canonical_path_from_uri,
 };
 
 use lsp_server::{Message, Request, Response};
@@ -82,18 +83,15 @@ pub fn on_completion_request<F: MoveFlavor>(
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
+    move_flavor: Arc<F>,
     flavor: Option<Flavor>,
 ) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
         .expect("could not deserialize completion request");
 
-    let path = parameters
-        .text_document_position
-        .text_document
-        .uri
-        .to_file_path()
-        .unwrap();
+    let path =
+        canonical_path_from_uri(&parameters.text_document_position.text_document.uri).unwrap();
 
     let mut pos = parameters.text_document_position.position;
     if pos.character != 0 {
@@ -107,6 +105,7 @@ pub fn on_completion_request<F: MoveFlavor>(
         pkg_dependencies,
         &path,
         pos,
+        move_flavor,
         flavor,
         context.auto_imports,
     )
@@ -130,6 +129,7 @@ fn completions<F: MoveFlavor>(
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     pos: Position,
+    move_flavor: Arc<F>,
     flavor: Option<Flavor>,
     auto_import: bool,
 ) -> Option<Vec<CompletionItem>> {
@@ -145,6 +145,7 @@ fn completions<F: MoveFlavor>(
         pkg_dependencies,
         path,
         pos,
+        move_flavor,
         flavor,
         auto_import,
     ))
@@ -166,6 +167,7 @@ pub fn compute_completions<F: MoveFlavor>(
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     pos: Position,
+    move_flavor: Arc<F>,
     flavor: Option<Flavor>,
     auto_import: bool,
 ) -> Vec<CompletionItem> {
@@ -174,6 +176,7 @@ pub fn compute_completions<F: MoveFlavor>(
         pkg_dependencies,
         path,
         pos,
+        move_flavor,
         flavor,
         auto_import,
     )
@@ -194,6 +197,7 @@ fn compute_completions_new_symbols<F: MoveFlavor>(
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     path: &Path,
     cursor_position: Position,
+    move_flavor: Arc<F>,
     flavor: Option<Flavor>,
     auto_import: bool,
 ) -> Option<Vec<CompletionItem>> {
@@ -208,6 +212,7 @@ fn compute_completions_new_symbols<F: MoveFlavor>(
         ide_files_root,
         &pkg_path,
         LintLevel::None,
+        move_flavor,
         cursor_info,
         flavor,
     )

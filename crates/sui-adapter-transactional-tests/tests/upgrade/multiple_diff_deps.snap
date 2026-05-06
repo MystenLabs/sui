@@ -16,7 +16,7 @@ task 2, lines 11-15:
 //# upgrade --package A1 --upgrade-capability 1,1 --sender A
 created: object(2,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 5563200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 4, lines 19-23:
 //# publish --upgradeable --sender A --dependencies A1 A2

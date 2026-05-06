@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use fastcrypto::traits::KeyPair;
 use futures::{TryFutureExt, future};
 use itertools::Itertools as _;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use prometheus::{
@@ -16,11 +17,8 @@ use prometheus::{
     register_int_counter_with_registry,
 };
 use std::{
-    cmp::Ordering,
-    future::Future,
     io,
     net::{IpAddr, SocketAddr},
-    pin::Pin,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -31,8 +29,7 @@ use sui_network::{
 };
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::message_envelope::Message;
-use sui_types::messages_consensus::ConsensusPosition;
-use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
 use sui_types::messages_grpc::{
     ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxResponse, SystemStateRequest,
     TransactionInfoRequest, TransactionInfoResponse,
@@ -43,7 +40,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::traffic_control::{ClientIdSource, Weight};
 use sui_types::{
     base_types::ObjectID,
-    digests::{TransactionDigest, TransactionEffectsDigest},
+    digests::TransactionEffectsDigest,
     error::{SuiErrorKind, UserInputError},
 };
 use sui_types::{
@@ -61,15 +58,15 @@ use sui_types::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
 };
-use tokio::sync::oneshot;
 use tokio::time::timeout;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{debug, error, info, instrument};
 
-use crate::consensus_adapter::ConnectionMonitorStatusForTests;
+use crate::admission_queue::{AdmissionQueueContext, AdmissionQueueManager};
+use crate::gasless_rate_limiter::GaslessRateLimiter;
 use crate::{
     authority::{AuthorityState, consensus_tx_status_cache::ConsensusTxStatus},
-    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, ConsensusOverloadChecker},
     traffic_controller::{TrafficController, parse_ip, policies::TrafficTally},
 };
 use crate::{
@@ -81,7 +78,6 @@ use crate::{
     mysticeti_adapter::LazyMysticetiClient,
 };
 use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
-use sui_types::messages_grpc::PingType;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -139,17 +135,15 @@ impl AuthorityServer {
     }
 
     pub fn new_for_test(state: Arc<AuthorityState>) -> Self {
+        let slot_freed_notify = Arc::new(tokio::sync::Notify::new());
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(LazyMysticetiClient::new()),
             CheckpointStore::new_for_tests(),
             state.name,
-            Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
             100_000,
-            None,
-            None,
             ConsensusAdapterMetrics::new_test(),
-            state.epoch_store_for_testing().protocol_config().clone(),
+            slot_freed_notify,
         ));
         Self::new_for_test_with_consensus_adapter(state, consensus_adapter)
     }
@@ -193,7 +187,6 @@ pub struct ValidatorServiceMetrics {
     pub signature_errors: IntCounter,
     pub tx_verification_latency: Histogram,
     pub cert_verification_latency: Histogram,
-    pub consensus_latency: Histogram,
     pub handle_transaction_latency: Histogram,
     pub submit_certificate_consensus_latency: Histogram,
     pub handle_certificate_consensus_latency: Histogram,
@@ -209,7 +202,6 @@ pub struct ValidatorServiceMetrics {
     handle_submit_transaction_bytes: HistogramVec,
     handle_submit_transaction_batch_size: HistogramVec,
 
-    num_rejected_cert_in_epoch_boundary: IntCounter,
     num_rejected_tx_during_overload: IntCounterVec,
     submission_rejected_transactions: IntCounterVec,
     connection_ip_not_found: IntCounter,
@@ -218,6 +210,9 @@ pub struct ValidatorServiceMetrics {
     forwarded_header_not_included: IntCounter,
     client_id_source_config_mismatch: IntCounter,
     x_forwarded_for_num_hops: Gauge,
+    pub gasless_rate_limited_count: IntCounter,
+    pub gasless_submission_outcomes: IntCounterVec,
+    admission_queue_direct_bypasses: IntCounter,
 }
 
 impl ValidatorServiceMetrics {
@@ -239,13 +234,6 @@ impl ValidatorServiceMetrics {
             cert_verification_latency: register_histogram_with_registry!(
                 "validator_service_cert_verification_latency",
                 "Latency of verifying a certificate",
-                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            consensus_latency: register_histogram_with_registry!(
-                "validator_service_consensus_latency",
-                "Time spent between submitting a txn to consensus and getting back local acknowledgement. Execution and finalization time are not included.",
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
@@ -346,12 +334,6 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            num_rejected_cert_in_epoch_boundary: register_int_counter_with_registry!(
-                "validator_service_num_rejected_cert_in_epoch_boundary",
-                "Number of rejected transaction certificate during epoch transitioning",
-                registry,
-            )
-            .unwrap(),
             num_rejected_tx_during_overload: register_int_counter_vec_with_registry!(
                 "validator_service_num_rejected_tx_during_overload",
                 "Number of rejected transaction due to system overload",
@@ -402,6 +384,25 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
+            gasless_rate_limited_count: register_int_counter_with_registry!(
+                "validator_service_gasless_rate_limited_count",
+                "Number of gasless transactions rejected by rate limiter",
+                registry,
+            )
+            .unwrap(),
+            gasless_submission_outcomes: register_int_counter_vec_with_registry!(
+                "validator_service_gasless_submission_outcomes",
+                "Number of valid gasless transaction submissions by outcome",
+                &["outcome"],
+                registry,
+            )
+            .unwrap(),
+            admission_queue_direct_bypasses: register_int_counter_with_registry!(
+                "validator_service_admission_queue_direct_bypasses",
+                "Number of transactions that bypassed the queue (system not overloaded)",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -411,6 +412,18 @@ impl ValidatorServiceMetrics {
     }
 }
 
+/// Where `handle_submit_transaction` routes a request.
+enum AdmissionQueueSubmitMode {
+    /// System has capacity: submit directly to consensus, skipping the queue.
+    Bypass,
+    /// System is overloaded: admit via the priority queue.
+    Queue,
+    /// Queue is not available — either turned off by config or temporarily
+    /// disabled by failover. Submit directly to consensus, but reject
+    /// individual txs when consensus is saturated (pre-queue behavior).
+    Disabled,
+}
+
 #[derive(Clone)]
 pub struct ValidatorService {
     state: Arc<AuthorityState>,
@@ -418,6 +431,8 @@ pub struct ValidatorService {
     metrics: Arc<ValidatorServiceMetrics>,
     traffic_controller: Option<Arc<TrafficController>>,
     client_id_source: Option<ClientIdSource>,
+    gasless_limiter: GaslessRateLimiter,
+    admission_queue: Option<AdmissionQueueContext>,
 }
 
 impl ValidatorService {
@@ -426,14 +441,18 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         validator_metrics: Arc<ValidatorServiceMetrics>,
         client_id_source: Option<ClientIdSource>,
+        admission_queue: Option<AdmissionQueueContext>,
     ) -> Self {
         let traffic_controller = state.traffic_controller.clone();
+        let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
         Self {
             state,
             consensus_adapter,
             metrics: validator_metrics,
             traffic_controller,
             client_id_source,
+            gasless_limiter,
+            admission_queue,
         }
     }
 
@@ -442,12 +461,22 @@ impl ValidatorService {
         consensus_adapter: Arc<ConsensusAdapter>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Self {
+        let gasless_limiter = GaslessRateLimiter::new(state.consensus_gasless_counter.clone());
+        let epoch_store = state.epoch_store_for_testing().clone();
+        let slot_freed_notify = Arc::new(tokio::sync::Notify::new());
+        let manager = Arc::new(AdmissionQueueManager::new_for_tests(
+            consensus_adapter.clone(),
+            slot_freed_notify,
+        ));
+        let admission_queue = Some(AdmissionQueueContext::spawn(manager, epoch_store));
         Self {
             state,
             consensus_adapter,
             metrics,
             traffic_controller: None,
             client_id_source: None,
+            gasless_limiter,
+            admission_queue,
         }
     }
 
@@ -487,7 +516,6 @@ impl ValidatorService {
 
         // Check system overload
         self.state.check_system_overload(
-            self.consensus_adapter.as_ref(),
             transaction.data(),
             self.state.check_system_overload_at_signing(),
         )?;
@@ -531,7 +559,7 @@ impl ValidatorService {
         // All objects should be found, since owned input objects have been validated to exist.
         objects
             .into_iter()
-            .zip(object_ids.iter())
+            .zip_debug_eq(object_ids.iter())
             .filter_map(|(obj, id)| {
                 let Some(o) = obj else {
                     return Some(Err::<ObjectID, SuiError>(
@@ -565,10 +593,12 @@ impl ValidatorService {
     ) -> WrappedServiceResponse<RawSubmitTxResponse> {
         let Self {
             state,
-            consensus_adapter,
+            consensus_adapter: _,
             metrics,
             traffic_controller: _,
             client_id_source,
+            gasless_limiter: _,
+            admission_queue: _,
         } = self.clone();
 
         let submitter_client_addr = if let Some(client_id_source) = &client_id_source {
@@ -585,13 +615,7 @@ impl ValidatorService {
 
         loop {
             let res = self
-                .handle_submit_transaction_inner(
-                    &state,
-                    &consensus_adapter,
-                    &metrics,
-                    &inner,
-                    submitter_client_addr,
-                )
+                .handle_submit_transaction_inner(&state, &metrics, &inner, submitter_client_addr)
                 .await;
             match res {
                 Ok((response, weight)) => return Ok((tonic::Response::new(response), weight)),
@@ -629,19 +653,11 @@ impl ValidatorService {
     async fn handle_submit_transaction_inner(
         &self,
         state: &AuthorityState,
-        consensus_adapter: &ConsensusAdapter,
         metrics: &ValidatorServiceMetrics,
         request: &RawSubmitTxRequest,
         submitter_client_addr: Option<IpAddr>,
     ) -> SuiResult<(RawSubmitTxResponse, Weight)> {
         let epoch_store = state.load_epoch_store_one_call_per_task();
-        if !epoch_store.protocol_config().mysticeti_fastpath() {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "Mysticeti fastpath".to_string(),
-            }
-            .into());
-        }
-
         let submit_type = SubmitTxType::try_from(request.submit_type).map_err(|e| {
             SuiErrorKind::GrpcMessageDeserializeError {
                 type_info: "RawSubmitTxRequest.submit_type".to_string(),
@@ -706,6 +722,8 @@ impl ValidatorService {
         let mut results: Vec<Option<SubmitTxResult>> = vec![None; request.transactions.len()];
         // Total size of all transactions in the request.
         let mut total_size_bytes = 0;
+        // Traffic control spam weight to use for the transaction.
+        let mut spam_weight = Weight::zero();
 
         let req_type = if is_ping_request {
             "ping"
@@ -722,6 +740,8 @@ impl ValidatorService {
             .with_label_values(&[req_type])
             .start_timer();
 
+        let submit_mode = self.classify_submit_mode(is_ping_request);
+
         for (idx, tx_bytes) in request.transactions.iter().enumerate() {
             let transaction = match bcs::from_bytes::<Transaction>(tx_bytes) {
                 Ok(txn) => txn,
@@ -736,9 +756,21 @@ impl ValidatorService {
 
             // Ok to fail the request when any transaction is invalid.
             let tx_size = transaction.validity_check(&epoch_store.tx_validity_check_context())?;
+            let is_gasless = transaction
+                .data()
+                .transaction_data()
+                .is_gasless_transaction();
+
+            if is_gasless {
+                // Gasless transactions count for traffic control, since they have no economic cost.
+                spam_weight = Weight::one();
+                metrics
+                    .gasless_submission_outcomes
+                    .with_label_values(&["attempted"])
+                    .inc();
+            }
 
             let overload_check_res = state.check_system_overload(
-                consensus_adapter,
                 transaction.data(),
                 state.check_system_overload_at_signing(),
             );
@@ -747,7 +779,46 @@ impl ValidatorService {
                     .num_rejected_tx_during_overload
                     .with_label_values(&[error.as_ref()])
                     .inc();
+                if is_gasless {
+                    metrics
+                        .gasless_submission_outcomes
+                        .with_label_values(&["rejected_overload"])
+                        .inc();
+                }
                 results[idx] = Some(SubmitTxResult::Rejected { error });
+                continue;
+            }
+
+            // Use the pre-queue per-tx consensus overload reject when the
+            // queue is disabled or in failover.
+            if matches!(submit_mode, AdmissionQueueSubmitMode::Disabled)
+                && let Err(error) = self.consensus_adapter.check_consensus_overload()
+            {
+                state.update_overload_metrics("consensus");
+                metrics
+                    .num_rejected_tx_during_overload
+                    .with_label_values(&[error.as_ref()])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected { error });
+                continue;
+            }
+
+            if is_gasless
+                && !self
+                    .gasless_limiter
+                    .try_acquire(epoch_store.protocol_config())
+            {
+                metrics.gasless_rate_limited_count.inc();
+                metrics
+                    .gasless_submission_outcomes
+                    .with_label_values(&["rejected_rate_limited"])
+                    .inc();
+                results[idx] = Some(SubmitTxResult::Rejected {
+                    error: SuiErrorKind::ValidatorOverloadedRetryAfter {
+                        retry_after_secs: 1,
+                    }
+                    .into(),
+                });
                 continue;
             }
 
@@ -773,9 +844,7 @@ impl ValidatorService {
                 }
             };
 
-            let tx_digest = verified_transaction.tx().digest();
-            tx_digests.push(*tx_digest);
-
+            let tx_digest = *verified_transaction.tx().digest();
             debug!(
                 ?tx_digest,
                 "handle_submit_transaction: verified transaction"
@@ -785,14 +854,13 @@ impl ValidatorService {
             // which could have been consumed.
             if let Some(effects) = state
                 .get_transaction_cache_reader()
-                .get_executed_effects(tx_digest)
+                .get_executed_effects(&tx_digest)
             {
                 let effects_digest = effects.digest();
                 if let Ok(executed_data) = self.complete_executed_data(effects).await {
                     let executed_result = SubmitTxResult::Executed {
                         effects_digest,
                         details: Some(executed_data),
-                        fast_path: false,
                     };
                     results[idx] = Some(executed_result);
                     debug!(?tx_digest, "handle_submit_transaction: already executed");
@@ -803,10 +871,10 @@ impl ValidatorService {
             if self
                 .state
                 .get_transaction_cache_reader()
-                .transaction_executed_in_last_epoch(tx_digest, epoch_store.epoch())
+                .transaction_executed_in_last_epoch(&tx_digest, epoch_store.epoch())
             {
                 results[idx] = Some(SubmitTxResult::Rejected {
-                    error: UserInputError::TransactionAlreadyExecuted { digest: *tx_digest }.into(),
+                    error: UserInputError::TransactionAlreadyExecuted { digest: tx_digest }.into(),
                 });
                 debug!(
                     ?tx_digest,
@@ -839,14 +907,13 @@ impl ValidatorService {
                     // This is an edge case so checking executed effects twice is acceptable.
                     if let Some(effects) = state
                         .get_transaction_cache_reader()
-                        .get_executed_effects(tx_digest)
+                        .get_executed_effects(&tx_digest)
                     {
                         let effects_digest = effects.digest();
                         if let Ok(executed_data) = self.complete_executed_data(effects).await {
                             let executed_result = SubmitTxResult::Executed {
                                 effects_digest,
                                 details: Some(executed_data),
-                                fast_path: false,
                             };
                             results[idx] = Some(executed_result);
                             continue;
@@ -906,13 +973,20 @@ impl ValidatorService {
                 &state.name,
                 tx_with_claims,
             ));
+            if is_gasless {
+                metrics
+                    .gasless_submission_outcomes
+                    .with_label_values(&["submitted"])
+                    .inc();
+            }
 
             transaction_indexes.push(idx);
+            tx_digests.push(tx_digest);
             total_size_bytes += tx_size;
         }
 
         if consensus_transactions.is_empty() && !is_ping_request {
-            return Ok((Self::try_from_submit_tx_response(results)?, Weight::zero()));
+            return Ok((Self::try_from_submit_tx_response(results)?, spam_weight));
         }
 
         // Set the max bytes size of the soft bundle to be half of the consensus max transactions in block size.
@@ -953,45 +1027,76 @@ impl ValidatorService {
             .with_label_values(&[req_type])
             .start_timer();
 
-        let consensus_positions = if is_soft_bundle_request || is_ping_request {
+        if is_soft_bundle_request {
             // We only allow the `consensus_transactions` to be empty for ping requests. This is how it should and is be treated from the downstream components.
             // For any other case, having an empty `consensus_transactions` vector is an invalid state and we should have never reached at this point.
             assert!(
-                is_ping_request || !consensus_transactions.is_empty(),
+                !consensus_transactions.is_empty(),
                 "A valid soft bundle must have at least one transaction"
             );
-            debug!(
-                "handle_submit_transaction: submitting consensus transactions ({}): {}",
-                req_type,
-                consensus_transactions
-                    .iter()
-                    .map(|t| t.local_display())
-                    .join(", ")
-            );
-            self.handle_submit_to_consensus_for_position(
-                consensus_transactions,
-                &epoch_store,
-                submitter_client_addr,
-            )
-            .await?
+        }
+
+        // Soft bundles are inserted as a single queue entry.
+        // Individual transactions are each inserted separately.
+        let tx_groups: Vec<Vec<ConsensusTransaction>> = if is_soft_bundle_request || is_ping_request
+        {
+            vec![consensus_transactions]
         } else {
-            let futures = consensus_transactions.into_iter().map(|t| {
-                debug!(
-                    "handle_submit_transaction: submitting consensus transaction ({}): {}",
-                    req_type,
-                    t.local_display(),
-                );
-                self.handle_submit_to_consensus_for_position(
-                    vec![t],
-                    &epoch_store,
-                    submitter_client_addr,
-                )
-            });
-            future::try_join_all(futures)
-                .await?
+            consensus_transactions
                 .into_iter()
-                .flatten()
+                .map(|t| vec![t])
                 .collect()
+        };
+
+        let consensus_positions: Vec<ConsensusPosition> = match submit_mode {
+            AdmissionQueueSubmitMode::Bypass | AdmissionQueueSubmitMode::Disabled => {
+                if matches!(submit_mode, AdmissionQueueSubmitMode::Bypass) {
+                    self.metrics.admission_queue_direct_bypasses.inc();
+                }
+                let futures = tx_groups.into_iter().map(|txns| {
+                    debug!(
+                        "handle_submit_transaction: submitting consensus transactions ({}): {}",
+                        req_type,
+                        txns.iter().map(|t| t.local_display()).join(", ")
+                    );
+                    self.consensus_adapter.submit_and_get_positions(
+                        txns,
+                        &epoch_store,
+                        submitter_client_addr,
+                    )
+                });
+                future::try_join_all(futures)
+                    .await?
+                    .into_iter()
+                    .flatten()
+                    .collect()
+            }
+            AdmissionQueueSubmitMode::Queue => {
+                let aq = self
+                    .admission_queue
+                    .as_ref()
+                    .expect("Queue mode implies admission_queue is Some")
+                    .load();
+                let mut receivers = Vec::with_capacity(tx_groups.len());
+                for txns in tx_groups {
+                    let gas_price = Self::extract_gas_price(&txns);
+                    let (rx, newly_inserted) = aq
+                        .try_insert(gas_price, txns, submitter_client_addr)
+                        .await?;
+                    if !newly_inserted {
+                        // Count duplicate tx submissions towards spam tallies.
+                        spam_weight = Weight::one();
+                    }
+                    receivers.push(rx);
+                }
+                let results = future::try_join_all(receivers.into_iter().map(|rx| async move {
+                    rx.await.map_err(|_| {
+                        SuiError::from(SuiErrorKind::TooManyTransactionsPendingConsensus)
+                    })?
+                }))
+                .await?;
+                results.into_iter().flatten().collect()
+            }
         };
 
         if is_ping_request {
@@ -1004,8 +1109,8 @@ impl ValidatorService {
             // Otherwise, return the consensus position for each transaction.
             for ((idx, tx_digest), consensus_position) in transaction_indexes
                 .into_iter()
-                .zip(tx_digests)
-                .zip(consensus_positions)
+                .zip_debug_eq(tx_digests)
+                .zip_debug_eq(consensus_positions)
             {
                 debug!(
                     ?tx_digest,
@@ -1016,7 +1121,7 @@ impl ValidatorService {
             }
         }
 
-        Ok((Self::try_from_submit_tx_response(results)?, Weight::zero()))
+        Ok((Self::try_from_submit_tx_response(results)?, spam_weight))
     }
 
     fn try_from_submit_tx_response(
@@ -1035,48 +1140,47 @@ impl ValidatorService {
         })
     }
 
-    #[instrument(
-        name = "ValidatorService::handle_submit_to_consensus_for_position",
-        level = "debug",
-        skip_all,
-        err(level = "debug")
-    )]
-    async fn handle_submit_to_consensus_for_position(
-        &self,
-        // Empty when this is a ping request.
-        consensus_transactions: Vec<ConsensusTransaction>,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-        submitter_client_addr: Option<IpAddr>,
-    ) -> Result<Vec<ConsensusPosition>, tonic::Status> {
-        let (tx_consensus_positions, rx_consensus_positions) = oneshot::channel();
+    /// Extract the gas price from a batch of consensus transactions.
+    /// Returns the minimum gas price in the batch, or 0 if no user transactions.
+    fn extract_gas_price(transactions: &[ConsensusTransaction]) -> u64 {
+        use sui_types::messages_consensus::ConsensusTransactionKind;
+        transactions
+            .iter()
+            .filter_map(|tx| match &tx.kind {
+                ConsensusTransactionKind::CertifiedTransaction(cert) => Some(cert.gas_price()),
+                ConsensusTransactionKind::UserTransaction(t) => {
+                    Some(t.data().transaction_data().gas_price())
+                }
+                ConsensusTransactionKind::UserTransactionV2(t) => {
+                    Some(t.tx().data().transaction_data().gas_price())
+                }
+                _ => None,
+            })
+            .min()
+            .unwrap_or(0)
+    }
 
-        {
-            // code block within reconfiguration lock
-            let reconfiguration_lock = epoch_store.get_reconfig_state_read_lock_guard();
-            if !reconfiguration_lock.should_accept_user_certs() {
-                self.metrics.num_rejected_cert_in_epoch_boundary.inc();
-                return Err(SuiErrorKind::ValidatorHaltedAtEpochEnd.into());
-            }
+    fn classify_submit_mode(&self, is_ping_request: bool) -> AdmissionQueueSubmitMode {
+        let Some(aq) = &self.admission_queue else {
+            return AdmissionQueueSubmitMode::Disabled;
+        };
 
-            // Submit to consensus and wait for position, we do not check if tx
-            // has been processed by consensus already as this method is called
-            // to get back a consensus position.
-            let _metrics_guard = self.metrics.consensus_latency.start_timer();
-
-            self.consensus_adapter.submit_batch(
-                &consensus_transactions,
-                Some(&reconfiguration_lock),
-                epoch_store,
-                Some(tx_consensus_positions),
-                submitter_client_addr,
-            )?;
+        if is_ping_request {
+            return AdmissionQueueSubmitMode::Bypass;
         }
 
-        Ok(rx_consensus_positions.await.map_err(|e| {
-            SuiErrorKind::FailedToSubmitToConsensus(format!(
-                "Failed to get consensus position: {e}"
-            ))
-        })?)
+        let inflight = usize::try_from(self.consensus_adapter.num_inflight_transactions()).unwrap();
+        if inflight < aq.bypass_threshold() {
+            return AdmissionQueueSubmitMode::Bypass;
+        }
+
+        // Failover is consulted only on the overloaded path so the hot path
+        // avoids the ArcSwap load.
+        if aq.load().failover_tripped() {
+            return AdmissionQueueSubmitMode::Disabled;
+        }
+
+        AdmissionQueueSubmitMode::Queue
     }
 
     async fn collect_effects_data(
@@ -1140,7 +1244,7 @@ impl ValidatorService {
         Ok((tonic::Response::new(response), Weight::zero()))
     }
 
-    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "error", skip_all, fields(consensus_position = ?request.consensus_position))]
+    #[instrument(name= "ValidatorService::wait_for_effects_response", level = "debug", skip_all, fields(consensus_position = ?request.consensus_position))]
     async fn wait_for_effects_response(
         &self,
         request: WaitForEffectsRequest,
@@ -1163,26 +1267,39 @@ impl ValidatorService {
         };
         let tx_digests = [tx_digest];
 
-        let fastpath_effects_future: Pin<Box<dyn Future<Output = _> + Send>> =
-            if let Some(consensus_position) = request.consensus_position {
-                Box::pin(self.wait_for_fastpath_effects(
-                    consensus_position,
-                    &tx_digests,
-                    request.include_details,
-                    epoch_store,
-                ))
-            } else {
-                Box::pin(futures::future::pending())
+        // When consensus_position is provided, also watch the consensus status cache
+        // so rejected/dropped transactions get a timely response instead of waiting
+        // forever for effects that will never be produced.
+        let consensus_status_future = async {
+            let consensus_position = match request.consensus_position {
+                Some(pos) => pos,
+                None => return futures::future::pending().await,
             };
+            let consensus_tx_status_cache = &epoch_store.consensus_tx_status_cache;
+            consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
+            match consensus_tx_status_cache
+                .notify_read_transaction_status(consensus_position)
+                .await
+            {
+                NotifyReadConsensusTxStatusResult::Status(
+                    ConsensusTxStatus::Rejected | ConsensusTxStatus::Dropped,
+                ) => Ok(WaitForEffectsResponse::Rejected {
+                    error: epoch_store.get_rejection_vote_reason(consensus_position),
+                }),
+                NotifyReadConsensusTxStatusResult::Status(ConsensusTxStatus::Finalized) => {
+                    // Effects will be produced — yield to let the effects future win.
+                    futures::future::pending().await
+                }
+                NotifyReadConsensusTxStatusResult::Expired(round) => {
+                    Ok(WaitForEffectsResponse::Expired {
+                        epoch: epoch_store.epoch(),
+                        round: Some(round),
+                    })
+                }
+            }
+        };
 
         tokio::select! {
-            // We always wait for effects regardless of consensus position via
-            // notify_read_executed_effects_may_fail. This is safe because we have separated
-            // mysticeti fastpath outputs to a separate dirty cache
-            // UncommittedData::fastpath_transaction_outputs that will only get flushed
-            // once finalized. So the output of notify_read_executed_effects_may_fail is
-            // guaranteed to be finalized effects or effects from QD execution.
-            // We use _may_fail variant because effects may have been pruned for old transactions.
             effects_result = self.state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_may_fail(
@@ -1196,17 +1313,13 @@ impl ValidatorService {
                 } else {
                     None
                 };
-
                 Ok(WaitForEffectsResponse::Executed {
                     effects_digest,
                     details,
-                    fast_path: false,
                 })
             }
-
-            fastpath_response = fastpath_effects_future => {
-                tracing::Span::current().record("fast_path_effects", true);
-                fastpath_response
+            status_response = consensus_status_future => {
+                status_response
             }
         }
     }
@@ -1217,12 +1330,7 @@ impl ValidatorService {
         request: WaitForEffectsRequest,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<WaitForEffectsResponse> {
-        let Some(consensus_tx_status_cache) = epoch_store.consensus_tx_status_cache.as_ref() else {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "Mysticeti fastpath".to_string(),
-            }
-            .into());
-        };
+        let consensus_tx_status_cache = &epoch_store.consensus_tx_status_cache;
 
         let Some(consensus_position) = request.consensus_position else {
             return Err(SuiErrorKind::InvalidRequest(
@@ -1247,156 +1355,32 @@ impl ValidatorService {
 
         consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
 
-        let mut last_status = None;
         let details = if request.include_details {
             Some(Box::new(ExecutedData::default()))
         } else {
             None
         };
 
-        loop {
-            let status = consensus_tx_status_cache
-                .notify_read_transaction_status_change(consensus_position, last_status)
-                .await;
-            match status {
-                NotifyReadConsensusTxStatusResult::Status(status) => match status {
-                    ConsensusTxStatus::FastpathCertified => {
-                        // If the request is for consensus, we need to wait for the transaction to be finalised via Consensus.
-                        if ping == PingType::Consensus {
-                            last_status = Some(status);
-                            continue;
-                        }
-                        return Ok(WaitForEffectsResponse::Executed {
-                            effects_digest: TransactionEffectsDigest::ZERO,
-                            details,
-                            fast_path: true,
-                        });
-                    }
-                    ConsensusTxStatus::Rejected => {
-                        return Ok(WaitForEffectsResponse::Rejected { error: None });
-                    }
-                    ConsensusTxStatus::Finalized => {
-                        return Ok(WaitForEffectsResponse::Executed {
-                            effects_digest: TransactionEffectsDigest::ZERO,
-                            details,
-                            fast_path: false,
-                        });
-                    }
-                    ConsensusTxStatus::Dropped => {
-                        // Transaction was dropped post-consensus, currently only due to invalid owned object inputs..
-                        // Fetch the detailed error (e.g., ObjectLockConflict) from the rejection reason cache.
-                        return Ok(WaitForEffectsResponse::Rejected {
-                            error: epoch_store.get_rejection_vote_reason(consensus_position),
-                        });
-                    }
-                },
-                NotifyReadConsensusTxStatusResult::Expired(round) => {
-                    return Ok(WaitForEffectsResponse::Expired {
-                        epoch: epoch_store.epoch(),
-                        round: Some(round),
-                    });
+        let status = consensus_tx_status_cache
+            .notify_read_transaction_status(consensus_position)
+            .await;
+        match status {
+            NotifyReadConsensusTxStatusResult::Status(status) => match status {
+                ConsensusTxStatus::Rejected | ConsensusTxStatus::Dropped => {
+                    Ok(WaitForEffectsResponse::Rejected {
+                        error: epoch_store.get_rejection_vote_reason(consensus_position),
+                    })
                 }
-            }
-        }
-    }
-
-    #[instrument(level = "error", skip_all, err(level = "debug"))]
-    async fn wait_for_fastpath_effects(
-        &self,
-        consensus_position: ConsensusPosition,
-        tx_digests: &[TransactionDigest],
-        include_details: bool,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<WaitForEffectsResponse> {
-        let Some(consensus_tx_status_cache) = epoch_store.consensus_tx_status_cache.as_ref() else {
-            return Err(SuiErrorKind::UnsupportedFeatureError {
-                error: "Mysticeti fastpath".to_string(),
-            }
-            .into());
-        };
-
-        let local_epoch = epoch_store.epoch();
-        match consensus_position.epoch.cmp(&local_epoch) {
-            Ordering::Less => {
-                // Ask TransactionDriver to retry submitting the transaction and get a new ConsensusPosition,
-                // if response from this validator is desired.
-                let response = WaitForEffectsResponse::Expired {
-                    epoch: local_epoch,
-                    round: None,
-                };
-                return Ok(response);
-            }
-            Ordering::Greater => {
-                // Ask TransactionDriver to retry this RPC until the validator's epoch catches up.
-                return Err(SuiErrorKind::WrongEpoch {
-                    expected_epoch: local_epoch,
-                    actual_epoch: consensus_position.epoch,
-                }
-                .into());
-            }
-            Ordering::Equal => {
-                // The validator's epoch is the same as the epoch of the transaction.
-                // We can proceed with the normal flow.
-            }
-        };
-
-        consensus_tx_status_cache.check_position_too_ahead(&consensus_position)?;
-
-        // FastpathCertified is non-terminal (tx may still be rejected), so loop
-        // until we see a terminal status.
-        let mut current_status = None;
-        loop {
-            let status = consensus_tx_status_cache
-                .notify_read_transaction_status_change(consensus_position, current_status)
-                .await;
-            match status {
-                NotifyReadConsensusTxStatusResult::Status(new_status) => match new_status {
-                    ConsensusTxStatus::Rejected => {
-                        return Ok(WaitForEffectsResponse::Rejected {
-                            error: epoch_store.get_rejection_vote_reason(consensus_position),
-                        });
-                    }
-                    ConsensusTxStatus::FastpathCertified => {
-                        current_status = Some(new_status);
-                        continue;
-                    }
-                    ConsensusTxStatus::Finalized => {
-                        let effects = self
-                            .state
-                            .get_transaction_cache_reader()
-                            .notify_read_executed_effects_may_fail(
-                                "AuthorityServer::wait_for_fastpath_effects::notify_read_executed_effects",
-                                tx_digests,
-                            )
-                            .await?
-                            .pop()
-                            .unwrap();
-                        let effects_digest = effects.digest();
-
-                        let details = if include_details {
-                            Some(self.complete_executed_data(effects).await?)
-                        } else {
-                            None
-                        };
-
-                        return Ok(WaitForEffectsResponse::Executed {
-                            effects_digest,
-                            details,
-                            fast_path: false,
-                        });
-                    }
-                    ConsensusTxStatus::Dropped => {
-                        return Ok(WaitForEffectsResponse::Rejected {
-                            error: epoch_store.get_rejection_vote_reason(consensus_position),
-                        });
-                    }
-                },
-                NotifyReadConsensusTxStatusResult::Expired(round) => {
-                    return Ok(WaitForEffectsResponse::Expired {
-                        epoch: epoch_store.epoch(),
-                        round: Some(round),
-                    });
-                }
+                ConsensusTxStatus::Finalized => Ok(WaitForEffectsResponse::Executed {
+                    effects_digest: TransactionEffectsDigest::ZERO,
+                    details,
+                }),
+            },
+            NotifyReadConsensusTxStatusResult::Expired(round) => {
+                Ok(WaitForEffectsResponse::Expired {
+                    epoch: epoch_store.epoch(),
+                    round: Some(round),
+                })
             }
         }
     }
@@ -1486,8 +1470,7 @@ impl ValidatorService {
         // Get last committed leader round from epoch store
         let last_committed_leader_round = epoch_store
             .consensus_tx_status_cache
-            .as_ref()
-            .and_then(|cache| cache.get_last_committed_leader_round())
+            .get_last_committed_leader_round()
             .unwrap_or(0);
 
         // Get last locally built checkpoint sequence

@@ -7,7 +7,7 @@ use mysten_metrics::monitored_mpsc::{UnboundedReceiver, UnboundedSender, unbound
 use tokio::sync::watch;
 use tracing::debug;
 
-use crate::{CommitIndex, CommittedSubDag, block::CertifiedBlocksOutput};
+use crate::{CommitIndex, CommittedSubDag};
 
 /// Arguments from commit consumer to this consensus instance.
 /// This includes both parameters and components for communications.
@@ -23,9 +23,6 @@ pub struct CommitConsumerArgs {
 
     /// A channel to output the committed sub dags.
     pub(crate) commit_sender: UnboundedSender<CommittedSubDag>,
-    /// A channel to output blocks for processing, separated from consensus commits.
-    /// In each block output, transactions that are not rejected are considered certified.
-    pub(crate) block_sender: UnboundedSender<CertifiedBlocksOutput>,
     // Allows the commit consumer to report its progress.
     monitor: Arc<CommitConsumerMonitor>,
 }
@@ -36,7 +33,6 @@ impl CommitConsumerArgs {
         consumer_last_processed_commit_index: CommitIndex,
     ) -> (Self, UnboundedReceiver<CommittedSubDag>) {
         let (commit_sender, commit_receiver) = unbounded_channel("consensus_commit_output");
-        let (block_sender, _block_receiver) = unbounded_channel("consensus_block_output");
 
         let monitor = Arc::new(CommitConsumerMonitor::new(
             replay_after_commit_index,
@@ -47,7 +43,6 @@ impl CommitConsumerArgs {
                 replay_after_commit_index,
                 consumer_last_processed_commit_index,
                 commit_sender,
-                block_sender,
                 monitor,
             },
             commit_receiver,

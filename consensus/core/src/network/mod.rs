@@ -16,14 +16,21 @@
 //! directly to the server. This keeps the logic agnostics to the underlying network outside of
 //! this module, so they can be reused easily across network implementations.
 
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{
+    fmt::{Display, Formatter},
+    net::SocketAddrV6,
+    pin::Pin,
+    sync::Arc,
+    time::Duration,
+};
 
 use async_trait::async_trait;
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
+use fastcrypto::encoding::{Encoding, Hex};
 use futures::Stream;
-use mysten_network::Multiaddr;
+use mysten_network::{Multiaddr, multiaddr::Protocol};
 
 use crate::{
     block::{ExtendedBlock, VerifiedBlock},
@@ -33,17 +40,57 @@ use crate::{
 };
 
 /// Identifies an observer node by its network public key.
-#[allow(unused)]
-pub(crate) type NodeId = NetworkPublicKey;
+pub type NodeId = NetworkPublicKey;
 
 /// Identifies a peer in the network, which can be either a validator or an observer.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum PeerId {
+/// The Observer variant is boxed to keep the enum small, since `NodeId` (32 bytes) is
+/// much larger than `AuthorityIndex` (4 bytes).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PeerId {
     /// A validator node identified by its authority index.
     Validator(AuthorityIndex),
     /// An observer node identified by its network public key.
     #[allow(dead_code)]
-    Observer(NodeId),
+    Observer(Box<NodeId>),
+}
+
+impl Display for PeerId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PeerId::Validator(authority) => write!(f, "[{}]", authority),
+            PeerId::Observer(node_id) => {
+                let bytes = node_id.to_bytes();
+                let s = Hex::encode(bytes.get(0..4).ok_or(std::fmt::Error)?);
+                write!(f, "o#{}..", s)
+            }
+        }
+    }
+}
+
+impl PeerId {
+    /// Returns a human-readable name suitable for logging. For observers, prints
+    /// the first 8 hex digits of the public key.
+    pub(crate) fn hostname(&self, context: &Context) -> String {
+        match self {
+            PeerId::Validator(index) => context.committee.authority(*index).hostname.to_string(),
+            PeerId::Observer(node_id) => {
+                let bytes = node_id.to_bytes();
+                format!(
+                    "[Observer]{:02x}{:02x}{:02x}{:02x}",
+                    bytes[0], bytes[1], bytes[2], bytes[3]
+                )
+            }
+        }
+    }
+
+    /// Returns a short label suitable for use in metrics. Does not include
+    /// full public keys to avoid high-cardinality metric labels.
+    pub(crate) fn labelname(&self, context: &Context) -> String {
+        match self {
+            PeerId::Validator(index) => context.committee.authority(*index).hostname.to_string(),
+            PeerId::Observer(_) => "observer".to_string(),
+        }
+    }
 }
 
 // Tonic generated RPC stubs.
@@ -89,15 +136,15 @@ pub(crate) trait ValidatorNetworkClient: Send + Sync + Sized + 'static {
 
     // TODO: add a parameter for maximum total size of blocks returned.
     /// Fetches serialized `SignedBlock`s from a peer. It also might return additional ancestor blocks
-    /// of the requested blocks according to the provided `highest_accepted_rounds`. The `highest_accepted_rounds`
-    /// length should be equal to the committee size. If `highest_accepted_rounds` is empty then it will
+    /// of the requested blocks according to the provided `fetch_after_rounds`. The `fetch_after_rounds`
+    /// length should be equal to the committee size. If `fetch_after_rounds` is empty then it will
     /// be simply ignored.
     async fn fetch_blocks(
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 
@@ -167,8 +214,8 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
     ) -> ConsensusResult<Vec<Bytes>>;
 
     /// Handles the request to fetch commits by index range from the peer.
@@ -192,21 +239,8 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
     ) -> ConsensusResult<(Vec<Round>, Vec<Round>)>;
 }
 
-/// A stream item for observer block streaming that includes both the block and highest commit index.
-#[allow(dead_code)]
-pub(crate) struct ObserverBlockStreamItem {
-    pub(crate) block: Bytes,
-    pub(crate) highest_commit_index: u64,
-}
-
 /// Observer block stream type.
-#[allow(dead_code)]
-pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = ObserverBlockStreamItem> + Send>>;
-
-/// Observer block request stream type for bidirectional streaming.
-#[allow(dead_code)]
-pub(crate) type BlockRequestStream =
-    Pin<Box<dyn Stream<Item = crate::network::observer::BlockStreamRequest> + Send>>;
+pub(crate) type ObserverBlockStream = Pin<Box<dyn Stream<Item = Vec<Bytes>> + Send + 'static>>;
 
 /// Observer network service for handling requests from observer nodes.
 /// Unlike ValidatorNetworkService which uses AuthorityIndex, this uses NodeId (NetworkPublicKey)
@@ -214,11 +248,17 @@ pub(crate) type BlockRequestStream =
 #[async_trait]
 #[allow(dead_code)]
 pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
-    /// Handles the bidirectional block streaming request from an observer peer.
+    /// Handles a block received from a peer subscription. Used by ObserverSubscriber to process
+    /// blocks streamed from validators or other observers.
+    async fn handle_block(&self, peer: PeerId, block: Bytes) -> ConsensusResult<()>;
+
+    /// Handles the block streaming request from an observer peer.
+    /// Returns a stream of blocks with the highest commit index for each block.
+    /// Blocks with rounds higher than the highest_round_per_authority will be streamed.
     async fn handle_stream_blocks(
         &self,
         peer: NodeId,
-        request_stream: BlockRequestStream,
+        highest_round_per_authority: Vec<u64>,
     ) -> ConsensusResult<ObserverBlockStream>;
 
     /// Handles the request to fetch blocks by references from an observer peer.
@@ -227,6 +267,8 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
         &self,
         peer: NodeId,
         block_refs: Vec<BlockRef>,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
     ) -> ConsensusResult<Vec<Bytes>>;
 
     /// Handles the request to fetch commits by index range from an observer peer.
@@ -245,11 +287,13 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
 #[async_trait]
 #[allow(dead_code)]
 pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
-    /// Initiates bidirectional block streaming with a peer.
+    /// Initiates block streaming with a peer (validator or observer).
+    /// Returns a stream of blocks with the highest commit index.
+    /// Blocks with rounds higher than the highest_round_per_authority will be streamed.
     async fn stream_blocks(
         &self,
         peer: PeerId,
-        request_stream: BlockRequestStream,
+        highest_round_per_authority: Vec<u64>,
         timeout: Duration,
     ) -> ConsensusResult<ObserverBlockStream>;
 
@@ -258,6 +302,8 @@ pub(crate) trait ObserverNetworkClient: Send + Sync + Sized + 'static {
         &self,
         peer: PeerId,
         block_refs: Vec<BlockRef>,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 
@@ -333,5 +379,25 @@ impl From<ExtendedBlock> for ExtendedSerializedBlock {
                 })
                 .collect(),
         }
+    }
+}
+
+/// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into
+/// a host:port string.
+pub(crate) fn to_host_port_str(addr: &Multiaddr) -> Result<String, String> {
+    let mut iter = addr.iter();
+
+    match (iter.next(), iter.next()) {
+        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => {
+            Ok(format!("{}:{}", ipaddr, port))
+        }
+        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => {
+            Ok(format!("{}", SocketAddrV6::new(ipaddr, port, 0, 0)))
+        }
+        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port))) => {
+            Ok(format!("{}:{}", hostname, port))
+        }
+
+        _ => Err(format!("unsupported multiaddr: {addr}")),
     }
 }

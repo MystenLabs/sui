@@ -24,7 +24,7 @@ use sui_move_natives::{
     NativesCostTable, object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
     transaction_context::TransactionContext,
 };
-use sui_package_alt::find_environment;
+use sui_package_alt::{SuiFlavor, find_environment};
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::{
@@ -33,7 +33,7 @@ use sui_types::{
     gas::{SuiGasStatus, SuiGasStatusAPI},
     gas_model::{tables::GasStatus, units_types::Gas},
     in_memory_storage::InMemoryStorage,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
 };
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -56,6 +56,7 @@ impl Test {
         path: Option<&Path>,
         mut build_config: BuildConfig,
         wallet: &WalletContext,
+        flavor: SuiFlavor,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
         if !cfg!(feature = "tracing") && compute_coverage {
@@ -85,7 +86,7 @@ impl Test {
         // it as the optional argument in the build-config, which then looks it up again, but it
         // should be ok.
         let environment =
-            find_environment(&rerooted_path, build_config.environment, wallet).await?;
+            find_environment(&rerooted_path, build_config.environment, wallet, false).await?;
         build_config.environment = Some(environment.name);
 
         run_move_unit_tests(
@@ -94,6 +95,7 @@ impl Test {
             Some(unit_test_config),
             compute_coverage,
             save_disassembly,
+            flavor,
         )
         .await
     }
@@ -107,18 +109,20 @@ pub async fn run_move_unit_tests(
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
+    flavor: SuiFlavor,
 ) -> anyhow::Result<UnitTestResult> {
     let config = config.unwrap_or_else(|| {
         UnitTestingConfig::default_with_bound(Some(*MAX_UNIT_TEST_INSTRUCTIONS))
     });
 
-    let result = move_cli::base::test::run_move_unit_tests::<sui_package_alt::SuiFlavor, _, _>(
+    let result = move_cli::base::test::run_move_unit_tests(
         path,
         build_config,
         UnitTestingConfig {
             report_stacktrace_on_abort: true,
             ..config
         },
+        flavor,
         SuiVMTestSetup::new(),
         compute_coverage,
         save_disassembly,
@@ -210,7 +214,7 @@ impl VMTestSetup for SuiVMTestSetup {
         let mut ext = NativeContextExtensions::default();
         // Use a throwaway metrics registry for testing.
         let registry = prometheus::Registry::new();
-        let metrics = Arc::new(LimitsMetrics::new(&registry));
+        let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
         ext.add(ObjectRuntime::new(
             store,

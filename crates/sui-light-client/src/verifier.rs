@@ -6,6 +6,7 @@ use crate::committee::extract_new_committee_info;
 use crate::config::Config;
 use crate::object_store::SuiObjectStore;
 use anyhow::{Result, anyhow};
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_config::genesis::Genesis;
 use sui_rpc_api::Client;
 use sui_types::base_types::{ObjectID, TransactionDigest};
@@ -33,7 +34,7 @@ pub fn extract_verified_effects_and_events(
     let (matching_tx, _) = checkpoint
         .transactions
         .iter()
-        .zip(contents.iter())
+        .zip_debug_eq(contents.iter())
         // Note that we get the digest of the effects to ensure this is
         // indeed the correct effects that are authenticated in the contents.
         .find(|(tx, digest)| {

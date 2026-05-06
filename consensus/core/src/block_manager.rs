@@ -9,6 +9,7 @@ use std::{
 
 use consensus_types::block::{BlockRef, Round};
 use itertools::Itertools as _;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use tracing::{debug, trace, warn};
@@ -238,7 +239,7 @@ impl BlockManager {
             .read()
             .contains_blocks(block_refs.clone())
             .into_iter()
-            .zip(block_refs.iter())
+            .zip_debug_eq(block_refs.iter())
         {
             if found || self.suspended_blocks.contains_key(block_ref) {
                 continue;
@@ -316,7 +317,7 @@ impl BlockManager {
         for (found, ancestor) in dag_state
             .contains_blocks(ancestors.clone())
             .into_iter()
-            .zip(ancestors.iter())
+            .zip_debug_eq(ancestors.iter())
         {
             if !found {
                 missing_ancestors.insert(*ancestor);
@@ -758,9 +759,7 @@ mod tests {
         let (mut context, _key_pairs) = Context::new_for_test(4);
 
         // We set the gc depth to 4
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(4);
+        context.protocol_config.set_gc_depth_for_testing(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -847,9 +846,7 @@ mod tests {
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
         // We set the gc depth to 4
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(4);
+        context.protocol_config.set_gc_depth_for_testing(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
@@ -892,9 +889,7 @@ mod tests {
     async fn accept_blocks_unsuspend_children_blocks() {
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(10);
+        context.protocol_config.set_gc_depth_for_testing(10);
 
         let context = Arc::new(context);
 
@@ -941,9 +936,7 @@ mod tests {
         telemetry_subscribers::init_for_testing();
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(gc_depth);
+        context.protocol_config.set_gc_depth_for_testing(gc_depth);
 
         let context = Arc::new(context);
 
@@ -1019,9 +1012,7 @@ mod tests {
         // GIVEN
         let (mut context, _key_pairs) = Context::new_for_test(4);
         // We set the gc depth to 4
-        context
-            .protocol_config
-            .set_consensus_gc_depth_for_testing(4);
+        context.protocol_config.set_gc_depth_for_testing(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));

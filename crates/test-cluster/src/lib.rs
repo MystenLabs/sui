@@ -3,8 +3,9 @@
 
 use futures::{StreamExt, future::join_all};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::fatal;
-use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
+use rand::{Rng, distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -37,6 +38,7 @@ use sui_swarm_config::network_config_builder::{
 };
 use sui_swarm_config::node_config_builder::{FullnodeConfigBuilder, ValidatorConfigBuilder};
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::authenticator_state::get_authenticator_state;
 use sui_types::base_types::ConciseableName;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SuiAddress};
 use sui_types::committee::CommitteeTrait;
@@ -46,7 +48,7 @@ use sui_types::crypto::SuiKeyPair;
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
-use sui_types::error::SuiResult;
+use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_grpc::{
     RawSubmitTxRequest, SubmitTxRequest, SubmitTxResult, SubmitTxType, WaitForEffectsRequest,
     WaitForEffectsResponse,
@@ -533,10 +535,21 @@ impl TestCluster {
         timeout(
             Duration::from_secs(60),
             self.fullnode_handle.sui_node.with_async(|node| async move {
-                let mut txns = node.state().subscription_handler.subscribe_transactions(
+                let state = node.state();
+                let mut txns = state.subscription_handler.subscribe_transactions(
                     TransactionFilter::ChangedObject(ObjectID::from_hex_literal("0x7").unwrap()),
                 );
-                let state = node.state();
+
+                // Check if the state was already updated before subscribe_transactions was called
+                // above (after trigger_reconfiguration completes, the AuthenticatorStateUpdate
+                // transaction may have already been committed).
+                let has_active_jwks = get_authenticator_state(state.get_object_store())
+                    .ok()
+                    .flatten()
+                    .is_some_and(|state| !state.active_jwks.is_empty());
+                if has_active_jwks {
+                    return;
+                }
 
                 while let Some(tx) = txns.next().await {
                     let digest = *tx.transaction_digest();
@@ -670,13 +683,12 @@ impl TestCluster {
             submit_type: SubmitTxType::SoftBundle.into(),
         };
 
-        let mut validator_client = self
-            .authority_aggregator()
-            .authority_clients
-            .iter()
-            .next()
-            .unwrap()
-            .1
+        let agg = self.authority_aggregator();
+        let clients = &agg.authority_clients;
+        // Use seeded RNG for deterministic but varying validator selection in simtests
+        let index = rand::thread_rng().gen_range(0..clients.len());
+        let (_, safe_client) = clients.iter().nth(index).unwrap();
+        let mut validator_client = safe_client
             .authority_client()
             .get_client_for_testing()
             .unwrap();
@@ -687,16 +699,69 @@ impl TestCluster {
             .map(tonic::Response::into_inner)?;
         assert_eq!(result.results.len(), signed_txs.len());
 
-        for raw_result in result.results.iter() {
-            let submit_result: sui_types::messages_grpc::SubmitTxResult =
-                raw_result.clone().try_into()?;
-            if let sui_types::messages_grpc::SubmitTxResult::Rejected { error } = submit_result {
-                return Err(error);
+        let mut executed_results = vec![None; signed_txs.len()];
+        let mut submitted_positions = Vec::new();
+        for (index, raw_result) in result.results.into_iter().enumerate() {
+            let submit_result: SubmitTxResult = raw_result.try_into()?;
+            match submit_result {
+                SubmitTxResult::Executed { details, .. } => {
+                    let data = details.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
+                        error: "Expected execution details".to_string(),
+                    })?;
+                    executed_results[index] = Some((digests[index], data.effects));
+                }
+                SubmitTxResult::Rejected { error } => {
+                    return Err(error);
+                }
+                SubmitTxResult::Submitted { consensus_position } => {
+                    submitted_positions.push((index, consensus_position));
+                }
             }
         }
 
-        let effects = self
-            .fullnode_handle
+        let wait_futures: Vec<_> = submitted_positions
+            .iter()
+            .map(|(index, position)| {
+                let request = WaitForEffectsRequest {
+                    transaction_digest: Some(digests[*index]),
+                    consensus_position: Some(*position),
+                    include_details: true,
+                    ping_type: None,
+                };
+                safe_client.wait_for_effects(request, None)
+            })
+            .collect();
+
+        let wait_responses = join_all(wait_futures).await;
+        for ((index, _), response) in submitted_positions
+            .into_iter()
+            .zip_debug_eq(wait_responses.into_iter())
+        {
+            match response? {
+                WaitForEffectsResponse::Executed { details, .. } => {
+                    let data = details.ok_or_else(|| SuiErrorKind::GenericAuthorityError {
+                        error: "Expected execution details".to_string(),
+                    })?;
+                    executed_results[index] = Some((digests[index], data.effects));
+                }
+                WaitForEffectsResponse::Rejected { error } => {
+                    return Err(error.unwrap_or_else(|| {
+                        SuiErrorKind::GenericAuthorityError {
+                            error: "Transaction was rejected".to_string(),
+                        }
+                        .into()
+                    }));
+                }
+                WaitForEffectsResponse::Expired { .. } => {
+                    return Err(SuiErrorKind::TransactionExpired.into());
+                }
+            }
+        }
+
+        // Effects were already obtained from the validator above; this call is a
+        // synchronization barrier so callers that query the fullnode (e.g. RPC)
+        // after this returns see the transactions' effects.
+        self.fullnode_handle
             .sui_node
             .with_async(|node| {
                 let digests = digests.clone();
@@ -704,7 +769,7 @@ impl TestCluster {
                     let state = node.state();
                     let transaction_cache_reader = state.get_transaction_cache_reader();
                     transaction_cache_reader
-                        .notify_read_executed_effects(
+                        .notify_read_executed_effects_digests(
                             "sign_and_execute_txns_in_soft_bundle",
                             &digests,
                         )
@@ -713,7 +778,17 @@ impl TestCluster {
             })
             .await;
 
-        Ok(digests.into_iter().zip(effects.into_iter()).collect())
+        executed_results
+            .into_iter()
+            .map(|result| {
+                result.ok_or_else(|| {
+                    SuiErrorKind::GenericAuthorityError {
+                        error: "Missing execution result".to_string(),
+                    }
+                    .into()
+                })
+            })
+            .collect()
     }
 
     /// Execute signed transactions in a soft bundle and return results for each transaction.
@@ -775,7 +850,7 @@ impl TestCluster {
         // Wait for effects using consensus positions
         let wait_futures: Vec<_> = digests
             .iter()
-            .zip(consensus_positions.iter())
+            .zip_debug_eq(consensus_positions.iter())
             .map(|(digest, position)| {
                 let request = WaitForEffectsRequest {
                     transaction_digest: Some(*digest),
@@ -791,7 +866,7 @@ impl TestCluster {
 
         let results: SuiResult<Vec<_>> = digests
             .into_iter()
-            .zip(responses.into_iter())
+            .zip_debug_eq(responses.into_iter())
             .map(|(digest, response)| Ok((digest, response?)))
             .collect();
 
@@ -860,11 +935,12 @@ impl TestCluster {
         client_addr: Option<SocketAddr>,
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let agg = self.authority_aggregator();
-        // Pick a validator to submit to
-        let (_, client) = agg
-            .authority_clients
+        // Pick a validator to submit to using seeded RNG for deterministic simtest selection
+        let clients = &agg.authority_clients;
+        let index = rand::thread_rng().gen_range(0..clients.len());
+        let (_, client) = clients
             .iter()
-            .next()
+            .nth(index)
             .ok_or_else(|| anyhow::anyhow!("No authority clients available"))?;
 
         // Submit the transaction
@@ -873,28 +949,33 @@ impl TestCluster {
             .submit_transaction(submit_request, client_addr)
             .await?;
 
-        // Check if already executed
+        let mut consensus_position = None;
         for result in submit_response.results {
             match result {
                 SubmitTxResult::Executed { details, .. } => {
-                    if let Some(data) = details {
-                        let events = data.events.unwrap_or_default();
-                        return Ok((data.effects, events));
-                    }
+                    let data =
+                        details.ok_or_else(|| anyhow::anyhow!("Expected execution details"))?;
+                    let events = data.events.unwrap_or_default();
+                    return Ok((data.effects, events));
                 }
                 SubmitTxResult::Rejected { error } => {
                     return Err(error.into());
                 }
-                SubmitTxResult::Submitted { .. } => {
-                    // Need to wait for effects
+                SubmitTxResult::Submitted {
+                    consensus_position: position,
+                } => {
+                    consensus_position = Some(position);
                 }
             }
         }
 
+        let consensus_position = consensus_position
+            .ok_or_else(|| anyhow::anyhow!("Expected submitted transaction result"))?;
+
         // Wait for effects
         let wait_request = WaitForEffectsRequest {
             transaction_digest: Some(*tx.digest()),
-            consensus_position: None,
+            consensus_position: Some(consensus_position),
             include_details: true,
             ping_type: None,
         };
@@ -907,9 +988,14 @@ impl TestCluster {
                 Ok((data.effects, events))
             }
             WaitForEffectsResponse::Rejected { error } => Err(error
-                .ok_or_else(|| anyhow::anyhow!("Transaction was rejected"))?
+                .unwrap_or_else(|| {
+                    SuiErrorKind::GenericAuthorityError {
+                        error: "Transaction was rejected".to_string(),
+                    }
+                    .into()
+                })
                 .into()),
-            WaitForEffectsResponse::Expired { .. } => Err(anyhow::anyhow!("Transaction expired")),
+            WaitForEffectsResponse::Expired { .. } => Err(SuiErrorKind::TransactionExpired.into()),
         }
     }
 
@@ -1055,8 +1141,6 @@ pub struct TestClusterBuilder {
     fullnode_policy_config: Option<PolicyConfig>,
     fullnode_fw_config: Option<RemoteFirewallConfig>,
 
-    max_submit_position: Option<usize>,
-    submit_delay_step_override_millis: Option<u64>,
     validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
     validator_funds_withdraw_scheduler_type_config: FundsWithdrawSchedulerTypeConfig,
 
@@ -1098,8 +1182,6 @@ impl TestClusterBuilder {
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
             fullnode_fw_config: None,
-            max_submit_position: None,
-            submit_delay_step_override_millis: None,
             validator_global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(
                 true,
             ),
@@ -1332,19 +1414,6 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
-        self.max_submit_position = Some(max_submit_position);
-        self
-    }
-
-    pub fn with_submit_delay_step_override_millis(
-        mut self,
-        submit_delay_step_override_millis: u64,
-    ) -> Self {
-        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
-        self
-    }
-
     pub fn with_rpc_config(mut self, config: sui_config::RpcConfig) -> Self {
         self.rpc_config = Some(config);
         self
@@ -1499,15 +1568,6 @@ impl TestClusterBuilder {
 
         if let Some(data_ingestion_dir) = self.data_ingestion_dir.take() {
             builder = builder.with_data_ingestion_dir(data_ingestion_dir);
-        }
-
-        if let Some(max_submit_position) = self.max_submit_position {
-            builder = builder.with_max_submit_position(max_submit_position);
-        }
-
-        if let Some(submit_delay_step_override_millis) = self.submit_delay_step_override_millis {
-            builder =
-                builder.with_submit_delay_step_override_millis(submit_delay_step_override_millis);
         }
 
         if let Some(state_sync_config) = self.state_sync_config.clone() {

@@ -579,28 +579,19 @@ impl PatternMatrix {
     ) -> Option<Vec<ArmResult>> {
         // NB: If the first row is all wild, we need to collect _all_ wild rows that have guards
         // until we find one that does not. If we do not find one without a guard, then this isn't
-        // a wild tree.
-        if let Some(arm) = self.patterns[0].all_wild_arm(context, fringe) {
-            if arm.guard.is_none() {
-                return Some(vec![arm]);
-            }
-            let mut result = vec![arm];
-            for pat in self.patterns[1..].iter_mut() {
-                // If we find a non-wildcard arm, we have only seen guarded wildcards and should
-                // specialize against the fringe instead.
-                let Some(arm) = pat.all_wild_arm(context, fringe) else {
-                    return None;
-                };
-                let has_guard = arm.guard.is_some();
-                result.push(arm);
-                if !has_guard {
-                    return Some(result);
-                }
-            }
-            None
-        } else {
-            None
-        }
+        // a wild tree. If it is a wild tree, we can mutate the entire prefix of wild rows into
+        // binders and return the bindings for the first unguarded one (GH-25790).
+        let stop = self
+            .patterns
+            .iter()
+            .take_while(|pat| pat.is_wild_arm())
+            .position(|pat| pat.guard.is_none())?;
+        Some(
+            self.patterns[..=stop]
+                .iter_mut()
+                .map(|pat| pat.all_wild_arm(context, fringe).unwrap())
+                .collect(),
+        )
     }
 
     pub fn specialize_variant<const AFTER_TYPING: bool, MC: MatchContext<AFTER_TYPING>>(

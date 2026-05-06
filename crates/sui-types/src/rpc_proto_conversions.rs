@@ -142,6 +142,8 @@ impl TryFrom<&Checkpoint> for crate::full_checkpoint_content::Checkpoint {
             .map(|(_, user_signatures)| user_signatures)
             .collect();
 
+        #[allow(clippy::disallowed_methods)]
+        // Intentional zip: transactions field may be partially populated via field masks
         let transactions = checkpoint
             .transactions()
             .iter()
@@ -3098,8 +3100,10 @@ impl Merge<&crate::effects::TransactionEffectsV1> for TransactionEffects {
                 }
             }
 
-            if mask.contains(Self::GAS_OBJECT_FIELD.name) {
-                let gas_object_id = value.gas_object().0.0.to_canonical_string(true);
+            if mask.contains(Self::GAS_OBJECT_FIELD.name)
+                && let Some(((gas_id, _, _), _)) = value.gas_object()
+            {
+                let gas_object_id = gas_id.to_canonical_string(true);
                 self.gas_object = changed_objects
                     .iter()
                     .find(|object| object.object_id() == gas_object_id)
@@ -3285,7 +3289,7 @@ impl From<crate::effects::AccumulatorWriteV1> for AccumulatorWrite {
             crate::effects::AccumulatorOperation::Split => AccumulatorOperation::Split,
         });
         match value.value {
-            crate::effects::AccumulatorValue::Integer(value) => message.set_value(value),
+            crate::effects::AccumulatorValue::Integer(value) => message.set_integer_value(value),
             //TODO unsupported value types
             crate::effects::AccumulatorValue::IntegerTuple(_, _)
             | crate::effects::AccumulatorValue::EventDigest(_) => {}

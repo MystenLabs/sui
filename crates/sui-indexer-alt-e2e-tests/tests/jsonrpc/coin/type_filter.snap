@@ -11,7 +11,7 @@ task 1, lines 6-38:
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5), object(1,6), object(1,7)
 mutated: object(0,0)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
-gas summary: computation_cost: 1000000, storage_cost: 18794800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 18802400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 40:
 //# create-checkpoint
@@ -25,54 +25,54 @@ Response: {
   "result": {
     "data": [
       {
-        "coinType": "0x10d365cfcae8ae186c92cbd351f8328a4c1b1f2ca2901411616d060b922f9ba7::fake::FAKE",
-        "coinObjectId": "0x9b4907a13699a7f195785f7bc786f5ae213530d056f2ede480a7c2a47e4f1e52",
+        "coinType": "0x9b83d8782225d48d08d787cd935a16b904dbb09e9aead4e2485956aff6dbdb60::fake::FAKE",
+        "coinObjectId": "0x9438566e8677790b192344f09a4236c558b1d58cac23160e1ee4aa843b9dd384",
         "version": "2",
-        "digest": "5KZh38DR18WV5aYJSmYcU6uUnyut9madcf8RN8RSNsUU",
+        "digest": "4aqBmZPNrc7Fd765ucj3HbQeRPJvzKyRoz9skR4AJzfQ",
         "balance": "5000",
-        "previousTransaction": "HDssi3TsXw2Pz5Z2eg447XwK7Lhi31d3YPsNEbwzXohG"
+        "previousTransaction": "HPjDT9iGbogXtTf6gzFbrgCXgN9UvhZrmMiHrwZJy8wC"
       },
       {
-        "coinType": "0x10d365cfcae8ae186c92cbd351f8328a4c1b1f2ca2901411616d060b922f9ba7::fake::FAKE",
-        "coinObjectId": "0x4aa1d2054fb227df675f23acb56f6969c7fc0da759aa595591a8ed90c28c8b2b",
+        "coinType": "0x9b83d8782225d48d08d787cd935a16b904dbb09e9aead4e2485956aff6dbdb60::fake::FAKE",
+        "coinObjectId": "0x389fe573af169626ee9ffaf2815b599262556be4b191ed852ff53a963e723f9b",
         "version": "2",
-        "digest": "CphG8gL6XywHrAjmnDYW8eLJHwMvYRSKnenrXcQoNraq",
+        "digest": "E6heAXAKc2FrSPRwx2aMaeDw1dqeGMcrYCGS3ZxJj8xv",
         "balance": "4000",
-        "previousTransaction": "HDssi3TsXw2Pz5Z2eg447XwK7Lhi31d3YPsNEbwzXohG"
+        "previousTransaction": "HPjDT9iGbogXtTf6gzFbrgCXgN9UvhZrmMiHrwZJy8wC"
       },
       {
-        "coinType": "0x10d365cfcae8ae186c92cbd351f8328a4c1b1f2ca2901411616d060b922f9ba7::fake::FAKE",
-        "coinObjectId": "0x10ebc1e4891b20f217904dc0551bc4d8521e9fe3c15a17856eebdfbb2f9fd3cc",
+        "coinType": "0x9b83d8782225d48d08d787cd935a16b904dbb09e9aead4e2485956aff6dbdb60::fake::FAKE",
+        "coinObjectId": "0x31ba02d883cee2a8cd6571075bfa02752157e26f7a50a4651f799ee7592bb4c3",
         "version": "2",
-        "digest": "7xctbP5bzTCyiyC7Vu4VBWKPmAajK5ejRuXzV9zHqP1x",
+        "digest": "AarXDSzkQvsHYwTsk3MVckpQer3oYbcezZntLcTrSyEf",
         "balance": "3000",
-        "previousTransaction": "HDssi3TsXw2Pz5Z2eg447XwK7Lhi31d3YPsNEbwzXohG"
+        "previousTransaction": "HPjDT9iGbogXtTf6gzFbrgCXgN9UvhZrmMiHrwZJy8wC"
       },
       {
-        "coinType": "0x10d365cfcae8ae186c92cbd351f8328a4c1b1f2ca2901411616d060b922f9ba7::fake::FAKE",
-        "coinObjectId": "0x8efc5aec84eb95eb7b16abfafbded8b2b8a216a3056b442502ca0c3d0d9c3bac",
+        "coinType": "0x9b83d8782225d48d08d787cd935a16b904dbb09e9aead4e2485956aff6dbdb60::fake::FAKE",
+        "coinObjectId": "0xd8479cd8062ff0b40336225d3aa898448254b8b9b3bb96819cc6321ddd7b11bb",
         "version": "2",
-        "digest": "GBBxhMab3LjjBTE3MLXqKLGQ4FY6tGFKk8sc8dKSxsw6",
+        "digest": "BuT7VdeRsM4fbWNbZ9zhTB24QTtBLPgU5JKQ9A1MRbLX",
         "balance": "100",
-        "previousTransaction": "HDssi3TsXw2Pz5Z2eg447XwK7Lhi31d3YPsNEbwzXohG"
+        "previousTransaction": "HPjDT9iGbogXtTf6gzFbrgCXgN9UvhZrmMiHrwZJy8wC"
       },
       {
-        "coinType": "0x10d365cfcae8ae186c92cbd351f8328a4c1b1f2ca2901411616d060b922f9ba7::fake::FAKE",
-        "coinObjectId": "0xdd6ad77ba7049374e7ef6cd2e5edae299b93953b732d1bc813fb5493593eb786",
+        "coinType": "0x9b83d8782225d48d08d787cd935a16b904dbb09e9aead4e2485956aff6dbdb60::fake::FAKE",
+        "coinObjectId": "0x0624e266bdec0e6414198f0aa6389caabff90f52266dfefa1ef223ee9135088c",
         "version": "2",
-        "digest": "8kBPepYG4RU8uA3RP9U3wB66wajcwWBwE4BEjW4DvqRM",
+        "digest": "8bAGPAUz8hdp599KfLnKKzkqCnw6V6mTqz97Us5P1knP",
         "balance": "2",
-        "previousTransaction": "HDssi3TsXw2Pz5Z2eg447XwK7Lhi31d3YPsNEbwzXohG"
+        "previousTransaction": "HPjDT9iGbogXtTf6gzFbrgCXgN9UvhZrmMiHrwZJy8wC"
       }
     ],
-    "nextCursor": "zgEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABxDTZc/K6K4YbJLL01H4MopMGx8sopAUEWFtBguSL5unAAAAAAAAAARmYWtlAAAAAAAAAARGQUtFAAAAAAAAAAAB//////////3datd7pwSTdOfvbNLl7a4pm5OVO3MtG8gT+1STWT63hg==",
+    "nextCursor": "zgEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAAB5uD2HgiJdSNCNeHzZNaFrkE27CemurU4khZVq/229tgAAAAAAAAAARmYWtlAAAAAAAAAARGQUtFAAAAAAAAAAAB//////////0GJOJmvewOZBQZjwqmOJyqv/kPUiZt/voe8iPukTUIjA==",
     "hasNextPage": false
   }
 }
 
 task 4, line 48:
-//# transfer-object 1,1 --sender A --recipient B
-mutated: object(0,0), object(1,1)
+//# transfer-object 1,3 --sender A --recipient B
+mutated: object(0,0), object(1,3)
 unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
 gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
 
@@ -91,12 +91,12 @@ Response: {
         "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
         "coinObjectId": "0xe115ae7ff9b56944fafef6fd015d510a2fd963b6d42ec8a6266409c0ea40fb36",
         "version": "3",
-        "digest": "131PaKziKJSH8YhEpYbFNBM8U5ops7FTJ7jcfPkLHUye",
-        "balance": "299999979182096",
-        "previousTransaction": "H2Z3rknx4UrZcjdhHP6LK8kKHrRQH5UsYJJbReRTMWaD"
+        "digest": "GtLt2cSTNSXqamm8McsXn7es5UZFTX8mEQC7ZueYwGPG",
+        "balance": "299999979174496",
+        "previousTransaction": "3rx2A5hr9JcbWbryU6PD5w6XPYjj4exoDkVL9LCzvYzA"
       }
     ],
-    "nextCursor": "zAEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAANzdWkAAAAAAAAAA1NVSQAAAAAAAAAAAf/+7ybPzufv4RWuf/m1aUT6/vb9AV1RCi/ZY7bULsimJmQJwOpA+zY=",
+    "nextCursor": "zAEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAANzdWkAAAAAAAAAA1NVSQAAAAAAAAAAAf/+7ybPzwWf4RWuf/m1aUT6/vb9AV1RCi/ZY7bULsimJmQJwOpA+zY=",
     "hasNextPage": false
   }
 }
@@ -109,23 +109,23 @@ Response: {
   "result": {
     "data": [
       {
-        "coinType": "0x10d365cfcae8ae186c92cbd351f8328a4c1b1f2ca2901411616d060b922f9ba7::fake::FAKE",
-        "coinObjectId": "0x9b4907a13699a7f195785f7bc786f5ae213530d056f2ede480a7c2a47e4f1e52",
+        "coinType": "0x9b83d8782225d48d08d787cd935a16b904dbb09e9aead4e2485956aff6dbdb60::fake::FAKE",
+        "coinObjectId": "0x9438566e8677790b192344f09a4236c558b1d58cac23160e1ee4aa843b9dd384",
         "version": "2",
-        "digest": "5KZh38DR18WV5aYJSmYcU6uUnyut9madcf8RN8RSNsUU",
+        "digest": "4aqBmZPNrc7Fd765ucj3HbQeRPJvzKyRoz9skR4AJzfQ",
         "balance": "5000",
-        "previousTransaction": "HDssi3TsXw2Pz5Z2eg447XwK7Lhi31d3YPsNEbwzXohG"
+        "previousTransaction": "HPjDT9iGbogXtTf6gzFbrgCXgN9UvhZrmMiHrwZJy8wC"
       },
       {
-        "coinType": "0x10d365cfcae8ae186c92cbd351f8328a4c1b1f2ca2901411616d060b922f9ba7::fake::FAKE",
-        "coinObjectId": "0x4aa1d2054fb227df675f23acb56f6969c7fc0da759aa595591a8ed90c28c8b2b",
+        "coinType": "0x9b83d8782225d48d08d787cd935a16b904dbb09e9aead4e2485956aff6dbdb60::fake::FAKE",
+        "coinObjectId": "0x389fe573af169626ee9ffaf2815b599262556be4b191ed852ff53a963e723f9b",
         "version": "2",
-        "digest": "CphG8gL6XywHrAjmnDYW8eLJHwMvYRSKnenrXcQoNraq",
+        "digest": "E6heAXAKc2FrSPRwx2aMaeDw1dqeGMcrYCGS3ZxJj8xv",
         "balance": "4000",
-        "previousTransaction": "HDssi3TsXw2Pz5Z2eg447XwK7Lhi31d3YPsNEbwzXohG"
+        "previousTransaction": "HPjDT9iGbogXtTf6gzFbrgCXgN9UvhZrmMiHrwZJy8wC"
       }
     ],
-    "nextCursor": "zgEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABxDTZc/K6K4YbJLL01H4MopMGx8sopAUEWFtBguSL5unAAAAAAAAAARmYWtlAAAAAAAAAARGQUtFAAAAAAAAAAAB////////8F9KodIFT7In32dfI6y1b2lpx/wNp1mqWVWRqO2QwoyLKw==",
+    "nextCursor": "zgEA/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAAB5uD2HgiJdSNCNeHzZNaFrkE27CemurU4khZVq/229tgAAAAAAAAAARmYWtlAAAAAAAAAARGQUtFAAAAAAAAAAAB////////8F84n+VzrxaWJu6f+vKBW1mSYlVr5LGR7YUv9TqWPnI/mw==",
     "hasNextPage": true
   }
 }
@@ -138,15 +138,15 @@ Response: {
   "result": {
     "data": [
       {
-        "coinType": "0x10d365cfcae8ae186c92cbd351f8328a4c1b1f2ca2901411616d060b922f9ba7::fake::FAKE",
-        "coinObjectId": "0x10ebc1e4891b20f217904dc0551bc4d8521e9fe3c15a17856eebdfbb2f9fd3cc",
+        "coinType": "0x9b83d8782225d48d08d787cd935a16b904dbb09e9aead4e2485956aff6dbdb60::fake::FAKE",
+        "coinObjectId": "0xd8479cd8062ff0b40336225d3aa898448254b8b9b3bb96819cc6321ddd7b11bb",
         "version": "3",
-        "digest": "2wRk5rK9ujtHcS1CtWUs48BMJN5pd6ciWeW8eHbSVSQP",
-        "balance": "3000",
-        "previousTransaction": "H2Z3rknx4UrZcjdhHP6LK8kKHrRQH5UsYJJbReRTMWaD"
+        "digest": "6UrqH6A2ENi4S2sdpNYPw2bLChEXUopF8q1JjaNTdwYN",
+        "balance": "100",
+        "previousTransaction": "3rx2A5hr9JcbWbryU6PD5w6XPYjj4exoDkVL9LCzvYzA"
       }
     ],
-    "nextCursor": "zgEAp7AycDh4qnTDEmk1eJ/R1NfhEdWRGwkkfWljBhwxK1oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAABxDTZc/K6K4YbJLL01H4MopMGx8sopAUEWFtBguSL5unAAAAAAAAAARmYWtlAAAAAAAAAARGQUtFAAAAAAAAAAAB////////9EcQ68HkiRsg8heQTcBVG8TYUh6f48FaF4Vu69+7L5/TzA==",
+    "nextCursor": "zgEAp7AycDh4qnTDEmk1eJ/R1NfhEdWRGwkkfWljBhwxK1oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAEY29pbgAAAAAAAAAEQ29pbgAAAAAAAAABAAAAB5uD2HgiJdSNCNeHzZNaFrkE27CemurU4khZVq/229tgAAAAAAAAAARmYWtlAAAAAAAAAARGQUtFAAAAAAAAAAAB/////////5vYR5zYBi/wtAM2Il06qJhEglS4ubO7loGcxjId3XsRuw==",
     "hasNextPage": false
   }
 }

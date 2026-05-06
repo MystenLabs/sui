@@ -728,6 +728,7 @@ mod tests {
     use crate::test_utils::DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
     use crate::types::BRIDGE_PAUSED;
     use fastcrypto::traits::KeyPair;
+    use mysten_common::ZipDebugEqIteratorExt;
     use prometheus::Registry;
     use std::collections::{BTreeMap, HashMap};
     use std::str::FromStr;
@@ -1448,7 +1449,7 @@ mod tests {
     ) -> BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthorityRecoverableSignature> {
         assert_eq!(mocks.len(), secrets.len());
         let mut signed_actions = BTreeMap::new();
-        for (mock, secret) in mocks.iter().zip(secrets.iter()) {
+        for (mock, secret) in mocks.iter().zip_debug_eq(secrets.iter()) {
             let signed_action = sign_action_with_key(action, secret);
             mock.add_sui_event_response(
                 sui_tx_digest,

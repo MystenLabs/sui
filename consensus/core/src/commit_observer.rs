@@ -15,10 +15,9 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::ConsensusResult,
-    leader_schedule::LeaderSchedule,
     linearizer::Linearizer,
     storage::Store,
-    transaction_certifier::TransactionCertifier,
+    transaction_vote_tracker::TransactionVoteTracker,
 };
 
 /// Role of CommitObserver
@@ -38,8 +37,7 @@ pub(crate) struct CommitObserver {
     dag_state: Arc<RwLock<DagState>>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
-    transaction_certifier: TransactionCertifier,
-    leader_schedule: Arc<LeaderSchedule>,
+    transaction_vote_tracker: TransactionVoteTracker,
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
     /// Handle to an unbounded channel to send output commits.
@@ -51,15 +49,14 @@ impl CommitObserver {
         context: Arc<Context>,
         commit_consumer: CommitConsumerArgs,
         dag_state: Arc<RwLock<DagState>>,
-        transaction_certifier: TransactionCertifier,
-        leader_schedule: Arc<LeaderSchedule>,
+        transaction_vote_tracker: TransactionVoteTracker,
     ) -> Self {
         let store = dag_state.read().store();
         let commit_interpreter = Linearizer::new(context.clone(), dag_state.clone());
         let commit_finalizer_handle = CommitFinalizer::start(
             context.clone(),
             dag_state.clone(),
-            transaction_certifier.clone(),
+            transaction_vote_tracker.clone(),
             commit_consumer.commit_sender.clone(),
         );
 
@@ -67,8 +64,7 @@ impl CommitObserver {
             context,
             dag_state,
             store,
-            transaction_certifier,
-            leader_schedule,
+            transaction_vote_tracker,
             commit_interpreter,
             commit_finalizer_handle,
         };
@@ -79,10 +75,10 @@ impl CommitObserver {
         // They will just be ignored.
         tokio::runtime::Handle::current()
             .spawn_blocking({
-                let transaction_certifier = observer.transaction_certifier.clone();
+                let transaction_vote_tracker = observer.transaction_vote_tracker.clone();
                 let gc_round = observer.dag_state.read().gc_round();
                 move || {
-                    transaction_certifier.recover_blocks_after_round(gc_round);
+                    transaction_vote_tracker.recover_blocks_after_round(gc_round);
                 }
             })
             .await
@@ -114,20 +110,6 @@ impl CommitObserver {
         // Set if the commit is produced from local DAG, or received through commit sync.
         for subdag in committed_sub_dags.iter_mut() {
             subdag.decided_with_local_blocks = local;
-        }
-
-        // Send scores as part of the first sub dag, if the leader schedule has been updated.
-        let schedule_updated = self
-            .leader_schedule
-            .leader_schedule_updated(&self.dag_state);
-        if schedule_updated {
-            let reputation_scores_desc = self
-                .leader_schedule
-                .leader_swap_table
-                .read()
-                .reputation_scores_desc
-                .clone();
-            committed_sub_dags[0].reputation_scores_desc = reputation_scores_desc;
         }
 
         for commit in committed_sub_dags.iter() {
@@ -226,25 +208,8 @@ impl CommitObserver {
                 last_sent_commit_index += 1;
                 assert_eq!(commit.index(), last_sent_commit_index);
 
-                // On recovery leader schedule will be updated with the current scores
-                // and the scores will be passed along with the last commit of this recovered batch sent to
-                // Sui so that the current scores are available for submission.
-                let reputation_scores = if commit.index() == last_commit_index {
-                    self.leader_schedule
-                        .leader_swap_table
-                        .read()
-                        .reputation_scores_desc
-                        .clone()
-                } else {
-                    vec![]
-                };
-
-                let committed_sub_dag = load_committed_subdag_from_store(
-                    &self.context,
-                    self.store.as_ref(),
-                    commit,
-                    reputation_scores,
-                );
+                let committed_sub_dag =
+                    load_committed_subdag_from_store(self.store.as_ref(), commit);
 
                 if !committed_sub_dag.recovered_rejected_transactions && !seen_unfinalized_commit {
                     info!(
@@ -264,7 +229,7 @@ impl CommitObserver {
                     assert!(!committed_sub_dag.decided_with_local_blocks);
                     // All unfinalized commits need to be processed by the CommitFinalizer, making it necessary to
                     // recover and vote on the blocks in this commit.
-                    self.transaction_certifier
+                    self.transaction_vote_tracker
                         .recover_and_vote_on_blocks(committed_sub_dag.blocks.clone());
                 }
 
@@ -338,9 +303,8 @@ impl CommitObserver {
 
 #[cfg(test)]
 mod tests {
-    use consensus_config::AuthorityIndex;
     use consensus_types::block::BlockRef;
-    use mysten_metrics::monitored_mpsc::{UnboundedReceiver, unbounded_channel};
+    use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use parking_lot::RwLock;
     use rstest::rstest;
     use tokio::time::timeout;
@@ -355,8 +319,6 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_handle_commit() {
-        use crate::leader_schedule::LeaderSwapTable;
-
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let (context, _keys) = Context::new_for_test(num_authorities);
@@ -370,25 +332,17 @@ mod tests {
         let last_processed_commit_index = 0;
         let (commit_consumer, mut commit_receiver) =
             CommitConsumerArgs::new(0, last_processed_commit_index);
-        let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
-            blocks_sender,
-        );
-        const NUM_OF_COMMITS_PER_SCHEDULE: u64 = 5;
-        let leader_schedule = Arc::new(
-            LeaderSchedule::new(context.clone(), LeaderSwapTable::default())
-                .with_num_commits_per_schedule(NUM_OF_COMMITS_PER_SCHEDULE),
         );
 
         let mut observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
-            leader_schedule.clone(),
+            transaction_vote_tracker.clone(),
         )
         .await;
 
@@ -399,7 +353,7 @@ mod tests {
             .layers(1..=num_rounds)
             .build()
             .persist_layers(dag_state.clone());
-        transaction_certifier.add_voted_blocks(
+        transaction_vote_tracker.add_voted_blocks(
             builder
                 .all_blocks()
                 .iter()
@@ -413,35 +367,13 @@ mod tests {
             .map(Option::unwrap)
             .collect::<Vec<_>>();
 
-        // Commit first 5 leaders.
-        let mut commits = observer
-            .handle_commit(leaders[0..5].to_vec(), true)
-            .unwrap();
-
-        // Trigger a leader schedule update.
-        leader_schedule.update_leader_schedule_v2(&dag_state);
-
-        // Commit the next 5 leaders.
-        commits.extend(observer.handle_commit(leaders[5..].to_vec(), true).unwrap());
+        let commits = observer.handle_commit(leaders.clone(), true).unwrap();
 
         // Check commits are returned by CommitObserver::handle_commit is accurate
         let mut expected_stored_refs: Vec<BlockRef> = vec![];
         for (idx, subdag) in commits.iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
-
-            // 5th subdag should contain the updated scores.
-            if idx == 5 {
-                let scores = vec![
-                    (AuthorityIndex::new_for_test(1), 9),
-                    (AuthorityIndex::new_for_test(3), 9),
-                    (AuthorityIndex::new_for_test(0), 9),
-                    (AuthorityIndex::new_for_test(2), 9),
-                ];
-                assert_eq!(subdag.reputation_scores_desc, scores);
-            } else {
-                assert!(subdag.reputation_scores_desc.is_empty());
-            }
 
             let expected_ts = {
                 let block_refs = leaders[idx]
@@ -519,27 +451,20 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let (blocks_sender, _blocks_receiver) = unbounded_channel("consensus_block_output");
-        let transaction_certifier = TransactionCertifier::new(
+        let transaction_vote_tracker = TransactionVoteTracker::new(
             context.clone(),
             Arc::new(NoopBlockVerifier {}),
             dag_state.clone(),
-            blocks_sender,
         );
         let last_processed_commit_index = 0;
         let (commit_consumer, mut commit_receiver) =
             CommitConsumerArgs::new(0, last_processed_commit_index);
-        let leader_schedule = Arc::new(LeaderSchedule::from_store(
-            context.clone(),
-            dag_state.clone(),
-        ));
 
         let mut observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            transaction_certifier.clone(),
-            leader_schedule.clone(),
+            transaction_vote_tracker.clone(),
         )
         .await;
 
@@ -550,7 +475,7 @@ mod tests {
             .layers(1..=num_rounds)
             .build()
             .persist_layers(dag_state.clone());
-        transaction_certifier.add_voted_blocks(
+        transaction_vote_tracker.add_voted_blocks(
             builder
                 .all_blocks()
                 .iter()
@@ -576,7 +501,6 @@ mod tests {
         while let Ok(Some(subdag)) = timeout(Duration::from_secs(1), commit_receiver.recv()).await {
             tracing::info!("Processed {subdag}");
             assert_eq!(subdag, commits[processed_subdag_index]);
-            assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == expected_last_processed_index {
                 break;
@@ -607,7 +531,6 @@ mod tests {
             tracing::info!("{subdag} was sent but not processed by consumer");
             assert_eq!(subdag, commits[processed_subdag_index]);
             assert!(subdag.decided_with_local_blocks);
-            assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_ref.index as usize;
             if processed_subdag_index == expected_last_sent_index {
                 break;
@@ -639,8 +562,7 @@ mod tests {
                 context.clone(),
                 commit_consumer,
                 dag_state.clone(),
-                transaction_certifier.clone(),
-                leader_schedule.clone(),
+                transaction_vote_tracker.clone(),
             )
             .await;
 
@@ -657,7 +579,6 @@ mod tests {
                 assert_eq!(subdag, commits[processed_subdag_index as usize]);
 
                 assert!(subdag.decided_with_local_blocks);
-                assert_eq!(subdag.reputation_scores_desc, vec![]);
                 processed_subdag_index = subdag.commit_ref.index;
                 if processed_subdag_index == consumer_last_processed_commit_index {
                     break;
@@ -686,8 +607,7 @@ mod tests {
                 context.clone(),
                 commit_consumer,
                 dag_state.clone(),
-                transaction_certifier.clone(),
-                leader_schedule.clone(),
+                transaction_vote_tracker.clone(),
             )
             .await;
 
@@ -712,8 +632,7 @@ mod tests {
                 context.clone(),
                 commit_consumer,
                 dag_state.clone(),
-                transaction_certifier.clone(),
-                leader_schedule.clone(),
+                transaction_vote_tracker.clone(),
             )
             .await;
 
@@ -726,7 +645,6 @@ mod tests {
                 tracing::info!("Received {subdag} on recovery");
                 assert_eq!(subdag.commit_ref.index, processed_subdag_index + 1);
                 assert!(subdag.decided_with_local_blocks);
-                assert_eq!(subdag.reputation_scores_desc, vec![]);
                 processed_subdag_index = subdag.commit_ref.index;
                 if processed_subdag_index == expected_last_sent_index as CommitIndex {
                     break;
@@ -758,8 +676,7 @@ mod tests {
                 context.clone(),
                 commit_consumer,
                 dag_state.clone(),
-                transaction_certifier.clone(),
-                leader_schedule.clone(),
+                transaction_vote_tracker.clone(),
             )
             .await;
 
@@ -778,7 +695,6 @@ mod tests {
                 assert_eq!(subdag, commits[processed_subdag_index as usize]);
 
                 assert!(subdag.decided_with_local_blocks);
-                assert_eq!(subdag.reputation_scores_desc, vec![]);
                 processed_subdag_index = subdag.commit_ref.index;
                 if processed_subdag_index == expected_last_sent_index as CommitIndex {
                     break;

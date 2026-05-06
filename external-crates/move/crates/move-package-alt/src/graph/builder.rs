@@ -59,11 +59,11 @@ struct PackageCache<F: MoveFlavor> {
 
 pub struct PackageGraphBuilder<'a, F: MoveFlavor> {
     cache: PackageCache<F>,
-    config: &'a PackageConfig,
+    config: &'a PackageConfig<F>,
 }
 
 impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
-    pub fn new(config: &'a PackageConfig) -> Self {
+    pub fn new(config: &'a PackageConfig<F>) -> Self {
         Self {
             cache: PackageCache::new(),
             config,
@@ -290,10 +290,11 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
         };
 
         // pin dependencies
-        let pinned = PinnedDependencyInfo::pin::<F>(
+        let pinned = PinnedDependencyInfo::pin(
             package.dep_for_self(),
             package.direct_deps().clone(),
             env.id(),
+            &*self.config.flavor,
         )
         .await
         .map_err(|err| PackageError::DepError {
@@ -349,13 +350,13 @@ impl<F: MoveFlavor> PackageCache<F> {
         }
     }
 
-    /// Return a reference to a cached [Package], loading it if necessary
+    /// Return a reference to a cached [Package], loading it if necessary.
     pub async fn fetch(
         &self,
         dep: &Pinned,
         env: &Environment,
         mtx: &PackageSystemLock,
-        config: &PackageConfig,
+        config: &PackageConfig<F>,
     ) -> PackageResult<Arc<Package<F>>> {
         let cell = self
             .cache

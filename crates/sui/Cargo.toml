@@ -16,14 +16,12 @@ async-recursion.workspace = true
 async-trait.workspace = true
 aws-config.workspace = true
 aws-sdk-kms.workspace = true
-axum.workspace = true
 bcs.workspace = true
 bin-version.workspace = true
 bip32.workspace = true
 camino.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
-codespan-reporting.workspace = true
 datatest-stable.workspace = true
 futures.workspace = true
 http.workspace = true
@@ -45,10 +43,7 @@ tabled.workspace = true
 tap.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full"] }
-tower.workspace = true
-tower-http.workspace = true
 tracing.workspace = true
-uuid.workspace = true
 url.workspace = true
 
 sui-rpc-api.workspace = true
@@ -92,11 +87,7 @@ sui-replay-2.workspace = true
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
 
-rustyline.workspace = true
-rustyline-derive.workspace = true
 colored.workspace = true
-unescape.workspace = true
-shell-words.workspace = true
 
 tempfile.workspace = true
 telemetry-subscribers.workspace = true
@@ -109,7 +100,6 @@ move-package-alt-compilation.workspace = true
 move-compiler.workspace = true
 csv.workspace = true
 move-vm-profiler.workspace = true
-move-vm-config.workspace = true
 move-ir-types.workspace = true
 move-command-line-common.workspace = true
 move-cli.workspace = true

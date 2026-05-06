@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use itertools::Itertools;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::fatal;
 use mysten_metrics::monitored_scope;
 use prometheus::{IntGauge, Registry, register_int_gauge_with_registry};
@@ -256,7 +257,7 @@ where
     let modified_at_digests: Vec<_> = store
         .multi_get_objects_by_key(&modified_at_version_keys.clone())
         .into_iter()
-        .zip(modified_at_version_keys)
+        .zip_debug_eq(modified_at_version_keys)
         .map(|(obj, key)| {
             obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
                 .compute_object_reference()
@@ -332,7 +333,7 @@ where
     let modified_at_digests: Vec<_> = store
         .multi_get_objects_by_key(&modified_at_version_keys.clone())
         .into_iter()
-        .zip(modified_at_version_keys)
+        .zip_debug_eq(modified_at_version_keys)
         .map(|(obj, key)| {
             obj.unwrap_or_else(|| panic!("Object for key {:?} from modified_at_versions effects does not exist in objects table", key))
                 .compute_object_reference()

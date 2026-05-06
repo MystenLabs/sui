@@ -1,0 +1,63 @@
+---
+title: DeepBook Predict
+description: Prediction market protocol built alongside DeepBook, with binary positions, vertical ranges, oracle-driven pricing, and shared vault liquidity on Sui.
+keywords:
+  [
+    deepbook predict,
+    predict,
+    prediction market,
+    binary position,
+    vertical range,
+    oracle,
+    plp,
+    deepbook,
+    sui,
+  ]
+---
+
+DeepBook Predict is an expiry-based prediction market protocol on Sui. It lets applications build markets where users can mint and redeem binary positions or vertical ranges against oracle-driven prices, while liquidity providers supply quote assets to a shared vault and receive `PLP` LP shares.
+
+The protocol is currently documented from the `predict-testnet-4-16` branch of the [DeepBookV3 repository](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-4-16/packages/predict). The current public integration target is on Sui Testnet.
+
+:::caution
+
+DeepBook Predict smart contracts might change before Mainnet deployment. Treat the current package IDs, object layouts, and entry points as Testnet integration targets.
+
+:::
+
+## Key features
+
+DeepBook Predict provides the following capabilities:
+
+- **Binary positions:** Users can mint directional positions for an oracle, expiry, strike, and direction.
+- **Vertical ranges:** Users can mint bounded range positions keyed by an oracle, expiry, lower strike, and higher strike.
+- **Oracle-based pricing:** `OracleSVI` objects track spot, forward, SVI parameters, lifecycle status, and settlement prices.
+- **Shared manager accounts:** Each user reuses a `PredictManager` to hold quote balances, positions, and range quantities.
+- **Vault liquidity:** LPs supply accepted quote assets to the vault and receive `PLP` shares representing a proportional claim on vault value.
+- **Indexed data path:** Applications can use the public Predict server for render-ready market, vault, portfolio, and history data.
+
+## Integration model
+
+Most applications should combine three data sources:
+
+- Use the public Predict server for page rendering, lists, portfolio summaries, vault summaries, and historical data.
+- Sui checkpoint or event streaming supports pages that need low-latency oracle updates.
+- Use direct onchain object reads immediately before or after wallet flows that need confirmation-critical state.
+
+Avoid building the primary UI around raw chain scans. The server already exposes indexed surfaces for market state, portfolio state, vault state, and history.
+
+## User flow
+
+A typical user flow starts with current market data from the public server. After selecting an active oracle and strike, the user creates or finds a `PredictManager`, deposits the enabled quote asset, previews mint and redeem amounts, then submits a transaction for a binary position or vertical range. After confirmation, refresh both the affected onchain objects and the indexed server endpoints backing the current page.
+
+## Liquidity provider flow
+
+Liquidity providers supply accepted quote assets into the shared vault using `predict::supply`. In return, the protocol mints `PLP`, which represents vault shares. LP withdrawals burn `PLP` and return a selected quote asset, subject to current vault value, max payout coverage, and the withdrawal limiter.
+
+## Testnet status
+
+DeepBook Predict is documented here as a Testnet integration surface. Do not reuse package IDs from older Predict experiments. See [Contract Information](/onchain-finance/deepbook-predict/contract-information) for the current package, object ID, quote asset, server URL, and source branch.
+
+import DocCardList from '@theme/DocCardList';
+
+<DocCardList />

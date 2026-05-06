@@ -38,6 +38,7 @@ pub struct VerifierConfig {
     pub disable_entry_point_signature_check: bool,
     /// If true, the verifier will run only the regex reference safety check.
     pub switch_to_regex_reference_safety: bool,
+    pub disallow_jump_orphans: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -90,6 +91,7 @@ impl Default for VerifierConfig {
             deprecate_global_storage_ops: true,
             disable_entry_point_signature_check: false,
             switch_to_regex_reference_safety: false,
+            disallow_jump_orphans: true,
         }
     }
 }

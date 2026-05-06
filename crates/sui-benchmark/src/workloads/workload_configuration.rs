@@ -5,6 +5,7 @@ use crate::bank::BenchmarkBank;
 use crate::drivers::Interval;
 use crate::options::{Opts, RunSpec};
 use crate::system_state_observer::SystemStateObserver;
+use crate::workloads::addr_bal_deposit::{AddrBalDepositConfig, AddrBalDepositWorkloadBuilder};
 use crate::workloads::batch_payment::BatchPaymentWorkloadBuilder;
 use crate::workloads::delegation::DelegationWorkloadBuilder;
 use crate::workloads::party::PartyWorkloadBuilder;
@@ -14,9 +15,11 @@ use crate::workloads::transfer_object::TransferObjectWorkloadBuilder;
 use crate::workloads::{ExpectedFailureType, GroupID, WorkloadBuilderInfo, WorkloadInfo};
 use anyhow::Result;
 use futures::future::join_all;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_types::base_types::SuiAddress;
 use tracing::info;
 
 use super::adversarial::{AdversarialPayloadCfg, AdversarialWorkloadBuilder};
@@ -60,6 +63,8 @@ pub struct WorkloadConfig {
     pub in_flight_ratio: u64,
     pub duration: Interval,
     pub composite_config: Option<super::composite::CompositeWorkloadConfig>,
+    pub deposit_target_addresses: Vec<SuiAddress>,
+    pub deposit_seed_sui: u64,
 }
 pub struct WorkloadConfiguration;
 
@@ -99,6 +104,8 @@ impl WorkloadConfiguration {
                 num_workers,
                 in_flight_ratio,
                 duration,
+                deposit_target_address,
+                deposit_seed_sui,
             } => {
                 info!(
                     "Number of benchmark groups to run: {}",
@@ -148,6 +155,19 @@ impl WorkloadConfiguration {
                         } else {
                             None
                         },
+                        deposit_target_addresses: deposit_target_address
+                            .as_ref()
+                            .map(|addrs| {
+                                addrs
+                                    .iter()
+                                    .map(|addr| {
+                                        SuiAddress::from_str(addr)
+                                            .expect("Invalid deposit target address format")
+                                    })
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
+                        deposit_seed_sui,
                     };
                     let builders =
                         Self::create_workload_builders(config, system_state_observer.clone()).await;
@@ -197,7 +217,7 @@ impl WorkloadConfiguration {
             }
         });
         let workloads: Vec<_> = join_all(init_futures).await;
-        let all_workloads = workloads.into_iter().zip(workload_params).fold(
+        let all_workloads = workloads.into_iter().zip_debug_eq(workload_params).fold(
             BTreeMap::<GroupID, Vec<WorkloadInfo>>::new(),
             |mut acc, (workload, workload_params)| {
                 let w = WorkloadInfo {
@@ -231,6 +251,8 @@ impl WorkloadConfiguration {
             in_flight_ratio,
             duration,
             composite_config,
+            deposit_target_addresses,
+            deposit_seed_sui,
         }: WorkloadConfig,
         system_state_observer: Arc<SystemStateObserver>,
     ) -> Vec<Option<WorkloadBuilderInfo>> {
@@ -241,6 +263,29 @@ impl WorkloadConfiguration {
             num_workers,
             duration
         );
+        let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
+
+        if !deposit_target_addresses.is_empty() {
+            info!(
+                "Deposit target address mode: all traffic deposits to {} addresses",
+                deposit_target_addresses.len()
+            );
+            let config = AddrBalDepositConfig {
+                target_addresses: deposit_target_addresses,
+                deposit_amount: 1000,
+                seed_amount: deposit_seed_sui * sui_types::gas_coin::MIST_PER_SUI,
+                metrics: None,
+            };
+            return vec![AddrBalDepositWorkloadBuilder::build_info(
+                config,
+                target_qps,
+                num_workers,
+                in_flight_ratio,
+                duration,
+                group,
+            )];
+        }
+
         let total_weight = weights.shared_counter
             + weights.shared_deletion
             + weights.transfer_object
@@ -254,7 +299,6 @@ impl WorkloadConfiguration {
             + weights.party
             + weights.conflicting_transfer
             + weights.composite;
-        let reference_gas_price = system_state_observer.state.borrow().reference_gas_price;
         let mut workload_builders = vec![];
         let shared_workload = SharedCounterWorkloadBuilder::from(
             weights.shared_counter as f32 / total_weight as f32,

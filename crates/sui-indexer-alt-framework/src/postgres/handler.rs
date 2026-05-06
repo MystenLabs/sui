@@ -83,7 +83,7 @@ const fn max_chunk_rows<T: FieldCount>() -> usize {
 #[async_trait]
 impl<H> concurrent::Handler for H
 where
-    H: Handler + Send + Sync + 'static,
+    H: Handler,
     H::Value: FieldCount + Send + Sync,
 {
     type Store = Db;

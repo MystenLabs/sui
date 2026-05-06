@@ -12,8 +12,8 @@ module example::use_permit;
 public struct MyType { /* ... */ }
 
 public fun test_permit() {
-let permit = internal::permit<MyType>();
-/* external_module::call_with_permit(permit); */
+   let permit = internal::permit<MyType>();
+   /* external_module::call_with_permit(permit); */
 }
 ```
 
@@ -25,7 +25,7 @@ To write a function that is guarded by a <code><a href="../std/internal.md#std_i
 module example::type_registry;
 
 public fun register_type<T>(_: internal::Permit<T> /* ... */) {
-/* ... */
+  /* ... */
 }
 ```
 

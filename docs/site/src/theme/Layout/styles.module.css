@@ -1,0 +1,36 @@
+/* Copyright (c) Mysten Labs, Inc.
+   SPDX-License-Identifier: Apache-2.0 */
+
+html,
+body {
+  height: 100%;
+}
+
+/* Flex container that lets us reorder navbar vs main via CSS order */
+.layoutWrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+}
+
+/* Navbar appears first visually (order: -1) even though it's after main in DOM */
+.layoutWrapper > :global(.navbar),
+.layoutWrapper > :global([class*="announcementBar"]) {
+  order: -1;
+}
+
+.mainWrapper {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+:global(.docusaurus-mt-lg) {
+  margin-top: 3rem;
+}
+
+:global(#__docusaurus) {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}

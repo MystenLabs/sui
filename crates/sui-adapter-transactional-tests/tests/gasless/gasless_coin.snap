@@ -1,0 +1,179 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+assertion_line: 908
+---
+processed 27 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 8-30:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 11567200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 34-39:
+//# programmable --sender A --inputs 5000 object(1,1) @A
+// Mint three USDC coins for A
+//> 0: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
+//> 1: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
+//> 2: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
+//> TransferObjects([Result(0), Result(1), Result(2)], Input(2));
+created: object(3,0), object(3,1), object(3,2)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 6657600,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 4, lines 41-43:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 45-47:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(3,0) @B
+// Gasless: send a coin object to B via coin::send_funds
+//> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
+deleted: object(3,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 5000)
+gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
+
+task 6, line 49:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 51-53:
+//# view-funds sui::balance::Balance<test::usdc::USDC> B
+5000
+
+task 8, lines 55-58:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(3,1) object(3,2) @C
+// Gasless: merge two coins then send the result to C
+//> 0: MergeCoins(Input(0), [Input(1)]);
+//> 1: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(2));
+deleted: object(3,1), object(3,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(8,0), C, sui::balance::Balance<test::usdc::USDC>, Merge, 10000)
+gas summary: computation_cost: 2618352, storage_cost: 0,  storage_rebate: 2618352, non_refundable_storage_fee: 26448
+
+task 9, line 60:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 10, lines 62-64:
+//# view-funds sui::balance::Balance<test::usdc::USDC> C
+10000
+
+task 11, lines 66-69:
+//# programmable --sender A --inputs 9000 object(1,1) @A
+// Mint one large coin for A
+//> 0: sui::coin::mint<test::usdc::USDC>(Input(1), Input(0));
+//> TransferObjects([Result(0)], Input(2));
+created: object(11,0)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 12, line 71:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 13, lines 73-77:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(11,0) 3000 @B @C
+// Gasless: split 3000 from 9000 coin, send split to B and remainder to C
+//> 0: SplitCoins(Input(0), [Input(1)]);
+//> 1: sui::coin::send_funds<test::usdc::USDC>(NestedResult(0, 0), Input(2));
+//> 2: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(3));
+deleted: object(11,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 3000), (object(8,0), C, sui::balance::Balance<test::usdc::USDC>, Merge, 6000)
+gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
+
+task 14, line 79:
+//# create-checkpoint
+Checkpoint created: 5
+
+task 15, line 81:
+//# view-funds sui::balance::Balance<test::usdc::USDC> B
+8000
+
+task 16, lines 83-85:
+//# view-funds sui::balance::Balance<test::usdc::USDC> C
+16000
+
+task 17, lines 87-90:
+//# programmable --sender A --inputs object(1,1) 1000
+// Mint and freeze a coin
+//> 0: sui::coin::mint<test::usdc::USDC>(Input(0), Input(1));
+//> test::usdc::freeze_coin(Result(0));
+created: object(17,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 18, lines 92-96:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(17,0) @B
+// Reject: immutable coin
+//> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
+// --- Test 5: Shared coin input rejected ---
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
+
+task 19, lines 98-101:
+//# programmable --sender A --inputs object(1,1) 1000
+// Mint and share a coin
+//> 0: sui::coin::mint<test::usdc::USDC>(Input(0), Input(1));
+//> test::usdc::share_coin(Result(0));
+created: object(19,0)
+mutated: object(0,0), object(1,1)
+gas summary: computation_cost: 1000000, storage_cost: 4012800,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 20, lines 103-105:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(19,0) @B
+// Reject: shared coin (used)
+//> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
+
+task 21, lines 107-112:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(19,0) @B 1
+// Reject: shared coin (used but not deleted)
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: sui::coin::send_funds<test::usdc::USDC>(NestedResult(0, 0), Input(1));
+// --- Test 6: Party coin input succeeds (used and unused) ---
+Error: Error checking transaction input objects: Feature is not supported: Gasless transactions only support owned object inputs
+
+task 22, lines 114-120:
+//# programmable --sender A --inputs object(1,1) 2000 @A
+// Mint two coins and party-transfer them
+//> 0: sui::coin::mint<test::usdc::USDC>(Input(0), Input(1));
+//> 1: sui::coin::mint<test::usdc::USDC>(Input(0), Input(1));
+//> 2: sui::party::single_owner(Input(2));
+//> sui::transfer::public_party_transfer<sui::coin::Coin<test::usdc::USDC>>(Result(0), Result(2));
+//> sui::transfer::public_party_transfer<sui::coin::Coin<test::usdc::USDC>>(Result(1), Result(2));
+created: object(22,0), object(22,1)
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 5335200,  storage_rebate: 2663496, non_refundable_storage_fee: 26904
+
+task 23, lines 122-124:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(22,0) @B
+// Success: party coin input used
+//> 0: sui::coin::send_funds<test::usdc::USDC>(Input(0), Input(1));
+deleted: object(22,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+accumulators_written: (object(5,0), B, sui::balance::Balance<test::usdc::USDC>, Merge, 2000)
+gas summary: computation_cost: 1309176, storage_cost: 0,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
+
+task 24, lines 126-129:
+//# programmable --sender A --address-balance-gas --gas-price 0 --gas-budget 0 --inputs object(22,1) @B 1
+// Reject: party coin input used but not deleted, fails post-execution check
+//> 0: SplitCoins(Input(0), [Input(2)]);
+//> 1: sui::coin::send_funds<test::usdc::USDC>(NestedResult(0, 0), Input(1));
+Error: Transaction Effects Status: Insufficient Gas.
+Debug of error: InsufficientGas at command None
+
+task 25, line 131:
+//# create-checkpoint
+Checkpoint created: 6
+
+task 26, line 133:
+//# view-funds sui::balance::Balance<test::usdc::USDC> B
+10000

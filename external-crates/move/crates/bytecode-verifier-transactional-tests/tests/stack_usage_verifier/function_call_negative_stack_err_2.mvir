@@ -1,37 +1,37 @@
 //# publish
-module 0x6.A {
-    public push_u64(): u64  {
+mvir 0x6::A {
+    public fun push_u64(): u64  {
     label b0:
         return 42;
     }
 
-    public push_bool(): bool {
+    public fun push_bool(): bool {
     label b0:
         return true;
     }
 
-    public foo(u: u64): u64 {
+    public fun foo(u: u64): u64 {
     label b0:
         return move(u) * 2;
     }
 
-    public eat_stack(b: bool, u: u64) {
+    public fun eat_stack(b: bool, u: u64) {
     label b0:
         return;
     }
 }
 
 //# run
-module 0x42.m {
-import 0x6.A;
+mvir 0x42::m {
+import 0x6::A;
 
-entry foo() {
+entry fun foo() {
     let ans: u64;
 label b0:
-    (A.push_bool(), A.push_u64());
-    ans = (A.foo());
+    (A::push_bool(), A::push_u64());
+    ans = (A::foo());
     // negative stack
-    (A.eat_stack());
+    (A::eat_stack());
     return;
 }
 }

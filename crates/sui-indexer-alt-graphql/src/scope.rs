@@ -23,11 +23,13 @@ use sui_types::object::Object as NativeObject;
 
 use crate::config::Limits;
 use crate::error::RpcError;
+use crate::task::streaming::StreamingPackageStore;
 use crate::task::watermark::Watermarks;
 
 /// A map of objects from an executed transaction, keyed by (ObjectID, SequenceNumber).
 /// None values indicate tombstones for deleted/wrapped objects.
-type ExecutionObjectMap = Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>;
+pub(crate) type ExecutionObjectMap =
+    Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>;
 
 /// Root object bound for consistent dynamic field reads.
 ///
@@ -94,6 +96,33 @@ impl Scope {
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
+    }
+
+    /// Create a scope for streamed checkpoint data. Sets `checkpoint_viewed_at` to `None`
+    /// because streamed data is resolved from memory, not bounded by an indexed checkpoint.
+    pub(crate) fn for_streamed_checkpoint(
+        package_store: Arc<StreamingPackageStore>,
+        resolver_limits: sui_package_resolver::Limits,
+    ) -> Self {
+        Self {
+            checkpoint_viewed_at: None,
+            root_bound: None,
+            execution_objects: Arc::new(BTreeMap::new()),
+            package_store,
+            resolver_limits,
+        }
+    }
+
+    /// Create a nested scope with pre-built execution objects. Used by streaming to attach
+    /// per-transaction objects that were deserialized from checkpoint-level data.
+    pub(crate) fn with_execution_objects(&self, execution_objects: ExecutionObjectMap) -> Self {
+        Self {
+            checkpoint_viewed_at: None,
+            root_bound: self.root_bound,
+            execution_objects,
+            package_store: self.package_store.clone(),
+            resolver_limits: self.resolver_limits.clone(),
+        }
     }
 
     /// Create a scope instance for tests with no package data.

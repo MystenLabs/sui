@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::filter::FilterScope,
     expansion::ast::{Fields, ModuleIdent},
     naming::ast as N,
     parser::ast::{Ability_, DatatypeName, DocComment, Field},
@@ -279,7 +279,7 @@ fn add_private_transfers(
         transferred: &'a mut BTreeMap<ModuleIdent, BTreeMap<DatatypeName, TransferKind>>,
     }
     impl TypingVisitorContext for TransferVisitor<'_> {
-        fn push_warning_filter_scope(&mut self, _: WarningFilters) {
+        fn push_warning_filter_scope(&mut self, _: FilterScope) {
             unreachable!("no warning filters in function bodies")
         }
 

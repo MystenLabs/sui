@@ -10,6 +10,7 @@ default-run = "move-package-alt"
 [dependencies]
 anyhow.workspace = true
 append-only-vec.workspace = true
+async-trait.workspace = true
 bimap.workspace = true
 clap.workspace = true
 codespan-reporting.workspace = true
@@ -23,8 +24,6 @@ jsonrpc.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true
-move-symbol-pool.workspace = true
-named-lock.workspace = true
 path-clean.workspace = true
 petgraph.workspace = true
 pretty_assertions.workspace = true
@@ -42,7 +41,6 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 heck.workspace = true
 walkdir.workspace = true
-whoami.workspace = true
 fs4.workspace = true
 
 [dev-dependencies]

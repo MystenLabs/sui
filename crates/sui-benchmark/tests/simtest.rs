@@ -53,12 +53,17 @@ mod test {
     use sui_simulator::{SimConfig, configs::*};
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
-    use sui_types::base_types::{AuthorityName, ConciseableName, ObjectID, SequenceNumber};
+    use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
+    use sui_types::base_types::{
+        AuthorityName, ConciseableName, ObjectID, SequenceNumber, SuiAddress,
+    };
     use sui_types::committee::CommitteeTrait;
     use sui_types::digests::TransactionDigest;
+    use sui_types::effects::TransactionEffectsAPI;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use sui_types::supported_protocol_versions::SupportedProtocolVersions;
     use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
+    use sui_types::transaction::{TransactionDataAPI, TransactionKind};
     use test_cluster::{TestCluster, TestClusterBuilder};
     use tracing::{error, info, trace};
     use typed_store::traits::Map;
@@ -130,7 +135,6 @@ mod test {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(1)
             .with_chain_override(chain)
             .build()
@@ -154,7 +158,6 @@ mod test {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_submit_delay_step_override_millis(3000)
             .with_global_state_hash_v2_enabled_callback(Arc::new(|idx| idx % 2 == 0))
             .build()
             .await
@@ -976,7 +979,6 @@ mod test {
                 ..Default::default()
             })
             .with_execution_cache_config(cache_config)
-            .with_submit_delay_step_override_millis(3000)
             .build()
             .await
             .into();
@@ -1017,7 +1019,6 @@ mod test {
                 check_system_overload_at_signing: false,
                 ..Default::default()
             })
-            .with_submit_delay_step_override_millis(3000)
             .with_num_unpruned_validators(default_num_of_unpruned_validators)
             .build()
             .await
@@ -1262,6 +1263,8 @@ mod test {
             in_flight_ratio,
             duration,
             composite_config: config.composite_config,
+            deposit_target_addresses: vec![],
+            deposit_seed_sui: 0,
         };
 
         let workloads_builders = WorkloadConfiguration::create_workload_builders(
@@ -1547,9 +1550,52 @@ mod test {
         test_cluster.wait_for_epoch(None).await;
     }
 
+    /// Scans every executed checkpoint on the test cluster's fullnode, finds
+    /// accumulator settlement transactions (ProgrammableSystemTransactions that
+    /// take the accumulator root as a shared input), and returns the total
+    /// number of objects deleted across their effects. A settlement transaction
+    /// only deletes an object when an accumulator it updates reaches zero, so
+    /// any non-zero count is direct evidence that accumulators were deleted.
+    fn count_settlement_deletions(test_cluster: &Arc<TestCluster>) -> usize {
+        test_cluster.fullnode_handle.sui_node.with(|node| {
+            let state = node.state();
+            let checkpoint_store = state.get_checkpoint_store();
+            let highest = checkpoint_store
+                .get_highest_executed_checkpoint_seq_number()
+                .expect("checkpoint store read failed")
+                .expect("no executed checkpoints");
+
+            let mut deletions = 0usize;
+            for seq in 0..=highest {
+                let Some(contents) = checkpoint_store
+                    .get_full_checkpoint_contents_by_sequence_number(seq)
+                    .expect("checkpoint contents read failed")
+                else {
+                    continue;
+                };
+                for exec_data in contents.iter() {
+                    let kind = exec_data.transaction.transaction_data().kind();
+                    if !is_accumulator_settlement_tx(kind) {
+                        continue;
+                    }
+                    deletions += exec_data.effects.deleted().len();
+                }
+            }
+            deletions
+        })
+    }
+
+    fn is_accumulator_settlement_tx(kind: &TransactionKind) -> bool {
+        matches!(kind, TransactionKind::ProgrammableSystemTransaction(_))
+            && kind
+                .shared_input_objects()
+                .any(|obj| obj.id == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+    }
+
     #[sim_test(config = "test_config()")]
     async fn test_composite_workload() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
         let test_cluster = build_test_cluster(4, 10000, 1).await;
 
         let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
@@ -1591,8 +1637,10 @@ mod test {
         .with_probability(TestCoinObjectWithdraw::NAME, 0.05)
         .with_probability(AddressBalanceOverdraw::NAME, 0.3)
         .with_probability(AccumulatorBalanceRead::NAME, 0.3)
-        .with_probability(AuthenticatedEventEmit::NAME, 0.1);
+        .with_probability(AuthenticatedEventEmit::NAME, 0.1)
+        .with_probability(CoinReservationWithdraw::NAME, 0.3);
 
+        let test_cluster_for_scan = test_cluster.clone();
         test_simulated_load_with_test_config(
             test_cluster,
             60,
@@ -1629,6 +1677,22 @@ mod test {
             assert!(
                 accum_read_stats.success_count > 0,
                 "expected at least one accumulator balance read"
+            );
+
+            // Verify accumulators are actually being deleted by scanning all checkpoints
+            // for settlement transactions with object deletions. A settlement transaction
+            // only deletes an object when an accumulator it updates reaches zero and is
+            // removed. This is a direct, on-chain signal of the coin-reservation round-trip
+            // draining an account's accumulator, rather than relying on the workload's
+            // own success counters.
+            let accumulator_deletions = count_settlement_deletions(&test_cluster_for_scan);
+            info!(
+                "settlement transaction accumulator deletions: {}",
+                accumulator_deletions
+            );
+            assert!(
+                accumulator_deletions > 0,
+                "expected at least one accumulator to be deleted by a settlement transaction"
             );
         } else {
             assert!(metrics_sum.success_count > 150);
@@ -1672,6 +1736,49 @@ mod test {
                 "expected at least one authenticated event emit"
             );
         }
+    }
+
+    /// Regression test for a panic at transaction_rewriting.rs where a coin-reservation
+    /// transaction executes before the settlement transaction that creates the accumulator
+    /// object it depends on. Uses execution delays to create adversarial scheduling.
+    #[sim_test(config = "test_config()")]
+    async fn test_coin_reservation_checkpoint_replay() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        register_fail_point_async("transaction_execution_delay", move || async move {
+            if thread_rng().gen_range(0..10u64) == 0 {
+                let delay = thread_rng().gen_range(0..1000u64);
+                tokio::time::sleep(Duration::from_millis(delay)).await;
+            }
+        });
+
+        let test_cluster = build_test_cluster(4, 10000, 1).await;
+
+        use sui_benchmark::workloads::composite::*;
+        let composite_config = CompositeWorkloadConfig {
+            num_shared_counters: 2,
+            shared_counter_hotness: 0.95,
+            address_balance_amount: 1000,
+            address_balance_gas_probability: 0.5,
+            conflicting_transaction_probability: 0.1,
+            ..Default::default()
+        }
+        .with_probability(SharedCounterIncrement::NAME, 0.1)
+        .with_probability(AddressBalanceDeposit::NAME, 0.1)
+        .with_probability(AddressBalanceWithdraw::NAME, 0.1)
+        .with_probability(AddressBalanceOverdraw::NAME, 0.3)
+        .with_probability(CoinReservationWithdraw::NAME, 0.3);
+
+        test_simulated_load_with_test_config(
+            test_cluster,
+            60,
+            SimulatedLoadConfig::composite_only(composite_config),
+            None,
+            None,
+            None::<fn(Arc<TestCluster>) -> std::future::Ready<()>>,
+            false,
+        )
+        .await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -1724,6 +1831,153 @@ mod test {
 
         assert!(shared_plus_randomness_txns > 0);
         assert!(shared_plus_randomness_cancellations > 0);
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_addr_bal_deposit_workload() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        // Use an epoch duration longer than the 60s workload so that the test
+        // does not span an epoch change (in-flight txs at an epoch boundary
+        // surface as `permanent_failure` due to a retry gap in the bench
+        // driver's soft-bundle helper).
+        let test_cluster = build_test_cluster(4, 120_000, 1).await;
+
+        let protocol_config = sui_protocol_config::ProtocolConfig::get_for_version(
+            sui_protocol_config::ProtocolVersion::max(),
+            test_cluster.get_chain_identifier().chain(),
+        );
+        if !protocol_config.enable_address_balance_gas_payments() {
+            info!("Address balance gas payments not enabled, skipping test");
+            return;
+        }
+
+        let targets: Vec<SuiAddress> = (0..4)
+            .map(|_| SuiAddress::random_for_testing_only())
+            .collect();
+        let metrics = Arc::new(Mutex::new(
+            sui_benchmark::workloads::addr_bal_deposit::AddrBalDepositMetrics::default(),
+        ));
+        let config = sui_benchmark::workloads::addr_bal_deposit::AddrBalDepositConfig {
+            target_addresses: targets.clone(),
+            deposit_amount: 1000,
+            seed_amount: 100_000 * sui_types::gas_coin::MIST_PER_SUI,
+            metrics: Some(metrics.clone()),
+        };
+
+        let sender = test_cluster.get_address_0();
+        let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+        let genesis = test_cluster.swarm.config().genesis.clone();
+        let primary_gas = test_cluster
+            .wallet
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap();
+        let ed25519_keypair =
+            Arc::new(get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap());
+        let primary_coin = (primary_gas, sender, ed25519_keypair);
+
+        let registry = prometheus::Registry::new();
+        let proxy_metrics = BenchmarkProxyMetrics::new(&registry);
+        let fullnode_proxy: Arc<dyn ValidatorProxy + Send + Sync> = Arc::new(
+            FullNodeProxy::from_url(
+                &test_cluster.fullnode_handle.rpc_url,
+                &genesis.committee(),
+                &proxy_metrics,
+            )
+            .await
+            .unwrap(),
+        );
+
+        let bank = BenchmarkBank::new(
+            fullnode_proxy.clone(),
+            vec![fullnode_proxy.clone()],
+            primary_coin,
+        );
+        let system_state_observer = {
+            let mut observer = SystemStateObserver::new_from_test_cluster(&test_cluster);
+            let _ = observer.state.changed().await;
+            Arc::new(observer)
+        };
+
+        let target_qps = 20u64;
+        let num_workers = 10u64;
+        let in_flight_ratio = 2u64;
+
+        let builder_info =
+            sui_benchmark::workloads::addr_bal_deposit::AddrBalDepositWorkloadBuilder::build_info(
+                config,
+                target_qps,
+                num_workers,
+                in_flight_ratio,
+                Interval::from_str("unbounded").unwrap(),
+                0,
+            )
+            .expect("builder should be created");
+
+        let workloads = WorkloadConfiguration::build(
+            vec![Some(builder_info)],
+            bank,
+            system_state_observer.clone(),
+            100,
+        )
+        .await
+        .unwrap();
+
+        let query_proxy = fullnode_proxy.clone();
+        let test_duration = Duration::from_secs(60);
+        let bench_task = tokio::spawn(async move {
+            let driver = BenchDriver::new(5, false);
+            let interval = Interval::Time(test_duration);
+            let (benchmark_stats, _) = driver
+                .run(
+                    vec![fullnode_proxy],
+                    vec![],
+                    workloads,
+                    system_state_observer,
+                    &registry,
+                    false,
+                    interval,
+                )
+                .await
+                .unwrap();
+            tracing::info!("end of test {:?}", benchmark_stats);
+            assert!(benchmark_stats.num_error_txes < 100);
+
+            // Verify all target addresses received deposits.
+            for (i, target) in targets.iter().enumerate() {
+                let target_balance = query_proxy
+                    .get_sui_address_balance(*target)
+                    .await
+                    .unwrap_or(0);
+                tracing::info!("target address {i} balance: {target_balance} MIST",);
+                assert!(
+                    target_balance > 0,
+                    "target address {i} should have received deposits, but balance is 0",
+                );
+            }
+        });
+
+        bench_task.await.unwrap();
+
+        let m = metrics.lock().unwrap();
+        info!(
+            "addr_bal_deposit metrics: sent={}, success={}, abort={}, permanent_failure={}, retriable={}, unknown={}",
+            m.sent,
+            m.success,
+            m.abort,
+            m.permanent_failure,
+            m.retriable_failure,
+            m.unknown_rejection,
+        );
+
+        assert!(
+            m.success > 100,
+            "expected >100 successes, got {}",
+            m.success
+        );
+        assert_eq!(m.abort, 0, "no transactions should abort");
+        assert_eq!(m.permanent_failure, 0, "no permanent failures expected");
     }
 
     /// Tests that async post-processing produces consistent indexes even when
@@ -1884,5 +2138,61 @@ mod test {
         async_indexes
             .tables()
             .check_databases_equal(sync_indexes.tables());
+    }
+
+    /// Finds the most recent protocol version that uses an older execution version
+    /// than the max protocol version.
+    fn find_previous_execution_version_protocol() -> Option<u64> {
+        let max_ver = ProtocolVersion::max().as_u64();
+        let max_config = ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        let max_exec_ver = max_config.execution_version_as_option().unwrap_or(0);
+
+        for v in (1..max_ver).rev() {
+            let config = ProtocolConfig::get_for_version(ProtocolVersion::new(v), Chain::Unknown);
+            let exec_ver = config.execution_version_as_option().unwrap_or(0);
+            if exec_ver < max_exec_ver {
+                return Some(v);
+            }
+        }
+        None
+    }
+
+    /// Smoke test that runs simulated load (including the composite workload) at
+    /// the most recent protocol version with an older execution version. Catches
+    /// bugs where shared code changes behavior unconditionally but only the latest
+    /// execution adapter compensates.
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_previous_execution_version() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        let target_version = find_previous_execution_version_protocol()
+            .expect("no protocol version found with an older execution version");
+        info!(
+            "Smoke testing at protocol version {} (execution version {})",
+            target_version,
+            ProtocolConfig::get_for_version(ProtocolVersion::new(target_version), Chain::Unknown)
+                .execution_version_as_option()
+                .unwrap_or(0),
+        );
+
+        let init_framework =
+            sui_framework_snapshot::load_bytecode_snapshot(target_version).unwrap();
+        let test_cluster = init_test_cluster_builder(2, 10_000)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_num_unpruned_validators(1)
+            .with_protocol_version(ProtocolVersion::new(target_version))
+            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                target_version,
+                target_version,
+            ))
+            .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
+            .build()
+            .await
+            .into();
+        test_simulated_load(test_cluster, 30).await;
     }
 }

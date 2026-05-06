@@ -5,6 +5,7 @@ use crate::{
     accumulators::funds_read::AccountFundsRead,
     authority::{
         AuthorityMetrics, ExecutionEnv, authority_per_epoch_store::AuthorityPerEpochStore,
+        epoch_start_configuration::EpochStartConfigTrait,
         shared_object_version_manager::Schedulable,
     },
     execution_cache::{ObjectCacheRead, TransactionCacheRead},
@@ -17,6 +18,7 @@ use crate::{
     },
 };
 use futures::stream::{FuturesUnordered, StreamExt};
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::spawn_monitored_task;
 use parking_lot::Mutex;
@@ -206,7 +208,7 @@ impl ExecutionScheduler {
         let input_object_kinds = tx_data
             .input_objects()
             .expect("input_objects() cannot fail");
-        let input_object_keys: Vec<_> = epoch_store
+        let mut input_object_keys: Vec<_> = epoch_store
             .get_input_object_keys(
                 &cert.key(),
                 &input_object_kinds,
@@ -214,6 +216,21 @@ impl ExecutionScheduler {
             )
             .into_iter()
             .collect();
+
+        // Coin reservation transactions need to wait for the accumulator root object
+        // to reach the assigned accumulator version. This ensures settlement transactions
+        // (which create/update accumulator account objects) execute before coin reservation
+        // transactions that depend on those objects.
+        if tx_data.kind().has_coin_reservations()
+            && let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version
+            && let Some(initial_shared_version) =
+                (**epoch_store.epoch_start_config()).accumulator_root_obj_initial_shared_version()
+        {
+            input_object_keys.push(InputKey::VersionedObject {
+                id: FullObjectID::new(SUI_ACCUMULATOR_ROOT_OBJECT_ID, Some(initial_shared_version)),
+                version: accumulator_version,
+            });
+        }
 
         let receiving_object_keys: HashSet<_> = tx_data
             .receiving_objects()
@@ -246,7 +263,7 @@ impl ExecutionScheduler {
         // missing input objects if necessary.
         let missing_input_keys: Vec<_> = input_and_receiving_keys
             .into_iter()
-            .zip(availability)
+            .zip_debug_eq(availability)
             .filter_map(|(key, available)| if !available { Some(key) } else { None })
             .collect();
 
@@ -442,7 +459,7 @@ impl ExecutionScheduler {
                     let tx = tx.expect("tx must exist").as_ref().clone();
                     VerifiedExecutableTransaction::new_system(tx, epoch_store.epoch())
                 })
-                .zip(tx_with_keys.into_iter().map(|(_, env)| env))
+                .zip_debug_eq(tx_with_keys.into_iter().map(|(_, env)| env))
                 .collect::<Vec<_>>();
             scheduler.enqueue_transactions(transactions, &epoch_store);
         }));
@@ -546,18 +563,16 @@ impl ExecutionScheduler {
             .transaction_cache_read
             .multi_get_executed_effects_digests(&digests);
         let mut already_executed_certs_num = 0;
-        let pending_certs =
-            certs
-                .into_iter()
-                .zip(executed)
-                .filter_map(|((cert, execution_env), executed)| {
-                    if executed.is_none() {
-                        Some((cert, execution_env))
-                    } else {
-                        already_executed_certs_num += 1;
-                        None
-                    }
-                });
+        let pending_certs = certs.into_iter().zip_debug_eq(executed).filter_map(
+            |((cert, execution_env), executed)| {
+                if executed.is_none() {
+                    Some((cert, execution_env))
+                } else {
+                    already_executed_certs_num += 1;
+                    None
+                }
+            },
+        );
 
         for (cert, execution_env) in pending_certs {
             let scheduler = self.clone();

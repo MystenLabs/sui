@@ -5,13 +5,16 @@
 //! for coordinating the symbolication process between different threads
 //! in the analyzer.
 
-use crate::symbols::{
-    Symbols,
-    compilation::{CachedPackages, MANIFEST_FILE_NAME},
-    get_symbols,
+use crate::{
+    symbols::{
+        Symbols,
+        compilation::{CachedPackages, MANIFEST_FILE_NAME},
+        get_symbols,
+    },
+    utils::canonicalize_path,
 };
 
-use anyhow::{Result, anyhow};
+use anyhow::anyhow;
 use crossbeam::channel::Sender;
 use lsp_types::Diagnostic;
 use std::{
@@ -29,6 +32,20 @@ use move_package_alt::MoveFlavor;
 
 /// Interval for checking if the parent process is still alive (in seconds)
 const PARENT_LIVENESS_MONITORING_INTERVAL_SECS: u64 = 10;
+
+/// Messages sent from the symbolication runner thread to the main analyzer loop.
+pub enum SymbolicatorMessage {
+    /// Compilation diagnostics — forwarded as textDocument/publishDiagnostics
+    Diagnostics(BTreeMap<PathBuf, Vec<Diagnostic>>),
+    /// Non-fatal error (e.g. missing manifest) — shown via window/showMessage, server continues
+    Error(anyhow::Error),
+    /// Fatal error (e.g. dependency download failure) — shown via window/showMessage, server exits
+    FatalError(anyhow::Error),
+    /// Symbolication batch started — triggers $/progress Begin
+    SymbolicationStart,
+    /// Symbolication batch finished — triggers $/progress End
+    SymbolicationEnd,
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum RunnerState {
@@ -50,12 +67,14 @@ impl SymbolicatorRunner {
     }
 
     /// Create a new runner
-    pub fn new<F: MoveFlavor>(
+    // `'static` is required because `F` is moved into a `thread::spawn` closure
+    pub fn new<F: MoveFlavor + 'static>(
         ide_files_root: VfsPath,
         symbols_map: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
         packages_info: Arc<Mutex<CachedPackages>>,
-        sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
+        sender: Sender<SymbolicatorMessage>,
         lint: LintLevel,
+        move_flavor: Arc<F>,
         flavor: Option<Flavor>,
         parent_process_id: Option<u32>,
     ) -> Self {
@@ -141,6 +160,14 @@ impl SymbolicatorRunner {
                             &mut missing_manifests,
                             sender.clone(),
                         );
+                        // Progress begin/end bracket the entire batch, not individual packages.
+                        // The client sees one status change if this takes a long time. It reflects
+                        // the overall server load but is less noisy than sending this (and having
+                        // client change status for each package).
+                        if let Err(err) = sender.send(SymbolicatorMessage::SymbolicationStart) {
+                            eprintln!("could not send symbolication start: {:?}", err);
+                        }
+                        let mut fatal = false;
                         for pkg_path in pkgs_to_analyze.into_iter() {
                             eprintln!("symbolication started");
                             match get_symbols::<F>(
@@ -148,6 +175,7 @@ impl SymbolicatorRunner {
                                 ide_files_root.clone(),
                                 pkg_path.as_path(),
                                 lint,
+                                move_flavor.clone(),
                                 None,
                                 flavor,
                             ) {
@@ -164,17 +192,27 @@ impl SymbolicatorRunner {
                                         old_symbols_map.insert(pkg_path.clone(), new_symbols);
                                     }
                                     // set/reset (previous) diagnostics
-                                    if let Err(err) = sender.send(Ok(lsp_diagnostics)) {
+                                    if let Err(err) = sender.send(SymbolicatorMessage::Diagnostics(lsp_diagnostics)) {
                                         eprintln!("could not pass diagnostics: {:?}", err);
                                     }
                                 }
                                 Err(err) => {
                                     eprintln!("symbolication failed: {:?}", err);
-                                    if let Err(err) = sender.send(Err(err)) {
-                                        eprintln!("could not pass compiler error: {:?}", err);
+                                    // Close progress before reporting fatal error
+                                    if let Err(err) = sender.send(SymbolicatorMessage::SymbolicationEnd) {
+                                        eprintln!("could not send symbolication end: {:?}", err);
                                     }
+                                    if let Err(err) = sender.send(SymbolicatorMessage::FatalError(err)) {
+                                        eprintln!("could not pass fatal error: {:?}", err);
+                                    }
+                                    fatal = true;
+                                    break;
                                 }
                             }
+                        }
+                        if !fatal && let Err(err) = sender.send(SymbolicatorMessage::SymbolicationEnd) {
+                                eprintln!("could not send symbolication end: {:?}", err);
+
                         }
                     }
                 }
@@ -188,7 +226,7 @@ impl SymbolicatorRunner {
     fn pkgs_to_analyze(
         starting_paths: BTreeSet<PathBuf>,
         missing_manifests: &mut BTreeSet<PathBuf>,
-        sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
+        sender: Sender<SymbolicatorMessage>,
     ) -> BTreeSet<PathBuf> {
         let mut pkgs_to_analyze = BTreeSet::new();
         for starting_path in &starting_paths {
@@ -199,7 +237,7 @@ impl SymbolicatorRunner {
                     // cases when developer indeed intended to open a standalone file that was
                     // not meant to compile
                     missing_manifests.insert(starting_path.clone());
-                    if let Err(err) = sender.send(Err(anyhow!(
+                    if let Err(err) = sender.send(SymbolicatorMessage::Error(anyhow!(
                         "Unable to find package manifest. Make sure that
                     the source files are located in a sub-directory of a package containing
                     a Move.toml file. "
@@ -248,7 +286,7 @@ impl SymbolicatorRunner {
             let current_path = current_path_opt.unwrap();
             let manifest_path = current_path.join(MANIFEST_FILE_NAME);
             if manifest_path.is_file() {
-                return Some(current_path.to_path_buf());
+                return Some(canonicalize_path(current_path.to_path_buf()));
             }
             current_path_opt = current_path.parent();
         }

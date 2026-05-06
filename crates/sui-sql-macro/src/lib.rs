@@ -126,6 +126,8 @@ pub fn sql(input: TokenStream) -> TokenStream {
         ::diesel::dsl::sql::<#return_>(#head)
     };
 
+    // Intentional zip: proc-macro crate, zip_debug_eq not applicable at compile time
+    #[allow(clippy::disallowed_methods)]
     for (expr, (ty, suffix)) in binds.iter().zip(tail.into_iter()) {
         tokens.extend(if let Some(ty) = ty {
             quote! {
@@ -184,6 +186,8 @@ pub fn query(input: TokenStream) -> TokenStream {
         ::sui_pg_db::query::Query::new(#head)
     };
 
+    // Intentional zip: proc-macro crate, zip_debug_eq not applicable at compile time
+    #[allow(clippy::disallowed_methods)]
     for (expr, (ty, suffix)) in binds.iter().zip(tail.into_iter()) {
         tokens.extend(if let Some(ty) = ty {
             // If there is a type, this interpolation is for a bind.

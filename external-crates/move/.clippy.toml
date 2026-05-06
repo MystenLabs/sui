@@ -1,0 +1,4 @@
+# Override root .clippy.toml — external-crates are upstream Move code
+# where zip_debug_eq/izip_debug_eq are not available.
+
+too-many-arguments-threshold = 20

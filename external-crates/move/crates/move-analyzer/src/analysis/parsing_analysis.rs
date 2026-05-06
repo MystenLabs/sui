@@ -174,6 +174,9 @@ impl<'a> ParsingAnalysisContext<'a> {
             | A::Mode { .. }
             | A::Syntax { .. }
             | A::Allow { .. }
+            | A::Deny { .. }
+            | A::Expect { .. }
+            | A::Warn { .. }
             | A::LintAllow { .. } => (),
             A::External { attrs } => {
                 // attrs: Spanned<Vec<ParsedAttribute>>

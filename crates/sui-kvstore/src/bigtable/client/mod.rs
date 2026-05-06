@@ -4,6 +4,7 @@
 mod auth_channel;
 mod channel_pool;
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -12,6 +13,7 @@ use std::time::Instant;
 
 use anyhow::Context as _;
 use anyhow::Result;
+use anyhow::bail;
 use async_trait::async_trait;
 use bytes::Bytes;
 use gcp_auth::TokenProvider;
@@ -39,24 +41,33 @@ use crate::PackageData;
 use crate::ProtocolConfigData;
 use crate::TransactionData;
 use crate::TransactionEventsData;
-use crate::Watermark;
+use crate::TxSeqDigestData;
+use crate::WatermarkV0;
+use crate::WatermarkV1;
 use crate::bigtable::metrics::KvMetrics;
+use crate::bigtable::proto::bigtable::v2::CheckAndMutateRowRequest;
 use crate::bigtable::proto::bigtable::v2::MutateRowsRequest;
+use crate::bigtable::proto::bigtable::v2::Mutation;
 use crate::bigtable::proto::bigtable::v2::PingAndWarmRequest;
 use crate::bigtable::proto::bigtable::v2::ReadRowsRequest;
 use crate::bigtable::proto::bigtable::v2::RequestStats;
 use crate::bigtable::proto::bigtable::v2::RowFilter;
 use crate::bigtable::proto::bigtable::v2::RowRange;
 use crate::bigtable::proto::bigtable::v2::RowSet;
+use crate::bigtable::proto::bigtable::v2::ValueRange;
 use crate::bigtable::proto::bigtable::v2::bigtable_client::BigtableClient as BigtableInternalClient;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
+use crate::bigtable::proto::bigtable::v2::mutation;
+use crate::bigtable::proto::bigtable::v2::mutation::SetCell;
 use crate::bigtable::proto::bigtable::v2::read_rows_response::cell_chunk::RowStatus;
 use crate::bigtable::proto::bigtable::v2::request_stats::StatsView;
 use crate::bigtable::proto::bigtable::v2::row_filter::Chain;
 use crate::bigtable::proto::bigtable::v2::row_filter::Filter;
 use crate::bigtable::proto::bigtable::v2::row_range::EndKey;
 use crate::bigtable::proto::bigtable::v2::row_range::StartKey;
+use crate::bigtable::proto::bigtable::v2::value_range;
 use crate::tables;
+use crate::tables::tx_seq_digest;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
 // TODO: Add per-method timeouts (e.g. separate write vs read) via tonic::Request::set_timeout().
@@ -204,8 +215,8 @@ impl BigTableClient {
             Some(p) => p,
             None => token_provider.project_id().await?.to_string(),
         };
-        let instance_name = format!("projects/{}/instances/{}/", project_id, instance_id);
-        let table_prefix = format!("{}tables/", instance_name);
+        let instance_name = format!("projects/{}/instances/{}", project_id, instance_id);
+        let table_prefix = format!("{}/tables/", instance_name);
         let primer = BigtablePrimer {
             instance_name,
             policy: policy.to_string(),
@@ -226,68 +237,298 @@ impl BigTableClient {
         })
     }
 
-    /// Get the pipeline watermark from the watermarks table.
-    /// Falls back to the legacy `[0]` row if the pipeline-specific row is missing.
-    // TODO(migration): Remove legacy fallback once all pipelines have their own watermarks.
-    pub async fn get_pipeline_watermark(&mut self, pipeline: &str) -> Result<Option<Watermark>> {
-        let pipeline_key = tables::watermarks::encode_key(pipeline);
-        let legacy_key = vec![0u8];
-
-        let rows = self
-            .multi_get(
-                tables::watermark_alt_legacy::NAME,
-                vec![pipeline_key.clone(), legacy_key.clone()],
-                None,
-            )
-            .await?;
-
-        let mut pipeline_wm = None;
-        let mut legacy_checkpoint = None;
-
-        for (key, row) in rows {
-            if key.as_ref() == pipeline_key.as_slice() {
-                pipeline_wm = Some(tables::watermarks::decode(&row)?);
-            } else if key.as_ref() == legacy_key.as_slice()
-                && let Some((_, value_bytes)) = row.last()
-            {
-                let next = u64::from_be_bytes(value_bytes.as_ref().try_into()?);
-                if next > 0 {
-                    legacy_checkpoint = Some(next - 1);
-                }
+    /// Fetch transactions with an optional column filter for partial reads.
+    /// When `columns` is None, all columns are fetched. When Some, only the
+    /// specified column qualifiers are fetched (e.g. `&["td", "ef", "ts", "cn"]`).
+    pub async fn get_transactions_filtered(
+        &mut self,
+        transactions: &[TransactionDigest],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<TransactionData>> {
+        let keys = transactions
+            .iter()
+            .map(tables::transactions::encode_key)
+            .collect();
+        let filter = columns.map(|cols| {
+            let pattern = format!("^({})$", cols.join("|"));
+            RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
             }
+        });
+        let mut result = vec![];
+        for (key, row) in self
+            .multi_get(tables::transactions::NAME, keys, filter)
+            .await?
+        {
+            let digest = TransactionDigest::from(
+                <[u8; 32]>::try_from(key.as_ref())
+                    .context("invalid transaction digest key length")?,
+            );
+            result.push(tables::transactions::decode(digest, &row)?);
         }
-
-        if let Some(wm) = pipeline_wm {
-            return Ok(Some(wm));
-        }
-
-        // Don't fall back to legacy watermark when legacy mode is disabled.
-        // This prevents tasked backfill pipelines from inheriting the main
-        // pipeline's watermark from the legacy [0] row.
-        if !crate::write_legacy_data() {
-            return Ok(None);
-        }
-
-        Ok(legacy_checkpoint.map(|cp| Watermark {
-            epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: cp,
-            tx_hi: 0,
-            timestamp_ms_hi_inclusive: 0,
-        }))
+        Ok(result)
     }
 
-    /// Set the pipeline watermark in the watermarks table.
-    pub async fn set_pipeline_watermark(
+    /// Fetch epochs with an optional column filter for partial reads.
+    /// When `columns` is None, all columns are fetched. When Some, only the
+    /// specified column qualifiers are fetched (e.g. `&["ep", "sc", "pv"]`).
+    pub async fn get_epochs_filtered(
+        &mut self,
+        epoch_ids: &[EpochId],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<EpochData>> {
+        let keys = epoch_ids
+            .iter()
+            .map(|id| tables::epochs::encode_key(*id))
+            .collect();
+        let filter = columns.map(|cols| {
+            let pattern = format!("^({})$", cols.join("|"));
+            RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+            }
+        });
+        let mut result = vec![];
+        for (_, row) in self.multi_get(tables::epochs::NAME, keys, filter).await? {
+            result.push(tables::epochs::decode(&row)?);
+        }
+        Ok(result)
+    }
+
+    /// Fetch the latest epoch with an optional column filter for partial reads.
+    pub async fn get_latest_epoch_filtered(
+        &mut self,
+        columns: Option<&[&str]>,
+    ) -> Result<Option<EpochData>> {
+        let upper_limit = tables::epochs::encode_key_upper_bound();
+        let filter = columns.map(|cols| {
+            let pattern = format!("^({})$", cols.join("|"));
+            RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+            }
+        });
+        match self
+            .range_scan(
+                tables::epochs::NAME,
+                None,
+                Some(upper_limit),
+                1,
+                true,
+                filter,
+            )
+            .await?
+            .pop()
+        {
+            Some((_, row)) => Ok(Some(tables::epochs::decode(&row)?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Fetch checkpoints with an optional column filter for partial reads.
+    /// When `columns` is None, all columns are fetched. When Some, only the
+    /// specified column qualifiers are fetched (e.g. `&["s", "sg"]`).
+    pub async fn get_checkpoints_filtered(
+        &mut self,
+        sequence_numbers: &[CheckpointSequenceNumber],
+        columns: Option<&[&str]>,
+    ) -> Result<Vec<CheckpointData>> {
+        let keys = sequence_numbers
+            .iter()
+            .copied()
+            .map(tables::checkpoints::encode_key)
+            .collect();
+        let filter = columns.map(|cols| {
+            let pattern = format!("^({})$", cols.join("|"));
+            RowFilter {
+                filter: Some(Filter::ColumnQualifierRegexFilter(pattern.into())),
+            }
+        });
+        let mut checkpoints = vec![];
+        for (_, row) in self
+            .multi_get(tables::checkpoints::NAME, keys, filter)
+            .await?
+        {
+            checkpoints.push(tables::checkpoints::decode(&row)?);
+        }
+        Ok(checkpoints)
+    }
+
+    /// Fetch a checkpoint by digest with an optional column filter.
+    pub async fn get_checkpoint_by_digest_filtered(
+        &mut self,
+        digest: CheckpointDigest,
+        columns: Option<&[&str]>,
+    ) -> Result<Option<CheckpointData>> {
+        let key = tables::checkpoints_by_digest::encode_key(&digest);
+        let mut response = self
+            .multi_get(tables::checkpoints_by_digest::NAME, vec![key], None)
+            .await?;
+        if let Some((_, row)) = response.pop() {
+            let sequence_number = tables::checkpoints_by_digest::decode(&row)?;
+            if let Some(chk) = self
+                .get_checkpoints_filtered(&[sequence_number], columns)
+                .await?
+                .pop()
+            {
+                return Ok(Some(chk));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Read the raw cells of a pipeline's watermark row. Returns an empty vec when the row
+    /// does not exist. Callers decode whichever schema variant they need (e.g.
+    /// [`tables::watermarks::decode_v1`] / [`tables::watermarks::decode_v0`]).
+    pub async fn get_pipeline_watermark_rows(
         &mut self,
         pipeline: &str,
-        watermark: &Watermark,
-    ) -> Result<()> {
-        let entry = tables::make_entry(
-            tables::watermarks::encode_key(pipeline),
-            tables::watermarks::encode(watermark)?,
-            Some(watermark.timestamp_ms_hi_inclusive),
-        );
-        self.write_entries(tables::watermarks::NAME, [entry]).await
+    ) -> Result<Vec<(Bytes, Bytes)>> {
+        let pipeline_key = tables::watermarks::encode_key(pipeline);
+        let rows = self
+            .multi_get(tables::watermarks::NAME, vec![pipeline_key.clone()], None)
+            .await?;
+        for (key, row) in rows {
+            if key.as_ref() == pipeline_key.as_slice() {
+                return Ok(row);
+            }
+        }
+        Ok(Vec::new())
+    }
+
+    /// CAS write to a watermarks row: write `cells` only when the existing `column` cell is
+    /// absent or has a u64 BE value strictly less than `new_value`. Returns `true` iff the
+    /// write happened (i.e. the new value strictly increased the guarded column). Cells not
+    /// included here retain their existing values in BigTable.
+    pub async fn cas_write_pipeline_watermark_cells(
+        &mut self,
+        pipeline: &str,
+        column: &'static str,
+        new_value: u64,
+        cells: Vec<(&'static str, Bytes)>,
+    ) -> Result<bool> {
+        let mutations = build_set_cell_mutations(cells);
+        let predicate = column_value_at_least_filter(column, u64_be(new_value));
+        // Predicate is "guarded column has a value >= new" → predicate_matched = true means
+        // the existing value blocks the write, so false_mutations are what we want to run.
+        let predicate_matched = self
+            .check_and_mutate_row(
+                tables::watermarks::NAME,
+                tables::watermarks::encode_key(pipeline),
+                Some(predicate),
+                Vec::new(),
+                mutations,
+            )
+            .await?;
+        Ok(!predicate_matched)
+    }
+
+    /// Returns `true` iff the supplied `chain_id` matches the chain_id stored for `pipeline`.
+    /// On the first call (no chain_id cell yet) writes `chain_id` and returns `true`. The
+    /// chain_id cell is independent of the v1 watermark cells, so this can be invoked before
+    /// `init_watermark`.
+    pub async fn accepts_chain_id(&mut self, pipeline: &str, chain_id: [u8; 32]) -> Result<bool> {
+        use tables::watermarks::col;
+        let mutations =
+            build_set_cell_mutations([(col::CHAIN_ID, Bytes::copy_from_slice(&chain_id))]);
+        let predicate = column_exists_filter(col::CHAIN_ID);
+        // Predicate is "row already has a chain_id" → false_mutations write the new chain_id
+        // when nothing is stored yet.
+        let predicate_matched = self
+            .check_and_mutate_row(
+                tables::watermarks::NAME,
+                tables::watermarks::encode_key(pipeline),
+                Some(predicate),
+                Vec::new(),
+                mutations,
+            )
+            .await?;
+        if !predicate_matched {
+            return Ok(true);
+        }
+        let row = self.get_pipeline_watermark_rows(pipeline).await?;
+        let cell = row
+            .iter()
+            .find_map(|(c, v)| (c.as_ref() == col::CHAIN_ID.as_bytes()).then_some(v))
+            .context("chain_id missing after CAS reported it present")?;
+        let stored: [u8; 32] = cell.as_ref().try_into().map_err(|_| {
+            anyhow::anyhow!(
+                "`{}` column has unexpected length {} (expected 32)",
+                col::CHAIN_ID,
+                cell.len()
+            )
+        })?;
+        Ok(stored == chain_id)
+    }
+
+    /// Create the row for a pipeline iff no schema-version cell exists yet. Used by
+    /// `init_watermark` for fresh rows and the v0 → v1 bootstrap. Returns `true` iff the
+    /// write happened.
+    pub async fn create_pipeline_watermark_if_absent(
+        &mut self,
+        pipeline: &str,
+        new: &WatermarkV1,
+    ) -> Result<bool> {
+        use tables::watermarks::col;
+        let mut cells = vec![
+            (col::SCHEMA_VERSION, u64_be(tables::watermarks::SCHEMA_V1)),
+            (col::EPOCH_HI, u64_be(new.epoch_hi_inclusive)),
+            (col::TX_HI, u64_be(new.tx_hi)),
+            (col::TIMESTAMP_MS_HI, u64_be(new.timestamp_ms_hi_inclusive)),
+            (col::READER_LO, u64_be(new.reader_lo)),
+            (col::PRUNER_HI, u64_be(new.pruner_hi)),
+            (col::PRUNER_TIMESTAMP_MS, u64_be(new.pruner_timestamp_ms)),
+        ];
+        if let Some(checkpoint) = new.checkpoint_hi_inclusive {
+            cells.push((col::CHECKPOINT_HI, u64_be(checkpoint)));
+            let v0 = WatermarkV0 {
+                epoch_hi_inclusive: new.epoch_hi_inclusive,
+                checkpoint_hi_inclusive: checkpoint,
+                tx_hi: new.tx_hi,
+                timestamp_ms_hi_inclusive: new.timestamp_ms_hi_inclusive,
+            };
+            cells.push((col::WATERMARK_V0, Bytes::from(bcs::to_bytes(&v0)?)));
+        }
+        let mutations = build_set_cell_mutations(cells);
+        let predicate = column_exists_filter(tables::watermarks::col::SCHEMA_VERSION);
+        // Predicate is "row has any schema-version cell" → false_mutations write the new row.
+        let predicate_matched = self
+            .check_and_mutate_row(
+                tables::watermarks::NAME,
+                tables::watermarks::encode_key(pipeline),
+                Some(predicate),
+                Vec::new(),
+                mutations,
+            )
+            .await?;
+        Ok(!predicate_matched)
+    }
+
+    /// Issue a `CheckAndMutateRow` request and return whether the predicate matched.
+    async fn check_and_mutate_row(
+        &mut self,
+        table: &str,
+        row_key: Vec<u8>,
+        predicate_filter: Option<RowFilter>,
+        true_mutations: Vec<Mutation>,
+        false_mutations: Vec<Mutation>,
+    ) -> Result<bool> {
+        let mut request = CheckAndMutateRowRequest {
+            table_name: format!("{}{}", self.table_prefix, table),
+            row_key: row_key.into(),
+            predicate_filter,
+            true_mutations,
+            false_mutations,
+            ..CheckAndMutateRowRequest::default()
+        };
+        if let Some(ref app_profile_id) = self.app_profile_id {
+            request.app_profile_id = app_profile_id.clone();
+        }
+        let response = self
+            .client
+            .clone()
+            .check_and_mutate_row(request)
+            .await?
+            .into_inner();
+        Ok(response.predicate_matched)
     }
 
     /// Write pre-built entries to BigTable.
@@ -578,6 +819,7 @@ impl BigTableClient {
 
     /// Scan a range of rows with optional start/end keys, limit, and direction.
     /// Applies `CellsPerColumnLimitFilter(1)` like `multi_get_internal`.
+    /// An optional column filter can be provided to restrict which columns are fetched.
     pub(crate) async fn range_scan(
         &mut self,
         table_name: &str,
@@ -585,10 +827,11 @@ impl BigTableClient {
         end_key: Option<Bytes>,
         limit: i64,
         reversed: bool,
+        filter: Option<RowFilter>,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
         let start_time = Instant::now();
         let result = self
-            .range_scan_internal(table_name, start_key, end_key, limit, reversed)
+            .range_scan_internal(table_name, start_key, end_key, limit, reversed, filter)
             .await;
         let elapsed_ms = start_time.elapsed().as_millis() as f64;
         let labels = [&self.client_name, table_name];
@@ -621,13 +864,22 @@ impl BigTableClient {
         end_key: Option<Bytes>,
         limit: i64,
         reversed: bool,
+        filter: Option<RowFilter>,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
         let range = RowRange {
             start_key: start_key.map(StartKey::StartKeyClosed),
             end_key: end_key.map(EndKey::EndKeyClosed),
         };
-        let filter = Some(RowFilter {
+        let version_filter = RowFilter {
             filter: Some(Filter::CellsPerColumnLimitFilter(1)),
+        };
+        let filter = Some(match filter {
+            Some(filter) => RowFilter {
+                filter: Some(Filter::Chain(Chain {
+                    filters: vec![filter, version_filter],
+                })),
+            },
+            None => version_filter,
         });
         let request = ReadRowsRequest {
             table_name: format!("{}{}", self.table_prefix, table_name),
@@ -642,6 +894,46 @@ impl BigTableClient {
             ..ReadRowsRequest::default()
         };
         self.read_rows(request, table_name).await
+    }
+
+    /// Resolve tx_sequence_numbers to tx digest mapping rows
+    /// via a single `multi_get` on the `tx_seq_digest` table.
+    ///
+    /// Returns a vector parallel to the input: `None` for any tx_seq that has
+    /// no row (e.g. not yet indexed).
+    pub async fn resolve_tx_digests(
+        &mut self,
+        tx_sequence_numbers: &[u64],
+    ) -> Result<Vec<Option<TxSeqDigestData>>> {
+        if tx_sequence_numbers.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let keys: Vec<Vec<u8>> = tx_sequence_numbers
+            .iter()
+            .map(|s| tx_seq_digest::encode_key(*s))
+            .collect();
+
+        let rows = self.multi_get(tx_seq_digest::NAME, keys, None).await?;
+
+        let mut by_seq: HashMap<u64, TxSeqDigestData> = HashMap::with_capacity(rows.len());
+        for (row_key, cells) in &rows {
+            let tx_seq = tx_seq_digest::decode_key(row_key.as_ref())?;
+            let (digest, event_count) = tx_seq_digest::decode(cells)?;
+            by_seq.insert(
+                tx_seq,
+                TxSeqDigestData {
+                    tx_sequence_number: tx_seq,
+                    digest,
+                    event_count,
+                },
+            );
+        }
+
+        Ok(tx_sequence_numbers
+            .iter()
+            .map(|s| by_seq.get(s).copied())
+            .collect())
     }
 }
 
@@ -676,89 +968,72 @@ impl KeyValueStoreReader for BigTableClient {
         &mut self,
         transactions: &[TransactionDigest],
     ) -> Result<Vec<TransactionData>> {
-        let keys = transactions
-            .iter()
-            .map(tables::transactions::encode_key)
-            .collect();
-        let mut result = vec![];
-        for (_, row) in self
-            .multi_get(tables::transactions::NAME, keys, None)
-            .await?
-        {
-            result.push(tables::transactions::decode(&row)?);
-        }
-        Ok(result)
+        self.get_transactions_filtered(transactions, None).await
     }
 
     async fn get_checkpoints(
         &mut self,
         sequence_numbers: &[CheckpointSequenceNumber],
     ) -> Result<Vec<CheckpointData>> {
-        let keys = sequence_numbers
-            .iter()
-            .copied()
-            .map(tables::checkpoints::encode_key)
-            .collect();
-        let mut checkpoints = vec![];
-        for (_, row) in self
-            .multi_get(tables::checkpoints::NAME, keys, None)
-            .await?
-        {
-            checkpoints.push(tables::checkpoints::decode(&row)?);
-        }
-        Ok(checkpoints)
+        self.get_checkpoints_filtered(sequence_numbers, None).await
     }
 
     async fn get_checkpoint_by_digest(
         &mut self,
         digest: CheckpointDigest,
     ) -> Result<Option<CheckpointData>> {
-        let key = tables::checkpoints_by_digest::encode_key(&digest);
-        let mut response = self
-            .multi_get(tables::checkpoints_by_digest::NAME, vec![key], None)
-            .await?;
-        if let Some((_, row)) = response.pop() {
-            let sequence_number = tables::checkpoints_by_digest::decode(&row)?;
-            if let Some(chk) = self.get_checkpoints(&[sequence_number]).await?.pop() {
-                return Ok(Some(chk));
-            }
-        }
-        Ok(None)
+        self.get_checkpoint_by_digest_filtered(digest, None).await
     }
 
     async fn get_watermark_for_pipelines(
         &mut self,
         pipelines: &[&str],
-    ) -> Result<Option<Watermark>> {
+    ) -> Result<Option<WatermarkV1>> {
+        if pipelines.is_empty() {
+            bail!("at least one watermark pipeline must be provided");
+        }
+
         let keys: Vec<Vec<u8>> = pipelines
             .iter()
             .map(|name| tables::watermarks::encode_key(name))
             .collect();
 
-        let rows = self
-            .multi_get(tables::watermark_alt_legacy::NAME, keys, None)
-            .await?;
+        let rows = self.multi_get(tables::watermarks::NAME, keys, None).await?;
 
         if rows.len() != pipelines.len() {
             return Ok(None);
         }
 
-        let mut min_wm: Option<Watermark> = None;
+        // A row is hidden if `checkpoint_hi_inclusive == None` or
+        // `checkpoint_hi_inclusive < reader_lo`. If any pipeline is hidden, every consumer
+        // of this method (RPC/graphql) treats the whole result as missing, resulting in `Ok(None)`.
+        let mut min_wm: Option<(u64, WatermarkV1)> = None;
         for (_, row) in &rows {
-            let wm = tables::watermarks::decode(row)?;
-            min_wm = Some(match min_wm {
-                Some(prev) if prev.checkpoint_hi_inclusive <= wm.checkpoint_hi_inclusive => prev,
-                _ => wm,
-            });
+            let Some(wm) = tables::watermarks::decode_v1(row)? else {
+                return Ok(None);
+            };
+            let Some(cp) = wm.checkpoint_hi_inclusive.filter(|cp| *cp >= wm.reader_lo) else {
+                return Ok(None);
+            };
+            if min_wm.as_ref().is_none_or(|(prev, _)| cp < *prev) {
+                min_wm = Some((cp, wm));
+            }
         }
 
-        Ok(min_wm)
+        Ok(min_wm.map(|(_, wm)| wm))
     }
 
     async fn get_latest_object(&mut self, object_id: &ObjectID) -> Result<Option<Object>> {
         let upper_limit = Bytes::from(Self::raw_object_key(&ObjectKey::max_for_id(object_id)));
         if let Some((_, row)) = self
-            .range_scan(tables::objects::NAME, None, Some(upper_limit), 1, true)
+            .range_scan(
+                tables::objects::NAME,
+                None,
+                Some(upper_limit),
+                1,
+                true,
+                None,
+            )
             .await?
             .pop()
         {
@@ -768,15 +1043,7 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochData>> {
-        let key = tables::epochs::encode_key(epoch_id);
-        match self
-            .multi_get(tables::epochs::NAME, vec![key], None)
-            .await?
-            .pop()
-        {
-            Some((_, row)) => Ok(Some(tables::epochs::decode(&row)?)),
-            None => Ok(None),
-        }
+        Ok(self.get_epochs_filtered(&[epoch_id], None).await?.pop())
     }
 
     async fn get_protocol_configs(
@@ -795,15 +1062,7 @@ impl KeyValueStoreReader for BigTableClient {
     }
 
     async fn get_latest_epoch(&mut self) -> Result<Option<EpochData>> {
-        let upper_limit = tables::epochs::encode_key_upper_bound();
-        match self
-            .range_scan(tables::epochs::NAME, None, Some(upper_limit), 1, true)
-            .await?
-            .pop()
-        {
-            Some((_, row)) => Ok(Some(tables::epochs::decode(&row)?)),
-            None => Ok(None),
-        }
+        self.get_latest_epoch_filtered(None).await
     }
 
     async fn get_events_for_transactions(
@@ -904,6 +1163,7 @@ impl KeyValueStoreReader for BigTableClient {
                 Some(end_key),
                 50,
                 true,
+                None,
             )
             .await?;
 
@@ -946,6 +1206,7 @@ impl KeyValueStoreReader for BigTableClient {
                 Some(end_key),
                 fetch_limit,
                 descending,
+                None,
             )
             .await?;
 
@@ -988,6 +1249,7 @@ impl KeyValueStoreReader for BigTableClient {
                 Some(end_key),
                 limit as i64,
                 descending,
+                None,
             )
             .await?;
 
@@ -1027,6 +1289,7 @@ impl KeyValueStoreReader for BigTableClient {
                 end_key,
                 limit as i64,
                 false,
+                None,
             )
             .await?;
 
@@ -1042,5 +1305,75 @@ impl KeyValueStoreReader for BigTableClient {
             }
         }
         Ok(results)
+    }
+}
+
+fn u64_be(v: u64) -> Bytes {
+    Bytes::copy_from_slice(&v.to_be_bytes())
+}
+
+/// Build `Mutation::SetCell` entries for the given `(column, value)` cells, all in the `sui`
+/// column family with server-assigned timestamps.
+fn build_set_cell_mutations(
+    cells: impl IntoIterator<Item = (&'static str, Bytes)>,
+) -> Vec<Mutation> {
+    cells
+        .into_iter()
+        .map(|(col, val)| Mutation {
+            mutation: Some(mutation::Mutation::SetCell(SetCell {
+                family_name: tables::FAMILY.to_string(),
+                column_qualifier: Bytes::from(col),
+                timestamp_micros: -1,
+                value: val,
+            })),
+        })
+        .collect()
+}
+
+/// Build a `RowFilter` matching cells in `sui:<column>` whose value is `>= value` (interpreted
+/// as raw cell bytes; callers pass the u64 BE encoding for watermark cells). Used as the
+/// CAS predicate for the monotonic-increase setters: predicate matches iff the existing value
+/// would block the write.
+fn column_value_at_least_filter(column: &str, value: Bytes) -> RowFilter {
+    RowFilter {
+        filter: Some(Filter::Chain(Chain {
+            filters: vec![
+                RowFilter {
+                    filter: Some(Filter::FamilyNameRegexFilter(tables::FAMILY.to_string())),
+                },
+                RowFilter {
+                    filter: Some(Filter::ColumnQualifierRegexFilter(Bytes::from(format!(
+                        "^{}$",
+                        column
+                    )))),
+                },
+                RowFilter {
+                    filter: Some(Filter::ValueRangeFilter(ValueRange {
+                        start_value: Some(value_range::StartValue::StartValueClosed(value)),
+                        end_value: None,
+                    })),
+                },
+            ],
+        })),
+    }
+}
+
+/// Build a `RowFilter` matching any cell in the `sui:<column>` column. Used as a CAS predicate
+/// for "create-if-absent" paths: if the predicate matches, the cell already exists.
+fn column_exists_filter(column: &str) -> RowFilter {
+    RowFilter {
+        filter: Some(Filter::Chain(Chain {
+            filters: vec![
+                RowFilter {
+                    filter: Some(Filter::FamilyNameRegexFilter(tables::FAMILY.to_string())),
+                },
+                RowFilter {
+                    filter: Some(Filter::ColumnQualifierRegexFilter(Bytes::from(format!(
+                        "^{}$",
+                        column
+                    )))),
+                },
+            ],
+        })),
     }
 }

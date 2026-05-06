@@ -216,7 +216,7 @@ public fun lock<Ext: drop, T: key + store>(
 
 /// Check whether an extension of type `Ext` is installed.
 public fun is_installed<Ext: drop>(self: &Kiosk): bool {
-    df::exists_(self.uid(), ExtensionKey<Ext> {})
+    df::exists(self.uid(), ExtensionKey<Ext> {})
 }
 
 /// Check whether an extension of type `Ext` is enabled.

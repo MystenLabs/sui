@@ -4,7 +4,12 @@
 use mysten_common::random::get_rng;
 use rand::Rng;
 use sui_types::TypeTag;
+use sui_types::accumulator_root::AccumulatorValue;
+use sui_types::balance::Balance;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::coin_reservation::ParsedObjectRefWithdrawal;
+use sui_types::committee::EpochId;
+use sui_types::digests::ChainIdentifier;
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
@@ -55,6 +60,7 @@ pub const ALL_OPERATIONS: &[OperationDescriptor] = &[
     ObjectBalanceOverdraw::DESCRIPTOR,
     AuthenticatedEventEmit::DESCRIPTOR,
     ImmutableObjectRead::DESCRIPTOR,
+    CoinReservationWithdraw::DESCRIPTOR,
 ];
 
 #[derive(Debug, Clone)]
@@ -66,6 +72,7 @@ pub enum ResourceRequest {
     TestCoinCap,
     AccumulatorRoot,
     ImmutableObject,
+    CoinReservation,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -83,6 +90,8 @@ pub struct OperationResources {
     pub test_coin_cap: Option<(ObjectID, SequenceNumber)>,
     pub test_coin_type: Option<TypeTag>,
     pub immutable_object: Option<ObjectRef>,
+    pub chain_identifier: Option<ChainIdentifier>,
+    pub current_epoch: Option<EpochId>,
 }
 
 pub trait Operation: Send + Sync {
@@ -1035,6 +1044,89 @@ impl Operation for AuthenticatedEventEmit {
             Identifier::new("emit_multiple").unwrap(),
             vec![],
             vec![start_arg, count_arg],
+        );
+    }
+}
+
+pub struct CoinReservationWithdraw;
+
+impl CoinReservationWithdraw {
+    pub const NAME: &'static str = "coin_reservation_withdraw";
+    pub const DESCRIPTOR: OperationDescriptor = OperationDescriptor {
+        name: Self::NAME,
+        factory: || Box::new(CoinReservationWithdraw),
+    };
+}
+
+impl Operation for CoinReservationWithdraw {
+    fn name(&self) -> &'static str {
+        Self::NAME
+    }
+
+    fn resource_requests(&self) -> Vec<ResourceRequest> {
+        vec![ResourceRequest::CoinReservation]
+    }
+
+    fn init_requirements(&self) -> Vec<InitRequirement> {
+        vec![InitRequirement::SeedAddressBalance]
+    }
+
+    fn apply(
+        &self,
+        builder: &mut ProgrammableTransactionBuilder,
+        resources: &OperationResources,
+        account_state: &AccountState,
+    ) {
+        let chain_identifier = resources
+            .chain_identifier
+            .expect("ChainIdentifier not resolved");
+        let current_epoch = resources.current_epoch.expect("CurrentEpoch not resolved");
+        let accumulator_root_version = resources
+            .accumulator_root
+            .expect("AccumulatorRoot version not resolved");
+
+        // Use the seeded amount rather than `account_state.sui_balance`, which reflects total
+        // coin balance (including gas objects), not the accumulator balance. The partner always
+        // deposits back the full withdrawal amount, so the accumulator always has exactly
+        // `address_balance_amount * 100` MIST when a withdrawal is possible.
+        let withdraw_amount = std::cmp::max(1, resources.address_balance_amount * 100);
+
+        let sui_balance_type = Balance::type_tag(GAS::type_tag());
+        let accumulator_obj_id =
+            AccumulatorValue::get_field_id(account_state.sender, &sui_balance_type)
+                .expect("Failed to compute accumulator object ID");
+
+        let coin_reservation = ParsedObjectRefWithdrawal::new(
+            *accumulator_obj_id.inner(),
+            current_epoch,
+            withdraw_amount,
+        );
+        let object_ref = coin_reservation.encode(accumulator_root_version, chain_identifier);
+
+        let withdrawal_arg = builder
+            .obj(ObjectArg::ImmOrOwnedObject(object_ref))
+            .unwrap();
+
+        // The compatibility layer implicitly inserts coin::redeem_funds for this withdrawal,
+        // converting it to a Coin<SUI>. We then convert to Balance<SUI> and send to the
+        // partner's accumulator so the partner can do a future CoinReservationWithdraw.
+        // Simply transferring a Coin<SUI> would only give the partner a coin object, not
+        // accumulator balance.
+        let coin_balance = builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("into_balance").unwrap(),
+            vec![GAS::type_tag()],
+            vec![withdrawal_arg],
+        );
+
+        let partner_arg = builder.pure(account_state.partner_address).unwrap();
+        builder.programmable_move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("send_funds").unwrap(),
+            vec![GAS::type_tag()],
+            vec![coin_balance, partner_arg],
         );
     }
 }

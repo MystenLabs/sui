@@ -7,6 +7,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use mock_store::MockStore;
+use mysten_common::ZipDebugEqIteratorExt;
 use object_store::ObjectStore;
 use object_store::ObjectStoreExt as _;
 use object_store::memory::InMemory;
@@ -200,10 +201,7 @@ impl TestHarness {
             sf_role: None,
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(Pipeline::Checkpoint)],
-            ingestion: IngestionLayer {
-                checkpoint_buffer_size: Some(100),
-                ..Default::default()
-            },
+            ingestion: IngestionLayer::default(),
             committer: CommitterLayer::default(),
             migration_id: None,
             file_format: FileFormat::Parquet,
@@ -481,10 +479,7 @@ impl MockTestHarness {
             sf_role: None,
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(Pipeline::Checkpoint)],
-            ingestion: IngestionLayer {
-                checkpoint_buffer_size: Some(100),
-                ..Default::default()
-            },
+            ingestion: IngestionLayer::default(),
             committer: CommitterLayer::default(),
             migration_id: None,
             file_format: FileFormat::Parquet,
@@ -1766,7 +1761,7 @@ impl TestHarness {
         for row_result in iter {
             let row = row_result.expect("Failed to read row");
             let mut record = std::collections::HashMap::new();
-            for (name, field) in field_names.iter().zip(row.get_column_iter()) {
+            for (name, field) in field_names.iter().zip_debug_eq(row.get_column_iter()) {
                 record.insert(name.clone(), format!("{}", field.1));
             }
             records.push(record);

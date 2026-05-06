@@ -13,7 +13,7 @@ use once_cell::sync::Lazy;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::effects::SignedTransactionEffects;
-use sui_types::execution_status::{ExecutionErrorKind, ExecutionStatus};
+use sui_types::execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -222,7 +222,7 @@ where
         ExecutionErrorKind::InsufficientGas
     );
     // gas object in effects is first coin in vector of coins
-    assert_eq!(gas_coin_ids[0], effects.gas_object().0.0);
+    assert_eq!(gas_coin_ids[0], effects.gas_object().unwrap().0.0);
     //  gas at position 0 mutated
     assert_eq!(effects.mutated().len(), 1);
     // extra coins are deleted
@@ -235,7 +235,7 @@ where
                 .any(|deleted| deleted.0 == *gas_coin_id)
         );
     }
-    let gas_ref = effects.gas_object().0;
+    let gas_ref = effects.gas_object().unwrap().0;
     let gas_object = authority_state.get_object(&gas_ref.0).await.unwrap();
     let final_value = GasCoin::try_from(&gas_object)?.value();
     let summary = effects.gas_cost_summary();
@@ -582,7 +582,10 @@ async fn test_transfer_sui_insufficient_gas() {
     // We expect this to fail due to insufficient gas.
     assert_eq!(
         *effects.status(),
-        ExecutionStatus::new_failure(ExecutionErrorKind::InsufficientGas, None)
+        ExecutionStatus::new_failure(ExecutionFailure::new(
+            ExecutionErrorKind::InsufficientGas,
+            None
+        ))
     );
     // Ensure that the owner of the object did not change if the transfer failed.
     assert_eq!(

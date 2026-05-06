@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use consensus_config::{AuthorityIndex, Stake};
+use mysten_common::ZipDebugEqIteratorExt;
 use parking_lot::RwLock;
 use tracing::{debug, info};
 
@@ -85,10 +86,8 @@ impl AncestorStateManager {
 
         // Note: this value cannot be greater than the threshold used in leader
         // schedule to identify bad nodes.
-        let excluded_nodes_stake_threshold_percentage = 2 * context
-            .protocol_config
-            .consensus_bad_nodes_stake_threshold()
-            / 3;
+        let excluded_nodes_stake_threshold_percentage =
+            2 * context.protocol_config.bad_nodes_stake_threshold() / 3;
 
         let excluded_nodes_stake_threshold = (excluded_nodes_stake_threshold_percentage
             * context.committee.total_stake())
@@ -286,7 +285,7 @@ impl AncestorStateManager {
 
         let mut high_quorum_rounds_with_stake = accepted_quorum_rounds
             .iter()
-            .zip(committee.authorities())
+            .zip_debug_eq(committee.authorities())
             .map(|((_low, high), (_, authority))| (*high, authority.stake))
             .collect::<Vec<_>>();
         high_quorum_rounds_with_stake.sort();
@@ -331,7 +330,7 @@ mod test {
         // Quorum rounds are not set yet, so we should calculate a network
         // quorum round of 0 to start.
         let network_high_quorum_round =
-            ancestor_state_manager.calculate_network_high_quorum_round(&[]);
+            ancestor_state_manager.calculate_network_high_quorum_round(&[(0, 0); 4]);
         assert_eq!(network_high_quorum_round, 0);
 
         let accepted_quorum_rounds = vec![(50, 229), (175, 229), (179, 229), (179, 300)];
@@ -353,7 +352,7 @@ mod test {
         let (mut context, _key_pairs) = Context::new_for_test(5);
         context
             .protocol_config
-            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
+            .set_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));

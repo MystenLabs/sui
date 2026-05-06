@@ -20,7 +20,7 @@ use crate::pipeline::concurrent::Handler;
 use crate::pipeline::concurrent::PrunerConfig;
 use crate::pipeline::logging::LoggerWatermark;
 use crate::pipeline::logging::WatermarkLogger;
-use crate::store::Connection;
+use crate::store::ConcurrentConnection;
 use crate::store::Store;
 
 #[derive(Default)]
@@ -95,7 +95,7 @@ impl PendingRanges {
 /// [LOUD_WATERMARK_UPDATE_INTERVAL]-many checkpoints.
 ///
 /// If the `config` is `None`, the task will shutdown immediately.
-pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
+pub(super) fn pruner<H: Handler>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
     store: H::Store,
@@ -278,7 +278,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     })
 }
 
-async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
+async fn prune_task_impl<H: Handler>(
     metrics: Arc<IndexerMetrics>,
     db: H::Store,
     handler: Arc<H>,
@@ -333,12 +333,14 @@ mod tests {
 
     use async_trait::async_trait;
     use prometheus::Registry;
+    use sui_indexer_alt_framework_store_traits::testing::mock_store::MockWatermark;
     use sui_types::full_checkpoint_content::Checkpoint;
     use tokio::time::Duration;
 
     use crate::FieldCount;
     use crate::metrics::IndexerMetrics;
-    use crate::mocks::store::*;
+    use crate::mocks::store::FallibleMockConnection;
+    use crate::mocks::store::FallibleMockStore;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::BatchStatus;
 
@@ -362,7 +364,7 @@ mod tests {
 
     #[async_trait]
     impl Handler for DataPipeline {
-        type Store = MockStore;
+        type Store = FallibleMockStore;
         type Batch = Vec<Self::Value>;
 
         fn batch(
@@ -377,7 +379,7 @@ mod tests {
         async fn commit<'a>(
             &self,
             batch: &Self::Batch,
-            _conn: &mut MockConnection<'a>,
+            _conn: &mut FallibleMockConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(batch.len())
         }
@@ -386,7 +388,7 @@ mod tests {
             &self,
             from: u64,
             to_exclusive: u64,
-            conn: &mut MockConnection<'a>,
+            conn: &mut FallibleMockConnection<'a>,
         ) -> anyhow::Result<usize> {
             conn.0.prune_data(DataPipeline::NAME, from, to_exclusive)
         }
@@ -541,8 +543,9 @@ mod tests {
             reader_lo: 3,
             pruner_timestamp: timestamp,
             pruner_hi: 0,
+            chain_id: None,
         };
-        let store = MockStore::new()
+        let store = FallibleMockStore::new()
             .with_watermark(DataPipeline::NAME, watermark)
             .with_data(DataPipeline::NAME, test_data);
 
@@ -620,8 +623,9 @@ mod tests {
             reader_lo: 3,
             pruner_timestamp: 0,
             pruner_hi: 0,
+            chain_id: None,
         };
-        let store = MockStore::new()
+        let store = FallibleMockStore::new()
             .with_watermark(DataPipeline::NAME, watermark)
             .with_data(DataPipeline::NAME, test_data);
 
@@ -686,10 +690,11 @@ mod tests {
             reader_lo: 4,        // Allow pruning up to checkpoint 4 (exclusive)
             pruner_timestamp: 0, // Past timestamp so delay doesn't block
             pruner_hi: 1,
+            chain_id: None,
         };
 
         // Configure failing behavior: range [1,2) should fail once before succeeding
-        let store = MockStore::new()
+        let store = FallibleMockStore::new()
             .with_watermark(DataPipeline::NAME, watermark)
             .with_data(DataPipeline::NAME, test_data.clone())
             .with_prune_failures(1, 2, 1);

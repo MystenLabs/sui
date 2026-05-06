@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_core_types::language_storage::StructTag;
 use sui_kvstore::{BigTableClient, KeyValueStoreReader};
 use sui_rpc::proto::sui::rpc::v2::{
     BatchGetObjectsRequest, BatchGetObjectsResponse, BatchGetTransactionsRequest,
@@ -12,14 +13,32 @@ use sui_rpc::proto::sui::rpc::v2::{
 use sui_rpc_api::proto::timestamp_ms_to_proto;
 use sui_rpc_api::{CheckpointNotFoundError, RpcError, ServerVersion};
 use sui_sdk_types::Digest;
+use sui_types::TypeTag;
 use sui_types::digests::ChainIdentifier;
+use sui_types::object::rpc_visitor::proto::ProtoVisitor;
 
-use crate::KvRpcServer;
+use crate::{KvRpcServer, PackageResolver};
 
 mod get_checkpoint;
 mod get_epoch;
 mod get_object;
 mod get_transaction;
+
+/// Maximum size in bytes for JSON-rendered Move values (1 MiB).
+const MAX_JSON_MOVE_VALUE_SIZE: usize = 1024 * 1024;
+
+/// Render a Move value as JSON using the package resolver for type layout.
+pub(crate) async fn render_json(
+    resolver: &PackageResolver,
+    struct_tag: &StructTag,
+    contents: &[u8],
+) -> Option<prost_types::Value> {
+    let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
+    let layout = resolver.type_layout(type_tag).await.ok()?;
+    ProtoVisitor::new(MAX_JSON_MOVE_VALUE_SIZE)
+        .deserialize_value(contents, &layout)
+        .ok()
+}
 
 #[tonic::async_trait]
 impl LedgerService for KvRpcServer {
@@ -38,6 +57,7 @@ impl LedgerService for KvRpcServer {
             self.client.clone(),
             self.chain_id,
             self.server_version.clone(),
+            &self.service_info_watermark_pipelines,
         )
         .await
         .map(tonic::Response::new)
@@ -48,40 +68,56 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<GetObjectRequest>,
     ) -> Result<tonic::Response<GetObjectResponse>, tonic::Status> {
-        get_object::get_object(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_object::get_object(
+            self.client.clone(),
+            request.into_inner(),
+            &self.package_resolver,
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn batch_get_objects(
         &self,
         request: tonic::Request<BatchGetObjectsRequest>,
     ) -> Result<tonic::Response<BatchGetObjectsResponse>, tonic::Status> {
-        get_object::batch_get_objects(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_object::batch_get_objects(
+            self.client.clone(),
+            request.into_inner(),
+            &self.package_resolver,
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_transaction(
         &self,
         request: tonic::Request<GetTransactionRequest>,
     ) -> Result<tonic::Response<GetTransactionResponse>, tonic::Status> {
-        get_transaction::get_transaction(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_transaction::get_transaction(
+            self.client.clone(),
+            request.into_inner(),
+            &self.package_resolver,
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn batch_get_transactions(
         &self,
         request: tonic::Request<BatchGetTransactionsRequest>,
     ) -> Result<tonic::Response<BatchGetTransactionsResponse>, tonic::Status> {
-        get_transaction::batch_get_transactions(self.client.clone(), request.into_inner())
-            .await
-            .map(tonic::Response::new)
-            .map_err(Into::into)
+        get_transaction::batch_get_transactions(
+            self.client.clone(),
+            request.into_inner(),
+            &self.package_resolver,
+        )
+        .await
+        .map(tonic::Response::new)
+        .map_err(Into::into)
     }
 
     async fn get_checkpoint(
@@ -117,15 +153,22 @@ pub(crate) async fn get_service_info(
     mut client: BigTableClient,
     chain_id: ChainIdentifier,
     server_version: Option<ServerVersion>,
+    watermark_pipelines: &[&str],
 ) -> Result<GetServiceInfoResponse, RpcError> {
-    let Some(wm) = client.get_watermark().await? else {
+    let Some(wm) = client
+        .get_watermark_for_pipelines(watermark_pipelines)
+        .await?
+    else {
+        return Err(CheckpointNotFoundError::sequence_number(0).into());
+    };
+    let Some(checkpoint_hi_inclusive) = wm.checkpoint_hi_inclusive else {
         return Err(CheckpointNotFoundError::sequence_number(0).into());
     };
     let mut message = GetServiceInfoResponse::default();
     message.chain_id = Some(Digest::new(chain_id.as_bytes().to_owned()).to_string());
     message.chain = Some(chain_id.chain().as_str().into());
     message.epoch = Some(wm.epoch_hi_inclusive);
-    message.checkpoint_height = Some(wm.checkpoint_hi_inclusive);
+    message.checkpoint_height = Some(checkpoint_hi_inclusive);
     message.timestamp = Some(timestamp_ms_to_proto(wm.timestamp_ms_hi_inclusive));
     message.lowest_available_checkpoint = Some(0);
     message.lowest_available_checkpoint_objects = Some(0);

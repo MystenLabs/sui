@@ -5,22 +5,10 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E05001]: ability constraint not satisfied
-   ┌─ tests/move_2024/matching/invalid_nested_native_struct.move:10:16
-   │
- 7 │     public native struct N;
-   │                          - To satisfy the constraint, the 'drop' ability would need to be added here
-   ·
-10 │         inner: N,
-   │                ^
-   │                │
-   │                Invalid field type. The struct was declared with the ability 'drop' so all fields require the ability 'drop'
-   │                The type '0x0::M::N' does not have the ability 'drop'
-
 error[E04015]: invalid use of native item
    ┌─ tests/move_2024/matching/invalid_nested_native_struct.move:15:30
    │
- 7 │     public native struct N;
+ 7 │     public native struct N has drop;
    │            ------ Struct declared 'native' here
    ·
 15 │             Wrapper { inner: N {} } => 1,

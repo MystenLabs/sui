@@ -1,0 +1,122 @@
+---
+title: Contract Information
+description: DeepBook Predict Testnet package, object, quote asset, public server, data endpoints, and source branch.
+keywords:
+  [
+    deepbook predict contract information,
+    predict package id,
+    predict object id,
+    predict server,
+    Testnet,
+    quote asset,
+    oracle,
+    plp,
+  ]
+---
+
+This page contains the current public integration targets for DeepBook Predict on Sui Testnet. These values come from the `predict-testnet-4-16` branch of the [DeepBookV3 Predict package](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-4-16/packages/predict).
+
+:::caution
+
+DeepBook Predict is documented here as a Testnet integration surface. The smart contracts might change before Mainnet deployment, so treat the current package IDs, object layouts, and entry points as provisional. Ignore older Predict package IDs in local configs or scripts unless a newer deployment explicitly replaces the values below.
+
+:::
+
+## Current deployment
+
+| Parameter | Value |
+|-----------|-------|
+| Network | Testnet |
+| Public server | `https://predict-server.testnet.mystenlabs.com` |
+| Predict package | `0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138` |
+| Predict registry | `0x43af14fed5480c20ff77e2263d5f794c35b9fab7e2212903127062f4fe2a6e64` |
+| Predict object | `0xc8736204d12f0a7277c86388a68bf8a194b0a14c5538ad13f22cbd8e2a38028a` |
+| Current quote asset | `0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC` |
+| PLP coin type | `0xf5ea2b3749c65d6e56507cc35388719aadb28f9cab873696a2f8687f5c785138::plp::PLP` |
+| Source branch | [`predict-testnet-4-16`](https://github.com/MystenLabs/deepbookv3/tree/predict-testnet-4-16/packages/predict) |
+
+## Supported quote assets
+
+<details>
+<summary>DeepBook Test USDC (DUSDC)</summary>
+
+| Parameter | Value |
+|-----------|-------|
+| Type | `0xe95040085976bfd54a1a07225cd46c8a2b4e8e2b6732f140a0fc49850ba73e1a::dusdc::DUSDC` |
+| Currency ID | `0xf3000dff421833d4bb8ed58fac146d691a3aaba2785aa1989af65a7089ca3e9c` |
+| Decimals | 6 |
+| Network | Testnet |
+
+</details>
+
+## Public server endpoints
+
+The public server provides render-ready market, vault, portfolio, and history data.
+
+### Protocol and market state
+
+| Endpoint | Use |
+|----------|-----|
+| `GET /status` | Server health and status |
+| `GET /predicts/:predict_id/state` | Predict object state and config |
+| `GET /predicts/:predict_id/oracles` | Oracle list for a Predict object |
+| `GET /oracles/:oracle_id/state` | Current oracle state |
+| `GET /predicts/:predict_id/quote-assets` | Accepted quote assets |
+| `GET /oracles/:oracle_id/ask-bounds` | Resolved oracle ask bounds |
+
+### Vault and LP data
+
+| Endpoint | Use |
+|----------|-----|
+| `GET /predicts/:predict_id/vault/summary` | Current vault summary |
+| `GET /predicts/:predict_id/vault/performance?range=ALL` | Vault performance over a selected range |
+| `GET /lp/supplies` | LP supply history |
+| `GET /lp/withdrawals` | LP withdrawal history |
+
+### Manager and portfolio data
+
+| Endpoint | Use |
+|----------|-----|
+| `GET /managers` | Predict manager list |
+| `GET /managers/:manager_id/summary` | Manager summary |
+| `GET /managers/:manager_id/positions/summary` | Manager position summary |
+| `GET /managers/:manager_id/pnl?range=ALL` | Manager PnL over a selected range |
+
+### History data
+
+| Endpoint | Use |
+|----------|-----|
+| `GET /oracles/:oracle_id/prices` | Oracle price history |
+| `GET /oracles/:oracle_id/prices/latest` | Latest indexed price update |
+| `GET /oracles/:oracle_id/svi` | Oracle SVI history |
+| `GET /oracles/:oracle_id/svi/latest` | Latest indexed SVI update |
+| `GET /positions/minted` | Position mint history |
+| `GET /positions/redeemed` | Position redeem history |
+| `GET /ranges/minted` | Range mint history |
+| `GET /ranges/redeemed` | Range redeem history |
+| `GET /trades/:oracle_id` | Trade history for an oracle |
+
+## Live Sui events
+
+When a UI needs lower-latency oracle state than the indexed server provides, use Sui checkpoint or event streaming. Filter by the current Predict package ID and watch these event types:
+
+- `oracle::OraclePricesUpdated`
+- `oracle::OracleSVIUpdated`
+- `oracle::OracleSettled`
+- `oracle::OracleActivated`
+
+Use the server for historical pagination. Use the live stream for freshness.
+
+## Source pointers
+
+| Area | Source |
+|------|--------|
+| Core shared object | [`packages/predict/sources/predict.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-4-16/packages/predict/sources/predict.move) |
+| Manager account model | [`packages/predict/sources/predict_manager.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-4-16/packages/predict/sources/predict_manager.move) |
+| Registry and admin entry points | [`packages/predict/sources/registry.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-4-16/packages/predict/sources/registry.move) |
+| Oracle state machine | [`packages/predict/sources/oracle.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-4-16/packages/predict/sources/oracle.move) |
+| Vault accounting | [`packages/predict/sources/vault/vault.move`](https://github.com/MystenLabs/deepbookv3/blob/predict-testnet-4-16/packages/predict/sources/vault/vault.move) |
+
+import DocCardList from '@theme/DocCardList';
+
+<DocCardList />

@@ -22,6 +22,7 @@ use crate::transaction::{TransactionData, VerifiedTransaction};
 use move_core_types::annotated_value::MoveTypeLayout;
 use move_core_types::language_storage::StructTag;
 use move_core_types::language_storage::TypeTag;
+use mysten_common::ZipDebugEqIteratorExt;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::{BTreeSet, HashMap};
@@ -200,7 +201,7 @@ pub trait ReadStore: ObjectStore {
         let mut events = self
             .multi_get_events(&event_tx_digests)
             .into_iter()
-            .zip(event_tx_digests)
+            .zip_debug_eq(event_tx_digests)
             .map(|(maybe_event, tx_digest)| {
                 maybe_event
                     .ok_or_else(|| Error::missing(format!("missing event for tx {tx_digest}")))
@@ -209,7 +210,7 @@ pub trait ReadStore: ObjectStore {
             .collect::<Result<HashMap<_, _>>>()?;
 
         let mut transactions = Vec::with_capacity(txns.len());
-        for (tx, fx) in txns.into_iter().zip(effects) {
+        for (tx, fx) in txns.into_iter().zip_debug_eq(effects) {
             let events = fx.events_digest().map(|_event_digest| {
                 events
                     .remove(fx.transaction_digest())
@@ -623,7 +624,9 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 ///
 /// It extends both ObjectStore and ReadStore by adding functionality that may require more
 /// detailed underlying databases or indexes to support.
-pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
+pub trait RpcStateReader:
+    ObjectStore + ReadStore + super::ChildObjectResolver + Send + Sync
+{
     /// Lowest available checkpoint for which object data can be requested.
     ///
     /// Specifically this is the lowest checkpoint for which input/output object data will be
@@ -652,7 +655,16 @@ pub trait RpcStateReader: ObjectStore + ReadStore + Send + Sync {
             TypeTag::U256 => Ok(Some(MoveTypeLayout::U256)),
         }
     }
-    fn get_struct_layout(&self, type_tag: &StructTag) -> Result<Option<MoveTypeLayout>>;
+
+    fn get_struct_layout(&self, struct_tag: &StructTag) -> Result<Option<MoveTypeLayout>> {
+        self.get_struct_layout_with_overlay(struct_tag, &ObjectSet::default())
+    }
+
+    fn get_struct_layout_with_overlay(
+        &self,
+        struct_tag: &StructTag,
+        overlay: &ObjectSet,
+    ) -> Result<Option<MoveTypeLayout>>;
 }
 
 pub type DynamicFieldIteratorItem = Result<DynamicFieldKey, TypedStoreError>;
@@ -750,7 +762,8 @@ pub struct CoinInfo {
 
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct BalanceInfo {
-    pub balance: u64,
+    pub coin_balance: u64,
+    pub address_balance: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]

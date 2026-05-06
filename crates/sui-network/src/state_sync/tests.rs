@@ -10,7 +10,8 @@ use crate::{
 };
 use anemo::{PeerId, Request};
 use anyhow::anyhow;
-use std::io::Write;
+use mysten_common::ZipDebugEqIteratorExt;
+use prost::Message;
 use std::num::NonZeroUsize;
 use std::{
     collections::HashMap,
@@ -19,7 +20,9 @@ use std::{
 use sui_config::node::ArchiveReaderConfig;
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_config::p2p::StateSyncConfig;
-use sui_storage::blob::{Blob, BlobEncoding};
+use sui_rpc::field::{FieldMask, FieldMaskUtil};
+use sui_rpc::merge::Merge;
+use sui_rpc::proto::sui::rpc;
 use sui_swarm_config::test_utils::{CommitteeFixture, empty_contents};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::{
@@ -294,9 +297,18 @@ async fn test_state_sync_using_archive() -> anyhow::Result<()> {
             checkpoint_contents: ordered_contents[idx].clone().into_checkpoint_contents(),
             transactions: vec![],
         };
-        let file_path = temp_dir.join(format!("{}.chk", summary.sequence_number));
-        let mut file = std::fs::File::create(file_path)?;
-        file.write_all(&Blob::encode(&chk, BlobEncoding::Bcs)?.to_bytes())?;
+        let checkpoint: sui_types::full_checkpoint_content::Checkpoint = chk.into();
+        let mask = FieldMask::from_paths([
+            rpc::v2::Checkpoint::path_builder().sequence_number(),
+            rpc::v2::Checkpoint::path_builder().summary().bcs().value(),
+            rpc::v2::Checkpoint::path_builder().signature().finish(),
+            rpc::v2::Checkpoint::path_builder().contents().bcs().value(),
+        ]);
+        let proto_checkpoint = rpc::v2::Checkpoint::merge_from(&checkpoint, &mask.into());
+        let proto_bytes = proto_checkpoint.encode_to_vec();
+        let compressed = zstd::encode_all(&proto_bytes[..], 3)?;
+        let file_path = temp_dir.join(format!("{}.binpb.zst", summary.sequence_number));
+        std::fs::write(file_path, compressed)?;
     }
     let archive_reader_config = ArchiveReaderConfig {
         remote_store_config: ObjectStoreConfig::default(),
@@ -690,7 +702,7 @@ async fn sync_with_checkpoints_watermark() {
     ));
 
     // Inject all the checkpoints to Peer 1
-    for (checkpoint, contents) in checkpoint_iter.zip(contents_iter) {
+    for (checkpoint, contents) in checkpoint_iter.zip_debug_eq(contents_iter) {
         store_1
             .insert_checkpoint_contents(&checkpoint, contents)
             .unwrap();
@@ -702,7 +714,7 @@ async fn sync_with_checkpoints_watermark() {
     timeout(Duration::from_secs(1), async {
         for (checkpoint, contents) in ordered_checkpoints[2..]
             .iter()
-            .zip(contents.clone().into_iter().skip(2))
+            .zip_debug_eq(contents.clone().into_iter().skip(2))
         {
             assert_eq!(subscriber_1.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();
@@ -805,7 +817,7 @@ async fn sync_with_checkpoints_watermark() {
     timeout(Duration::from_secs(10), async {
         for (checkpoint, contents) in ordered_checkpoints[2..]
             .iter()
-            .zip(contents.clone().into_iter().skip(2))
+            .zip_debug_eq(contents.clone().into_iter().skip(2))
         {
             assert_eq!(subscriber_2.recv().await.unwrap().data(), checkpoint.data());
             assert_eq!(subscriber_3.recv().await.unwrap().data(), checkpoint.data());
@@ -888,7 +900,7 @@ async fn sync_with_checkpoints_watermark() {
     timeout(Duration::from_secs(3), async {
         for (checkpoint, contents) in ordered_checkpoints[1..]
             .iter()
-            .zip(contents.clone().into_iter().skip(1))
+            .zip_debug_eq(contents.clone().into_iter().skip(1))
         {
             assert_eq!(subscriber_4.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();

@@ -10,7 +10,6 @@ publish = false
 anyhow.workspace = true
 prometheus.workspace = true
 reqwest.workspace = true
-serde.workspace = true
 snap.workspace = true
 tokio.workspace = true
 tracing.workspace = true

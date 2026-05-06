@@ -20,7 +20,7 @@ use crate::{
 };
 use move_binary_format::{
     checked_as,
-    errors::{Location, VMError, VMResult},
+    errors::{Location, PartialVMResult, VMError, VMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, Visibility},
     partial_vm_error,
 };
@@ -351,6 +351,28 @@ impl<'extensions> MoveVM<'extensions> {
                     return_type: _,
                 } = self.find_function(original_id, function_name, &type_arguments)?;
 
+                if args.len() != function.to_ref().parameters.len() {
+                    return Err(partial_vm_error!(
+                        NUMBER_OF_ARGUMENTS_MISMATCH,
+                        "argument length mismatch: expected {} got {}",
+                        function.to_ref().parameters.len(),
+                        args.len(),
+                    )
+                    .finish(Location::Module(function.module_id(&self.interner))));
+                }
+
+                // Internal type error if we get here -- `find_function` should have already
+                // verified the type arguments as part of the type resolution that it performs.
+                if type_arguments.len() != function.to_ref().type_parameters().len() {
+                    return Err(partial_vm_error!(
+                        INTERNAL_TYPE_ERROR,
+                        "type argument length mismatch: expected {} got {}.",
+                        function.to_ref().type_parameters().len(),
+                        type_arguments.len(),
+                    )
+                    .finish(Location::Module(function.module_id(&self.interner))));
+                }
+
                 if !bypass_declared_entry_check && !function.to_ref().is_entry {
                     return Err(partial_vm_error!(EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION)
                     .finish(Location::Module(function.module_id(&self.interner))));
@@ -396,9 +418,19 @@ impl<'extensions> MoveVM<'extensions> {
 
         let fun_ref = function.to_ref();
 
-        let parameters = fun_ref.parameters.iter().map(|ty| ty.to_type()).collect();
+        let parameters = fun_ref
+            .parameters
+            .iter()
+            .map(|ty| ty.to_type())
+            .collect::<PartialVMResult<Vec<_>>>()
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
-        let return_ = fun_ref.return_.iter().map(|ty| ty.to_type()).collect();
+        let return_ = fun_ref
+            .return_
+            .iter()
+            .map(|ty| ty.to_type())
+            .collect::<PartialVMResult<Vec<_>>>()
+            .map_err(|e| e.finish(Location::Module(original_id.clone())))?;
 
         // verify type arguments
         self.virtual_tables

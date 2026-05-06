@@ -1,5 +1,7 @@
+/*
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+*/
 
 import fs from "fs";
 import path from "path";
@@ -24,7 +26,7 @@ const outputFile = flags["output"] ?? path.join(scriptDir, "../../../static/llms
 const baseUrl = flags["base-url"] ?? "https://docs.sui.io";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const TARGET_CHARS = 100_000;
+const TARGET_CHARS = 45_000;
 const PINNED_SECTIONS = ["Move", "Top Level Navigation", "Sui Developer Skills"];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -54,7 +56,8 @@ const IGNORE_FILES = new Set([
   "references/sui-api/sui-graphql/beta/reference/types/enums/multisig-member-signature-scheme.md",
   "references/sui-api/sui-graphql/beta/reference/types/objects/multisig-member-signature.md",
   "references/sui-framework-reference.md",
-  "release-notes.md",
+  "/references/release-notes.md",
+  "/references/awesome-sui.md",
 ]);
 
 function walk(dir, results = []) {
@@ -138,12 +141,11 @@ function getHierarchy(relPath) {
   // Capitalize the section heading (e.g. "concepts" → "Concepts")
   const section = formatTitle(parts[0] || "General");
 
-  // Use up to 3 path parts for subsection so guides/developer/app-examples
-  // groups under ### Guides/Developer/App Examples rather than flattening
-  // everything under ### Guides/Developer.
-  // Still requires parts.length >= 3 so flat files (section/file.md) never
-  // get a lone subsection heading.
-  const subsection = parts.length >= 3 ? parts.slice(0, 3).join("/") : null;
+  // Use the full parent directory path as the subsection so each directory
+  // gets its own group. For index files (already popped), parts IS the
+  // directory path. For regular files, drop the filename to get the directory.
+  const dirParts = isIndex ? parts : parts.slice(0, -1);
+  const subsection = dirParts.length >= 2 ? dirParts.join("/") : null;
 
   return { section, subsection, isIndex, parts };
 }
@@ -304,7 +306,7 @@ function sortPages(pages) {
 
 // ── Build output ─────────────────────────────────────────────────────────────
 
-function build(ratio = 1) {
+function build(ratio = 1, { includeFull = false } = {}) {
   const lines = [];
 
   // Static header (LLM optimized)
@@ -315,6 +317,13 @@ function build(ratio = 1) {
     "Designed for efficient retrieval and grounding by large language models.",
     ""
   );
+
+  if (includeFull) {
+    lines.push(
+      `> For the complete, unabridged page index see [llms-full.txt](${baseUrl}/llms-full.txt).`,
+      ""
+    );
+  }
 
   const sections = sortSections(Object.keys(grouped));
 
@@ -354,22 +363,29 @@ function build(ratio = 1) {
   return lines.join("\n");
 }
 
-// ── Trim passes ──────────────────────────────────────────────────────────────
+// ── Build full listing ───────────────────────────────────────────────────────
 
-let output = build(1);
+const fullOutput = build(1);
+
+// ── Build trimmed listing for llms.txt (under TARGET_CHARS) ─────────────────
+
+let output = build(1, { includeFull: true });
 
 if (output.length > TARGET_CHARS) {
   const ratio = TARGET_CHARS / output.length;
-  output = build(ratio);
+  output = build(ratio, { includeFull: true });
 }
 
 if (output.length > TARGET_CHARS) {
   output = output.slice(0, TARGET_CHARS);
 }
 
-// ── Write file ───────────────────────────────────────────────────────────────
+// ── Write files ──────────────────────────────────────────────────────────────
 
 fs.mkdirSync(path.dirname(outputFile), { recursive: true });
 fs.writeFileSync(outputFile, output, "utf8");
-
 console.log(`✓ Generated ${outputFile} (${output.length.toLocaleString()} chars)`);
+
+const fullOutputFile = outputFile.replace(/llms\.txt$/, "llms-full.txt");
+fs.writeFileSync(fullOutputFile, fullOutput, "utf8");
+console.log(`✓ Generated ${fullOutputFile} (${fullOutput.length.toLocaleString()} chars)`);

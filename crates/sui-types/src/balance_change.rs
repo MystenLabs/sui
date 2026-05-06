@@ -27,6 +27,35 @@ pub struct BalanceChange {
     pub amount: i128,
 }
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DetailedBalanceChange {
+    /// Owner of the balance change
+    pub address: SuiAddress,
+
+    /// Type of the Coin
+    pub coin_type: TypeTag,
+
+    /// The amount indicates the balance value changes from coins.
+    ///
+    /// A negative amount means spending coin value and positive means receiving coin value.
+    pub coin_amount: i128,
+
+    /// The amount indicates the balance value changes from address balances.
+    ///
+    /// A negative amount means spending coin value and positive means receiving coin value.
+    pub address_amount: i128,
+}
+
+impl From<DetailedBalanceChange> for BalanceChange {
+    fn from(value: DetailedBalanceChange) -> Self {
+        Self {
+            address: value.address,
+            coin_type: value.coin_type,
+            amount: value.coin_amount + value.address_amount,
+        }
+    }
+}
+
 impl std::fmt::Debug for BalanceChange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BalanceChange")
@@ -52,35 +81,47 @@ fn coins(objects: &[Object]) -> impl Iterator<Item = (&SuiAddress, TypeTag, u64)
     })
 }
 
-/// Extract balance changes from accumulator events that have `Balance<T>` types.
-/// Returns an iterator of (address, coin_type, signed_amount) tuples.
+/// Extract the signed balance change from a single accumulator event, if it
+/// has a `Balance<T>` type and an integer value.
+fn signed_balance_change_from_event(
+    event: &crate::accumulator_event::AccumulatorEvent,
+) -> Option<(SuiAddress, TypeTag, i128)> {
+    let ty = &event.write.address.ty;
+    // Only process events with Balance<T> types
+    let coin_type = Balance::maybe_get_balance_type_param(ty)?;
+
+    let amount = match &event.write.value {
+        AccumulatorValue::Integer(v) => *v as i128,
+        // IntegerTuple and EventDigest are not balance-related
+        AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+            return None;
+        }
+    };
+
+    // Convert operation to signed amount: Split means balance decreased, Merge means increased
+    let signed_amount = match event.write.operation {
+        AccumulatorOperation::Split => -amount,
+        AccumulatorOperation::Merge => amount,
+    };
+
+    Some((event.write.address.address, coin_type, signed_amount))
+}
+
+/// Extract balance changes from a slice of accumulator events.
+pub fn signed_balance_changes_from_events(
+    events: &[crate::accumulator_event::AccumulatorEvent],
+) -> impl Iterator<Item = (SuiAddress, TypeTag, i128)> + '_ {
+    events.iter().filter_map(signed_balance_change_from_event)
+}
+
+/// Extract balance changes from accumulator events in transaction effects.
 pub fn address_balance_changes_from_accumulator_events(
     effects: &TransactionEffects,
-) -> impl Iterator<Item = (SuiAddress, TypeTag, i128)> + '_ {
+) -> impl Iterator<Item = (SuiAddress, TypeTag, i128)> {
     effects
         .accumulator_events()
         .into_iter()
-        .filter_map(|event| {
-            let ty = &event.write.address.ty;
-            // Only process events with Balance<T> types
-            let coin_type = Balance::maybe_get_balance_type_param(ty)?;
-
-            let amount = match &event.write.value {
-                AccumulatorValue::Integer(v) => *v as i128,
-                // IntegerTuple and EventDigest are not balance-related
-                AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
-                    return None;
-                }
-            };
-
-            // Convert operation to signed amount: Split means balance decreased, Merge means increased
-            let signed_amount = match event.write.operation {
-                AccumulatorOperation::Split => -amount,
-                AccumulatorOperation::Merge => amount,
-            };
-
-            Some((event.write.address.address, coin_type, signed_amount))
-        })
+        .filter_map(|ref event| signed_balance_change_from_event(event))
 }
 
 pub fn derive_balance_changes(
@@ -88,11 +129,30 @@ pub fn derive_balance_changes(
     input_objects: &[Object],
     output_objects: &[Object],
 ) -> Vec<BalanceChange> {
+    derive_detailed_balance_changes(effects, input_objects, output_objects)
+        .into_iter()
+        // Filter out when coin and address changes net to 0
+        .filter_map(|detailed_change| {
+            let change = BalanceChange::from(detailed_change);
+            if change.amount == 0 {
+                None
+            } else {
+                Some(change)
+            }
+        })
+        .collect()
+}
+
+pub fn derive_detailed_balance_changes(
+    effects: &TransactionEffects,
+    input_objects: &[Object],
+    output_objects: &[Object],
+) -> Vec<DetailedBalanceChange> {
     // 1. subtract all input coins
     let balances = coins(input_objects).fold(
-        std::collections::BTreeMap::<_, i128>::new(),
+        std::collections::BTreeMap::<_, (i128, i128)>::new(),
         |mut acc, (address, coin_type, balance)| {
-            *acc.entry((*address, coin_type)).or_default() -= balance as i128;
+            acc.entry((*address, coin_type)).or_default().0 -= balance as i128;
             acc
         },
     );
@@ -100,7 +160,7 @@ pub fn derive_balance_changes(
     // 2. add all mutated/output coins
     let balances =
         coins(output_objects).fold(balances, |mut acc, (address, coin_type, balance)| {
-            *acc.entry((*address, coin_type)).or_default() += balance as i128;
+            acc.entry((*address, coin_type)).or_default().0 += balance as i128;
             acc
         });
 
@@ -108,22 +168,23 @@ pub fn derive_balance_changes(
     let balances = address_balance_changes_from_accumulator_events(effects).fold(
         balances,
         |mut acc, (address, coin_type, signed_amount)| {
-            *acc.entry((address, coin_type)).or_default() += signed_amount;
+            acc.entry((address, coin_type)).or_default().1 += signed_amount;
             acc
         },
     );
 
     balances
         .into_iter()
-        .filter_map(|((address, coin_type), amount)| {
-            if amount == 0 {
+        .filter_map(|((address, coin_type), (coin_amount, address_amount))| {
+            if coin_amount == 0 && address_amount == 0 {
                 return None;
             }
 
-            Some(BalanceChange {
+            Some(DetailedBalanceChange {
                 address,
                 coin_type,
-                amount,
+                coin_amount,
+                address_amount,
             })
         })
         .collect()

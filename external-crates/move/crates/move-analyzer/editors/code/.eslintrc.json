@@ -2,7 +2,6 @@
     // Don't bother looking for eslint configuration files in parent
     // directories; this is the root configuration.
     "root": true,
-
     // Instruct eslint to use a parser that can parse TypeScript.
     "parser": "@typescript-eslint/parser",
     "parserOptions": {
@@ -18,13 +17,11 @@
             "**/tsconfig.json"
         ]
     },
-
     // Specify the environment in which our JavaScript will run.
     "env": {
         // The Node.js runtime environment provides globals such as `__dirname`.
         "node": true
     },
-
     // Plug-in eslint rules from @typescript-eslint.
     "plugins": [
         "@typescript-eslint",
@@ -46,7 +43,6 @@
         "no-unsafe-optional-chaining": "warn",
         "no-useless-backreference": "warn",
         "require-atomic-updates": "warn",
-
         // The following are in the "best practices" category of eslint rules.
         "array-callback-return": "warn",
         "block-scoped-var": "warn",
@@ -85,7 +81,6 @@
         "no-useless-return": "warn",
         "prefer-promise-reject-errors": "warn",
         "radix": "warn",
-
         // The following are in the "stylistic issues" category of eslint rules.
         "array-bracket-spacing": "warn",
         "array-element-newline": [
@@ -103,8 +98,14 @@
         "comma-style": "warn",
         "computed-property-spacing": "warn",
         "eol-last": "warn",
-        "function-call-argument-newline": ["warn", "consistent"],
-        "function-paren-newline": ["warn", "consistent"],
+        "function-call-argument-newline": [
+            "warn",
+            "consistent"
+        ],
+        "function-paren-newline": [
+            "warn",
+            "consistent"
+        ],
         "key-spacing": "warn",
         "linebreak-style": "off", // We use different linebreak styles. ref https://eslint.org/docs/latest/rules/linebreak-style
         "max-len": [
@@ -134,7 +135,6 @@
         "spaced-comment": "warn",
         "switch-colon-spacing": "warn",
         "unicode-bom": "warn",
-
         // The following are @typescript-eslint rules. For more information, see:
         // * All @typescript-eslint rules: https://github.com/typescript-eslint/typescript-eslint/tree/v4.31.1/packages/eslint-plugin/docs/rules
         // * The rules included in @typescript-eslint/recommended: https://github.com/typescript-eslint/typescript-eslint/blob/v4.31.1/packages/eslint-plugin/src/configs/recommended.ts
@@ -179,7 +179,10 @@
         "@typescript-eslint/no-unused-vars": "warn",
         "@typescript-eslint/no-use-before-define": "warn",
         "@typescript-eslint/non-nullable-type-assertion-style": "warn",
-        "@typescript-eslint/object-curly-spacing": ["warn", "always"],
+        "@typescript-eslint/object-curly-spacing": [
+            "warn",
+            "always"
+        ],
         "@typescript-eslint/prefer-for-of": "warn",
         "@typescript-eslint/prefer-function-type": "warn",
         "@typescript-eslint/prefer-includes": "warn",
@@ -190,25 +193,18 @@
         "@typescript-eslint/prefer-reduce-type-parameter": "warn",
         "@typescript-eslint/prefer-string-starts-ends-with": "warn",
         "@typescript-eslint/promise-function-async": "warn",
-        "@typescript-eslint/quotes": ["warn", "single"],
+        "@typescript-eslint/quotes": [
+            "warn",
+            "single"
+        ],
         "@typescript-eslint/require-array-sort-compare": "warn",
         "@typescript-eslint/return-await": "warn",
         "@typescript-eslint/semi": "warn",
-        "@typescript-eslint/space-before-function-paren": [
-            "warn",
-            {
-                "anonymous": "never",
-                "named": "never",
-                "asyncArrow": "always"
-            }
-        ],
         "@typescript-eslint/strict-boolean-expressions": "warn",
         "@typescript-eslint/switch-exhaustiveness-check": "warn",
         "@typescript-eslint/unified-signatures": "warn",
-
         // The following are eslint-plugin-tsdoc rules:
         "tsdoc/syntax": "warn",
-
         "@typescript-eslint/no-unsafe-return": "off",
         "@typescript-eslint/type-annotation-spacing": "off",
         "@typescript-eslint/no-explicit-any": "off",

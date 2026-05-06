@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::StreamExt;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::future;
 use sui_sdk::{SUI_COIN_TYPE, SuiClientBuilder};
 use sui_swarm_config::genesis_config::{DEFAULT_GAS_AMOUNT, DEFAULT_NUMBER_OF_OBJECT_PER_ACCOUNT};
@@ -101,7 +102,7 @@ async fn test_coins_stream() -> Result<(), anyhow::Error> {
         .get_coins(address, Some(SUI_COIN_TYPE.to_string()), None, None)
         .await?;
 
-    for (coin1, coin2) in coins.into_iter().zip(page.data) {
+    for (coin1, coin2) in coins.into_iter().zip_debug_eq(page.data) {
         assert_eq!(coin1.coin_object_id, coin2.coin_object_id);
     }
 

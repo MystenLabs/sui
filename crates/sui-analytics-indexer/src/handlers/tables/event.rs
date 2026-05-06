@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use move_core_types::annotated_value::MoveValue;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_json_rpc_types::type_and_fields_from_move_event_data;
 use sui_types::base_types::EpochId;
@@ -13,17 +12,21 @@ use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use sui_package_resolver::PackageStoreWithLruCache;
+use sui_package_resolver::Resolver;
+use sui_rpc_resolver::package_store::RpcPackageStore;
+use sui_types::object::bounded_visitor::BoundedVisitor;
+
 use crate::Row;
-use crate::package_store::PackageCache;
 use crate::pipeline::Pipeline;
 use crate::tables::EventRow;
 
 pub struct EventProcessor {
-    package_cache: Arc<PackageCache>,
+    package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>,
 }
 
 impl EventProcessor {
-    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+    pub fn new(package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>) -> Self {
         Self { package_cache }
     }
 }
@@ -63,15 +66,13 @@ impl Processor for EventProcessor {
                         contents,
                     } = event;
 
-                    let layout = self
-                        .package_cache
-                        .resolver_for_epoch(epoch)
+                    let layout = Resolver::new(self.package_cache.clone())
                         .type_layout(move_core_types::language_storage::TypeTag::Struct(
                             Box::new(type_.clone()),
                         ))
                         .await?;
 
-                    let move_value = MoveValue::simple_deserialize(contents, &layout)?;
+                    let move_value = BoundedVisitor::deserialize_value(contents, &layout)?;
                     let (_, event_json) = type_and_fields_from_move_event_data(move_value)?;
 
                     let row = EventRow {

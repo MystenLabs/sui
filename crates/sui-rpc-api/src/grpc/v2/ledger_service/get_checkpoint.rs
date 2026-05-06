@@ -5,6 +5,7 @@ use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
 use crate::error::CheckpointNotFoundError;
+use mysten_common::ZipDebugEqIteratorExt;
 use prost_types::FieldMask;
 use sui_rpc::field::FieldMaskTree;
 use sui_rpc::field::FieldMaskUtil;
@@ -20,6 +21,7 @@ use sui_rpc::proto::sui::rpc::v2::TransactionEvents;
 use sui_rpc::proto::sui::rpc::v2::get_checkpoint_request::CheckpointId;
 use sui_sdk_types::Digest;
 use sui_types::balance_change::derive_balance_changes_2;
+use sui_types::full_checkpoint_content::ObjectSet as TypesObjectSet;
 
 pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
 
@@ -149,9 +151,15 @@ pub fn get_checkpoint(
                             && let Some(events) = transaction.events.as_mut()
                             && let Some(sdk_events) = &t.events
                         {
-                            for (message, event) in events.events.iter_mut().zip(&sdk_events.data) {
+                            for (message, event) in
+                                events.events.iter_mut().zip_debug_eq(&sdk_events.data)
+                            {
                                 message.json = service
-                                    .render_json(&event.type_, &event.contents)
+                                    .render_json(
+                                        &event.type_,
+                                        &event.contents,
+                                        &TypesObjectSet::default(),
+                                    )
                                     .map(Box::new);
                             }
                         }

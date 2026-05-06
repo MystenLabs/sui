@@ -5,7 +5,7 @@ processed 3 tasks
 
 task 0, lines 1-8:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 6.m {
 
 entry foo() {
@@ -18,7 +18,7 @@ B0:
 
 task 1, lines 10-19:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 7.m {
 
 entry foo() {

@@ -47,8 +47,8 @@ module tto::M1 {
 
 //# view-object 2,1
 
-//# view-object 5,0
-
 //# view-object 5,1
 
 //# view-object 5,2
+
+//# view-object 5,0

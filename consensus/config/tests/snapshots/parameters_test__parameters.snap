@@ -1,5 +1,6 @@
 ---
 source: consensus/config/tests/parameters_test.rs
+assertion_line: 8
 expression: parameters
 ---
 leader_timeout:
@@ -23,6 +24,13 @@ dag_state_cached_rounds: 500
 commit_sync_parallel_fetches: 8
 commit_sync_batch_size: 100
 commit_sync_batches_ahead: 32
+commit_sync_request_timeout:
+  secs: 10
+  nanos: 0
+commit_sync_probe_timeout:
+  secs: 2
+  nanos: 0
+use_fifo_compaction: true
 tonic:
   keepalive_interval:
     secs: 10
@@ -30,7 +38,9 @@ tonic:
   connection_buffer_size: 33554432
   excessive_message_size: 16777216
   message_size_limit: 67108864
-  observer_server_port: ~
-  observer_allowlist: []
+observer:
+  server_port: ~
+  allowlist: []
+  peers: []
 internal:
   skip_equivocation_validation: false

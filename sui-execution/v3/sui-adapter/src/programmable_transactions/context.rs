@@ -69,7 +69,7 @@ mod checked {
         execution::{ExecutionResults, ExecutionResultsV2},
         execution_status::{CommandArgumentError, ExecutionErrorKind},
         funds_accumulator::Withdrawal,
-        metrics::LimitsMetrics,
+        metrics::ExecutionMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::DenyListResult,
@@ -84,7 +84,7 @@ mod checked {
         /// The protocol config
         pub protocol_config: &'a ProtocolConfig,
         /// Metrics for reporting exceeded limits
-        pub metrics: Arc<LimitsMetrics>,
+        pub metrics: Arc<ExecutionMetrics>,
         /// The MoveVM
         pub vm: &'vm MoveVM,
         /// The LinkageView for this session
@@ -151,7 +151,7 @@ mod checked {
         #[instrument(name = "ExecutionContext::new", level = "trace", skip_all)]
         pub fn new(
             protocol_config: &'a ProtocolConfig,
-            metrics: Arc<LimitsMetrics>,
+            metrics: Arc<ExecutionMetrics>,
             vm: &'vm MoveVM,
             state_view: &'state dyn ExecutionState,
             tx_context: Rc<RefCell<TxContext>>,
@@ -1574,7 +1574,11 @@ mod checked {
         if protocol_config.enable_coin_deny_list_v2() {
             for object in written_objects.values() {
                 let coin_type = object.type_().and_then(|ty| ty.coin_type_maybe());
-                let owner = object.owner.get_address_owner_address();
+                let owner = if protocol_config.use_coin_party_owner() {
+                    object.owner.get_owner_address()
+                } else {
+                    object.owner.get_address_owner_address()
+                };
                 if let (Some(ty), Ok(owner)) = (coin_type, owner) {
                     receiving_funds_type_and_owners
                         .entry(ty)

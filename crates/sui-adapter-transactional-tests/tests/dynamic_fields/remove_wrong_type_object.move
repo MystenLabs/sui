@@ -35,4 +35,4 @@ entry fun t2(obj: &mut Obj) {
 
 //# run a::m::t1 --sender A
 
-//# run a::m::t2 --sender A --args object(2,1)
+//# run a::m::t2 --sender A --args object(2,0)

@@ -48,6 +48,7 @@ pub(crate) struct VMTracer<'a> {
     type_stack: Vec<StackType>,
     loaded_data: BTreeMap<TraceIndex, GlobalValue>,
     effects: Vec<EF>,
+    wants_effects: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -911,15 +912,6 @@ impl VMTracer<'_> {
         let pc = machine.call_stack.current_frame.pc;
         self.pc = Some(pc);
 
-        let popn = |n: usize| {
-            let mut effects = vec![];
-            for i in 0..n {
-                let v = self.resolve_stack_value(vtables, machine, i)?;
-                effects.push(EF::Pop(v));
-            }
-            Some(effects)
-        };
-
         assert_eq!(
             self.type_stack.len(),
             machine.operand_stack.len(),
@@ -932,6 +924,43 @@ impl VMTracer<'_> {
                 .name(&self.interner),
             pc,
         );
+
+        if !self.wants_effects {
+            match &machine.call_stack.current_frame.function.to_ref().code()[pc as usize] {
+                // StLoc: still need store_global and insert_local side effects.
+                B::StLoc(lidx) => {
+                    let ty = self.type_stack.last()?.clone();
+                    self.store_global(
+                        machine,
+                        self.current_frame_identifier()?,
+                        0,
+                        *lidx as usize,
+                    )?;
+                    self.insert_local(*lidx as usize, ty)?;
+                }
+                // VecImmBorrow/VecMutBorrow: capture just the u64 index (trivially cheap) since
+                // end_instruction_no_effects_impl needs it for the type_stack Indexed location.
+                B::VecImmBorrow(_) | B::VecMutBorrow(_) => {
+                    let v = self.resolve_stack_value(vtables, machine, 0)?;
+                    self.register_pre_effects(vec![EF::Pop(v)]);
+                    return Some(());
+                }
+                // VecPushBack: no special handling needed. The reference location is available
+                // from the type_stack in end_instruction_no_effects_impl.
+                _ => {}
+            }
+            self.register_pre_effects(vec![]);
+            return Some(());
+        }
+
+        let popn = |n: usize| {
+            let mut effects = vec![];
+            for i in 0..n {
+                let v = self.resolve_stack_value(vtables, machine, i)?;
+                effects.push(EF::Pop(v));
+            }
+            Some(effects)
+        };
 
         match &machine.call_stack.current_frame.function.to_ref().code()[pc as usize] {
             B::Nop
@@ -1084,15 +1113,26 @@ impl VMTracer<'_> {
         // executed the instruction and we now need to manage the type transition of the
         // instruction along with snapshoting the effects of the instruction's execution.
         let instruction = &machine.call_stack.current_frame.function.to_ref().code()[pc as usize];
+
+        macro_rules! emit_effects {
+            ($($body:tt)*) => {{
+                if self.wants_effects {
+                    self.register_post_effects({ $($body)* })
+                } else {
+                    vec![]
+                }
+            }};
+        }
+
         match instruction {
             B::Pop | B::BrTrue(_) | B::BrFalse(_) => {
                 self.type_stack.pop()?;
-                let effects = self.register_post_effects(vec![]);
+                let effects = emit_effects!(vec![]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::Branch(_) | B::Ret => {
-                let effects = self.register_post_effects(vec![]);
+                let effects = emit_effects!(vec![]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1119,15 +1159,13 @@ impl VMTracer<'_> {
                         .ok()?,
                     _ => unreachable!(),
                 };
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = vec![EF::Push(value)];
-                let effects = self.register_post_effects(effects);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1141,9 +1179,9 @@ impl VMTracer<'_> {
                 if matches!(i, B::MoveLoc(_)) {
                     self.invalidate_local(vtables, machine, *l as usize)?;
                 }
-                // This was pushed on the stack during execution so read it off from there.
-                let v = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(v.clone())]);
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1157,27 +1195,27 @@ impl VMTracer<'_> {
                     B::CastU256 => AnnotatedTypeLayout::U256,
                     _ => unreachable!(),
                 };
-                let annot_layout = StackType {
+                self.type_stack.pop()?;
+                self.type_stack.push(StackType {
                     layout,
                     ref_type: None,
-                };
-                self.type_stack.pop()?;
-                self.type_stack.push(annot_layout);
-
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = vec![EF::Push(value.clone())];
-                let effects = self.register_post_effects(effects);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::StLoc(lidx) => {
                 let ty = self.type_stack.pop()?;
                 self.insert_local(*lidx as usize, ty.clone())?;
-                let v = self.resolve_local(vtables, machine, *lidx as usize)?;
-                let effects = self.register_post_effects(vec![EF::Write(Write {
-                    location: Location::Local(self.current_frame_identifier()?, *lidx as usize),
-                    root_value_after_write: v.clone(),
-                })]);
+                let effects = emit_effects! {
+                    let v = self.resolve_local(vtables, machine, *lidx as usize)?;
+                    vec![EF::Write(Write {
+                        location: Location::Local(self.current_frame_identifier()?, *lidx as usize),
+                        root_value_after_write: v.clone(),
+                    })]
+                };
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1192,35 +1230,31 @@ impl VMTracer<'_> {
             | B::Shl
             | B::Shr => {
                 self.type_stack.pop()?;
-                // NB in the case of shift left and shift right the second operand is the resultant
-                // value type.
                 let a_ty = self.type_stack.pop()?;
                 self.type_stack.push(a_ty);
-
-                let result = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(result)]);
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::Lt | B::Gt | B::Le | B::Ge => {
                 self.type_stack.pop()?;
                 self.type_stack.pop()?;
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: AnnotatedTypeLayout::Bool,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(value)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::DirectCall(_) | B::VirtualCall(_) | B::CallGeneric(_) => {
-                // NB: We don't register effects for calls as they will be handled by
-                // open_frame.
+                let effects = emit_effects!(vec![]);
                 self.trace
-                    .instruction(instruction, vec![], vec![], *remaining_gas, pc);
+                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::Pack(struct_ptr) => {
                 let field_count = struct_ptr.field_count();
@@ -1228,14 +1262,13 @@ impl VMTracer<'_> {
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?;
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: ty,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(value)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1249,18 +1282,17 @@ impl VMTracer<'_> {
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - field_count);
                 let ty = vtables.type_to_fully_annotated_layout(&struct_type).ok()?;
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: ty,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(value)]);
+                });
                 let TypeTag::Struct(s_type) = vtables.type_to_type_tag(&struct_type).ok()? else {
                     self.report_error(&format!("Expected struct, got {:#?}", struct_type));
                     return None;
                 };
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace.instruction(
                     instruction,
                     s_type.type_params,
@@ -1275,78 +1307,78 @@ impl VMTracer<'_> {
                     self.report_error(&format!("Expected struct, got {:#?}", ty));
                     return None;
                 };
-                let field_tys = s.fields.iter().map(|t| t.layout.clone());
-                for field_ty in field_tys {
+                for field in &s.fields {
                     self.type_stack.push(StackType {
-                        layout: field_ty.clone(),
+                        layout: field.layout.clone(),
                         ref_type: None,
                     });
                 }
-
-                let mut effects = vec![];
-                for i in (0..s.fields.len()).rev() {
-                    let value = self.resolve_stack_value(vtables, machine, i)?;
-                    effects.push(EF::Push(value));
-                }
-
-                let effects = self.register_post_effects(effects);
+                let effects = emit_effects! {
+                    let mut effects = vec![];
+                    for i in (0..s.fields.len()).rev() {
+                        let value = self.resolve_stack_value(vtables, machine, i)?;
+                        effects.push(EF::Push(value));
+                    }
+                    effects
+                };
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::Eq | B::Neq => {
                 self.type_stack.pop()?;
                 self.type_stack.pop()?;
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: AnnotatedTypeLayout::Bool,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(value)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::Or | B::And => {
                 self.type_stack.pop()?;
                 self.type_stack.pop()?;
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: AnnotatedTypeLayout::Bool,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(value)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::Not => {
                 let a_ty = self.type_stack.pop()?;
                 self.type_stack.push(a_ty);
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(value)]);
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::Nop => {
+                let effects = emit_effects!(vec![]);
                 self.trace
-                    .instruction(instruction, vec![], vec![], *remaining_gas, pc);
+                    .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::Abort => {
                 self.type_stack.pop()?;
-                let effects = self.register_post_effects(vec![]);
+                let effects = emit_effects!(vec![]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::ReadRef => {
                 let ref_ty = self.type_stack.pop()?;
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: ref_ty.layout.clone(),
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(value)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1357,30 +1389,31 @@ impl VMTracer<'_> {
                     B::MutBorrowLoc(_) => Mutability::Mut,
                     _ => unreachable!(),
                 };
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: non_imm_ty.layout?.clone(),
                     ref_type: Some((
                         ref_type,
                         RuntimeLocation::Local(self.current_frame_identifier()?, *l_idx as usize),
                     )),
-                };
-                self.type_stack.push(a_layout);
-
-                let val = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(val)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::WriteRef => {
                 let reference_ty = self.type_stack.pop()?;
                 let _value_ty = self.type_stack.pop()?;
-                let location = reference_ty.ref_type.as_ref()?.1.clone();
-                let root_value_after_write =
-                    self.resolve_location(vtables, machine, &location)?.clone();
-                let effects = self.register_post_effects(vec![EF::Write(Write {
-                    location: location.as_trace_location()?,
-                    root_value_after_write,
-                })]);
+                let effects = emit_effects! {
+                    let location = reference_ty.ref_type.as_ref()?.1.clone();
+                    let root_value_after_write =
+                        self.resolve_location(vtables, machine, &location)?;
+                    vec![EF::Write(Write {
+                        location: location.as_trace_location()?,
+                        root_value_after_write,
+                    })]
+                };
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1388,43 +1421,40 @@ impl VMTracer<'_> {
                 let mut reference_ty = self.type_stack.pop()?;
                 reference_ty.ref_type.as_mut()?.0 = Mutability::Imm;
                 self.type_stack.push(reference_ty);
-                let reference_val = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(reference_val)]);
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             i @ (B::MutBorrowField(fh_ptr) | B::ImmBorrowField(fh_ptr)) => {
                 let value_ty = self.type_stack.pop()?;
-
                 let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
                     self.report_error(&format!("Expected struct, got {:#?}", value_ty.layout));
                     return None;
                 };
                 let field_offset = fh_ptr.offset;
                 let field_layout = slayout.fields.get(field_offset)?.layout.clone();
-
                 let location = value_ty.ref_type.as_ref()?.1.clone();
                 let field_location =
                     RuntimeLocation::Indexed(Box::new(location.clone()), field_offset);
-
                 let ref_type = match i {
                     B::MutBorrowField(_) => Mutability::Mut,
                     B::ImmBorrowField(_) => Mutability::Imm,
                     _ => unreachable!(),
                 };
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: field_layout,
                     ref_type: Some((ref_type, field_location)),
-                };
-                self.type_stack.push(a_layout);
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(value)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             i @ (B::MutBorrowFieldGeneric(fh_ptr) | B::ImmBorrowFieldGeneric(fh_ptr)) => {
                 let value_ty = self.type_stack.pop()?;
-
                 let AnnotatedTypeLayout::Struct(slayout) = &value_ty.layout else {
                     self.report_error(&format!("Expected struct, got {:#?}", value_ty.layout));
                     return None;
@@ -1434,24 +1464,22 @@ impl VMTracer<'_> {
                 let location = value_ty.ref_type.as_ref()?.1.clone();
                 let field_location =
                     RuntimeLocation::Indexed(Box::new(location.clone()), field_offset);
-
                 let ref_type = match i {
                     B::MutBorrowFieldGeneric(_) => Mutability::Mut,
                     B::ImmBorrowFieldGeneric(_) => Mutability::Imm,
                     _ => unreachable!(),
                 };
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: field_layout,
                     ref_type: Some((ref_type, field_location)),
-                };
-                self.type_stack.push(a_layout);
-                let value = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(value)]);
+                });
                 let ty_args = slayout.type_.type_params.clone();
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, ty_args, effects, *remaining_gas, pc);
             }
-
             B::VecPack(ty_ptr, n) => {
                 let ty = instantiate_single_type(ty_ptr, &machine.call_stack.current_frame.ty_args)
                     .ok()?;
@@ -1459,13 +1487,13 @@ impl VMTracer<'_> {
                 let ty = AnnotatedTypeLayout::Vector(Box::new(ty));
                 let stack_len = self.type_stack.len();
                 let _ = self.type_stack.split_off(stack_len - *n as usize);
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: ty,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-                let val = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(val)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1481,6 +1509,8 @@ impl VMTracer<'_> {
                     self.report_error(&format!("Expected vector, got {:#?}", ref_ty.layout));
                     return None;
                 };
+                // The u64 index is always captured in self.effects[0] (cheaply, even when
+                // !wants_effects) since we need it for the type_stack Indexed location.
                 let EF::Pop(TraceValue::RuntimeValue {
                     value: SerializableMoveValue::U64(i),
                 }) = &self.effects[0]
@@ -1490,44 +1520,52 @@ impl VMTracer<'_> {
                     );
                     return None;
                 };
+                let i = *i;
+                if !self.wants_effects {
+                    self.effects.remove(0);
+                }
                 let location =
-                    RuntimeLocation::Indexed(Box::new(ref_ty.ref_type?.1.clone()), *i as usize);
-                let a_layout = StackType {
+                    RuntimeLocation::Indexed(Box::new(ref_ty.ref_type?.1.clone()), i as usize);
+                self.type_stack.push(StackType {
                     layout: (*ty).clone(),
                     ref_type: Some((ref_type, location)),
-                };
-                self.type_stack.push(a_layout);
-                let val = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(val)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::VecLen(_) => {
                 self.type_stack.pop()?;
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: AnnotatedTypeLayout::U64,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-                let len = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(len)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::VecPushBack(_) => {
                 self.type_stack.pop()?;
                 self.type_stack.pop()?;
-                let EF::Pop(reference_val) = &self.effects[1] else {
-                    self.report_error("Expected a reference value for the vector in VecPushBack");
-                    return None;
+                let effects = emit_effects! {
+                    let EF::Pop(reference_val) = &self.effects[1] else {
+                        self.report_error(
+                            "Expected a reference value for the vector in VecPushBack",
+                        );
+                        return None;
+                    };
+                    let location = reference_val.location()?.clone();
+                    let runtime_location = RuntimeLocation::as_runtime_location(location.clone());
+                    let snap = self.resolve_location(vtables, machine, &runtime_location)?;
+                    vec![EF::Write(Write {
+                        location,
+                        root_value_after_write: snap,
+                    })]
                 };
-                let location = reference_val.location()?.clone();
-                let runtime_location = RuntimeLocation::as_runtime_location(location.clone());
-                let snap = self.resolve_location(vtables, machine, &runtime_location)?;
-                let effects = self.register_post_effects(vec![EF::Write(Write {
-                    location,
-                    root_value_after_write: snap,
-                })]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1537,13 +1575,13 @@ impl VMTracer<'_> {
                     self.report_error(&format!("Expected vector, got {:#?}", ref_ty.layout));
                     return None;
                 };
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: (*ty).clone(),
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-                let v = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(v)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1554,18 +1592,19 @@ impl VMTracer<'_> {
                     return None;
                 };
                 for _ in 0..*n {
-                    let a_layout = StackType {
+                    self.type_stack.push(StackType {
                         layout: (*ty).clone(),
                         ref_type: None,
-                    };
-                    self.type_stack.push(a_layout);
+                    });
                 }
-                let mut effects = vec![];
-                for i in (0..*n).rev() {
-                    let value = self.resolve_stack_value(vtables, machine, i as usize)?;
-                    effects.push(EF::Push(value));
-                }
-                let effects = self.register_post_effects(effects);
+                let effects = emit_effects! {
+                    let mut effects = vec![];
+                    for i in (0..*n as usize).rev() {
+                        let value = self.resolve_stack_value(vtables, machine, i)?;
+                        effects.push(EF::Push(value));
+                    }
+                    effects
+                };
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1573,12 +1612,14 @@ impl VMTracer<'_> {
                 self.type_stack.pop()?;
                 self.type_stack.pop()?;
                 let v_ref = self.type_stack.pop()?;
-                let location = v_ref.ref_type.as_ref()?.1.clone();
-                let snap = self.resolve_location(vtables, machine, &location)?;
-                let effects = self.register_post_effects(vec![EF::Write(Write {
-                    location: location.as_trace_location()?,
-                    root_value_after_write: snap,
-                })]);
+                let effects = emit_effects! {
+                    let location = v_ref.ref_type.as_ref()?.1.clone();
+                    let snap = self.resolve_location(vtables, machine, &location)?;
+                    vec![EF::Write(Write {
+                        location: location.as_trace_location()?,
+                        root_value_after_write: snap,
+                    })]
+                };
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1589,13 +1630,13 @@ impl VMTracer<'_> {
                 let ty = vtables
                     .type_to_fully_annotated_layout(&variant_inst_ptr.enum_def.datatype())
                     .ok()?;
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: ty,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-                let val = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(val)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1612,13 +1653,13 @@ impl VMTracer<'_> {
                         .ok()?,
                     )
                     .ok()?;
-                let a_layout = StackType {
+                self.type_stack.push(StackType {
                     layout: ty,
                     ref_type: None,
-                };
-                self.type_stack.push(a_layout);
-                let val = self.resolve_stack_value(vtables, machine, 0)?;
-                let effects = self.register_post_effects(vec![EF::Push(val)]);
+                });
+                let effects = emit_effects!(vec![EF::Push(
+                    self.resolve_stack_value(vtables, machine, 0)?
+                )]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1636,19 +1677,20 @@ impl VMTracer<'_> {
                     return None;
                 };
                 let variant_layout = e.variants.iter().find(|v| v.0.1 == tag)?;
-                let mut effects = vec![];
                 for f_layout in variant_layout.1.iter() {
-                    let a_layout = StackType {
+                    self.type_stack.push(StackType {
                         layout: f_layout.layout.clone(),
                         ref_type: None,
-                    };
-                    self.type_stack.push(a_layout);
+                    });
                 }
-                for i in 0..field_count {
-                    let value = self.resolve_stack_value(vtables, machine, i)?;
-                    effects.push(EF::Push(value));
-                }
-                let effects = self.register_post_effects(effects);
+                let effects = emit_effects! {
+                    let mut effects = vec![];
+                    for i in (0..field_count).rev() {
+                        let value = self.resolve_stack_value(vtables, machine, i)?;
+                        effects.push(EF::Push(value));
+                    }
+                    effects
+                };
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1682,27 +1724,27 @@ impl VMTracer<'_> {
                 };
                 let variant_layout = e.variants.iter().find(|v| v.0.1 == tag)?;
                 let location = ty.ref_type.as_ref()?.1.clone();
-
-                let mut effects = vec![];
                 for (i, f_layout) in variant_layout.1.iter().enumerate() {
                     let location = RuntimeLocation::Indexed(Box::new(location.clone()), i);
-                    let a_layout = StackType {
+                    self.type_stack.push(StackType {
                         layout: f_layout.layout.clone(),
                         ref_type: Some((ref_type.clone(), location)),
-                    };
-                    self.type_stack.push(a_layout);
+                    });
                 }
-                for i in 0..field_count {
-                    let value = self.resolve_stack_value(vtables, machine, i)?;
-                    effects.push(EF::Push(value));
-                }
-                let effects = self.register_post_effects(effects);
+                let effects = emit_effects! {
+                    let mut effects = vec![];
+                    for i in (0..field_count).rev() {
+                        let value = self.resolve_stack_value(vtables, machine, i)?;
+                        effects.push(EF::Push(value));
+                    }
+                    effects
+                };
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
             B::VariantSwitch(_) => {
                 self.type_stack.pop()?;
-                let effects = self.register_post_effects(vec![]);
+                let effects = emit_effects!(vec![]);
                 self.trace
                     .instruction(instruction, vec![], effects, *remaining_gas, pc);
             }
@@ -1715,6 +1757,7 @@ impl VMTracer<'_> {
 /// The (public crate) API for the VM tracer.
 impl<'a> VMTracer<'a> {
     pub(crate) fn new(trace: &'a mut MoveTraceBuilder, interner: Arc<IdentifierInterner>) -> Self {
+        let wants_effects = trace.wants_effects();
         Self {
             trace,
             interner,
@@ -1723,6 +1766,7 @@ impl<'a> VMTracer<'a> {
             type_stack: vec![],
             loaded_data: BTreeMap::new(),
             effects: vec![],
+            wants_effects,
         }
     }
 

@@ -44,6 +44,7 @@ use crate::{
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::{
+        to_host_port_str,
         tonic_gen::{
             consensus_service_server::ConsensusServiceServer,
             observer_service_server::ObserverServiceServer,
@@ -145,8 +146,8 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
@@ -161,8 +162,8 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                     }
                 })
                 .collect(),
-            highest_accepted_rounds,
-            breadth_first,
+            fetch_after_rounds,
+            fetch_missing_ancestors,
         });
         request.set_timeout(timeout);
 
@@ -183,7 +184,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             * self
                 .context
                 .protocol_config
-                .consensus_max_transactions_in_block_bytes() as usize
+                .max_transactions_in_block_bytes() as usize
             * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
@@ -279,7 +280,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             * self
                 .context
                 .protocol_config
-                .consensus_max_transactions_in_block_bytes() as usize
+                .max_transactions_in_block_bytes() as usize
             * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
@@ -357,7 +358,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
 }
 
 // Tonic channel wrapped with layers.
-type Channel = mysten_network::callback::Callback<
+pub(crate) type Channel = mysten_network::callback::Callback<
     tower_http::trace::Trace<
         tonic_rustls::Channel,
         tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
@@ -610,15 +611,15 @@ impl<S: ValidatorNetworkService> ConsensusService for TonicServiceProxy<S> {
                 }
             })
             .collect();
-        let highest_accepted_rounds = inner.highest_accepted_rounds;
-        let breadth_first = inner.breadth_first;
+        let fetch_after_rounds = inner.fetch_after_rounds;
+        let fetch_missing_ancestors = inner.fetch_missing_ancestors;
         let blocks = self
             .service
             .handle_fetch_blocks(
                 peer_index,
                 block_refs,
-                highest_accepted_rounds,
-                breadth_first,
+                fetch_after_rounds,
+                fetch_missing_ancestors,
             )
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
@@ -763,6 +764,10 @@ impl TonicManager {
         // Calculate own address
         let own_address = if let Some(listen_addr) = &context.parameters.listen_address_override {
             listen_addr
+        } else if context.is_observer() {
+            // Observer node - use the configured observer server port since we're not in the committee.
+            let port = context.parameters.observer.server_port.unwrap_or(0);
+            &Multiaddr::try_from(format!("/ip4/0.0.0.0/tcp/{port}")).unwrap()
         } else {
             let authority = context.committee.authority(context.own_index);
             // By default, bind to the unspecified address to allow the actual address to be assigned.
@@ -964,23 +969,37 @@ impl TonicManager {
     }
 
     async fn start_observer_server_impl<O: ObserverNetworkService>(&mut self, service: Arc<O>) {
-        let config = &self.context.parameters.tonic;
-        let Some(observer_port) = config.observer_server_port else {
+        let observer_params = &self.context.parameters.observer;
+        let tonic_config = &self.context.parameters.tonic;
+        let Some(observer_port) = observer_params.server_port else {
             info!("Observer server not configured, skipping observer server start");
             return;
         };
 
-        // Parse observer allowlist from configuration
-        let observer_allowlist = parse_observer_allowlist(&config.observer_allowlist);
-
-        if observer_allowlist.is_empty() {
+        // Parse observer allowlist from configuration and create TLS verifier
+        let observer_allowlist = parse_observer_allowlist(&observer_params.allowlist);
+        let observer_tls_config = if observer_allowlist.is_empty() {
             info!("Observer server allowlist disabled - all observers allowed");
+            sui_tls::create_rustls_server_config_with_client_verifier(
+                self.network_keypair.clone().private_key().into_inner(),
+                certificate_server_name(&self.context),
+                sui_tls::AllowAll,
+            )
         } else {
             info!(
                 "Observer server allowlist enabled with {} keys",
                 observer_allowlist.len()
             );
-        }
+            let allowed_keys = observer_allowlist
+                .into_iter()
+                .map(|k| k.into_inner())
+                .collect();
+            sui_tls::create_rustls_server_config_with_client_verifier(
+                self.network_keypair.clone().private_key().into_inner(),
+                certificate_server_name(&self.context),
+                AllowPublicKeys::new(allowed_keys),
+            )
+        };
 
         info!("Starting observer service on port {observer_port}");
 
@@ -989,8 +1008,8 @@ impl TonicManager {
         let observer_service_proxy = ObserverServiceProxy::new(service);
 
         let observer_service_server = ObserverServiceServer::new(observer_service_proxy)
-            .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit)
+            .max_encoding_message_size(tonic_config.message_size_limit)
+            .max_decoding_message_size(tonic_config.message_size_limit)
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
 
@@ -1000,7 +1019,7 @@ impl TonicManager {
                     request.extensions().get::<sui_http::PeerCertificates>()
                 {
                     if let Some(observer_peer_info) =
-                        observer_peer_info_from_certs(peer_certificates, &observer_allowlist)
+                        observer_peer_info_from_certs(peer_certificates)
                     {
                         debug!("Inserting observer peer info: {:?}", observer_peer_info);
                         request.extensions_mut().insert(observer_peer_info);
@@ -1027,16 +1046,11 @@ impl TonicManager {
             .into_axum_router()
             .route_layer(layers);
 
-        let observer_tls_config = sui_tls::create_rustls_server_config(
-            self.network_keypair.clone().private_key().into_inner(),
-            certificate_server_name(&self.context),
-        );
-
         let http_config = sui_http::Config::default()
             .initial_connection_window_size(HTTP2_INITIAL_CONNECTION_WINDOW_SIZE)
             .initial_stream_window_size(HTTP2_INITIAL_STREAM_WINDOW_SIZE)
-            .http2_keepalive_interval(Some(config.keepalive_interval))
-            .http2_keepalive_timeout(Some(config.keepalive_interval))
+            .http2_keepalive_interval(Some(tonic_config.keepalive_interval))
+            .http2_keepalive_timeout(Some(tonic_config.keepalive_interval))
             .accept_http1(false);
 
         let deadline = Instant::now() + Duration::from_secs(20);
@@ -1107,11 +1121,9 @@ fn peer_info_from_certs(
 
 /// Extracts observer peer information from TLS certificates.
 /// Unlike validator peers, observers are not required to be in the committee.
-/// If allowlist is non-empty, only public keys in the allowlist are allowed.
-/// If allowlist is empty, all observers are allowed.
+/// The allowlist filtering is enforced at the TLS level via AllowPublicKeys or AllowAll.
 fn observer_peer_info_from_certs(
     peer_certificates: &sui_http::PeerCertificates,
-    allowlist: &[NetworkPublicKey],
 ) -> Option<ObserverPeerInfo> {
     let certs = peer_certificates.peer_certs();
 
@@ -1131,20 +1143,10 @@ fn observer_peer_info_from_certs(
         .ok()?;
     let client_public_key = NetworkPublicKey::new(public_key);
 
-    // Check allowlist if non-empty
-    if !allowlist.is_empty() {
-        if !allowlist.contains(&client_public_key) {
-            warn!(
-                "Observer connection rejected: public key {:?} not in allowlist",
-                client_public_key
-            );
-            return None;
-        }
-        debug!(
-            "Observer connection accepted: public key {:?} is in allowlist",
-            client_public_key
-        );
-    }
+    debug!(
+        "Observer connection accepted: public key {:?}",
+        client_public_key
+    );
 
     Some(ObserverPeerInfo {
         public_key: client_public_key,
@@ -1181,26 +1183,6 @@ fn parse_observer_allowlist(allowlist_strings: &[String]) -> Vec<NetworkPublicKe
             }
         })
         .collect()
-}
-
-/// Attempts to convert a multiaddr of the form `/[ip4,ip6,dns]/{}/udp/{port}` into
-/// a host:port string.
-fn to_host_port_str(addr: &Multiaddr) -> Result<String, String> {
-    let mut iter = addr.iter();
-
-    match (iter.next(), iter.next()) {
-        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Udp(port))) => {
-            Ok(format!("{}:{}", ipaddr, port))
-        }
-        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Udp(port))) => {
-            Ok(format!("{}", SocketAddrV6::new(ipaddr, port, 0, 0)))
-        }
-        (Some(Protocol::Dns(hostname)), Some(Protocol::Udp(port))) => {
-            Ok(format!("{}:{}", hostname, port))
-        }
-
-        _ => Err(format!("unsupported multiaddr: {addr}")),
-    }
 }
 
 /// Attempts to convert a multiaddr of the form `/[ip4,ip6]/{}/[udp,tcp]/{port}` into
@@ -1353,18 +1335,16 @@ pub(crate) struct SubscribeBlocksResponse {
 pub(crate) struct FetchBlocksRequest {
     #[prost(bytes = "vec", repeated, tag = "1")]
     block_refs: Vec<Vec<u8>>,
-    // The highest accepted round per authority. The vector represents the round for each authority
-    // and its length should be the same as the committee size.
+    // The round per authority after which blocks should be fetched. The vector represents the round
+    // for each authority and its length should be the same as the committee size.
     // When this field is non-empty, additional ancestors of the requested blocks can be fetched.
     #[prost(uint32, repeated, tag = "2")]
-    highest_accepted_rounds: Vec<Round>,
-    // When true, this indicates that missing ancestors should be added breadth-first, by searching through
-    // missing ancestors of the requested blocks.
-    // When false, this indicates that missing ancestors should be added depth-first, by adding missing
-    // ancestors from the requested block authorities.
-    // This field is only meaningful when highest_accepted_rounds is non-empty.
+    fetch_after_rounds: Vec<Round>,
+    // When true, missing ancestors of the requested blocks will be fetched as well.
+    // When false, additional blocks are fetched depth-first from the requested block authorities.
+    // This field is only meaningful when fetch_after_rounds is non-empty.
     #[prost(bool, tag = "3")]
-    breadth_first: bool,
+    fetch_missing_ancestors: bool,
 }
 
 #[derive(Clone, prost::Message)]
@@ -1442,19 +1422,19 @@ pub(crate) fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<By
 mod tests {
     use super::*;
     use crate::{context::Clock, metrics::initialise_metrics};
-    use consensus_config::{Parameters, local_committee_and_keys};
+    use consensus_config::{ConsensusProtocolConfig, Parameters, local_committee_and_keys};
     use prometheus::Registry;
-    use sui_protocol_config::ProtocolConfig;
 
     fn create_test_context_and_client() -> (Arc<Context>, TonicValidatorClient) {
         let (committee, mut keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let parameters = Parameters::default();
-        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+        let protocol_config = ConsensusProtocolConfig::for_testing();
         let metrics = initialise_metrics(Registry::new());
 
+        let authority_index = committee.to_authority_index(0).unwrap();
         let context = Arc::new(Context::new(
             0,
-            committee.to_authority_index(0).unwrap(),
+            Some(authority_index),
             committee,
             parameters,
             protocol_config,

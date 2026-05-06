@@ -12,6 +12,7 @@ use crate::workloads::{Gas, GasCoinConfig, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
+use mysten_common::ZipDebugEqIteratorExt;
 use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
@@ -609,8 +610,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     .build_and_sign(keypair.as_ref());
                 let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
-                    let (_, execution_result) =
-                        proxy_ref.execute_transaction_block(transaction).await;
+                    let execution_result = proxy_ref.execute_transaction_block(transaction).await;
                     execution_result.unwrap().created()[0].0
                 });
             }
@@ -634,8 +634,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     ],
                 )
                 .build_and_sign(keypair.as_ref());
-            let (_, execution_result) =
-                execution_proxy.execute_transaction_block(transaction).await;
+            let execution_result = execution_proxy.execute_transaction_block(transaction).await;
             let effects = execution_result.expect("Failed to create immutable object");
             let created_obj = effects.created()[0].0;
             current_gas = effects.gas_object().0;
@@ -650,8 +649,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(created_obj))],
                 )
                 .build_and_sign(keypair.as_ref());
-            let (_, execution_result) =
-                execution_proxy.execute_transaction_block(transaction).await;
+            let execution_result = execution_proxy.execute_transaction_block(transaction).await;
             let effects = execution_result.expect("Failed to freeze object");
 
             // After freezing, the object becomes immutable - find it in mutated objects
@@ -685,8 +683,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
                     .build_and_sign(keypair.as_ref());
                 let proxy_ref = execution_proxy.clone();
                 futures.push(async move {
-                    let (_, execution_result) =
-                        proxy_ref.execute_transaction_block(transaction).await;
+                    let execution_result = proxy_ref.execute_transaction_block(transaction).await;
                     let effects = execution_result.unwrap();
 
                     let created_owned = effects.created()[0].0;
@@ -698,7 +695,7 @@ impl Workload<dyn Payload> for RandomizedTransactionWorkload {
             self.owned_objects = results.iter().map(|x| x.0).collect();
 
             // Update gas object in payload gas
-            for (payload_gas, result) in self.payload_gas.iter_mut().zip(results.iter()) {
+            for (payload_gas, result) in self.payload_gas.iter_mut().zip_debug_eq(results.iter()) {
                 payload_gas.0 = result.1;
             }
         }

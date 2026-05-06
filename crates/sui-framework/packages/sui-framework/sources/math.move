@@ -37,5 +37,5 @@ public fun sqrt_u128(x: u128): u128 {
 
 /// DEPRECATED, use `std::u64::divide_and_round_up` instead
 public fun divide_and_round_up(x: u64, y: u64): u64 {
-    x.divide_and_round_up(y)
+    x.div_ceil(y)
 }

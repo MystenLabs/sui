@@ -16,6 +16,7 @@ use move_trace_format::{
     value::{SerializableMoveValue, SimplifiedMoveStruct},
 };
 use move_vm_runtime::execution::values::Value as VMValue;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     error::ExecutionError,
     ptb_trace::{
@@ -54,7 +55,7 @@ pub fn trace_transfer(
 ) -> Result<(), ExecutionError> {
     if let Some(trace_builder) = trace_builder_opt {
         let mut to_transfer = vec![];
-        for (idx, (v, ty)) in values.iter().zip(tys).enumerate() {
+        for (idx, (v, ty)) in values.iter().zip_debug_eq(tys).enumerate() {
             let tag = adapter_type_to_type_tag_with_refs(ty)?;
             let layout = annotated_type_layout_for_adapter_ty(context, ty)?;
             let value = serializable_move_value_from_ctx_value(v, &layout)?;

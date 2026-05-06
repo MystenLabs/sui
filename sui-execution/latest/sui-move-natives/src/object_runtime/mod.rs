@@ -40,7 +40,7 @@ use sui_types::{
     execution::DynamicallyLoadedObjectMetadata,
     execution_status::ExecutionErrorKind,
     id::UID,
-    metrics::LimitsMetrics,
+    metrics::ExecutionMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
 };
@@ -106,6 +106,7 @@ pub(crate) struct ObjectRuntimeState {
     accumulator_events: Vec<MoveAccumulatorEvent>,
     // total size of events emitted so far
     total_events_size: u64,
+    total_events_emitted: u64,
     received: IndexMap<ObjectID, DynamicallyLoadedObjectMetadata>,
     // Used to track SUI conservation in settlement transactions. Settlement transactions
     // gather up withdraws and deposits from other transactions, and record them to accumulator
@@ -129,7 +130,7 @@ pub struct ObjectRuntime<'a> {
     is_metered: bool,
 
     pub(crate) protocol_config: &'a ProtocolConfig,
-    pub(crate) metrics: Arc<LimitsMetrics>,
+    pub(crate) metrics: Arc<ExecutionMetrics>,
 }
 
 impl<'a> NativeExtensionMarker<'a> for ObjectRuntime<'a> {}
@@ -158,7 +159,7 @@ impl<'a> ObjectRuntime<'a> {
         input_objects: BTreeMap<ObjectID, InputObject>,
         is_metered: bool,
         protocol_config: &'a ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         epoch_id: EpochId,
     ) -> Self {
         let mut input_object_owners = BTreeMap::new();
@@ -200,6 +201,7 @@ impl<'a> ObjectRuntime<'a> {
                 events: vec![],
                 accumulator_events: vec![],
                 total_events_size: 0,
+                total_events_emitted: 0,
                 received: IndexMap::new(),
                 settlement_input_sui: 0,
                 settlement_output_sui: 0,
@@ -220,7 +222,7 @@ impl<'a> ObjectRuntime<'a> {
             self.state.new_ids.len(),
             self.protocol_config.max_num_new_move_object_ids(),
             self.protocol_config.max_num_new_move_object_ids_system_tx(),
-            self.metrics.excessive_new_move_object_ids
+            self.metrics.limits_metrics.excessive_new_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!("Creating more than {} IDs is not allowed", lim))
@@ -252,7 +254,9 @@ impl<'a> ObjectRuntime<'a> {
             self.protocol_config.max_num_deleted_move_object_ids(),
             self.protocol_config
                 .max_num_deleted_move_object_ids_system_tx(),
-            self.metrics.excessive_deleted_move_object_ids
+            self.metrics
+                .limits_metrics
+                .excessive_deleted_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!("Deleting more than {} IDs is not allowed", lim))
@@ -353,7 +357,9 @@ impl<'a> ObjectRuntime<'a> {
             self.protocol_config.max_num_transferred_move_object_ids(),
             self.protocol_config
                 .max_num_transferred_move_object_ids_system_tx(),
-            self.metrics.excessive_transferred_move_object_ids
+            self.metrics
+                .limits_metrics
+                .excessive_transferred_move_object_ids
         ) {
             return Err(PartialVMError::new(StatusCode::MEMORY_LIMIT_EXCEEDED)
                 .with_message(format!("Transferring more than {} IDs is not allowed", lim))
@@ -371,6 +377,7 @@ impl<'a> ObjectRuntime<'a> {
             return Err(max_event_error(self.protocol_config.max_num_event_emit()));
         }
         self.state.events.push((tag, event));
+        self.state.total_events_emitted += 1;
         Ok(())
     }
 
@@ -476,6 +483,18 @@ impl<'a> ObjectRuntime<'a> {
         else {
             return Ok(None);
         };
+
+        if self
+            .protocol_config
+            .early_return_receive_object_mismatched_type()
+            && let ObjectResult::MismatchedType = &value
+            && self.state.received.contains_key(&child)
+        {
+            // New case due to the new adapter and being able to re-use receiving values at
+            // different types
+            return Ok(Some(ObjectResult::MismatchedType));
+        }
+
         // NB: It is important that the object only be added to the received set after it has been
         // fully authenticated and loaded.
         if self.state.received.insert(child, obj_meta).is_some() {
@@ -699,6 +718,7 @@ impl ObjectRuntimeState {
             settlement_output_sui,
             accumulator_merge_totals: _,
             accumulator_split_totals: _,
+            total_events_emitted: _,
         } = self;
 
         // The set of new ids is a subset of the generated ids.
@@ -762,6 +782,10 @@ impl ObjectRuntimeState {
 
     pub fn events(&self) -> &[(StructTag, Value)] {
         &self.events
+    }
+
+    pub fn total_events_emitted(&self) -> u64 {
+        self.total_events_emitted
     }
 
     pub fn total_events_size(&self) -> u64 {

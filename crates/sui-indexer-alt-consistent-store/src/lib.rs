@@ -66,6 +66,8 @@ mod rpc;
 pub(crate) mod schema;
 mod store;
 
+pub use schema::object_by_owner::Key as ObjectByOwnerKey;
+
 /// Set-up and run the Indexer and RPC service, using the provided arguments (expected to be
 /// extracted from the command-line).
 ///
@@ -138,7 +140,6 @@ pub async fn start_service(
                         $handler,
                         SequentialConfig {
                             committer: layer.finish(committer.clone()),
-                            checkpoint_lag: 0,
                             ..Default::default()
                         },
                     )

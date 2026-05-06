@@ -19,7 +19,7 @@ use sui_types::{
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
-    metrics::{BytecodeVerifierMetrics, LimitsMetrics},
+    metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
@@ -37,6 +37,7 @@ use sui_verifier_v3::meter::SuiVerifierMeter;
 use crate::executor;
 use crate::verifier;
 use sui_adapter_v3::execution_mode;
+use sui_types::execution_status::ExecutionFailure;
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
@@ -65,7 +66,7 @@ impl executor::Executor for Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
@@ -74,6 +75,58 @@ impl executor::Executor for Executor {
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
+        _rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionFailure>,
+    ) {
+        let (inner_temp_store, gas_status, effects, timings, result) =
+            execute_transaction_to_effects::<execution_mode::Normal>(
+                store,
+                input_objects,
+                gas,
+                gas_status,
+                transaction_kind,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                execution_params,
+                trace_builder_opt,
+            );
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            timings,
+            result.map_err(ExecutionFailure::from),
+        )
+    }
+
+    fn execute_transaction_to_effects_and_execution_error(
+        &self,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        gas: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -107,7 +160,7 @@ impl executor::Executor for Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
@@ -116,6 +169,7 @@ impl executor::Executor for Executor {
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
+        _rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,
@@ -169,7 +223,7 @@ impl executor::Executor for Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         epoch_id: EpochId,
         epoch_timestamp_ms: u64,
         transaction_digest: &TransactionDigest,
@@ -202,6 +256,7 @@ impl executor::Executor for Executor {
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
         &'vm self,
+        _protocol_config: &'vm ProtocolConfig,
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r> {
         Box::new(TypeLayoutResolver::new(&self.0, store))

@@ -1,6 +1,6 @@
 //# publish
-module 0x42.tu8 {
-test() {
+mvir 0x42::tu8 {
+fun test() {
 let x: u8;
 label l0:
     x = 0u8;
@@ -20,8 +20,8 @@ label l0:
 }
 
 //# publish
-module 0x42.tu16 {
-test() {
+mvir 0x42::tu16 {
+fun test() {
 let x: u16;
 label l0:
   x = 0u16;
@@ -41,8 +41,8 @@ label l0:
 }
 
 //# publish
-module 0x42.tu32 {
-test() {
+mvir 0x42::tu32 {
+fun test() {
 let x: u32;
 label l0:
     x = 0u32;
@@ -62,8 +62,8 @@ label l0:
 }
 
 //# publish
-module 0x42.tu64 {
-test() {
+mvir 0x42::tu64 {
+fun test() {
 let x: u64;
 label l0:
   x = 0u64;
@@ -83,8 +83,8 @@ label l0:
 }
 
 //# publish
-module 0x42.tu128 {
-test() {
+mvir 0x42::tu128 {
+fun test() {
 let x: u128;
 label l0:
     x = 0u128;
@@ -104,8 +104,8 @@ label l0:
 }
 
 //# publish
-module 0x42.tu256 {
-test() {
+mvir 0x42::tu256 {
+fun test() {
 let x: u256;
 label l0:
     x = 0u256;

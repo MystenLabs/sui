@@ -61,6 +61,7 @@ impl Summary {
         self,
         path: Option<&Path>,
         config: BuildConfig,
+        flavor: F,
         additional_metadata: Option<&T>,
         // address_derivation_fn_opt: Option<F>,
     ) -> anyhow::Result<()> {
@@ -105,8 +106,9 @@ impl Summary {
             )
         } else {
             let path = reroot_path(path)?;
-            let env = find_env::<F>(&path, &config)?;
-            let root_pkg: RootPackage<F> = config.package_loader(&path, &env).load().await?;
+            let env = find_env(&path, &config, &flavor)?;
+            let root_pkg: RootPackage<F> =
+                config.package_loader(&path, &env, flavor).load().await?;
 
             // Get named addresses from the root package graph
             let named_addresses: BuildNamedAddresses =

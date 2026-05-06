@@ -2,20 +2,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::accumulators::coin_reservations::CoinReservationResolver;
+use crate::accumulators::coin_reservations::CachingCoinReservationResolver;
 use crate::accumulators::funds_read::AccountFundsRead;
 use crate::accumulators::object_funds_checker::ObjectFundsChecker;
 use crate::accumulators::object_funds_checker::metrics::ObjectFundsCheckerMetrics;
+use crate::accumulators::transaction_rewriting::rewrite_transaction_for_coin_reservations;
 use crate::accumulators::{self, AccumulatorSettlementTxBuilder};
 use crate::checkpoints::CheckpointBuilderError;
 use crate::checkpoints::CheckpointBuilderResult;
 use crate::congestion_tracker::CongestionTracker;
-use crate::consensus_adapter::ConsensusOverloadChecker;
 use crate::execution_cache::ExecutionCacheTraitPointers;
 use crate::execution_cache::TransactionCacheRead;
 use crate::execution_cache::writeback_cache::WritebackCache;
 use crate::execution_scheduler::ExecutionScheduler;
 use crate::execution_scheduler::funds_withdraw_scheduler::FundsSettlement;
+use crate::gasless_rate_limiter::ConsensusGaslessCounter;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
@@ -34,6 +35,7 @@ use move_binary_format::CompiledModule;
 use move_binary_format::binary_config::BinaryConfig;
 use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::language_storage::ModuleId;
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::{assert_reachable, fatal};
 use parking_lot::Mutex;
 use prometheus::{
@@ -66,6 +68,7 @@ use std::{
 };
 use sui_config::NodeConfig;
 use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
+use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
 use sui_types::crypto::RandomnessRound;
@@ -122,7 +125,10 @@ use sui_json_rpc_types::{
 use sui_macros::{fail_point, fail_point_arg, fail_point_async, fail_point_if};
 use sui_storage::key_value_store::{TransactionKeyValueStore, TransactionKeyValueStoreTrait};
 use sui_storage::key_value_store_metrics::KeyValueStoreMetrics;
+use sui_types::accumulator_root::AccumulatorValue;
 use sui_types::authenticator_state::get_authenticator_state;
+use sui_types::balance::Balance;
+use sui_types::coin_reservation;
 use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{AuthoritySignInfo, Signer, default_hash};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
@@ -132,8 +138,8 @@ use sui_types::effects::{
     InputConsensusObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents, VerifiedSignedTransactionEffects,
 };
-use sui_types::error::{ExecutionError, SuiErrorKind, UserInputError};
-use sui_types::event::{Event, EventID};
+use sui_types::error::{ExecutionError, ExecutionErrorTrait, SuiErrorKind, UserInputError};
+use sui_types::event::EventID;
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::gas::{GasCostSummary, SuiGasStatus};
@@ -151,7 +157,7 @@ use sui_types::messages_grpc::{
     LayoutGenerationOption, ObjectInfoRequest, ObjectInfoRequestKind, ObjectInfoResponse,
     TransactionInfoRequest, TransactionInfoResponse, TransactionStatus,
 };
-use sui_types::metrics::{BytecodeVerifierMetrics, LimitsMetrics};
+use sui_types::metrics::{BytecodeVerifierMetrics, ExecutionMetrics};
 use sui_types::object::{MoveObject, OBJECT_START_VERSION, Owner, PastObjectRead};
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{
@@ -228,6 +234,10 @@ pub mod move_integration_tests;
 mod gas_tests;
 
 #[cfg(test)]
+#[path = "unit_tests/gas_data_tests.rs"]
+mod gas_data_tests;
+
+#[cfg(test)]
 #[path = "unit_tests/batch_verification_tests.rs"]
 mod batch_verification_tests;
 
@@ -249,6 +259,7 @@ pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod congestion_log;
 pub mod consensus_tx_status_cache;
+pub(crate) mod epoch_marker_key;
 pub mod epoch_start_configuration;
 pub mod execution_time_estimator;
 pub mod shared_object_congestion_tracker;
@@ -315,14 +326,14 @@ pub struct AuthorityMetrics {
     /// Consensus commit and transaction handler metrics
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_transaction_sizes: HistogramVec,
-    pub consensus_handler_num_low_scoring_authorities: IntGauge,
-    pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_unpaid_amplification_deferrals: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
     pub consensus_handler_max_object_costs: IntGaugeVec,
     pub consensus_committed_subdags: IntCounterVec,
+    pub accumulator_deposits: IntCounter,
+    pub accumulator_withdrawals: IntCounter,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
     pub consensus_finalized_user_transactions: IntGaugeVec,
@@ -334,7 +345,7 @@ pub struct AuthorityMetrics {
     pub consensus_block_handler_fastpath_executions: IntCounter,
     pub consensus_timestamp_bias: Histogram,
 
-    pub limits_metrics: Arc<LimitsMetrics>,
+    pub execution_metrics: Arc<ExecutionMetrics>,
 
     /// bytecode verifier metrics for tracking timeouts
     pub bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
@@ -640,17 +651,6 @@ impl AuthorityMetrics {
                 POSITIVE_INT_BUCKETS.to_vec(),
                 registry
             ).unwrap(),
-            consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
-                "consensus_handler_num_low_scoring_authorities",
-                "Number of low scoring authorities based on reputation scores from consensus",
-                registry
-            ).unwrap(),
-            consensus_handler_scores: register_int_gauge_vec_with_registry!(
-                "consensus_handler_scores",
-                "scores from consensus for each authority",
-                &["authority"],
-                registry,
-            ).unwrap(),
             consensus_handler_deferred_transactions: register_int_counter_with_registry!(
                 "consensus_handler_deferred_transactions",
                 "Number of transactions deferred by consensus handler",
@@ -683,6 +683,16 @@ impl AuthorityMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
+            accumulator_deposits: register_int_counter_with_registry!(
+                "accumulator_deposits",
+                "Total accumulator deposit (merge) events processed in settlement",
+                registry,
+            ).unwrap(),
+            accumulator_withdrawals: register_int_counter_with_registry!(
+                "accumulator_withdrawals",
+                "Total accumulator withdrawal (split) events processed in settlement",
+                registry,
+            ).unwrap(),
             consensus_committed_messages: register_int_gauge_vec_with_registry!(
                 "consensus_committed_messages",
                 "Total number of committed consensus messages, sliced by author",
@@ -707,7 +717,7 @@ impl AuthorityMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
-            limits_metrics: Arc::new(LimitsMetrics::new(registry)),
+            execution_metrics: Arc::new(ExecutionMetrics::new(registry)),
             bytecode_verifier_metrics: Arc::new(BytecodeVerifierMetrics::new(registry)),
             zklogin_sig_count: register_int_counter_with_registry!(
                 "zklogin_sig_count",
@@ -886,7 +896,7 @@ pub struct AuthorityState {
     /// The database
     input_loader: TransactionInputLoader,
     execution_cache_trait_pointers: ExecutionCacheTraitPointers,
-    coin_reservation_resolver: Arc<CoinReservationResolver>,
+    coin_reservation_resolver: Arc<CachingCoinReservationResolver>,
 
     epoch_store: ArcSwap<AuthorityPerEpochStore>,
 
@@ -927,6 +937,9 @@ pub struct AuthorityState {
     chain_identifier: ChainIdentifier,
 
     pub(crate) congestion_tracker: Arc<CongestionTracker>,
+
+    /// Consumed by gasless tx rate limiter.
+    pub(crate) consensus_gasless_counter: Arc<ConsensusGaslessCounter>,
 
     /// Traffic controller for Sui core servers (json-rpc, validator service)
     pub traffic_controller: Option<Arc<TrafficController>>,
@@ -993,7 +1006,8 @@ impl AuthorityState {
         tx_signatures: &[GenericSignature],
         input_object_kinds: &[InputObjectKind],
         receiving_objects_refs: &[ObjectRef],
-    ) -> SuiResult<BTreeMap<AccumulatorObjId, u64>> {
+        protocol_config: &ProtocolConfig,
+    ) -> SuiResult<BTreeMap<AccumulatorObjId, (u64, TypeTag)>> {
         // Note: the deny checks may do redundant package loads but:
         // - they only load packages when there is an active package deny map
         // - the loads are cached anyway
@@ -1015,6 +1029,14 @@ impl AuthorityState {
             .account_funds_read
             .check_amounts_available(&declared_withdrawals)?;
 
+        if protocol_config.gasless_verify_remaining_balance() && tx_data.is_gasless_transaction() {
+            let min_amounts =
+                sui_types::transaction::get_gasless_allowed_token_types(protocol_config);
+            self.execution_cache_trait_pointers
+                .account_funds_read
+                .check_remaining_amounts_after_withdrawal(&declared_withdrawals, &min_amounts)?;
+        }
+
         Ok(declared_withdrawals)
     }
 
@@ -1034,6 +1056,7 @@ impl AuthorityState {
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
+            epoch_store.protocol_config(),
         )?;
 
         let (input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
@@ -1070,13 +1093,17 @@ impl AuthorityState {
         receiving_objects: &ReceivingObjects,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<()> {
-        let funds_withdraw_types = tx_data
-            .get_funds_withdrawals()
-            .into_iter()
-            .filter_map(|withdraw| {
-                withdraw
-                    .type_arg
-                    .get_balance_type_param()
+        use sui_types::balance::Balance;
+
+        let declared_withdrawals = tx_data.process_funds_withdrawals_for_signing(
+            self.chain_identifier,
+            self.coin_reservation_resolver.as_ref(),
+        )?;
+
+        let funds_withdraw_types = declared_withdrawals
+            .values()
+            .filter_map(|(_, type_tag)| {
+                Balance::maybe_get_balance_type_param(type_tag)
                     .map(|ty| ty.to_canonical_string(false))
             })
             .collect::<BTreeSet<_>>();
@@ -1153,7 +1180,6 @@ impl AuthorityState {
             .get_transaction_cache_reader()
             .transaction_executed_in_last_epoch(transaction.digest(), epoch_store.epoch())
         {
-            assert_reachable!("transaction executed in last epoch");
             return Err(SuiErrorKind::TransactionAlreadyExecuted {
                 digest: (*transaction.digest()),
             }
@@ -1260,7 +1286,6 @@ impl AuthorityState {
 
     pub(crate) fn check_system_overload(
         &self,
-        consensus_overload_checker: &(impl ConsensusOverloadChecker + ?Sized),
         tx_data: &SenderSignedData,
         do_authority_overload_check: bool,
     ) -> SuiResult {
@@ -1274,11 +1299,7 @@ impl AuthorityState {
             .tap_err(|_| {
                 self.update_overload_metrics("execution_pending");
             })?;
-        consensus_overload_checker
-            .check_consensus_overload()
-            .tap_err(|_| {
-                self.update_overload_metrics("consensus");
-            })?;
+        // Consensus overload is handled by the admission queue in authority_server.rs.
 
         let pending_tx_count = self
             .get_cache_commit()
@@ -1305,7 +1326,7 @@ impl AuthorityState {
         overload_monitor_accept_tx(load_shedding_percentage, tx_data.digest())
     }
 
-    fn update_overload_metrics(&self, source: &str) {
+    pub(crate) fn update_overload_metrics(&self, source: &str) {
         self.metrics
             .transaction_overload_sources
             .with_label_values(&[source])
@@ -1404,36 +1425,15 @@ impl AuthorityState {
         })
     }
 
-    /// Wait for a transaction to be executed.
-    /// For consensus transactions, it needs to be sequenced by the consensus.
-    /// For owned object transactions, this function will enqueue the transaction for execution.
+    /// Wait for a transaction to be executed. Transactions need to be sequenced by consensus
+    /// before being enqueued for execution.
     ///
     /// Only use this in tests.
     #[instrument(level = "trace", skip_all)]
     pub async fn wait_for_transaction_execution_for_testing(
         &self,
         transaction: &VerifiedExecutableTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> TransactionEffects {
-        if !transaction.is_consensus_tx()
-            && !epoch_store.protocol_config().disable_preconsensus_locking()
-        {
-            // Shared object transactions need to be sequenced by the consensus before enqueueing
-            // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
-            //
-            // For owned object transactions, they can be enqueued for execution immediately
-            // ONLY when disable_preconsensus_locking is false (QD/original fastpath mode).
-            // When disable_preconsensus_locking is true (MFP mode), all transactions including
-            // owned object transactions must go through consensus before enqueuing for execution.
-            self.execution_scheduler.enqueue(
-                vec![(
-                    Schedulable::Transaction(transaction.clone()),
-                    ExecutionEnv::new(),
-                )],
-                epoch_store,
-            );
-        }
-
         self.notify_read_effects_for_testing(
             "AuthorityState::wait_for_transaction_execution_for_testing",
             *transaction.digest(),
@@ -1576,9 +1576,6 @@ impl AuthorityState {
             }
         }
 
-        // TODO: We should also settle address funds during execution,
-        // instead of from checkpoint builder. It will improve performance
-        // since we will be settling as soon as we can.
         if certificate
             .transaction_data()
             .kind()
@@ -1755,7 +1752,6 @@ impl AuthorityState {
                 // We could be re-executing a previously executed but uncommitted transaction, perhaps after
                 // restarting with a new binary. In this situation, if we have published an effects signature,
                 // we must be sure not to equivocate.
-                // TODO: read from cache instead of DB
                 match epoch_store.get_signed_effects_digest(&tx_digest) {
                     Ok(digest) => digest,
                     Err(e) => return ExecutionOutput::Fatal(e),
@@ -1888,6 +1884,76 @@ impl AuthorityState {
         );
     }
 
+    /// Helper function that handles transaction rewriting for coin reservations and executes
+    /// the transaction to effects. Returns the execution results along with the command offset
+    /// used for rewriting failure command indices.
+    fn execute_transaction_to_effects(
+        &self,
+        executor: &dyn Executor,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        gas_data: GasData,
+        gas_status: SuiGasStatus,
+        sender: SuiAddress,
+        mut kind: TransactionKind,
+        signer: SuiAddress,
+        tx_digest: TransactionDigest,
+        accumulator_version: Option<SequenceNumber>,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionError>,
+    ) {
+        // Skip rewriting if execution_params already indicates an error - the transaction will fail
+        // anyway, and trying to rewrite could fail if the accumulator was deleted.
+        let rewritten_inputs = if execution_params.is_ok() {
+            rewrite_transaction_for_coin_reservations(
+                self.chain_identifier,
+                &*self.coin_reservation_resolver,
+                sender,
+                &mut kind,
+                accumulator_version,
+            )
+        } else {
+            None
+        };
+
+        let (inner_temp_store, gas_status, effects, timings, execution_error) = executor
+            // TODO only run this function on FullNodes, use `execute_transaction_to_effects` on validators.
+            .execute_transaction_to_effects_and_execution_error(
+                store,
+                protocol_config,
+                self.metrics.execution_metrics.clone(),
+                enable_expensive_checks,
+                execution_params,
+                epoch_id,
+                epoch_timestamp_ms,
+                input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                rewritten_inputs,
+                signer,
+                tx_digest,
+                &mut None,
+            );
+
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            timings,
+            execution_error,
+        )
+    }
+
     /// execute_certificate validates the transaction input, and executes the certificate,
     /// returning transaction outputs.
     ///
@@ -1941,6 +2007,7 @@ impl AuthorityState {
         let tx_digest = *certificate.digest();
         let protocol_config = epoch_store.protocol_config();
         let transaction_data = &certificate.data().intent_message().value;
+        let sender = transaction_data.sender();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
         let early_execution_error = get_early_execution_error(
             &tx_digest,
@@ -1956,11 +2023,11 @@ impl AuthorityState {
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
         #[allow(unused_mut)]
-        let (inner_temp_store, _, mut effects, timings, execution_error_opt) =
-            epoch_store.executor().execute_transaction_to_effects(
+        let (inner_temp_store, _, mut effects, timings, execution_error_opt) = self
+            .execute_transaction_to_effects(
+                &**epoch_store.executor(),
                 &tracking_store,
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
                 self.config
@@ -1975,10 +2042,11 @@ impl AuthorityState {
                 input_objects,
                 gas_data,
                 gas_status,
+                sender,
                 kind,
                 signer,
                 tx_digest,
-                &mut None,
+                execution_env.assigned_versions.accumulator_version,
             );
 
         let object_funds_checker = self.object_funds_checker.load();
@@ -2225,7 +2293,23 @@ impl AuthorityState {
 
         // make a gas object if one was not provided
         let mut gas_data = transaction.gas_data().clone();
-        let ((gas_status, checked_input_objects), mock_gas) = if transaction.gas().is_empty() {
+        let is_gasless =
+            epoch_store.protocol_config().enable_gasless() && transaction.is_gasless_transaction();
+        let ((gas_status, checked_input_objects), mock_gas) = if is_gasless {
+            // Gasless transactions don't use gas coins — skip mock gas object injection.
+            (
+                sui_transaction_checks::check_transaction_input(
+                    epoch_store.protocol_config(),
+                    epoch_store.reference_gas_price(),
+                    &transaction,
+                    input_objects,
+                    &receiving_objects,
+                    &self.metrics.bytecode_verifier_metrics,
+                    &self.config.verifier_signing_config,
+                )?,
+                None,
+            )
+        } else if transaction.gas().is_empty() {
             let sender = transaction.sender();
             // use a 1B sui coin
             const MIST_TO_SUI: u64 = 1_000_000_000;
@@ -2290,11 +2374,12 @@ impl AuthorityState {
             Some(error) => ExecutionOrEarlyError::Err(error),
             None => ExecutionOrEarlyError::Ok(()),
         };
-        let (inner_temp_store, _, effects, _timings, execution_error) = executor
+
+        let (inner_temp_store, _, effects, _timings, execution_error) = self
             .execute_transaction_to_effects(
+                executor.as_ref(),
                 self.get_backing_store().as_ref(),
                 protocol_config,
-                self.metrics.limits_metrics.clone(),
                 expensive_checks,
                 execution_params,
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
@@ -2305,23 +2390,26 @@ impl AuthorityState {
                 checked_input_objects,
                 gas_data,
                 gas_status,
+                transaction.sender(),
                 kind,
                 signer,
                 transaction_digest,
-                &mut None,
+                // Use latest accumulator version for dry run/dev inspect
+                None,
             );
+
         let tx_digest = *effects.transaction_digest();
 
         let module_cache =
             TemporaryModuleResolver::new(&inner_temp_store, epoch_store.module_cache().clone());
 
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    &inner_temp_store,
-                    self.get_backing_package_store(),
-                )));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(PackageStoreWithFallback::new(
+                &inner_temp_store,
+                self.get_backing_package_store(),
+            )),
+        );
         // Returning empty vector here because we recalculate changes in the rpc layer.
         let object_changes = Vec::new();
 
@@ -2354,7 +2442,7 @@ impl AuthorityState {
         let execution_error_source = execution_error
             .as_ref()
             .err()
-            .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
+            .and_then(|e| e.source_ref().as_ref().map(|e| e.to_string()));
 
         Ok((
             DryRunTransactionBlockResponse {
@@ -2417,6 +2505,22 @@ impl AuthorityState {
             .into());
         }
 
+        // Reject coin reservations in gas payment when the execution engine
+        // doesn't support them.
+        let protocol_config = epoch_store.protocol_config();
+        if !protocol_config.enable_coin_reservation_obj_refs()
+            && transaction.gas().iter().any(|obj_ref| {
+                sui_types::coin_reservation::ParsedDigest::is_coin_reservation_digest(&obj_ref.2)
+            })
+        {
+            return Err(SuiErrorKind::UnsupportedFeatureError {
+                error:
+                    "coin reservations in gas payment are not supported at this protocol version"
+                        .to_string(),
+            }
+            .into());
+        }
+
         // Cheap validity checks for a transaction, including input size limits.
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
@@ -2426,7 +2530,10 @@ impl AuthorityState {
         // Create and inject mock gas coin before pre_object_load_checks so that
         // funds withdrawal processing sees non-empty payment and doesn't incorrectly
         // create an address balance withdrawal for gas.
-        let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() {
+        // Skip mock gas for gasless transactions — they don't use gas coins.
+        let is_gasless = protocol_config.enable_gasless() && transaction.is_gasless_transaction();
+        let mock_gas_object = if allow_mock_gas_coin && transaction.gas().is_empty() && !is_gasless
+        {
             let obj = Object::new_move(
                 MoveObject::new_gas_coin(
                     OBJECT_START_VERSION,
@@ -2447,6 +2554,7 @@ impl AuthorityState {
             &[],
             &input_object_kinds,
             &receiving_object_refs,
+            epoch_store.protocol_config(),
         )?;
         let address_funds: BTreeSet<_> = declared_withdrawals.keys().cloned().collect();
 
@@ -2494,7 +2602,14 @@ impl AuthorityState {
         )
         .expect("Creating an executor should not fail here");
 
-        let (kind, signer, gas_data) = transaction.execution_parts();
+        let (mut kind, signer, gas_data) = transaction.execution_parts();
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            signer,
+            &mut kind,
+            None,
+        );
         let early_execution_error = get_early_execution_error(
             &transaction.digest(),
             &checked_input_objects,
@@ -2521,7 +2636,7 @@ impl AuthorityState {
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             &tracking_store,
             protocol_config,
-            self.metrics.limits_metrics.clone(),
+            self.metrics.execution_metrics.clone(),
             false, // expensive_checks
             execution_params,
             &epoch_id,
@@ -2530,6 +2645,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             kind,
+            rewritten_inputs.clone(),
             signer,
             tx_digest,
             dev_inspect,
@@ -2556,7 +2672,7 @@ impl AuthorityState {
                 let (store, _, effects, result) = executor.dev_inspect_transaction(
                     &tracking_store,
                     protocol_config,
-                    self.metrics.limits_metrics.clone(),
+                    self.metrics.execution_metrics.clone(),
                     false,
                     ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
                     &epoch_id,
@@ -2565,6 +2681,7 @@ impl AuthorityState {
                     cloned_gas,
                     retry_gas_status,
                     cloned_kind,
+                    rewritten_inputs,
                     signer,
                     tx_digest,
                     dev_inspect,
@@ -2803,10 +2920,18 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
+        let mut transaction_kind = transaction_kind;
+        let rewritten_inputs = rewrite_transaction_for_coin_reservations(
+            self.chain_identifier,
+            &*self.coin_reservation_resolver,
+            sender,
+            &mut transaction_kind,
+            None,
+        );
         let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
             self.get_backing_store().as_ref(),
             protocol_config,
-            self.metrics.limits_metrics.clone(),
+            self.metrics.execution_metrics.clone(),
             /* expensive checks */ false,
             execution_params,
             &epoch_store.epoch_start_config().epoch_data().epoch_id(),
@@ -2818,6 +2943,7 @@ impl AuthorityState {
             gas_data,
             gas_status,
             transaction_kind,
+            rewritten_inputs,
             sender,
             transaction_digest,
             skip_checks,
@@ -2831,13 +2957,13 @@ impl AuthorityState {
             vec![]
         };
 
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    &inner_temp_store,
-                    self.get_backing_package_store(),
-                )));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(PackageStoreWithFallback::new(
+                &inner_temp_store,
+                self.get_backing_package_store(),
+            )),
+        );
 
         DevInspectResults::new(
             effects,
@@ -3004,13 +3130,13 @@ impl AuthorityState {
         inner_temporary_store: &InnerTemporaryStore,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<ObjectIndexChanges> {
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    inner_temporary_store,
-                    backing_package_store,
-                )));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(PackageStoreWithFallback::new(
+                inner_temporary_store,
+                backing_package_store,
+            )),
+        );
 
         let modified_at_version = effects
             .modified_at_versions()
@@ -3451,13 +3577,13 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         inner_temporary_store: &InnerTemporaryStore,
     ) -> SuiResult<SuiTransactionBlockEvents> {
-        let mut layout_resolver =
-            epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(PackageStoreWithFallback::new(
-                    inner_temporary_store,
-                    backing_package_store,
-                )));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(PackageStoreWithFallback::new(
+                inner_temporary_store,
+                backing_package_store,
+            )),
+        );
         SuiTransactionBlockEvents::try_from(
             transaction_events,
             digest,
@@ -3530,10 +3656,14 @@ impl AuthorityState {
         let layout = if let (LayoutGenerationOption::Generate, Some(move_obj)) =
             (request.generate_layout, object.data.try_as_move())
         {
+            let epoch_store = self.load_epoch_store_one_call_per_task();
             Some(into_struct_layout(
-                self.load_epoch_store_one_call_per_task()
+                epoch_store
                     .executor()
-                    .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
+                    .type_layout_resolver(
+                        epoch_store.protocol_config(),
+                        Box::new(self.get_backing_package_store().as_ref()),
+                    )
                     .get_annotated_layout(&move_obj.type_().clone().into())?,
             )?)
         } else {
@@ -3716,7 +3846,7 @@ impl AuthorityState {
                 .expect("Failed to initialize fork recovery state")
         });
 
-        let coin_reservation_resolver = Arc::new(CoinReservationResolver::new(
+        let coin_reservation_resolver = Arc::new(CachingCoinReservationResolver::new(
             execution_cache_trait_pointers.child_object_resolver.clone(),
         ));
 
@@ -3745,6 +3875,7 @@ impl AuthorityState {
             overload_info: AuthorityOverloadInfo::default(),
             chain_identifier,
             congestion_tracker: Arc::new(CongestionTracker::new()),
+            consensus_gasless_counter: Arc::new(ConsensusGaslessCounter::default()),
             traffic_controller,
             fork_recovery_state,
             notify_epoch: tokio::sync::watch::channel(epoch).0,
@@ -3958,9 +4089,10 @@ impl AuthorityState {
 
         let mut new_owners = vec![];
         let mut new_dynamic_fields = vec![];
-        let mut layout_resolver = epoch_store
-            .executor()
-            .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(self.get_backing_package_store().as_ref()),
+        );
         for o in genesis_objects.iter() {
             match o.owner {
                 Owner::AddressOwner(addr) | Owner::ConsensusAddressOwner { owner: addr, .. } => {
@@ -4679,21 +4811,101 @@ impl AuthorityState {
         Ok(Some((object, layout)))
     }
 
-    fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
+    pub fn get_object_layout(&self, object: &Object) -> SuiResult<Option<MoveStructLayout>> {
         let layout = object
             .data
             .try_as_move()
             .map(|object| {
+                let epoch_store = self.load_epoch_store_one_call_per_task();
                 into_struct_layout(
-                    self.load_epoch_store_one_call_per_task()
+                    epoch_store
                         .executor()
                         // TODO(cache) - must read through cache
-                        .type_layout_resolver(Box::new(self.get_backing_package_store().as_ref()))
+                        .type_layout_resolver(
+                            epoch_store.protocol_config(),
+                            Box::new(self.get_backing_package_store().as_ref()),
+                        )
                         .get_annotated_layout(&object.type_().clone().into())?,
                 )
             })
             .transpose()?;
         Ok(layout)
+    }
+
+    /// Returns a fake ObjectRef representing an address balance, along with the balance value
+    /// and the previous transaction digest. The ObjectRef can be returned to JSON-RPC clients
+    /// that don't understand address balances.
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_address_balance_coin_info(
+        &self,
+        owner: SuiAddress,
+        balance_type: TypeTag,
+    ) -> SuiResult<Option<(ObjectRef, u64, TransactionDigest)>> {
+        let accumulator_id = AccumulatorValue::get_field_id(owner, &balance_type)?;
+        let accumulator_obj = AccumulatorValue::load_object_by_id(
+            self.get_child_object_resolver().as_ref(),
+            None,
+            *accumulator_id.inner(),
+        )?;
+
+        let Some(accumulator_obj) = accumulator_obj else {
+            return Ok(None);
+        };
+
+        // Extract the currency type from balance_type (e.g., SUI from Balance<SUI>).
+        // get_balance expects the currency type, not the balance type.
+        let currency_type =
+            Balance::maybe_get_balance_type_param(&balance_type).unwrap_or(balance_type);
+
+        let balance = crate::accumulators::balances::get_balance(
+            owner,
+            self.get_child_object_resolver().as_ref(),
+            currency_type,
+        )?;
+
+        if balance == 0 {
+            return Ok(None);
+        };
+
+        let object_ref = coin_reservation::encode_object_ref(
+            accumulator_obj.id(),
+            accumulator_obj.version(),
+            self.load_epoch_store_one_call_per_task().epoch(),
+            balance,
+            self.get_chain_identifier(),
+        );
+
+        Ok(Some((
+            object_ref,
+            balance,
+            accumulator_obj.previous_transaction,
+        )))
+    }
+
+    /// Returns fake ObjectRefs for all address balances of an owner, keyed by coin type string.
+    /// Used by get_all_coins to include fake coins for each coin type.
+    #[instrument(level = "trace", skip_all)]
+    pub fn get_all_address_balance_coin_infos(
+        &self,
+        owner: SuiAddress,
+    ) -> SuiResult<std::collections::HashMap<String, (ObjectRef, u64, TransactionDigest)>> {
+        let indexes = self
+            .indexes
+            .as_ref()
+            .ok_or(SuiErrorKind::IndexStoreNotAvailable)?;
+
+        let mut result = std::collections::HashMap::new();
+        for currency_type in indexes.get_address_balance_coin_types_iter(owner) {
+            let balance_type = sui_types::balance::Balance::type_tag(currency_type.clone());
+            if let Some((obj_ref, balance, prev_tx)) =
+                self.get_address_balance_coin_info(owner, balance_type)?
+            {
+                // Use currency_type.to_string() to match the format in CoinIndexKey2
+                // (e.g., "0x2::sui::SUI", not "0x2::coin::Coin<0x2::sui::SUI>")
+                result.insert(currency_type.to_string(), (obj_ref, balance, prev_tx));
+            }
+        }
+        Ok(result)
     }
 
     fn get_owner_at_version(
@@ -4783,7 +4995,7 @@ impl AuthorityState {
             .get_object_store()
             .multi_get_objects_by_key(&object_ids);
 
-        for (o, id) in objects.into_iter().zip(object_ids) {
+        for (o, id) in objects.into_iter().zip_debug_eq(object_ids) {
             let object = o.ok_or_else(|| {
                 SuiError::from(UserInputError::ObjectNotFound {
                     object_id: id.0,
@@ -5199,8 +5411,10 @@ impl AuthorityState {
             .multi_get_events_by_tx_digests(&transaction_digests)
             .await?;
 
-        let events_map: HashMap<_, _> =
-            transaction_digests.iter().zip(events.into_iter()).collect();
+        let events_map: HashMap<_, _> = transaction_digests
+            .iter()
+            .zip_debug_eq(events.into_iter())
+            .collect();
 
         let stored_events = event_keys
             .into_iter()
@@ -5227,7 +5441,7 @@ impl AuthorityState {
         let backing_store = self.get_backing_package_store().as_ref();
         let mut layout_resolver = epoch_store
             .executor()
-            .type_layout_resolver(Box::new(backing_store));
+            .type_layout_resolver(epoch_store.protocol_config(), Box::new(backing_store));
         let mut events = vec![];
         for (e, tx_digest, event_seq, timestamp) in stored_events.into_iter() {
             events.push(SuiEvent::try_from(
@@ -5583,7 +5797,8 @@ impl AuthorityState {
         let objects = self.get_objects(&ids).await;
 
         let mut res = Vec::with_capacity(system_packages.len());
-        for (system_package_ref, object) in system_packages.into_iter().zip(objects.iter()) {
+        for (system_package_ref, object) in system_packages.into_iter().zip_debug_eq(objects.iter())
+        {
             let prev_transaction = match object {
                 Some(cur_object) if cur_object.compute_object_reference() == system_package_ref => {
                     // Skip this one because it doesn't need to be upgraded.
@@ -6045,7 +6260,7 @@ impl AuthorityState {
             .multi_get_locally_computed_checkpoints(&sequence_numbers)
             .expect("typed store must not fail")
             .into_iter()
-            .zip(sequence_numbers)
+            .zip_debug_eq(sequence_numbers)
             .map(|(maybe_checkpoint, sequence_number)| {
                 if let Some(checkpoint) = maybe_checkpoint {
                     checkpoint.content_digest

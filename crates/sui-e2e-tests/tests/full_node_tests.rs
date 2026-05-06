@@ -1221,7 +1221,7 @@ async fn test_access_old_object_pruned() {
         .sign_and_execute_transaction(&tx_builder.transfer_sui(None, sender).build())
         .await
         .effects;
-    let new_gas_version = effects.gas_object().0.1;
+    let new_gas_version = effects.gas_object().unwrap().0.1;
     test_cluster.trigger_reconfiguration().await;
     // Construct a new transaction that uses the old gas object reference.
     let tx = test_cluster

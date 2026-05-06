@@ -1,35 +1,35 @@
 //# publish
-module 0x5.A {
-    public foo(t: u64): u64 * u64 {
+mvir 0x5::A {
+    public fun foo(t: u64): u64 * u64 {
     label b0:
        return (copy(t), 2 * move(t));
     }
 
-    public bar(k: u64): u64 * u64 {
+    public fun bar(k: u64): u64 * u64 {
     label b0:
         jump_if (copy(k) != 1) b2;
     label b1:
-        return 3 * Self.foo(move(k));
+        return 3 * Self::foo(move(k));
     label b2:
-        return Self.foo(copy(k));
+        return Self::foo(copy(k));
     }
 }
 
 
 //# run
-module 0x6.m {
+mvir 0x6::m {
 
-import 0x5.A;
+import 0x5::A;
 
-entry foo() {
+entry fun foo() {
     let x: u64;
     let y: u64;
 
     let u: u64;
     let v: u64;
 label b0:
-    x, y = A.bar(10);
-    u, v = A.bar(1);
+    x, y = A::bar(10);
+    u, v = A::bar(1);
 
     assert(move(x) == 10, 42);
     assert(move(y) == 20, 42);

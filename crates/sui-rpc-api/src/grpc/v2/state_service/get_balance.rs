@@ -61,54 +61,25 @@ pub fn get_balance(service: &RpcService, request: GetBalanceRequest) -> Result<G
 }
 
 pub(super) fn render_balance(
-    service: &RpcService,
-    owner: SuiAddress,
+    _service: &RpcService,
+    _owner: SuiAddress,
     coin_type: move_core_types::language_storage::StructTag,
     balance_info: BalanceInfo,
 ) -> Balance {
     let mut balance = Balance::default()
         .with_coin_type(coin_type.to_canonical_string(true))
-        .with_balance(balance_info.balance);
+        .with_balance(
+            balance_info
+                .coin_balance
+                .saturating_add(balance_info.address_balance),
+        );
 
-    if balance_info.balance == 0 {
-        return balance;
+    if balance_info.coin_balance != 0 {
+        balance.set_coin_balance(balance_info.coin_balance);
     }
 
-    // When looking up an Address's balance for a particular coin type, there is a possibility that
-    // the value we read is "newer" (further ahead in time) than the summed balance we've read from
-    // the indexes.
-    //
-    // This inconsistency should in practice be hard to see (as its a race) but it can lead to
-    // slightly inconsistent responses:
-    //
-    // - If the Address balance is greater than it was at the checkpoint corrisponding to our index
-    // read, then we'll clamp the value returned to what was in the indexes and its possible that
-    // we under report the balance stored in `Coin<T>`s by saying that the address has no coin
-    // balance.
-    //
-    // - If the Address balance is less than it was at the checkpoint corrisponding to our index
-    // read, then we can possibly over-inflate the balance stored in `Coin<T>`s.
-    if let Some(address_balance) = service.reader.lookup_address_balance(owner, coin_type) {
-        balance.set_address_balance(address_balance);
-
-        match address_balance.cmp(&balance_info.balance) {
-            std::cmp::Ordering::Less => {
-                // If the AddressBalance is less than the total balance we read from the indexes,
-                // then the difference is attributed to coins
-                balance.set_coin_balance(balance_info.balance.saturating_sub(address_balance));
-            }
-            std::cmp::Ordering::Equal => {}
-            std::cmp::Ordering::Greater => {
-                // There is a potential race where the Address balance we read is newer than what
-                // we read from the indexes, and if its higher then lets just cap it based on what
-                // we have in the indexes.
-                balance.set_address_balance(balance_info.balance);
-            }
-        }
-    } else {
-        // If there is no AddressBalance for this coin type, then all the balance is attributed to
-        // coins
-        balance.set_coin_balance(balance_info.balance);
+    if balance_info.address_balance != 0 {
+        balance.set_address_balance(balance_info.address_balance);
     }
 
     balance

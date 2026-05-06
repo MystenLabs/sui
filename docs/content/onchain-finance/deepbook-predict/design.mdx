@@ -1,0 +1,76 @@
+---
+title: Design
+description: Learn about DeepBook Predict design, including Predict, PredictManager, OracleSVI, Vault, and PLP.
+keywords:
+  [
+    deepbook predict design,
+    predict,
+    predictmanager,
+    oraclesvi,
+    vault,
+    plp,
+    binary position,
+    vertical range,
+    prediction market,
+  ]
+---
+
+At a high level, DeepBook Predict revolves around four main onchain components:
+
+- `Predict`: The top-level shared object. It holds vault balances, pricing config, risk config, the quote-asset allowlist, oracle strike grids, withdrawal-limiter config, and the `PLP` treasury cap.
+- `PredictManager`: A per-user shared account object. It wraps a DeepBook `BalanceManager`, stores deposited quote balances, and tracks a user's binary position and vertical range quantities.
+- `OracleSVI`: The market state for one underlying asset and one expiry. It stores spot, forward, SVI parameters, activation status, timestamps, and settlement price.
+- `Vault`: The shared liquidity and exposure state machine. It stores accepted quote assets, tracks mark-to-market liability, tracks maximum payout, and supports `PLP` supply and withdrawal flows.
+
+## `Predict` shared object {#predict}
+
+`Predict` is the main protocol object that applications pass to trading and liquidity functions. It validates quote assets, checks trading pause state, prices mints and redeems from oracle state, applies spread and utilization configuration, updates vault exposure, and emits protocol events.
+
+For a mint, `Predict` first validates that the manager owner is the signer, the quote asset is accepted, the oracle is live, and the requested market key or range key matches the oracle. It then inserts the new liability into the vault before pricing the trade, so the trader pays for the post-trade state they create. After collecting payment from the `PredictManager`, it checks total exposure and increases the user's internal position quantity.
+
+For a redeem, `Predict` decreases the user's internal position quantity, removes or compacts the vault exposure as needed, dispenses the payout from the vault, and deposits the payout back into the `PredictManager`.
+
+## `PredictManager` shared object {#predict-manager}
+
+Each user creates one `PredictManager` and reuses it across Predict flows. The manager owns an inner `BalanceManager` plus deposit and withdraw capabilities, which lets the protocol move balances during mints, redeems, and payouts without exposing the internal capabilities directly.
+
+Positions and ranges are not standalone objects. The manager stores binary position quantities in a table keyed by `MarketKey`, and vertical range quantities in a table keyed by `RangeKey`. Applications should read those quantities from the manager object or from the indexed server API rather than looking for separate position objects.
+
+## Positions and ranges {#positions-and-ranges}
+
+Binary positions are keyed by `(oracle_id, expiry, strike, is_up)`. The `is_up` direction represents whether the position pays when settlement is above the strike. A corresponding down position is created with the same oracle, expiry, and strike but the opposite direction.
+
+Vertical ranges are keyed by `(oracle_id, expiry, lower_strike, higher_strike)`. A range is priced as a single bounded instrument. At settlement, it pays out when the settlement lands in the band `(lower, higher]`.
+
+## Oracle lifecycle {#oracle-lifecycle}
+
+`OracleSVI` moves through four lifecycle states:
+
+- **Inactive:** The oracle exists but has not been activated.
+- **Active:** The oracle accepts live spot, forward, and SVI updates before expiry.
+- **Pending settlement:** The oracle has reached expiry but has not yet received the first post-expiry price push.
+- **Settled:** The first post-expiry price update freezes the settlement price and prevents further live price or SVI updates.
+
+Tradeability depends on this lifecycle. Mints require a live oracle. Redeems can quote against live or settled oracle state. After settlement, the vault can compact dense strike matrix exposure into constant-size settled state.
+
+## Vault and `PLP` {#vault-and-plp}
+
+The vault takes the opposite side of every Predict trade. It stores concrete quote asset balances, a shared quote-denominated vault balance, per-oracle strike matrices, compact settled-oracle state, total mark-to-market liability, and total maximum payout.
+
+Liquidity providers call `predict::supply` with an accepted quote asset and receive `PLP` shares. The first supplier receives shares one-to-one with the supplied amount. Later suppliers receive shares proportional to their deposit relative to current vault value. Withdrawals burn `PLP` and return quote assets only when the withdrawal amount is available after covering current max payout.
+
+## Pricing and risk {#pricing-and-risk}
+
+Predict prices binary positions and ranges from oracle fair prices plus protocol spread and utilization adjustments. The protocol can set global ask bounds and tighter per-oracle ask bounds. These bounds prevent mints with post-spread ask prices outside configured limits.
+
+Risk is enforced by the vault's total exposure check. After minting, the vault asserts that total mark-to-market liability remains within `max_total_exposure_pct` of the vault balance.
+
+## Data flow {#data-flow}
+
+Applications should split reads by freshness and purpose:
+
+1. Render markets, portfolios, vault summaries, and history from the public Predict server.
+1. Subscribe to Sui checkpoints or events for second-level oracle updates when the UI needs a live tape.
+1. Read onchain `Predict`, `PredictManager`, `OracleSVI`, and quote coin objects around wallet flows that require authoritative state.
+
+This keeps page rendering fast while still letting transaction flows confirm exact onchain state.

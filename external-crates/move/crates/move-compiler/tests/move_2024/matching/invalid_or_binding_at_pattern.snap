@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/matching/invalid_or_binding_at_pattern.move:6:18
+  │
+2 │     public enum E has drop { A(u64), B }
+  │                                      - 'B' is declared here
+  ·
+6 │             x @ (E::B(0) | E::A(_)) => match (x) {
+  │                  ^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+  │
+  = Remove '()' arguments from this pattern
+
+warning[W04039]: unable to determine principal type for literal
+  ┌─ tests/move_2024/matching/invalid_or_binding_at_pattern.move:6:23
+  │
+6 │             x @ (E::B(0) | E::A(_)) => match (x) {
+  │                       ^ Could not determine a concrete type for this numeric literal, so defaulting to 'u64'
+  │
+  = To avoid this warning, add an explicit type annotation, e.g., '<num>u64'
+  = This warning can be suppressed with '#[allow(untyped_literal)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

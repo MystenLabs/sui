@@ -3,7 +3,7 @@ title: MDX Components
 description: Extensions to the Sui docs rendering engine.
 ---
 
-The Sui developer documentation uses the MarkdownX (`.mdx`) format for all pages. MDX allows [JSX within Markdown content](https://mdxjs.com/). The site uses Docusaurus, an open-source framework that provides built-in features like admonitions and Mermaid diagrams. It also utilizes community plugins and custom components the documentation team developed. While none of these features are required in a contribution, you may include them if they enhance the reader’s experience.
+The Sui developer documentation uses the MarkdownX (`.mdx`) format for all pages. MDX allows [JSX within Markdown content](https://mdxjs.com/). The site uses Docusaurus, an open-source framework that provides built-in features like admonitions and Mermaid diagrams. It also utilizes community plugins and custom components the documentation team developed. While none of these features are required in a contribution, you can include them if they enhance the reader’s experience.
 
 ## Custom frontmatter
 
@@ -159,7 +159,7 @@ Snippets help reduce maintenance and avoid forcing readers off-page for importan
 1. Set the `source` argument to the file path in the `snippets` folder. Do not include the `snippet` directory.
 1. Set the `mode` argument to `snippet`. 
 
-`<ImportContent source="file.mdx" mode="snippet" />`
+`<ImportContent source="file" mode="snippet" />`
 
 #### Prerequisite snippets
 
@@ -168,7 +168,7 @@ For guides and tutorials that have prerequisite requirements, the prerequisite t
 If a guide or tutorial uses the following prerequisites: 
 
 ```
-- [x] [Install the latest version of Sui](/guides/developer/getting-started/sui-install).
+- [x] [Install the latest version of Sui](/getting-started/onboarding/sui-install).
 
 - [x] Set up your Sui account and CLI environment. 
 
@@ -178,7 +178,7 @@ If a guide or tutorial uses the following prerequisites:
 Then a reusable snippet can be used:
 
 ```jsx
-<ImportContent source="prerequisites.mdx" mode="snippet" />
+<ImportContent source="prerequisites" mode="snippet" />
 ```
 
 For guides and tutorials that have their own unique prerequisites, the following `Tabs` component with the `className="tabsHeadingCentered--small"` styling should be used:
@@ -210,11 +210,11 @@ When including sections of code, understand that the code might change from what
 
 #### Referencing files within the Sui monorepo 
 
-Reference files via their relative path:
+Reference files through their relative path:
 
 #### Referencing files from other repos 
 
-If several code files located in another repo need to be referenced across multiple documentation pages, the Sui documentation team may have added it as a **submodule** of the Sui repo. Submodules are a GitHub feature that creates symlinks across repositories. 
+If several code files located in another repo need to be referenced across multiple documentation pages, the Sui documentation team might have added it as a **submodule** of the Sui repo. Submodules are a GitHub feature that creates symlinks across repositories. 
 
 Current submodules within the Sui docs include:
 
@@ -313,13 +313,13 @@ return book;
 
 ### Additional options 
 
-You can also add additional strings to the end of the inject statement to highlight specific lines, remove titles, etc:
+You can also add additional strings to the end of the inject statement to highlight specific lines, remove titles, and more:
 
 - `noComments` → Strip comments  
 - `noTests` → Strip tests  
 - `noTitle` → Remove code block title  
 - `singleSpace` → Normalize spacing  
-- `highlight` → Highlight a specific line using a unique word in the line you want highlighted (ex. `highlight="variable_name"`)
+- `highlight` → Highlight a specific line using a unique word in the line you want highlighted (for example, `highlight="variable_name"`)
 
 **Example:**  
 
@@ -349,7 +349,7 @@ Add an empty newline above and below the content, opening, and closing tags.
 
 Prefer ordered lists for processes; keep each step to one instruction. However, if a step needs multiple sub-instructions or lots of context, use step headings (headings with step/substep) to group content. 
 
-Avoid lists where Step 1 spans pages and switch to step headings instead. Step headings make long guides easier to resume and navigate via the ToC.
+Avoid lists where Step 1 spans pages and switch to step headings instead. Step headings make long guides easier to resume and navigate through the ToC.
 
 ### How to use step headings
 

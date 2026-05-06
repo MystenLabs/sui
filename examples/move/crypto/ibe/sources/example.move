@@ -18,7 +18,7 @@ public struct IbeEncryption has copy, drop, store {
 }
 
 public fun from_bytes(bytes: vector<u8>): IbeEncryption {
-    let mut buffer = vector::empty();
+    let mut buffer = vector[];
     let mut i = 0;
     while (i < 96) {
         buffer.push_back(bytes[i]);
@@ -26,13 +26,13 @@ public fun from_bytes(bytes: vector<u8>): IbeEncryption {
     };
     let u = bls12381::g2_from_bytes(&buffer);
 
-    let mut v = vector::empty();
+    let mut v = vector[];
     while (i < 96 + 32) {
         v.push_back(bytes[i]);
         i = i + 1;
     };
 
-    let mut w = vector::empty();
+    let mut w = vector[];
     while (i < 96 + 32 + 32) {
         w.push_back(bytes[i]);
         i = i + 1;
@@ -72,7 +72,7 @@ public fun insecure_ibe_encrypt(
     let mut to_hash = b"HASH2 - ";
     to_hash.append(*bytes(&pk_rho_r));
     let hash_pk_rho_r = blake2b256(&to_hash);
-    let mut v = vector::empty();
+    let mut v = vector[];
     let mut i = 0;
     while (i < sigma.length()) {
         v.push_back(sigma[i] ^ hash_pk_rho_r[i]);
@@ -83,7 +83,7 @@ public fun insecure_ibe_encrypt(
     let mut to_hash = b"HASH4 - ";
     to_hash.append(*sigma);
     let hash = blake2b256(&to_hash);
-    let mut w = vector::empty();
+    let mut w = vector[];
     let mut i = 0;
     while (i < m.length()) {
         w.push_back(m[i] ^ hash[i]);
@@ -100,7 +100,7 @@ public fun ibe_decrypt(enc: IbeEncryption, target_key: &Element<G1>): Option<vec
     let mut to_hash = b"HASH2 - ";
     to_hash.append(*bytes(&e));
     let hash = blake2b256(&to_hash);
-    let mut sigma_prime = vector::empty();
+    let mut sigma_prime = vector[];
     let mut i = 0;
     while (i < enc.v.length()) {
         sigma_prime.push_back(hash[i] ^ enc.v[i]);
@@ -111,7 +111,7 @@ public fun ibe_decrypt(enc: IbeEncryption, target_key: &Element<G1>): Option<vec
     let mut to_hash = b"HASH4 - ";
     to_hash.append(sigma_prime);
     let hash = blake2b256(&to_hash);
-    let mut m_prime = vector::empty();
+    let mut m_prime = vector[];
     let mut i = 0;
     while (i < enc.w.length()) {
         m_prime.push_back(hash[i] ^ enc.w[i]);
@@ -143,7 +143,7 @@ public fun ibe_decrypt(enc: IbeEncryption, target_key: &Element<G1>): Option<vec
 public(package) fun try_substract(x: &vector<u8>): Option<vector<u8>> {
     assert!(x.length() == 32, EInvalidLength);
     let order = x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
-    let mut c = vector::empty();
+    let mut c = vector[];
     let mut i = 0;
     let mut carry: u8 = 0;
     while (i < 32) {

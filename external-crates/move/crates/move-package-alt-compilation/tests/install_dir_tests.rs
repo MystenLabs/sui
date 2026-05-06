@@ -59,7 +59,8 @@ async fn test_install_dir_creates_directory() {
     let env = Vanilla::default_environment();
 
     let result =
-        compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut Vec::new()).await;
+        compile_package::<_, Vanilla>(&package_path, &build_config, &env, Vanilla, &mut Vec::new())
+            .await;
 
     assert!(result.is_ok(), "Compilation should succeed");
 
@@ -104,7 +105,8 @@ async fn test_install_dir_relative_path() {
     let mut output = Cursor::new(Vec::new());
 
     let result =
-        compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output).await;
+        compile_package::<_, Vanilla>(&package_path, &build_config, &env, Vanilla, &mut output)
+            .await;
 
     assert!(
         result.is_ok(),
@@ -143,7 +145,7 @@ async fn test_install_dir_absolute_path() {
     let env = Vanilla::default_environment();
     let mut output = Cursor::new(Vec::new());
 
-    compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output)
+    compile_package::<_, Vanilla>(&package_path, &build_config, &env, Vanilla, &mut output)
         .await
         .expect("compilation succeeds");
 
@@ -181,7 +183,8 @@ async fn test_no_install_dir_uses_default() {
     let mut output = Cursor::new(Vec::new());
 
     let result =
-        compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output).await;
+        compile_package::<_, Vanilla>(&package_path, &build_config, &env, Vanilla, &mut output)
+            .await;
 
     assert!(result.is_ok(), "Compilation should succeed");
 
@@ -219,7 +222,8 @@ async fn test_install_dir_existing_directory() {
     let mut output = Cursor::new(Vec::new());
 
     let result =
-        compile_package::<_, Vanilla>(&package_path, &build_config, &env, &mut output).await;
+        compile_package::<_, Vanilla>(&package_path, &build_config, &env, Vanilla, &mut output)
+            .await;
 
     assert!(
         result.is_ok(),

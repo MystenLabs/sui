@@ -1,0 +1,23 @@
+/* Copyright (c) Mysten Labs, Inc. */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/*
+ * Swizzled from @docusaurus/theme-classic.
+ * Main content comes first in DOM (for crawlers & content scanners),
+ * but sidebar renders on the left visually via CSS order.
+ */
+
+.docRoot {
+  display: flex;
+  width: 100%;
+}
+
+/* Sidebar appears first visually (left) despite being second in DOM */
+.docRoot > aside {
+  order: -1;
+}
+
+.docsWrapper {
+  display: flex;
+  flex: 1 0 auto;
+}

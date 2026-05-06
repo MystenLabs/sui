@@ -5,7 +5,7 @@ processed 3 tasks
 
 task 0, lines 1-9:
 //# print-bytecode
-// Move bytecode v6
+// Move bytecode v7
 module 2d20.M {
 
 struct T {

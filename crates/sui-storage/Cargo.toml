@@ -10,6 +10,7 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+mysten-common.workspace = true
 integer-encoding.workspace = true
 async-trait.workspace = true
 futures.workspace = true
@@ -52,6 +53,8 @@ sui-config.workspace = true
 typed-store.workspace = true
 eyre.workspace = true
 lru.workspace = true
+prost.workspace = true
+sui-rpc.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true

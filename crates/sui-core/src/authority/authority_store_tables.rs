@@ -3,14 +3,16 @@
 
 use super::*;
 use crate::authority::authority_store::LockDetailsWrapperDeprecated;
+#[cfg(tidehunter)]
+use crate::authority::epoch_marker_key::EPOCH_MARKER_KEY_SIZE;
+use crate::authority::epoch_marker_key::EpochMarkerKey;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use sui_types::base_types::SequenceNumber;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::global_state_hash::GlobalStateHash;
-use sui_types::storage::{FullObjectKey, MarkerValue};
+use sui_types::storage::MarkerValue;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{
     DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
@@ -92,10 +94,6 @@ pub struct AuthorityPerpetualTables {
     /// tables.
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    #[allow(dead_code)]
-    #[deprecated]
-    events: DBMap<(TransactionEventsDigest, usize), Event>,
-
     // Events keyed by the digest of the transaction that produced them.
     pub(crate) events_2: DBMap<TransactionDigest, TransactionEvents>,
 
@@ -137,7 +135,7 @@ pub struct AuthorityPerpetualTables {
     /// objects that have been deleted. This table is meant to be pruned per-epoch, and all
     /// previous epochs other than the current epoch may be pruned safely.
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
-    pub(crate) object_per_epoch_marker_table_v2: DBMap<(EpochId, FullObjectKey), MarkerValue>,
+    pub(crate) object_per_epoch_marker_table_v2: DBMap<EpochMarkerKey, MarkerValue>,
 
     /// Tracks executed transaction digests across epochs.
     /// Used to support address balance gas payments feature.
@@ -157,8 +155,8 @@ impl AuthorityPerpetualTables {
         _pruner_watermark: Option<Arc<AtomicU64>>,
     ) -> Self {
         let db_options_override = db_options_override.unwrap_or_default();
-        let db_options =
-            db_options_override.apply_to(default_db_options().optimize_db_for_write_throughput(4));
+        let db_options = db_options_override
+            .apply_to(default_db_options().optimize_db_for_write_throughput(4, false));
         let table_options = DBMapTableConfigMap::new(BTreeMap::from([
             (
                 "objects".to_string(),
@@ -200,6 +198,7 @@ impl AuthorityPerpetualTables {
             default_cells_per_mutex, default_mutex_count, default_value_cache_size,
         };
         let mutexes = default_mutex_count() * 2;
+        let transaction_mutexes = mutexes * 4;
         let value_cache_size = default_value_cache_size();
         // effectively disables pruning if not set
         let pruner_watermark = pruner_watermark.unwrap_or(Arc::new(AtomicU64::new(0)));
@@ -208,7 +207,7 @@ impl AuthorityPerpetualTables {
         let objects_compactor = |iter: &mut dyn DoubleEndedIterator<Item = &Bytes>| {
             let mut retain = HashSet::new();
             let mut previous: Option<&[u8]> = None;
-            const OID_SIZE: usize = 16;
+            const OID_SIZE: usize = 32;
             for key in iter.rev() {
                 if let Some(prev) = previous {
                     if prev == &key[..OID_SIZE] {
@@ -227,15 +226,15 @@ impl AuthorityPerpetualTables {
         // TransactionDigest is serialized with an 8-byte prefix, so we include it in the key calculation
         let epoch_tx_digest_prefix_key =
             KeyType::from_prefix_bits((8/*EpochId*/ + 8/*TransactionDigest prefix*/) * 8 + 12);
-        let object_indexing = KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
+        let object_indexing = KeyIndexing::fixed(32 + 8); //  KeyIndexing::key_reduction(32 + 8, 16..(32 + 8));
         // todo can figure way to scramble off 8 bytes in the middle
         let obj_ref_size = 32 + 8 + 32 + 8;
         let owned_object_transaction_locks_indexing =
             KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
 
         let mut objects_config = KeySpaceConfig::new()
-            .with_unloaded_iterator(true)
-            .with_max_dirty_keys(4048);
+            .with_max_dirty_keys(4096)
+            .with_value_cache_size(value_cache_size);
         if matches!(db_options_override, Some(options) if options.is_validator) {
             objects_config = objects_config.with_compactor(Box::new(objects_compactor));
         }
@@ -245,8 +244,8 @@ impl AuthorityPerpetualTables {
                 "objects".to_string(),
                 ThConfig::new_with_config_indexing(
                     object_indexing,
-                    mutexes,
-                    KeyType::uniform(default_cells_per_mutex() * 4),
+                    mutexes * 4,
+                    KeyType::uniform(1),
                     objects_config,
                 ),
             ),
@@ -254,16 +253,16 @@ impl AuthorityPerpetualTables {
                 "owned_object_transaction_locks".to_string(),
                 ThConfig::new_with_config_indexing(
                     owned_object_transaction_locks_indexing,
-                    mutexes,
-                    KeyType::uniform(default_cells_per_mutex() * 4),
-                    bloom_config.clone().with_max_dirty_keys(4048),
+                    mutexes * 16,
+                    KeyType::uniform(default_cells_per_mutex()),
+                    bloom_config.clone().with_max_dirty_keys(16192),
                 ),
             ),
             (
                 "transactions".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    mutexes,
+                    transaction_mutexes,
                     uniform_key,
                     KeySpaceConfig::new()
                         .with_value_cache_size(value_cache_size)
@@ -275,7 +274,7 @@ impl AuthorityPerpetualTables {
                 "effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    mutexes,
+                    transaction_mutexes,
                     uniform_key,
                     apply_relocation_filter(
                         bloom_config.clone().with_value_cache_size(value_cache_size),
@@ -290,7 +289,7 @@ impl AuthorityPerpetualTables {
                 "executed_effects".to_string(),
                 ThConfig::new_with_rm_prefix_indexing(
                     KeyIndexing::key_reduction(32, 0..16),
-                    mutexes,
+                    transaction_mutexes,
                     uniform_key,
                     bloom_config
                         .clone()
@@ -381,13 +380,13 @@ impl AuthorityPerpetualTables {
             (
                 "object_per_epoch_marker_table_v2".to_string(),
                 ThConfig::new_with_config_indexing(
-                    KeyIndexing::VariableLength,
+                    KeyIndexing::fixed(EPOCH_MARKER_KEY_SIZE),
                     mutexes,
                     epoch_prefix_key,
                     apply_relocation_filter(
                         bloom_config.clone(),
                         pruner_watermark.clone(),
-                        |(epoch_id, _): (EpochId, FullObjectKey)| epoch_id,
+                        |k: EpochMarkerKey| k.0,
                         true,
                     ),
                 ),
@@ -397,7 +396,7 @@ impl AuthorityPerpetualTables {
                 ThConfig::new_with_config_indexing(
                     // EpochId + (TransactionDigest)
                     KeyIndexing::fixed(8 + (32 + 8)),
-                    mutexes,
+                    transaction_mutexes,
                     epoch_tx_digest_prefix_key,
                     apply_relocation_filter(
                         bloom_config.clone(),
@@ -429,6 +428,11 @@ impl AuthorityPerpetualTables {
     #[cfg(tidehunter)]
     pub fn open_readonly(parent_path: &Path) -> Self {
         Self::open(parent_path, None, None)
+    }
+
+    #[cfg(tidehunter)]
+    pub fn force_rebuild_control_region(&self) -> anyhow::Result<()> {
+        self.objects.db.force_rebuild_control_region()
     }
 
     // This is used by indexer to find the correct version of dynamic field child object.

@@ -77,7 +77,7 @@ module t1::o1 {
 
 //# view-object 4,0
 
-//# view-object 5,1
+//# view-object 5,0
 
 // child arguments cannot be taken directly
-//# run t1::o1::use_o2_o3 --args object(5,1) object(4,0) --sender A
+//# run t1::o1::use_o2_o3 --args object(5,0) object(4,0) --sender A

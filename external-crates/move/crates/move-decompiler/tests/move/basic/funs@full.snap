@@ -7,9 +7,7 @@ module basic::funs;
 
 // -- functions -- 
 
-public fun f() {
-    return
-}
+public fun f() {}
 
 public fun f_s(l0: &basic::structs::S): &basic::structs::S {
     return l0

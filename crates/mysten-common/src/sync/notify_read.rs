@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::ZipDebugEqIteratorExt;
 use crate::debug_fatal;
 
 use futures::future::{Either, join_all};
@@ -169,7 +170,7 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
         // Track which keys are still waiting
         let waiting_keys: HashSet<K> = keys
             .iter()
-            .zip(results.iter())
+            .zip_debug_eq(results.iter())
             .filter(|&(_key, result)| result.is_none())
             .map(|(key, _result)| key.clone())
             .collect();
@@ -217,25 +218,24 @@ impl<K: Eq + Hash + Clone + Unpin + std::fmt::Debug + Send + Sync + 'static, V: 
             None
         };
 
-        let results =
-            results
-                .into_iter()
-                .zip(registrations)
-                .zip(keys.iter())
-                .map(|((a, r), key)| match a {
-                    // Note that Some() clause also drops registration that is already fulfilled
-                    Some(ready) => Either::Left(futures::future::ready(ready)),
-                    None => {
-                        let waiting_keys = waiting_keys.clone();
-                        let key = key.clone();
-                        Either::Right(async move {
-                            let result = r.await;
-                            // Remove this key from the waiting set
-                            waiting_keys.lock().remove(&key);
-                            result
-                        })
-                    }
-                });
+        let results = results
+            .into_iter()
+            .zip_debug_eq(registrations)
+            .zip_debug_eq(keys.iter())
+            .map(|((a, r), key)| match a {
+                // Note that Some() clause also drops registration that is already fulfilled
+                Some(ready) => Either::Left(futures::future::ready(ready)),
+                None => {
+                    let waiting_keys = waiting_keys.clone();
+                    let key = key.clone();
+                    Either::Right(async move {
+                        let result = r.await;
+                        // Remove this key from the waiting set
+                        waiting_keys.lock().remove(&key);
+                        result
+                    })
+                }
+            });
 
         // The logging task will be automatically aborted when _log_handle_guard is dropped
 

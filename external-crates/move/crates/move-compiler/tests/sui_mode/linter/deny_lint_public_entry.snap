@@ -1,0 +1,16 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+error[Lint E99010]: unnecessary `entry` on a `public` function
+  ┌─ tests/sui_mode/linter/deny_lint_public_entry.move:4:12
+  │
+3 │     #[deny(lint(public_entry))]
+  │                 ------------ the lint level is defined here
+4 │     public entry fun foo() {}
+  │            ^^^^^ `entry` on `public` is meaningless. In conjunction with `public`, `entry` adds no additional permissions or restrictions.
+  │
+  = `public` functions can be called from PTBs. `entry` can be used to allow non-`public` (private or `public(package)`) functions to be called from PTBs, although there will be additional restrictions on the input arguments to such functions.

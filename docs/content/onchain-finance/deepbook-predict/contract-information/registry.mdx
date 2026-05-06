@@ -1,0 +1,188 @@
+---
+title: Registry
+description: Learn about DeepBook Predict registry setup, oracle creation, quote asset management, and admin configuration entry points.
+keywords:
+  [
+    deepbook predict registry,
+    registry,
+    admin cap,
+    create predict,
+    create oracle,
+    quote asset,
+    oracle cap,
+    pricing config,
+    risk config,
+  ]
+---
+
+The `Registry` shared object tracks the Predict object ID and the oracle IDs created by each `OracleSVICap`. The registry module also exposes admin entry points for setup, quote asset management, oracle creation, pricing configuration, risk configuration, and the withdrawal limiter.
+
+Most app integrations do not call these functions directly. They are operator and governance surfaces for deploying and maintaining the protocol.
+
+## API
+
+<details>
+<summary>Read registered object IDs</summary>
+
+Use these functions to read the active Predict object ID and the oracle IDs associated with an oracle cap.
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="predict_id,oracle_ids"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Create the Predict object</summary>
+
+The `create_predict()` function creates the shared `Predict` object once for a quote asset and records its ID in the registry.
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="create_predict"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Create and register oracle caps</summary>
+
+Oracle caps authorize oracle operators to update oracles and tighten per-oracle ask bounds.
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="create_oracle_cap,register_oracle_cap"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Create an oracle</summary>
+
+The `create_oracle()` function creates an `OracleSVI`, associates it with the calling cap, and initializes the Predict vault's strike grid for that oracle.
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="create_oracle"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Manage quote assets</summary>
+
+Admins can enable or disable quote assets for new supply and mint inflows.
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="enable_quote_asset,disable_quote_asset"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Configure pricing</summary>
+
+These functions control global spread, minimum spread, utilization multiplier, and global ask price bounds.
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="set_base_spread,set_min_spread,set_utilization_multiplier,set_min_ask_price,set_max_ask_price"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Configure oracle ask bounds</summary>
+
+Oracle ask-bound overrides are authorized by the oracle's cap and can only tighten the global bounds.
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="set_oracle_ask_bounds,clear_oracle_ask_bounds"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Configure trading and risk controls</summary>
+
+These functions control the trading pause, max total exposure percentage, and LP withdrawal limiter.
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="set_trading_paused,set_max_total_exposure_pct,update_withdrawal_limiter,enable_withdrawal_limiter,disable_withdrawal_limiter"
+	noComments
+/>
+
+</details>
+
+## Structs and events
+
+<details>
+<summary>`Registry` and `AdminCap`</summary>
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="Registry,AdminCap"
+/>
+
+</details>
+
+<details>
+<summary>Registry events</summary>
+
+<ImportContent
+	source="packages/predict/sources/registry.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="PredictCreated,OracleCreated"
+/>
+
+</details>

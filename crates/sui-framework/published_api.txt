@@ -1054,6 +1054,9 @@ active_validator_addresses_ref
 active_validator_voting_powers
 	public fun
 	0x3::sui_system
+active_validator_stake_amount
+	public fun
+	0x3::sui_system
 calculate_rewards
 	public(package) fun
 	0x3::sui_system
@@ -1489,13 +1492,22 @@ borrow_mut
 remove
 	public fun
 	0x2::dynamic_field
+exists
+	public fun
+	0x2::dynamic_field
+remove_opt
+	public fun
+	0x2::dynamic_field
+replace
+	public fun
+	0x2::dynamic_field
+exists_with_type
+	public fun
+	0x2::dynamic_field
 exists_
 	public fun
 	0x2::dynamic_field
 remove_if_exists
-	public fun
-	0x2::dynamic_field
-exists_with_type
 	public fun
 	0x2::dynamic_field
 field_info
@@ -2320,13 +2332,22 @@ borrow_mut
 remove
 	public fun
 	0x2::dynamic_object_field
-exists_
+exists
 	public fun
 	0x2::dynamic_object_field
 exists_with_type
 	public fun
 	0x2::dynamic_object_field
 id
+	public fun
+	0x2::dynamic_object_field
+remove_opt
+	public fun
+	0x2::dynamic_object_field
+replace
+	public fun
+	0x2::dynamic_object_field
+exists_
 	public fun
 	0x2::dynamic_object_field
 internal_add
@@ -2998,6 +3019,9 @@ migrate_v1_to_v2
 destroy_system_migration_cap
 	entry fun
 	0x2::display_registry
+transfer_migration_cap
+	entry fun
+	0x2::display_registry
 delete_legacy
 	public fun
 	0x2::display_registry
@@ -3247,9 +3271,6 @@ has_access
 uid_mut_as_owner
 	public fun
 	0x2::kiosk
-set_allow_extensions
-	public fun
-	0x2::kiosk
 uid
 	public fun
 	0x2::kiosk
@@ -3290,6 +3311,9 @@ purchase_cap_item
 	public fun
 	0x2::kiosk
 purchase_cap_min_price
+	public fun
+	0x2::kiosk
+set_allow_extensions
 	public fun
 	0x2::kiosk
 Extension
@@ -3745,6 +3769,12 @@ g_div
 g_neg
 	public fun
 	0x2::ristretto255
+verify_bulletproofs_ristretto255
+	public fun
+	0x2::rangeproofs
+verify_bulletproofs_ristretto255_internal
+	fun
+	0x2::rangeproofs
 TableVec
 	public struct
 	0x2::table_vec
@@ -5014,9 +5044,6 @@ Permit
 permit
 	public fun
 	0x1::internal
-empty
-	public fun
-	0x1::vector
 length
 	public fun
 	0x1::vector
@@ -5036,9 +5063,6 @@ destroy_empty
 	public fun
 	0x1::vector
 swap
-	public fun
-	0x1::vector
-singleton
 	public fun
 	0x1::vector
 reverse
@@ -5072,6 +5096,12 @@ take
 	public fun
 	0x1::vector
 flatten
+	public fun
+	0x1::vector
+empty
+	public fun
+	0x1::vector
+singleton
 	public fun
 	0x1::vector
 Option
@@ -5344,7 +5374,13 @@ min
 diff
 	public fun
 	0x1::u128
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u128
+mul_div_ceil
+	public fun
+	0x1::u128
+div_ceil
 	public fun
 	0x1::u128
 pow
@@ -5404,6 +5440,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u128
+divide_and_round_up
+	public fun
+	0x1::u128
 bitwise_not
 	public fun
 	0x1::u16
@@ -5416,7 +5455,13 @@ min
 diff
 	public fun
 	0x1::u16
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u16
+mul_div_ceil
+	public fun
+	0x1::u16
+div_ceil
 	public fun
 	0x1::u16
 pow
@@ -5467,6 +5512,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u16
+divide_and_round_up
+	public fun
+	0x1::u16
 bitwise_not
 	public fun
 	0x1::u256
@@ -5479,7 +5527,7 @@ min
 diff
 	public fun
 	0x1::u256
-divide_and_round_up
+div_ceil
 	public fun
 	0x1::u256
 pow
@@ -5533,6 +5581,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u256
+divide_and_round_up
+	public fun
+	0x1::u256
 bitwise_not
 	public fun
 	0x1::u32
@@ -5545,7 +5596,13 @@ min
 diff
 	public fun
 	0x1::u32
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u32
+mul_div_ceil
+	public fun
+	0x1::u32
+div_ceil
 	public fun
 	0x1::u32
 pow
@@ -5599,6 +5656,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u32
+divide_and_round_up
+	public fun
+	0x1::u32
 bitwise_not
 	public fun
 	0x1::u64
@@ -5611,7 +5671,13 @@ min
 diff
 	public fun
 	0x1::u64
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u64
+mul_div_ceil
+	public fun
+	0x1::u64
+div_ceil
 	public fun
 	0x1::u64
 pow
@@ -5668,6 +5734,9 @@ lossless_shr
 lossless_div
 	public fun
 	0x1::u64
+divide_and_round_up
+	public fun
+	0x1::u64
 bitwise_not
 	public fun
 	0x1::u8
@@ -5680,7 +5749,13 @@ min
 diff
 	public fun
 	0x1::u8
-divide_and_round_up
+mul_div
+	public fun
+	0x1::u8
+mul_div_ceil
+	public fun
+	0x1::u8
+div_ceil
 	public fun
 	0x1::u8
 pow
@@ -5726,6 +5801,9 @@ lossless_shr
 	public fun
 	0x1::u8
 lossless_div
+	public fun
+	0x1::u8
+divide_and_round_up
 	public fun
 	0x1::u8
 UQ32_32

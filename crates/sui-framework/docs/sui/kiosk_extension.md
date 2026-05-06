@@ -539,7 +539,7 @@ Check whether an extension of type <code>Ext</code> is installed.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_is_installed">is_installed</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
-    df::exists_(self.uid(), <a href="../sui/kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
+    df::exists(self.uid(), <a href="../sui/kiosk_extension.md#sui_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
 }
 </code></pre>
 

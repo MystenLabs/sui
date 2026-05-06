@@ -15,6 +15,7 @@ use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
+use sui_kvstore::parse_alpha_pipeline_name;
 use sui_kvstore::set_write_legacy_data;
 use sui_protocol_config::Chain;
 use telemetry_subscribers::TelemetryConfig;
@@ -47,9 +48,13 @@ struct Args {
     #[arg(long)]
     chain: Chain,
 
-    /// Enable writing legacy data: watermark \[0\] row, epoch DEFAULT_COLUMN, and transaction tx column
+    /// Enable writing legacy data: deprecated combined transaction tx column
     #[arg(long)]
     write_legacy_data: bool,
+
+    /// Enable an alpha pipeline by framework pipeline name. Repeat to enable multiple pipelines.
+    #[arg(long = "enable-alpha-pipeline", value_name = "PIPELINE_NAME", value_parser = parse_alpha_pipeline_name)]
+    enable_alpha_pipelines: Vec<&'static str>,
 
     #[command(flatten)]
     metrics_args: MetricsArgs,
@@ -83,10 +88,12 @@ async fn main() -> Result<()> {
 
     let is_bounded = args.indexer_args.last_checkpoint.is_some();
     set_write_legacy_data(args.write_legacy_data);
+    let alpha_pipelines = args.enable_alpha_pipelines;
 
     info!("Starting sui-kvstore-alt indexer");
     info!(instance_id = %args.instance_id);
     info!("Config: {:#?}", config);
+    info!(?alpha_pipelines, "Enabled alpha pipelines");
 
     let channel_timeout = config
         .bigtable_channel_timeout_ms
@@ -112,7 +119,7 @@ async fn main() -> Result<()> {
 
     let store = BigTableStore::new(client);
 
-    let registry = prometheus::Registry::new_custom(Some("kvstore_alt".into()), None)?;
+    let registry = prometheus::Registry::new();
     let metrics_service =
         sui_indexer_alt_metrics::MetricsService::new(args.metrics_args, registry.clone());
 
@@ -127,6 +134,7 @@ async fn main() -> Result<()> {
         indexer_config,
         config.pipeline,
         args.chain,
+        &alpha_pipelines,
         &registry,
     )
     .await?;

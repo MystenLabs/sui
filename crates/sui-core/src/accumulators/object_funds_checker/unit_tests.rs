@@ -12,7 +12,7 @@ use sui_types::{
     crypto::get_account_key_pair,
     executable_transaction::VerifiedExecutableTransaction,
     execution_params::FundsWithdrawStatus,
-    execution_status::{ExecutionErrorKind, ExecutionStatus},
+    execution_status::{ExecutionErrorKind, ExecutionFailure, ExecutionStatus},
 };
 
 use crate::{
@@ -381,7 +381,10 @@ async fn test_should_commit_early_exits() {
     // Failed execution should always commit.
     assert!(checker.should_commit_object_funds_withdraws(
         &tx,
-        &ExecutionStatus::new_failure(ExecutionErrorKind::FunctionNotFound, None,),
+        &ExecutionStatus::new_failure(ExecutionFailure::new(
+            ExecutionErrorKind::FunctionNotFound,
+            None,
+        )),
         &withdraws,
         &ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(
             vec![],

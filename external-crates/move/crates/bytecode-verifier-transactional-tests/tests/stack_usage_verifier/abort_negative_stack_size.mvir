@@ -1,7 +1,7 @@
 //# run
-module 0x42.m {
+mvir 0x42::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     // negative stack size, abort takes an arg
     abort;

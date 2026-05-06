@@ -1,0 +1,55 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-32:
+//# publish --sender A
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6399200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 34-36:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 38-39:
+//# programmable --sender A --inputs object(2,0) 7u64 111u64 222u64
+//> 0: test::mod::add_child(Input(0), Input(1), Input(2), Input(3))
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 6118000,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 4, line 41:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 43-59:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMoveObject": {
+        "contents": {
+          "formatted": "111",
+          "missingFormatted": null,
+          "extracted": {
+            "json": {
+              "id": "0xea50a3a31999735a3cae39f116edeeb42d6f95e6917f9c0df29819b438d060f3",
+              "x": "111",
+              "y": "222"
+            }
+          },
+          "missingExtracted": null
+        }
+      }
+    }
+  }
+}

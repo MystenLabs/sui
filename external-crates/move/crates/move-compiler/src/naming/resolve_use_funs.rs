@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::diagnostics::warning_filters::WarningFilters;
+use crate::diagnostics::filter::FilterScope;
 use crate::diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics};
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
@@ -47,7 +47,7 @@ impl<'env, 'info> Context<'env, 'info> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -87,7 +87,7 @@ fn module(
     mdef: &mut N::ModuleDefinition,
 ) {
     let context = &mut Context::new(env, info, mident);
-    context.push_warning_filter_scope(mdef.warning_filter);
+    context.push_warning_filter_scope(mdef.warning_filter.clone());
     use_funs(context, &mut mdef.use_funs);
     for (_, _, c) in &mut mdef.constants {
         constant(context, c);
@@ -99,13 +99,13 @@ fn module(
 }
 
 fn constant(context: &mut Context, c: &mut N::Constant) {
-    context.push_warning_filter_scope(c.warning_filter);
+    context.push_warning_filter_scope(c.warning_filter.clone());
     exp(context, &mut c.value);
     context.pop_warning_filter_scope();
 }
 
 fn function(context: &mut Context, function: &mut N::Function) {
-    context.push_warning_filter_scope(function.warning_filter);
+    context.push_warning_filter_scope(function.warning_filter.clone());
     if let N::FunctionBody_::Defined(seq) = &mut function.body.value {
         sequence(context, seq)
     }

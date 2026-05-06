@@ -293,6 +293,9 @@ pub enum ToolCommand {
         /// Number of parallel downloads to perform. Defaults to 50, max 200.
         #[clap(long = "num-parallel-downloads")]
         num_parallel_downloads: Option<usize>,
+        /// Number of parallel chunks for object insertion. Defaults to 8.
+        #[clap(long = "num-parallel-chunks", default_value = "8")]
+        num_parallel_chunks: usize,
         /// Verification mode to employ.
         #[clap(long = "verify", default_value = "normal")]
         verify: Option<SnapshotVerifyMode>,
@@ -434,7 +437,7 @@ impl ToolCommand {
                 start_commit,
                 end_commit,
             } => {
-                let rocks_db_store = RocksDBStore::new(&db_path);
+                let rocks_db_store = RocksDBStore::new(&db_path, true);
 
                 let start_commit = start_commit.unwrap_or(0);
                 let end_commit = end_commit.unwrap_or(u32::MAX);
@@ -646,6 +649,7 @@ impl ToolCommand {
                 genesis,
                 path,
                 num_parallel_downloads,
+                num_parallel_chunks,
                 verify,
                 network,
                 snapshot_bucket,
@@ -780,6 +784,7 @@ impl ToolCommand {
                     snapshot_store_config,
                     ingestion_url,
                     num_parallel_downloads,
+                    num_parallel_chunks,
                     network,
                     verify,
                     max_retries,

@@ -26,6 +26,7 @@ pub mod packages_by_id;
 pub mod protocol_configs;
 pub mod system_packages;
 pub mod transactions;
+pub mod tx_seq_digest;
 pub mod watermarks;
 
 /// Column family name used by all tables.
@@ -33,18 +34,6 @@ pub const FAMILY: &str = "sui";
 
 /// Default column qualifier (empty string) used by single-column tables.
 pub const DEFAULT_COLUMN: &str = "";
-
-/// Deprecated: Legacy watermark tables, replaced by per-pipeline watermarks table.
-pub mod watermark_legacy {
-    /// Stores checkpoint numbers as row keys (scan to find latest).
-    pub const NAME: &str = "watermark";
-}
-
-/// Deprecated: Legacy watermark table with single row.
-pub mod watermark_alt_legacy {
-    /// Stores checkpoint number at row key \[0\] (single read).
-    pub const NAME: &str = "watermark_alt";
-}
 
 /// Build an Entry from cells. Accepts any iterator to avoid intermediate allocations.
 pub fn make_entry(

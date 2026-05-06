@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use diesel::ExpressionMethods;
 use diesel::upsert::excluded;
 use diesel_async::RunQueryDsl;
-use futures::future::try_join_all;
 use sui_indexer_alt_framework::FieldCount;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::pipeline::sequential::Handler;
@@ -78,21 +77,21 @@ impl Handler for SumDisplays {
 
     async fn commit<'a>(&self, batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
-        let updates = values
-            .chunks(MAX_INSERT_CHUNK_ROWS)
-            .map(|chunk: &[StoredDisplay]| {
-                diesel::insert_into(sum_displays::table)
-                    .values(chunk)
-                    .on_conflict(sum_displays::object_type)
-                    .do_update()
-                    .set((
-                        sum_displays::display_id.eq(excluded(sum_displays::display_id)),
-                        sum_displays::display_version.eq(excluded(sum_displays::display_version)),
-                        sum_displays::display.eq(excluded(sum_displays::display)),
-                    ))
-                    .execute(conn)
-            });
+        let mut updates = 0;
+        for chunk in values.chunks(MAX_INSERT_CHUNK_ROWS) {
+            updates += diesel::insert_into(sum_displays::table)
+                .values(chunk)
+                .on_conflict(sum_displays::object_type)
+                .do_update()
+                .set((
+                    sum_displays::display_id.eq(excluded(sum_displays::display_id)),
+                    sum_displays::display_version.eq(excluded(sum_displays::display_version)),
+                    sum_displays::display.eq(excluded(sum_displays::display)),
+                ))
+                .execute(conn)
+                .await?;
+        }
 
-        Ok(try_join_all(updates).await?.into_iter().sum())
+        Ok(updates)
     }
 }

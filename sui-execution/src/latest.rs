@@ -16,10 +16,11 @@ use sui_types::{
     effects::TransactionEffects,
     error::{ExecutionError, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
+    execution_status::ExecutionFailure,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     layout_resolver::LayoutResolver,
-    metrics::{BytecodeVerifierMetrics, LimitsMetrics},
+    metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     transaction::{CheckedInputObjects, ProgrammableTransaction, TransactionKind},
 };
 
@@ -65,7 +66,7 @@ impl executor::Executor for Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
@@ -74,6 +75,53 @@ impl executor::Executor for Executor {
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
+        transaction_signer: SuiAddress,
+        transaction_digest: TransactionDigest,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> (
+        InnerTemporaryStore,
+        SuiGasStatus,
+        TransactionEffects,
+        Vec<ExecutionTiming>,
+        Result<(), ExecutionFailure>,
+    ) {
+        let (store_out, gas_status_out, effects, timings, result) =
+            execute_transaction_to_effects::<execution_mode::Normal>(
+                store,
+                input_objects,
+                gas,
+                gas_status,
+                transaction_kind,
+                rewritten_inputs,
+                transaction_signer,
+                transaction_digest,
+                &self.0,
+                epoch_id,
+                epoch_timestamp_ms,
+                protocol_config,
+                metrics,
+                enable_expensive_checks,
+                execution_params,
+                trace_builder_opt,
+            );
+        (store_out, gas_status_out, effects, timings, result)
+    }
+
+    fn execute_transaction_to_effects_and_execution_error(
+        &self,
+        store: &dyn BackingStore,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<ExecutionMetrics>,
+        enable_expensive_checks: bool,
+        execution_params: ExecutionOrEarlyError,
+        epoch_id: &EpochId,
+        epoch_timestamp_ms: u64,
+        input_objects: CheckedInputObjects,
+        gas: GasData,
+        gas_status: SuiGasStatus,
+        transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -84,12 +132,13 @@ impl executor::Executor for Executor {
         Vec<ExecutionTiming>,
         Result<(), ExecutionError>,
     ) {
-        execute_transaction_to_effects::<execution_mode::Normal>(
+        execute_transaction_to_effects::<execution_mode::Normal<ExecutionError>>(
             store,
             input_objects,
             gas,
             gas_status,
             transaction_kind,
+            rewritten_inputs,
             transaction_signer,
             transaction_digest,
             &self.0,
@@ -107,7 +156,7 @@ impl executor::Executor for Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         enable_expensive_checks: bool,
         execution_params: ExecutionOrEarlyError,
         epoch_id: &EpochId,
@@ -116,6 +165,7 @@ impl executor::Executor for Executor {
         gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
+        rewritten_inputs: Option<Vec<bool>>,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
         skip_all_checks: bool,
@@ -132,6 +182,7 @@ impl executor::Executor for Executor {
                 gas,
                 gas_status,
                 transaction_kind,
+                rewritten_inputs,
                 transaction_signer,
                 transaction_digest,
                 &self.0,
@@ -150,6 +201,7 @@ impl executor::Executor for Executor {
                 gas,
                 gas_status,
                 transaction_kind,
+                rewritten_inputs,
                 transaction_signer,
                 transaction_digest,
                 &self.0,
@@ -169,7 +221,7 @@ impl executor::Executor for Executor {
         &self,
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
-        metrics: Arc<LimitsMetrics>,
+        metrics: Arc<ExecutionMetrics>,
         epoch_id: EpochId,
         epoch_timestamp_ms: u64,
         transaction_digest: &TransactionDigest,
@@ -202,9 +254,10 @@ impl executor::Executor for Executor {
 
     fn type_layout_resolver<'r, 'vm: 'r, 'store: 'r>(
         &'vm self,
+        protocol_config: &'vm ProtocolConfig,
         store: Box<dyn TypeLayoutStore + 'store>,
     ) -> Box<dyn LayoutResolver + 'r> {
-        Box::new(TypeLayoutResolver::new(&self.0, store))
+        Box::new(TypeLayoutResolver::new(&self.0, protocol_config, store))
     }
 }
 

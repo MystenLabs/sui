@@ -4,7 +4,7 @@
 // Tests `public_receive` should fail for an object _without_ public transfer,
 // and that we cannot directly call `receive` from a PTB.
 
-//# init --accounts A B --addresses test=0x0 --protocol-version 30
+//# init --accounts A B --addresses test=0x0 --protocol-version 30 --file-format 6
 
 //# publish
 module test::m {
@@ -88,11 +88,11 @@ module test::m {
 
 //# run test::m::mint_cup --sender A --type-args u64
 
-//# view-object 6,0
-
 //# view-object 6,1
 
-//# programmable --sender A --inputs object(6,1) receiving(6,0)
+//# view-object 6,0
+
+//# programmable --sender A --inputs object(6,0) receiving(6,1)
 //> 0: test::m::receive_cup<u64>(Input(0), Input(1));
 //> 1: test::m::destroy_cup<u64>(Result(0));
 

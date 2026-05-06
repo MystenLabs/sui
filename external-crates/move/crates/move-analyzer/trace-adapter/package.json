@@ -40,7 +40,7 @@
     "@iarna/toml": "^2.2.5",
     "@vscode/debugadapter": "^1.56.0",
     "@vscode/debugprotocol": "1.66.0",
-    "fzstd": "^0.1.1",
+    "zstddec": "^0.2.0",
     "lodash.snakecase": "^4.1.1"
   }
 }

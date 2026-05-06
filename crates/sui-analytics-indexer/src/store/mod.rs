@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Analytics store implementation with TransactionalStore support.
+//! Analytics store implementation with SequentialStore support.
 //!
 //! This store supports two modes:
 //!
@@ -23,21 +23,18 @@ use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
 
-use anyhow::Result;
-use anyhow::bail;
 use async_trait::async_trait;
+use object_store::ObjectStore;
 use object_store::PutPayload;
 use object_store::path::Path as ObjectPath;
 use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_framework::pipeline::Processor;
 use sui_indexer_alt_framework::store::Connection;
+use sui_indexer_alt_framework::store::SequentialConnection;
+use sui_indexer_alt_framework::store::SequentialStore;
 use sui_indexer_alt_framework::store::Store;
-use sui_indexer_alt_framework::store::TransactionalStore;
 use sui_indexer_alt_framework_store_traits::CommitterWatermark;
 use sui_indexer_alt_framework_store_traits::InitWatermark;
-use sui_indexer_alt_framework_store_traits::PrunerWatermark;
-use sui_indexer_alt_framework_store_traits::ReaderWatermark;
-use sui_indexer_alt_framework_store_traits::init_with_committer_watermark;
 use sui_types::base_types::EpochId;
 use tokio::sync::mpsc;
 use tracing::debug;
@@ -47,6 +44,7 @@ use tracing::warn;
 use crate::config::FileFormat;
 use crate::config::IndexerConfig;
 use crate::handlers::CheckpointRows;
+use crate::handlers::system_package_eviction::SYSTEM_PACKAGE_EVICTION_PIPELINE;
 use crate::metrics::Metrics;
 use crate::schema::RowSchema;
 
@@ -152,6 +150,12 @@ pub struct AnalyticsStore {
     config: IndexerConfig,
     /// Schema for each pipeline, registered during pipeline setup.
     schemas_by_pipeline: Arc<RwLock<HashMap<String, &'static [&'static str]>>>,
+    /// Committer watermarks for pipelines whose `committer_watermark` has already been
+    /// invoked during framework registration, keyed by pipeline name. Populated as a
+    /// side effect of each call. `SystemPackageEviction` (registered last in
+    /// `build_analytics_indexer`) reads from this map to derive its own watermark as the
+    /// max across other pipelines — so the cache doubles as the set of enabled pipelines.
+    initial_watermarks: Arc<tokio::sync::Mutex<HashMap<String, Option<CommitterWatermark>>>>,
 }
 
 /// Connection to the analytics store.
@@ -165,6 +169,14 @@ pub struct AnalyticsConnection<'a> {
 }
 
 impl StoreMode {
+    /// Access the underlying object store, regardless of mode.
+    pub(crate) fn object_store(&self) -> &Arc<dyn ObjectStore> {
+        match self {
+            StoreMode::Live(store) => store.object_store(),
+            StoreMode::Migration(store) => store.object_store(),
+        }
+    }
+
     /// Split a batch of checkpoints into files.
     ///
     /// Delegates to mode-specific splitting logic:
@@ -273,6 +285,7 @@ impl AnalyticsStore {
             worker_handles: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             config,
             schemas_by_pipeline: Arc::new(RwLock::new(HashMap::new())),
+            initial_watermarks: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
         }
     }
 
@@ -290,7 +303,7 @@ impl AnalyticsStore {
         &self,
         first_checkpoint: Option<u64>,
         last_checkpoint: Option<u64>,
-    ) -> Result<(Option<u64>, Option<u64>)> {
+    ) -> anyhow::Result<(Option<u64>, Option<u64>)> {
         match &self.mode {
             StoreMode::Live(_) => Ok((first_checkpoint, last_checkpoint)),
             StoreMode::Migration(store) => {
@@ -536,7 +549,7 @@ impl<'a> AnalyticsConnection<'a> {
     pub async fn commit_batch<P: Processor>(
         &mut self,
         batch_from_framework: &[CheckpointRows],
-    ) -> Result<usize> {
+    ) -> anyhow::Result<usize> {
         let pipeline = P::NAME;
         let pipeline_config = self.pipeline_config(pipeline);
 
@@ -610,7 +623,9 @@ impl Store for AnalyticsStore {
 }
 
 #[async_trait]
-impl TransactionalStore for AnalyticsStore {
+impl SequentialStore for AnalyticsStore {
+    type SequentialConnection<'c> = AnalyticsConnection<'c>;
+
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,
@@ -626,48 +641,79 @@ impl TransactionalStore for AnalyticsStore {
 
 #[async_trait]
 impl Connection for AnalyticsConnection<'_> {
-    /// Initialize watermark.
-    ///
-    /// In live mode: Watermarks are derived from file names, so just delegates to `committer_watermark`.
-    /// In migration mode: Delegates to `MigrationStore::init_watermark`.
     async fn init_watermark(
         &mut self,
         pipeline_task: &str,
-        init_watermark: InitWatermark,
-    ) -> anyhow::Result<InitWatermark> {
-        init_with_committer_watermark(self, pipeline_task, init_watermark).await
+        checkpoint_hi_inclusive: Option<u64>,
+    ) -> anyhow::Result<Option<InitWatermark>> {
+        self.delegate_to_committer_watermark(pipeline_task, checkpoint_hi_inclusive)
+            .await
+    }
+
+    /// Stores the chain_id at `_metadata/chain_id/{pipeline_task}` on first call,
+    /// and on subsequent calls verifies that the provided chain_id matches the stored value.
+    ///
+    /// This guards against pointing the indexer at an object store that was previously
+    /// populated with data from a different chain.
+    async fn accepts_chain_id(
+        &mut self,
+        pipeline_task: &str,
+        chain_id: [u8; 32],
+    ) -> anyhow::Result<bool> {
+        sui_indexer_alt_object_store::accepts_chain_id(
+            self.store.mode.object_store().as_ref(),
+            pipeline_task,
+            chain_id,
+        )
+        .await
     }
 
     /// Determine the watermark.
     ///
     /// In live mode: scans file names in the object store.
     /// In migration mode: reads from watermark metadata file.
+    ///
+    /// `SystemPackageEviction` is a pseudohandler that never writes files, so its
+    /// watermark cannot be derived from its own `output_prefix`. It is always registered
+    /// last in `build_analytics_indexer`, so by the time this fires for it, each other
+    /// pipeline's watermark has already been computed and cached in `initial_watermarks`.
+    /// Return the max across those pipelines. The cache only matters at tip — it starts
+    /// empty on restart and only needs invalidation to clear entries staled by a live
+    /// epoch transition. Starting at the farthest-along pipeline means eviction sits idle
+    /// while slower pipelines backfill, then wakes up at tip where invalidation matters.
     async fn committer_watermark(
         &mut self,
         pipeline: &str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-        let output_prefix = self.pipeline_config(pipeline).output_prefix().to_string();
-        match &self.store.mode {
-            StoreMode::Live(store) => store.committer_watermark(&output_prefix).await,
-            StoreMode::Migration(store) => store.committer_watermark(&output_prefix).await,
+        if pipeline == SYSTEM_PACKAGE_EVICTION_PIPELINE {
+            let watermarks = self.store.initial_watermarks.lock().await;
+            let max = watermarks
+                .values()
+                .filter_map(|w| *w)
+                .max_by_key(|w| w.checkpoint_hi_inclusive);
+            if max.is_none() {
+                warn!(
+                    pipeline = SYSTEM_PACKAGE_EVICTION_PIPELINE,
+                    "No other pipelines have durable progress; falling back to framework default start checkpoint"
+                );
+            }
+            return Ok(max);
         }
-    }
 
-    async fn reader_watermark(
-        &mut self,
-        _pipeline: &'static str,
-    ) -> anyhow::Result<Option<ReaderWatermark>> {
-        // Reader watermark not supported - no pruning in analytics indexer
-        Ok(None)
-    }
-
-    async fn pruner_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark>> {
-        // Pruning not supported in analytics indexer
-        Ok(None)
+        let Some(config) = self.store.config.get_pipeline_config(pipeline) else {
+            return Ok(None);
+        };
+        let output_prefix = config.output_prefix().to_string();
+        let watermark = match &self.store.mode {
+            StoreMode::Live(store) => store.committer_watermark(&output_prefix).await?,
+            StoreMode::Migration(store) => store.committer_watermark(&output_prefix).await?,
+        };
+        self.store
+            .initial_watermarks
+            .lock()
+            .await
+            .insert(pipeline.to_string(), watermark);
+        Ok(watermark)
     }
 
     /// Store the watermark for use in commit_batch.
@@ -683,23 +729,10 @@ impl Connection for AnalyticsConnection<'_> {
         self.watermark = Some(watermark);
         Ok(true)
     }
-
-    async fn set_reader_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _reader_lo: u64,
-    ) -> anyhow::Result<bool> {
-        bail!("Pruning not supported by analytics store");
-    }
-
-    async fn set_pruner_watermark(
-        &mut self,
-        _pipeline: &'static str,
-        _pruner_hi: u64,
-    ) -> anyhow::Result<bool> {
-        bail!("Pruning not supported by analytics store");
-    }
 }
+
+#[async_trait]
+impl SequentialConnection for AnalyticsConnection<'_> {}
 
 /// Construct the object store path for an analytics file.
 /// Path format: {pipeline}/epoch_{epoch}/{start}_{end}.{ext}

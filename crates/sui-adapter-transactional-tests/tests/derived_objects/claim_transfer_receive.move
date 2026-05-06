@@ -48,10 +48,10 @@ entry fun receive_obj_from_derived(
 
 //# run a::m::create_parent_and_derived --args 0 --sender A
 
-//# run a::m::transfer_obj_to_derived --sender A --args object(2,1) 0
+//# run a::m::transfer_obj_to_derived --sender A --args object(2,0) 0
 
 //# view-object 3,0
 
-//# run a::m::receive_obj_from_derived --sender A --args object(2,0) receiving(3,0)
+//# run a::m::receive_obj_from_derived --sender A --args object(2,1) receiving(3,0)
 
 //# view-object 3,0

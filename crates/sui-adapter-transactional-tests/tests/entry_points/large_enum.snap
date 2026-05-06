@@ -33,11 +33,11 @@ gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 9
 task 5, lines 68-69:
 //# programmable --sender A
 //> test::m::e_x4()
-Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: TOO_MANY_TYPE_NODES, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: UNKNOWN. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(None)), source: Some(VMError { major_status: VM_MAX_TYPE_NODES_REACHED, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: Some(0) } }
 
 task 6, lines 71-72:
 //# programmable --sender A
 //> test::m::s_x4()
-Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: TOO_MANY_TYPE_NODES, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: None } }
+Error: Transaction Effects Status: Move Primitive Runtime Error. Location: UNKNOWN. Arithmetic error, stack overflow, max value depth, etc.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MovePrimitiveRuntimeError(MoveLocationOpt(None)), source: Some(VMError { major_status: VM_MAX_TYPE_NODES_REACHED, sub_status: None, message: None, exec_state: None, location: Undefined, indices: [], offsets: [] }), command: None } }

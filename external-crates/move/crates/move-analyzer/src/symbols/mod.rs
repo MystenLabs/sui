@@ -68,7 +68,10 @@ use crate::{
         mod_defs::{FieldDef, MemberDef, MemberDefInfo, ModuleDefs, ModuleParsingInfo},
         use_def::{References, UseDef, UseDefMap},
     },
-    utils::{expansion_mod_ident_to_map_key, loc_start_to_lsp_position_opt, lsp_position_to_loc},
+    utils::{
+        canonicalize_path, expansion_mod_ident_to_map_key, loc_start_to_lsp_position_opt,
+        lsp_position_to_loc,
+    },
 };
 
 use anyhow::Result;
@@ -164,6 +167,7 @@ pub fn get_symbols<F: MoveFlavor>(
     ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: LintLevel,
+    move_flavor: Arc<F>,
     cursor_info: Option<(&PathBuf, Position)>,
     flavor: Option<Flavor>,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
@@ -194,6 +198,7 @@ pub fn get_symbols<F: MoveFlavor>(
             ide_files_root.clone(),
             pkg_path,
             lint,
+            move_flavor.clone(),
             flavor,
             cursor_info.map(|(path, _)| path),
         )?;
@@ -495,8 +500,7 @@ pub fn compute_symbols_typed_program(
                 .file_name_mapping()
                 .get(&fhash)
                 .map(|p| {
-                    let fpath =
-                        dunce::canonicalize(p).unwrap_or_else(|_| p.as_path().to_path_buf());
+                    let fpath = canonicalize_path(p.clone());
                     (fpath, mod_map)
                 })
         })
@@ -533,8 +537,7 @@ fn update_file_use_defs(
         };
         let fpath = fpath.as_path().to_string_lossy().to_string();
 
-        let fpath_buffer =
-            dunce::canonicalize(fpath.clone()).unwrap_or_else(|_| PathBuf::from(fpath.as_str()));
+        let fpath_buffer = canonicalize_path(PathBuf::from(fpath.as_str()));
 
         file_use_defs
             .entry(fpath_buffer)

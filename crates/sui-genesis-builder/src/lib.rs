@@ -5,8 +5,8 @@ use anyhow::{Context, bail};
 use camino::Utf8Path;
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair;
-use move_binary_format::CompiledModule;
 use move_core_types::ident_str;
+use mysten_common::ZipDebugEqIteratorExt;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::fs;
@@ -43,13 +43,11 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
     CheckpointVersionSpecificData, CheckpointVersionSpecificDataV1,
 };
-use sui_types::metrics::LimitsMetrics;
+use sui_types::metrics::ExecutionMetrics;
 use sui_types::object::{Object, Owner};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait, get_sui_system_state};
-use sui_types::transaction::{
-    CallArg, CheckedInputObjects, Command, InputObjectKind, ObjectReadResult, Transaction,
-};
+use sui_types::transaction::{CallArg, CheckedInputObjects, Transaction};
 use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
 use validator_info::{GenesisValidatorInfo, GenesisValidatorMetadata, ValidatorInfo};
@@ -345,7 +343,7 @@ impl Builder {
         for (validator, onchain_validator) in self
             .validators
             .values()
-            .zip(system_state.validators.active_validators.iter())
+            .zip_debug_eq(system_state.validators.active_validators.iter())
         {
             let metadata = onchain_validator.verified_metadata();
 
@@ -693,11 +691,11 @@ fn create_genesis_digest(
 ) -> TransactionDigest {
     let mut hasher = DefaultHash::default();
     hasher.update(b"sui-genesis");
-    hasher.update(bcs::to_bytes(genesis_chain_parameters).unwrap());
-    hasher.update(bcs::to_bytes(genesis_validators).unwrap());
-    hasher.update(bcs::to_bytes(token_distribution_schedule).unwrap());
+    bcs::serialize_into(&mut hasher, genesis_chain_parameters).unwrap();
+    bcs::serialize_into(&mut hasher, genesis_validators).unwrap();
+    bcs::serialize_into(&mut hasher, token_distribution_schedule).unwrap();
     for system_package in system_packages {
-        hasher.update(bcs::to_bytes(&system_package.bytes).unwrap());
+        bcs::serialize_into(&mut hasher, &system_package.bytes).unwrap();
     }
 
     let hash = hasher.finalize();
@@ -760,7 +758,7 @@ fn build_unsigned_genesis_data(
 
     // Use a throwaway metrics registry for genesis transaction execution.
     let registry = prometheus::Registry::new();
-    let metrics = Arc::new(LimitsMetrics::new(&registry));
+    let metrics = Arc::new(ExecutionMetrics::new(&registry));
 
     let objects = create_genesis_objects(
         &epoch_data,
@@ -873,7 +871,7 @@ fn create_genesis_checkpoint(
 fn create_genesis_transaction(
     objects: Vec<Object>,
     protocol_config: &ProtocolConfig,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
     epoch_data: &EpochData,
 ) -> (
     Transaction,
@@ -922,7 +920,7 @@ fn create_genesis_transaction(
         gas_data.payment = vec![];
         let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
         let (inner_temp_store, _, effects, _timings, _execution_error) = executor
-            .execute_transaction_to_effects(
+            .execute_transaction_to_effects_and_execution_error(
                 &InMemoryStorage::new(Vec::new()),
                 protocol_config,
                 metrics,
@@ -934,6 +932,7 @@ fn create_genesis_transaction(
                 gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,
+                None, // compat_args
                 signer,
                 genesis_digest,
                 &mut None,
@@ -961,7 +960,7 @@ fn create_genesis_objects(
     parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
     system_packages: Vec<SystemPackage>,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
     // We don't know the chain ID here since we haven't yet created the genesis checkpoint.
@@ -977,17 +976,7 @@ fn create_genesis_objects(
         .expect("Creating an executor should not fail here");
 
     for system_package in system_packages.into_iter() {
-        process_package(
-            &mut store,
-            executor.as_ref(),
-            epoch_data,
-            genesis_digest,
-            &system_package.modules(),
-            system_package.dependencies,
-            &protocol_config,
-            metrics.clone(),
-        )
-        .unwrap();
+        process_package(&mut store, system_package).unwrap();
     }
 
     {
@@ -1013,72 +1002,29 @@ fn create_genesis_objects(
 
 fn process_package(
     store: &mut InMemoryStorage,
-    executor: &dyn Executor,
-    epoch_data: &EpochData,
-    genesis_digest: &TransactionDigest,
-    modules: &[CompiledModule],
-    dependencies: Vec<ObjectID>,
-    protocol_config: &ProtocolConfig,
-    metrics: Arc<LimitsMetrics>,
+    system_package: SystemPackage,
 ) -> anyhow::Result<()> {
-    let dependency_objects = store.get_objects(&dependencies);
-    // When publishing genesis packages, since the std framework packages all have
-    // non-zero addresses, [`Transaction::input_objects_in_compiled_modules`] will consider
-    // them as dependencies even though they are not. Hence input_objects contain objects
-    // that don't exist on-chain because they are yet to be published.
     #[cfg(debug_assertions)]
     {
         use move_core_types::account_address::AccountAddress;
-        let to_be_published_addresses: std::collections::HashSet<_> = modules
+        let to_be_published_addresses: std::collections::HashSet<_> = system_package
+            .modules()
             .iter()
             .map(|module| *module.self_id().address())
             .collect();
+        let dependencies = &system_package.dependencies;
+        let dependency_objects = store.get_objects(dependencies);
         assert!(
             // An object either exists on-chain, or is one of the packages to be published.
             dependencies
                 .iter()
-                .zip(dependency_objects.iter())
+                .zip_debug_eq(dependency_objects.iter())
                 .all(|(dependency, obj_opt)| obj_opt.is_some()
                     || to_be_published_addresses.contains(&AccountAddress::from(*dependency)))
         );
     }
-    let loaded_dependencies: Vec<_> = dependencies
-        .iter()
-        .zip(dependency_objects)
-        .filter_map(|(dependency, object)| {
-            Some(ObjectReadResult::new(
-                InputObjectKind::MovePackage(*dependency),
-                object?.clone().into(),
-            ))
-        })
-        .collect();
-
-    let module_bytes = modules
-        .iter()
-        .map(|m| {
-            let mut buf = vec![];
-            m.serialize_with_version(m.version, &mut buf).unwrap();
-            buf
-        })
-        .collect();
-    let pt = {
-        let mut builder = ProgrammableTransactionBuilder::new();
-        // executing in Genesis mode does not create an `UpgradeCap`.
-        builder.command(Command::Publish(module_bytes, dependencies));
-        builder.finish()
-    };
-    let InnerTemporaryStore { written, .. } = executor.update_genesis_state(
-        &*store,
-        protocol_config,
-        metrics,
-        epoch_data.epoch_id(),
-        epoch_data.epoch_start_timestamp(),
-        genesis_digest,
-        CheckedInputObjects::new_for_genesis(loaded_dependencies),
-        pt,
-    )?;
-
-    store.finish(written);
+    // This is genesis, so insert the system package objects directly without going through Move.
+    store.insert_object(system_package.genesis_object());
 
     Ok(())
 }
@@ -1091,7 +1037,7 @@ pub fn generate_genesis_system_object(
     genesis_digest: &TransactionDigest,
     genesis_chain_parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
-    metrics: Arc<LimitsMetrics>,
+    metrics: Arc<ExecutionMetrics>,
 ) -> anyhow::Result<()> {
     let protocol_config = ProtocolConfig::get_for_version(
         ProtocolVersion::new(genesis_chain_parameters.protocol_version),

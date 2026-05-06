@@ -14,7 +14,7 @@ use move_binary_format::{
 use move_command_line_common::files::FileHash;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_ir_types::{
-    ast::{ConstantName, ModuleIdent, ModuleName, NopLabel},
+    ast::{BlockLabel_, ConstantName, ModuleIdent, ModuleName, NopLabel},
     location::Loc,
 };
 use move_symbol_pool::Symbol;
@@ -84,6 +84,9 @@ pub struct FunctionSourceMap {
     /// A map to the code offset for a corresponding nop. Nop's are used as markers for some
     /// high level language information
     pub nops: BTreeMap<NopLabel, CodeOffset>,
+
+    /// A map from block labels to their bytecode offsets.
+    pub labels: BTreeMap<BlockLabel_, CodeOffset>,
 
     /// The source location map for the function body.
     pub code_map: BTreeMap<CodeOffset, Loc>,
@@ -228,6 +231,7 @@ impl FunctionSourceMap {
             code_map: BTreeMap::new(),
             is_native,
             nops: BTreeMap::new(),
+            labels: BTreeMap::new(),
         }
     }
 
@@ -259,6 +263,11 @@ impl FunctionSourceMap {
     /// Record the code offset for an Nop label
     pub fn add_nop_mapping(&mut self, label: NopLabel, offset: CodeOffset) {
         assert!(self.nops.insert(label, offset).is_none())
+    }
+
+    /// Record the code offset for a block label
+    pub fn add_label_mapping(&mut self, label: BlockLabel_, offset: CodeOffset) {
+        self.labels.insert(label, offset);
     }
 
     // Note that it is important that locations be added in order.
@@ -435,6 +444,20 @@ impl SourceMap {
             .get_mut(&fdef_idx.0)
             .ok_or_else(|| format_err!("Tried to add nop mapping to undefined function index"))?;
         func_entry.add_nop_mapping(label, start_offset);
+        Ok(())
+    }
+
+    pub fn add_label_mapping(
+        &mut self,
+        fdef_idx: FunctionDefinitionIndex,
+        label: BlockLabel_,
+        offset: CodeOffset,
+    ) -> Result<()> {
+        let func_entry = self
+            .function_map
+            .get_mut(&fdef_idx.0)
+            .ok_or_else(|| format_err!("Tried to add label mapping to undefined function index"))?;
+        func_entry.add_label_mapping(label, offset);
         Ok(())
     }
 

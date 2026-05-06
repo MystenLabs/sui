@@ -18,8 +18,6 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 anyhow.workspace = true
 async-trait.workspace = true
 base64.workspace = true
-clap.workspace = true
-colored.workspace = true
 jsonrpsee.workspace = true
 serde.workspace = true
 serde_with.workspace = true
@@ -53,7 +51,6 @@ sui-sdk-types.workspace = true
 # to not have to pull in the entire sui repo for it.
 
 [dev-dependencies]
-clap.workspace = true
 dirs.workspace = true
 tempfile.workspace = true
 futures-core.workspace = true

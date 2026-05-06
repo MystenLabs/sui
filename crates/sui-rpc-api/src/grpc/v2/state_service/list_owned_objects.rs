@@ -15,6 +15,7 @@ use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
 use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsResponse;
 use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_sdk_types::Address;
+use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::storage::OwnedObjectInfo;
 
 const MAX_PAGE_SIZE: usize = 1000;
@@ -108,7 +109,7 @@ pub fn list_owned_objects(
                 continue;
             };
 
-            service.render_object_to_proto(&object, &read_mask)
+            service.render_object_to_proto(&object, &read_mask, &ObjectSet::default())
         } else {
             owned_object_to_proto(object_info, &read_mask)
         };

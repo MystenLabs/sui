@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use mysten_common::ZipDebugEqIteratorExt;
 use mysten_common::register_debug_fatal_handler;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -418,7 +419,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
             "Both transactions should have the same number of signatures"
         );
         for ((_, enable_version), (_, transfer_version)) in
-            enable_signatures.iter().zip(transfer_signatures.iter())
+            enable_signatures.iter().zip_debug_eq(transfer_signatures.iter())
         {
             assert_eq!(
                 enable_version, transfer_version,
@@ -507,7 +508,7 @@ async fn test_checkpoint_contents_v2_alias_versions() {
             "Both transactions should have the same number of signatures"
         );
         for ((_, post_enable_version), original_version) in
-            post_enable_signatures.iter().zip(original_alias_versions.iter())
+            post_enable_signatures.iter().zip_debug_eq(original_alias_versions.iter())
         {
             assert_ne!(
                 post_enable_version, original_version,

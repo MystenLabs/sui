@@ -8,6 +8,7 @@ publish = false
 edition = "2024"
 
 [dev-dependencies]
+mysten-common.workspace = true
 anyhow.workspace = true
 datatest-stable.workspace = true
 insta.workspace = true

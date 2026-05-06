@@ -6,7 +6,7 @@ use crate::unit_tests::testutils::compile_module_string;
 use std::fmt::Write;
 
 fn generate_function(name: &str, num_formals: usize, num_locals: usize) -> String {
-    let mut code = format!("public {}(", name);
+    let mut code = format!("public fun {}(", name);
 
     code.reserve(30 * (num_formals + num_locals));
 
@@ -38,8 +38,8 @@ fn generate_function(name: &str, num_formals: usize, num_locals: usize) -> Strin
 fn compile_module_with_large_frame() {
     let mut code = String::from(
         "
-        module 0x16.Foobar {
-            struct FooCoin { value: u64 }
+        mvir 0x16::Foobar {
+            public struct FooCoin { value: u64 }
         ",
     );
 

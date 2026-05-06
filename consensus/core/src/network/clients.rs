@@ -50,8 +50,8 @@ where
         &self,
         peer: PeerId,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         // A validator node will always talk via the validator interface to another authority.
@@ -66,8 +66,8 @@ where
                 .fetch_blocks(
                     authority,
                     block_refs,
-                    highest_accepted_rounds,
-                    breadth_first,
+                    fetch_after_rounds,
+                    fetch_missing_ancestors,
                     timeout,
                 )
                 .await
@@ -75,7 +75,15 @@ where
             let client = self.observer_client.as_ref().ok_or_else(|| {
                 ConsensusError::NetworkConfig("Observer client not available".to_string())
             })?;
-            client.fetch_blocks(peer, block_refs, timeout).await
+            client
+                .fetch_blocks(
+                    peer,
+                    block_refs,
+                    fetch_after_rounds,
+                    fetch_missing_ancestors,
+                    timeout,
+                )
+                .await
         }
     }
 
@@ -123,6 +131,19 @@ where
         }
     }
 
+    pub async fn probe_connectivity(&self, peer: PeerId, timeout: Duration) -> ConsensusResult<()> {
+        // For now, only probe connectivity by validator against validators.
+        if self.context.is_validator()
+            && let PeerId::Validator(authority) = peer
+        {
+            let client = self.validator_client.as_ref().ok_or_else(|| {
+                ConsensusError::NetworkConfig("Validator client not available".to_string())
+            })?;
+            let _ = client.get_latest_rounds(authority, timeout).await?;
+        }
+        Ok(())
+    }
+
     pub async fn fetch_commits(
         &self,
         peer: PeerId,
@@ -150,8 +171,8 @@ where
         &self,
         peer: PeerId,
         block_refs: Vec<BlockRef>,
-        highest_accepted_rounds: Vec<Round>,
-        breadth_first: bool,
+        fetch_after_rounds: Vec<Round>,
+        fetch_missing_ancestors: bool,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         // A validator node will always talk via the validator interface to another authority.
@@ -166,8 +187,8 @@ where
                 .fetch_blocks(
                     authority,
                     block_refs,
-                    highest_accepted_rounds,
-                    breadth_first,
+                    fetch_after_rounds,
+                    fetch_missing_ancestors,
                     timeout,
                 )
                 .await
@@ -175,7 +196,15 @@ where
             let client = self.observer_client.as_ref().ok_or_else(|| {
                 ConsensusError::NetworkConfig("Observer client not available".to_string())
             })?;
-            client.fetch_blocks(peer, block_refs, timeout).await
+            client
+                .fetch_blocks(
+                    peer,
+                    block_refs,
+                    fetch_after_rounds,
+                    fetch_missing_ancestors,
+                    timeout,
+                )
+                .await
         }
     }
 }

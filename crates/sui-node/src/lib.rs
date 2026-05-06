@@ -25,6 +25,9 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
+use sui_core::admission_queue::{
+    AdmissionQueueContext, AdmissionQueueManager, AdmissionQueueMetrics,
+};
 use sui_core::authority::ExecutionEnv;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTablesOptions;
@@ -96,13 +99,9 @@ use sui_core::checkpoints::{
     CheckpointMetrics, CheckpointService, CheckpointStore, SendCheckpointToStateSync,
     SubmitCheckpointToConsensus,
 };
-use sui_core::consensus_adapter::{
-    CheckConnection, ConnectionMonitorStatus, ConsensusAdapter, ConsensusAdapterMetrics,
-};
+use sui_core::consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics};
 use sui_core::consensus_manager::ConsensusManager;
-use sui_core::consensus_throughput_calculator::{
-    ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
-};
+use sui_core::consensus_throughput_calculator::ConsensusThroughputCalculator;
 use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::db_checkpoint_handler::DBCheckpointHandler;
 use sui_core::epoch::committee_store::CommitteeStore;
@@ -169,6 +168,7 @@ pub struct ValidatorComponents {
     consensus_adapter: Arc<ConsensusAdapter>,
     checkpoint_metrics: Arc<CheckpointMetrics>,
     sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
+    admission_queue: Option<AdmissionQueueContext>,
 }
 pub struct P2pComponents {
     p2p_network: Network,
@@ -264,7 +264,6 @@ pub struct SuiNode {
     randomness_handle: randomness::Handle,
     checkpoint_store: Arc<CheckpointStore>,
     global_state_hasher: Mutex<Option<Arc<GlobalStateHasher>>>,
-    connection_monitor_status: Arc<ConnectionMonitorStatus>,
 
     /// Broadcast channel to send the starting system state for the next epoch.
     end_of_epoch_channel: broadcast::Sender<SuiSystemState>,
@@ -580,7 +579,7 @@ impl SuiNode {
                 .unwrap_or(highest_executed_checkpoint)
         };
 
-        let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
+        let epoch_options = default_db_options().optimize_db_for_write_throughput(4, false);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee.clone(),
@@ -840,16 +839,10 @@ impl SuiNode {
             GlobalStateHashMetrics::new(&prometheus_registry),
         ));
 
-        let authority_names_to_peer_ids = epoch_store
-            .epoch_start_state()
-            .get_authority_names_to_peer_ids();
-
         let network_connection_metrics = mysten_network::quinn_metrics::QuinnConnectionMetrics::new(
             "sui",
             &registry_service.default_registry(),
         );
-
-        let authority_names_to_peer_ids = ArcSwap::from_pointee(authority_names_to_peer_ids);
 
         let connection_monitor_handle =
             mysten_network::anemo_connection_monitor::AnemoConnectionMonitor::spawn(
@@ -858,12 +851,6 @@ impl SuiNode {
                 known_peers,
             );
 
-        let connection_monitor_status = ConnectionMonitorStatus {
-            connection_statuses: connection_monitor_handle.connection_statuses(),
-            authority_names_to_peer_ids,
-        };
-
-        let connection_monitor_status = Arc::new(connection_monitor_status);
         let sui_node_metrics = Arc::new(SuiNodeMetrics::new(&registry_service.default_registry()));
 
         sui_node_metrics
@@ -884,14 +871,15 @@ impl SuiNode {
                 randomness_handle.clone(),
                 Arc::downgrade(&global_state_hasher),
                 backpressure_manager.clone(),
-                connection_monitor_status.clone(),
                 &registry_service,
                 sui_node_metrics.clone(),
                 checkpoint_metrics.clone(),
             )
             .await?;
 
-            components.consensus_adapter.submit_recovered(&epoch_store);
+            components
+                .consensus_adapter
+                .recover_end_of_publish(&epoch_store);
 
             // Start the gRPC server
             components.validator_server_handle = components.validator_server_handle.start().await;
@@ -924,7 +912,6 @@ impl SuiNode {
             checkpoint_store,
             global_state_hasher: Mutex::new(Some(global_state_hasher)),
             end_of_epoch_channel,
-            connection_monitor_status,
             endpoint_manager,
             backpressure_manager,
 
@@ -1183,9 +1170,12 @@ impl SuiNode {
                 .into_inner();
 
             let mut anemo_config = config.p2p_config.anemo_config.clone().unwrap_or_default();
-            // Set the max_frame_size to be 1 GB to work around the issue of there being too many
-            // staking events in the epoch change txn.
-            anemo_config.max_frame_size = Some(1 << 30);
+            // Inbound requests on this network are small (signatures, queries, summaries).
+            // Cap request frames at 1 MiB.
+            anemo_config.max_request_frame_size = Some(1 << 20);
+            // Responses can be larger (checkpoint contents).
+            // Cap response frames at 128 MiB.
+            anemo_config.max_response_frame_size = Some(128 << 20);
 
             // Set a higher default value for socket send/receive buffers if not already
             // configured.
@@ -1267,7 +1257,6 @@ impl SuiNode {
         randomness_handle: randomness::Handle,
         global_state_hasher: Weak<GlobalStateHasher>,
         backpressure_manager: Arc<BackpressureManager>,
-        connection_monitor_status: Arc<ConnectionMonitorStatus>,
         registry_service: &RegistryService,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
@@ -1279,15 +1268,15 @@ impl SuiNode {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
 
         let client = Arc::new(UpdatableConsensusClient::new());
+        let inflight_slot_freed_notify = Arc::new(tokio::sync::Notify::new());
         let consensus_adapter = Arc::new(Self::construct_consensus_adapter(
             &committee,
             consensus_config,
             state.name,
-            connection_monitor_status.clone(),
             &registry_service.default_registry(),
-            epoch_store.protocol_config().clone(),
             client.clone(),
             checkpoint_store.clone(),
+            inflight_slot_freed_notify.clone(),
         ));
         let consensus_manager = Arc::new(ConsensusManager::new(
             &config,
@@ -1307,11 +1296,13 @@ impl SuiNode {
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
-        let validator_server_handle = Self::start_grpc_validator_service(
+        let (validator_server_handle, admission_queue) = Self::start_grpc_validator_service(
             &config,
             state.clone(),
             consensus_adapter.clone(),
+            epoch_store.clone(),
             &registry_service.default_registry(),
+            inflight_slot_freed_notify,
         )
         .await?;
 
@@ -1350,6 +1341,7 @@ impl SuiNode {
             checkpoint_metrics,
             sui_node_metrics,
             sui_tx_validator_metrics,
+            admission_queue,
         )
         .await
     }
@@ -1371,6 +1363,7 @@ impl SuiNode {
         checkpoint_metrics: Arc<CheckpointMetrics>,
         sui_node_metrics: Arc<SuiNodeMetrics>,
         sui_tx_validator_metrics: Arc<SuiTxValidatorMetrics>,
+        admission_queue: Option<AdmissionQueueContext>,
     ) -> Result<ValidatorComponents> {
         let checkpoint_service = Self::build_checkpoint_service(
             config,
@@ -1382,13 +1375,6 @@ impl SuiNode {
             state_hasher,
             checkpoint_metrics.clone(),
         );
-
-        // create a new map that gets injected into both the consensus handler and the consensus adapter
-        // the consensus handler will write values forwarded from consensus, and the consensus adapter
-        // will read the values to make decisions about which validator submits a transaction to consensus
-        let low_scoring_authorities = Arc::new(ArcSwap::new(Arc::new(HashMap::new())));
-
-        consensus_adapter.swap_low_scoring_authorities(low_scoring_authorities.clone());
 
         if epoch_store.randomness_state_enabled() {
             let randomness_manager = RandomnessManager::try_new(
@@ -1419,22 +1405,11 @@ impl SuiNode {
             state.metrics.clone(),
         ));
 
-        let throughput_profiler = Arc::new(ConsensusThroughputProfiler::new(
-            throughput_calculator.clone(),
-            None,
-            None,
-            state.metrics.clone(),
-            ThroughputProfileRanges::from_chain(epoch_store.get_chain_identifier()),
-        ));
-
-        consensus_adapter.swap_throughput_profiler(throughput_profiler);
-
         let consensus_handler_initializer = ConsensusHandlerInitializer::new(
             state.clone(),
             checkpoint_service.clone(),
             epoch_store.clone(),
             consensus_adapter.clone(),
-            low_scoring_authorities,
             throughput_calculator,
             backpressure_manager,
             config.congestion_log.clone(),
@@ -1486,6 +1461,10 @@ impl SuiNode {
             );
         }
 
+        if let Some(ctx) = &admission_queue {
+            ctx.rotate_for_epoch(epoch_store);
+        }
+
         Ok(ValidatorComponents {
             validator_server_handle,
             validator_overload_monitor_handle,
@@ -1494,6 +1473,7 @@ impl SuiNode {
             consensus_adapter,
             checkpoint_metrics,
             sui_tx_validator_metrics,
+            admission_queue,
         })
     }
 
@@ -1520,9 +1500,7 @@ impl SuiNode {
             sender: consensus_adapter,
             signer: state.secret.clone(),
             authority: config.protocol_public_key(),
-            next_reconfiguration_timestamp_ms: epoch_start_timestamp_ms
-                .checked_add(epoch_duration_ms)
-                .expect("Overflow calculating next_reconfiguration_timestamp_ms"),
+            next_reconfiguration_timestamp_ms: epoch_store.next_reconfiguration_timestamp_ms(),
             metrics: checkpoint_metrics.clone(),
         });
 
@@ -1549,11 +1527,10 @@ impl SuiNode {
         committee: &Committee,
         consensus_config: &ConsensusConfig,
         authority: AuthorityName,
-        connection_monitor_status: Arc<ConnectionMonitorStatus>,
         prometheus_registry: &Registry,
-        protocol_config: ProtocolConfig,
         consensus_client: Arc<dyn ConsensusClient>,
         checkpoint_store: Arc<CheckpointStore>,
+        inflight_slot_freed_notify: Arc<tokio::sync::Notify>,
     ) -> ConsensusAdapter {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
@@ -1562,13 +1539,10 @@ impl SuiNode {
             consensus_client,
             checkpoint_store,
             authority,
-            connection_monitor_status,
             consensus_config.max_pending_transactions(),
             consensus_config.max_pending_transactions() * 2 / committee.num_members(),
-            consensus_config.max_submit_position,
-            consensus_config.submit_delay_step_override(),
             ca_metrics,
-            protocol_config,
+            inflight_slot_freed_notify,
         )
     }
 
@@ -1576,13 +1550,28 @@ impl SuiNode {
         config: &NodeConfig,
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         prometheus_registry: &Registry,
-    ) -> Result<SpawnOnce> {
+        inflight_slot_freed_notify: Arc<tokio::sync::Notify>,
+    ) -> Result<(SpawnOnce, Option<AdmissionQueueContext>)> {
+        let overload_config = &config.authority_overload_config;
+        let admission_queue = overload_config.admission_queue_enabled.then(|| {
+            let manager = Arc::new(AdmissionQueueManager::new(
+                consensus_adapter.clone(),
+                Arc::new(AdmissionQueueMetrics::new(prometheus_registry)),
+                overload_config.admission_queue_capacity_fraction,
+                overload_config.admission_queue_bypass_fraction,
+                overload_config.admission_queue_failover_timeout,
+                inflight_slot_freed_notify,
+            ));
+            AdmissionQueueContext::spawn(manager, epoch_store)
+        });
         let validator_service = ValidatorService::new(
             state.clone(),
             consensus_adapter,
             Arc::new(ValidatorServiceMetrics::new(prometheus_registry)),
             config.policy_config.clone().map(|p| p.client_id_source),
+            admission_queue.clone(),
         );
 
         let mut server_conf = mysten_network::config::Config::new();
@@ -1605,7 +1594,7 @@ impl SuiNode {
 
         let (ready_tx, ready_rx) = oneshot::channel();
 
-        Ok(SpawnOnce::new(ready_rx, async move {
+        let spawn_once = SpawnOnce::new(ready_rx, async move {
             let server = server_builder
                 .bind(&network_address, Some(tls_config))
                 .await
@@ -1617,7 +1606,8 @@ impl SuiNode {
                 info!("Server stopped: {err}");
             }
             info!("Server stopped");
-        }))
+        });
+        Ok((spawn_once, admission_queue))
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {
@@ -1625,8 +1615,10 @@ impl SuiNode {
     }
 
     #[cfg(any(test, msim))]
-    pub fn connection_monitor_status_for_testing(&self) -> &Arc<ConnectionMonitorStatus> {
-        &self.connection_monitor_status
+    pub fn connection_monitor_handle_for_testing(
+        &self,
+    ) -> &mysten_network::anemo_connection_monitor::ConnectionMonitorHandle {
+        &self._connection_monitor_handle
     }
 
     // Only used for testing because of how epoch store is loaded.
@@ -1809,15 +1801,6 @@ impl SuiNode {
 
             fail_point_async!("reconfig_delay");
 
-            // We save the connection monitor status map regardless of validator / fullnode status
-            // so that we don't need to restart the connection monitor every epoch.
-            // Update the mappings that will be used by the consensus adapter if it exists or is
-            // about to be created.
-            let authority_names_to_peer_ids =
-                new_epoch_start_state.get_authority_names_to_peer_ids();
-            self.connection_monitor_status
-                .update_mapping_for_epoch(authority_names_to_peer_ids);
-
             cur_epoch_store.record_epoch_reconfig_start_time_metric();
 
             update_peer_addresses(
@@ -1850,6 +1833,7 @@ impl SuiNode {
                 consensus_adapter,
                 checkpoint_metrics,
                 sui_tx_validator_metrics,
+                admission_queue,
             }) = validator_components_lock_guard.take()
             {
                 info!("Reconfiguring the validator.");
@@ -1893,6 +1877,7 @@ impl SuiNode {
                             checkpoint_metrics,
                             self.metrics.clone(),
                             sui_tx_validator_metrics,
+                            admission_queue,
                         )
                         .await?,
                     )
@@ -1926,7 +1911,6 @@ impl SuiNode {
                         self.randomness_handle.clone(),
                         weak_hasher,
                         self.backpressure_manager.clone(),
-                        self.connection_monitor_status.clone(),
                         &self.registry_service,
                         self.metrics.clone(),
                         self.checkpoint_metrics.clone(),

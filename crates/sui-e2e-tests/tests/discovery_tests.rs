@@ -94,9 +94,8 @@ mod test {
             let node = test_cluster.swarm.node(name).unwrap();
             let handle = node.get_node_handle().unwrap();
             let statuses = handle.with(|n| {
-                n.connection_monitor_status_for_testing()
-                    .connection_statuses
-                    .clone()
+                n.connection_monitor_handle_for_testing()
+                    .connection_statuses()
             });
             let connected_peer_ids: Vec<_> = statuses.iter().map(|entry| *entry.key()).collect();
             info!(
@@ -212,9 +211,8 @@ mod test {
 
         for handle in &remaining_handles {
             let statuses = handle.with(|n| {
-                n.connection_monitor_status_for_testing()
-                    .connection_statuses
-                    .clone()
+                n.connection_monitor_handle_for_testing()
+                    .connection_statuses()
             });
             let status = statuses.get(&removed_peer_id).map(|e| e.value().clone());
             assert_eq!(
@@ -238,9 +236,8 @@ mod test {
         // Verify remaining validators are no longer connected to the removed validator.
         for handle in &remaining_handles {
             let statuses = handle.with(|n| {
-                n.connection_monitor_status_for_testing()
-                    .connection_statuses
-                    .clone()
+                n.connection_monitor_handle_for_testing()
+                    .connection_statuses()
             });
             let status = statuses.get(&removed_peer_id).map(|e| e.value().clone());
             assert_eq!(

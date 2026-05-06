@@ -10,7 +10,7 @@ task 1, lines 7-26:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5411200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5426400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 28-30:
 //# programmable --sender A --inputs 42 @A
@@ -70,7 +70,7 @@ Response: {
           "asMoveObject": {
             "contents": {
               "json": {
-                "id": "0xda91be597f751ffec6af8e852e696e7b9f645b7722c40507df4d2dd2eec2465c",
+                "id": "0x0784e29887105bb93b79409602dca9cabd1f71e6444ff28cb9655ded125f4f41",
                 "balance": "42"
               }
             }
@@ -81,7 +81,7 @@ Response: {
           "asMoveObject": {
             "contents": {
               "json": {
-                "id": "0xda91be597f751ffec6af8e852e696e7b9f645b7722c40507df4d2dd2eec2465c",
+                "id": "0x0784e29887105bb93b79409602dca9cabd1f71e6444ff28cb9655ded125f4f41",
                 "balance": "41"
               }
             }
@@ -92,7 +92,7 @@ Response: {
           "asMoveObject": {
             "contents": {
               "json": {
-                "id": "0xda91be597f751ffec6af8e852e696e7b9f645b7722c40507df4d2dd2eec2465c",
+                "id": "0x0784e29887105bb93b79409602dca9cabd1f71e6444ff28cb9655ded125f4f41",
                 "balance": "41"
               }
             }

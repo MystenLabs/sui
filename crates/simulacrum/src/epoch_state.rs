@@ -11,11 +11,12 @@ use sui_execution::Executor;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     committee::{Committee, EpochId},
+    digests::ChainIdentifier,
     effects::TransactionEffects,
     execution_params::ExecutionOrEarlyError,
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
-    metrics::{BytecodeVerifierMetrics, LimitsMetrics},
+    metrics::{BytecodeVerifierMetrics, ExecutionMetrics},
     sui_system_state::{
         SuiSystemState, SuiSystemStateTrait,
         epoch_start_sui_system_state::{EpochStartSystemState, EpochStartSystemStateTrait},
@@ -29,29 +30,31 @@ pub struct EpochState {
     epoch_start_state: EpochStartSystemState,
     committee: Committee,
     protocol_config: ProtocolConfig,
-    limits_metrics: Arc<LimitsMetrics>,
+    execution_metrics: Arc<ExecutionMetrics>,
     bytecode_verifier_metrics: Arc<BytecodeVerifierMetrics>,
     executor: Arc<dyn Executor + Send + Sync>,
+    chain_identifier: ChainIdentifier,
     /// A counter that advances each time we advance the clock in order to ensure that each update
     /// txn has a unique digest. This is reset on epoch changes
     next_consensus_round: u64,
 }
 
 impl EpochState {
-    pub fn new(system_state: SuiSystemState) -> Self {
+    pub fn new(system_state: SuiSystemState, chain_identifier: ChainIdentifier) -> Self {
         let protocol_config =
             ProtocolConfig::get_for_version(system_state.protocol_version().into(), Chain::Unknown);
-        Self::new_with_protocol_config(system_state, protocol_config)
+        Self::new_with_protocol_config(system_state, protocol_config, chain_identifier)
     }
 
     pub fn new_with_protocol_config(
         system_state: SuiSystemState,
         protocol_config: ProtocolConfig,
+        chain_identifier: ChainIdentifier,
     ) -> Self {
         let epoch_start_state = system_state.into_epoch_start_state();
         let committee = epoch_start_state.get_sui_committee();
         let registry = prometheus::Registry::new();
-        let limits_metrics = Arc::new(LimitsMetrics::new(&registry));
+        let execution_metrics = Arc::new(ExecutionMetrics::new(&registry));
         let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(&registry));
         let executor = sui_execution::executor(&protocol_config, true).unwrap();
 
@@ -59,9 +62,10 @@ impl EpochState {
             epoch_start_state,
             committee,
             protocol_config,
-            limits_metrics,
+            execution_metrics,
             bytecode_verifier_metrics,
             executor,
+            chain_identifier,
             next_consensus_round: 0,
         }
     }
@@ -94,6 +98,10 @@ impl EpochState {
 
     pub fn protocol_config(&self) -> &ProtocolConfig {
         &self.protocol_config
+    }
+
+    pub fn chain_identifier(&self) -> ChainIdentifier {
+        self.chain_identifier
     }
 
     pub fn execute_transaction(
@@ -142,11 +150,12 @@ impl EpochState {
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas_data) = transaction_data.execution_parts();
-        let (inner_temp_store, gas_status, effects, _timings, result) =
-            self.executor.execute_transaction_to_effects(
+        let (inner_temp_store, gas_status, effects, _timings, result) = self
+            .executor
+            .execute_transaction_to_effects_and_execution_error(
                 store.backing_store(),
                 &self.protocol_config,
-                self.limits_metrics.clone(),
+                self.execution_metrics.clone(),
                 false, // enable_expensive_checks
                 // TODO: Integrate with early execution error
                 ExecutionOrEarlyError::Ok(()),
@@ -156,6 +165,7 @@ impl EpochState {
                 gas_data,
                 gas_status,
                 kind,
+                None, // compat_args
                 signer,
                 tx_digest,
                 &mut None,

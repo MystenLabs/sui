@@ -60,15 +60,39 @@ jobs:
         run: tsh -i ${{ steps.auth.outputs.identity-file }} status
         env:
           TELEPORT_IDENTITY_FILE: ${{ env.TELEPORT_IDENTITY_FILE }}
-      # Clean tmpfs, old repo, and old simtest logs before starting fresh
+      # Clean tmpfs, old repo, and old simtest logs before starting fresh.
+      #
+      # Consolidated into a single SSH call: each additional `tsh ssh`
+      # spin-up has been hitting an intermittent
+      # "cannot relogin in non-interactive session" failure on the
+      # *second* (and beyond) call within the same step. One handshake
+      # = one chance to flake.
+      #
+      # The pkill block kills any stale simtest workers from a prior
+      # nightly that was cancelled mid-run and nohup'd onto the host —
+      # otherwise the survivor's in-flight cargo/test processes race
+      # our re-clone, exec test binaries we're about to delete, and
+      # corrupt the shared ~/simtest_stdout.log via a leaked fd.
       - name: Environment clean
         run: |
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 echo 'teleport OK'
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "rm -rf ~/sui"
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cd ~/ && git clone git@github.com:MystenLabs/sui.git"
-          # Keep only the 10 most recent simtest log directories
-          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "cd ~/simtest_logs && ls -dt */ 2>/dev/null | tail -n +11 | xargs rm -rf" || true
+          # The character classes ([ ], [e]) below are deliberate: pkill -f
+          # matches against the full command line, which includes our own
+          # remote bash's command line — and that command line contains the
+          # literal pattern as text. A char class is a regex metasequence
+          # that still matches the intended live process (cargo-simtest
+          # simtest with a real space, target/simulator/deps/ with a real
+          # 'e') but does NOT match the literal text "[ ]" / "[e]" in our
+          # own shell, so pkill can no longer SIGKILL its own parent.
+          tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "set -e; \
+            echo teleport OK; \
+            pkill -9 -f 'scripts/simtest/(simtest-run|seed-search)' || true; \
+            pkill -9 -f 'cargo-simtest[ ]simtest' || true; \
+            pkill -9 -f 'target/simulator/d[e]ps/' || true; \
+            sleep 3; \
+            sudo rm -rf /tmp/* 2>/dev/null || true; \
+            rm -rf ~/sui; \
+            cd ~/ && git clone git@github.com:MystenLabs/sui.git; \
+            (cd ~/simtest_logs && ls -dt */ 2>/dev/null | tail -n +11 | xargs -r rm -rf) || true"
 
       # Checkout out the latest sui repo
       - name: Checkout sui repo
@@ -152,7 +176,8 @@ jobs:
         if: failure()
         run: |
           LOG_DIR=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "ls -td ~/simtest_logs/*/ | head -1")
-          FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 "sed 's/\x1b\[[0-9;]*m//g' ${LOG_DIR}* 2>/dev/null | grep -E '^\s*(FAIL|TIMEOUT)\s+\[' | sed -E 's/^\s*(FAIL|TIMEOUT)\s+\[[^]]+\]\s+//' | sort -u | head -20")
+          FAILED_TESTS=$(tsh -i ${{ steps.auth.outputs.identity-file }} ssh ubuntu@simtest-01 \
+            "cd ~/sui && ./scripts/simtest/collect-failures.py '$LOG_DIR' | head -20")
           echo "failed_tests<<EOF" >> $GITHUB_OUTPUT
           echo "$FAILED_TESTS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT

@@ -18,7 +18,7 @@ use std::sync::Arc;
 use tokio::sync::watch;
 use tokio::task::JoinHandle;
 use tokio::time::{self, Duration, Instant};
-use tracing::error;
+use tracing::{error, warn};
 
 const ETH_LOG_QUERY_MAX_BLOCK_RANGE: u64 = 1000;
 const ETH_EVENTS_CHANNEL_SIZE: usize = 1000;
@@ -133,6 +133,8 @@ impl EthSyncer {
         tracing::info!(contract_address=?contract_address, "Starting eth events listening task from block {start_block}");
         let contract_address_str = contract_address.to_string();
         let mut more_blocks = false;
+        // Tracks the current query window; shrinks when RPC returns -32005.
+        let mut query_range = ETH_LOG_QUERY_MAX_BLOCK_RANGE;
         loop {
             // If no more known blocks, wait for the next finalized block.
             if !more_blocks {
@@ -151,19 +153,58 @@ impl EthSyncer {
                 );
                 continue;
             }
-            // Each query does at most ETH_LOG_QUERY_MAX_BLOCK_RANGE blocks.
-            let end_block = std::cmp::min(
-                start_block + ETH_LOG_QUERY_MAX_BLOCK_RANGE - 1,
-                new_finalized_block,
-            );
+            // Each query does at most `query_range` blocks (may be smaller than
+            // ETH_LOG_QUERY_MAX_BLOCK_RANGE after a -32005 shrink).
+            let end_block = std::cmp::min(start_block + query_range - 1, new_finalized_block);
             more_blocks = end_block < new_finalized_block;
             let timer = Instant::now();
-            let Ok(Ok(events)) = retry_with_max_elapsed_time!(
-                eth_client.get_events_in_range(contract_address, start_block, end_block),
-                Duration::from_secs(600)
-            ) else {
-                error!("Failed to get events from eth client after retry");
-                continue;
+            let events = match eth_client
+                .get_events_in_range(contract_address, start_block, end_block)
+                .await
+            {
+                Ok(events) => events,
+                Err(e) => {
+                    let err_str = format!("{:?}", e);
+                    if err_str.contains("query returned more than")
+                        || err_str.contains("-32005")
+                        || err_str.contains("32005")
+                    {
+                        // RPC limit exceeded (-32005): halve the range and retry immediately.
+                        let new_range = (query_range / 2).max(1);
+                        if new_range == query_range {
+                            error!(
+                                contract_address=?contract_address,
+                                "Block query range is already 1 but RPC still returns -32005 \
+                                 for block {}. Retrying with standard backoff.",
+                                start_block
+                            );
+                        } else {
+                            warn!(
+                                contract_address=?contract_address,
+                                "RPC returned -32005 (too many results) for block range {}-{} \
+                                 (window={}). Shrinking window to {} blocks and retrying.",
+                                start_block,
+                                end_block,
+                                query_range,
+                                new_range,
+                            );
+                            query_range = new_range;
+                        }
+                        // Retry immediately with the new (smaller) range; more_blocks stays true
+                        // so we don't wait for a new finalized block notification.
+                        more_blocks = true;
+                        continue;
+                    }
+                    // Not a range-overflow error — use standard backoff retry.
+                    let Ok(Ok(events)) = retry_with_max_elapsed_time!(
+                        eth_client.get_events_in_range(contract_address, start_block, end_block),
+                        Duration::from_secs(600)
+                    ) else {
+                        error!("Failed to get events from eth client after retry");
+                        continue;
+                    };
+                    events
+                }
             };
             tracing::debug!(
                 ?contract_address,

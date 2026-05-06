@@ -74,10 +74,14 @@ macro_rules! register_debug_fatal_handler {
     };
 }
 
+/// Like `debug_fatal!`, but records `$location` (a `&str`) as the
+/// `system_invariant_violations` metric label instead of the macro's own
+/// `file!():line!()`. Use this when forwarding a caller-supplied location
+/// (e.g. from `#[track_caller]` + `Location::caller()`) so the metric points
+/// at the user's call site rather than the wrapper.
 #[macro_export]
-macro_rules! debug_fatal {
-    //($msg:literal $(, $arg:expr)* $(,)?)
-    ($msg:literal $(, $arg:expr)*) => {{
+macro_rules! debug_fatal_at {
+    ($location:expr, $msg:literal $(, $arg:expr)*) => {{
         loop {
             #[cfg(msim)]
             {
@@ -98,7 +102,7 @@ macro_rules! debug_fatal {
             } else {
                 let stacktrace = std::backtrace::Backtrace::capture();
                 tracing::error!(debug_fatal = true, stacktrace = ?stacktrace, $msg $(, $arg)*);
-                let location = concat!(file!(), ':', line!());
+                let location: &str = $location;
                 if let Some(metrics) = mysten_metrics::get_metrics() {
                     metrics.system_invariant_violations.with_label_values(&[location]).inc();
                 }
@@ -112,6 +116,14 @@ macro_rules! debug_fatal {
             }
             break;
         }
+    }};
+}
+
+#[macro_export]
+macro_rules! debug_fatal {
+    //($msg:literal $(, $arg:expr)* $(,)?)
+    ($msg:literal $(, $arg:expr)*) => {{
+        $crate::debug_fatal_at!(concat!(file!(), ':', line!()), $msg $(, $arg)*);
     }};
 }
 

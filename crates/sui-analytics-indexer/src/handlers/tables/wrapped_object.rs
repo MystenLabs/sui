@@ -10,19 +10,22 @@ use sui_indexer_alt_framework::pipeline::Processor;
 use sui_types::base_types::EpochId;
 use sui_types::full_checkpoint_content::Checkpoint;
 
+use sui_package_resolver::PackageStoreWithLruCache;
+use sui_package_resolver::Resolver;
+use sui_rpc_resolver::package_store::RpcPackageStore;
+
 use crate::Row;
 use crate::handlers::tables::get_move_struct;
 use crate::handlers::tables::parse_struct;
-use crate::package_store::PackageCache;
 use crate::pipeline::Pipeline;
 use crate::tables::WrappedObjectRow;
 
 pub struct WrappedObjectProcessor {
-    package_cache: Arc<PackageCache>,
+    package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>,
 }
 
 impl WrappedObjectProcessor {
-    pub fn new(package_cache: Arc<PackageCache>) -> Self {
+    pub fn new(package_cache: Arc<PackageStoreWithLruCache<RpcPackageStore>>) -> Self {
         Self { package_cache }
     }
 }
@@ -58,7 +61,7 @@ impl Processor for WrappedObjectProcessor {
                     match get_move_struct(
                         &tag,
                         contents,
-                        &self.package_cache.resolver_for_epoch(epoch),
+                        &Resolver::new(self.package_cache.clone()),
                     )
                     .await
                     {

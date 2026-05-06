@@ -4,14 +4,14 @@
 // User logging wrappers for outputting structured messages to the user.
 macro_rules! user_warning {
     ($($arg:tt)*) => {{
-        use colored::Colorize;
+        use ::colored::Colorize;
         eprintln!("[{}] {}", "WARNING".bold().yellow(), format!($($arg)*));
     }};
     }
 
 macro_rules! user_note {
     ($($arg:tt)*) => {{
-        use colored::Colorize;
+        use ::colored::Colorize;
         eprintln!("[{}] {}", "NOTE".bold().yellow(), format!($($arg)*));
     }};
 }
@@ -24,7 +24,7 @@ macro_rules! user_info {
 
 macro_rules! user_error {
     ($($arg:tt)*) => {{
-        use colored::Colorize;
+        use ::colored::Colorize;
         eprintln!("[{}] {}", "ERROR".bold().red(), format!($($arg)*));
     }};
 }

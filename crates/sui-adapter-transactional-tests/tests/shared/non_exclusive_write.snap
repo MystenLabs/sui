@@ -10,7 +10,7 @@ task 1, lines 9-58:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 8854000,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 8914800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 60:
 //# run a::m::create --sender A
@@ -53,8 +53,8 @@ Contents: a::m::Obj {
 
 task 6, lines 71-74:
 //# run a::m::remove_and_transfer --sender A --args object(2,0)
-Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::remove_child_object (function index 13) at offset 0, Abort Code: 1
-Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 13, instruction: 0, function_name: Some("remove_child_object") }, 1) at command Some(0)
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::dynamic_field::remove_child_object (function index 16) at offset 0, Abort Code: 1
+Debug of error: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("dynamic_field") }, function: 16, instruction: 0, function_name: Some("remove_child_object") }, 1) at command Some(0)
 
 task 7, line 75:
 //# run a::m::remove_and_transfer --sender A --args object(2,0)

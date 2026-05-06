@@ -1,0 +1,28 @@
+---
+title: Address Balances
+description: Address balances introduce a canonical balance system for fungible assets tied to Sui addresses.
+keywords:
+  [
+    address balances,
+    migration,
+    coin objects,
+    funds withdrawal,
+    balance transfer,
+    gas payment,
+    SIP-58,
+    fungible assets,
+  ]
+---
+
+Address balances introduce a canonical balance system for fungible assets tied to Sui addresses. This replaces the UTXO-style `Coin<T>` model with direct address-owned balances, simplifying transaction construction and eliminating coin selection complexity.
+
+For the full specification, see [SIP-58: Sui Address Balances](https://github.com/sui-foundation/sips/blob/main/sips/sip-58.md).
+
+Previously, balances on Sui were computed by summing the values of all `Coin<T>` objects owned by an address. With address balances, each address may additionally have one address-owned balance for each currency type `T`. The total balance is the sum of all `Coin<T>` objects plus the address balance value for that coin type.
+
+`Coin<T>` and address balances coexist. Existing coins remain functional and can still be transferred with `transfer::public_transfer`. However, address balances provide significant operational advantages:
+
+- No coin selection logic required.
+- Automatic deposit merging into a single canonical balance.
+- Stateless transaction construction without querying object states.
+- Direct gas payment from SUI address balances.

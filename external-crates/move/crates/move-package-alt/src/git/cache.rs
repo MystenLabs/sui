@@ -182,6 +182,7 @@ impl GitTree {
                     "--no-checkout",
                     "--depth",
                     "1",
+                    "--",
                     &self.repo,
                     &self.path_to_repo.to_string_lossy(),
                 ],
@@ -199,6 +200,7 @@ impl GitTree {
             self.run_git(&[
                 "sparse-checkout",
                 "add",
+                "--",
                 &self.path_in_repo().to_string_lossy(),
             ])
             .await?;
@@ -312,7 +314,8 @@ async fn find_sha(repo: &str, rev: &Option<String>) -> GitResult<GitSha> {
 
 /// Find the default branch and return the SHA
 async fn find_default_branch_and_get_sha(repo_url: &str) -> GitResult<GitSha> {
-    let stdout = run_git_cmd_with_args(&["ls-remote", "--symref", repo_url, "HEAD"], None).await?;
+    let stdout =
+        run_git_cmd_with_args(&["ls-remote", "--symref", "--", repo_url, "HEAD"], None).await?;
 
     let lines: Vec<_> = stdout.lines().collect();
 
@@ -394,12 +397,15 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
 
     // Try to find a tag matching the `rev`:
     // git ls-remote https://github.com/user/repo.git refs/heads/<tag_name>
-    let tag = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/tags/{rev}")], None)
-        .await?
-        .split_whitespace()
-        .next()
-        .map(|s| s.to_string())
-        .ok_or(GitError::no_sha(repo, rev));
+    let tag = run_git_cmd_with_args(
+        &["ls-remote", "--", repo, &format!("refs/tags/{rev}")],
+        None,
+    )
+    .await?
+    .split_whitespace()
+    .next()
+    .map(|s| s.to_string())
+    .ok_or(GitError::no_sha(repo, rev));
 
     // return early if `rev` maps to a valid tag.
     if let Ok(tag_sha) = tag {
@@ -408,12 +414,15 @@ async fn find_branch_or_tag_sha(repo: &str, rev: &str) -> GitResult<GitSha> {
 
     // Try to find a branch matching the `rev`:
     // git ls-remote https://github.com/user/repo.git refs/heads/<branch_name>
-    let branch = run_git_cmd_with_args(&["ls-remote", repo, &format!("refs/heads/{rev}")], None)
-        .await?
-        .split_whitespace()
-        .next()
-        .map(|s| s.to_string())
-        .ok_or(GitError::no_sha(repo, rev))?;
+    let branch = run_git_cmd_with_args(
+        &["ls-remote", "--", repo, &format!("refs/heads/{rev}")],
+        None,
+    )
+    .await?
+    .split_whitespace()
+    .next()
+    .map(|s| s.to_string())
+    .ok_or(GitError::no_sha(repo, rev))?;
 
     Ok(branch.try_into().expect("git returns valid shas"))
 }
@@ -443,19 +452,23 @@ async fn try_find_full_sha(repo: &str, rev: &str) -> GitResult<Option<GitSha>> {
             "downloading temporary git repo with full history to {}",
             path_to_clone_str
         );
-        let args = vec![
-            "-c",
-            "advice.detachedHead=false",
-            "clone",
-            "--quiet",
-            "--sparse",
-            "--filter=blob:none",
-            "--no-checkout",
-            repo,
-            &path_to_clone_str,
-        ];
 
-        run_git_cmd_with_args(&args, None).await?;
+        run_git_cmd_with_args(
+            &[
+                "-c",
+                "advice.detachedHead=false",
+                "clone",
+                "--quiet",
+                "--sparse",
+                "--filter=blob:none",
+                "--no-checkout",
+                "--",
+                repo,
+                &path_to_clone_str,
+            ],
+            None,
+        )
+        .await?;
     }
 
     let full_sha = run_git_cmd_with_args(&["rev-parse", rev], Some(&path_to_clone))

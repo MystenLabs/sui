@@ -16,6 +16,7 @@ use sui_rpc::proto::sui::rpc::v2::GetObjectResponse;
 use sui_rpc::proto::sui::rpc::v2::GetObjectResult;
 use sui_rpc::proto::sui::rpc::v2::Object;
 use sui_sdk_types::Address;
+use sui_types::full_checkpoint_content::ObjectSet;
 
 pub const MAX_BATCH_REQUESTS: usize = 1000;
 pub const READ_MASK_DEFAULT: &str = "object_id,version,digest";
@@ -128,5 +129,5 @@ fn get_object_impl(
             .ok_or_else(|| ObjectNotFoundError::new(object_id))?
     };
 
-    Ok(service.render_object_to_proto(&object, read_mask))
+    Ok(service.render_object_to_proto(&object, read_mask, &ObjectSet::default()))
 }

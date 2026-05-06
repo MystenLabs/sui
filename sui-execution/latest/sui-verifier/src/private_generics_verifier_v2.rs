@@ -10,6 +10,7 @@ use move_binary_format::{
 use move_bytecode_utils::format_signature_token;
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use move_vm_config::verifier::VerifierConfig;
+use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, error::ExecutionError, make_invariant_violation,
 };
@@ -255,7 +256,7 @@ fn verify_call(
             ty_args.len()
         )));
     }
-    for (idx, (ty_arg, &is_internal)) in ty_args.iter().zip(internal_flags).enumerate() {
+    for (idx, (ty_arg, &is_internal)) in ty_args.iter().zip_debug_eq(internal_flags).enumerate() {
         if !is_internal {
             continue;
         }

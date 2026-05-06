@@ -10,7 +10,7 @@ task 1, lines 7-59:
 //# publish --sender A
 created: object(1,0)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 13748400,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 13771200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 61-63:
 //# programmable --sender A --inputs object(0xd) @A
@@ -57,9 +57,9 @@ Response: {
   "result": [
     {
       "data": {
-        "objectId": "0x6bda987d7c24a030040874da2cad8b5ede72c173edbf276dbfb7cfee9b7f04d5",
+        "objectId": "0xd3db63ee1f788c0234ed09f386d3272f5bca346a2ba423b763447b14259c6a03",
         "version": "4",
-        "digest": "CYvoTekvL6NQAMQ1a5SFrytGKqNf4nMwy5hW1hkLtkAc",
+        "digest": "AoseeAGK5w1LZnnqjzrFnCAzKwz8bJepSroW4DtyVrQC",
         "display": {
           "data": {
             "bar": "bar is 42!",
@@ -83,9 +83,9 @@ Response: {
     },
     {
       "data": {
-        "objectId": "0x560b329d992bb2b5958b7f989048afa19571fdb42721514b82f98471b3d4db04",
+        "objectId": "0x09ec8fda6a123ee443ba9f885179a7b059eafce6b2355f61decfe0b1ab719741",
         "version": "6",
-        "digest": "Fhjk7JuTpyCkT6ZaiyTeT3S8oX57gxpa75hi86EpJANi",
+        "digest": "BNMoCMM1QRdjbYWBEkVd1m1zdvvqZcxiJstQwRc5xEP8",
         "display": {
           "data": {
             "bar": "bar is 42!",

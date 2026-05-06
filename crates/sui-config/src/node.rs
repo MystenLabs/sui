@@ -757,8 +757,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "EveFrontier".to_string(),
         "TestEveFrontier".to_string(),
         "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
-        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_rz7IVMOR5".to_string(), // test Gamma Prime, external partner
-        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_K3XgRburu".to_string(), // Gamma Prime, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_Bpct2JyBg".to_string(), // test Gamma Prime, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_4HdQTpt3E".to_string(), // Gamma Prime, external partner
     ]);
 
     // providers that are available for mainnet and testnet.
@@ -778,6 +778,8 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "EveFrontier".to_string(),
         "TestEveFrontier".to_string(),
         "AwsTenant-region:ap-southeast-1-tenant_id:ap-southeast-1_2QQPyQXDz".to_string(), // Decot, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_Bpct2JyBg".to_string(), // test Gamma Prime, external partner
+        "AwsTenant-region:eu-north-1-tenant_id:eu-north-1_4HdQTpt3E".to_string(), // Gamma Prime, external partner
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -953,15 +955,6 @@ pub struct ConsensusConfig {
     /// Default to 20_000 inflight limit, assuming 20_000 txn tps * 1 sec consensus latency.
     pub max_pending_transactions: Option<usize>,
 
-    /// When defined caps the calculated submission position to the max_submit_position. Even if the
-    /// is elected to submit from a higher position than this, it will "reset" to the max_submit_position.
-    pub max_submit_position: Option<usize>,
-
-    /// The submit delay step to consensus defined in milliseconds. When provided it will
-    /// override the current back off logic otherwise the default backoff logic will be applied based
-    /// on consensus latency estimates.
-    pub submit_delay_step_override_millis: Option<u64>,
-
     pub parameters: Option<ConsensusParameters>,
 
     /// Override for the consensus network listen address.
@@ -985,11 +978,6 @@ impl ConsensusConfig {
 
     pub fn max_pending_transactions(&self) -> usize {
         self.max_pending_transactions.unwrap_or(20_000)
-    }
-
-    pub fn submit_delay_step_override(&self) -> Option<Duration> {
-        self.submit_delay_step_override_millis
-            .map(Duration::from_millis)
     }
 
     pub fn db_retention_epochs(&self) -> u64 {
@@ -1376,6 +1364,31 @@ pub struct AuthorityOverloadConfig {
     // is above the threshold.
     #[serde(default = "default_max_transaction_manager_per_object_queue_length")]
     pub max_transaction_manager_per_object_queue_length: usize,
+
+    // Fraction of max_pending_transactions that determines the admission queue
+    // capacity. During congestion, the queue evicts the lowest gas price entries
+    // to make room for higher ones. Capacity = max_pending_transactions * fraction.
+    #[serde(default = "default_admission_queue_capacity_fraction")]
+    pub admission_queue_capacity_fraction: f64,
+
+    // Fraction of max_pending_transactions below which the admission queue is
+    // bypassed (transactions are submitted directly to consensus). Above this
+    // threshold, transactions go through the priority queue.
+    #[serde(default = "default_admission_queue_bypass_fraction")]
+    pub admission_queue_bypass_fraction: f64,
+
+    // Enables use of a gas-price-based priority queue for load shedding of
+    // transactions at admission time. If false, when consensus is saturated, transactions
+    // are rejected with TooManyTransactionsPendingConsensus.
+    #[serde(default = "default_admission_queue_enabled")]
+    pub admission_queue_enabled: bool,
+
+    // Failover timeout for the admission queue. If the queue has not made forward
+    // progress (draining an entry or observing an empty queue) within this window,
+    // it is presumed stuck and new transactions bypass it (using the same saturation
+    // reject behavior as when the queue is disabled) until progress resumes.
+    #[serde(default = "default_admission_queue_failover_timeout")]
+    pub admission_queue_failover_timeout: Duration,
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
@@ -1418,6 +1431,22 @@ fn default_max_transaction_manager_per_object_queue_length() -> usize {
     2000
 }
 
+fn default_admission_queue_capacity_fraction() -> f64 {
+    0.5
+}
+
+fn default_admission_queue_bypass_fraction() -> f64 {
+    0.9
+}
+
+fn default_admission_queue_enabled() -> bool {
+    false
+}
+
+fn default_admission_queue_failover_timeout() -> Duration {
+    Duration::from_secs(30)
+}
+
 impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
@@ -1434,6 +1463,10 @@ impl Default for AuthorityOverloadConfig {
             max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
             max_transaction_manager_per_object_queue_length:
                 default_max_transaction_manager_per_object_queue_length(),
+            admission_queue_capacity_fraction: default_admission_queue_capacity_fraction(),
+            admission_queue_bypass_fraction: default_admission_queue_bypass_fraction(),
+            admission_queue_enabled: default_admission_queue_enabled(),
+            admission_queue_failover_timeout: default_admission_queue_failover_timeout(),
         }
     }
 }

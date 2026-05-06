@@ -10,7 +10,7 @@ task 1, lines 6-27:
 //# publish
 created: object(1,0)
 mutated: object(0,1)
-gas summary: computation_cost: 1000000, storage_cost: 5715200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 5738000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 29-36:
 //# create-checkpoint
@@ -89,23 +89,23 @@ Response: {
         "nodes": [
           {
             "name": {
-              "json": "20"
+              "json": "50"
             },
             "value": {
               "json": {
-                "id": "0x0622ba936cbc3bed80985b80ecd24f782508cf92906a5c74e6d781d92e32d659",
-                "x": "4"
+                "id": "0x8c471462701a5f7c6ea4beaa01264a2e6fbbd5b515092a428e63d9744a88c3d8",
+                "x": "8"
               }
             }
           },
           {
             "name": {
-              "json": "50"
+              "json": "20"
             },
             "value": {
               "json": {
-                "id": "0xa65b85aeba27d77dde5a366ed9a9adcc3b615b9a40506f03cf6bc8f33197b6ae",
-                "x": "8"
+                "id": "0xc2445f08d4aa97edd0c92b47d81395842b7cc9e9c53ad8a0444eca3273d59998",
+                "x": "4"
               }
             }
           },
@@ -116,7 +116,7 @@ Response: {
             "value": {
               "contents": {
                 "json": {
-                  "id": "0x00aeee42bd96d47f46bb9c1696a4325517d881125f0f0ae001d05425359c677a",
+                  "id": "0x8bc3345b5a74b7432c9f098fc7c49d75f45f4df974b68c1c1b2606949ddf429a",
                   "x": "6"
                 }
               },
@@ -128,7 +128,7 @@ Response: {
                     },
                     "value": {
                       "json": {
-                        "id": "0x9a2ae0cd8208edc4274cd24630a288014803c5b57c05c213913bd2be400d5a27",
+                        "id": "0x470e9458466fe1b6e428713475d329343d9b98bb57fd7c7a4295655713042131",
                         "x": "7"
                       }
                     }
@@ -147,23 +147,23 @@ Response: {
           "nodes": [
             {
               "name": {
-                "json": "20"
+                "json": "50"
               },
               "value": {
                 "json": {
-                  "id": "0x0622ba936cbc3bed80985b80ecd24f782508cf92906a5c74e6d781d92e32d659",
-                  "x": "4"
+                  "id": "0x8c471462701a5f7c6ea4beaa01264a2e6fbbd5b515092a428e63d9744a88c3d8",
+                  "x": "8"
                 }
               }
             },
             {
               "name": {
-                "json": "50"
+                "json": "20"
               },
               "value": {
                 "json": {
-                  "id": "0xa65b85aeba27d77dde5a366ed9a9adcc3b615b9a40506f03cf6bc8f33197b6ae",
-                  "x": "8"
+                  "id": "0xc2445f08d4aa97edd0c92b47d81395842b7cc9e9c53ad8a0444eca3273d59998",
+                  "x": "4"
                 }
               }
             },
@@ -174,7 +174,7 @@ Response: {
               "value": {
                 "contents": {
                   "json": {
-                    "id": "0x00aeee42bd96d47f46bb9c1696a4325517d881125f0f0ae001d05425359c677a",
+                    "id": "0x8bc3345b5a74b7432c9f098fc7c49d75f45f4df974b68c1c1b2606949ddf429a",
                     "x": "6"
                   }
                 },
@@ -186,7 +186,7 @@ Response: {
                       },
                       "value": {
                         "json": {
-                          "id": "0x9a2ae0cd8208edc4274cd24630a288014803c5b57c05c213913bd2be400d5a27",
+                          "id": "0x470e9458466fe1b6e428713475d329343d9b98bb57fd7c7a4295655713042131",
                           "x": "7"
                         }
                       }
@@ -208,7 +208,7 @@ Response: {
             },
             "value": {
               "json": {
-                "id": "0xab230c0ad310dd6ab9185afee72f95a5da546160103de4eb4d47e605eb76d8af",
+                "id": "0x95fc7c846cf54b30610e3daf7c2502be843b1ddcfae7549fedb48bca085e2a3e",
                 "x": "5"
               }
             }

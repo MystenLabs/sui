@@ -26,6 +26,7 @@ use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use hex_literal::hex;
 use move_core_types::language_storage::TypeTag;
+use mysten_common::ZipDebugEqIteratorExt;
 use std::collections::{BTreeMap, HashMap};
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -151,7 +152,7 @@ pub fn get_test_authorities_and_run_mock_bridge_server(
     let (handles, ports) = run_mock_bridge_server(mock_handlers);
     let mut authorities = vec![];
     let mut secrets = vec![];
-    for (port, vp) in ports.iter().zip(voting_power) {
+    for (port, vp) in ports.iter().zip_debug_eq(voting_power) {
         let (authority, _, secret) = get_test_authority_and_key(vp, *port);
         authorities.push(authority);
         secrets.push(secret);

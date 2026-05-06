@@ -458,6 +458,7 @@ pub struct AdvanceEpochParams {
 
 #[cfg(msim)]
 pub mod advance_epoch_result_injection {
+    use crate::error::ExecutionErrorTrait;
     use crate::{
         committee::EpochId, error::ExecutionError, execution::ResultWithTimings,
         execution_status::ExecutionErrorKind,
@@ -484,6 +485,24 @@ pub mod advance_epoch_result_injection {
             if current_epoch >= start && current_epoch < end {
                 return Err((
                     ExecutionError::new(ExecutionErrorKind::FunctionNotFound, None),
+                    vec![],
+                ));
+            }
+        }
+        result
+    }
+
+    /// This function is used to modify the result of advance_epoch transaction for testing.
+    /// If the override is set, the result will be an execution error, otherwise the original result will be returned.
+    pub fn maybe_modify_result_for<E: ExecutionErrorTrait>(
+        result: ResultWithTimings<(), E>,
+        current_epoch: EpochId,
+    ) -> ResultWithTimings<(), E> {
+        if let Some((start, end)) = OVERRIDE.with(|o| *o.borrow()) {
+            if current_epoch >= start && current_epoch < end {
+                return Err((
+                    // TODO use E constructor
+                    ExecutionError::new(ExecutionErrorKind::FunctionNotFound, None).into(),
                     vec![],
                 ));
             }

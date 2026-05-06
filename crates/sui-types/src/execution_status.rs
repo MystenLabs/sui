@@ -3,9 +3,11 @@
 
 use crate::ObjectID;
 use crate::base_types::SuiAddress;
+use crate::error::{ExecutionError, ExecutionErrorTrait};
 use move_binary_format::file_format::{CodeOffset, TypeParameterIndex};
 use move_core_types::language_storage::ModuleId;
 use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use sui_macros::EnumVariantOrder;
 use thiserror::Error;
@@ -25,6 +27,47 @@ pub enum ExecutionStatus {
 pub struct ExecutionFailure {
     pub error: ExecutionErrorKind,
     pub command: Option<CommandIndex>,
+}
+
+impl ExecutionFailure {
+    pub fn new(error: ExecutionErrorKind, command: Option<CommandIndex>) -> Self {
+        ExecutionFailure { error, command }
+    }
+}
+
+impl From<ExecutionError> for ExecutionFailure {
+    fn from(value: ExecutionError) -> Self {
+        Self {
+            error: value.kind().clone(),
+            command: value.command(),
+        }
+    }
+}
+
+impl Error for ExecutionFailure {}
+
+impl Display for ExecutionFailure {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Execution Failure: {}", self.error)
+    }
+}
+
+impl ExecutionErrorTrait for ExecutionFailure {
+    fn with_command_index(self, command: CommandIndex) -> Self {
+        Self {
+            command: Some(command),
+            ..self
+        }
+    }
+    fn kind(&self) -> &ExecutionErrorKind {
+        &self.error
+    }
+    fn command(&self) -> Option<CommandIndex> {
+        self.command
+    }
+    fn source_ref(&self) -> Option<&(dyn Error + 'static)> {
+        None
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -414,11 +457,8 @@ impl Display for MoveLocation {
 }
 
 impl ExecutionStatus {
-    pub fn new_failure(
-        error: ExecutionErrorKind,
-        command: Option<CommandIndex>,
-    ) -> ExecutionStatus {
-        ExecutionStatus::Failure(ExecutionFailure { error, command })
+    pub fn new_failure(failure: ExecutionFailure) -> ExecutionStatus {
+        ExecutionStatus::Failure(failure)
     }
 
     pub fn is_ok(&self) -> bool {

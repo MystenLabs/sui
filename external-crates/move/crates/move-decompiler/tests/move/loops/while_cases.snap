@@ -7,7 +7,6 @@ module while_cases {
         while(l0 < 10u64) {
             l0 = l0 + 1u64;
         }
-        return 
     }
 
     public fun while_test_2 () {
@@ -38,7 +37,6 @@ module while_cases {
                 continue;
             }
         }
-        return 
     }
 
     public fun while_test_4 () {

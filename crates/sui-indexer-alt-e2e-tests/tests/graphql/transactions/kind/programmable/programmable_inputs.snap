@@ -10,7 +10,7 @@ task 1, lines 6-48:
 //# publish
 created: object(1,0), object(1,1)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 8990800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9036400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, lines 49-51:
 //# programmable --sender A --inputs 42u64 @A
@@ -25,9 +25,9 @@ task 3, lines 53-55:
 Checkpoint created: 1
 
 task 4, lines 56-57:
-//# programmable --sender A --inputs object(1,0) 10
+//# programmable --sender A --inputs object(1,1) 10
 //> 0: test::simple::add(Input(0), Input(1))
-mutated: object(0,0), object(1,0)
+mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 2340800,  storage_rebate: 2317392, non_refundable_storage_fee: 23408
 
 task 5, lines 59-62:
@@ -76,7 +76,7 @@ task 12, lines 84-103:
 Response: {
   "data": {
     "pureInputTest": {
-      "digest": "Bttkcbw8wwg8zCEHvvNB7G6E33j6BkdnsN3EZ8V8R69w",
+      "digest": "CHptXRsAADVbbuYuvjhkvRTVN6bukFCTawaoCdXEHALj",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -101,14 +101,14 @@ task 13, lines 105-126:
 Response: {
   "data": {
     "sharedInputTest": {
-      "digest": "9SPTGEs8zccU9wmKqySDLQ6mNwFp1PXmzeo6TXbvxNcF",
+      "digest": "BgyVWkMb3V6Z5Ks2NLjJbrohJ2xGQ5xYKqU1husoUhk9",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
           "nodes": [
             {
               "__typename": "SharedInput",
-              "address": "0xdac85611bd8b757d3f83e856fc3d1b3410efe3564ba6ab2fa1bd5da010ce66bb",
+              "address": "0x2fb770f5cd650d7db23a7a5af74c6d6e0a7227dad7431470fc4d054dc5ceeba4",
               "initialSharedVersion": 2,
               "mutable": true
             },
@@ -127,7 +127,7 @@ task 14, lines 128-151:
 Response: {
   "data": {
     "ownedOrImmutableTest": {
-      "digest": "A2nbHCsBb5RHdgMJayftB8LBk95JJ7Aihyw8Tp3dS1t4",
+      "digest": "CLWcCZBe21bfABbxTAXGMkHX7AmdafQn6bnxJMuxJrDD",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -135,9 +135,9 @@ Response: {
             {
               "__typename": "OwnedOrImmutable",
               "object": {
-                "address": "0xf7ada3a469c1494d73bba789173d5579b2b87259021e5f3b33e081be0b8bc32e",
+                "address": "0x3e8068450e610053f4f65e29e414135a7652146c724148de35eb14c2e73f0b36",
                 "version": 2,
-                "digest": "Aa6EyPZHdjMqLNxFahtvLBhb4UVz1vFVWKkeBJQxqLn2"
+                "digest": "FbFbpCEftUMJZJhuTh9Pou3b1SexCmuqrqb1utbHyCbC"
               }
             }
           ]
@@ -152,7 +152,7 @@ task 15, lines 153-176:
 Response: {
   "data": {
     "receivingInputTest": {
-      "digest": "JBV3ka46ujUGJ9q3K3rC2xexK6iYDdXXApADX7Ktmjpc",
+      "digest": "GQG22XMrzZYrd2Gr5zeSXwyx237Y7L5SRfeQZ31ZdQoo",
       "kind": {
         "__typename": "ProgrammableTransaction",
         "inputs": {
@@ -163,9 +163,9 @@ Response: {
             {
               "__typename": "Receiving",
               "object": {
-                "address": "0x9eb4542cc46f70bcd3332b74783e0d0a9e5a41371d664345e5c2a11facc7d9ff",
+                "address": "0xc7f1c5b162c28d835e635f9e1c10de45ae9362e9cbb02c34eb8bd1e1a4a86519",
                 "version": 6,
-                "digest": "C3WBk3KF77FLVSEcQDQxo6rfUs17ziEMXx5o6eXkiTP8"
+                "digest": "9wDNw619rmt9pFy2cj5km7UpqrBAxLxY9H1vFNDzUbYS"
               }
             },
             {

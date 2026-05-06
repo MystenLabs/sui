@@ -17,7 +17,6 @@ clap.workspace = true
 futures.workspace = true
 governor.workspace = true
 http.workspace = true
-num_cpus.workspace = true
 gcp_auth.workspace = true
 prometheus.workspace = true
 rand.workspace = true
@@ -39,7 +38,9 @@ tonic-prost.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+mysten-common.workspace = true
 sui-indexer-alt-framework = { workspace = true, features = ["cluster"] }
+sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
 sui-keys.workspace = true
 sui-rpc.workspace = true
 sui-test-transaction-builder.workspace = true

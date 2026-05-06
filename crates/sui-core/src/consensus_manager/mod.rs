@@ -8,8 +8,8 @@ use crate::mysticeti_adapter::LazyMysticetiClient;
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{
-    Committee, NetworkKeyPair, NetworkPublicKey as ConsensusNetworkPublicKey, Parameters,
-    ProtocolKeyPair,
+    ChainType, Committee, ConsensusProtocolConfig, NetworkKeyPair,
+    NetworkPublicKey as ConsensusNetworkPublicKey, Parameters, ProtocolKeyPair,
 };
 use consensus_core::{
     Clock, CommitConsumerArgs, CommitConsumerMonitor, CommitIndex, ConsensusAuthority, NetworkType,
@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_network::endpoint_manager::ConsensusAddressUpdater;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
@@ -115,6 +115,26 @@ impl AddressOverridesMap {
         }
         result
     }
+}
+
+fn to_consensus_protocol_config(config: &ProtocolConfig, chain: Chain) -> ConsensusProtocolConfig {
+    let chain_type = match chain {
+        Chain::Mainnet => ChainType::Mainnet,
+        Chain::Testnet => ChainType::Testnet,
+        Chain::Unknown => ChainType::Unknown,
+    };
+    ConsensusProtocolConfig::new(
+        config.version.as_u64(),
+        chain_type,
+        config.max_transaction_size_bytes(),
+        config.max_transactions_in_block_bytes(),
+        config.max_num_transactions_in_block(),
+        config.gc_depth(),
+        /* transaction_voting_enabled */ true,
+        config.mysticeti_num_leaders_per_round(),
+        config.consensus_bad_nodes_stake_threshold(),
+        /* enable_v3 */ false,
+    )
 }
 
 /// Used by Sui validator to start consensus protocol for each epoch.
@@ -223,12 +243,6 @@ impl ConsensusManager {
             ..consensus_config.parameters.clone().unwrap_or_default()
         };
 
-        let own_protocol_key = self.protocol_keypair.public();
-        let (own_index, _) = committee
-            .authorities()
-            .find(|(_, a)| a.protocol_key == own_protocol_key)
-            .expect("Own authority should be among the consensus authorities!");
-
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
@@ -280,11 +294,10 @@ impl ConsensusManager {
         let authority = ConsensusAuthority::start(
             NetworkType::Tonic,
             epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
-            own_index,
             committee.clone(),
             parameters.clone(),
-            protocol_config.clone(),
-            self.protocol_keypair.clone(),
+            to_consensus_protocol_config(protocol_config, epoch_store.get_chain()),
+            Some(self.protocol_keypair.clone()),
             self.network_keypair.clone(),
             Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),

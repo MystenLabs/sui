@@ -74,11 +74,11 @@ on the property values of an Object.
 ```
 // Example of a display object
 Display<0x...::capy::Capy> {
-fields:
-<name, "Capy { genes }">
-<link, "https://capy.art/capy/{ id }">
-<image, "https://api.capy.art/capy/{ id }/svg">
-<description, "Lovely Capy, one of many">
+ fields:
+   <name, "Capy { genes }">
+   <link, "https://capy.art/capy/{ id }">
+   <image, "https://api.capy.art/capy/{ id }/svg">
+   <description, "Lovely Capy, one of many">
 }
 ```
 
