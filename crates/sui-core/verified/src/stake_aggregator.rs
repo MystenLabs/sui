@@ -12,6 +12,7 @@ use sui_types::committee::{Committee, CommitteeTrait, StakeUnit};
 use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait};
 use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types::message_envelope::{Envelope, Message};
+use sui_types_verified::VerifiedHashMap;
 use tracing::warn;
 use typed_store::TypedStoreError;
 use vstd::prelude::*;
@@ -23,90 +24,6 @@ use crate::verus_shims::{
     committee_threshold_spec, committee_unique, committee_weight_of,
     lemma_voted_weight_empty, lemma_voted_weight_insert, voted_weight,
 };
-
-// ---------------------------------------------------------------------------
-// AuthorityMap
-// ---------------------------------------------------------------------------
-//
-// Thin wrapper around `HashMap<AuthorityName, S>` that adds the iteration
-// API (`values`, `keys`, etc.) missing from `HashMapWithView`, while still
-// giving verified code a clean `Map<AuthorityName, S>` view.
-//
-// Why not just use `HashMapWithView<AuthorityName, S>` directly?
-// vstd's `HashMapWithView` has no `iter()` / `values()` / `IntoIterator`
-// — the unverified `AuthoritySignInfo` specialisation below needs those.
-// `AuthorityMap` bridges the gap: verified code uses the specced methods
-// below; unverified code reaches `self.data.inner` for iteration.
-//
-// The view is `open` and delegates to the raw HashMap's own view (which
-// vstd provides in `vstd::view`). With `obeys_key_model::<AuthorityName>()`
-// axiomatised in `verus_shims`, no further axioms are needed for the
-// view to be consistent.
-
-#[derive(Debug)]
-pub struct AuthorityMap<S> {
-    pub inner: HashMap<AuthorityName, S>,
-}
-
-impl<S> View for AuthorityMap<S> {
-    type V = Map<AuthorityName, S>;
-    // Transparent: self@ unfolds to self.inner@ (the raw HashMap's view).
-    // No uninterpreted axiom needed — the HashMap view is grounded in vstd.
-    open spec fn view(&self) -> Map<AuthorityName, S> { self.inner@ }
-}
-
-impl<S> AuthorityMap<S> {
-    #[verifier::external_body]
-    pub fn new() -> (out: Self)
-        ensures
-            // Fresh map is empty and finite.
-            out@ =~= Map::<AuthorityName, S>::empty(),
-            out@.dom().finite(),
-    {
-        Self { inner: HashMap::new() }
-    }
-
-    #[verifier::external_body]
-    pub fn contains_key(&self, name: &AuthorityName) -> (b: bool)
-        // Result mirrors the ghost map.
-        ensures b == self@.contains_key(*name),
-    {
-        self.inner.contains_key(name)
-    }
-
-    #[verifier::external_body]
-    pub fn insert_new(&mut self, name: AuthorityName, value: S)
-        requires
-            // Caller promises the name is not already present.
-            !old(self)@.contains_key(name),
-            old(self)@.dom().finite(),
-        ensures
-            // After insert: view extends by (name, value); finiteness preserved.
-            self@ =~= old(self)@.insert(name, value),
-            self@.dom().finite(),
-    {
-        self.inner.insert(name, value);
-    }
-
-    /// Production uses this only for the `conflicting_sig` metadata in
-    /// errors, which does not affect the sum invariant. No useful spec.
-    #[verifier::external_body]
-    pub fn get_value<'a>(&'a self, name: &AuthorityName) -> (out: Option<&'a S>) {
-        self.inner.get(name)
-    }
-}
-
-impl<S> Default for AuthorityMap<S> {
-    #[verifier::external_body]
-    fn default() -> (out: Self)
-        // Default == new(): empty map.
-        ensures
-            out@ =~= Map::<AuthorityName, S>::empty(),
-            out@.dom().finite(),
-    {
-        Self::new()
-    }
-}
 
 // Verus cannot construct opaque external types directly. These wrappers
 // build the SuiErrors used by `insert_generic`'s error branches. Bodies
@@ -135,7 +52,7 @@ verus! {
 /// STRENGTH indicates whether we want a strong quorum (2f+1) or a weak quorum (f+1).
 #[derive(Debug)]
 pub struct StakeAggregator<S, const STRENGTH: bool> {
-    pub data: AuthorityMap<S>,
+    pub data: VerifiedHashMap<AuthorityName, S>,
     pub total_votes: StakeUnit,
     pub committee: Arc<Committee>,
 }
@@ -167,7 +84,7 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
         // sum_stakes(c, empty) == 0 for any committee, so the invariant follows.
         broadcast use lemma_voted_weight_empty;
         Self {
-            data: AuthorityMap::default(),
+            data: VerifiedHashMap::default(),
             total_votes: 0,
             committee,
         }

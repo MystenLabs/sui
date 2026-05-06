@@ -10,6 +10,7 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+sui-types-verified.workspace = true
 async-trait.workspace = true
 anemo.workspace = true
 anyhow.workspace = true

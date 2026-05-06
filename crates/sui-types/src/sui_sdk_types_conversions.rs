@@ -11,7 +11,7 @@
 use fastcrypto::traits::ToFromBytes;
 use sui_sdk_types::{
     self, AccumulatorWrite, ActiveJwk, Address, Argument, AuthenticatorStateExpire, Bitmap,
-    Bls12381PublicKey, Bls12381Signature, CanceledTransaction, CanceledTransactionV2, ChangeEpoch,
+    Bls12381Signature, CanceledTransaction, CanceledTransactionV2, ChangeEpoch,
     CheckpointCommitment, CheckpointContents, CheckpointData, CheckpointSummary, Command,
     CommandArgumentError, ConsensusDeterminedVersionAssignments, Digest, Ed25519PublicKey,
     Ed25519Signature, EndOfEpochTransactionKind, ExecutionError, ExecutionStatus,
@@ -553,17 +553,9 @@ impl From<ValidatorCommittee> for crate::committee::Committee {
     }
 }
 
-impl From<crate::crypto::AuthorityPublicKeyBytes> for Bls12381PublicKey {
-    fn from(value: crate::crypto::AuthorityPublicKeyBytes) -> Self {
-        Self::new(value.0)
-    }
-}
-
-impl From<Bls12381PublicKey> for crate::crypto::AuthorityPublicKeyBytes {
-    fn from(value: Bls12381PublicKey) -> Self {
-        Self::new(value.into_inner())
-    }
-}
+// From<AuthorityPublicKeyBytes> for Bls12381PublicKey and its inverse are
+// now in sui-types-verified/src/authority_name.rs (where AuthorityPublicKeyBytes
+// is defined, avoiding the orphan-rule issue).
 
 impl From<UnchangedConsensusKind> for crate::effects::UnchangedConsensusKind {
     fn from(value: UnchangedConsensusKind) -> Self {

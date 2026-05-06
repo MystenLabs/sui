@@ -1,0 +1,22 @@
+[package]
+name = "sui-types-verified"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+
+[lints]
+workspace = true
+
+[package.metadata.verus]
+verify = true
+
+[dependencies]
+anyhow.workspace = true
+derive_more = { workspace = true, features = ["as_ref"] }
+fastcrypto.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_with.workspace = true
+sui-sdk-types.workspace = true
+vstd.workspace = true

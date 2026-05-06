@@ -1,5 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crate::base_types::{AuthorityName, ConciseableName, SuiAddress};
 use crate::committee::CommitteeTrait;
 use crate::committee::{Committee, EpochId, StakeUnit};
@@ -427,36 +428,10 @@ impl PublicKey {
     }
 }
 
-/// Defines the compressed version of the public key that we pass around
-/// in Sui
-#[serde_as]
-#[derive(
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Hash,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    schemars::JsonSchema,
-    AsRef,
-)]
-#[as_ref(forward)]
-pub struct AuthorityPublicKeyBytes(
-    #[schemars(with = "Base64")]
-    #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub [u8; AuthorityPublicKey::LENGTH],
-);
-
-impl AuthorityPublicKeyBytes {
-    fn fmt_impl(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let s = Hex::encode(self.0);
-        write!(f, "k#{}", s)?;
-        Ok(())
-    }
-}
+// `AuthorityPublicKeyBytes` is now defined in `sui-types-verified` so that
+// `impl View for AuthorityPublicKeyBytes` is orphan-free. Re-export here to
+// preserve all existing imports unchanged.
+pub use sui_types_verified::AuthorityPublicKeyBytes;
 
 impl<'a> ConciseableName<'a> for AuthorityPublicKeyBytes {
     type ConciseTypeRef = ConciseAuthorityPublicKeyBytesRef<'a>;
@@ -508,65 +483,9 @@ impl Display for ConciseAuthorityPublicKeyBytes {
     }
 }
 
-impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
-    type Error = FastCryptoError;
-
-    fn try_from(bytes: AuthorityPublicKeyBytes) -> Result<AuthorityPublicKey, Self::Error> {
-        AuthorityPublicKey::from_bytes(bytes.as_ref())
-    }
-}
-
-impl From<&AuthorityPublicKey> for AuthorityPublicKeyBytes {
-    fn from(pk: &AuthorityPublicKey) -> AuthorityPublicKeyBytes {
-        AuthorityPublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
-    }
-}
-
-impl Debug for AuthorityPublicKeyBytes {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.fmt_impl(f)
-    }
-}
-
-impl Display for AuthorityPublicKeyBytes {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.fmt_impl(f)
-    }
-}
-
-impl ToFromBytes for AuthorityPublicKeyBytes {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, fastcrypto::error::FastCryptoError> {
-        let bytes: [u8; AuthorityPublicKey::LENGTH] = bytes
-            .try_into()
-            .map_err(|_| fastcrypto::error::FastCryptoError::InvalidInput)?;
-        Ok(AuthorityPublicKeyBytes(bytes))
-    }
-}
-
-impl AuthorityPublicKeyBytes {
-    pub const ZERO: Self = Self::new([0u8; AuthorityPublicKey::LENGTH]);
-
-    /// This ensures it's impossible to construct an instance with other than registered lengths
-    pub const fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
-where {
-        AuthorityPublicKeyBytes(bytes)
-    }
-}
-
-impl FromStr for AuthorityPublicKeyBytes {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = Hex::decode(s).map_err(|e| anyhow!(e))?;
-        Self::from_bytes(&value[..]).map_err(|e| anyhow!(e))
-    }
-}
-
-impl Default for AuthorityPublicKeyBytes {
-    fn default() -> Self {
-        Self::ZERO
-    }
-}
+// TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey is in
+// sui-types-verified/src/authority_name.rs (both types are foreign
+// to sui-types after AuthorityPublicKeyBytes moved).
 
 //
 // Add helper calls for Authority Signature
