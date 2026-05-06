@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    data_store::PackageStore,
     sp,
     static_programmable_transactions::{env, spanned::Spanned, typing::ast as T},
 };
@@ -82,7 +81,7 @@ fn ensure_type_defining_id_based(env: &env::Env, ty: &T::Type) -> Result<(), Exe
             // If we fail to resolve the type that's an invariant violation as we should be able to
             // load the package that defined this type otherwise we should have failed at
             // load/typing time.
-            let Ok(Some(resolved_id)) = env.linkable_store.resolve_type_to_defining_id(
+            let Ok(Some(resolved_id)) = env.resolve_type_to_defining_id(
                 (*datatype.module.address()).into(),
                 datatype.module.name(),
                 &datatype.name,

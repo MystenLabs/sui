@@ -14,7 +14,9 @@ use crate::{
     execution_value::ExecutionState,
     gas_charger::GasCharger,
     static_programmable_transactions::{
-        env::Env, linkage::analysis::LinkageAnalyzer, metering::translation_meter,
+        env::{Env, cache::PerTxCache},
+        linkage::analysis::LinkageAnalyzer,
+        metering::translation_meter,
     },
 };
 use move_trace_format::format::MoveTraceBuilder;
@@ -52,8 +54,9 @@ pub fn execute<Mode: ExecutionMode>(
     let package_store = CachedPackageStore::new(vm, TransactionPackageStore::new(package_store));
     let linkage_analysis =
         LinkageAnalyzer::new::<Mode>(protocol_config).map_err(|e| (e, vec![]))?;
+    let per_tx_cache = PerTxCache::new(protocol_config);
     let ptb_type_linkage = linkage_analysis
-        .compute_input_type_resolution_linkage(&txn, &package_store, state_view)
+        .compute_input_type_resolution_linkage(&txn, &package_store, state_view, &per_tx_cache)
         .and_then(|linkage| linkage.linkage_context())
         .map_err(|e| (e, vec![]))?;
     let resolution_vm = vm
@@ -72,6 +75,7 @@ pub fn execute<Mode: ExecutionMode>(
         &package_store,
         &linkage_analysis,
         &resolution_vm,
+        &per_tx_cache,
     );
     let mut translation_meter =
         translation_meter::TranslationMeter::new(protocol_config, gas_charger);

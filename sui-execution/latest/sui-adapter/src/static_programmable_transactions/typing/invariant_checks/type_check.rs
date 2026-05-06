@@ -150,7 +150,7 @@ fn command<Mode: ExecutionMode>(
                 function,
                 arguments,
             } = &**move_call;
-            let L::LoadedFunction { signature, .. } = function;
+            let L::LoadedFunction { signature, .. } = &**function;
             let L::LoadedFunctionInstantiation {
                 parameters,
                 return_,

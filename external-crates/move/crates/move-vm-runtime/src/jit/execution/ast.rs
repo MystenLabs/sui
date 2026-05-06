@@ -885,6 +885,7 @@ impl Function {
         self.return_.len()
     }
 
+    #[allow(dead_code)]
     pub fn name_str(&self, interner: &IdentifierInterner) -> String {
         self.name(interner).to_string()
     }

@@ -1083,6 +1083,10 @@ struct FeatureFlags {
     // MAX_PUBLIC_INPUTS public inputs.
     #[serde(skip_serializing_if = "is_false")]
     limit_groth16_pvk_inputs: bool,
+
+    // If true, enable caching in ptb execution.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_ptb_tx_cache: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2813,6 +2817,10 @@ impl ProtocolConfig {
 
     pub fn limit_groth16_pvk_inputs(&self) -> bool {
         self.feature_flags.limit_groth16_pvk_inputs
+    }
+
+    pub fn enable_ptb_tx_cache(&self) -> bool {
+        self.feature_flags.enable_ptb_tx_cache
     }
 }
 
@@ -4897,6 +4905,7 @@ impl ProtocolConfig {
                     }
                     cfg.gas_model_version = Some(14);
                     cfg.feature_flags.limit_groth16_pvk_inputs = true;
+                    cfg.feature_flags.enable_ptb_tx_cache = true;
                 }
                 // Use this template when making changes:
                 //
