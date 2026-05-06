@@ -6,7 +6,7 @@ use std::{
     net::{SocketAddr, SocketAddrV4, SocketAddrV6},
     pin::Pin,
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use async_trait::async_trait;
@@ -26,25 +26,29 @@ use sui_tls::AllowPublicKeys;
 use tokio_stream::{Iter, iter};
 use tonic::{Request, Response, Streaming, codec::CompressionEncoding};
 use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info};
 
 use super::{
     BlockStream, ExtendedSerializedBlock, NetworkManager, ObserverNetworkService,
     ValidatorNetworkClient, ValidatorNetworkService,
     metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
     observer::{ObserverPeerInfo, ObserverServiceProxy, TonicObserverClient},
+    tonic_common::{
+        Channel, FetchBlocksRequest, FetchBlocksResponse, FetchCommitsRequest,
+        FetchCommitsResponse, MAX_FETCH_RESPONSE_BYTES, chunk_blocks, connect_channel,
+        drain_blocks_stream, extract_peer_public_key, http2_server_config,
+        max_fetch_blocks_response_bytes, serve_with_retry,
+    },
     tonic_gen::{
         consensus_service_client::ConsensusServiceClient,
         consensus_service_server::ConsensusService,
     },
 };
 use crate::{
-    CommitIndex,
     commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::{
-        to_host_port_str,
         tonic_gen::{
             consensus_service_server::ConsensusServiceServer,
             observer_service_server::ObserverServiceServer,
@@ -53,35 +57,7 @@ use crate::{
     },
 };
 
-// Maximum bytes size in a single fetch_blocks()response.
-// TODO: put max RPC response size in protocol config.
-pub(crate) const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
-
-pub(crate) fn max_fetch_blocks_response_bytes(
-    context: &Context,
-    block_refs: &[BlockRef],
-    fetch_after_rounds: &[Round],
-) -> usize {
-    let max_response_num_blocks = if fetch_after_rounds.is_empty() {
-        block_refs
-            .len()
-            .min(context.parameters.max_blocks_per_fetch)
-    } else if block_refs.is_empty() {
-        context.parameters.max_blocks_per_fetch
-    } else {
-        context.parameters.max_blocks_per_sync
-    };
-
-    max_response_num_blocks
-        .saturating_mul(context.protocol_config.max_transactions_in_block_bytes() as usize)
-        .saturating_mul(2)
-}
-
 const DEFAULT_GRPC_SERVER_TIMEOUT: Duration = Duration::from_secs(300);
-
-// HTTP/2 connection and stream window sizes for both validator and observer servers.
-const HTTP2_INITIAL_CONNECTION_WINDOW_SIZE: u32 = 64 << 20; // 64 MB
-const HTTP2_INITIAL_STREAM_WINDOW_SIZE: u32 = 32 << 20; // 32 MB
 
 // Implements Tonic RPC client for validator consensus operations.
 pub(crate) struct TonicValidatorClient {
@@ -189,7 +165,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         });
         request.set_timeout(timeout);
 
-        let mut stream = client
+        let stream = client
             .fetch_blocks(request)
             .await
             .map_err(|e| {
@@ -201,44 +177,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             })?
             .into_inner();
 
-        let mut blocks = vec![];
-        let mut total_fetched_bytes = 0;
-        loop {
-            match stream.message().await {
-                Ok(Some(response)) => {
-                    for b in &response.blocks {
-                        total_fetched_bytes += b.len();
-                    }
-                    blocks.extend(response.blocks);
-                    if total_fetched_bytes > max_allowed_bytes {
-                        info!(
-                            "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
-                            total_fetched_bytes, max_allowed_bytes,
-                        );
-                        break;
-                    }
-                }
-                Ok(None) => {
-                    break;
-                }
-                Err(e) => {
-                    if blocks.is_empty() {
-                        if e.code() == tonic::Code::DeadlineExceeded {
-                            return Err(ConsensusError::NetworkRequestTimeout(format!(
-                                "fetch_blocks failed mid-stream: {e:?}"
-                            )));
-                        }
-                        return Err(ConsensusError::NetworkRequest(format!(
-                            "fetch_blocks failed mid-stream: {e:?}"
-                        )));
-                    } else {
-                        warn!("fetch_blocks failed mid-stream: {e:?}");
-                        break;
-                    }
-                }
-            }
-        }
-        Ok(blocks)
+        drain_blocks_stream(stream, max_allowed_bytes, "fetch_blocks", |r| r.blocks).await
     }
 
     async fn fetch_commits(
@@ -276,7 +215,7 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         });
         request.set_timeout(timeout);
 
-        let mut stream = client
+        let stream = client
             .fetch_latest_blocks(request)
             .await
             .map_err(|e| {
@@ -297,44 +236,10 @@ impl ValidatorNetworkClient for TonicValidatorClient {
                 .protocol_config
                 .max_transactions_in_block_bytes() as usize
             * 2;
-        let mut blocks = vec![];
-        let mut total_fetched_bytes = 0;
-        loop {
-            match stream.message().await {
-                Ok(Some(response)) => {
-                    for b in &response.blocks {
-                        total_fetched_bytes += b.len();
-                    }
-                    blocks.extend(response.blocks);
-                    if total_fetched_bytes > max_allowed_bytes {
-                        info!(
-                            "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
-                            total_fetched_bytes, max_allowed_bytes,
-                        );
-                        break;
-                    }
-                }
-                Ok(None) => {
-                    break;
-                }
-                Err(e) => {
-                    if blocks.is_empty() {
-                        if e.code() == tonic::Code::DeadlineExceeded {
-                            return Err(ConsensusError::NetworkRequestTimeout(format!(
-                                "fetch_blocks failed mid-stream: {e:?}"
-                            )));
-                        }
-                        return Err(ConsensusError::NetworkRequest(format!(
-                            "fetch_blocks failed mid-stream: {e:?}"
-                        )));
-                    } else {
-                        warn!("fetch_latest_blocks failed mid-stream: {e:?}");
-                        break;
-                    }
-                }
-            }
-        }
-        Ok(blocks)
+        drain_blocks_stream(stream, max_allowed_bytes, "fetch_latest_blocks", |r| {
+            r.blocks
+        })
+        .await
     }
 
     async fn get_latest_rounds(
@@ -371,15 +276,6 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         Ok(())
     }
 }
-
-// Tonic channel wrapped with layers.
-pub(crate) type Channel = mysten_network::callback::Callback<
-    tower_http::trace::Trace<
-        tonic_rustls::Channel,
-        tower_http::classify::SharedClassifier<tower_http::classify::GrpcErrorsAsFailures>,
-    >,
-    MetricsCallbackMaker,
->;
 
 /// Manages a pool of connections to peers to avoid constantly reconnecting,
 /// which can be expensive.
@@ -443,7 +339,6 @@ impl ChannelPool {
         }
 
         let authority = self.context.committee.authority(peer);
-
         let peer_address = {
             let overrides = self.address_overrides.read();
             overrides
@@ -451,66 +346,16 @@ impl ChannelPool {
                 .cloned()
                 .unwrap_or_else(|| authority.address.clone())
         };
+        let peer_network_key = authority.network_key.clone();
 
-        let address = to_host_port_str(&peer_address).map_err(|e| {
-            ConsensusError::NetworkConfig(format!("Cannot convert address to host:port: {e:?}"))
-        })?;
-        let address = format!("https://{address}");
-        let config = &self.context.parameters.tonic;
-        let buffer_size = config.connection_buffer_size;
-        let client_tls_config = sui_tls::create_rustls_client_config(
-            self.context
-                .committee
-                .authority(peer)
-                .network_key
-                .clone()
-                .into_inner(),
-            certificate_server_name(&self.context),
-            Some(network_keypair.private_key().into_inner()),
-        );
-        let endpoint = tonic_rustls::Channel::from_shared(address.clone())
-            .map_err(|e| ConsensusError::NetworkConfig(format!("invalid URI '{address}': {e}")))?
-            .connect_timeout(timeout)
-            .initial_connection_window_size(Some(buffer_size as u32))
-            .initial_stream_window_size(Some(buffer_size as u32 / 2))
-            .keep_alive_while_idle(true)
-            .keep_alive_timeout(config.keepalive_interval)
-            .http2_keep_alive_interval(config.keepalive_interval)
-            // tcp keepalive is probably unnecessary and is unsupported by msim.
-            .user_agent("mysticeti")
-            .unwrap()
-            .tls_config(client_tls_config)
-            .unwrap();
-
-        let deadline = tokio::time::Instant::now() + timeout;
-        let channel = loop {
-            trace!("Connecting to endpoint at {address}");
-            match endpoint.connect().await {
-                Ok(channel) => break channel,
-                Err(e) => {
-                    debug!("Failed to connect to endpoint at {address}: {e:?}");
-                    if tokio::time::Instant::now() >= deadline {
-                        return Err(ConsensusError::NetworkClientConnection(format!(
-                            "Timed out connecting to endpoint at {address}: {e:?}"
-                        )));
-                    }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            }
-        };
-        trace!("Connected to {address}");
-
-        let channel = tower::ServiceBuilder::new()
-            .layer(CallbackLayer::new(MetricsCallbackMaker::new(
-                self.context.metrics.network_metrics.outbound.clone(),
-                self.context.parameters.tonic.excessive_message_size,
-            )))
-            .layer(
-                TraceLayer::new_for_grpc()
-                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
-                    .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
-            )
-            .service(channel);
+        let channel = connect_channel(
+            &self.context,
+            network_keypair,
+            peer_network_key,
+            &peer_address,
+            timeout,
+        )
+        .await?;
 
         let mut channels = self.channels.write();
         // There should not be many concurrent attempts at connecting to the same peer.
@@ -948,36 +793,19 @@ impl TonicManager {
             ),
         );
 
-        let http_config = sui_http::Config::default()
-            .initial_connection_window_size(HTTP2_INITIAL_CONNECTION_WINDOW_SIZE)
-            .initial_stream_window_size(HTTP2_INITIAL_STREAM_WINDOW_SIZE)
-            .http2_keepalive_interval(Some(config.keepalive_interval))
-            .http2_keepalive_timeout(Some(config.keepalive_interval))
-            .accept_http1(false);
+        let http_config = http2_server_config(config.keepalive_interval);
 
-        // Create server
-        //
         // During simtest crash/restart tests there may be an older instance of consensus running
         // that is bound to the TCP port of `own_address` that hasn't finished relinquishing
         // control of the port yet. So instead of crashing when the address is inuse, we will retry
         // for a short/reasonable period of time before giving up.
-        let deadline = Instant::now() + Duration::from_secs(20);
-        let server = loop {
-            match sui_http::Builder::new()
+        let server = serve_with_retry("consensus", || {
+            sui_http::Builder::new()
                 .config(http_config.clone())
                 .tls_config(tls_server_config.clone())
                 .serve(self.own_address, consensus_service.clone())
-            {
-                Ok(server) => break server,
-                Err(err) => {
-                    warn!("Error starting consensus server: {err:?}");
-                    if Instant::now() > deadline {
-                        panic!("Failed to start consensus server within required deadline");
-                    }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            }
-        };
+        })
+        .await;
 
         info!("Server started at: {}", self.own_address);
         self.server = Some(server);
@@ -1061,30 +889,15 @@ impl TonicManager {
             .into_axum_router()
             .route_layer(layers);
 
-        let http_config = sui_http::Config::default()
-            .initial_connection_window_size(HTTP2_INITIAL_CONNECTION_WINDOW_SIZE)
-            .initial_stream_window_size(HTTP2_INITIAL_STREAM_WINDOW_SIZE)
-            .http2_keepalive_interval(Some(tonic_config.keepalive_interval))
-            .http2_keepalive_timeout(Some(tonic_config.keepalive_interval))
-            .accept_http1(false);
+        let http_config = http2_server_config(tonic_config.keepalive_interval);
 
-        let deadline = Instant::now() + Duration::from_secs(20);
-        let observer_server = loop {
-            match sui_http::Builder::new()
+        let observer_server = serve_with_retry("observer", || {
+            sui_http::Builder::new()
                 .config(http_config.clone())
                 .tls_config(observer_tls_config.clone())
                 .serve(observer_address, observer_service.clone())
-            {
-                Ok(server) => break server,
-                Err(err) => {
-                    warn!("Error starting observer server: {err:?}");
-                    if Instant::now() > deadline {
-                        panic!("Failed to start observer server within required deadline");
-                    }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            }
-        };
+        })
+        .await;
 
         info!("Observer server started at: {observer_address}");
         self.observer_server = Some(observer_server);
@@ -1110,23 +923,7 @@ fn peer_info_from_certs(
     connections_info: &ConnectionsInfo,
     peer_certificates: &sui_http::PeerCertificates,
 ) -> Option<PeerInfo> {
-    let certs = peer_certificates.peer_certs();
-
-    if certs.len() != 1 {
-        trace!(
-            "Unexpected number of certificates from TLS stream: {}",
-            certs.len()
-        );
-        return None;
-    }
-    trace!("Received {} certificates", certs.len());
-    let public_key = sui_tls::public_key_from_certificate(&certs[0])
-        .map_err(|e| {
-            trace!("Failed to extract public key from certificate: {e:?}");
-            e
-        })
-        .ok()?;
-    let client_public_key = NetworkPublicKey::new(public_key);
+    let client_public_key = extract_peer_public_key(peer_certificates)?;
     let Some(authority_index) = connections_info.authority_index(&client_public_key) else {
         error!("Failed to find the authority with public key {client_public_key:?}");
         return None;
@@ -1140,29 +937,11 @@ fn peer_info_from_certs(
 fn observer_peer_info_from_certs(
     peer_certificates: &sui_http::PeerCertificates,
 ) -> Option<ObserverPeerInfo> {
-    let certs = peer_certificates.peer_certs();
-
-    if certs.len() != 1 {
-        trace!(
-            "Unexpected number of certificates from TLS stream: {}",
-            certs.len()
-        );
-        return None;
-    }
-    trace!("Received {} observer certificates", certs.len());
-    let public_key = sui_tls::public_key_from_certificate(&certs[0])
-        .map_err(|e| {
-            trace!("Failed to extract public key from observer certificate: {e:?}");
-            e
-        })
-        .ok()?;
-    let client_public_key = NetworkPublicKey::new(public_key);
-
+    let client_public_key = extract_peer_public_key(peer_certificates)?;
     debug!(
         "Observer connection accepted: public key {:?}",
         client_public_key
     );
-
     Some(ObserverPeerInfo {
         public_key: client_public_key,
     })
@@ -1347,47 +1126,6 @@ pub(crate) struct SubscribeBlocksResponse {
 }
 
 #[derive(Clone, prost::Message)]
-pub(crate) struct FetchBlocksRequest {
-    #[prost(bytes = "vec", repeated, tag = "1")]
-    block_refs: Vec<Vec<u8>>,
-    // The round per authority after which blocks should be fetched. The vector represents the round
-    // for each authority and its length should be the same as the committee size.
-    // When this field is non-empty, additional ancestors of the requested blocks can be fetched.
-    #[prost(uint32, repeated, tag = "2")]
-    fetch_after_rounds: Vec<Round>,
-    // When true, missing ancestors of the requested blocks will be fetched as well.
-    // When false, additional blocks are fetched depth-first from the requested block authorities.
-    // This field is only meaningful when fetch_after_rounds is non-empty.
-    #[prost(bool, tag = "3")]
-    fetch_missing_ancestors: bool,
-}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct FetchBlocksResponse {
-    // The response of the requested blocks as Serialized SignedBlock.
-    #[prost(bytes = "bytes", repeated, tag = "1")]
-    blocks: Vec<Bytes>,
-}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct FetchCommitsRequest {
-    #[prost(uint32, tag = "1")]
-    start: CommitIndex,
-    #[prost(uint32, tag = "2")]
-    end: CommitIndex,
-}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct FetchCommitsResponse {
-    // Serialized consecutive Commit.
-    #[prost(bytes = "bytes", repeated, tag = "1")]
-    commits: Vec<Bytes>,
-    // Serialized SignedBlock that certify the last commit from above.
-    #[prost(bytes = "bytes", repeated, tag = "2")]
-    certifier_blocks: Vec<Bytes>,
-}
-
-#[derive(Clone, prost::Message)]
 pub(crate) struct FetchLatestBlocksRequest {
     #[prost(uint32, repeated, tag = "1")]
     authorities: Vec<u32>,
@@ -1411,26 +1149,6 @@ pub(crate) struct GetLatestRoundsResponse {
     // Highest accepted round per authority.
     #[prost(uint32, repeated, tag = "2")]
     highest_accepted: Vec<u32>,
-}
-
-pub(crate) fn chunk_blocks(blocks: Vec<Bytes>, chunk_limit: usize) -> Vec<Vec<Bytes>> {
-    let mut chunks = vec![];
-    let mut chunk = vec![];
-    let mut chunk_size = 0;
-    for block in blocks {
-        let block_size = block.len();
-        if !chunk.is_empty() && chunk_size + block_size > chunk_limit {
-            chunks.push(chunk);
-            chunk = vec![];
-            chunk_size = 0;
-        }
-        chunk.push(block);
-        chunk_size += block_size;
-    }
-    if !chunk.is_empty() {
-        chunks.push(chunk);
-    }
-    chunks
 }
 
 #[cfg(test)]

@@ -8,24 +8,22 @@ use bytes::Bytes;
 use consensus_config::{NetworkKeyPair, NetworkPublicKey};
 use consensus_types::block::{BlockRef, Round};
 use futures::{Stream, StreamExt as _};
-use mysten_network::{Multiaddr, callback::CallbackLayer};
+use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use tokio_stream::Iter;
 use tonic::{Request, Response};
-use tower_http::trace::{DefaultMakeSpan, DefaultOnFailure, TraceLayer};
-use tracing::{debug, info, trace, warn};
+use tracing::debug;
 
 use crate::{
     CommitRange, Context,
     error::{ConsensusError, ConsensusResult},
     network::{
         ObserverBlockStream, ObserverNetworkClient, PeerId,
-        metrics_layer::MetricsCallbackMaker,
-        to_host_port_str,
-        tonic_network::{
-            Channel, MAX_FETCH_RESPONSE_BYTES, chunk_blocks, max_fetch_blocks_response_bytes,
+        tonic_common::{
+            Channel, FetchBlocksRequest, FetchBlocksResponse, FetchCommitsRequest,
+            FetchCommitsResponse, MAX_FETCH_RESPONSE_BYTES, chunk_blocks, connect_channel,
+            drain_blocks_stream, max_fetch_blocks_response_bytes,
         },
-        tonic_tls::certificate_server_name,
     },
 };
 
@@ -42,45 +40,6 @@ pub(crate) struct BlockStreamRequest {
 pub(crate) struct BlockStreamResponse {
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub(crate) blocks: Vec<Bytes>,
-}
-
-// Observer fetch messages
-#[derive(Clone, prost::Message)]
-pub(crate) struct FetchBlocksRequest {
-    #[prost(bytes = "vec", repeated, tag = "1")]
-    block_refs: Vec<Vec<u8>>,
-    // The round per authority after which blocks should be fetched. The vector represents the round
-    // for each authority and its length should be the same as the committee size.
-    // When this field is non-empty, additional ancestors of the requested blocks can be fetched.
-    #[prost(uint32, repeated, tag = "2")]
-    fetch_after_rounds: Vec<Round>,
-    // When true, missing ancestors of the requested blocks will be fetched as well.
-    // When false, additional blocks are fetched depth-first from the requested block authorities.
-    // This field is only meaningful when fetch_after_rounds is non-empty.
-    #[prost(bool, tag = "3")]
-    fetch_missing_ancestors: bool,
-}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct FetchBlocksResponse {
-    #[prost(bytes = "bytes", repeated, tag = "1")]
-    pub(crate) blocks: Vec<Bytes>,
-}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct FetchCommitsRequest {
-    #[prost(uint32, tag = "1")]
-    pub(crate) start: u32,
-    #[prost(uint32, tag = "2")]
-    pub(crate) end: u32,
-}
-
-#[derive(Clone, prost::Message)]
-pub(crate) struct FetchCommitsResponse {
-    #[prost(bytes = "bytes", repeated, tag = "1")]
-    pub(crate) commits: Vec<Bytes>,
-    #[prost(bytes = "bytes", repeated, tag = "2")]
-    pub(crate) certifier_blocks: Vec<Bytes>,
 }
 
 /// Information about an observer peer connection, set in request extensions by the server.
@@ -132,7 +91,6 @@ impl ChannelPool {
             }
         }
 
-        // Find the network key of the peer.
         let peer_network_key = match peer.clone() {
             PeerId::Validator(authority) => self
                 .context
@@ -148,60 +106,14 @@ impl ChannelPool {
             ConsensusError::NetworkConfig(format!("Peer not in observer peers pool: {:?}", peer))
         })?;
 
-        let address = to_host_port_str(peer_address).map_err(|e| {
-            ConsensusError::NetworkConfig(format!("Cannot convert address to host:port: {e:?}"))
-        })?;
-        let address = format!("https://{address}");
-        let config = &self.context.parameters.tonic;
-        let buffer_size = config.connection_buffer_size;
-        let client_tls_config = sui_tls::create_rustls_client_config(
-            peer_network_key.into_inner().clone(),
-            certificate_server_name(&self.context),
-            Some(network_keypair.private_key().into_inner()),
-        );
-        let endpoint = tonic_rustls::Channel::from_shared(address.clone())
-            .map_err(|e| ConsensusError::NetworkConfig(format!("invalid URI '{address}': {e}")))?
-            .connect_timeout(timeout)
-            .initial_connection_window_size(Some(buffer_size as u32))
-            .initial_stream_window_size(Some(buffer_size as u32 / 2))
-            .keep_alive_while_idle(true)
-            .keep_alive_timeout(config.keepalive_interval)
-            .http2_keep_alive_interval(config.keepalive_interval)
-            // tcp keepalive is probably unnecessary and is unsupported by msim.
-            .user_agent("mysticeti")
-            .unwrap()
-            .tls_config(client_tls_config)
-            .unwrap();
-
-        let deadline = tokio::time::Instant::now() + timeout;
-        let channel = loop {
-            trace!("Connecting to endpoint at {address}");
-            match endpoint.connect().await {
-                Ok(channel) => break channel,
-                Err(e) => {
-                    debug!("Failed to connect to endpoint at {address}: {e:?}");
-                    if tokio::time::Instant::now() >= deadline {
-                        return Err(ConsensusError::NetworkClientConnection(format!(
-                            "Timed out connecting to endpoint at {address}: {e:?}"
-                        )));
-                    }
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-            }
-        };
-        trace!("Connected to {address}");
-
-        let channel = tower::ServiceBuilder::new()
-            .layer(CallbackLayer::new(MetricsCallbackMaker::new(
-                self.context.metrics.network_metrics.outbound.clone(),
-                self.context.parameters.tonic.excessive_message_size,
-            )))
-            .layer(
-                TraceLayer::new_for_grpc()
-                    .make_span_with(DefaultMakeSpan::new().level(tracing::Level::TRACE))
-                    .on_failure(DefaultOnFailure::new().level(tracing::Level::DEBUG)),
-            )
-            .service(channel);
+        let channel = connect_channel(
+            &self.context,
+            network_keypair,
+            peer_network_key,
+            peer_address,
+            timeout,
+        )
+        .await?;
 
         let mut channels = self.channels.write();
         // There should not be many concurrent attempts at connecting to the same peer.
@@ -305,7 +217,7 @@ impl ObserverNetworkClient for TonicObserverClient {
         });
         request.set_timeout(timeout);
 
-        let mut stream = client
+        let stream = client
             .fetch_blocks(request)
             .await
             .map_err(|e| {
@@ -317,44 +229,7 @@ impl ObserverNetworkClient for TonicObserverClient {
             })?
             .into_inner();
 
-        let mut blocks = vec![];
-        let mut total_fetched_bytes = 0;
-        loop {
-            match stream.message().await {
-                Ok(Some(response)) => {
-                    for b in &response.blocks {
-                        total_fetched_bytes += b.len();
-                    }
-                    blocks.extend(response.blocks);
-                    if total_fetched_bytes > max_allowed_bytes {
-                        info!(
-                            "fetch_blocks() fetched bytes exceeded limit: {} > {}, terminating stream.",
-                            total_fetched_bytes, max_allowed_bytes,
-                        );
-                        break;
-                    }
-                }
-                Ok(None) => {
-                    break;
-                }
-                Err(e) => {
-                    if blocks.is_empty() {
-                        if e.code() == tonic::Code::DeadlineExceeded {
-                            return Err(ConsensusError::NetworkRequestTimeout(format!(
-                                "fetch_blocks failed mid-stream: {e:?}"
-                            )));
-                        }
-                        return Err(ConsensusError::NetworkRequest(format!(
-                            "fetch_blocks failed mid-stream: {e:?}"
-                        )));
-                    } else {
-                        warn!("fetch_blocks failed mid-stream: {e:?}");
-                        break;
-                    }
-                }
-            }
-        }
-        Ok(blocks)
+        drain_blocks_stream(stream, max_allowed_bytes, "fetch_blocks", |r| r.blocks).await
     }
 
     async fn fetch_commits(

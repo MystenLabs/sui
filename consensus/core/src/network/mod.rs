@@ -110,6 +110,7 @@ pub(crate) mod observer;
 pub mod observer;
 #[cfg(test)]
 pub(crate) mod test_network;
+pub(crate) mod tonic_common;
 #[cfg(not(msim))]
 pub(crate) mod tonic_network;
 #[cfg(msim)]
