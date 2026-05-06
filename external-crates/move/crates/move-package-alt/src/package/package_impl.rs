@@ -351,6 +351,7 @@ pub async fn cache_package<F: MoveFlavor>(
     // summarize
     Ok(CachedPackageInfo {
         name: package.name().clone(),
+        path: package.path().path().to_path_buf(),
         addresses: package.publication().map(|p| p.addresses.clone()),
         chain_id: env.id.clone(),
     })
@@ -597,14 +598,17 @@ mod tests {
             .add_published("a", OriginalID::from(1), PublishedID::from(2))
             .build();
 
-        let path = scenario.path_for("a");
+        let pkg_path = scenario.path_for("a");
         let env = default_environment();
-        let dep = &ManifestDependencyInfo::Local(LocalDepInfo { local: path });
+        let dep = &ManifestDependencyInfo::Local(LocalDepInfo {
+            local: pkg_path.clone(),
+        });
 
         let info = cache_package::<Vanilla>(&env, dep, Vanilla).await.unwrap();
 
         let CachedPackageInfo {
             name,
+            path,
             addresses,
             chain_id,
         } = info;
@@ -615,6 +619,7 @@ mod tests {
         } = addresses.unwrap();
 
         assert_eq!(name.as_str(), "a");
+        assert_eq!(path, pkg_path);
         assert_eq!(published_at, PublishedID::from(2));
         assert_eq!(original_id, OriginalID::from(1));
         assert_eq!(chain_id, DEFAULT_ENV_ID);

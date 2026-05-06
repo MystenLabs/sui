@@ -12,6 +12,6 @@ sui move --client.config $CONFIG cache-package testnet 4c78adac "{ local="\"$(pw
 success: true
 exit_code: 0
 ----- stdout -----
-{"name":"a","published-at":"0x000000000000000000000000000000000000000000000000000000000000cafe","original-id":"0x00000000000000000000000000000000000000000000000000000000deadbeef","chain_id":"4c78adac"}
+{"name":"a","path":"<SANDBOX_DIR>/a","published-at":"0x000000000000000000000000000000000000000000000000000000000000cafe","original-id":"0x00000000000000000000000000000000000000000000000000000000deadbeef","chain_id":"4c78adac"}
 
 ----- stderr -----
