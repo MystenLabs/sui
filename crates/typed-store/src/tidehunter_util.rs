@@ -57,6 +57,22 @@ pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfi
         config.config.clone(),
     )
 }
+
+fn parse_env_usize(name: &str, minimum: usize) -> Option<usize> {
+    env::var(name).ok().map(|value| {
+        let parsed = value
+            .parse::<usize>()
+            .unwrap_or_else(|_| panic!("Failed to parse {name}"));
+        assert!(parsed >= minimum, "{name} must be at least {minimum}");
+        println!("Using {name} from env variable {parsed}");
+        parsed
+    })
+}
+
+fn default_max_dirty_keys() -> usize {
+    parse_env_usize("TH_DEFAULT_MAX_DIRTY_KEYS", 1).unwrap_or(1024)
+}
+
 fn thdb_config() -> Config {
     let frag_size = if let Ok(frag_size) = env::var("TH_FRAG_SIZE") {
         let frag_size = frag_size.parse().expect("Failed to parse TH_FRAG_SIZE");
@@ -81,7 +97,8 @@ fn thdb_config() -> Config {
     let max_maps = 4;
     #[cfg(not(debug_assertions))]
     let max_maps = 8; // 8Gb of mapped space for prod
-    let max_index_maps = Some(3);
+    let max_maps = parse_env_usize("TH_MAX_MAPS", 1).unwrap_or(max_maps);
+    let max_index_maps = Some(parse_env_usize("TH_MAX_INDEX_MAPS", 3).unwrap_or(3));
     #[cfg(debug_assertions)]
     let commit_pool_size = 0;
     #[cfg(not(debug_assertions))]
@@ -97,7 +114,7 @@ fn thdb_config() -> Config {
         // force unloading dirty index entries if behind 60 Gb of wal
         snapshot_unload_threshold: 60 * 1024 * 1024 * 1024,
         unload_jitter_pct: 30,
-        max_dirty_keys: 1024,
+        max_dirty_keys: default_max_dirty_keys(),
         max_maps,
         max_index_maps,
         commit_pool_size,
@@ -108,12 +125,12 @@ fn thdb_config() -> Config {
 
 #[cfg(not(debug_assertions))]
 pub fn default_mutex_count() -> usize {
-    1024
+    parse_env_usize("TH_DEFAULT_MUTEX_COUNT", 1).unwrap_or(1024)
 }
 
 #[cfg(debug_assertions)]
 pub fn default_mutex_count() -> usize {
-    16
+    parse_env_usize("TH_DEFAULT_MUTEX_COUNT", 1).unwrap_or(16)
 }
 
 pub fn default_value_cache_size() -> usize {
