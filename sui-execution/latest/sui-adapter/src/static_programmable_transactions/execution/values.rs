@@ -3,7 +3,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::static_programmable_transactions::{env::Env, typing::ast::Type};
+use crate::{
+    execution_mode::ExecutionMode,
+    static_programmable_transactions::{env::Env, typing::ast::Type},
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::runtime_value::MoveTypeLayout;
@@ -17,7 +20,7 @@ use move_vm_runtime::{
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
     digests::TransactionDigest,
-    error::{ExecutionError, ExecutionErrorTrait},
+    error::ExecutionError,
     move_package::{UpgradeCap, UpgradeReceipt, UpgradeTicket},
 };
 pub enum InputValue<'a> {
@@ -178,11 +181,11 @@ impl Value {
         self.0.cast().map_err(iv("cast"))
     }
 
-    pub fn deserialize<E: ExecutionErrorTrait>(
-        env: &Env<'_, '_, '_, '_, '_, E>,
+    pub fn deserialize<Mode: ExecutionMode>(
+        env: &Env<'_, '_, '_, '_, '_, Mode>,
         bytes: &[u8],
         ty: Type,
-    ) -> Result<Value, E> {
+    ) -> Result<Value, Mode::Error> {
         let layout = env.runtime_layout(&ty)?;
         let Some(value) = VMValue::simple_deserialize(bytes, &layout) else {
             // we already checked the layout of pure bytes during typing

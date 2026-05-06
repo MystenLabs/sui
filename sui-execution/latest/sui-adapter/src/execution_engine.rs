@@ -1000,7 +1000,7 @@ mod checked {
             }
         }?;
         temporary_store
-            .check_execution_results_consistency::<Mode::Error>()
+            .check_execution_results_consistency::<Mode>()
             .map_err(|e| (e, vec![]))?;
         Ok(result)
     }
@@ -1039,10 +1039,10 @@ mod checked {
         (storage_rewards, computation_rewards)
     }
 
-    pub fn construct_advance_epoch_pt<E: ExecutionErrorTrait>(
+    pub fn construct_advance_epoch_pt<Mode: ExecutionMode>(
         mut builder: ProgrammableTransactionBuilder,
         params: &AdvanceEpochParams,
-    ) -> Result<ProgrammableTransaction, E> {
+    ) -> Result<ProgrammableTransaction, Mode::Error> {
         // Step 1: Create storage and computation rewards.
         let (storage_rewards, computation_rewards) = mint_epoch_rewards_in_pt(&mut builder, params);
 
@@ -1160,7 +1160,7 @@ mod checked {
             reward_slashing_rate: protocol_config.reward_slashing_rate(),
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
-        let advance_epoch_pt = construct_advance_epoch_pt::<Mode::Error>(builder, &params)?;
+        let advance_epoch_pt = construct_advance_epoch_pt::<Mode>(builder, &params)?;
         let result = SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics.clone(),

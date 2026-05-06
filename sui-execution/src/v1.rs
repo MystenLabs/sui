@@ -15,7 +15,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, ExecutionErrorContext, SuiError, SuiResult},
+    error::{ExecutionError, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
@@ -205,7 +205,7 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
-        Result<(), ExecutionErrorContext>,
+        Result<(), ExecutionError>,
     ) {
         let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, result) =
@@ -228,7 +228,6 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        let result = result.map_err(ExecutionErrorContext::from);
         (inner_temp_store, gas_status, effects, vec![], result)
     }
 

@@ -3,15 +3,15 @@
 
 use crate::{
     data_store::PackageStore,
+    execution_mode::ExecutionMode,
     sp,
     static_programmable_transactions::{env, spanned::Spanned, typing::ast as T},
 };
-use sui_types::error::ExecutionErrorTrait;
 
-pub fn verify<E: ExecutionErrorTrait>(
-    env: &env::Env<'_, '_, '_, '_, '_, E>,
+pub fn verify<Mode: ExecutionMode>(
+    env: &env::Env<'_, '_, '_, '_, '_, Mode>,
     tt: &T::Transaction,
-) -> Result<(), E> {
+) -> Result<(), Mode::Error> {
     let check_type = |ty| ensure_type_defining_id_based(env, ty);
     let check_arg = |sp!(_, (_, ty)): &Spanned<_>| ensure_type_defining_id_based(env, ty);
 
@@ -65,10 +65,10 @@ pub fn verify<E: ExecutionErrorTrait>(
     })
 }
 
-fn ensure_type_defining_id_based<E: ExecutionErrorTrait>(
-    env: &env::Env<'_, '_, '_, '_, '_, E>,
+fn ensure_type_defining_id_based<Mode: ExecutionMode>(
+    env: &env::Env<'_, '_, '_, '_, '_, Mode>,
     ty: &T::Type,
-) -> Result<(), E> {
+) -> Result<(), Mode::Error> {
     match ty {
         T::Type::Bool
         | T::Type::U8

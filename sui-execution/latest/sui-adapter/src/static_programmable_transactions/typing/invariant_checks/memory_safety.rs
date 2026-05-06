@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    execution_mode::ExecutionMode,
     sp,
     static_programmable_transactions::{env::Env, typing::ast as T},
 };
 use indexmap::IndexSet;
 use mysten_common::ZipDebugEqIteratorExt;
 use std::rc::Rc;
-use sui_types::error::{ExecutionError, ExecutionErrorTrait};
+use sui_types::error::ExecutionError;
 
 /// A dot-star like extension, but with a unique identifier. Deltas can be compared between
 /// different Deltas of the same command, otherwise they behave like .* in the regex based
@@ -291,8 +292,8 @@ impl Location {
 }
 
 impl Context {
-    fn new<E: ExecutionErrorTrait>(
-        _env: &Env<'_, '_, '_, '_, '_, E>,
+    fn new<Mode: ExecutionMode>(
+        _env: &Env<'_, '_, '_, '_, '_, Mode>,
         txn: &T::Transaction,
     ) -> anyhow::Result<Self> {
         let T::Transaction {
@@ -318,28 +319,28 @@ impl Context {
                     i, u16
                 )?)))
             })
-            .collect::<Result<_, E>>()?;
+            .collect::<Result<_, ExecutionError>>()?;
         let withdrawal_inputs = (0..withdrawals.len())
             .map(|i| {
                 Ok(Location::non_ref(T::Location::WithdrawalInput(
                     checked_as!(i, u16)?,
                 )))
             })
-            .collect::<Result<_, E>>()?;
+            .collect::<Result<_, ExecutionError>>()?;
         let pure_inputs = (0..pure.len())
             .map(|i| {
                 Ok(Location::non_ref(T::Location::PureInput(checked_as!(
                     i, u16
                 )?)))
             })
-            .collect::<Result<_, E>>()?;
+            .collect::<Result<_, ExecutionError>>()?;
         let receiving_inputs = (0..receiving.len())
             .map(|i| {
                 Ok(Location::non_ref(T::Location::ReceivingInput(checked_as!(
                     i, u16
                 )?)))
             })
-            .collect::<Result<_, E>>()?;
+            .collect::<Result<_, ExecutionError>>()?;
         Ok(Self {
             tx_context,
             gas,
@@ -549,15 +550,15 @@ impl Context {
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
-pub fn verify<E: ExecutionErrorTrait>(
-    env: &Env<'_, '_, '_, '_, '_, E>,
+pub fn verify<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     txn: &T::Transaction,
-) -> Result<(), E> {
+) -> Result<(), Mode::Error> {
     Ok(verify_(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))?)
 }
 
-fn verify_<E: ExecutionErrorTrait>(
-    env: &Env<'_, '_, '_, '_, '_, E>,
+fn verify_<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     txn: &T::Transaction,
 ) -> anyhow::Result<()> {
     let mut context = Context::new(env, txn)?;

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::{GasCharger, PaymentLocation};
 use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
@@ -29,7 +30,7 @@ use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest},
     effects::EffectsObjectChange,
-    error::{ExecutionError, ExecutionErrorTrait, SuiResult},
+    error::{ExecutionError, SuiResult},
     gas::GasCostSummary,
     object::Object,
     object::Owner,
@@ -945,7 +946,9 @@ impl TemporaryStore<'_> {
         }
     }
 
-    pub fn check_execution_results_consistency<E: ExecutionErrorTrait>(&self) -> Result<(), E> {
+    pub fn check_execution_results_consistency<Mode: ExecutionMode>(
+        &self,
+    ) -> Result<(), Mode::Error> {
         assert_invariant!(
             self.execution_results
                 .created_object_ids

@@ -36,7 +36,7 @@ use sui_types::{
 use tracing::instrument;
 
 pub fn execute<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
-    env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode::Error>,
+    env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
     metrics: Arc<ExecutionMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
@@ -77,7 +77,7 @@ where
 
 fn execute_inner<'env, 'pc, 'vm, 'state, 'linkage, 'extension, Mode: ExecutionMode>(
     timings: &mut IndexedExecutionTimings,
-    env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode::Error>,
+    env: &'env mut Env<'pc, 'vm, 'state, 'linkage, 'extension, Mode>,
     metrics: Arc<ExecutionMetrics>,
     tx_context: Rc<RefCell<TxContext>>,
     gas_charger: &mut GasCharger,
@@ -147,7 +147,7 @@ where
     let generated_object_ids = object_runtime!(context)?.generated_object_ids();
 
     // apply changes
-    let finished = context.finish::<Mode>();
+    let finished = context.finish();
     // Save loaded objects for debug. We dont want to lose the info
     env.state_view
         .save_loaded_runtime_objects(loaded_runtime_objects);
@@ -162,7 +162,7 @@ where
 /// Execute a single command
 #[instrument(level = "trace", skip_all)]
 fn execute_command<Mode: ExecutionMode>(
-    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode::Error>,
+    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
     mode_results: &mut Mode::ExecutionResults,
     c: T::Command_,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
@@ -353,12 +353,8 @@ fn execute_command<Mode: ExecutionMode>(
             let modules =
                 context.deserialize_modules(&module_bytes, /* is upgrade */ false)?;
 
-            let original_id = context.publish_and_init_package::<Mode>(
-                modules,
-                &dep_ids,
-                linkage,
-                trace_builder_opt,
-            )?;
+            let original_id =
+                context.publish_and_init_package(modules, &dep_ids, linkage, trace_builder_opt)?;
 
             if <Mode>::packages_are_predefined() {
                 // no upgrade cap for genesis modules

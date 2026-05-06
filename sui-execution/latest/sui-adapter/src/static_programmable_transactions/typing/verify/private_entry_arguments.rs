@@ -393,7 +393,7 @@ impl Context {
 /// - Note that command inputs are released before checking the rules, so an `entry` function can
 ///   consume a hot potato value if it is the last "heating" value in its clique.
 pub fn verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     txn: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     let mut context = Context::new(txn);
@@ -411,7 +411,7 @@ pub fn verify<Mode: ExecutionMode>(
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &mut Context,
     sp!(_, c): &T::Command,
 ) -> Result<Vec<Option<Value>>, Mode::Error> {
@@ -459,27 +459,27 @@ fn command<Mode: ExecutionMode>(
 }
 
 /// Returns the index of the first hot argument, if any
-fn arguments<'a, E: ExecutionErrorTrait>(
-    env: &Env<'_, '_, '_, '_, '_, E>,
+fn arguments<'a, Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &mut Context,
     args: impl IntoIterator<Item = &'a T::Argument>,
-) -> Result<Vec<(u16, CliqueID)>, E> {
+) -> Result<Vec<(u16, CliqueID)>, Mode::Error> {
     let mut arguments = vec![];
     for arg in args {
-        if let Some(clique) = argument::<E>(env, context, arg)? {
+        if let Some(clique) = argument::<Mode>(env, context, arg)? {
             arguments.push((arg.idx, clique));
         }
     }
     Ok(arguments)
 }
 
-fn argument<E: ExecutionErrorTrait>(
-    _env: &Env<'_, '_, '_, '_, '_, E>,
+fn argument<Mode: ExecutionMode>(
+    _env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &mut Context,
     arg: &T::Argument,
-) -> Result<Option<CliqueID>, E> {
-    let value = context.argument::<E>(arg)?;
-    context.cliques.release_value::<E>(value)
+) -> Result<Option<CliqueID>, Mode::Error> {
+    let value = context.argument::<Mode::Error>(arg)?;
+    context.cliques.release_value::<Mode::Error>(value)
 }
 
 /// Checks a move call for
@@ -490,7 +490,7 @@ fn argument<E: ExecutionErrorTrait>(
 ///
 /// Returns true iff any return type is a hot potato
 fn move_call<Mode: ExecutionMode>(
-    _env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    _env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &mut Context,
     call: &T::MoveCall,
     argument_cliques: &[(u16, CliqueID)],

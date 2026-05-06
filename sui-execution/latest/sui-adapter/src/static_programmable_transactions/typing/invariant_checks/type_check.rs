@@ -18,10 +18,7 @@ use crate::{
         },
     },
 };
-use sui_types::{
-    coin::RESOLVED_COIN_STRUCT, error::ExecutionErrorTrait,
-    funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
-};
+use sui_types::{coin::RESOLVED_COIN_STRUCT, funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT};
 
 struct Context<'txn> {
     objects: Vec<&'txn T::Type>,
@@ -48,7 +45,7 @@ impl<'txn> Context<'txn> {
 }
 
 pub fn verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     txn: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     Ok(verify_::<Mode>(env, txn)
@@ -56,7 +53,7 @@ pub fn verify<Mode: ExecutionMode>(
 }
 
 fn verify_<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     txn: &T::Transaction,
 ) -> anyhow::Result<()> {
     let context = Context::new(txn);
@@ -140,7 +137,7 @@ fn receiving_input(r: &T::ReceivingInput) -> anyhow::Result<()> {
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &Context,
     sp!(_, c): &T::Command,
 ) -> anyhow::Result<()> {
@@ -308,8 +305,8 @@ fn command<Mode: ExecutionMode>(
     Ok(())
 }
 
-fn argument<E: ExecutionErrorTrait>(
-    env: &Env<'_, '_, '_, '_, '_, E>,
+fn argument<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &Context,
     sp!(_, (arg__, ty)): &T::Argument,
     param: &T::Type,
@@ -373,8 +370,8 @@ fn argument<E: ExecutionErrorTrait>(
     Ok(())
 }
 
-fn usage<E: ExecutionErrorTrait>(
-    env: &Env<'_, '_, '_, '_, '_, E>,
+fn usage<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &Context,
     u: &T::Usage,
 ) -> anyhow::Result<T::Type> {
@@ -387,8 +384,8 @@ fn usage<E: ExecutionErrorTrait>(
     }
 }
 
-fn location<E: ExecutionErrorTrait>(
-    env: &Env<'_, '_, '_, '_, '_, E>,
+fn location<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &Context,
     l: T::Location,
 ) -> anyhow::Result<T::Type> {
@@ -428,8 +425,8 @@ fn location<E: ExecutionErrorTrait>(
     })
 }
 
-fn withdrawal_compatibility_conversion<E: ExecutionErrorTrait>(
-    env: &Env<'_, '_, '_, '_, '_, E>,
+fn withdrawal_compatibility_conversion<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &Context,
     withdrawal_location: T::Location,
     conv: &T::WithdrawalCompatibilityConversion,
