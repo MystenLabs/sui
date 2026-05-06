@@ -3737,6 +3737,151 @@ async fn test_redeem_single_fss_partial() {
     );
 }
 
+/// Redeem FSS from a validator that has been moved to `inactive_validators`.
+///
+/// Exercises the full inactive code path: FSS-first pool resolution, the
+/// `inactive_validators[pool_id]` dynamic field walk, the `Versioned →
+/// ValidatorV1` decode, and the `pool_token_exchange_rate_at_epoch` walk-back
+/// against the pool's `exchange_rates` table. The chain accepts inactive
+/// pools at the same `redeem_fungible_staked_sui` entry point
+/// (`validator_set.move:346-364`) so any layout/derive bug in the Rosetta
+/// inactive code surfaces as a metadata or submit failure here.
+///
+/// Default genesis sets `min_validator_count = 4`, and `request_remove_validator`
+/// asserts `next_epoch_validator_count() > min_validator_count` (strictly
+/// greater). We start with 6 validators so removing one leaves 5 > 4 and
+/// the remove succeeds.
+#[tokio::test]
+async fn test_redeem_fss_from_inactive_validator() {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+    use sui_test_transaction_builder::TestTransactionBuilder;
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(6)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+    let validator = first_validator(&mut client).await;
+
+    // Stake → activate → convert StakedSui to FSS so the sender holds an
+    // FSS object whose pool_id == `validator`'s staking pool.
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        2_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    let staked_req = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+    let staked_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_req)
+        .map_err(|e| panic!("list error: {e}"))
+        .try_collect()
+        .await
+        .unwrap();
+    let staked_obj = &staked_objects[0];
+    let staked_ref = (
+        ObjectID::from_str(staked_obj.object_id()).unwrap(),
+        staked_obj.version().into(),
+        staked_obj.digest().parse().unwrap(),
+    );
+    let gas_coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+    let gas_ref = get_object_ref(&mut client.clone(), gas_coins[0].id())
+        .await
+        .unwrap()
+        .as_object_ref();
+    let gas_price = client.get_reference_gas_price().await.unwrap();
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let sys = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+    let staked_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
+    let fss_result = ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+        vec![],
+        vec![sys, staked_arg],
+    ));
+    let sender_arg = ptb.pure(sender).unwrap();
+    ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+    let convert_tx = TransactionData::new_programmable(
+        sender,
+        vec![gas_ref],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(convert_tx, keystore.export(&sender).unwrap());
+    execute_transaction(&mut client.clone(), &tx)
+        .await
+        .expect("convert StakedSui → FSS");
+
+    // Have the validator request its own removal (signed by validator key).
+    let validator_handle = test_cluster
+        .swarm
+        .validator_node_handles()
+        .into_iter()
+        .find(|h| h.with(|n| n.get_config().sui_address()) == validator)
+        .expect("validator node handle for active_validators[0]");
+    let validator_addr = validator_handle.with(|n| n.get_config().sui_address());
+    let validator_gas = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(validator_addr)
+        .await
+        .unwrap()
+        .unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let remove_tx = validator_handle.with(|n| {
+        TestTransactionBuilder::new(validator_addr, validator_gas, rgp)
+            .call_request_remove_validator()
+            .build_and_sign(n.get_config().account_key_pair.keypair())
+    });
+    test_cluster.execute_transaction(remove_tx).await;
+
+    // Trigger reconfiguration so the validator moves to inactive_validators.
+    // After this, `system_state.validators.active_validators` no longer
+    // contains it; only `inactive_validators[pool_id]` does.
+    test_cluster.trigger_reconfiguration().await;
+
+    let balance_before = get_sui_balance(&mut client, sender).await;
+
+    // AtLeast is the strictest mode — it forces the inactive path to fetch
+    // FSS data via dynamic-field walk, mirror the chain's payout formula
+    // (which itself reads exchange_rates[deactivation_epoch]), and bind the
+    // resulting transaction to the quote epoch. If any of those layers is
+    // wrong this fails before submission.
+    run_redeem_flow(
+        &mut client,
+        &rosetta_client,
+        keystore,
+        sender,
+        validator,
+        "AtLeast",
+        Some(500_000_000),
+    )
+    .await;
+
+    let balance_after = get_sui_balance(&mut client, sender).await;
+    let delta = balance_after as i128 - balance_before as i128;
+    assert!(
+        delta >= 500_000_000,
+        "AtLeast guarantee violated for inactive-pool redeem: \
+         got {delta} MIST, expected >= 500_000_000"
+    );
+}
+
 #[tokio::test]
 async fn test_redeem_multi_validator_isolation() {
     use futures::TryStreamExt;

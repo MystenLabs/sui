@@ -329,6 +329,14 @@ async fn resolve_pool_fss_and_rate(
             if let Some(inactive) =
                 lookup_inactive_pool(client, table_id, *pool_id, target_validator).await?
             {
+                let (rate_sui, rate_token) = fetch_pool_exchange_rate_at_epoch(
+                    client,
+                    inactive.exchange_rates_table_id,
+                    inactive.activation_epoch,
+                    inactive.deactivation_epoch,
+                    snapshot.epoch,
+                )
+                .await?;
                 let mut sorted = fss_list.clone();
                 sorted.sort_by_key(|f| f.object_ref.0);
                 let total_tokens: u64 = sorted.iter().map(|f| f.value).sum();
@@ -336,8 +344,8 @@ async fn resolve_pool_fss_and_rate(
                 return Ok(PoolFssRateSnapshot {
                     fss_refs,
                     total_tokens,
-                    rate_sui: inactive.rate_sui,
-                    rate_token: inactive.rate_token,
+                    rate_sui,
+                    rate_token,
                     epoch: snapshot.epoch,
                     pool_extra_fields_id: Some(inactive.pool_extra_fields_id),
                 });
@@ -377,15 +385,27 @@ fn build_snapshot(
 }
 
 /// Pool data extracted from an inactive validator's `ValidatorWrapper`.
+///
+/// The on-chain redeem path (`staking_pool.move:205`) calls
+/// `pool.pool_token_exchange_rate_at_epoch(ctx.epoch())` rather than reading
+/// `pool.sui_balance / pool_token_balance` directly. For inactive pools these
+/// live fields can drift from the exchange-rate snapshot when other users do
+/// regular `request_withdraw_stake` (StakedSui, not FSS) on the deactivated
+/// pool — `staking_pool.move:187-188` immediately processes the pending
+/// withdrawal for inactive/preactive pools, which mutates `sui_balance` and
+/// `pool_token_balance`. So we extract the table id and walk it the same way
+/// the chain does.
 struct InactivePoolData {
-    rate_sui: u64,
-    rate_token: u64,
+    activation_epoch: Option<u64>,
+    deactivation_epoch: Option<u64>,
+    exchange_rates_table_id: ObjectID,
     pool_extra_fields_id: ObjectID,
 }
 
 /// Walk `inactive_validators[pool_id]` → `ValidatorWrapper` → `Versioned` →
-/// `ValidatorV1` to extract the staking pool's rate fields and verify the
-/// validator address matches.
+/// `ValidatorV1` to find the validator with matching address and extract the
+/// pool's exchange-rate table id (plus activation/deactivation epochs needed
+/// for the walk-back) and the FSS data Bag id.
 ///
 /// The chain stores `inactive_validators` as `Table<ID, ValidatorWrapper>`
 /// (validator_set.move:73). Each entry is a dynamic field at
@@ -393,13 +413,8 @@ struct InactivePoolData {
 /// `Versioned` whose latest value is the actual `ValidatorV1`, stored at
 /// `derive(versioned.id, &TypeTag::U64, bcs(version))`.
 ///
-/// For inactive pools, `pool.sui_balance` and `pool.pool_token_balance` are
-/// frozen at deactivation (advance_epoch no longer touches them), so they
-/// equal the latest exchange-rate snapshot — no `pool_token_exchange_rate_at_epoch`
-/// walk-back needed.
-///
-/// Returns `None` if the wrapper is not found at the derived id (validator
-/// address didn't match) so the caller can try the next candidate pool.
+/// Returns `None` if the wrapper at the derived id resolves to a validator
+/// whose address doesn't match (caller can try the next candidate pool).
 async fn lookup_inactive_pool(
     client: &mut Client,
     inactive_table_id: ObjectID,
@@ -423,15 +438,7 @@ async fn lookup_inactive_pool(
     };
     let wrapper_field: Field<ID, ValidatorWrapper> = bcs::from_bytes(&wrapper_bytes)
         .map_err(|e| Error::DataError(format!("Field<ID,ValidatorWrapper> decode: {e}")))?;
-    let versioned_id = ObjectID::from_str(
-        &wrapper_field
-            .value
-            .inner
-            .id
-            .object_id()
-            .to_hex_uncompressed(),
-    )
-    .map_err(|e| Error::DataError(format!("Invalid Versioned id: {e}")))?;
+    let versioned_id = wrapper_field.value.inner.id.id.bytes;
     let version = wrapper_field.value.inner.version;
 
     let u64_type = sui_types::TypeTag::U64;
@@ -456,10 +463,107 @@ async fn lookup_inactive_pool(
     }
 
     Ok(Some(InactivePoolData {
-        rate_sui: validator.staking_pool.sui_balance,
-        rate_token: validator.staking_pool.pool_token_balance,
+        activation_epoch: validator.staking_pool.activation_epoch,
+        deactivation_epoch: validator.staking_pool.deactivation_epoch,
+        exchange_rates_table_id: validator.staking_pool.exchange_rates.id,
         pool_extra_fields_id: validator.staking_pool.extra_fields.id.id.bytes,
     }))
+}
+
+/// Mirror of `staking_pool::pool_token_exchange_rate_at_epoch`
+/// (`staking_pool.move:587-608`). Returns `(sui_amount, pool_token_amount)`
+/// of the exchange rate the chain would use when redeeming at `current_epoch`.
+///
+/// For deactivated pools the lookup epoch is clamped to `deactivation_epoch`
+/// (rates aren't recorded after deactivation; the last recorded rate is the
+/// one the chain replays). The walk steps backward from the clamped epoch
+/// down to `activation_epoch` and returns the first `exchange_rates[epoch]`
+/// entry it finds. If none is found (or the pool is preactive) the chain
+/// returns `initial_exchange_rate()` which `get_sui_amount` then treats as
+/// 1:1 — we surface the same `(0, 0)` here so downstream `expected_sui_amount`
+/// applies the same fallback.
+async fn fetch_pool_exchange_rate_at_epoch(
+    client: &mut Client,
+    table_id: ObjectID,
+    activation_epoch: Option<u64>,
+    deactivation_epoch: Option<u64>,
+    current_epoch: u64,
+) -> Result<(u64, u64), Error> {
+    let candidates = walk_back_epochs(activation_epoch, deactivation_epoch, current_epoch);
+    for epoch in candidates {
+        if let Some((sui_amount, pool_token_amount)) =
+            try_read_exchange_rate(client, table_id, epoch).await?
+        {
+            return Ok((sui_amount, pool_token_amount));
+        }
+    }
+    Ok((0, 0))
+}
+
+/// Pure-function half of the walk-back: given the pool's activation /
+/// deactivation epochs and the current epoch, produce the ordered list of
+/// epochs to probe, matching `pool_token_exchange_rate_at_epoch` semantics.
+///
+/// * Preactive pool (activation > current, or never activated) → empty list:
+///   the on-chain `is_preactive_at_epoch` short-circuits to
+///   `initial_exchange_rate()`.
+/// * Otherwise clamp to `min(deactivation.unwrap_or(current), current)` and
+///   walk down to `activation`.
+fn walk_back_epochs(
+    activation_epoch: Option<u64>,
+    deactivation_epoch: Option<u64>,
+    current_epoch: u64,
+) -> Vec<u64> {
+    let Some(activation) = activation_epoch else {
+        return Vec::new();
+    };
+    if activation > current_epoch {
+        return Vec::new();
+    }
+    let clamped = deactivation_epoch
+        .map(|d| d.min(current_epoch))
+        .unwrap_or(current_epoch);
+    let start = clamped.max(activation);
+    (activation..=start).rev().collect()
+}
+
+/// BCS layout of `0x3::staking_pool::PoolTokenExchangeRate`. Mirrors the Move
+/// struct at `staking_pool.move:69-72`. We can't use `sui_types`'s
+/// `PoolTokenExchangeRate` directly because its fields are private; the BCS
+/// layout (positional u64 / u64) is the public interface.
+#[derive(Deserialize, Debug)]
+struct PoolTokenExchangeRateBcs {
+    sui_amount: u64,
+    pool_token_amount: u64,
+}
+
+/// Direct dynamic-field lookup of `exchange_rates[epoch]`. Returns
+/// `Ok(None)` if the entry doesn't exist at the derived id (no rate was
+/// recorded for that epoch — caller walks back to the previous one).
+async fn try_read_exchange_rate(
+    client: &mut Client,
+    table_id: ObjectID,
+    epoch: u64,
+) -> Result<Option<(u64, u64)>, Error> {
+    use sui_types::dynamic_field::{Field, derive_dynamic_field_id};
+
+    let key_bcs = bcs::to_bytes(&epoch)
+        .map_err(|e| Error::DataError(format!("exchange_rates key bcs: {e}")))?;
+    let field_id = derive_dynamic_field_id(table_id, &sui_types::TypeTag::U64, &key_bcs)
+        .map_err(|e| Error::DataError(format!("derive exchange_rates[{epoch}] field id: {e}")))?;
+
+    let Some(bytes) = try_read_object_contents(client, field_id).await? else {
+        return Ok(None);
+    };
+    let field: Field<u64, PoolTokenExchangeRateBcs> = bcs::from_bytes(&bytes).map_err(|e| {
+        Error::DataError(format!(
+            "Field<u64,PoolTokenExchangeRate> decode at epoch {epoch}: {e}"
+        ))
+    })?;
+    Ok(Some((
+        field.value.sui_amount,
+        field.value.pool_token_amount,
+    )))
 }
 
 /// Fetch raw BCS contents of an object, returning `None` if the object does
@@ -911,6 +1015,55 @@ mod tests {
         // Typical pool: ~10^9 SUI total, 1:1 rate. Should not overflow.
         let result = mul_div_u64(1_000_000_000_000_000_000, 1, 1).unwrap();
         assert_eq!(result, 1_000_000_000_000_000_000);
+    }
+
+    // --- Exchange-rate walk-back (mirrors pool_token_exchange_rate_at_epoch) -
+
+    #[test]
+    fn walk_back_active_pool_starts_at_current_epoch() {
+        // Active pool (no deactivation): walk from current down to activation.
+        let epochs = walk_back_epochs(Some(10), None, 15);
+        assert_eq!(epochs, vec![15, 14, 13, 12, 11, 10]);
+    }
+
+    #[test]
+    fn walk_back_inactive_pool_clamps_to_deactivation_epoch() {
+        // Pool deactivated at epoch 12 — at current epoch 17 the chain replays
+        // the rate snapshot at deactivation, walking back from there.
+        let epochs = walk_back_epochs(Some(10), Some(12), 17);
+        assert_eq!(epochs, vec![12, 11, 10]);
+    }
+
+    #[test]
+    fn walk_back_clamp_is_minimum_of_deactivation_and_current() {
+        // Pool deactivated *after* current epoch (unusual but the chain handles
+        // it via min(deactivation, current)) — walk-back starts from current.
+        let epochs = walk_back_epochs(Some(10), Some(99), 12);
+        assert_eq!(epochs, vec![12, 11, 10]);
+    }
+
+    #[test]
+    fn walk_back_preactive_returns_empty() {
+        // Pool not yet activated at the lookup epoch → chain short-circuits to
+        // initial_exchange_rate(). Empty list signals the same — no
+        // exchange_rates entry to probe; the `(0, 0)` fallback applies.
+        let epochs = walk_back_epochs(Some(20), None, 15);
+        assert!(epochs.is_empty(), "got {epochs:?}");
+    }
+
+    #[test]
+    fn walk_back_no_activation_returns_empty() {
+        // Activation epoch is None — chain treats this as preactive.
+        let epochs = walk_back_epochs(None, None, 5);
+        assert!(epochs.is_empty(), "got {epochs:?}");
+    }
+
+    #[test]
+    fn walk_back_single_epoch_pool() {
+        // Pool activated and deactivated in the same epoch: walk-back probes
+        // exactly that epoch.
+        let epochs = walk_back_epochs(Some(7), Some(7), 30);
+        assert_eq!(epochs, vec![7]);
     }
 
     // --- Plan construction ---------------------------------------------------
