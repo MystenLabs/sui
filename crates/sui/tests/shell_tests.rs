@@ -22,6 +22,15 @@ const TEST_DIR: &str = "tests/shell_tests";
 // Temporarily disabled by deleting the folder
 const TEST_NET_DIR: &str = "tests/shell_tests/with_network";
 const TEST_PATTERN: &str = r"\.sh$";
+const IGNORED_TESTS: &[&str] = &[
+    // Temporarily ignore until devnet is healthy again.
+    "env_error/no_env_publish.sh",
+];
+
+fn should_ignore(path: &Path) -> bool {
+    let path = path.to_string_lossy();
+    IGNORED_TESTS.iter().any(|ignored| path.ends_with(ignored))
+}
 
 /// run the bash script at [path], comparing its output to the insta snapshot of the same name.
 /// The script is run in a temporary working directory that contains a copy of the parent directory
@@ -31,6 +40,10 @@ const TEST_PATTERN: &str = r"\.sh$";
 /// variable; otherwise `CONFIG` is set to a temporary file (see [make_temp_config])
 #[tokio::main]
 async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
+    if should_ignore(path) {
+        return Ok(());
+    }
+
     // set up test cluster
     let cluster = if path.starts_with(TEST_NET_DIR) {
         Some(
