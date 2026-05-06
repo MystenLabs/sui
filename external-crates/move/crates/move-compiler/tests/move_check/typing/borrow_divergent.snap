@@ -28,6 +28,6 @@ error[E04004]: expected a single non-reference type
    │
 13 │         &(if (cond) return else return);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │         │                       │
-   │         │                       Could not find a concrete type for this expression
+   │         │           │
+   │         │           Could not find a concrete type for this expression
    │         Invalid borrow

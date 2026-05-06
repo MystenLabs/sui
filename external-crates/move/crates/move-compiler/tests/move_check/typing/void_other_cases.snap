@@ -37,6 +37,6 @@ error[E04004]: expected a single non-reference type
    │
 21 │         let _v = vector[if (cond) abort 0 else abort 1];
    │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │                  │                             │
-   │                  │                             Could not find a concrete type for this expression
+   │                  │                │
+   │                  │                Could not find a concrete type for this expression
    │                  Invalid 'vector' type
