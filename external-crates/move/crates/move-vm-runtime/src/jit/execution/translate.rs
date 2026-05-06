@@ -127,48 +127,55 @@ impl PackageContext<'_> {
     /// Try to resolve a function call (vtable entry) to a direct call.
     ///
     /// Two cases produce a direct call:
+    ///
     /// 1. The target is a function in the same package; resolved via the in-progress vtable.
     /// 2. The target is in a system package that this translation is keyed against; resolved
     ///    via that system package's already-built vtable.
     ///
-    /// Otherwise the call must remain virtual and be resolved at runtime through the
-    /// `VMDispatchTables`. The system-package map handed in here has already been filtered
-    /// against the user package's linkage table by the caller; absence here means "not a
-    /// direct-call target", not "missing dependency".
+    /// Otherwise the call remains virtual and will be resolved at runtime through the
+    /// `VMDispatchTables`.
+    ///
+    /// SAFETY: The system-package map handed in here has already been filtered against the user
+    /// package's linkage table by the caller; absence here means "not a direct-call target", not
+    /// "missing dependency".
     fn try_resolve_direct_function_call(
         &self,
         vtable_entry: &VirtualTableKey,
     ) -> PartialVMResult<Option<VMPointer<Function>>> {
-        // Same-package call: resolve against the package we're currently building.
-        if vtable_entry.package_key() == self.original_id {
-            return match self.vtable_funs.get(vtable_entry.intra_package_key()) {
-                Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
-                None => Err(partial_vm_error!(
-                    FUNCTION_RESOLUTION_FAILURE,
-                    "Function not found in vtable with name: {}::{}",
-                    self.version_id,
-                    self.interner.resolve_ident(
-                        &vtable_entry.intra_package_key().member_name,
-                        "function name"
-                    )
-                )),
-            };
-        }
-
-        // System-package call: only direct-resolve if the caller has handed us a pinned
-        // version that matches the user's linkage. The pointer points into the system
-        // package's arena, which is kept alive by the runtime's `Arc<Package>` chain.
-        if let Some(sys_pkg) = self.system_packages.get(&vtable_entry.package_key())
-            && let Some(fun_ptr) = sys_pkg
-                .runtime
-                .vtable
-                .functions
-                .get(vtable_entry.intra_package_key())
+        let known_fn_opt = if vtable_entry.package_key() == self.original_id {
+            // Same-package call: resolve against the package we're currently building.
+            self.vtable_funs.get(vtable_entry.intra_package_key())
+        } else if self
+            .system_packages
+            .contains_key(&vtable_entry.package_key())
         {
-            return Ok(Some(fun_ptr.ptr_clone()));
-        }
+            // System-package call: only direct-resolve if the caller has handed us a pinned
+            // version that matches the user's linkage.
+            self.system_packages
+                .get(&vtable_entry.package_key())
+                .and_then(|sys_pkg| {
+                    sys_pkg
+                        .runtime
+                        .vtable
+                        .functions
+                        .get(vtable_entry.intra_package_key())
+                })
+        } else {
+            return Ok(None);
+        };
 
-        Ok(None)
+        match known_fn_opt {
+            Some(fun_ptr) => Ok(Some(fun_ptr.ptr_clone())),
+            None => Err(partial_vm_error!(
+                FUNCTION_RESOLUTION_FAILURE,
+                "Could not find function with name: {}::{}",
+                self.version_id,
+                self.interner.resolve_ident(
+                    &vtable_entry.intra_package_key().member_name,
+                    "function name"
+                )
+            )),
+        }
     }
 
     fn arena_vec<T>(
