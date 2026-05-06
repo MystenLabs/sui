@@ -16,7 +16,7 @@ pub mod verify;
 
 pub fn translate_and_verify<Mode: ExecutionMode>(
     meter: &mut TranslationMeter<'_, '_>,
-    env: &env::Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &env::Env<'_, '_, '_, '_, '_, Mode>,
     lt: L::Transaction,
 ) -> Result<ast::Transaction, Mode::Error> {
     let mut ast = translate::transaction::<Mode>(env, lt)?;

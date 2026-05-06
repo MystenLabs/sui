@@ -19,9 +19,7 @@ use move_core_types::identifier::IdentStr;
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::ObjectID,
-    error::{ExecutionError, ExecutionErrorTrait},
-    execution_status::ExecutionErrorKind,
+    base_types::ObjectID, error::ExecutionErrorTrait, execution_status::ExecutionErrorKind,
     transaction::ProgrammableTransaction,
 };
 
@@ -31,9 +29,7 @@ pub struct LinkageAnalyzer {
 }
 
 impl LinkageAnalyzer {
-    pub fn new<Mode: ExecutionMode>(
-        protocol_config: &ProtocolConfig,
-    ) -> Result<Self, ExecutionError> {
+    pub fn new<Mode: ExecutionMode>(protocol_config: &ProtocolConfig) -> Result<Self, Mode::Error> {
         let always_include_system_packages = !Mode::packages_are_predefined();
         let linkage_config = LinkageConfig::legacy_linkage_settings(always_include_system_packages);
         let binary_config = protocol_config.binary_config(None);

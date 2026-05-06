@@ -21,7 +21,7 @@ use sui_types::{
 
 pub fn transaction<Mode: ExecutionMode>(
     meter: &mut TranslationMeter<'_, '_>,
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     tx_context: &TxContext,
     // which inputs are withdrawals that need to be converted to coins, must
     // be the same length as the inputs
@@ -69,7 +69,7 @@ pub fn transaction<Mode: ExecutionMode>(
 }
 
 fn input<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     tx_context: &TxContext,
     // True iff this is a withdrawal that needs to be converted to a coin
     is_withdrawal_compatibility_input: bool,
@@ -198,7 +198,7 @@ fn object_mutability(mutability: SharedObjectMutability) -> L::ObjectMutability 
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     command: P::Command,
 ) -> Result<L::Command, Mode::Error> {
     Ok(match command {

@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::{
+    execution_mode::ExecutionMode,
     sp,
     static_programmable_transactions::{
         env::Env,
@@ -69,10 +70,10 @@ impl Value {
 }
 
 impl Context {
-    fn new<E: ExecutionErrorTrait>(
-        _env: &Env<'_, '_, '_, '_, '_, E>,
+    fn new<Mode: ExecutionMode>(
+        _env: &Env<'_, '_, '_, '_, '_, Mode>,
         ast: &T::Transaction,
-    ) -> Result<Self, E> {
+    ) -> Result<Self, Mode::Error> {
         let gas_coin = if ast.gas_payment.is_none() {
             None
         } else {
@@ -101,7 +102,7 @@ impl Context {
             .filter(|ty| matches!(&ty, Type::Reference(_, _)))
             .count();
         let (mut graph, _locals) =
-            Graph::new::<()>(canonical_reference_capacity, []).map_err(graph_err::<E>)?;
+            Graph::new::<()>(canonical_reference_capacity, []).map_err(graph_err::<Mode::Error>)?;
         let local_root = graph
             .extend_by_epsilon(
                 (),
@@ -109,7 +110,7 @@ impl Context {
                 /* is_mut */ true,
                 &mut DummyMeter,
             )
-            .map_err(graph_meter_err::<E>)?;
+            .map_err(graph_meter_err::<Mode::Error>)?;
         Ok(Self {
             graph,
             local_root,
@@ -267,15 +268,15 @@ impl Context {
 /// Checks the following
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
-pub fn verify<E: ExecutionErrorTrait>(
-    env: &Env<'_, '_, '_, '_, '_, E>,
+pub fn verify<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     ast: &T::Transaction,
-) -> Result<(), E> {
+) -> Result<(), Mode::Error> {
     let mut context = Context::new(env, ast)?;
     let commands = &ast.commands;
     for c in commands {
-        let result =
-            command::<E>(&mut context, c).map_err(|e| e.with_command_index(c.idx as usize))?;
+        let result = command::<Mode::Error>(&mut context, c)
+            .map_err(|e| e.with_command_index(c.idx as usize))?;
         assert_invariant!(
             result.len() == c.value.result_type.len(),
             "result length mismatch for command. {c:?}"
@@ -292,11 +293,11 @@ pub fn verify<E: ExecutionErrorTrait>(
                 Ok(if !drop {
                     Some(v)
                 } else {
-                    consume_value::<E>(&mut context, v)?;
+                    consume_value::<Mode::Error>(&mut context, v)?;
                     None
                 })
             })
-            .collect::<Result<Vec<_>, E>>()?;
+            .collect::<Result<Vec<_>, Mode::Error>>()?;
         context.results.push(result_values);
     }
 
@@ -313,21 +314,23 @@ pub fn verify<E: ExecutionErrorTrait>(
     let pure = std::mem::take(pure);
     let receiving = std::mem::take(receiving);
     let results = std::mem::take(results);
-    consume_value_opt::<E>(&mut context, gas_coin)?;
+    consume_value_opt::<Mode::Error>(&mut context, gas_coin)?;
     for vopt in objects.into_iter().chain(pure).chain(receiving) {
-        consume_value_opt::<E>(&mut context, vopt)?;
+        consume_value_opt::<Mode::Error>(&mut context, vopt)?;
     }
     for result in results {
         for vopt in result {
-            consume_value_opt::<E>(&mut context, vopt)?;
+            consume_value_opt::<Mode::Error>(&mut context, vopt)?;
         }
     }
 
     assert_invariant!(
-        context.borrowed_by::<E>(context.local_root)?.is_empty(),
+        context
+            .borrowed_by::<Mode::Error>(context.local_root)?
+            .is_empty(),
         "reference to local root not released"
     );
-    context.release::<E>(context.local_root)?;
+    context.release::<Mode::Error>(context.local_root)?;
     assert_invariant!(context.graph.is_empty(), "reference not released");
     assert_invariant!(
         context.tx_context.is_some(),

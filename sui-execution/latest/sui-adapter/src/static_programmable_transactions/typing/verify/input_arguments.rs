@@ -75,7 +75,7 @@ impl Context {
 ///    on mutable objects. And that the gas coin is only taken by value in transfer objects or with
 ///    `sui::coin::send_funds`.
 pub fn verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     txn: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     let T::Transaction {
@@ -245,11 +245,11 @@ pub fn is_valid_receiving(constraint: &Type) -> bool {
 // Object usage
 //**************************************************************************************************
 
-fn command<E: ExecutionErrorTrait>(
-    env: &Env<'_, '_, '_, '_, '_, E>,
+fn command<Mode: ExecutionMode>(
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     context: &mut Context,
     sp!(_, c): &T::Command,
-) -> Result<(), E> {
+) -> Result<(), Mode::Error> {
     match &c.command {
         T::Command__::MoveCall(mc) => {
             check_obj_usages(context, &mc.arguments)?;

@@ -10,7 +10,7 @@ use crate::{
 /// After, it verifies the following
 /// - No results without `drop` are unused (all unused non-input values have `drop`)
 pub fn refine_and_verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+    env: &Env<'_, '_, '_, '_, '_, Mode>,
     ast: &mut T::Transaction,
 ) -> Result<(), Mode::Error> {
     refine::transaction(env, ast)?;
@@ -19,10 +19,8 @@ pub fn refine_and_verify<Mode: ExecutionMode>(
 }
 
 mod refine {
-    use sui_types::{
-        coin::{COIN_MODULE_NAME, SEND_FUNDS_FUNC_NAME},
-        error::ExecutionErrorTrait,
-    };
+    use crate::execution_mode::ExecutionMode;
+    use sui_types::coin::{COIN_MODULE_NAME, SEND_FUNDS_FUNC_NAME};
 
     use crate::{
         sp,
@@ -57,10 +55,10 @@ mod refine {
 
     /// After memory safety, we can switch the last usage of a `Copy` to a `Move` if it is not
     /// borrowed at the time of the last usage.
-    pub fn transaction<E: ExecutionErrorTrait>(
-        env: &Env<'_, '_, '_, '_, '_, E>,
+    pub fn transaction<Mode: ExecutionMode>(
+        env: &Env<'_, '_, '_, '_, '_, Mode>,
         ast: &mut T::Transaction,
-    ) -> Result<(), E> {
+    ) -> Result<(), Mode::Error> {
         let mut context = Context::new();
         for c in ast.commands.iter_mut().rev() {
             command(&mut context, c);
@@ -125,11 +123,11 @@ mod refine {
 
     /// For any withdrawal conversion where the value was not moved, send it back to the original
     /// owner
-    fn return_unused_withdrawal_conversions<E: ExecutionErrorTrait>(
-        env: &Env<'_, '_, '_, '_, '_, E>,
+    fn return_unused_withdrawal_conversions<Mode: ExecutionMode>(
+        env: &Env<'_, '_, '_, '_, '_, Mode>,
         ast: &mut T::Transaction,
         moved_locations: &BTreeSet<T::Location>,
-    ) -> Result<(), E> {
+    ) -> Result<(), Mode::Error> {
         // withdrawal conversions not empty ==> accumulators enabled
         assert_invariant!(
             ast.withdrawal_compatibility_conversions.is_empty()
@@ -233,8 +231,8 @@ mod verify {
     }
 
     impl Context {
-        fn new<E: ExecutionErrorTrait>(
-            _env: &Env<'_, '_, '_, '_, '_, E>,
+        fn new<Mode: ExecutionMode>(
+            _env: &Env<'_, '_, '_, '_, '_, Mode>,
             ast: &T::Transaction,
         ) -> Self {
             let objects = ast.objects.iter().map(|_| Some(Value)).collect::<Vec<_>>();
@@ -287,7 +285,7 @@ mod verify {
     /// Checks the following
     /// - All unused result values have `drop`
     pub fn transaction<Mode: ExecutionMode>(
-        env: &Env<'_, '_, '_, '_, '_, Mode::Error>,
+        env: &Env<'_, '_, '_, '_, '_, Mode>,
         ast: &T::Transaction,
     ) -> Result<(), Mode::Error> {
         let mut context = Context::new(env, ast);
