@@ -34,6 +34,7 @@ use crate::{
     },
     typing::deprecation_warnings::Deprecations,
 };
+use indexmap::IndexMap;
 use known_attributes::AttributePosition;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -1329,7 +1330,8 @@ impl TVarCounter {
 #[derive(Clone, Debug)]
 pub struct Subst {
     tvars: HashMap<TVar, Type>,
-    tvar_constraints: HashMap<TVar, VarConstraint>,
+    // IndexMap (rather than HashMap) so iteration order matches insertion order.
+    tvar_constraints: IndexMap<TVar, VarConstraint>,
 }
 
 #[derive(Clone, Debug)]
@@ -1344,7 +1346,7 @@ impl Subst {
     pub fn empty() -> Self {
         Self {
             tvars: HashMap::new(),
-            tvar_constraints: HashMap::new(),
+            tvar_constraints: IndexMap::new(),
         }
     }
 
@@ -2389,7 +2391,8 @@ pub fn solve_constraints(context: &mut Context) {
     use BuiltinTypeName_ as BT;
 
     // Resolve divergent type variables first, so that downstream constraints (e.g., base type)
-    // can see Void rather than an unresolved TVar.
+    // can see Void rather than an unresolved TVar. `tvar_constraints` is an IndexMap so iteration
+    // is deterministic using insertion order.
     {
         let var_constraints = context.subst.tvar_constraints.clone();
         let mut subst = std::mem::replace(&mut context.subst, Subst::empty());
