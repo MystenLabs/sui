@@ -728,12 +728,16 @@ pub struct ConstructionMetadata {
     /// Used by ConsolidateAllStakedSuiToFungible.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fss_object_count: Option<u64>,
-    /// Pool tokens to redeem. None = redeem all.
-    /// Used by MergeAndRedeemFungibleStakedSui.
+    /// Pool tokens to redeem. `None` = redeem all.
+    /// Used by `MergeAndRedeemFungibleStakedSui`.
     ///
-    /// Kept for serialization compatibility with prior metadata responses, but
-    /// new code paths consult `redeem_plan` instead, which carries the full
-    /// mode-aware plan needed to build runtime guards.
+    /// **Forward-compat field only**: kept so older clients reading newer
+    /// metadata responses still see the field they expect. New servers
+    /// consume `redeem_plan` exclusively when constructing the payload —
+    /// older metadata responses that lack `redeem_plan` cannot be signed by
+    /// new code (the payload step rejects them with a clear error so the
+    /// client can re-fetch metadata). This field is therefore one-way
+    /// compat (new server → old client), not two-way.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub redeem_token_amount: Option<u64>,
     /// Mode-aware redeem plan for `MergeAndRedeemFungibleStakedSui`.

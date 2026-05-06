@@ -74,6 +74,22 @@ pub(crate) struct PoolRedeemData {
     pub fss_total_supply: u64,
 }
 
+/// `floor(a * b / c)` with checked u64 overflow. Move's `mul_div!` aborts on
+/// overflow; this helper returns `Err(DataError)` to match — silently truncating
+/// to `u64` would let the off-chain mirror disagree with the chain in pathological
+/// rate scenarios.
+fn mul_div_u64(a: u64, b: u64, c: u64) -> Result<u64, Error> {
+    if c == 0 {
+        return Err(Error::DataError("mul_div_u64: divide by zero".into()));
+    }
+    let v = (a as u128) * (b as u128) / (c as u128);
+    u64::try_from(v).map_err(|_| {
+        Error::DataError(format!(
+            "redeem math overflow: floor({a} * {b} / {c}) does not fit in u64"
+        ))
+    })
+}
+
 /// Mirror of `0x3::staking_pool::PoolTokenExchangeRate::get_sui_amount` at
 /// `staking_pool.move:638-646`. Returns the SUI cap for `token_amount` pool
 /// tokens given an exchange rate of `(rate_sui, rate_token)`.
@@ -84,11 +100,15 @@ pub(crate) struct PoolRedeemData {
 /// (see `staking_pool.move:264-268`), so any token count satisfying
 /// `expected_sui_amount(token) <= max_sui` will stay within the cap at
 /// execution time regardless of intra-epoch pool drift.
-pub(crate) fn expected_sui_amount(rate_sui: u64, rate_token: u64, token_amount: u64) -> u64 {
+pub(crate) fn expected_sui_amount(
+    rate_sui: u64,
+    rate_token: u64,
+    token_amount: u64,
+) -> Result<u64, Error> {
     if rate_sui == 0 || rate_token == 0 {
-        return token_amount;
+        return Ok(token_amount);
     }
-    ((token_amount as u128) * (rate_sui as u128) / (rate_token as u128)) as u64
+    mul_div_u64(token_amount, rate_sui, rate_token)
 }
 
 /// Mirror of `0x3::staking_pool::calculate_fungible_staked_sui_withdraw_amount`
@@ -100,82 +120,87 @@ pub(crate) fn expected_sui_amount(rate_sui: u64, rate_token: u64, token_amount: 
 /// by ~2 MIST per redemption (one MIST per floor, scaled by `token/supply`).
 /// AtLeast selection must use this (not `expected_sui_amount`) to avoid picking
 /// a token count whose actual payout falls below the user's `min_sui`.
-pub(crate) fn mirror_redeem_actual(data: &PoolRedeemData, token_amount: u64) -> u64 {
+///
+/// Returns `Err(DataError)` if any intermediate `mul_div` overflows u64 — the
+/// chain's `mul_div!` aborts on overflow, so the mirror surfaces the same
+/// failure mode rather than silently truncating.
+pub(crate) fn mirror_redeem_actual(data: &PoolRedeemData, token_amount: u64) -> Result<u64, Error> {
     if data.fss_total_supply == 0 {
-        return 0;
+        return Ok(0);
     }
 
     // total_sui = exchange_rate.get_sui_amount(total_supply)
     let total_sui = if data.rate_sui == 0 || data.rate_token == 0 {
         data.fss_total_supply
     } else {
-        ((data.rate_sui as u128) * (data.fss_total_supply as u128) / (data.rate_token as u128))
-            as u64
+        mul_div_u64(data.rate_sui, data.fss_total_supply, data.rate_token)?
     };
 
     let principal = data.fss_principal.min(total_sui);
     let rewards = total_sui - principal;
 
-    let principal_out =
-        ((token_amount as u128) * (principal as u128) / (data.fss_total_supply as u128)) as u64;
-    let rewards_out =
-        ((token_amount as u128) * (rewards as u128) / (data.fss_total_supply as u128)) as u64;
+    let principal_out = mul_div_u64(token_amount, principal, data.fss_total_supply)?;
+    let rewards_out = mul_div_u64(token_amount, rewards, data.fss_total_supply)?;
 
-    principal_out + rewards_out
+    principal_out
+        .checked_add(rewards_out)
+        .ok_or_else(|| Error::DataError("redeem math overflow: principal_out + rewards_out".into()))
 }
 
 /// Binary-search the smallest `token_amount` in `[1, total_tokens]` such that
 /// `mirror_redeem_actual(data, token_amount) >= target_sui`.
 ///
-/// Returns `None` if even redeeming `total_tokens` produces less than
-/// `target_sui` (caller reports "Insufficient FSS balance").
+/// Returns `Ok(None)` if even redeeming `total_tokens` produces less than
+/// `target_sui` (caller reports "Insufficient FSS balance"). Returns
+/// `Err` only if the underlying mirror math would overflow u64.
 pub(crate) fn binary_search_at_least(
     data: &PoolRedeemData,
     total_tokens: u64,
     target_sui: u64,
-) -> Option<u64> {
+) -> Result<Option<u64>, Error> {
     if total_tokens == 0 {
-        return None;
+        return Ok(None);
     }
-    if mirror_redeem_actual(data, total_tokens) < target_sui {
-        return None;
+    if mirror_redeem_actual(data, total_tokens)? < target_sui {
+        return Ok(None);
     }
     let mut lo: u64 = 1;
     let mut hi: u64 = total_tokens;
     while lo < hi {
         let mid = lo + (hi - lo) / 2;
-        if mirror_redeem_actual(data, mid) >= target_sui {
+        if mirror_redeem_actual(data, mid)? >= target_sui {
             hi = mid;
         } else {
             lo = mid + 1;
         }
     }
-    Some(lo)
+    Ok(Some(lo))
 }
 
 /// Binary-search the largest `token_amount` in `[1, total_tokens]` such that
 /// `expected_sui_amount(rate_sui, rate_token, token_amount) <= max_sui`.
 ///
-/// Returns `None` if even one token would already exceed `max_sui` (caller
-/// reports "AtMost amount too small to redeem any tokens").
+/// Returns `Ok(None)` if even one token would already exceed `max_sui`
+/// (caller reports "AtMost amount too small to redeem any tokens"). Returns
+/// `Err` only if the underlying mirror math would overflow u64.
 pub(crate) fn binary_search_at_most(
     rate_sui: u64,
     rate_token: u64,
     total_tokens: u64,
     max_sui: u64,
-) -> Option<u64> {
+) -> Result<Option<u64>, Error> {
     if total_tokens == 0 {
-        return None;
+        return Ok(None);
     }
-    if expected_sui_amount(rate_sui, rate_token, 1) > max_sui {
-        return None;
+    if expected_sui_amount(rate_sui, rate_token, 1)? > max_sui {
+        return Ok(None);
     }
     let mut lo: u64 = 1;
     let mut hi: u64 = total_tokens;
     let mut ans: Option<u64> = None;
     while lo <= hi {
         let mid = lo + (hi - lo) / 2;
-        if expected_sui_amount(rate_sui, rate_token, mid) <= max_sui {
+        if expected_sui_amount(rate_sui, rate_token, mid)? <= max_sui {
             ans = Some(mid);
             if mid == u64::MAX {
                 break;
@@ -188,7 +213,7 @@ pub(crate) fn binary_search_at_most(
             hi = mid - 1;
         }
     }
-    ans
+    Ok(ans)
 }
 
 // ============================================================================
@@ -250,19 +275,22 @@ async fn list_owned_fss(client: &mut Client, sender: SuiAddress) -> Result<Vec<O
 }
 
 /// Resolve `validator` to a pool, the sender's FSS in that pool, and the
-/// `(rate_sui, rate_token, epoch)` snapshot — all from a single
-/// `GetEpochRequest::latest()` response.
+/// `(rate_sui, rate_token, epoch)` snapshot. Supports both active and inactive
+/// validator pools — the chain's `validator_set::redeem_fungible_staked_sui`
+/// (validator_set.move:346-364) routes through `staking_pool_mappings` for
+/// active pools and falls back to `inactive_validators[pool_id]` otherwise,
+/// so Rosetta must accept the same set.
+///
+/// FSS-first: enumerate sender's FSS, group by pool_id, then for each candidate
+/// pool look up the validator address (active fast path, inactive_validators
+/// dynamic field walk fallback). The first pool whose validator address matches
+/// `target_validator` is selected.
 ///
 /// **Atomicity is load-bearing**: amount-sensitive plans bind the resulting
-/// transaction to `epoch`, so the rate must come from the same epoch. Splitting
-/// this into separate RPCs creates a race where rate is from epoch N but
-/// `bind_epoch` is N+1, silently violating AtMost caps and aborting AtLeast
-/// guards.
-///
-/// Inactive validators (deactivated pools) are not supported by this path;
-/// the chain still allows redeeming from inactive pools, but the lookup
-/// requires walking `inactive_validators[pool_id] → ValidatorWrapper` dynamic
-/// fields, which is a follow-up.
+/// transaction to `epoch`, so the rate must come from the same RPC response
+/// as the inactive-table lookup. Otherwise an epoch transition between the
+/// rate read and the bind_epoch read could leave the quote pinned to a stale
+/// rate, silently violating AtMost caps and aborting AtLeast guards.
 async fn resolve_pool_fss_and_rate(
     client: &mut Client,
     sender: SuiAddress,
@@ -275,46 +303,193 @@ async fn resolve_pool_fss_and_rate(
         )));
     }
 
-    let (rates, epoch) = crate::account::get_pool_exchange_rates_with_epoch(client).await?;
-
+    let snapshot = crate::account::get_validator_set_snapshot(client).await?;
     let target_validator_addr = sui_sdk_types::Address::from(target_validator);
-    let (pool_id_str, rate_info) = rates
-        .iter()
-        .find(|(_, info)| info.validator_address == target_validator_addr)
-        .ok_or_else(|| {
-            Error::InvalidInput(format!(
-                "Validator {target_validator} not found among active validators"
-            ))
-        })?;
-    let pool_for_validator = ObjectID::from_str(pool_id_str)
-        .map_err(|e| Error::DataError(format!("Invalid active pool id: {e}")))?;
 
-    let mut matching: Vec<&OwnedFss> = owned
-        .iter()
-        .filter(|f| f.pool_id == pool_for_validator)
-        .collect();
-    matching.sort_by_key(|f| f.object_ref.0);
-
-    if matching.is_empty() {
-        return Err(Error::InvalidInput(format!(
-            "Sender {sender} has no FungibleStakedSui for validator {target_validator}'s pool"
-        )));
+    // Group FSS by pool_id; deterministic ordering (BTreeMap on ObjectID).
+    let mut by_pool: std::collections::BTreeMap<ObjectID, Vec<&OwnedFss>> =
+        std::collections::BTreeMap::new();
+    for fss in &owned {
+        by_pool.entry(fss.pool_id).or_default().push(fss);
     }
 
-    let total_tokens: u64 = matching.iter().map(|f| f.value).sum();
-    let fss_refs: Vec<ObjectRef> = matching.iter().map(|f| f.object_ref).collect();
+    for (pool_id, fss_list) in &by_pool {
+        // Active fast path.
+        if let Some(rate_info) = snapshot.active_rates.get(&pool_id.to_string())
+            && rate_info.validator_address == target_validator_addr
+        {
+            return Ok(build_snapshot(fss_list, rate_info, snapshot.epoch));
+        }
+
+        // Inactive fallback.
+        if let Some(table_id_str) = snapshot.inactive_validators_table_id.as_deref() {
+            let table_id = ObjectID::from_str(table_id_str).map_err(|e| {
+                Error::DataError(format!("Invalid inactive_validators table id: {e}"))
+            })?;
+            if let Some(inactive) =
+                lookup_inactive_pool(client, table_id, *pool_id, target_validator).await?
+            {
+                let mut sorted = fss_list.clone();
+                sorted.sort_by_key(|f| f.object_ref.0);
+                let total_tokens: u64 = sorted.iter().map(|f| f.value).sum();
+                let fss_refs: Vec<ObjectRef> = sorted.iter().map(|f| f.object_ref).collect();
+                return Ok(PoolFssRateSnapshot {
+                    fss_refs,
+                    total_tokens,
+                    rate_sui: inactive.rate_sui,
+                    rate_token: inactive.rate_token,
+                    epoch: snapshot.epoch,
+                    pool_extra_fields_id: Some(inactive.pool_extra_fields_id),
+                });
+            }
+        }
+    }
+
+    Err(Error::InvalidInput(format!(
+        "No FungibleStakedSui found for validator {target_validator}'s pool \
+         (sender holds {} FSS object(s) but none are for that validator's active \
+          or inactive pool)",
+        owned.len()
+    )))
+}
+
+fn build_snapshot(
+    fss_list: &[&OwnedFss],
+    rate_info: &crate::account::PoolRateInfo,
+    epoch: u64,
+) -> PoolFssRateSnapshot {
+    let mut sorted = fss_list.to_vec();
+    sorted.sort_by_key(|f| f.object_ref.0);
+    let total_tokens: u64 = sorted.iter().map(|f| f.value).sum();
+    let fss_refs: Vec<ObjectRef> = sorted.iter().map(|f| f.object_ref).collect();
     let pool_extra_fields_id = rate_info
         .pool_extra_fields_id
         .as_deref()
         .and_then(|s| ObjectID::from_str(s).ok());
-    Ok(PoolFssRateSnapshot {
+    PoolFssRateSnapshot {
         fss_refs,
         total_tokens,
         rate_sui: rate_info.sui_balance,
         rate_token: rate_info.pool_token_balance,
         epoch,
         pool_extra_fields_id,
-    })
+    }
+}
+
+/// Pool data extracted from an inactive validator's `ValidatorWrapper`.
+struct InactivePoolData {
+    rate_sui: u64,
+    rate_token: u64,
+    pool_extra_fields_id: ObjectID,
+}
+
+/// Walk `inactive_validators[pool_id]` → `ValidatorWrapper` → `Versioned` →
+/// `ValidatorV1` to extract the staking pool's rate fields and verify the
+/// validator address matches.
+///
+/// The chain stores `inactive_validators` as `Table<ID, ValidatorWrapper>`
+/// (validator_set.move:73). Each entry is a dynamic field at
+/// `derive(table.id, &TypeTag::ID, bcs(pool_id))`. The wrapper holds a
+/// `Versioned` whose latest value is the actual `ValidatorV1`, stored at
+/// `derive(versioned.id, &TypeTag::U64, bcs(version))`.
+///
+/// For inactive pools, `pool.sui_balance` and `pool.pool_token_balance` are
+/// frozen at deactivation (advance_epoch no longer touches them), so they
+/// equal the latest exchange-rate snapshot — no `pool_token_exchange_rate_at_epoch`
+/// walk-back needed.
+///
+/// Returns `None` if the wrapper is not found at the derived id (validator
+/// address didn't match) so the caller can try the next candidate pool.
+async fn lookup_inactive_pool(
+    client: &mut Client,
+    inactive_table_id: ObjectID,
+    pool_id: ObjectID,
+    expected_validator: SuiAddress,
+) -> Result<Option<InactivePoolData>, Error> {
+    use sui_types::dynamic_field::{Field, derive_dynamic_field_id};
+    use sui_types::id::ID;
+    use sui_types::sui_system_state::ValidatorWrapper;
+    use sui_types::sui_system_state::sui_system_state_inner_v1::ValidatorV1;
+
+    let id_type = sui_types::TypeTag::from_str("0x2::object::ID")
+        .map_err(|e| Error::DataError(format!("ID TypeTag: {e}")))?;
+    let pool_id_bcs =
+        bcs::to_bytes(&pool_id).map_err(|e| Error::DataError(format!("pool_id bcs: {e}")))?;
+    let wrapper_field_id = derive_dynamic_field_id(inactive_table_id, &id_type, &pool_id_bcs)
+        .map_err(|e| Error::DataError(format!("derive inactive wrapper field id: {e}")))?;
+
+    let Some(wrapper_bytes) = try_read_object_contents(client, wrapper_field_id).await? else {
+        return Ok(None);
+    };
+    let wrapper_field: Field<ID, ValidatorWrapper> = bcs::from_bytes(&wrapper_bytes)
+        .map_err(|e| Error::DataError(format!("Field<ID,ValidatorWrapper> decode: {e}")))?;
+    let versioned_id = ObjectID::from_str(
+        &wrapper_field
+            .value
+            .inner
+            .id
+            .object_id()
+            .to_hex_uncompressed(),
+    )
+    .map_err(|e| Error::DataError(format!("Invalid Versioned id: {e}")))?;
+    let version = wrapper_field.value.inner.version;
+
+    let u64_type = sui_types::TypeTag::U64;
+    let version_bcs =
+        bcs::to_bytes(&version).map_err(|e| Error::DataError(format!("version bcs: {e}")))?;
+    let validator_field_id = derive_dynamic_field_id(versioned_id, &u64_type, &version_bcs)
+        .map_err(|e| Error::DataError(format!("derive ValidatorV1 field id: {e}")))?;
+
+    let validator_bytes = try_read_object_contents(client, validator_field_id)
+        .await?
+        .ok_or_else(|| {
+            Error::DataError(format!(
+                "Inactive validator wrapper at {wrapper_field_id} points at \
+                 missing ValidatorV1 at {validator_field_id} (version {version})"
+            ))
+        })?;
+    let validator_field: Field<u64, ValidatorV1> = bcs::from_bytes(&validator_bytes)
+        .map_err(|e| Error::DataError(format!("Field<u64,ValidatorV1> decode: {e}")))?;
+    let validator = validator_field.value;
+    if validator.metadata.sui_address != expected_validator {
+        return Ok(None);
+    }
+
+    Ok(Some(InactivePoolData {
+        rate_sui: validator.staking_pool.sui_balance,
+        rate_token: validator.staking_pool.pool_token_balance,
+        pool_extra_fields_id: validator.staking_pool.extra_fields.id.id.bytes,
+    }))
+}
+
+/// Fetch raw BCS contents of an object, returning `None` if the object does
+/// not exist (so callers can probe derived addresses without erroring).
+async fn try_read_object_contents(
+    client: &mut Client,
+    object_id: ObjectID,
+) -> Result<Option<Vec<u8>>, Error> {
+    let request = sui_rpc::proto::sui::rpc::v2::GetObjectRequest::default()
+        .with_object_id(object_id.to_string())
+        .with_read_mask(FieldMask::from_paths(["contents"]));
+    let response = match client.ledger_client().get_object(request).await {
+        Ok(r) => r.into_inner(),
+        Err(status) if status.code() == tonic::Code::NotFound => return Ok(None),
+        Err(e) => return Err(Error::from(e)),
+    };
+    let Some(obj) = response.object else {
+        return Ok(None);
+    };
+    let bytes = obj
+        .contents
+        .as_ref()
+        .and_then(|b| b.value.as_deref())
+        .map(|v| v.to_vec())
+        .unwrap_or_default();
+    if bytes.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(bytes))
+    }
 }
 
 /// Atomic snapshot tying together pool, FSS, exchange rate, and the epoch the
@@ -549,7 +724,7 @@ pub(crate) fn build_redeem_plan(
                 )
             })?;
             let token_amount =
-                binary_search_at_least(data, total_tokens, min_sui).ok_or_else(|| {
+                binary_search_at_least(data, total_tokens, min_sui)?.ok_or_else(|| {
                     Error::InvalidInput(format!(
                         "Insufficient FSS balance: cannot deliver AtLeast {min_sui} SUI \
                          from {total_tokens} pool tokens at current exchange rate",
@@ -574,13 +749,13 @@ pub(crate) fn build_redeem_plan(
                     "Pool has zero exchange rate, cannot compute redeem plan".to_string(),
                 ));
             }
-            let token_amount = binary_search_at_most(rate_sui, rate_token, total_tokens, max_sui)
+            let token_amount = binary_search_at_most(rate_sui, rate_token, total_tokens, max_sui)?
                 .ok_or_else(|| {
-                Error::InvalidInput(
+                    Error::InvalidInput(
                     "AtMost amount too small: would redeem 0 pool tokens at current exchange rate"
                         .to_string(),
                 )
-            })?;
+                })?;
             Ok(RedeemPlan::AtMost {
                 token_amount,
                 max_sui,
@@ -704,23 +879,38 @@ mod tests {
     fn atmost_picks_maximum_token_under_cap() {
         // rate 200/99, supply=99: for T=49 expected=98, for T=50 expected=101.
         // Largest T with expected(T) <= 100 is 49.
-        let token = binary_search_at_most(200, 99, 99, 100).unwrap();
+        let token = binary_search_at_most(200, 99, 99, 100).unwrap().unwrap();
         assert_eq!(token, 49);
-        assert!(expected_sui_amount(200, 99, token) <= 100);
-        assert!(expected_sui_amount(200, 99, token + 1) > 100);
+        assert!(expected_sui_amount(200, 99, token).unwrap() <= 100);
+        assert!(expected_sui_amount(200, 99, token + 1).unwrap() > 100);
     }
 
     #[test]
     fn atmost_returns_none_when_one_token_already_over_cap() {
         // rate 1000:1 means 1 token = 1000 SUI; cap of 1 SUI is unsatisfiable.
-        assert!(binary_search_at_most(1000, 1, 100, 1).is_none());
+        assert!(binary_search_at_most(1000, 1, 100, 1).unwrap().is_none());
     }
 
     #[test]
     fn atmost_zero_rate_falls_back_to_one_to_one() {
         // expected(token) = token when rate fields are 0. With cap=10 and 100
         // tokens available, max satisfying token is 10.
-        assert_eq!(binary_search_at_most(0, 0, 100, 10).unwrap(), 10);
+        assert_eq!(binary_search_at_most(0, 0, 100, 10).unwrap().unwrap(), 10);
+    }
+
+    #[test]
+    fn mul_div_overflow_is_reported_not_truncated() {
+        // u64::MAX * u64::MAX / 1 fits in u128 but NOT in u64 — must error,
+        // not silently truncate. Confirms we match Move's `mul_div!` abort.
+        let err = mul_div_u64(u64::MAX, u64::MAX, 1).expect_err("should overflow");
+        assert!(format!("{err}").contains("overflow"));
+    }
+
+    #[test]
+    fn mul_div_safely_handles_typical_pool_scale() {
+        // Typical pool: ~10^9 SUI total, 1:1 rate. Should not overflow.
+        let result = mul_div_u64(1_000_000_000_000_000_000, 1, 1).unwrap();
+        assert_eq!(result, 1_000_000_000_000_000_000);
     }
 
     // --- Plan construction ---------------------------------------------------
@@ -758,7 +948,7 @@ mod tests {
                     "mirror picks t=6 (actual=6) over naive t=5 (actual=4)"
                 );
                 assert_eq!(min_sui, 5);
-                assert!(mirror_redeem_actual(&data, token_amount) >= 5);
+                assert!(mirror_redeem_actual(&data, token_amount).unwrap() >= 5);
             }
             _ => panic!("wrong variant"),
         }
@@ -787,7 +977,7 @@ mod tests {
                     token_amount, 16,
                     "mirror search should pick t=16, not naive t=15"
                 );
-                assert!(mirror_redeem_actual(&data, token_amount) >= 35);
+                assert!(mirror_redeem_actual(&data, token_amount).unwrap() >= 35);
             }
             _ => panic!("wrong variant"),
         }
@@ -852,8 +1042,8 @@ mod tests {
                         if token == 0 || token > supply {
                             continue;
                         }
-                        let expected = expected_sui_amount(rate_sui, rate_token, token);
-                        let actual = mirror_redeem_actual(&data, token);
+                        let expected = expected_sui_amount(rate_sui, rate_token, token).unwrap();
+                        let actual = mirror_redeem_actual(&data, token).unwrap();
                         assert!(actual <= expected, "actual={actual} > expected={expected}");
                         assert!(
                             actual + 2 >= expected,

@@ -74,7 +74,9 @@ pub struct TransactionObjectData {
     /// Pool tokens to redeem. None = redeem all.
     /// Used by MergeAndRedeemFungibleStakedSui.
     ///
-    /// Kept for backward compatibility; new code reads `redeem_plan` instead.
+    /// Forward-compat-only field: surfaced in metadata responses for older
+    /// clients, but new code reads `redeem_plan` exclusively when building
+    /// the payload. See `ConstructionMetadata::redeem_token_amount`.
     pub redeem_token_amount: Option<u64>,
     /// Mode-aware redeem plan (used by `MergeAndRedeemFungibleStakedSui`).
     /// `None` for other operations.

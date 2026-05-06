@@ -938,18 +938,27 @@ impl Operations {
     ///
     /// Recognized shapes (all produced by `merge_and_redeem_fss_pt`):
     /// 1. `All`: `[join_fss]*, redeem_fss, coin::from_balance<SUI>, TransferObjects`
-    /// 2. `AtMost`: `[join_fss]*, split_fss, redeem_fss, coin::from_balance<SUI>, TransferObjects`
+    /// 2. Partial without guard: `[join_fss]*, split_fss, redeem_fss, coin::from_balance<SUI>, TransferObjects`
     /// 3. `AtLeast`: `[join_fss]*, split_fss, redeem_fss, balance::split<SUI>, balance::join<SUI>, coin::from_balance<SUI>, TransferObjects`
     ///
     /// The `balance::split + balance::join` pair after `redeem_fss` is the AtLeast
-    /// runtime guard: the chain-side `balance::split(min_sui)` aborts if the redeemed
-    /// balance is below `min_sui`, then the join restores the original balance for
-    /// `coin::from_balance` to consume in full.
+    /// runtime guard: the chain-side `balance::split(min_sui)` aborts if the
+    /// redeemed balance is below `min_sui`, then the join restores the original
+    /// balance for `coin::from_balance` to consume in full. The parser also
+    /// verifies that this guard's arguments are wired to the actual redeem
+    /// result (not an unrelated `Balance<SUI>`) — see `is_result_of`.
     ///
     /// Emits:
     /// * `Some(All)` when no `split_fungible_staked_sui` is present.
-    /// * `Some(AtLeast)` when a split_fungible_staked_sui plus `balance::split + balance::join` guard pair are present.
-    /// * `Some(AtMost)` when a split_fungible_staked_sui is present without the balance guard.
+    /// * `Some(AtLeast)` + `metadata.amount = Some(min_sui)` when a
+    ///   `split_fungible_staked_sui` plus correctly-wired `balance::split +
+    ///   balance::join` guard pair are present. `min_sui` is decoded from the
+    ///   pure u64 input to `balance::split`.
+    /// * `redeem_mode = None` when a `split_fungible_staked_sui` is present
+    ///   without the balance guard. This corresponds to a partial redeem whose
+    ///   user-facing intent (`AtMost(max_sui)` vs older builders that didn't
+    ///   add a guard) cannot be recovered from PTB bytes alone — only the
+    ///   token count is encoded, not the original `max_sui` cap.
     ///
     /// Returns `None` on any shape mismatch, causing fall-through to generic op.
     fn parse_merge_and_redeem(
@@ -981,6 +990,12 @@ impl Operations {
         let mut has_split_fss = false;
         let mut has_balance_guard = false;
         let mut min_sui_recovered: Option<u64> = None;
+        // Command indices used to verify the AtLeast guard wires correctly:
+        // balance::split must consume the redeem result, balance::join must
+        // consume the redeem result and the split result, and the final
+        // coin::from_balance must consume the redeem result.
+        let mut redeem_cmd_idx: Option<u32> = None;
+        let mut balance_split_cmd_idx: Option<u32> = None;
 
         for (idx, command) in commands.iter().enumerate() {
             if phase == Phase::Done {
@@ -1056,6 +1071,7 @@ impl Operations {
                         ArgumentKind::Result => {}
                         _ => return None,
                     }
+                    redeem_cmd_idx = Some(idx as u32);
                     phase = Phase::AfterRedeem;
                 }
                 Some(Command::MoveCall(m)) if Self::is_balance_split_sui_call(m) => {
@@ -1065,6 +1081,11 @@ impl Operations {
                     if m.arguments.len() != 2 {
                         return None;
                     }
+                    // arg[0] must be the redeem result we just produced.
+                    if !Self::is_result_of(&m.arguments[0], redeem_cmd_idx) {
+                        return None;
+                    }
+                    // arg[1] must be a Pure u64 split amount.
                     if m.arguments[1].kind() != ArgumentKind::Input {
                         return None;
                     }
@@ -1077,6 +1098,7 @@ impl Operations {
                     // the PTB carries a malformed split amount; fall through.
                     let min_sui = bcs::from_bytes::<u64>(pure_input.pure()).ok()?;
                     min_sui_recovered = Some(min_sui);
+                    balance_split_cmd_idx = Some(idx as u32);
                     phase = Phase::AfterBalanceSplit;
                 }
                 Some(Command::MoveCall(m)) if Self::is_balance_join_sui_call(m) => {
@@ -1086,11 +1108,29 @@ impl Operations {
                     if m.arguments.len() != 2 {
                         return None;
                     }
+                    // arg[0] must be the redeem result; arg[1] must be the
+                    // balance::split result. Otherwise the guard isn't actually
+                    // protecting the redeemed balance — could be a different
+                    // sub-balance, which means the parser cannot claim AtLeast.
+                    if !Self::is_result_of(&m.arguments[0], redeem_cmd_idx) {
+                        return None;
+                    }
+                    if !Self::is_result_of(&m.arguments[1], balance_split_cmd_idx) {
+                        return None;
+                    }
                     has_balance_guard = true;
                     phase = Phase::AfterBalanceJoin;
                 }
                 Some(Command::MoveCall(m)) if Self::is_coin_from_balance_sui_call(m) => {
                     if phase != Phase::AfterRedeem && phase != Phase::AfterBalanceJoin {
+                        return None;
+                    }
+                    if m.arguments.len() != 1 {
+                        return None;
+                    }
+                    // The Coin<SUI> handed to TransferObjects must be derived
+                    // from the redeem result, not from some other Balance.
+                    if !Self::is_result_of(&m.arguments[0], redeem_cmd_idx) {
                         return None;
                     }
                     phase = Phase::AfterFromBalance;
@@ -1189,6 +1229,17 @@ impl Operations {
             return false;
         };
         oid == SUI_SYSTEM_STATE_OBJECT_ID
+    }
+
+    /// Returns true iff `arg` is `Result(expected_idx)`. Used to verify
+    /// dataflow linkage in `parse_merge_and_redeem` — for example, that
+    /// `balance::split` actually consumes the result of `redeem_fss` rather
+    /// than some unrelated `Balance<SUI>` that happens to be in scope.
+    fn is_result_of(arg: &Argument, expected_idx: Option<u32>) -> bool {
+        let Some(expected) = expected_idx else {
+            return false;
+        };
+        arg.kind() == ArgumentKind::Result && arg.result() == expected
     }
 
     /// Resolves a list of input indices to ObjectIDs. Returns None if any index is
@@ -3384,6 +3435,156 @@ mod tests {
         builder.command(NativeCommand::TransferObjects(vec![new_fss], sender_arg));
         let ops = parse_pt(sender, builder.finish());
         assert_falls_through_to_generic(&ops);
+    }
+
+    // ==============================================================================
+    // AtLeast guard dataflow linkage tests
+    //
+    // The AtLeast PTB shape is:
+    //   redeem_fss → balance::split<SUI> → balance::join<SUI> → coin::from_balance<SUI>
+    // and the parser must verify that the guard operates on the redeem result
+    // (not on some unrelated Balance<SUI>) — otherwise a malformed PTB could be
+    // misclassified as a typed AtLeast op even though the chain wouldn't enforce
+    // the guarantee on the redeemed balance.
+    // ==============================================================================
+
+    /// Build a malformed AtLeast PTB where the AtLeast guard operates on a
+    /// freshly-created `Balance<SUI>` (via `balance::zero<SUI>`) rather than
+    /// on the redeem result. Type-checks on chain (the chain doesn't care if
+    /// the guard runs against a different balance), but the parser must NOT
+    /// emit `Some(AtLeast)` for this PTB because the balance::split is not
+    /// gating the redeemed balance.
+    ///
+    /// NOTE: chain validation might still reject the resulting PTB for other
+    /// reasons (orphaned redeem result), but as far as the parser shape match
+    /// goes we want it to fall through to a generic op.
+    fn build_malformed_atleast_ptb(
+        sender: SuiAddress,
+        fss: ObjectRef,
+        wire_split_to_redeem: bool,
+        wire_join_to_redeem: bool,
+        wire_join_arg1_to_split: bool,
+        wire_from_balance_to_redeem: bool,
+    ) -> ProgrammableTransaction {
+        use sui_types::transaction::Argument;
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let sys = builder.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+        let fss_arg = builder.obj(ObjectArg::ImmOrOwnedObject(fss)).unwrap();
+        let split_amt = builder.pure(100u64).unwrap();
+        // Split fss to make the shape AtLeast/AtMost-like (with split_fss before redeem).
+        let split_fss = builder.command(NativeCommand::move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            Identifier::new("staking_pool").unwrap(),
+            Identifier::new("split_fungible_staked_sui").unwrap(),
+            vec![],
+            vec![fss_arg, split_amt],
+        ));
+        let redeem_balance = builder.command(NativeCommand::move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            Identifier::new("sui_system").unwrap(),
+            Identifier::new("redeem_fungible_staked_sui").unwrap(),
+            vec![],
+            vec![sys, split_fss],
+        ));
+        // Make a separate Balance<SUI> via `balance::zero<SUI>` to have a
+        // distinct Balance<SUI> Result available for the malformed wiring.
+        let zero_balance = builder.command(NativeCommand::move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("zero").unwrap(),
+            vec![sui_types::TypeTag::from_str("0x2::sui::SUI").unwrap()],
+            vec![],
+        ));
+        let min_arg = builder.pure(0u64).unwrap();
+        let split_arg0 = if wire_split_to_redeem {
+            redeem_balance
+        } else {
+            zero_balance
+        };
+        let split_result = builder.command(NativeCommand::move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("split").unwrap(),
+            vec![sui_types::TypeTag::from_str("0x2::sui::SUI").unwrap()],
+            vec![split_arg0, min_arg],
+        ));
+        let join_arg0 = if wire_join_to_redeem {
+            redeem_balance
+        } else {
+            zero_balance
+        };
+        let join_arg1 = if wire_join_arg1_to_split {
+            split_result
+        } else {
+            // Use a fresh zero<SUI> result so it's a Balance<SUI> Result that
+            // is not the prior balance::split's output.
+            builder.command(NativeCommand::move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                Identifier::new("balance").unwrap(),
+                Identifier::new("zero").unwrap(),
+                vec![sui_types::TypeTag::from_str("0x2::sui::SUI").unwrap()],
+                vec![],
+            ))
+        };
+        builder.command(NativeCommand::move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("balance").unwrap(),
+            Identifier::new("join").unwrap(),
+            vec![sui_types::TypeTag::from_str("0x2::sui::SUI").unwrap()],
+            vec![join_arg0, join_arg1],
+        ));
+        let from_balance_arg = if wire_from_balance_to_redeem {
+            redeem_balance
+        } else {
+            zero_balance
+        };
+        let coin = builder.command(NativeCommand::move_call(
+            SUI_FRAMEWORK_PACKAGE_ID,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("from_balance").unwrap(),
+            vec![sui_types::TypeTag::from_str("0x2::sui::SUI").unwrap()],
+            vec![from_balance_arg],
+        ));
+        let sender_arg = builder.pure(sender).unwrap();
+        builder.command(NativeCommand::TransferObjects(vec![coin], sender_arg));
+        let _ = Argument::GasCoin; // silence Argument unused warning when not needed
+        builder.finish()
+    }
+
+    #[test]
+    fn test_parse_falls_through_atleast_split_arg_not_redeem_result() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss = random_object_ref();
+        // balance::split arg[0] points at zero<SUI>, not at redeem result.
+        let pt = build_malformed_atleast_ptb(sender, fss, false, true, true, true);
+        assert_falls_through_to_generic(&parse_pt(sender, pt));
+    }
+
+    #[test]
+    fn test_parse_falls_through_atleast_join_arg0_not_redeem_result() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss = random_object_ref();
+        // balance::join arg[0] points at zero<SUI>, not at redeem result.
+        let pt = build_malformed_atleast_ptb(sender, fss, true, false, true, true);
+        assert_falls_through_to_generic(&parse_pt(sender, pt));
+    }
+
+    #[test]
+    fn test_parse_falls_through_atleast_join_arg1_not_split_result() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss = random_object_ref();
+        // balance::join arg[1] points at a different zero<SUI>, not at split result.
+        let pt = build_malformed_atleast_ptb(sender, fss, true, true, false, true);
+        assert_falls_through_to_generic(&parse_pt(sender, pt));
+    }
+
+    #[test]
+    fn test_parse_falls_through_atleast_from_balance_arg_not_redeem_result() {
+        let sender = SuiAddress::random_for_testing_only();
+        let fss = random_object_ref();
+        // coin::from_balance arg[0] points at zero<SUI>, not at redeem result.
+        let pt = build_malformed_atleast_ptb(sender, fss, true, true, true, false);
+        assert_falls_through_to_generic(&parse_pt(sender, pt));
     }
 
     // ==============================================================================

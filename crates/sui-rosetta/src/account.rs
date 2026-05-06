@@ -167,20 +167,43 @@ pub(crate) async fn get_pool_exchange_rates(
     Ok(get_pool_exchange_rates_with_epoch(client).await?.0)
 }
 
+/// Atomic snapshot of validator-set state from a single `GetEpochRequest::latest()`.
+///
+/// Splitting these reads across multiple RPCs allows an epoch transition to
+/// land between them: the caller could observe rate from epoch N, then read
+/// epoch N+1, and bind the transaction to N+1 with a stale N rate, silently
+/// violating AtMost caps and aborting AtLeast guards. Bundling rate, epoch,
+/// and the inactive-table id into one response eliminates that race.
+pub(crate) struct ValidatorSetSnapshot {
+    /// Active pool rates keyed by `pool.id` (canonical 0x-prefixed hex string).
+    pub active_rates: std::collections::HashMap<String, PoolRateInfo>,
+    /// Current epoch the snapshot was taken in.
+    pub epoch: u64,
+    /// `validators.inactive_validators.id` — UID of the
+    /// `Table<ID, ValidatorWrapper>` storing deactivated pools. `None` only if
+    /// the proto omitted the field.
+    pub inactive_validators_table_id: Option<String>,
+}
+
 /// Reads exchange rates and the epoch they're snapshotted in from a single
 /// `GetEpochRequest::latest()` response. Used by amount-sensitive operations
 /// (e.g. `MergeAndRedeemFungibleStakedSui::AtLeast`/`AtMost`) that must pin
 /// the rate quote to the same epoch the resulting transaction will be bound to.
-///
-/// Reading rate and epoch separately would race: a caller could observe rate
-/// from epoch N, then read epoch N+1, and bind the transaction to N+1 with a
-/// stale N rate, silently violating AtMost caps and aborting AtLeast guards.
 pub(crate) async fn get_pool_exchange_rates_with_epoch(
     client: &mut Client,
 ) -> Result<(std::collections::HashMap<String, PoolRateInfo>, u64), Error> {
+    let snap = get_validator_set_snapshot(client).await?;
+    Ok((snap.active_rates, snap.epoch))
+}
+
+/// Read the full validator-set snapshot atomically.
+pub(crate) async fn get_validator_set_snapshot(
+    client: &mut Client,
+) -> Result<ValidatorSetSnapshot, Error> {
     let request = GetEpochRequest::latest().with_read_mask(FieldMask::from_paths([
         "epoch",
         "system_state.validators.active_validators",
+        "system_state.validators.inactive_validators",
     ]));
     let response = client
         .ledger_client()
@@ -190,7 +213,14 @@ pub(crate) async fn get_pool_exchange_rates_with_epoch(
     let epoch_obj = response.epoch();
     let epoch = epoch_obj.epoch();
     let system_state = epoch_obj.system_state();
-    let validators = system_state.validators().active_validators();
+    let validators_proto = system_state.validators();
+    let validators = validators_proto.active_validators();
+
+    let inactive_validators_table_id = validators_proto
+        .inactive_validators
+        .as_ref()
+        .and_then(|t| t.id.as_ref())
+        .cloned();
 
     let mut rates = std::collections::HashMap::new();
     for validator in validators {
@@ -212,7 +242,11 @@ pub(crate) async fn get_pool_exchange_rates_with_epoch(
             },
         );
     }
-    Ok((rates, epoch))
+    Ok(ValidatorSetSnapshot {
+        active_rates: rates,
+        epoch,
+        inactive_validators_table_id,
+    })
 }
 
 async fn get_sub_account_balances(
