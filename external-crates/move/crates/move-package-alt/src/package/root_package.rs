@@ -123,8 +123,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
         let mut filtered_graph = unfiltered_graph.filter_for_mode(&config.modes).linkage()?;
         if let Some(ephemeral_pubs) = ephemeral_pubs {
             debug!("adding overrides");
-            filtered_graph
-                .make_ephemeral(localpubs_to_publications(&ephemeral_pubs)?, &*config.flavor);
+            filtered_graph.make_ephemeral(
+                localpubs_to_publications(&ephemeral_pubs)?,
+                &*config.flavor,
+                &config.chain_id,
+            );
         }
 
         debug!("checking rename-from");
@@ -262,7 +265,11 @@ impl<F: MoveFlavor + fmt::Debug> RootPackage<F> {
     /// Record metadata for a publication for the root package in either its `Published.toml` or
     /// its ephemeral pubfile (depending on how it was loaded)
     pub fn write_publish_data(&mut self, publish_data: Publication<F>) -> PackageResult<()> {
-        let root_dep = self.package_info().package().dep_for_self().clone().into();
+        let root_dep = self
+            .package_info()
+            .package()
+            .dep_for_self()
+            .to_ephemeral(self.environment.id());
         if let Some(ephemeral_file) = &mut self.ephemeral_file {
             let mut pubs = ephemeral_file
                 .read_pubfile::<F>()?

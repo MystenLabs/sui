@@ -19,11 +19,12 @@ use tracing::debug;
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::package::EnvironmentID;
 use crate::package::package_loader::PackageConfig;
 use crate::package::package_lock::PackageSystemLock;
 use crate::schema::{EphemeralDependencyInfo, ModeName, Publication};
 use crate::{
-    dependency::PinnedDependencyInfo,
+    dependency::PinnedDependency,
     errors::PackageResult,
     flavor::MoveFlavor,
     package::{Package, paths::PackagePath},
@@ -50,7 +51,7 @@ pub(crate) struct PackageGraph<F: MoveFlavor> {
     package_ids: BiBTreeMap<PackageID, NodeIndex>,
 
     /// The actual nodes and edges of the graph
-    inner: DiGraph<Arc<Package<F>>, PinnedDependencyInfo>,
+    inner: DiGraph<Arc<Package<F>>, PinnedDependency>,
 }
 
 impl<F: MoveFlavor> PackageGraph<F> {
@@ -132,10 +133,11 @@ impl<F: MoveFlavor> PackageGraph<F> {
         &mut self,
         overrides: BTreeMap<EphemeralDependencyInfo, Publication<F>>,
         flavor: &F,
+        chain_id: &EnvironmentID,
     ) {
         for (_, index) in &self.package_ids {
             let package = self.inner[*index].clone();
-            let dep = package.dep_for_self().clone().into();
+            let dep = package.dep_for_self().to_ephemeral(chain_id);
             debug!("replacing dep: {dep:?}");
             let new_publish = if let Some(publish) = overrides.get(&dep) {
                 // take from ephemeral file
@@ -212,6 +214,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use crate::Vanilla;
+    use crate::flavor::vanilla::DEFAULT_ENV_ID;
     use test_log::test;
 
     use crate::{
@@ -374,7 +377,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides, &Vanilla);
+        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -415,7 +418,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides, &Vanilla);
+        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -458,7 +461,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides, &Vanilla);
+        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -496,7 +499,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides, &Vanilla);
+        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
         assert!(graph.get_package(&"a".to_string()).published().is_none());
     }
 
@@ -518,7 +521,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides, &Vanilla);
+        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
         assert!(graph.get_package(&"a".to_string()).published().is_none());
     }
 
@@ -542,7 +545,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides, &Vanilla);
+        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
         assert_eq!(
             graph
                 .get_package(&"a".to_string())

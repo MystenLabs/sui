@@ -9,7 +9,6 @@ use sha2::{Digest, Sha256};
 use tracing::debug;
 
 use crate::{
-    dependency::{ResolvedDependency, combine::Combined, resolve::Resolved},
     errors::{FileHandle, PackageError, PackageResult, fmt_truncated},
     flavor::MoveFlavor,
     git::{GitCache, GitError, GitTree},
@@ -21,21 +20,39 @@ use crate::{
     },
 };
 
-use super::{CombinedDependency, Dependency};
+use super::{
+    CombinedDependency, DependencyContext,
+    combine::Combined,
+    resolve::{Resolved, ResolvedDependency},
+};
 
-/// [Dependency<Pinned>]s are guaranteed to always resolve to the same package source. For example,
-/// a git dependency with a branch or tag revision may change over time (and is thus not
-/// pinned), whereas a git dependency with a sha revision is always guaranteed to produce the same
-/// files.
+/// A dependency that has been pinned to a specific version. Pairs a [Pinned] source location with
+/// a [DependencyContext] describing how a parent references this dependency — this is a graph
+/// **edge** concept.
+#[derive(Debug, Clone)]
+pub struct PinnedDependency {
+    context: DependencyContext,
+    dep_info: Pinned,
+}
+
+/// A pinned source location for a package. Represents where a package's files can be found on
+/// disk (or will be fetched to). This is a **node** concept — it describes a package's location,
+/// independent of how it is referenced by other packages.
+///
+/// In contrast, [PinnedDependency] pairs a `Pinned` with a [DependencyContext] and represents a
+/// graph **edge** — how a parent package references a dependency.
+///
+// TODO: consider moving `Pinned` out of the `dependency` module, since it describes package
+// locations rather than dependency relationships.
 #[derive(Clone, Debug)]
-pub enum Pinned {
+pub(crate) enum Pinned {
     Local(PinnedLocalDependency),
     Git(PinnedGitDependency),
     OnChain(OnChainDepInfo),
     Root(PackagePath),
 }
 
-/// Invariant: if a PinnedDependencyInfo has `dep_info` `Root`, then its `containing_file` is either a
+/// Invariant: if a PinnedDependency has `dep_info` `Root`, then its `containing_file` is either a
 /// manifest or a lockfile in the directory containing the root package
 #[derive(Clone, Debug)]
 pub struct PinnedGitDependency {
@@ -54,20 +71,17 @@ pub struct PinnedLocalDependency {
     relative_path_from_root_package: PathBuf,
 }
 
-#[derive(Debug, Clone)]
-pub struct PinnedDependencyInfo(pub(super) Dependency<Pinned>);
-
-impl PinnedDependencyInfo {
+impl PinnedDependency {
     /// Replace all dependencies in `deps` with their pinned versions:
     ///  - first, all external dependencies are resolved (in environment `environment_id`)
     ///  - next, the revisions for git dependencies are replaced with 40-character shas
     ///  - finally, local dependencies are transformed relative to `parent`
-    pub async fn pin<F: MoveFlavor>(
+    pub(crate) async fn pin<F: MoveFlavor>(
         parent: &Pinned,
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
         flavor: &F,
-    ) -> PackageResult<Vec<PinnedDependencyInfo>> {
+    ) -> PackageResult<Vec<PinnedDependency>> {
         debug!("pinning dependencies");
         // replace all system dependencies using the flavor
         let (non_system_deps, mut result) =
@@ -78,14 +92,16 @@ impl PinnedDependencyInfo {
 
         // pinning - fix git shas and normalize local deps
         for dep in deps.into_iter() {
-            let transformed = match dep.0.dep_info {
-                Resolved::Local(ref loc) => loc.clone().pin(parent)?,
+            let transformed = match dep.dep_info {
+                Resolved::Local(ref loc) => loc.clone().pin(parent, environment_id)?,
                 Resolved::Git(ref git) => git.pin().await?,
                 Resolved::OnChain(_) => todo!(),
             };
 
-            // TODO: can avoid clones above if we don't use `map` here
-            result.push(PinnedDependencyInfo(dep.0.map(|_| transformed)));
+            result.push(PinnedDependency {
+                context: dep.context,
+                dep_info: transformed,
+            });
         }
 
         Ok(result)
@@ -93,17 +109,20 @@ impl PinnedDependencyInfo {
 
     /// Transform a combined dependency into a pinned dependency using the provided pinned
     /// information
-    pub fn from_combined(dep: CombinedDependency, pinned: Pinned) -> Self {
-        Self(dep.0.map(|_| pinned))
+    pub(crate) fn from_combined(dep: CombinedDependency, pinned: Pinned) -> Self {
+        Self {
+            context: dep.context,
+            dep_info: pinned,
+        }
     }
 
-    /// partition `deps` into the system dependencies and the non-system dependencies; replace all
-    /// the system dependencies using `flavor`
+    /// Partition `deps` into the system dependencies and the non-system dependencies; replace all
+    /// the system dependencies using `flavor`.
     async fn replace_system_deps<F: MoveFlavor>(
         deps: Vec<CombinedDependency>,
         environment_id: &EnvironmentID,
         flavor: &F,
-    ) -> PackageResult<(Vec<CombinedDependency>, Vec<PinnedDependencyInfo>)> {
+    ) -> PackageResult<(Vec<CombinedDependency>, Vec<PinnedDependency>)> {
         let all_system_deps = flavor.system_deps(environment_id).await;
         let valid_list = move_compiler::format_oxford_list!(
             "and",
@@ -111,11 +130,11 @@ impl PinnedDependencyInfo {
             all_system_deps.keys().collect::<Vec<&String>>()
         );
 
-        let mut system_deps: Vec<PinnedDependencyInfo> = Vec::new();
+        let mut system_deps: Vec<PinnedDependency> = Vec::new();
         let mut non_system_deps: Vec<CombinedDependency> = Vec::new();
 
         for dep in deps.into_iter() {
-            if let Combined::System(sys) = &dep.0.dep_info {
+            if let Combined::System(sys) = &dep.dep_info {
                 let lockfile_dep =
                     all_system_deps
                         .get(&sys.system)
@@ -123,11 +142,12 @@ impl PinnedDependencyInfo {
                             dep: sys.system.clone(),
                             valid: valid_list.to_string(),
                         })?;
-                let file = dep.0.containing_file;
-                let pinned_dep = PinnedDependencyInfo(dep.0.map(|_| {
-                    Pinned::from_lockfile(file, lockfile_dep)
-                        .expect("system dependencies are valid pins")
-                }));
+                let file = dep.context.containing_file;
+                let pinned_dep = PinnedDependency {
+                    context: dep.context,
+                    dep_info: Pinned::from_lockfile(file, lockfile_dep)
+                        .expect("system dependencies are valid pins"),
+                };
                 system_deps.push(pinned_dep);
             } else {
                 non_system_deps.push(dep);
@@ -138,48 +158,54 @@ impl PinnedDependencyInfo {
 
     /// The name for the dependency
     pub fn name(&self) -> &PackageName {
-        &self.0.name
+        &self.context.name
     }
 
     /// The `use-environment` field for this dependency
     pub fn use_environment(&self) -> &EnvironmentName {
-        self.0.use_environment()
+        &self.context.use_environment
     }
 
     /// The `override` flag for this dependency
     pub fn is_override(&self) -> bool {
-        self.0.is_override
+        self.context.is_override
     }
 
     /// The `rename-from` field for this dependency
     pub fn rename_from(&self) -> &Option<PackageName> {
-        self.0.rename_from()
+        &self.context.rename_from
     }
 
+    /// Whether this is the root dependency
     pub fn is_root(&self) -> bool {
-        self.0.dep_info.is_root()
+        self.dep_info.is_root()
     }
 
+    /// The `modes` field for this dependency
     pub fn modes(&self) -> &Option<Vec<ModeName>> {
-        &self.0.modes
+        &self.context.modes
     }
-}
 
-impl AsRef<Pinned> for PinnedDependencyInfo {
-    fn as_ref(&self) -> &Pinned {
-        &self.0.dep_info
+    /// Access the inner [Pinned] value.
+    pub(crate) fn pinned(&self) -> &Pinned {
+        &self.dep_info
+    }
+
+    /// Return the absolute path to the directory that this dependency would be fetched into.
+    pub fn unfetched_path(&self, chain_id: &EnvironmentID) -> PathBuf {
+        self.dep_info.unfetched_path(chain_id)
     }
 }
 
 impl Pinned {
     /// Is the dependency the root?
-    pub fn is_root(&self) -> bool {
+    pub(crate) fn is_root(&self) -> bool {
         matches!(self, Pinned::Root(_))
     }
 
     /// Return the absolute path to the directory that this package would be fetched into, without
-    /// actually fetching it. This is guaranteed to be a valid path
-    pub fn unfetched_path(&self) -> PathBuf {
+    /// actually fetching it. `_chain_id` is unused for now but will be needed for on-chain deps.
+    pub(crate) fn unfetched_path(&self, _chain_id: &EnvironmentID) -> PathBuf {
         match &self {
             Pinned::Git(dep) => dep.inner.path_to_tree(),
             Pinned::Local(dep) => dep.absolute_path_to_package.clone(),
@@ -188,17 +214,11 @@ impl Pinned {
         }
     }
 
-    /// Create a pinned dependency from a pin in a lockfile. This involves attaching the context of
-    /// the file it is contained in (`containing_file`) and the environment it is defined in
-    /// (`env`).
+    /// Create a [Pinned] from a lockfile dependency info entry.
     ///
-    /// The returned dependency has the `override` field set, since we assume dependencies are
-    /// only pinned to the lockfile after the linkage checks have been performed.
-    ///
-    /// We do not set the `rename-from` field, since when we are creating the pinned dependency we
-    /// don't yet know what the rename-from field  should be. The caller is responsible for calling
-    /// [Self::with_rename_from] if they need to establish the rename-from check invariant.
-    pub fn from_lockfile(
+    /// `containing_file` is the lockfile that the dependency comes from, used to resolve relative
+    /// paths.
+    pub(crate) fn from_lockfile(
         containing_file: FileHandle,
         pin: &LockfileDependencyInfo,
     ) -> PackageResult<Self> {
@@ -226,7 +246,7 @@ impl Pinned {
     }
 
     /// Return an abbreviated string (without braces) showing the dependency (e.g. `local = "foo/bar"`)
-    pub fn abbreviated(&self) -> String {
+    pub(crate) fn abbreviated(&self) -> String {
         match &self {
             Pinned::Local(local) => {
                 format!(r#"local = {:?}"#, local.relative_path_from_root_package)
@@ -243,7 +263,7 @@ impl Pinned {
     }
 
     /// Returns the default hash for Self.
-    pub fn unique_hash(&self) -> u64 {
+    pub(crate) fn unique_hash(&self) -> u64 {
         let lockfile_pin: LockfileDependencyInfo = self.clone().into();
         let digest = Sha256::digest(lockfile_pin.render_as_toml().as_bytes());
         // Take the first 8 bytes of the 32-byte SHA256 digest and convert to u64
@@ -277,24 +297,25 @@ impl TryFrom<LockfileGitDepInfo> for PinnedGitDependency {
 }
 
 impl LocalDepInfo {
-    /// Takes a local dependency, and its parent, and transforms local dependencies
-    /// based on their parent.
+    /// Takes a local dependency and its `parent`, and transforms local dependencies based on their
+    /// parent. `chain_id` is passed through to [Pinned::unfetched_path].
+    ///
     /// 1. If the parent is a git dependency, we convert local transitive deps to git.
     /// 2. If the parent is a local dependency, we normalize the path based on the parents.
-    fn pin(self, parent: &Pinned) -> PackageResult<Pinned> {
+    fn pin(self, parent: &Pinned, chain_id: &EnvironmentID) -> PackageResult<Pinned> {
         let info: Pinned = match &parent {
             Pinned::Git(parent_git) => Pinned::Git(PinnedGitDependency {
                 inner: parent_git.inner.relative_tree(self.local)?,
             }),
             Pinned::Local(parent_local) => Pinned::Local(PinnedLocalDependency {
-                absolute_path_to_package: parent.unfetched_path().join(&self.local).clean(),
+                absolute_path_to_package: parent.unfetched_path(chain_id).join(&self.local).clean(),
                 relative_path_from_root_package: parent_local
                     .relative_path_from_root_package
                     .join(&self.local)
                     .clean(),
             }),
             Pinned::Root(_) => Pinned::Local(PinnedLocalDependency {
-                absolute_path_to_package: parent.unfetched_path().join(&self.local).clean(),
+                absolute_path_to_package: parent.unfetched_path(chain_id).join(&self.local).clean(),
                 relative_path_from_root_package: self.local.clean(),
             }),
             Pinned::OnChain(_) => todo!(),
@@ -304,9 +325,9 @@ impl LocalDepInfo {
     }
 }
 
-impl From<PinnedDependencyInfo> for LockfileDependencyInfo {
-    fn from(value: PinnedDependencyInfo) -> Self {
-        value.0.dep_info.into()
+impl From<PinnedDependency> for LockfileDependencyInfo {
+    fn from(value: PinnedDependency) -> Self {
+        value.dep_info.into()
     }
 }
 
@@ -327,17 +348,16 @@ impl From<Pinned> for LockfileDependencyInfo {
     }
 }
 
-impl From<Pinned> for EphemeralDependencyInfo {
-    fn from(value: Pinned) -> Self {
-        // for EphemeralDependencyInfo, local dependencies (including the root) are stored as
-        // absolute paths; otherwise they are stored the same way as lockfile dependencies
-
-        let local = value
-            .unfetched_path()
+impl Pinned {
+    /// Convert to an [EphemeralDependencyInfo]. For ephemeral dependencies, local dependencies
+    /// (including the root) are stored as absolute paths.
+    pub(crate) fn to_ephemeral(&self, chain_id: &EnvironmentID) -> EphemeralDependencyInfo {
+        let local = self
+            .unfetched_path(chain_id)
             .canonicalize()
             .expect("Filesystem path for pinned package is valid");
 
-        Self(LocalDepInfo { local })
+        EphemeralDependencyInfo(LocalDepInfo { local })
     }
 }
 
@@ -360,6 +380,7 @@ mod tests {
     use super::*;
 
     const RANDOM_SHA: &str = "1111111111111111111111111111111111111111"; // 40 characters
+    const TEST_CHAIN_ID: &str = "test-chain";
 
     // Local pinning ///////////////////////////////////////////////////////////////////////////////
 
@@ -371,7 +392,10 @@ mod tests {
         assert!(parent.is_root());
 
         let dep = new_local("../child");
-        let pinned = dep.pin(&parent).unwrap_as_local().clone();
+        let pinned = dep
+            .pin(&parent, &TEST_CHAIN_ID.to_string())
+            .unwrap_as_local()
+            .clone();
 
         assert_eq!(
             pinned.absolute_path_to_package.as_os_str(),
@@ -392,7 +416,10 @@ mod tests {
         let parent = new_pinned_local_from("/root", "parent");
 
         let dep = new_local("child");
-        let pinned = dep.pin(&parent).unwrap_as_local().clone();
+        let pinned = dep
+            .pin(&parent, &TEST_CHAIN_ID.to_string())
+            .unwrap_as_local()
+            .clone();
 
         assert_eq!(
             pinned.absolute_path_to_package.as_os_str(),
@@ -412,7 +439,7 @@ mod tests {
         let parent = new_pinned_git_from("repo.git", RANDOM_SHA, "parent");
         let dep = new_local("child");
 
-        let pinned = dep.pin(&parent).unwrap_as_git();
+        let pinned = dep.pin(&parent, &TEST_CHAIN_ID.to_string()).unwrap_as_git();
         let parent_git = parent.unwrap_as_git();
 
         assert_eq!(
@@ -442,7 +469,7 @@ mod tests {
         let parent = new_pinned_git_from("repo.git", RANDOM_SHA, "packages/foo");
         let dep = new_local("../bar");
 
-        let pinned = dep.pin(&parent).unwrap_as_git();
+        let pinned = dep.pin(&parent, &TEST_CHAIN_ID.to_string()).unwrap_as_git();
         let parent_git = parent.unwrap_as_git();
 
         assert_eq!(pinned.inner.repo_url(), parent_git.inner.repo_url());
@@ -459,7 +486,7 @@ mod tests {
         let dep = new_local("../../d");
 
         assert_snapshot!(
-            dep.pin(&parent).unwrap_err().to_string(),
+            dep.pin(&parent, &TEST_CHAIN_ID.to_string()).unwrap_err().to_string(),
             @"relative path `../d` is not contained in the repository"
         );
     }
@@ -559,13 +586,13 @@ mod tests {
         }
     }
 
-    impl<E: std::fmt::Debug> Helpers for Result<PinnedDependencyInfo, E> {
+    impl<E: std::fmt::Debug> Helpers for Result<PinnedDependency, E> {
         fn unwrap_as_local(self) -> PinnedLocalDependency {
-            self.map(|dep| dep.0.dep_info).unwrap_as_local()
+            self.map(|dep| dep.dep_info).unwrap_as_local()
         }
 
         fn unwrap_as_git(self) -> PinnedGitDependency {
-            self.map(|dep| dep.0.dep_info).unwrap_as_git()
+            self.map(|dep| dep.dep_info).unwrap_as_git()
         }
     }
 
@@ -585,13 +612,13 @@ mod tests {
         }
     }
 
-    impl Helpers for PinnedDependencyInfo {
+    impl Helpers for PinnedDependency {
         fn unwrap_as_local(self) -> PinnedLocalDependency {
-            self.0.dep_info.unwrap_as_local()
+            self.dep_info.unwrap_as_local()
         }
 
         fn unwrap_as_git(self) -> PinnedGitDependency {
-            self.0.dep_info.unwrap_as_git()
+            self.dep_info.unwrap_as_git()
         }
     }
 

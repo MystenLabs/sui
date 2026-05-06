@@ -8782,6 +8782,7 @@ dependencies = [
  "codespan-reporting",
  "dunce",
  "hex",
+ "indexmap 2.8.0",
  "insta",
  "lsp-types 0.95.1",
  "move-abstract-interpreter",
