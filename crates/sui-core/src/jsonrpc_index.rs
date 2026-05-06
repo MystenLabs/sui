@@ -34,7 +34,7 @@ use sui_types::base_types::{ObjectInfo, ObjectRef};
 use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{self, DynamicFieldInfo};
 use sui_types::effects::TransactionEvents;
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
+use sui_types::error::{ExecutionErrorMetadata, SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::inner_temporary_store::TxCoins;
 use sui_types::object::{Object, Owner};
 use sui_types::parse_sui_struct_tag;
@@ -52,6 +52,7 @@ type DynamicFieldKey = (ObjectID, ObjectID);
 type EventId = (TxSequenceNumber, usize);
 type EventIndex = (TransactionEventsDigest, TransactionDigest, u64);
 type AllBalance = HashMap<TypeTag, TotalBalance>;
+type ExecutionErrorMetadataIndexValue = (TxSequenceNumber, ExecutionErrorMetadata);
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct CoinIndexKey2 {
@@ -275,6 +276,9 @@ pub struct IndexStoreTables {
     event_by_time: DBMap<(u64, EventId), EventIndex>,
 
     pruner_watermark: DBMap<(), TxSequenceNumber>,
+
+    /// Index from transaction digest to execution error context metadata.
+    execution_error_metadata: DBMap<TransactionDigest, ExecutionErrorMetadataIndexValue>,
 }
 
 impl IndexStoreTables {
@@ -583,6 +587,7 @@ impl IndexStoreTables {
         // Skipped tables:
         // - transaction_order / transactions_seq: sequence numbers differ by design
         // - transactions_by_input_object_id / transactions_by_mutated_object_id: deprecated
+        // - execution_error_metadata: local execution context, not reconstructed during restore
         // - meta: metadata singleton, not meaningful to compare
         // - pruner_watermark: operational state
     }
@@ -838,6 +843,17 @@ impl IndexStore {
                     |(_, event_id): (u64, EventId)| event_id.0,
                 ),
             ),
+            (
+                "execution_error_metadata".to_string(),
+                compaction_filter_config(
+                    "execution_error_metadata",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |(sequence_number, _): ExecutionErrorMetadataIndexValue| sequence_number,
+                    false,
+                ),
+            ),
         ]));
         let tables = IndexStoreTables::open_tables_read_write_with_deprecation_option(
             path,
@@ -1074,8 +1090,18 @@ impl IndexStore {
         tx_coins: Option<TxCoins>,
         accumulator_events: Vec<AccumulatorEvent>,
         acquire_locks: bool,
+        execution_error_metadata: Option<ExecutionErrorMetadata>,
     ) -> SuiResult<(StagedBatch, IndexStoreCacheUpdatesWithLocks)> {
         let mut batch = StagedBatch::new();
+
+        if let Some(metadata) = execution_error_metadata {
+            if !metadata.is_empty() {
+                batch.insert_batch(
+                    &self.tables.execution_error_metadata,
+                    std::iter::once((*digest, (sequence, metadata))),
+                )?;
+            }
+        }
 
         batch.insert_batch(
             &self.tables.transaction_order,
@@ -1232,6 +1258,33 @@ impl IndexStore {
         )?;
 
         Ok((batch, cache_updates))
+    }
+
+    pub fn get_execution_error_metadata(
+        &self,
+        digest: TransactionDigest,
+    ) -> SuiResult<Option<ExecutionErrorMetadata>> {
+        self.tables
+            .execution_error_metadata
+            .get(&digest)
+            .map(|value| value.map(|(_, metadata)| metadata))
+            .map_err(SuiError::from)
+    }
+
+    pub fn multi_get_execution_error_metadata(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> SuiResult<Vec<Option<ExecutionErrorMetadata>>> {
+        self.tables
+            .execution_error_metadata
+            .multi_get(digests)
+            .map(|values| {
+                values
+                    .into_iter()
+                    .map(|value| value.map(|(_, metadata)| metadata))
+                    .collect()
+            })
+            .map_err(SuiError::from)
     }
 
     /// Write a combined index batch and apply cache updates.
@@ -2293,6 +2346,58 @@ mod tests {
     use sui_types::object::Owner;
 
     #[tokio::test]
+    async fn test_execution_error_metadata_index_round_trip() -> anyhow::Result<()> {
+        let temp_dir = tempfile::tempdir()?;
+        let index_store = IndexStore::new_without_init(
+            temp_dir.path().to_path_buf(),
+            &Registry::default(),
+            Some(128),
+            false,
+        );
+        let address: SuiAddress = AccountAddress::random().into();
+        let digest = TransactionDigest::random();
+        let missing_digest = TransactionDigest::random();
+        let seq = index_store.allocate_sequence_number();
+        let mut metadata = BTreeMap::new();
+        metadata.insert("source".to_string(), "VMError".to_string());
+
+        let (raw_batch, cache_updates) = index_store.index_tx(
+            seq,
+            address,
+            vec![].into_iter(),
+            vec![].into_iter(),
+            vec![].into_iter(),
+            &TransactionEvents { data: vec![] },
+            ObjectIndexChanges {
+                deleted_owners: vec![],
+                deleted_dynamic_fields: vec![],
+                new_owners: vec![],
+                new_dynamic_fields: vec![],
+            },
+            &digest,
+            1234,
+            None,
+            vec![],
+            false,
+            Some(metadata.clone()),
+        )?;
+        let mut db_batch = index_store.new_db_batch();
+        db_batch.concat(vec![raw_batch]).unwrap();
+        index_store.commit_index_batch(db_batch, vec![cache_updates.into_inner()])?;
+
+        assert_eq!(
+            index_store.get_execution_error_metadata(digest)?,
+            Some(metadata.clone())
+        );
+        assert_eq!(
+            index_store.multi_get_execution_error_metadata(&[digest, missing_digest])?,
+            vec![Some(metadata), None]
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_index_cache() -> anyhow::Result<()> {
         // This test is going to invoke `index_tx()`where 10 coins each with balance 100
         // are going to be added to an address. The balance is then going to be read from the db
@@ -2347,6 +2452,7 @@ mod tests {
             Some(tx_coins),
             vec![],
             false,
+            None,
         )?;
         // Commit the batch so subsequent reads see the data
         let mut db_batch = index_store.new_db_batch();
@@ -2399,6 +2505,7 @@ mod tests {
             Some(tx_coins),
             vec![],
             false,
+            None,
         )?;
         let mut db_batch = index_store.new_db_batch();
         db_batch.concat(vec![raw_batch]).unwrap();

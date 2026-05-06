@@ -9,13 +9,13 @@ use std::str::FromStr;
 use move_core_types::identifier::Identifier;
 use sui_json::{call_args, type_args};
 use sui_json_rpc_api::ReadApiClient;
-use sui_json_rpc_types::SuiTransactionBlockDataAPI;
 use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponseQuery, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
+use sui_json_rpc_types::{SuiTransactionBlockDataAPI, SuiTransactionBlockEffectsAPI};
 use sui_macros::sim_test;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use sui_types::base_types::ObjectID;
@@ -528,4 +528,133 @@ async fn test_display_transaction_block_with_empty_balance_changes() {
     assert!(tx_block.balance_changes.as_ref().unwrap().is_empty());
 
     let _ = tx_block.to_string();
+}
+
+#[sim_test]
+async fn test_execution_error_metadata_in_response() -> Result<(), anyhow::Error> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let client = cluster.sui_client().clone();
+    let address = cluster.get_address_0();
+
+    let objects = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    let coin = objects.first().unwrap();
+    let gas = objects.last().unwrap().object().unwrap().object_ref();
+    let signer = cluster.wallet.active_address().unwrap();
+
+    let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
+    let module = Identifier::from_str("pay")?;
+    let function = Identifier::from_str("divide_and_keep")?;
+
+    let sui_type_args = type_args![GAS::type_tag()]?;
+    let type_args = sui_type_args
+        .into_iter()
+        .map(|ty| ty.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let sui_call_args = call_args!(coin.data.clone().unwrap().object_id, 0u64)?;
+
+    let mut pt_builder = ProgrammableTransactionBuilder::new();
+    let call_args = client
+        .transaction_builder()
+        .resolve_and_checks_json_args(
+            &mut pt_builder,
+            package_id,
+            &module,
+            &function,
+            &type_args,
+            sui_call_args,
+        )
+        .await?;
+
+    let cmd = Command::move_call(package_id, module, function, type_args, call_args);
+    pt_builder.command(cmd);
+    let pt = pt_builder.finish();
+
+    let tx_data = TransactionData::new_programmable(signer, vec![gas], pt, 10_000_000, 1000);
+    let dry_run_response = client
+        .read_api()
+        .dry_run_transaction_block(tx_data.clone())
+        .await?;
+    let dry_run_error_metadata = dry_run_response
+        .error_metadata
+        .as_ref()
+        .expect("Dry run execution error metadata should be present for failing transactions");
+    assert!(
+        !dry_run_error_metadata.is_empty(),
+        "Dry run metadata shouldn't be empty"
+    );
+    if let Some(source) = &dry_run_response.execution_error_source {
+        assert_eq!(dry_run_error_metadata.get("source"), Some(source));
+    }
+
+    let signed_data = cluster.wallet.sign_transaction(&tx_data).await;
+
+    let execution_response = client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            signed_data,
+            SuiTransactionBlockResponseOptions::new().with_effects(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await
+        .unwrap();
+
+    let response = client
+        .read_api()
+        .get_transaction_with_options(
+            execution_response.digest,
+            SuiTransactionBlockResponseOptions::new().with_effects(),
+        )
+        .await?;
+
+    let error_metadata = response.error_metadata;
+    let effects = response.effects.unwrap();
+    let status = effects.into_status();
+    match status {
+        sui_json_rpc_types::SuiExecutionStatus::Failure { error } => {
+            assert!(
+                error.contains("MoveAbort")
+                    || error.contains("DivideByZero")
+                    || error.contains("E_DIVIDE_BY_ZERO")
+                    || error.contains("divide by zero")
+                    || error.contains("ArithmeticError"),
+                "Error was: {}",
+                error
+            );
+            assert!(
+                error_metadata.is_some(),
+                "Execution error metadata should be present for failing transactions"
+            );
+            let metadata = error_metadata.as_ref().unwrap();
+            assert!(!metadata.is_empty(), "Metadata shouldn't be empty");
+        }
+        _ => panic!("Expected execution failure, got {:?}", status),
+    }
+
+    let responses = client
+        .read_api()
+        .multi_get_transactions_with_options(
+            vec![execution_response.digest],
+            SuiTransactionBlockResponseOptions::new().with_effects(),
+        )
+        .await?;
+    assert_eq!(1, responses.len());
+    assert_eq!(error_metadata, responses[0].error_metadata);
+
+    Ok(())
 }

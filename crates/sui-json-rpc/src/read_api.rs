@@ -54,7 +54,7 @@ use sui_types::crypto::AggregateAuthoritySignature;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::display_registry;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::{SuiError, SuiObjectResponseError};
+use sui_types::error::{ExecutionErrorMetadata, SuiError, SuiObjectResponseError};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp,
 };
@@ -200,6 +200,7 @@ struct IntermediateTransactionResponse {
     digest: TransactionDigest,
     transaction: Option<Transaction>,
     effects: Option<TransactionEffects>,
+    error_metadata: Option<ExecutionErrorMetadata>,
     events: Option<SuiTransactionBlockEvents>,
     checkpoint_seq: Option<CheckpointSequenceNumber>,
     balance_changes: Option<Vec<BalanceChange>>,
@@ -371,10 +372,47 @@ impl ReadApi {
                 .tap_err(
                     |err| debug!(digests=?digests_clone, "Failed to multi get effects for transactions: {:?}", err),
                 )?;
-            for ((_digest, cache_entry), e) in temp_response
+
+            let mut failed_digests = vec![];
+            for (digest, e) in digests.iter().zip(effects_list.iter()) {
+                if let Some(effects) = e {
+                    if effects.status().is_err() {
+                        failed_digests.push(*digest);
+                    }
+                }
+            }
+
+            let mut error_metadata_map = HashMap::new();
+            if !failed_digests.is_empty() {
+                match self
+                    .state
+                    .multi_get_execution_error_metadata(&failed_digests)
+                {
+                    Ok(metadata_list) => {
+                        for (digest, metadata) in failed_digests
+                            .iter()
+                            .copied()
+                            .zip(metadata_list.into_iter())
+                        {
+                            if let Some(metadata) = metadata {
+                                error_metadata_map.insert(digest, metadata);
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        debug!(
+                            ?failed_digests,
+                            "Failed to get execution error metadata: {err:?}"
+                        );
+                    }
+                }
+            }
+
+            for ((digest, cache_entry), e) in temp_response
                 .iter_mut()
                 .zip_debug_eq(effects_list.into_iter())
             {
+                cache_entry.error_metadata = error_metadata_map.remove(*digest);
                 cache_entry.effects = e;
             }
         }
@@ -897,18 +935,30 @@ impl ReadApiServer for ReadApi {
                 temp_response.transaction = Some(transaction);
             }
 
-            // Fetch effects when `show_events` is true because events relies on effects
             if opts.require_effects() {
                 let transaction_kv_store = self.transaction_kv_store.clone();
-                temp_response.effects = Some(
-                    transaction_kv_store
-                        .get_fx_by_tx_digest(digest)
-                        .await
-                        .map_err(|err| {
-                            debug!(tx_digest=?digest, "Failed to get effects: {:?}", err);
-                            Error::from(err)
-                        })?,
-                );
+                let effects = transaction_kv_store
+                    .get_fx_by_tx_digest(digest)
+                    .await
+                    .map_err(|err| {
+                        debug!(tx_digest=?digest, "Failed to get effects: {:?}", err);
+                        Error::from(err)
+                    })?;
+
+                if effects.status().is_err() {
+                    match self.state.multi_get_execution_error_metadata(&[digest]) {
+                        Ok(mut metadata) => {
+                            temp_response.error_metadata = metadata.pop().flatten();
+                        }
+                        Err(err) => {
+                            debug!(
+                                tx_digest = ?digest,
+                                "Failed to get execution error metadata: {err:?}"
+                            );
+                        }
+                    }
+                }
+                temp_response.effects = Some(effects);
             }
 
             temp_response.checkpoint_seq = self
@@ -1522,6 +1572,8 @@ fn convert_to_response(
     }
 
     if let Some(effects) = cache.effects {
+        let is_failure = effects.status().is_err();
+
         if opts.show_raw_effects {
             response.raw_effects = bcs::to_bytes(&effects).map_err(|e| {
                 // TODO: is this a client or server error?
@@ -1534,6 +1586,10 @@ fn convert_to_response(
                 // TODO: is this a client or server error?
                 anyhow!("Failed to convert transaction block effects with error: {e}")
             })?);
+        }
+
+        if is_failure && (opts.show_effects || opts.show_raw_effects) {
+            response.error_metadata = cache.error_metadata;
         }
     }
 

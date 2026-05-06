@@ -38,7 +38,7 @@ use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue, TransactionEffects, TransactionEffectsAPI,
     TransactionEvents,
 };
-use sui_types::error::{ExecutionError, SuiError, SuiResult};
+use sui_types::error::{ExecutionError, ExecutionErrorMetadata, SuiError, SuiResult};
 use sui_types::execution_status::{ExecutionFailure, ExecutionStatus};
 use sui_types::gas::GasCostSummary;
 use sui_types::layout_resolver::{LayoutResolver, get_layout_from_struct_tag};
@@ -251,6 +251,8 @@ pub struct SuiTransactionBlockResponse {
     pub errors: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub raw_effects: Vec<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_metadata: Option<ExecutionErrorMetadata>,
 }
 
 impl SuiTransactionBlockResponse {
@@ -1220,6 +1222,8 @@ pub struct DryRunTransactionBlockResponse {
     pub balance_changes: Vec<BalanceChange>,
     pub input: SuiTransactionBlockData,
     pub execution_error_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_metadata: Option<ExecutionErrorMetadata>,
     // If an input object is congested, suggest a gas price to use.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<BigInt<u64>>")]
@@ -1331,6 +1335,9 @@ pub struct DevInspectResults {
     /// Execution error from executing the transactions
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Execution error metadata from executing the transactions
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_metadata: Option<ExecutionErrorMetadata>,
     /// The raw transaction data that was dev inspected.
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub raw_txn_data: Vec<u8>,
@@ -1361,6 +1368,7 @@ impl DevInspectResults {
         effects: TransactionEffects,
         events: TransactionEvents,
         return_values: Result<Vec<ExecutionResult>, ExecutionError>,
+        error_metadata: Option<ExecutionErrorMetadata>,
         raw_txn_data: Vec<u8>,
         raw_effects: Vec<u8>,
         resolver: &mut dyn LayoutResolver,
@@ -1397,6 +1405,7 @@ impl DevInspectResults {
             events: SuiTransactionBlockEvents::try_from(events, tx_digest, None, resolver)?,
             results,
             error,
+            error_metadata,
             raw_txn_data,
             raw_effects,
         })

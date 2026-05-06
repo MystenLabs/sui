@@ -15,7 +15,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorContext, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
@@ -139,7 +139,7 @@ impl executor::Executor for Executor {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
-        Result<Vec<ExecutionResult>, ExecutionError>,
+        Result<Vec<ExecutionResult>, ExecutionErrorContext>,
     ) {
         let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, result) = if skip_all_checks {
@@ -180,6 +180,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
+        let result = result.map_err(ExecutionErrorContext::from);
         (inner_temp_store, gas_status, effects, result)
     }
 
@@ -205,7 +206,7 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
+        Result<(), ExecutionErrorContext>,
     ) {
         let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, result) =
@@ -228,6 +229,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
+        let result = result.map_err(ExecutionErrorContext::from);
         (inner_temp_store, gas_status, effects, vec![], result)
     }
 

@@ -810,6 +810,7 @@ impl LocalExec {
                 *tx_digest,
                 &mut None,
             );
+        let result = result.map_err(ExecutionError::from);
 
         if let Err(err) = self.pretty_print_for_tracing(
             &gas_status,
@@ -1005,6 +1006,7 @@ impl LocalExec {
                 *executable.digest(),
                 &mut None,
             );
+        let exec_res = exec_res.map_err(ExecutionError::from);
 
         let effects =
             SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;

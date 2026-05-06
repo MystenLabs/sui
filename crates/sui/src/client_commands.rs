@@ -2725,6 +2725,7 @@ fn to_legacy_dry_run_transaction_block_response(
         balance_changes: to_legacy_balance_changes(&response.transaction),
         input,
         execution_error_source,
+        error_metadata: None,
         suggested_gas_price: response.suggested_gas_price,
     })
 }

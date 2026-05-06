@@ -148,6 +148,7 @@ pub fn execute_transaction_to_effects(
             digest,
             trace_builder_opt,
         );
+    let result = result.map_err(ExecutionError::from);
     let ReplayStore {
         object_cache,
         checkpoint: _,

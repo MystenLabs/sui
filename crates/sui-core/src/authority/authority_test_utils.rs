@@ -120,7 +120,7 @@ pub async fn execute_from_consensus(
         .try_execute_executable_for_test(&executable, env)
         .await;
     let effects = result.inner().data().clone();
-    (effects, execution_error_opt)
+    (effects, execution_error_opt.map(ExecutionError::from))
 }
 
 /// This is the primary test helper for executing transactions end-to-end.
@@ -221,7 +221,11 @@ pub async fn submit_and_execute_with_error(
         execution_error_opt = fullnode_execution_error_opt;
     }
 
-    Ok((executable, result.into_inner(), execution_error_opt))
+    Ok((
+        executable,
+        result.into_inner(),
+        execution_error_opt.map(ExecutionError::from),
+    ))
 }
 
 /// Enqueues multiple transactions for execution after they've been through consensus.

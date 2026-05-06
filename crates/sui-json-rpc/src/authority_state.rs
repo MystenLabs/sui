@@ -30,7 +30,7 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::digests::{ChainIdentifier, TransactionDigest};
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::effects::TransactionEffects;
-use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
+use sui_types::error::{ExecutionErrorMetadata, SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::event::EventID;
 use sui_types::governance::StakedSui;
 use sui_types::messages_checkpoint::{
@@ -61,6 +61,11 @@ pub trait StateRead: Send + Sync {
         transactions: &[TransactionDigest],
         effects: &[TransactionDigest],
     ) -> StateReadResult<KVStoreTransactionData>;
+
+    fn multi_get_execution_error_metadata(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> StateReadResult<Vec<Option<ExecutionErrorMetadata>>>;
 
     fn get_object_read(&self, object_id: &ObjectID) -> StateReadResult<ObjectRead>;
 
@@ -246,6 +251,17 @@ impl StateRead for AuthorityState {
             )
             .await?,
         )
+    }
+
+    fn multi_get_execution_error_metadata(
+        &self,
+        digests: &[TransactionDigest],
+    ) -> StateReadResult<Vec<Option<ExecutionErrorMetadata>>> {
+        let Some(indexes) = &self.indexes else {
+            return Ok(vec![None; digests.len()]);
+        };
+
+        Ok(indexes.multi_get_execution_error_metadata(digests)?)
     }
 
     fn get_object_read(&self, object_id: &ObjectID) -> StateReadResult<ObjectRead> {

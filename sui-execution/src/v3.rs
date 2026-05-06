@@ -14,7 +14,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{ExecutionError, SuiError, SuiResult},
+    error::{ExecutionError, ExecutionErrorContext, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
@@ -139,7 +139,7 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Vec<ExecutionTiming>,
-        Result<(), ExecutionError>,
+        Result<(), ExecutionErrorContext>,
     ) {
         let (inner_temp_store, gas_status, effects, timings, result) =
             execute_transaction_to_effects::<execution_mode::Normal>(
@@ -162,6 +162,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(protocol_config, transaction_digest, error);
         }
+        let result = result.map_err(ExecutionErrorContext::from);
         (inner_temp_store, gas_status, effects, timings, result)
     }
 
@@ -186,7 +187,7 @@ impl executor::Executor for Executor {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
-        Result<Vec<ExecutionResult>, ExecutionError>,
+        Result<Vec<ExecutionResult>, ExecutionErrorContext>,
     ) {
         let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
@@ -228,6 +229,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(protocol_config, transaction_digest, error);
         }
+        let result = result.map_err(ExecutionErrorContext::from);
         (inner_temp_store, gas_status, effects, result)
     }
 

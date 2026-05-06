@@ -262,6 +262,7 @@ impl TransactionExecutionApi {
             checkpoint: None,
             errors: vec![],
             raw_effects,
+            error_metadata: None,
         })
     }
 
@@ -319,6 +320,7 @@ impl TransactionExecutionApi {
             balance_changes,
             input: resp.input,
             execution_error_source: resp.execution_error_source,
+            error_metadata: resp.error_metadata,
             suggested_gas_price: resp.suggested_gas_price,
         })
     }
