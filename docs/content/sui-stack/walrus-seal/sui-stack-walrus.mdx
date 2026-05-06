@@ -2,15 +2,83 @@
 title: Data Storage Using Walrus
 description: Learn how to store and retrieve data on Walrus by walking through OnlyFins, a content platform built on Sui and Walrus.
 keywords: [walrus, blob storage, walrus SDK, OnlyFins, Sui Stack, upload, read, seal]
+verified_against:
+  sui_ts_sdk: "^1.x"
+  walrus_sdk: "^0.x"
+  move_edition: "2024.beta"
+  last_verified: 2026-04-15
+  owner: "@sui-docs/stack-guides"
 ---
 
 This guide uses [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) as a concrete example throughout. OnlyFins is a demo content platform where creators post images stored on [Walrus](https://docs.wal.app/), some encrypted with [Seal](https://seal-docs.wal.app/). Each post is a Sui object. Users request access onchain to unlock encrypted posts, demonstrating how Sui, Walrus, and Seal work together as a stack.
 
-Each section explains a Walrus concept or operation and shows where it appears in OnlyFins. For patterns OnlyFins does not cover, the guide draws on [Walrus Onboarding](https://github.com/MystenLabs/Walrus-Onboarding) modules and [quack-intelligence](https://github.com/StefPler/quack-intelligence), a community frontend app. The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the authoritative reference for all SDK options. The [Encryption with Seal](/sui-stack/walrus-seal/sui-stack-seal) guide builds on this same app.
+Each section explains a Walrus concept or operation and shows where it appears in OnlyFins. For patterns OnlyFins does not cover, the guide draws on [Walrus Onboarding](https://github.com/MystenLabs/Walrus-Onboarding) modules and [walrus-pocs](https://github.com/MystenLabs/walrus-pocs), a collection of focused Walrus proof-of-concept examples maintained by Mysten Labs. The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the authoritative reference for all SDK options. The [Encryption with Seal](/sui-stack/walrus-seal/sui-stack-seal) guide builds on this same app.
 
 ## Introduction to Walrus
 
 Walrus is a decentralized storage and data availability protocol built specifically for large binary files, or blobs. It uses Sui for coordination, payment, and governance, making it a natural storage layer for apps built on Sui.
+
+### Architecture
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: '#000000'
+    primaryTextColor: '#FFFFFF'
+    primaryBorderColor: '#6C7584'
+    secondaryColor: '#6C7584'
+    secondaryTextColor: '#FFFFFF'
+    tertiaryColor: '#298DFF'
+    tertiaryTextColor: '#FFFFFF'
+    lineColor: '#298DFF'
+    background: '#FFFFFF'
+    mainBkg: '#000000'
+    secondBkg: '#6C7584'
+    noteBkgColor: '#E6F1FB'
+    noteTextColor: '#000000'
+    noteBorderColor: '#298DFF'
+    activationBkgColor: '#298DFF'
+    activationBorderColor: '#185FA5'
+    fontSize: '14px'
+    fontFamily: 'Inter, sans-serif'
+    signalColor: '#298DFF'
+    signalTextColor: '#298DFF'
+    labelBoxBkgColor: '#000000'
+    labelBoxBorderColor: '#6C7584'
+    labelTextColor: '#FFFFFF'
+    loopTextColor: '#FFFFFF'
+---
+flowchart LR
+    APP["YOUR APP"]
+
+    subgraph write ["Write path"]
+        SDK["WALRUS TS SDK"]
+        RELAY["UPLOAD RELAY"]
+        NODES["STORAGE NODES"]
+    end
+
+    subgraph sui_chain ["Sui"]
+        SUI["SUI TRANSACTION\nregister blob"]
+    end
+
+    subgraph read ["Read path"]
+        AGG["AGGREGATOR\nHTTP GET /v1/{blob_id}"]
+        SDK2["WALRUS TS SDK\nreadBlob()"]
+    end
+
+    APP -->|"blob bytes"| SDK
+    SDK -->|"blob bytes"| RELAY
+    RELAY -->|"n shards"| NODES
+    NODES -->|"blob_id"| SUI
+    SUI -->|"blob_id + object_id"| APP
+
+    APP -->|"blob_id"| AGG
+    APP -->|"blob_id"| SDK2
+    AGG -->|"blob bytes"| APP
+    SDK2 -->|"blob bytes"| APP
+```
 
 ### Blob storage
 
@@ -66,7 +134,7 @@ For most apps, publishers and aggregators are the recommended integration path b
 
 ## Tooling
 
-2 tools cover most Walrus integration scenarios.
+Two tools cover most Walrus integration scenarios.
 
 ### CLI
 
@@ -106,23 +174,15 @@ The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the single 
 Some code examples in this guide use `SuiClient` from `@mysten/sui/client` rather than `SuiGrpcClient` from `@mysten/sui/grpc`. `SuiGrpcClient` is the recommended transport for new integrations. All Walrus SDK and transaction APIs are identical regardless of which client you use. See the [Sui SDK v2 migration guide](https://sdk.mystenlabs.com/sui/migrations/sui-2.0) for upgrade instructions.
 :::
 
-For React apps, wrap your component tree with a context provider that initializes the client once and makes it available throughout the app. The `WalrusProvider` from [quack-intelligence](https://github.com/StefPler/quack-intelligence) shows this pattern using `SuiGrpcClient`:
-
-<ImportContent
-  source="dapp/src/contexts/WalrusProvider.tsx"
-  mode="code"
-  org="StefPler"
-  repo="quack-intelligence"
-  language="tsx"
-/>
+For React apps, wrap your component tree with a context provider that initializes the client once and makes it available throughout the app. The [walrus-pocs](https://github.com/MystenLabs/walrus-pocs) repo includes focused examples for each SDK operation that show this pattern in a clean Node.js context. For a React-specific provider, initialize `SuiGrpcClient.$extend(walrus())` in your app's root and pass the result through React context using the same pattern shown in the SDK client setup above.
 
 ## Uploading data
 
-There are 2 primary ways to upload data to Walrus: using the CLI directly, or using the TS SDK programmatically. The TS SDK offers 2 upload APIs: `writeBlob` for raw blobs, and the `WalrusFile` API which stores files efficiently by grouping them together.
+There are two primary ways to upload data to Walrus: using the CLI directly, or using the TS SDK programmatically. The TS SDK offers two upload APIs: `writeBlob` for raw blobs, and the `WalrusFile` API which stores files efficiently by grouping them together.
 
 ### Using the TS SDK with a `Signer`
 
-Use `writeBlob` with a `Signer` instance for server-side uploads where a backend script or job controls the wallet. The Walrus Onboarding Module 07 provides 2 clean examples: a direct upload and an upload through the relay. Both use the `$extend(walrus())` pattern:
+Use `writeBlob` with a `Signer` instance for server-side uploads where a backend script or job controls the wallet. The Walrus Onboarding Module 07 provides two clean examples: a direct upload and an upload through the relay. Both use the `$extend(walrus())` pattern:
 
 <ImportContent
   source="07-Walrus-SDK-upload-relay/hands-on-source-code/src/examples/basic-upload-example.ts"
@@ -170,7 +230,7 @@ With signers configured, `createPosts.ts` builds a PTB that calls `posts::create
 
 When uploads are signed by a user wallet in a browser, wallets use popups that browsers block if they are not opened in direct response to a user interaction. The `writeFilesFlow` method breaks the upload into discrete steps, each triggered by a separate user action.
 
-The flow has 5 steps:
+The flow has five steps:
 
 1. `encode`: Encode the files and compute a blob ID.
 2. `register`: Return a transaction that registers the blob onchain.
@@ -178,27 +238,20 @@ The flow has 5 steps:
 4. `certify`: Return a transaction that certifies the blob onchain.
 5. `listFiles`: Return the list of created files.
 
-There is currently no example of this pattern in OnlyFins. 2 external references cover it: [relay.wal.app](https://relay.wal.app/) is a deployed demo with an open-sourced repository that shows a complete production-ready browser upload flow. The [`write-from-wallet`](https://github.com/MystenLabs/ts-sdks/tree/main/packages/walrus/examples/write-from-wallet) example in the TS SDK repo is a more concise undeployed version. Both use `writeFilesFlow` with `@mysten/dapp-kit-react`.
+There is currently no example of this pattern in OnlyFins. Two external references cover it: [relay.wal.app](https://relay.wal.app/) is a deployed demo with an open-sourced repository that shows a complete production-ready browser upload flow. The [`write-from-wallet`](https://github.com/MystenLabs/ts-sdks/tree/main/packages/walrus/examples/write-from-wallet) example in the TS SDK repo is a more concise undeployed version. Both use `writeFilesFlow` with `@mysten/dapp-kit-react`.
 
-The `walrus.service.ts` in [quack-intelligence](https://github.com/StefPler/quack-intelligence) shows both a single-blob browser upload flow and a batch browser upload flow using `writeBlobFlow` and `writeFilesFlow` from a standalone `WalrusClient`:
-
-<ImportContent
-  source="dapp/src/services/walrus.service.ts"
-  mode="code"
-  org="StefPler"
-  repo="quack-intelligence"
-  language="ts"
-  fun="createUploadBlobFlow"
-/>
+The `walrus-pocs` SDK example shows the core `writeBlob` pattern with a signer:
 
 <ImportContent
-  source="dapp/src/services/walrus.service.ts"
+  source="sdk/src/write.ts"
   mode="code"
-  org="StefPler"
-  repo="quack-intelligence"
+  org="MystenLabs"
+  repo="walrus-pocs"
   language="ts"
-  fun="createUploadQuiltFlow"
+  fun="write"
 />
+
+For browser wallet upload flows using `writeBlobFlow` and `writeFilesFlow`, see the [`write-from-wallet`](https://github.com/MystenLabs/ts-sdks/tree/main/packages/walrus/examples/write-from-wallet) example in the TS SDK repo, which shows the complete dApp Kit integration pattern.
 
 ### Using the WalrusFile API to batch upload
 
@@ -244,7 +297,7 @@ The `transformSuiObjectsToPosts` utility extracts the `image_blob_id` field from
 
 Blobs support custom key-value attributes stored as [dynamic fields](/develop/objects/dynamic-fields) on the Sui blob object. Attributes can include content type, content length, or any app-specific metadata. They are set at upload time or updated afterward, travel with the blob object on Sui, and are readable alongside the blob content.
 
-The `attributes.ts` example in the TS SDK shows all three operations in one script: setting attributes at upload through the `attributes` parameter on `writeBlob`, reading them with `readBlobAttributes`, and updating or deleting individual keys with `executeWriteBlobAttributesTransaction`:
+The `attributes.ts` example in the TS SDK shows all 3 operations in one script: setting attributes at upload through the `attributes` parameter on `writeBlob`, reading them with `readBlobAttributes`, and updating or deleting individual keys with `executeWriteBlobAttributesTransaction`:
 
 <ImportContent
   source="packages/walrus/examples/basics/attributes.ts"
@@ -268,15 +321,15 @@ The Walrus Onboarding Module 11 shows how to retrieve files by identifier:
   language="ts"
 />
 
-The `quack-intelligence` service layer shows how to read a single file including its content-type tag and identifier:
+The `walrus-pocs` SDK example shows how to read a blob by ID and write it to disk:
 
 <ImportContent
-  source="dapp/src/services/walrus.service.ts"
+  source="sdk/src/download.ts"
   mode="code"
-  org="StefPler"
-  repo="quack-intelligence"
+  org="MystenLabs"
+  repo="walrus-pocs"
   language="ts"
-  fun="downloadFile"
+  fun="download"
 />
 
 :::caution
@@ -329,15 +382,7 @@ const { data } = useSuiClientQuery('getOwnedObjects', {
 });
 ```
 
-When displaying blob owners, resolve their [SuiNS](https://suins.io/) name if one exists rather than showing a raw address. The `useDisplayName` hook from quack-intelligence wraps `useResolveSuiNSName` from Sui dApp Kit with a graceful fallback to a formatted address:
-
-<ImportContent
-  source="dapp/src/hooks/useDisplayName.ts"
-  mode="code"
-  org="StefPler"
-  repo="quack-intelligence"
-  language="ts"
-/>
+When displaying blob owners, resolve their [SuiNS](https://suins.io/) name if one exists rather than showing a raw address. Use `useResolveSuiNSName` from Sui dApp Kit, which returns the primary SuiNS name for any address, and fall back to a truncated hex string when no name is set.
 
 ### Sharing blobs
 
@@ -349,51 +394,24 @@ Sharing blobs is currently only supported through the Walrus CLI or manually thr
 
 Blobs must be marked as `deletable: true` at registration time to be eligible for deletion. Permanent blobs cannot be deleted.
 
-The `walrus.service.ts` in quack-intelligence shows how to build a delete transaction from a standalone `WalrusClient`:
+The `walrus-pocs` SDK example shows how to find a blob object by ID and execute a delete transaction:
 
 <ImportContent
-  source="dapp/src/services/walrus.service.ts"
+  source="sdk/src/delete.ts"
   mode="code"
-  org="StefPler"
-  repo="quack-intelligence"
+  org="MystenLabs"
+  repo="walrus-pocs"
   language="ts"
-  fun="deleteBlobTransaction"
+  fun="del"
 />
 
-The `useDeleteFile` hook composes this with `useSignAndExecuteTransaction` from Sui dApp Kit to handle the full browser wallet flow:
-
-<ImportContent
-  source="dapp/src/hooks/useDeleteFile.ts"
-  mode="code"
-  org="StefPler"
-  repo="quack-intelligence"
-  language="ts"
-/>
+For browser wallet flows, compose this pattern with `useSignAndExecuteTransaction` from Sui dApp Kit: build the delete transaction using `walrus.executeDeleteBlobTransaction`, sign it with the connected wallet, and execute it through the dApp Kit hook.
 
 ### Extending the lifetime of blobs
 
 Blob storage is purchased for a set number of [epochs](/develop/sui-architecture/epochs). You can extend the storage period of a blob before it expires.
 
-The `walrus.service.ts` in quack-intelligence shows how to build an extension transaction:
-
-<ImportContent
-  source="dapp/src/services/walrus.service.ts"
-  mode="code"
-  org="StefPler"
-  repo="quack-intelligence"
-  language="ts"
-  fun="extendStorageTransaction"
-/>
-
-The `useExtendStorage` hook composes this with `useSignAndExecuteTransaction` and also updates the app's own onchain record with the new total epoch count:
-
-<ImportContent
-  source="dapp/src/hooks/useExtendStorage.ts"
-  mode="code"
-  org="StefPler"
-  repo="quack-intelligence"
-  language="ts"
-/>
+To extend a blob, call `walrus.extendBlob` with the blob object ID and the additional number of epochs to add. The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) covers the full API. For browser wallet flows, compose the extension transaction with `useSignAndExecuteTransaction` from Sui dApp Kit.
 
 ## Data encryption
 
