@@ -401,6 +401,7 @@ const config = {
             to: "getting-started",
             items: [
               { type: "doc", docId: "getting-started/onboarding/index", label: "Hello, World!" },
+              { type: "doc", docId: "getting-started/examples/index", label: "Example Apps" },
               { type: "doc", docId: "getting-started/tooling", label: "Developer Tools" },
               { type: "doc", docId: "getting-started/dev-cheat-sheet", label: "Developer Cheat Sheet" },
               { type: "doc", docId: "getting-started/sui-for-ethereum", label: "Ethereum -> Sui" },
@@ -453,6 +454,7 @@ const config = {
               { type: "doc", docId: "sui-stack/sagat", label: "Sagat" },
               { type: "doc", docId: "sui-stack/walrus-seal/index", label: "Walrus and Seal" },
               { type: "doc", docId: "sui-stack/nautilus/index", label: "Nautilus" },
+              { type: "doc", docId: "sui-stack/enoki/solitaire", label: "Enoki" },
               { type: "doc", docId: "sui-stack/zklogin-integration/index", label: "zkLogin" },
               { type: "doc", docId: "sui-stack/suiplay0x1/index", label: "SuiPlay0X1" },
             ],

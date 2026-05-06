@@ -266,14 +266,9 @@ export default {
           'getting-started/examples/first-dapp',
           'getting-started/examples/lootbox-ctf',
           'getting-started/examples/merchant-ctf',
-          'getting-started/examples/nautilus-weather-oracle',
           'getting-started/examples/plinko',
           'getting-started/examples/scenario-testing',
-          'getting-started/examples/solitaire',
           'getting-started/examples/staking-ctf',
-          'getting-started/examples/sui-chat-app',
-          'getting-started/examples/ticketing-poc',
-          'getting-started/examples/zklogin-demo',
       ]
     },
     'getting-started/tooling',
@@ -496,7 +491,7 @@ export default {
 	'onchain-finance/payment-intents',
   ],
 
-  suiStackSidebar: [
+suiStackSidebar: [
     'sui-stack',
     'sui-stack/on-chain-primitives/access-time',
     'sui-stack/on-chain-primitives/randomness-onchain',
@@ -509,6 +504,21 @@ export default {
         'sui-stack/walrus-seal/sui-stack-walrus',
         'sui-stack/walrus-seal/sui-stack-seal',
         'sui-stack/walrus-seal/indexer-walrus',
+        'sui-stack/walrus/only-fins',
+        'sui-stack/seal/sui-chat-app',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Enoki',
+      items: [
+        {
+          type: 'link',
+          label: 'Enoki Docs',
+          href: 'https://docs.enoki.mystenlabs.com/',
+        },
+        'sui-stack/enoki/solitaire',
+        'sui-stack/enoki/ticketing-poc',
       ],
     },
     {
@@ -520,8 +530,17 @@ export default {
         'sui-stack/nautilus/nautilus-design',
         'sui-stack/nautilus/using-nautilus',
         'sui-stack/nautilus/customize-nautilus',
+        'sui-stack/nautilus/nautilus-weather-oracle',
         'sui-stack/nautilus/seal',
         'sui-stack/nautilus/community-dev-tools',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'DeepBook',
+      items: [
+        'onchain-finance/deepbookv3/deepbook',
+        'onchain-finance/deepbook-margin/deepbook-margin',
       ],
     },
     {
@@ -531,7 +550,7 @@ export default {
       items: [
         'sui-stack/zklogin-integration/zklogin',
         'sui-stack/zklogin-integration/developer-account',
-        'sui-stack/zklogin-integration/zklogin-example',
+        'sui-stack/zklogin-integration/zklogin-demo',
       ],
     },
     {
