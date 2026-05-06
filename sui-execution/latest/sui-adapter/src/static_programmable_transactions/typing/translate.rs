@@ -553,7 +553,7 @@ fn move_call_arguments<Mode: ExecutionMode>(
     };
     let num_parameters = params.len();
     if num_args != num_parameters {
-        return Err(ExecutionError::new_with_source(
+        return Err(Mode::Error::new_with_source(
             ExecutionErrorKind::ArityMismatch,
             format!(
                 "Expected {} argument{} calling function '{}::{}', but found {}",
@@ -563,8 +563,7 @@ fn move_call_arguments<Mode: ExecutionMode>(
                 function.name,
                 num_args,
             ),
-        )
-        .into());
+        ));
     }
     // construct arguments, injecting tx context args as needed
     let mut args = args.into_iter().enumerate();

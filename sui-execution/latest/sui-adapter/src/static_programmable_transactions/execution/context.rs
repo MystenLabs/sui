@@ -970,7 +970,7 @@ where
                 .iter()
                 .map(|ty| {
                     let tag: TypeTag = ty.clone().try_into().map_err(|e| {
-                        ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, e)
+                        Mode::Error::new_with_source(ExecutionErrorKind::VMInvariantViolation, e)
                     })?;
                     vm.load_type(&tag)
                         .map_err(|e| self.env.convert_linked_vm_error(e, &function.linkage))
@@ -1077,11 +1077,10 @@ where
         for id in &dependency_ids {
             match self.env.linkable_store.get_move_package(id) {
                 Err(e) => {
-                    return Err(ExecutionError::new_with_source(
+                    return Err(Mode::Error::new_with_source(
                         ExecutionErrorKind::PublishUpgradeMissingDependency,
                         e,
-                    )
-                    .into());
+                    ));
                 }
                 Ok(Some(inner)) => {
                     fetched.push(inner);
@@ -1107,11 +1106,10 @@ where
                     .collect::<Vec<_>>()
                     .join(", ")
             );
-            Err(ExecutionError::new_with_source(
+            Err(Mode::Error::new_with_source(
                 ExecutionErrorKind::PublishUpgradeMissingDependency,
                 msg,
-            )
-            .into())
+            ))
         }
     }
 
@@ -1347,11 +1345,10 @@ where
         });
         if new_module_has_init {
             // TODO we cannot run 'init' on upgrade yet due to global type cache limitations
-            return Err(ExecutionError::new_with_source(
+            return Err(Mode::Error::new_with_source(
                 ExecutionErrorKind::FeatureNotYetSupported,
                 "`init` in new modules on upgrade is not yet supported",
-            )
-            .into());
+            ));
         }
 
         self.env.linkable_store.package_store.push_package(
@@ -1398,6 +1395,7 @@ where
     // Dev Inspect tracking
     //
 
+    #[allow(clippy::type_complexity)]
     pub fn argument_updates(
         &mut self,
         args: Vec<T::Argument>,
@@ -1407,6 +1405,7 @@ where
             .collect()
     }
 
+    #[allow(clippy::type_complexity)]
     fn argument_update(
         &mut self,
         sp!(_, (arg, ty)): T::Argument,

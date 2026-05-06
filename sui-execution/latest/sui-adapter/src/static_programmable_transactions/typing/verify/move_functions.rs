@@ -7,7 +7,7 @@ use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typi
 use move_binary_format::file_format::Visibility;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::ModuleId;
-use sui_types::error::{ExecutionError, ExecutionErrorTrait};
+use sui_types::error::ExecutionErrorTrait;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_verifier::private_generics_verifier_v2;
 
@@ -79,12 +79,11 @@ fn check_signature<Mode: ExecutionMode>(
         if let Type::Reference(_, _) = return_type
             && !Mode::allow_arbitrary_values()
         {
-            return Err(ExecutionError::from_kind(
+            return Err(E::from_kind(
                 ExecutionErrorKind::InvalidPublicFunctionReturnType {
                     idx: checked_as!(idx, u16)?,
                 },
-            )
-            .into());
+            ));
         }
         Ok(())
     }
@@ -115,11 +114,10 @@ fn check_visibility<Mode: ExecutionMode>(
         // cannot call private or friend if not entry
         (Visibility::Private | Visibility::Friend, false) => {
             if !Mode::allow_arbitrary_function_calls() {
-                return Err(ExecutionError::new_with_source(
+                return Err(Mode::Error::new_with_source(
                     ExecutionErrorKind::NonEntryFunctionInvoked,
                     "Can only call `entry` or `public` functions",
-                )
-                .into());
+                ));
             }
         }
     };
@@ -157,5 +155,8 @@ fn check_private_generics_v2<E: ExecutionErrorTrait>(
                  only be instantiated with types defined within the caller's module.{}",
         callee_package_name, callee_module, callee_function, internal_idx, help,
     );
-    Err(ExecutionError::new_with_source(ExecutionErrorKind::NonEntryFunctionInvoked, msg).into())
+    Err(E::new_with_source(
+        ExecutionErrorKind::NonEntryFunctionInvoked,
+        msg,
+    ))
 }

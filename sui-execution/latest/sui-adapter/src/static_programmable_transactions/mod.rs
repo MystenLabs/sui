@@ -98,5 +98,4 @@ pub fn execute<Mode: ExecutionMode>(
         txn,
         trace_builder_opt,
     )
-    .map_err(|(e, timings)| (e, timings))
 }
