@@ -2393,13 +2393,23 @@ pub fn solve_constraints(context: &mut Context) {
     {
         let var_constraints = context.subst.tvar_constraints.clone();
         let mut subst = std::mem::replace(&mut context.subst, Subst::empty());
-        for (var, constraint) in &var_constraints {
-            if let VarConstraint::Divergent(loc) = constraint {
-                let last_tvar = forward_tvar(&subst, *var);
-                if subst.get(last_tvar).is_none() {
-                    join_bind_tvar(&mut subst, *loc, last_tvar, sp(*loc, VOID_TYPE.clone()))
-                        .expect("ICE failed handling unbound divergent type");
+        // Sort by tvar ID so the location chosen for merged divergent vars is deterministic.
+        let mut divergent: Vec<_> = var_constraints
+            .iter()
+            .filter_map(|(var, c)| {
+                if let VarConstraint::Divergent(loc) = c {
+                    Some((*var, *loc))
+                } else {
+                    None
                 }
+            })
+            .collect();
+        divergent.sort_by_key(|(var, _)| *var);
+        for (var, loc) in divergent {
+            let last_tvar = forward_tvar(&subst, var);
+            if subst.get(last_tvar).is_none() {
+                join_bind_tvar(&mut subst, loc, last_tvar, sp(loc, VOID_TYPE.clone()))
+                    .expect("ICE failed handling unbound divergent type");
             }
         }
         context.subst = subst;
