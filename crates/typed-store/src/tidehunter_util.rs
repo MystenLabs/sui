@@ -59,14 +59,24 @@ pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfi
 }
 
 fn parse_env_usize(name: &str, minimum: usize) -> Option<usize> {
-    env::var(name).ok().map(|value| {
-        let parsed = value
-            .parse::<usize>()
-            .unwrap_or_else(|_| panic!("Failed to parse {name}"));
-        assert!(parsed >= minimum, "{name} must be at least {minimum}");
-        println!("Using {name} from env variable {parsed}");
-        parsed
-    })
+    let value = env::var(name).ok()?;
+    let parsed = match value.parse::<usize>() {
+        Ok(parsed) if parsed >= minimum => parsed,
+        Ok(parsed) => {
+            println!(
+                "Ignoring {name} env variable {parsed}: must be at least {minimum}, using default"
+            );
+            return None;
+        }
+        Err(err) => {
+            println!(
+                "Ignoring {name} env variable {value}: failed to parse ({err}), using default"
+            );
+            return None;
+        }
+    };
+    println!("Using {name} from env variable {parsed}");
+    Some(parsed)
 }
 
 fn default_max_dirty_keys() -> usize {
