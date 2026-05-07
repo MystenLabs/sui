@@ -22,8 +22,8 @@ verus! {
 #[cfg(verus_only)]
 use crate::verus_shims::{
     committee_epoch_spec, committee_threshold_spec, committee_unique,
-    committee_weight_of, lemma_voted_weight_empty, lemma_voted_weight_insert,
-    voted_weight,
+    committee_weight_of, envelope_authority, envelope_epoch, envelope_sig_spec,
+    lemma_voted_weight_empty, lemma_voted_weight_insert, sig_is_valid, voted_weight,
 };
 
 // Verus cannot construct opaque external types directly. These wrappers
@@ -507,6 +507,49 @@ impl<CertT> InsertResult<CertT> {
         matches!(self, Self::QuorumReached(..))
     }
 }
+
+// ---------------------------------------------------------------------------
+// Spec for StakeAggregator<AuthoritySignInfo, STRENGTH>::insert
+// ---------------------------------------------------------------------------
+//
+// `insert` is a thin wrapper around `insert_generic` that:
+//   1. Extracts the AuthoritySignInfo from the envelope.
+//   2. Rejects envelopes whose epoch doesn't match the committee.
+//   3. Delegates to `insert_generic`, then aggregates and verifies if quorum
+//      is reached (with an individual-verification fallback that may evict
+//      previously-stored bad signatures).
+//
+// We spec the parts that are unconditionally true regardless of the BLS
+// aggregation outcome. Full QuorumReached ↔ validity biconditionals require
+// connecting `sig_is_valid` to the real `verify_secure` result, which would
+// need specs for `AuthorityQuorumSignInfo::verify_secure` — left for future work.
+
+pub assume_specification<const STRENGTH: bool, T: Message + Serialize>[
+    StakeAggregator::<AuthoritySignInfo, STRENGTH>::insert::<T>
+](
+    agg: &mut StakeAggregator<AuthoritySignInfo, STRENGTH>,
+    envelope: Envelope<T, AuthoritySignInfo>,
+) -> (out: InsertResult<AuthorityQuorumSignInfo<STRENGTH>>)
+    requires
+        old(agg).invariant_holds(),
+        committee_unique(&old(agg).committee),
+    ensures
+        // Committee reference is never mutated.
+        agg.committee == old(agg).committee,
+        // Invariant is preserved across all branches (including eviction).
+        agg.invariant_holds(),
+        // Epoch mismatch always produces Failed; no state change occurs.
+        envelope_epoch(&envelope) != committee_epoch_spec(&old(agg).committee)
+            ==> out is Failed,
+        // A valid new sig from a weighted authority is accepted (not Failed).
+        // "Accepted" means the authority is recorded and the result reflects
+        // the running total — either QuorumReached or NotEnoughVotes.
+        envelope_epoch(&envelope) == committee_epoch_spec(&old(agg).committee)
+        && sig_is_valid(&envelope_sig_spec(&envelope), &old(agg).committee)
+        && !old(agg).has_voted(envelope_authority(&envelope))
+        && committee_weight_of(&old(agg).committee, envelope_authority(&envelope)) > 0
+            ==> !(out is Failed),
+;
 
 } // verus!
 

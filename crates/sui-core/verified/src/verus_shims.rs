@@ -12,13 +12,18 @@
 #![allow(non_local_definitions)]
 #![allow(dead_code)]
 
+use serde::Serialize;
 use shared_crypto::intent::Intent;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, StakeUnit};
 use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfoTrait};
+use sui_types::message_envelope::{Envelope, Message};
 // AuthoritySignInfo now lives in sui-types-verified (first-class Verus type).
 use sui_types::error::{SuiError, SuiErrorKind};
 use sui_types_verified::AuthoritySignInfo;
+// Spec-only functions — stripped by verus! in stable builds.
+#[cfg(verus_only)]
+use sui_types_verified::authority_sign_info::{auth_sig_authority_spec, auth_sig_epoch_spec};
 use vstd::prelude::*;
 
 verus! {
@@ -70,7 +75,50 @@ pub struct ExAuthorityQuorumSignInfo<const STRENGTH: bool>(AuthorityQuorumSignIn
 #[verifier::external_body]
 pub struct ExIntent(Intent);
 
+// Register serde::Serialize so Verus can accept `T: Serialize` bounds.
+// No methods need to be declared — the bound appears only in function
+// signatures, not in any spec expression.
+#[verifier::external_trait_specification]
+pub trait ExSerialize {
+    type ExternalTraitSpecificationFor: Serialize;
+}
+
+// Register the Message trait so Verus can accept `T: Message` bounds.
+// DigestType must be declared because Envelope<T: Message, S> stores
+// a T::DigestType in its digest field; Verus needs to know it exists.
+#[verifier::external_trait_specification]
+pub trait ExMessage {
+    type ExternalTraitSpecificationFor: Message;
+    type DigestType: Clone + std::fmt::Debug;
+}
+
 // Register Envelope generically (T = message payload, S = signature).
+#[verifier::external_type_specification]
+#[verifier::external_body]
+#[verifier::accept_recursive_types(T)]
+#[verifier::accept_recursive_types(S)]
+pub struct ExEnvelope<T: Message, S>(pub Envelope<T, S>);
+
+// Spec projector: the auth_signature field of an Envelope<T, S>.
+// We use a generic S so the assume_specification signature matches the real
+// method exactly; callers specialize to S = AuthoritySignInfo as needed.
+pub uninterp spec fn envelope_sig_spec<T: Message, S>(e: &Envelope<T, S>) -> S;
+
+pub assume_specification<T: Message, S>[ Envelope::<T, S>::auth_sig ](
+    e: &Envelope<T, S>,
+) -> (s: &S)
+    ensures *s == envelope_sig_spec(e),
+;
+
+// Convenience projectors for the specialized S = AuthoritySignInfo case.
+// These avoid deeply nested calls in postcondition expressions.
+pub open spec fn envelope_epoch<T: Message>(e: &Envelope<T, AuthoritySignInfo>) -> u64 {
+    auth_sig_epoch_spec(&envelope_sig_spec(e))
+}
+
+pub open spec fn envelope_authority<T: Message>(e: &Envelope<T, AuthoritySignInfo>) -> AuthorityName {
+    auth_sig_authority_spec(&envelope_sig_spec(e))
+}
 
 // ---------------------------------------------------------------------------
 // Cryptographic validity predicate
