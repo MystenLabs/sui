@@ -45,6 +45,7 @@ node_modules
 .tsbuildinfo
 *.tsbuildinfo
 .turbo
+.pnpm-store/
 
 # App build directories
 dist/
