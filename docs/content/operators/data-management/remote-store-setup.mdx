@@ -110,6 +110,7 @@ Writes are idempotent, so multiple indexer instances can safely write to the sam
 | `--remote-store-url <URL>` | Fetch checkpoints from an HTTPS remote store URL. Public HTTPS endpoints retain only the most recent 30 days of checkpoints. |
 | `--remote-store-s3 <BUCKET>` | Fetch checkpoints from an S3 bucket. |
 | `--rpc-api-url <URL>` | Fetch checkpoints from a full node gRPC endpoint. |
+| `--remote-store-http-header <KEY:VALUE>` | Set an arbitrary HTTP header on requests to the remote store. Can be repeated to set multiple headers. Use this when the remote store requires authentication or custom headers, for example `Authorization: Bearer <token>`. |
 
 ### Other flags
 
@@ -144,6 +145,13 @@ watermark-interval-jitter-ms = 120000
 - **`write-concurrency`**: Allows up to 500 concurrent writes to the object store. Decrease this if you observe heavy throttling from your storage provider.
 - **`watermark-interval-ms`**: Reduces the frequency of watermark updates from the framework default to avoid hot-key issues on the watermark file in the object store.
 - **`watermark-interval-jitter-ms`**: Adds random jitter to the watermark interval, staggering writes when running multiple indexer instances so they don't write to the same key simultaneously.
+
+To set custom HTTP headers for requests to the remote store (for example, when the store requires authentication), add them to the `[ingestion]` section:
+
+```toml
+[ingestion]
+remote-store-http-headers = [["Authorization", "Bearer <token>"], ["X-Custom-Header", "value"]]
+```
 
 The configuration options (`[ingestion]`, `[committer]`, `[pipeline.<name>]`) are the same as the indexer framework's standard settings. See [Pipeline architecture: Performance tuning](/develop/accessing-data/custom-indexer/pipeline-architecture#performance-tuning) for the full reference.
 
