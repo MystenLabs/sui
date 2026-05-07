@@ -81,7 +81,10 @@ impl NodeRole {
     }
 
     pub fn is_withdraw_scheduler_enabled(&self) -> bool {
-        matches!(self, Self::Validator | Self::FullNode(FullNodeSyncMode::ConsensusObserver))
+        matches!(
+            self,
+            Self::Validator | Self::FullNode(FullNodeSyncMode::ConsensusObserver)
+        )
     }
 }
 
