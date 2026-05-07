@@ -16,7 +16,6 @@ anyhow.workspace = true
 bcs.workspace = true
 better_any.workspace = true
 bumpalo.workspace = true
-crossbeam-utils.workspace = true
 dashmap.workspace = true
 fail.workspace = true
 hex.workspace = true
