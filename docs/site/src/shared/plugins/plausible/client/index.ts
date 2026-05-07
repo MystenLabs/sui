@@ -13,6 +13,15 @@ declare global {
   }
 }
 
+const BOT_PATTERNS = /bot|crawler|spider|crawling|headless|puppet|phantom|selenium|playwright|archiver|fetcher|slurp|mediapartners/i;
+
+function detectVisitorType(): "agent" | "human" {
+  const ua = navigator.userAgent || "";
+  if (BOT_PATTERNS.test(ua)) return "agent";
+  if ((navigator as any).webdriver) return "agent";
+  return "human";
+}
+
 export async function onRouteDidUpdate({ location }: { location: Location }) {
   if (!ExecutionEnvironment.canUseDOM) return;
 
@@ -72,5 +81,8 @@ export async function onRouteDidUpdate({ location }: { location: Location }) {
   track("pageview", {
     url: location.pathname + location.search + location.hash,
     referrer: document.referrer || undefined,
+    props: {
+      visitor_type: detectVisitorType(),
+    },
   });
 }
