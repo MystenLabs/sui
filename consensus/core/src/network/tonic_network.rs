@@ -62,14 +62,13 @@ pub(crate) fn max_fetch_blocks_response_bytes(
     block_refs: &[BlockRef],
     fetch_after_rounds: &[Round],
 ) -> usize {
-    let max_response_num_blocks = if fetch_after_rounds.is_empty() {
-        block_refs
-            .len()
-            .min(context.parameters.max_blocks_per_fetch)
-    } else if block_refs.is_empty() {
-        context.parameters.max_blocks_per_fetch
-    } else {
+    // Mirror the server-side limit selection in `block_sync_service::fetch_blocks`:
+    // live sync (both inputs non-empty) is capped by `max_blocks_per_sync`,
+    // every other mode by `max_blocks_per_fetch`.
+    let max_response_num_blocks = if !fetch_after_rounds.is_empty() && !block_refs.is_empty() {
         context.parameters.max_blocks_per_sync
+    } else {
+        context.parameters.max_blocks_per_fetch
     };
 
     max_response_num_blocks
@@ -1464,8 +1463,8 @@ mod tests {
         (context, client)
     }
 
-    #[test]
-    fn test_max_fetch_blocks_response_bytes_uses_response_mode_limit() {
+    #[tokio::test]
+    async fn test_max_fetch_blocks_response_bytes_uses_response_mode_limit() {
         let (mut context, _keys) = Context::new_for_test(4);
         context.parameters.max_blocks_per_fetch = 11;
         context.parameters.max_blocks_per_sync = 7;
@@ -1476,18 +1475,22 @@ mod tests {
         let block_ref = BlockRef::new(1, AuthorityIndex::new_for_test(0), BlockDigest::MIN);
         let fetch_after_rounds = vec![0; context.committee.size()];
 
+        // Commit-sync mode (block_refs only): always sized to max_blocks_per_fetch,
+        // independent of how many block_refs the caller actually requested.
         assert_eq!(
             max_fetch_blocks_response_bytes(&context, &[block_ref; 3], &[]),
-            3 * bytes_per_block
+            context.parameters.max_blocks_per_fetch * bytes_per_block
         );
         assert_eq!(
             max_fetch_blocks_response_bytes(&context, &[block_ref; 20], &[]),
             context.parameters.max_blocks_per_fetch * bytes_per_block
         );
+        // Periodic-sync mode (fetch_after_rounds only): max_blocks_per_fetch.
         assert_eq!(
             max_fetch_blocks_response_bytes(&context, &[], &fetch_after_rounds),
             context.parameters.max_blocks_per_fetch * bytes_per_block
         );
+        // Live-sync mode (both inputs non-empty): max_blocks_per_sync.
         assert_eq!(
             max_fetch_blocks_response_bytes(&context, &[block_ref], &fetch_after_rounds),
             context.parameters.max_blocks_per_sync * bytes_per_block
