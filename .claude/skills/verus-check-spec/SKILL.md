@@ -15,6 +15,17 @@ Before self-reviewing, spawn a sub-agent and ask it to:
 
 The sub-agent should not try to fix anything — only report. Review its findings before continuing.
 
+## Derive challenge theorems
+
+Take three or four behaviors you believe the spec should imply but haven't stated explicitly. Try to derive them from your spec. If a challenge theorem cannot be derived, one of two things is true: the spec is missing a constraint, or your intuition about the system is wrong. Either discovery is valuable.
+
+Examples of good challenge theorems:
+- "A quorum cannot be reached with fewer than threshold weight" — can you derive this?
+- "The same authority cannot appear twice in the voted set" — is this ruled out?
+- "An empty aggregator has total_votes == 0" — does the spec say this?
+
+Also verify the spec permits what it should: construct a clearly valid execution and confirm the spec allows it.
+
 ## Self-review checklist
 
 Work through each item. If the answer is "no" or "unclear," the spec is under-specified.
@@ -41,6 +52,21 @@ Work through each item. If the answer is "no" or "unclear," the spec is under-sp
 
 - [ ] **Commutativity.** If two operations commute, add a lemma. The proof is usually just set-algebra commutativity applied to the state-transition biconditionals.
 
+### Condition and mode coverage
+
+For each postcondition clause, ask: have all the input conditions and modes been enumerated? Most dangerous omissions are things that seem obvious to the author and are therefore never written down.
+
+- [ ] Every distinct input condition that produces different behavior has its own clause
+- [ ] Edge cases (empty set, zero weight, duplicate authority) are explicitly covered
+- [ ] Error paths are specified as precisely as the success paths
+
+### Minimal spec: avoid over-constraining
+
+A spec that rules out valid implementations is its own form of incorrectness.
+
+- [ ] **Two-implementations test.** Can you think of two different correct implementations that both satisfy your spec? If not, the spec may be over-constraining the *how* rather than the *what*.
+- [ ] No postcondition encodes a specific algorithm or data structure choice that an equivalent implementation could reasonably avoid.
+
 ### Axioms (external_body)
 
 - [ ] **Every external_body postcondition is as strong as possible.** The caller can only rely on what the external_body postconditions say. Weak postconditions here produce weak guarantees everywhere the helper is used.
@@ -49,4 +75,4 @@ Work through each item. If the answer is "no" or "unclear," the spec is under-sp
 
 ## After this step
 
-Fix any gaps found before proceeding to `/verus-trust-boundary`. An under-specified formal proof is worse than no proof — it gives false assurance.
+Fix any gaps found before proceeding to `/verus-trust-boundary`. Then, after the proof is written, run `/verus-stress-test` to verify the spec non-vacuously catches real errors. An under-specified formal proof is worse than no proof — it gives false assurance.

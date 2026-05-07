@@ -27,5 +27,8 @@ Work through these phases in order. Each has its own sub-skill with detailed gui
 5. **Write the spec and proof** (`/verus-proof`)
    Translate the informal spec into Verus `requires`/`ensures`, add proof hints, and iterate until Verus reports zero errors.
 
-6. **Verify and commit**
+6. **Stress test the spec** (`/verus-stress-test`)
+   Attack the spec to find vacuity, under-specification, and mis-specification. A green Verus run only confirms the implementation satisfies the spec — this step confirms the spec is strong enough to matter.
+
+7. **Verify and commit**
    Run `bash scripts/verus-check.sh` (zero errors across all verified crates) and `cargo check -p <crate>` (clean stable build). Commit verified code and shims together; commit debug scaffolding separately so it can be discarded.

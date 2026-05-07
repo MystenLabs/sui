@@ -44,7 +44,16 @@ What properties must hold before and after every public operation?
 - These become `requires invariant_holds()` and `ensures invariant_holds()`.
 - Example: `total_votes == Σ weight(a) for a ∈ data.dom()` is a sum invariant.
 
-## Step 4: State semantic guarantees beyond state transitions
+## Step 4: Decompose into safety and liveness
+
+Every behavioral property is either *safety* ("nothing bad ever happens") or *liveness* ("something good eventually happens"). A spec that addresses only one class is almost certainly incomplete.
+
+- **Safety**: What states are forbidden? What invariants must always hold? What can never be returned?
+- **Liveness**: What must eventually become true? (In a synchronous setting this often means: given a valid sequence of inputs, is there a path to each outcome?)
+
+A common incompleteness pattern is a spec that rules out all bad behaviors but accidentally permits a system that does nothing — which vacuously satisfies every safety property. Explicitly asking "what must eventually be *possible*?" catches this.
+
+## Step 5: State semantic guarantees beyond state transitions
 
 These are the properties callers actually care about:
 
@@ -54,12 +63,23 @@ These are the properties callers actually care about:
 
 If you can state these now, they become the most valuable part of the spec.
 
+## Step 6: Prefer declarative statements over operational ones
+
+A spec is easier to trust when a reader can see immediately that it says the right thing, without simulating execution. Prefer stating *what is true* over *how the system proceeds*:
+
+- "The lock is held by at most one process" is obviously correct.
+- "The acquire/release protocol executes steps A, B, C" requires the reader to verify the protocol is correct — which is what you're trying to avoid.
+
+If your spec clause reads like pseudocode, it is probably at the wrong level of abstraction. Step back and ask: what *property* does that pseudocode achieve?
+
 ## Checklist before moving on
 
 - [ ] The abstract state is named and defined as a spec predicate, not in terms of the concrete data structure
 - [ ] The state transition is written as a biconditional (⟺), not just one direction
 - [ ] The invariant is identified and will appear in both `requires` and `ensures`
+- [ ] Both safety properties (what is forbidden) and liveness properties (what must be possible) are addressed
 - [ ] At least one of monotonicity / commutativity / value-preservation is stated
+- [ ] Spec clauses state what is true, not how the code achieves it
 - [ ] The spec describes what callers need to know, not what the implementation does
 
 Only proceed to `/verus-check-spec` once this checklist is complete.
