@@ -105,7 +105,7 @@ With `entry`, no wrapper module can call `open_lootbox`, inspect the result, and
 
 :::caution
 
-Sui also enforces `PostRandomCommandRestrictions`: after a PTB command that uses `Random`, subsequent commands in the same PTB are restricted. Your wrapper must handle the entire flow (open and extract) in a single Move function call, not as separate PTB commands.
+Sui also enforces `PostRandomCommandRestrictions`: after a PTB command that uses `Random`, Sui restricts subsequent commands in the same PTB. Your wrapper must handle the entire flow (open and extract) in a single Move function call, not as separate PTB commands.
 
 :::
 
@@ -289,6 +289,7 @@ The `Option<flag::Flag>` field is `Some` on a win and `None` on a loss. Because 
 
 ## Troubleshooting
 
+The following sections address common issues with this example.
 ### `PostRandomCommandRestrictions` error
 
 **Symptom:** The transaction fails with an error about restricted commands after a random call.

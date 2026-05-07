@@ -36,7 +36,7 @@ Use this pattern when you need to:
 
 This example teaches:
 
-- **Ephemeral key pairs:** The zkLogin system uses short-lived Ed25519 key pairs that are valid for a configurable number of epochs. The key pair signs transactions, but the resulting signature is wrapped in a zkLogin signature that proves the signer owns the OAuth identity without revealing it.
+- **Ephemeral key pairs:** The zkLogin system uses short-lived Ed25519 key pairs that are valid for a configurable number of epochs. The key pair signs transactions, but a zkLogin signature wraps the result and proves the signer owns the OAuth identity without revealing it.
 
 - **OAuth popup flow:** The application opens an OAuth provider in a popup window, extracts the `id_token` from the URL hash, and sends it to the parent window through `postMessage`. This keeps the main application state intact during authentication.
 
@@ -250,6 +250,7 @@ The function POSTs the proof payload to `https://prover-dev.mystenlabs.com/v1`. 
 
 ## Troubleshooting
 
+The following sections address common issues with this example.
 ### OAuth popup is blocked
 
 **Symptom:** Clicking **Login with Google** does nothing, or the browser shows a popup-blocked notification.

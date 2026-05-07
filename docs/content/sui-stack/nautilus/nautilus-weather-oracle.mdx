@@ -21,7 +21,7 @@ This example demonstrates a verified oracle system that fetches real-world weath
 
 Use this pattern when you need to:
 
-- Bring external API data onchain with cryptographic proof that the data was not tampered with.
+- Bring external API data onchain with cryptographic proof that no one tampered with the data.
 
 - Build an oracle where neither the operator nor the user can forge the output.
 
@@ -67,7 +67,7 @@ sequenceDiagram
 
 The following steps walk through the flow:
 
-1. The user sends a POST request to the enclave's `/process_data` endpoint with a location string (for example, "London").
+1. The user sends a POST request to the enclave's `/process_data` endpoint with a location string (for example, `London`).
 
 2. The enclave fetches the current weather from `weatherapi.com` and extracts the location name, temperature in Celsius, and the last-updated timestamp.
 
@@ -99,7 +99,7 @@ The trust chain works through Platform Configuration Registers (PCRs), which are
 
 - **PCR2:** Identifies runtime configuration files.
 
-The Move contract stores the expected PCR values at deployment. When the enclave registers, the contract verifies the attestation document against these values. After registration, every signed response from the enclave can be verified onchain using the stored public key.
+The Move contract stores the expected PCR values at deployment. When the enclave registers, the contract verifies the attestation document against these values. After registration, you can verify every signed response from the enclave onchain using the stored public key.
 
 The enclave exposes 3 endpoints:
 
@@ -274,7 +274,8 @@ The handler fetches from `weatherapi.com`, extracts the location name and temper
 
 ## Troubleshooting
 
-### Enclave returns "Weather API timestamp is too old"
+The following sections address common issues with this example.
+### Enclave returns `Weather API timestamp is too old`
 
 **Symptom:** The `/process_data` endpoint returns an error about a stale timestamp.
 

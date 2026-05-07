@@ -10,7 +10,7 @@ path: /chat-app
 concepts: [end_to_end_encryption, seal_threshold_encryption, permissioned_groups, dynamic_fields, events, walrus_storage, relayer_pattern, session_keys]
 ---
 
-This example builds an end-to-end encrypted group chat app on Sui. Messages are encrypted client-side with AES-256-GCM before leaving the browser, routed through an offchain relayer that never sees plaintext, and archived to Walrus for decentralized persistence. Onchain Move contracts manage group membership, 7 granular permission types, and versioned encryption keys through Seal threshold encryption.
+This example builds an end-to-end encrypted group chat app on Sui. The client encrypts messages with AES-256-GCM before they leave the browser, routes them through an offchain relayer that never sees plaintext, and archives them to Walrus for decentralized persistence. Onchain Move contracts manage group membership, 7 granular permission types, and versioned encryption keys through Seal threshold encryption.
 
 ## When to use this pattern
 
@@ -27,7 +27,7 @@ Use this pattern when you need to:
 This example teaches:
 
 - **Permissioned groups:** A `PermissionedGroup<Messaging>` shared object tracks members and their permissions onchain. The relayer caches these permissions and enforces them on every API call.
-- **Envelope encryption:** The client generates a random AES-256-GCM key (the DEK), encrypts it with Seal, and stores the encrypted DEK onchain in an `EncryptionHistory` object. Messages are encrypted with the DEK locally. Seal key servers release the DEK only to members with `MessagingReader` permission.
+- **Envelope encryption:** The client generates a random AES-256-GCM key (the DEK), encrypts it with Seal, and stores the encrypted DEK onchain in an `EncryptionHistory` object. The client encrypts messages with the DEK locally. Seal key servers release the DEK only to members with `MessagingReader` permission.
 - **Key rotation:** When a member is removed, the admin atomically revokes permissions and rotates the DEK in a single transaction. The removed member can no longer decrypt new messages.
 - **Relayer pattern:** An offchain Rust service accepts encrypted messages, verifies sender signatures, checks onchain permissions through a cached membership store, and batches messages to Walrus for archival.
 - **File attachments:** Each file is individually encrypted with the group DEK, uploaded to Walrus through the publisher API, and referenced by a `quiltPatchId` in the message metadata.
@@ -245,6 +245,7 @@ The hook calls `client.sendMessage()` which encrypts the text with AES-256-GCM u
 
 ## Troubleshooting
 
+The following sections address common issues with this example.
 ### Relayer connection fails
 
 **Symptom:** The frontend shows a network error or messages do not send.

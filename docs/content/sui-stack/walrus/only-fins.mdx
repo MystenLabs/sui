@@ -43,7 +43,7 @@ This example teaches:
 
 - **Sponsored transactions:** A backend pays gas so users interact without holding SUI. The frontend sends unsigned transactions to the sponsor backend, which co-signs and returns the sponsored bytes.
 
-- **Walrus storage:** The frontend stores encrypted image blobs offchain on Walrus and references them by blob ID. Walrus blobs are publicly addressable, so encryption is required to restrict access.
+- **Walrus storage:** The frontend stores encrypted image blobs offchain on Walrus and references them by blob ID. Walrus blobs are publicly addressable, so you must encrypt content to restrict access.
 
 ## Architecture
 
@@ -300,6 +300,7 @@ The provider persists session keys to localStorage and validates them on mount. 
 
 ## Troubleshooting
 
+The following sections address common issues with this example.
 ### Package ID is missing or invalid
 
 **Symptom:** The frontend logs `Error: invalid package ID` or transactions fail with `PackageNotFound`.
