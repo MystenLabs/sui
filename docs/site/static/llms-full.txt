@@ -119,6 +119,8 @@
 ### Develop/Transaction Payment
 - [Gas In Sui](https://docs.sui.io/develop/transaction-payment/gas-in-sui.md)
 - [Gas Smashing](https://docs.sui.io/develop/transaction-payment/gas-smashing.md)
+- [Gasless Stablecoin
+    Transfers](https://docs.sui.io/develop/transaction-payment/gasless-stablecoin-transfers.md)
 - [Transaction Payment Index](https://docs.sui.io/develop/transaction-payment/index.md)
 - [Local Fee Markets](https://docs.sui.io/develop/transaction-payment/local-fee-markets.md)
 - [Sponsor Txn](https://docs.sui.io/develop/transaction-payment/sponsor-txn.md)
@@ -244,6 +246,22 @@
     Referral](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/supply-referral.md)
 - [Tpsl](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/tpsl.md)
 
+### Onchain Finance/Deepbook Predict
+- [Contract
+    Information](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information.md)
+- [Design](https://docs.sui.io/onchain-finance/deepbook-predict/design.md)
+- [Deepbook Predict Index](https://docs.sui.io/onchain-finance/deepbook-predict/index.md)
+
+### Onchain Finance/Deepbook Predict/Contract Information
+- [Market
+    Keys](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/market-keys.md)
+- [Oracle](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/oracle.md)
+- [Predict
+    Manager](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/predict-manager.md)
+- [Predict](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/predict.md)
+- [Registry](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/registry.md)
+- [Vault](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/vault.md)
+
 ### Onchain Finance/Deepbookv3
 - [Contract Information](https://docs.sui.io/onchain-finance/deepbookv3/contract-information.md)
 - [Deepbook](https://docs.sui.io/onchain-finance/deepbookv3/deepbook.md)
@@ -308,7 +326,9 @@
 - [Pas Architecture](https://docs.sui.io/onchain-finance/pas/pas-architecture.md)
 - [Pas Workflows](https://docs.sui.io/onchain-finance/pas/pas-workflows.md)
 - [Querying Assets](https://docs.sui.io/onchain-finance/pas/querying-assets.md)
+- [Payment Intents](https://docs.sui.io/onchain-finance/payment-intents.md)
 - [Payment Kit](https://docs.sui.io/onchain-finance/payment-kit.md)
+- [Payments](https://docs.sui.io/onchain-finance/payments.md)
 
 ### Onchain Finance/Tokenized Assets
 - [Asset Tokenization](https://docs.sui.io/onchain-finance/tokenized-assets/asset-tokenization.md)
@@ -339,6 +359,7 @@
 - [Updates](https://docs.sui.io/operators/full-node/updates.md)
 - [Genesis](https://docs.sui.io/operators/genesis.md)
 - [Operators Index](https://docs.sui.io/operators/index.md)
+- [Observability](https://docs.sui.io/operators/observability.md)
 - [Snapshots](https://docs.sui.io/operators/snapshots.md)
 
 ### Operators/Validator
@@ -1058,7 +1079,11 @@
 - [On Chain Primitives Index](https://docs.sui.io/sui-stack/on-chain-primitives/index.md)
 - [Randomness Onchain](https://docs.sui.io/sui-stack/on-chain-primitives/randomness-onchain.md)
 - [Sagat](https://docs.sui.io/sui-stack/sagat.md)
+
+### Sui Stack/Seal
+- [Seal Index](https://docs.sui.io/sui-stack/seal/index.md)
 - [Sui Chat App](https://docs.sui.io/sui-stack/seal/sui-chat-app.md)
+- [Sui Stack Seal](https://docs.sui.io/sui-stack/seal/sui-stack-seal.md)
 
 ### Sui Stack/Suiplay0x1
 - [Best Practices](https://docs.sui.io/sui-stack/suiplay0x1/best-practices.md)
@@ -1068,8 +1093,10 @@
 - [Wallet Integration](https://docs.sui.io/sui-stack/suiplay0x1/wallet-integration.md)
 
 ### Sui Stack/Walrus
+- [Walrus Index](https://docs.sui.io/sui-stack/walrus/index.md)
 - [Indexer Walrus](https://docs.sui.io/sui-stack/walrus/indexer-walrus.md)
 - [Only Fins](https://docs.sui.io/sui-stack/walrus/only-fins.md)
+- [Sui Stack Walrus](https://docs.sui.io/sui-stack/walrus/sui-stack-walrus.md)
 
 ### Sui Stack/Zklogin Integration
 - [Developer Account](https://docs.sui.io/sui-stack/zklogin-integration/developer-account.md)

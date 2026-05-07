@@ -47,29 +47,7 @@ This example teaches:
 
 ## Architecture
 
-The example has 4 actors and 1 onchain package. The diagram below shows the components and the calls between them.
-
-```mermaid
-graph LR
-  user([User])
-  frontend[Frontend]
-  wallet([Enoki / Wallet])
-  package[posts Move package]
-  seal[(Seal key servers)]
-  walrus[(Walrus storage)]
-  backend[Sponsor backend]
-
-  user --> frontend
-  frontend --> wallet
-  wallet --> package
-  frontend --> seal
-  seal --> package
-  frontend --> walrus
-  frontend --> backend
-  backend --> package
-```
-
-The **Frontend** builds transactions and renders post feeds as a React app. The **Enoki wallet** handles zkLogin authentication and transaction signing. The **posts Move package** stores post metadata and issues `ViewerToken` objects as [shared](/develop/objects/object-ownership/shared) and [address-owned](/develop/objects/object-ownership/address-owned) objects on Sui. **Seal key servers** hold threshold encryption keys and release them only when the Move contract confirms access through `seal_approve_access`. **Walrus** stores the actual image blobs, both encrypted and unencrypted. The **Sponsor backend** covers gas fees so users do not need SUI in their wallet.
+The example has 4 actors and 1 onchain package. The frontend builds transactions and renders post feeds as a React app. The Enoki wallet handles zkLogin authentication and transaction signing. The posts Move package stores post metadata and issues `ViewerToken` objects as [shared](/develop/objects/object-ownership/shared) and [address-owned](/develop/objects/object-ownership/address-owned) objects on Sui. Seal key servers hold threshold encryption keys and release them only when the Move contract confirms access through `seal_approve_access`. Walrus stores the actual image blobs, both encrypted and unencrypted. The sponsor backend covers gas fees so users do not need SUI in their wallet.
 
 The diagram below traces 1 full interaction from a user unlocking content to viewing the decrypted image.
 
@@ -167,13 +145,12 @@ Follow these steps to set up the example locally.
 
 ```bash
 $ git clone https://github.com/MystenLabs/onlyfins-example-app.git
-$ cd onlyfins-example-app
+$ cd onlyfins-example-app/frontend
 ```
 
 ##### Step 2: Install frontend dependencies
 
 ```bash
-$ cd frontend
 $ pnpm install
 ```
 
@@ -193,6 +170,16 @@ $ sui client publish --gas-budget 200000000
 
 Record the package ID from the publish output. You need it in the next step.
 
+```bash
+│ Published Objects:                                                                               │
+│  ┌──                                                                                             │
+│  │ PackageID: 0x29af8b7725a4cd3ba29f7c836433ea115ade7460bc5c610d9e7580d10cd991de          <---- Package ID       │
+│  │ Version: 1                                                                                    │
+│  │ Digest: 9joVfPViTuK6zfyxfFq23dxJcTXfgaBDKMXgVLAraWxv                                          │
+│  │ Modules: posts                                                                                │
+│  └──                       
+```
+
 ##### Step 5: Update the package ID
 
 Open `frontend/src/constants.ts` and replace the `POSTS_PACKAGE_ID` value with the package ID from the previous step.
@@ -200,7 +187,7 @@ Open `frontend/src/constants.ts` and replace the `POSTS_PACKAGE_ID` value with t
 ##### Step 6: Set up the backend
 
 ```bash
-$ cd ../../backend
+$ cd ../../../backend/
 $ cp .env.example .env
 ```
 
@@ -213,19 +200,24 @@ AUTHOR_3_PRIVATE_KEY=YOUR_ED25519_PRIVATE_KEY
 PACKAGE_ID=PACKAGE_ID_FROM_STEP_4
 ```
 
-##### Step 7: Encrypt and upload images
-
-The backend has 2 scripts that prepare demo content. Run them in order.
-
-The first script creates encrypted image files in `backend/encrypted/` and outputs JSON mapping files:
+To get your private key, use the command:
 
 ```bash
+$ sui keytool export --key-identity YOUR_WALLET_ADDRESS
+```
+
+Then copy the value `exportedPrivateKey`. It should start with `suiprivkey1...`
+
+##### Step 7: Encrypt and upload images
+
+The backend has 2 scripts that prepare demo content. Run them in order. The first script creates encrypted image files in `backend/encrypted/` and outputs JSON mapping files:
+
+```bash
+$ pnpm install
 $ pnpm encrypt-images
 ```
 
-Upload the encrypted and unencrypted images to Walrus, then populate the blob IDs in the generated JSON files.
-
-The second script publishes the posts onchain using the configured author key pairs:
+Upload the encrypted and unencrypted images to Walrus, then populate the blob IDs in the generated JSON files. The second script publishes the posts onchain using the configured author key pairs:
 
 ```bash
 $ pnpm create-posts
