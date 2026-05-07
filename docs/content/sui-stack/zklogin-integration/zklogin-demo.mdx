@@ -136,7 +136,7 @@ For more details, see the [zkLogin documentation](/sui-stack/zklogin-integration
 
 - [x] A Sui wallet ([Slush Wallet](https://slush.app/) or another compatible wallet)
 
-- [x] A [Google OAuth client](https://console.cloud.google.com/) and its client ID. Your Google OAuth client must have `http://localhost:3000/` set as an authorized JavaScript origin and authorized redirect URI.
+- [x] A [Google OAuth client](https://console.cloud.google.com/) and its client ID. Your Google OAuth client must have `http://localhost:5173/` set as an authorized JavaScript origin and authorized redirect URI.
 
 </TabItem>
 </Tabs>
@@ -263,7 +263,7 @@ The following sections address common issues with this example.
 
 **Symptom:** The Google OAuth popup closes immediately or never appears.
 
-**Cause:** The `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is misconfigured, the redirect URI does not match `http://localhost:3000/`, or third-party cookies are blocked.
+**Cause:** The `VITE_OAUTH_CLIENT_ID` is misconfigured, the redirect URI does not match `http://localhost:5173/`, or third-party cookies are blocked.
 
 **Fix:** Verify the Google Client ID and authorized redirect URIs in Google Cloud Console. Try a different browser or disable cookie-blocking extensions.
 

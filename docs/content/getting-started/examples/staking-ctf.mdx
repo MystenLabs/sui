@@ -81,7 +81,7 @@ The following steps walk through the exploit:
 
 ### How the vulnerability works
 
-The vulnerability is in step 3: `merge_receipts` does not validate that the hours represent actual elapsed time. It simply sums them.
+The vulnerability is in step 3: `merge_receipts` does not validate that the hours represent actual elapsed time. It sums them without validation.
 
 The `merge_receipts` function destructs 2 `StakeReceipt` objects and creates a new one with `hours_staked: hours1 + hours2`. There is no check that the combined hours correspond to real wall-clock time. The function also resets `last_update_timestamp` to the current time, erasing any evidence of how the hours accumulated.
 
