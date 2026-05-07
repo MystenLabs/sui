@@ -4,6 +4,19 @@ Translate the informal spec into Verus syntax and iterate until zero errors.
 
 ## Writing the spec
 
+### Start from the informal spec, not the implementation
+
+The spec must describe what the function *should* do, not what it *happens* to do.
+
+**Never read the implementation first and transcribe it into `requires`/`ensures`.** That produces a spec that is trivially satisfied by the current code but says nothing useful — it won't catch bugs, and it won't constrain future refactors. A spec that mirrors the implementation is not a specification; it is a tautology.
+
+Instead:
+1. Open the informal spec you wrote in `/verus-informal-spec`.
+2. Write `requires` and `ensures` directly from that document.
+3. Only look at the implementation to understand *how* to phrase a postcondition in Verus syntax — never to decide *what* to say.
+
+If you find yourself writing a postcondition that starts "the function calls X, so ensures X ran," stop. Ask instead: "What property does the caller care about after this returns?" That is the postcondition.
+
 **Name your predicates.** Define `open spec fn has_voted`, `invariant_holds`, `all_sigs_valid`, etc. rather than inlining complex expressions in `requires`/`ensures`. Named predicates are reusable across lemmas and make specs readable.
 
 **Use biconditionals.** The state-transition postcondition should be `<=>` not `==>`:
