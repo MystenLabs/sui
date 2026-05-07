@@ -18,7 +18,7 @@ The following steps align with those in the diagram:
 
 1. Each validator executes the transaction once it is committed and accepted by consensus. Execution is deterministic, so all honest validators produce the same sequence of effects.
 
-1. Once the transaction has executed, validators return the transaction output (effects) to the *Transaction Driver* on the full node. *Transaction Driver* certifies the effects by ensuring either the effects are acknowledged by a quorum of validators, or the effects are included in a certified checkpoint. At this point the full node holds proof of settlement finality: the transaction is irreversible.
+1. After the validators execute the transaction, they return the transaction output (effects) to the *Transaction Driver* on the full node. *Transaction Driver* certifies the effects by ensuring either that a quorum of validators acknowledge them, or that a certified checkpoint includes them. At this point the full node holds proof of settlement finality: the transaction is irreversible.
 
 1. *Transaction Driver* returns the certified effects to the user (or the calling application). The user now has confirmation that the transaction has settled and can act on its outcome.
 
@@ -44,13 +44,13 @@ If all the validity checks pass, the validator includes the transaction in its n
 
 ## Transaction voting and sequencing in consensus
 
-In Sui consensus, each validator broadcasts its proposed blocks to peer validators. When a peer receives a block, the block and its transactions are not yet trusted. Each peer runs the same validity checks (including the ones listed above) to detect and handle misbehavior such as attempts to double-spend. Only after a block and its transactions pass these checks do the receiving validators include accept votes for those transactions in their own next blocks.
+In Sui consensus, each validator broadcasts its proposed blocks to peer validators. When a peer receives a block, it does not yet trust the block or its transactions. Each peer runs the same validity checks (including the ones listed above) to detect and handle misbehavior such as attempts to double-spend. Only after a block and its transactions pass these checks do the receiving validators include accept votes for those transactions in their own next blocks.
 
-If valid, the user transaction is eventually included in the deterministic output of Sui consensus.
+If valid, Sui consensus eventually includes the user transaction in its deterministic output.
 
 ## Transaction effects and finality
 
-Transactions emitted by consensus are executed by Sui's parallel execution engine. Transactions that don't conflict on inputs execute completely in parallel. Transaction execution produces the *transaction effects*: the list of all actions the transaction took:
+Sui's parallel execution engine executes transactions emitted by consensus. Transactions that don't conflict on inputs execute completely in parallel. Transaction execution produces the *transaction effects*: the list of all actions the transaction took:
 
 - All the objects that were mutated, created, wrapped, unwrapped, or deleted.
 
@@ -60,11 +60,11 @@ Transactions emitted by consensus are executed by Sui's parallel execution engin
 
 After execution, the validator returns either the effects digest or the full effects together with related data such as events and updated objects, depending on what the full node requested. The full node only needs full effects from a single validator, plus quorum acknowledgments of the same effects digest from the others.
 
-If the *Transaction Driver* cannot collect a quorum of acknowledgments — for example, when the responding validators are slow or partitioned — it falls back to waiting for the transaction to appear in a certified checkpoint. Inclusion in a certified checkpoint is itself proof of finality.
+If the *Transaction Driver* cannot collect a quorum of acknowledgments (for example, when slow or partitioned validators delay responding), it falls back to waiting for the transaction to appear in a certified checkpoint. Inclusion in a certified checkpoint is itself proof of finality.
 
 :::tip
 
-Certified effects guarantee transaction finality. After a full node observes certified effects, the transaction is guaranteed to be included in a checkpoint and cannot be reverted.
+Certified effects guarantee transaction finality. After a full node observes certified effects, Sui includes the transaction in a checkpoint and never reverts it.
 
 :::
 
@@ -74,25 +74,25 @@ Inclusion in a checkpoint is the final stage in the life of a transaction. The c
 
 Validators can deterministically split a large consensus commit into multiple checkpoints, or merge multiple consensus commits into a single checkpoint. A checkpoint contains, among other data, the digests of the included transactions and their effects.
 
-After the checkpoint is produced, the transaction has reached the end of its life cycle and is part of Sui's permanent record. Indexers consume checkpoints as their input — these include the indexing logic shipped with Sui full nodes, as well as custom indexers and indexing frameworks built by the broader ecosystem.
+After the checkpoint is produced, the transaction has reached the end of its life cycle and is part of Sui's permanent record. Indexers consume checkpoints as their input. Examples include the indexing logic shipped with Sui full nodes, as well as custom indexers and indexing frameworks built by the broader ecosystem.
 
 ## Finality timing
 
-End-to-end finality typically takes 400–700 ms, measured from when the user submits the transaction to when the full node returns a finality confirmation. The exact latency depends on the locations of the user and the full node. After finality, the user knows the transaction is irreversible and will be processed within the epoch.
+End-to-end finality typically takes 400–700 ms, measured from when the user submits the transaction to when the full node returns a finality confirmation. The exact latency depends on the locations of the user and the full node. After finality, the user knows the transaction is irreversible and that the network processes it within the epoch.
 
 ## Epoch change
 
-Approximately every 24 hours, the Sui [Testnet](/develop/sui-architecture/networks) and [Mainnet](/develop/sui-architecture/networks) networks enter [epoch](/develop/sui-architecture/epochs) change. During an epoch change, the network calculates and distributes [staking rewards](/develop/sui-architecture/tokenomics-overview), applies pending validator metadata changes, and performs other network maintenance. User transactions are temporarily delayed for a few hundred milliseconds until the new epoch begins. Sui full nodes and validators automatically retry user transactions on epoch change, so this short delay is transparent to most users.
+Approximately every 24 hours, the Sui [Testnet](/develop/sui-architecture/networks) and [Mainnet](/develop/sui-architecture/networks) networks enter [epoch](/develop/sui-architecture/epochs) change. During an epoch change, the network calculates and distributes [staking rewards](/develop/sui-architecture/tokenomics-overview), applies pending validator metadata changes, and performs other network maintenance. The network temporarily delays user transactions for a few hundred milliseconds until the new epoch begins. Sui full nodes and validators automatically retry user transactions on epoch change, so this short delay is transparent to most users.
 
 ## Transaction idempotence and finality verification
 
-It is best practice to store signed transactions locally before sending them to a full node, and to only remove them after receiving confirmation of finality or invalidity from a full node. When the app restarts, it can resend all pending transactions to full nodes. This is safe because Sui transactions are idempotent: a given transaction is executed at most once. Resending an executed transaction returns either its original effects or an indication that the transaction has become invalid.
+It is best practice to store signed transactions locally before sending them to a full node, and to only remove them after receiving confirmation of finality or invalidity from a full node. When the app restarts, it can resend all pending transactions to full nodes. This is safe because Sui transactions are idempotent: Sui executes a given transaction at most once. Resending an executed transaction returns either its original effects or an indication that the transaction has become invalid.
 
 To verify whether a pending transaction has been finalized, an app can query a trusted full node with the `getTransactionBlock` method:
 
-- If the response contains transaction details, the transaction has been finalized and executed.
+- If the response contains transaction details, Sui has finalized and executed the transaction.
 
-- If the response is `None`, the transaction was either never finalized or has been finalized but is not yet known to this full node. In this case, the safer option is to resubmit the transaction; as noted above, Sui transactions are idempotent.
+- If the response is `None`, either Sui never finalized the transaction or this full node does not yet know about it. In this case, the safer option is to resubmit the transaction; as noted above, Sui transactions are idempotent.
 
 The full node must wait for the transaction to be checkpointed and state-synced, which normally takes a few seconds. It then executes the transaction and applies the resulting state changes locally.
 
