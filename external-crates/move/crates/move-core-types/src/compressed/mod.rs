@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{fmt, sync::Arc};
+
 pub mod annotated;
 pub mod runtime;
 
@@ -28,6 +30,31 @@ const _: () = {
 /// canonical `VariantTag` lives in `move-binary-format` but cannot be
 /// referenced from here (circular dependency), so we define a local alias.
 pub type VariantTag = u16;
+
+/// Pool family for compact layout views.
+///
+/// Owned layouts use [`ArcPool`] so clones share the node pool. Borrowed
+/// layouts use [`RefPool`] to navigate an existing pool without cloning field
+/// slices.
+pub trait LayoutPool<'a>: Clone {
+    type Slice<T: 'a + fmt::Debug>: AsRef<[T]> + Clone + fmt::Debug;
+}
+
+/// Shared, owned pool for compact layouts.
+#[derive(Debug, Clone)]
+pub struct ArcPool;
+
+/// Borrowed pool for compact layout views.
+#[derive(Debug, Clone)]
+pub struct RefPool;
+
+impl<'a> LayoutPool<'a> for ArcPool {
+    type Slice<T: 'a + fmt::Debug> = Arc<[T]>;
+}
+
+impl<'a> LayoutPool<'a> for RefPool {
+    type Slice<T: 'a + fmt::Debug> = &'a [T];
+}
 
 /// Discriminant for primitive (leaf) Move types, encoded inline in a
 /// [`LayoutRef`] rather than stored in the node table.
