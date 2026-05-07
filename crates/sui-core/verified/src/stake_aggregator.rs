@@ -506,6 +506,34 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
 
 verus! {
 
+// ---------------------------------------------------------------------------
+// Spec predicates for the AuthoritySignInfo specialisation
+// ---------------------------------------------------------------------------
+
+/// All authorities with positive committee weight have cryptographically valid
+/// stored signatures.  This is the "clean state" invariant: established on a
+/// fresh aggregator and maintained by every call to `insert` when the caller
+/// supplies a valid signature.
+pub open spec fn all_sigs_valid<const STRENGTH: bool>(
+    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
+) -> bool {
+    forall|a: AuthorityName|
+        agg.has_voted(a) && committee_weight_of(&agg.committee, a) > 0
+            ==> #[trigger] sig_is_valid(&agg.data@[a], &agg.committee)
+}
+
+/// The aggregated weight meets the quorum threshold.
+/// Under `all_sigs_valid`, every stored weighted vote is valid, so
+/// `total_votes` already counts only valid votes and this reduces to
+/// `total_votes >= threshold`.  The spec is stated in those simple terms
+/// rather than re-summing over the valid subset.
+pub open spec fn reaches_quorum<const STRENGTH: bool>(
+    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
+) -> bool {
+    agg.total_votes >= committee_threshold_spec(&agg.committee, STRENGTH)
+}
+
+
 pub enum InsertResult<CertT> {
     QuorumReached(CertT),
     Failed {
@@ -549,26 +577,18 @@ fn try_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
     requires
         old(agg).invariant_holds(),
         committee_unique(&old(agg).committee),
+        // All stored sigs are valid: no eviction will occur, the batch BLS
+        // aggregation succeeds, and QuorumReached is returned.
+        all_sigs_valid::<STRENGTH>(old(agg)),
     ensures
-        // Committee reference is never mutated.
         agg.committee == old(agg).committee,
-        // Sum invariant is re-established after any eviction.
         agg.invariant_holds(),
-        // Eviction can only remove entries, never add new ones.
-        forall|a: AuthorityName| agg.has_voted(a) ==> #[trigger] old(agg).has_voted(a),
-        // QuorumReached is only returned when the running total meets the threshold.
-        // (BLS passed without eviction, so total_votes is unchanged from the post-
-        //  insert_generic state which already satisfied total >= threshold.)
-        out is QuorumReached ==> agg.total_votes >= committee_threshold_spec(&agg.committee, STRENGTH),
-        // An entry is evicted only if its sig fails verification.  Any entry
-        // whose sig satisfies sig_is_valid is guaranteed to survive.
-        forall|a: AuthorityName|
-            old(agg).has_voted(a)
-            && sig_is_valid(&old(agg).data@[a], &old(agg).committee)
-                ==> #[trigger] agg.has_voted(a),
-        // Values of surviving entries are never modified.
-        forall|a: AuthorityName|
-            agg.has_voted(a) ==> #[trigger] agg.data@[a] == old(agg).data@[a],
+        all_sigs_valid::<STRENGTH>(agg),
+        // With all-valid sigs, no eviction happens: data and total_votes are unchanged.
+        agg.data@ == old(agg).data@,
+        agg.total_votes == old(agg).total_votes,
+        // Batch BLS of all-valid sigs always succeeds: QuorumReached is certain.
+        out is QuorumReached,
 {
     match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
         agg.data.inner.values().cloned().collect(),
@@ -621,11 +641,18 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
     ///
     /// # Algebraic model
     ///
-    /// Treat the aggregator as `{ voted: Set<Authority>, committee }`.
-    /// `insert` can only grow `voted` by one element (the incoming authority)
-    /// or shrink it (eviction of bad sigs in the BLS fallback path).
+    /// The aggregator is a set of (authority, valid-sig) pairs tracked against a
+    /// fixed committee.  `insert` is called with a cryptographically valid sig
+    /// (required via precondition) from an authority not yet in the set.
     ///
-    /// After `insert`, `voted` is a subset of `old(voted) ∪ {authority}`.
+    /// The return variant is fully determined by the pre-state:
+    ///
+    ///   Failed        ⟺   epoch mismatch  ∨  duplicate authority  ∨  weight = 0
+    ///   QuorumReached ⟺   new valid sig and the running total now meets threshold
+    ///   NotEnoughVotes ⟺  new valid sig but running total still below threshold
+    ///
+    /// Under this model the state-transition is always set-union: after a
+    /// successful (non-Failed) insert, `voted` = `old(voted) ∪ {authority}`.
     pub fn insert<T: Message + Serialize>(
         &mut self,
         envelope: Envelope<T, AuthoritySignInfo>,
@@ -633,45 +660,50 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
         requires
             old(self).invariant_holds(),
             committee_unique(&old(self).committee),
-            // Overflow guard: required by insert_generic. In practice bounded
-            // by the total committee stake, but we leave that proof for later.
             old(self).total_votes as int
                 + committee_weight_of(&old(self).committee, envelope_authority(&envelope))
                 <= u64::MAX as int,
+            // All previously stored sigs are valid — the aggregator is in a clean state.
+            all_sigs_valid::<STRENGTH>(old(self)),
+            // The incoming sig is cryptographically valid.
+            sig_is_valid(&envelope_sig_spec(&envelope), &old(self).committee),
         ensures
             self.committee == old(self).committee,
             self.invariant_holds(),
-            // Epoch mismatch always yields Failed with no state change.
-            envelope_epoch(&envelope) != committee_epoch_spec(&old(self).committee)
-                ==> out is Failed,
-            // has_voted can only change by gaining {authority} or losing entries
-            // via eviction; it never gains any authority other than the one in
-            // the envelope.
-            forall|a: AuthorityName|
-                self.has_voted(a)
-                    ==> old(self).has_voted(a) || a == envelope_authority(&envelope),
-            // Monotonicity w.r.t. valid sigs: an entry present before the call
-            // whose sig satisfies sig_is_valid is guaranteed to still be present.
-            // (Valid sigs are never evicted by the BLS fallback path.)
-            forall|a: AuthorityName|
-                old(self).has_voted(a)
-                && sig_is_valid(&old(self).data@[a], &old(self).committee)
-                    ==> #[trigger] self.has_voted(a),
+            all_sigs_valid::<STRENGTH>(self),
 
-            // === Return value characterization ===
-            // Duplicate authority always yields Failed.
-            old(self).has_voted(envelope_authority(&envelope)) ==> out is Failed,
-            // Weight-zero new authority always yields Failed.
-            !old(self).has_voted(envelope_authority(&envelope))
-            && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) == 0
-                ==> out is Failed,
-            // NotEnoughVotes means the authority was new and had positive weight.
-            out is NotEnoughVotes
-                ==> !old(self).has_voted(envelope_authority(&envelope))
-                    && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0,
-            // QuorumReached means the running total now meets the threshold.
-            out is QuorumReached
-                ==> self.total_votes >= committee_threshold_spec(&self.committee, STRENGTH),
+            // === State transition ===
+            // The voted set grows by exactly {authority} on non-Failed paths.
+            envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee)
+                && !old(self).has_voted(envelope_authority(&envelope))
+                && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
+                ==> forall|a: AuthorityName|
+                        self.has_voted(a)
+                            <==> (#[trigger] old(self).has_voted(a) || a == envelope_authority(&envelope)),
+
+            // === Return value (fully biconditional) ===
+
+            // Failed iff the input is structurally invalid: wrong epoch, duplicate
+            // authority, or zero committee weight.
+            (out is Failed)
+                <==> (envelope_epoch(&envelope) != committee_epoch_spec(&old(self).committee)
+                      || old(self).has_voted(envelope_authority(&envelope))
+                      || committee_weight_of(&old(self).committee, envelope_authority(&envelope)) == 0),
+
+            // QuorumReached iff the new sig is valid (precondition), the input is
+            // structurally valid, and the running total now meets the threshold.
+            (out is QuorumReached)
+                <==> (envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee)
+                      && !old(self).has_voted(envelope_authority(&envelope))
+                      && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
+                      && reaches_quorum::<STRENGTH>(self)),
+
+            // NotEnoughVotes iff structurally valid but quorum not yet reached.
+            (out is NotEnoughVotes)
+                <==> (envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee)
+                      && !old(self).has_voted(envelope_authority(&envelope))
+                      && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
+                      && !reaches_quorum::<STRENGTH>(self)),
     {
         let ghost pre_sig = envelope_sig_spec(&envelope);
 
