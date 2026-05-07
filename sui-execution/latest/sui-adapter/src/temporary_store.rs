@@ -1188,8 +1188,13 @@ impl TemporaryStore<'_> {
         let mut ptb_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
         for (idx, event) in self.execution_results.accumulator_events.iter().enumerate() {
             // Only Balance<T> accumulators are supported today; extend this filter when
-            // additional funds-accumulator types are introduced.
+            // additional funds-accumulator types are introduced. The debug_fatal flags any
+            // new shape so this check is updated alongside it instead of silently skipping.
             if !Balance::is_balance_type(&event.write.address.ty) {
+                debug_fatal!(
+                    "Unexpected non-Balance accumulator event type: {:?}",
+                    event.write.address.ty
+                );
                 continue;
             }
             let is_ptb_emitted = self
