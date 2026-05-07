@@ -22,6 +22,17 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
         self,
         deserializer: D,
     ) -> Result<Self::Value, D::Error> {
+        self.as_ref().deserialize(deserializer)
+    }
+}
+
+impl<'a, 'd> serde::de::DeserializeSeed<'d> for MoveTypeLayoutRef<'a> {
+    type Value = AnnValue;
+
+    fn deserialize<D: serde::de::Deserializer<'d>>(
+        self,
+        deserializer: D,
+    ) -> Result<Self::Value, D::Error> {
         match self.as_view() {
             MoveLayoutView::Bool => bool::deserialize(deserializer).map(AnnValue::Bool),
             MoveLayoutView::U8 => u8::deserialize(deserializer).map(AnnValue::U8),
@@ -39,7 +50,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
             MoveLayoutView::Struct(sv) => {
                 let fields = deserializer.deserialize_tuple(
                     sv.field_count(),
-                    CompressedStructFieldVisitor(&sv.fields),
+                    CompressedStructFieldVisitor(sv.fields_layout()),
                 )?;
                 Ok(AnnValue::Struct(AnnStruct {
                     type_: sv.type_().clone(),
@@ -48,7 +59,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
             }
             MoveLayoutView::Enum(ev) => {
                 let (variant_name, tag, fields) =
-                    deserializer.deserialize_tuple(2, CompressedEnumFieldVisitor(&ev))?;
+                    deserializer.deserialize_tuple(2, CompressedEnumFieldVisitor(ev))?;
                 Ok(AnnValue::Variant(AnnVariant {
                     type_: ev.type_().clone(),
                     variant_name,
@@ -57,15 +68,15 @@ impl<'d> serde::de::DeserializeSeed<'d> for &MoveTypeLayout {
                 }))
             }
             MoveLayoutView::Vector(vv) => Ok(AnnValue::Vector(
-                deserializer.deserialize_seq(CompressedVectorVisitor(&vv))?,
+                deserializer.deserialize_seq(CompressedVectorVisitor(vv))?,
             )),
         }
     }
 }
 
-struct CompressedVectorVisitor<'a>(&'a MoveTypeLayout);
+struct CompressedVectorVisitor<'a>(MoveTypeLayoutRef<'a>);
 
-impl<'d> serde::de::Visitor<'d> for CompressedVectorVisitor<'_> {
+impl<'a, 'd> serde::de::Visitor<'d> for CompressedVectorVisitor<'a> {
     type Value = Vec<AnnValue>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -84,9 +95,9 @@ impl<'d> serde::de::Visitor<'d> for CompressedVectorVisitor<'_> {
     }
 }
 
-struct CompressedStructFieldVisitor<'a>(&'a MoveFieldsLayout);
+struct CompressedStructFieldVisitor<'a>(MoveFieldsLayout<'a>);
 
-impl<'d> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'_> {
+impl<'a, 'd> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'a> {
     type Value = Vec<(Identifier, AnnValue)>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -99,7 +110,7 @@ impl<'d> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'_> {
     {
         let mut vals = Vec::new();
         for (i, (name, field_layout)) in self.0.fields().enumerate() {
-            match seq.next_element_seed(&field_layout)? {
+            match seq.next_element_seed(field_layout)? {
                 Some(val) => vals.push((name.clone(), val)),
                 None => return Err(A::Error::invalid_length(i, &self)),
             }
@@ -108,9 +119,9 @@ impl<'d> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'_> {
     }
 }
 
-struct CompressedEnumFieldVisitor<'a>(&'a MoveEnumLayout);
+struct CompressedEnumFieldVisitor<'a>(MoveEnumLayout<'a>);
 
-impl<'d> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'_> {
+impl<'a, 'd> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'a> {
     type Value = (Identifier, VariantTag, Vec<(Identifier, AnnValue)>);
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -149,9 +160,9 @@ impl<'d> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'_> {
     }
 }
 
-struct CompressedVariantFieldSeed<'a>(&'a MoveFieldsLayout);
+struct CompressedVariantFieldSeed<'a>(MoveFieldsLayout<'a>);
 
-impl<'d> serde::de::DeserializeSeed<'d> for CompressedVariantFieldSeed<'_> {
+impl<'a, 'd> serde::de::DeserializeSeed<'d> for CompressedVariantFieldSeed<'a> {
     type Value = Vec<(Identifier, AnnValue)>;
 
     fn deserialize<D: serde::de::Deserializer<'d>>(
