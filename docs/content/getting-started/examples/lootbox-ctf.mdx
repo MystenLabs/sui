@@ -36,7 +36,7 @@ Use this pattern when you need to:
 
 This example teaches:
 
-- **Public vs entry visibility:** An `entry` function can only be called directly from a programmable transaction block (PTB), not from another Move module. A `public` function can be called from anywhere, including other modules that inspect the result and conditionally abort.
+- **Public vs entry visibility:** You can call an `entry` function only from a programmable transaction block (PTB), not from another Move module. You can call a `public` function from anywhere, including from other modules that inspect the result and conditionally abort.
 
 - **Composition attack:** When a randomness-consuming function is `public`, an attacker deploys a wrapper module that calls it, checks the outcome, and aborts if unfavorable. The attacker pays gas only for the winning transaction. The transaction never transfers the USDC payment on losing attempts because the entire transaction rolls back.
 
