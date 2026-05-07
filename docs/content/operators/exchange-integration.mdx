@@ -7,6 +7,10 @@ keywords: [ integrate sui, integrate with SUI token, sui tokens, SUI, integrate 
 
 This topic describes how to integrate SUI, the token native to the Sui network, into a cryptocurrency exchange. The specific requirements and processes to implement an integration vary between exchanges. Rather than provide a step-by-step guide, this topic provides information about the primary tasks necessary to complete an integration. After the guidance about how to configure an integration, you can also find information and code samples related to staking on the Sui network.
 
+:::info
+The JSON-RPC API used in some examples on this page is deprecated. For new integrations, use the gRPC or GraphQL APIs. See the [Sui API documentation](/sui-api-ref) for migration guidance.
+:::
+
 ## Requirements to configure a SUI integration
 
 The requirements to configure a SUI integration include:
@@ -48,12 +52,12 @@ Sui supports both addresses with and without a `0x` prefix. Sui recommends that 
 
 You can track balance changes by calling `suix_getBalance` at predefined intervals. This call returns the total balance for an address. The total includes any coin or token type, but this document focuses on SUI. You can track changes in the total balance for an address between subsequent `suix_getBalance` requests.
 
-The following bash example demonstrates how to use `suix_getBalance` for address `0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3`. If you use a network other than Devnet, replace the value for `rpc` with the URL to the appropriate full node.
+The following bash example demonstrates how to use `suix_getBalance` for address `0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3`. Replace the value for `rpc` with the URL to the appropriate full node for your target network.
 
 ```sh
-rpc="https://fullnode.devnet.sui.io:443"
+rpc="https://fullnode.mainnet.sui.io:443"
 address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
-data="{\"jsonrpc\": \"2.0\", \"method\": \"suix_getBalance\", \"id\": 1, \"params\": {\"owner\": \"$owner\"}}"
+data="{\"jsonrpc\": \"2.0\", \"method\": \"suix_getBalance\", \"id\": 1, \"params\": {\"owner\": \"$address\"}}"
 curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 ```
 
@@ -73,7 +77,8 @@ The response is a JSON object that includes the `totalBalance` for the address:
 }
 ```
 
-The following example demonstrates using `suix_getBalance` in Rust:
+The following example demonstrates using `suix_getBalance` in Rust. This example uses the JSON-RPC Rust SDK, which is deprecated. For new integrations, use the gRPC SDK (`sui-rust-sdk` with `SuiGrpcClient`) or GraphQL instead.
+
 ```rust
 use std::str::FromStr;
 use sui_sdk::types::base_types::SuiAddress;
@@ -83,11 +88,11 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
    let sui = SuiClientBuilder::default().build(
-      "https://fullnode.devnet.sui.io:443",
+      "https://fullnode.mainnet.sui.io:443",
    ).await.unwrap();
    let address = SuiAddress::from_str("0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3")?;
-   let objects = sui.read_api().get_balance(address).await?;
-   println!("{:?}", objects);
+   let balance = sui.read_api().get_balance(address).await?;
+   println!("{:?}", balance);
    Ok(())
 }
 ```
@@ -98,9 +103,9 @@ You can also track the balance for an address by subscribing to all of the event
 The following example demonstrates how to filter events for an address using bash and cURL:
 
 ```sh
-rpc="https://fullnode.devnet.sui.io:443"
+rpc="https://fullnode.mainnet.sui.io:443"
 address="0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3"
-data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"sui_getEvents\", \"params\": [{\"Recipient\": {\"AddressOwner\": \"0x849d63687330447431a2e76fecca4f3c10f6884ebaa9909674123c6c662612a3\"}}, null, null, true ]}"
+data="{\"jsonrpc\": \"2.0\", \"id\":1, \"method\": \"suix_queryEvents\", \"params\": [{\"Sender\": \"$address\"}, null, null, true ]}"
 curl -X POST -H 'Content-type: application/json' --data-raw "$data" $rpc
 ```
 
