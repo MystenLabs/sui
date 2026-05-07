@@ -59,6 +59,9 @@ default = []
 fuzzing = ["move-core-types/fuzzing"]
 failpoints = ["fail/failpoints"]
 testing = []
+# Enables runtime telemetry recording. Off in production for zero overhead; auto-enabled under
+# `cfg(test)` so the crate's own unit tests keep working without an explicit flag.
+telemetry = []
 lazy_natives = []
 tiered-gas = []
 tracing = [

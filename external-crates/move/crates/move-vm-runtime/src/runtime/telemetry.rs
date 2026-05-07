@@ -4,10 +4,20 @@
 #![allow(clippy::cast_possible_truncation)]
 use std::{
     sync::atomic::{AtomicU64, Ordering},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crate::cache::move_cache::MoveCache;
+
+/// Compile-time gate for runtime telemetry. `false` in production (the default), so every
+/// record/report path const-folds to a no-op and `Instant::now()` is skipped. Enabled
+/// automatically under `cfg(test)` so the crate's own unit tests keep working, and via the
+/// `telemetry` Cargo feature for builds that want telemetry without running tests
+/// (e.g. benchmarks, ad-hoc profiling).
+#[cfg(any(test, feature = "telemetry"))]
+pub const TELEMETRY_ENABLED: bool = true;
+#[cfg(not(any(test, feature = "telemetry")))]
+pub const TELEMETRY_ENABLED: bool = false;
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -179,11 +189,12 @@ pub(crate) enum TimerKind {
 
 /// Timer
 /// Used for timing various parts of the runtime. Must be reported or will panic on drop.
+/// `start_time` is `None` when telemetry is compile-time disabled, so `Instant::now()` is skipped.
 pub(crate) struct Timer {
     kind: TimerKind,
     count: Option<u64>,
     reported: bool,
-    start_time: std::time::Instant,
+    start_time: Option<Instant>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -223,7 +234,11 @@ impl TelemetryContext {
 
     /// Update the telemetry by recording the context. Note that this mutates the context in-place
     /// via atomic update operations.
+    #[inline]
     pub(crate) fn record_transaction(&self, transaction: TransactionTelemetryContext) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         const ORDERING: Ordering = Ordering::Relaxed;
         macro_rules! update_duration_field {
             ($duration:expr, $count:expr, $total_field:ident, $count_field:ident) => {{
@@ -376,26 +391,36 @@ impl TransactionTelemetryContext {
         }
     }
 
+    #[inline]
     pub(crate) fn make_timer(&self, kind: TimerKind) -> Timer {
         Timer {
             kind,
             count: None,
-            reported: false,
-            start_time: std::time::Instant::now(),
+            // When disabled, mark as already-reported so Drop's debug_assert is satisfied.
+            reported: !TELEMETRY_ENABLED,
+            start_time: TELEMETRY_ENABLED.then(Instant::now),
         }
     }
 
+    #[inline]
     pub(crate) fn make_timer_with_count(&self, kind: TimerKind, count: u64) -> Timer {
         Timer {
             kind,
             count: Some(count),
-            reported: false,
-            start_time: std::time::Instant::now(),
+            reported: !TELEMETRY_ENABLED,
+            start_time: TELEMETRY_ENABLED.then(Instant::now),
         }
     }
 
+    #[inline]
     pub(crate) fn report_time(&mut self, timer: Timer) {
-        let duration = timer.start_time.elapsed();
+        if !TELEMETRY_ENABLED {
+            return;
+        }
+        let Some(start) = timer.start_time else {
+            return;
+        };
+        let duration = start.elapsed();
         let mut timer = timer;
         timer.reported = true;
         match timer.kind {
@@ -435,48 +460,87 @@ impl TransactionTelemetryContext {
         }
     }
 
+    #[inline]
     pub(crate) fn record_load_time(&mut self, load_time: Duration, load_count: u64) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         add_or_set!(self, load_time);
         self.load_count = self.load_count.saturating_add(load_count);
     }
 
+    #[inline]
     pub(crate) fn record_validation_time(&mut self, validation_time: Duration, valid_count: u64) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         add_or_set!(self, validation_time);
         self.validation_count = self.validation_count.saturating_add(valid_count);
     }
 
+    #[inline]
     pub(crate) fn record_jit_time(&mut self, jit_time: Duration, jit_count: u64) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         add_or_set!(self, jit_time);
         self.jit_count = self.jit_count.saturating_add(jit_count);
     }
 
+    #[inline]
     pub(crate) fn record_execution_time(&mut self, execution_time: Duration) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         add_or_set!(self, execution_time)
     }
 
+    #[inline]
     pub(crate) fn record_interpreter_time(&mut self, interpreter_time: Duration) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         add_or_set!(self, interpreter_time)
     }
 
+    #[inline]
     pub(crate) fn record_total_time(&mut self, total_time: Duration) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         self.total_time = self.total_time.saturating_add(total_time);
     }
 
+    #[inline]
     pub(crate) fn record_redundant_compilation(&mut self) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         self.redundant_compilations = self.redundant_compilations.saturating_add(1);
     }
 
+    #[inline]
     pub(crate) fn record_callstack_size(&mut self, callstack_size: u64) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         self.max_callstack_size = self.max_callstack_size.max(callstack_size);
     }
 
+    #[inline]
     pub(crate) fn record_valuestack_size(&mut self, valuestack_size: u64) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         self.max_valuestack_size = self.max_valuestack_size.max(valuestack_size);
     }
 }
 
 impl Drop for Timer {
     fn drop(&mut self) {
+        if !TELEMETRY_ENABLED {
+            return;
+        }
         if !self.reported {
             debug_assert!(
                 false,
