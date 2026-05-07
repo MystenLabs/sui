@@ -382,6 +382,40 @@ const config = {
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
       image: "img/sui-doc-og.png",
+      mermaid: {
+        theme: {
+          light: "base",
+          dark: "base",
+        },
+        options: {
+          themeVariables: {
+            primaryColor: "#000000",
+            primaryTextColor: "#FFFFFF",
+            primaryBorderColor: "#6C7584",
+            secondaryColor: "#6C7584",
+            secondaryTextColor: "#FFFFFF",
+            tertiaryColor: "#298DFF",
+            tertiaryTextColor: "#FFFFFF",
+            lineColor: "#298DFF",
+            background: "#FFFFFF",
+            mainBkg: "#000000",
+            secondBkg: "#6C7584",
+            noteBkgColor: "#E6F1FB",
+            noteTextColor: "#000000",
+            noteBorderColor: "#298DFF",
+            activationBkgColor: "#298DFF",
+            activationBorderColor: "#185FA5",
+            fontSize: "14px",
+            fontFamily: "Inter, sans-serif",
+            signalColor: "#298DFF",
+            signalTextColor: "#298DFF",
+            labelBoxBkgColor: "#000000",
+            labelBoxBorderColor: "#6C7584",
+            labelTextColor: "#FFFFFF",
+            loopTextColor: "#FFFFFF",
+          },
+        },
+      },
       docs: {
         sidebar: {
           autoCollapseCategories: true,
