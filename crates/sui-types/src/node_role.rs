@@ -1,6 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::AuthorityName;
+use crate::committee::Committee;
+
 /// How a full node syncs data from the network.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FullNodeSyncMode {
@@ -26,6 +29,23 @@ pub enum NodeRole {
 }
 
 impl NodeRole {
+    /// Determines the node role from committee membership and observer configuration.
+    /// This is the single source of truth for role derivation — used both at startup
+    /// (with the latest committee from CommitteeStore) and per-epoch (in AuthorityPerEpochStore).
+    pub fn from_committee(
+        committee: &Committee,
+        name: &AuthorityName,
+        has_observer_config: bool,
+    ) -> Self {
+        if committee.authority_exists(name) {
+            NodeRole::Validator
+        } else if has_observer_config {
+            NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+        } else {
+            NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+        }
+    }
+
     pub fn is_fullnode(&self) -> bool {
         matches!(self, Self::FullNode(_))
     }
@@ -48,16 +68,6 @@ impl NodeRole {
         matches!(self, Self::Validator)
     }
 
-    /// Whether this node should run fork detection and recovery at startup.
-    // Fork detection and recovery is only relevant for validators and full nodes that run in observer mode.
-    // Fullnodes that run in checkpoint state sync mode only don't need fork checking
-    pub fn should_check_forks(&self) -> bool {
-        matches!(
-            self,
-            Self::Validator | Self::FullNode(FullNodeSyncMode::ConsensusObserver)
-        )
-    }
-
     /// Whether this node should create index stores for JSON-RPC and REST API.
     pub fn should_enable_index_processing(&self) -> bool {
         matches!(self, Self::FullNode(_))
@@ -71,14 +81,6 @@ impl NodeRole {
     /// Whether this node should run the authority overload monitor.
     pub fn should_run_overload_monitor(&self) -> bool {
         matches!(self, Self::Validator)
-    }
-
-    /// Whether this node should run the randomness manager (DKG).
-    pub fn should_run_randomness(&self) -> bool {
-        matches!(
-            self,
-            Self::Validator | Self::FullNode(FullNodeSyncMode::ConsensusObserver)
-        )
     }
 
     /// Whether this node should submit JWK updates to consensus.
@@ -118,7 +120,6 @@ mod tests {
         let role = NodeRole::Validator;
         assert!(role.runs_consensus());
         assert!(role.can_propose_transactions());
-        assert!(role.should_check_forks());
         assert!(!role.should_enable_index_processing());
         assert!(!role.should_run_rpc_servers());
     }
@@ -128,9 +129,7 @@ mod tests {
         let role = NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver);
         assert!(role.runs_consensus());
         assert!(!role.can_propose_transactions());
-        assert!(role.should_check_forks());
         assert!(role.should_enable_index_processing());
-        assert!(role.should_run_randomness());
         assert!(role.should_run_rpc_servers());
     }
 
@@ -139,7 +138,6 @@ mod tests {
         let role = NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly);
         assert!(!role.runs_consensus());
         assert!(!role.can_propose_transactions());
-        assert!(!role.should_check_forks());
         assert!(role.should_enable_index_processing());
         assert!(role.should_run_rpc_servers());
     }

@@ -466,9 +466,6 @@ impl SuiNode {
         }
 
         let run_with_range = config.run_with_range;
-        // Preliminary role from config — used for infrastructure decisions before
-        // the epoch store exists. The authoritative role is on AuthorityPerEpochStore.
-        let preliminary_role = config.node_role();
         let prometheus_registry = registry_service.default_registry();
 
         info!(node =? config.protocol_public_key(),
@@ -497,6 +494,8 @@ impl SuiNode {
             None,
         ));
 
+        let node_role = Self::resolve_node_role(&config, &committee_store)?;
+
         let pruner_watermarks = Arc::new(PrunerWatermarks::default());
         let checkpoint_store = CheckpointStore::new(
             &config.db_path().join("checkpoints"),
@@ -507,7 +506,7 @@ impl SuiNode {
         Self::check_and_recover_forks(
             &checkpoint_store,
             &checkpoint_metrics,
-            preliminary_role.should_check_forks(),
+            node_role.runs_consensus(),
             config.fork_recovery.as_ref(),
         )
         .await?;
@@ -515,13 +514,13 @@ impl SuiNode {
         // By default, only enable write stall on nodes that run consensus.
         let enable_write_stall = config
             .enable_db_write_stall
-            .unwrap_or(preliminary_role.runs_consensus());
+            .unwrap_or(node_role.runs_consensus());
         let perpetual_tables_options = AuthorityPerpetualTablesOptions {
             enable_write_stall,
-            is_validator: preliminary_role.is_validator(),
+            is_validator: node_role.is_validator(),
         };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
-            &config.db_path().join("store"),
+            &config.store_db_path(),
             Some(perpetual_tables_options),
             Some(pruner_watermarks.epoch_id.clone()),
         ));
@@ -587,7 +586,7 @@ impl SuiNode {
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee.clone(),
-            &config.db_path().join("store"),
+            &config.store_db_path(),
             Some(epoch_options.options),
             EpochMetrics::new(&registry_service.default_registry()),
             epoch_start_configuration,
@@ -651,23 +650,22 @@ impl SuiNode {
             checkpoint_store.clone(),
         );
 
-        let index_store = if preliminary_role.should_enable_index_processing()
-            && config.enable_index_processing
-        {
-            info!("creating jsonrpc index store");
-            Some(Arc::new(IndexStore::new(
-                config.db_path().join("indexes"),
-                &prometheus_registry,
-                epoch_store
-                    .protocol_config()
-                    .max_move_identifier_len_as_option(),
-                config.remove_deprecated_tables,
-            )))
-        } else {
-            None
-        };
+        let index_store =
+            if node_role.should_enable_index_processing() && config.enable_index_processing {
+                info!("creating jsonrpc index store");
+                Some(Arc::new(IndexStore::new(
+                    config.db_path().join("indexes"),
+                    &prometheus_registry,
+                    epoch_store
+                        .protocol_config()
+                        .max_move_identifier_len_as_option(),
+                    config.remove_deprecated_tables,
+                )))
+            } else {
+                None
+            };
 
-        let rpc_index = if preliminary_role.should_enable_index_processing()
+        let rpc_index = if node_role.should_enable_index_processing()
             && config.rpc().is_some_and(|rpc| rpc.enable_indexing())
         {
             info!("creating rpc index store");
@@ -815,8 +813,7 @@ impl SuiNode {
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
-        let transaction_orchestrator = if preliminary_role.is_fullnode() && run_with_range.is_none()
-        {
+        let transaction_orchestrator = if node_role.is_fullnode() && run_with_range.is_none() {
             Some(Arc::new(TransactionOrchestrator::new_with_auth_aggregator(
                 auth_agg.load_full(),
                 state.clone(),
@@ -836,7 +833,7 @@ impl SuiNode {
             &config,
             &prometheus_registry,
             server_version,
-            preliminary_role,
+            node_role,
         )
         .await?;
 
@@ -1411,7 +1408,7 @@ impl SuiNode {
             node_role,
         );
 
-        if node_role.should_run_randomness() && epoch_store.randomness_state_enabled() {
+        if node_role.runs_consensus() && epoch_store.randomness_state_enabled() {
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 Box::new(consensus_adapter.clone()),
@@ -1656,6 +1653,10 @@ impl SuiNode {
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.state.clone()
+    }
+
+    pub fn node_role(&self) -> NodeRole {
+        self.state.load_epoch_store_one_call_per_task().node_role()
     }
 
     // Only used for testing because of how epoch store is loaded.
@@ -2085,6 +2086,36 @@ impl SuiNode {
         } else {
             digest_str
         }
+    }
+
+    /// Resolves the node role by temporarily opening the perpetual tables to
+    /// read the recovery epoch, then looking up the committee. On a fresh
+    /// genesis node the DB is empty, so we fall back to the latest committee
+    /// in the store (which is the genesis committee).
+    fn resolve_node_role(
+        config: &NodeConfig,
+        committee_store: &CommitteeStore,
+    ) -> SuiResult<NodeRole> {
+        let perpetual_tables = AuthorityPerpetualTables::open(&config.store_db_path(), None, None);
+
+        let committee = if perpetual_tables.database_is_empty()? {
+            committee_store.get_latest_committee()?
+        } else {
+            let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
+            committee_store
+                .get_committee(&cur_epoch)?
+                .expect("Committee of the current epoch must exist")
+                .as_ref()
+                .clone()
+        };
+
+        drop(perpetual_tables);
+
+        Ok(NodeRole::from_committee(
+            &committee,
+            &config.protocol_public_key(),
+            config.has_observer_config(),
+        ))
     }
 
     /// Check for previously detected forks and handle them appropriately.

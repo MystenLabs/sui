@@ -30,7 +30,6 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::node_role::{FullNodeSyncMode, NodeRole};
 use sui_types::supported_protocol_versions::{Chain, SupportedProtocolVersions};
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
@@ -884,6 +883,10 @@ impl NodeConfig {
         self.db_path.join("db_checkpoints")
     }
 
+    pub fn store_db_path(&self) -> PathBuf {
+        self.db_path().join("store")
+    }
+
     pub fn archive_path(&self) -> PathBuf {
         self.db_path.join("archive")
     }
@@ -898,25 +901,6 @@ impl NodeConfig {
 
     pub fn consensus_config(&self) -> Option<&ConsensusConfig> {
         self.consensus_config.as_ref()
-    }
-
-    /// Determines the node role from static configuration.
-    /// This is a preliminary role based on config alone — the authoritative
-    /// role that also accounts for committee membership lives on
-    /// `AuthorityPerEpochStore::node_role()`.
-    pub fn node_role(&self) -> NodeRole {
-        let has_consensus_config = self.consensus_config.is_some();
-        let has_observer_peers = self
-            .consensus_config
-            .as_ref()
-            .and_then(|c| c.parameters.as_ref())
-            .map(|p| !p.observer.peers.is_empty())
-            .unwrap_or(false);
-        match (has_consensus_config, has_observer_peers) {
-            (true, false) => NodeRole::Validator,
-            (true, true) => NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver),
-            _ => NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly),
-        }
     }
 
     /// Whether this node has observer peers configured in its consensus config.

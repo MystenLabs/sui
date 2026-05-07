@@ -64,7 +64,7 @@ use sui_types::messages_consensus::{
     ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind, TimestampMs,
     VersionedDkgConfirmation, check_total_jwk_size,
 };
-use sui_types::node_role::{FullNodeSyncMode, NodeRole};
+use sui_types::node_role::NodeRole;
 use sui_types::signature::GenericSignature;
 use sui_types::storage::{BackingPackageStore, InputKey, ObjectStore};
 use sui_types::sui_system_state::epoch_start_sui_system_state::{
@@ -3853,13 +3853,7 @@ impl AuthorityPerEpochStore {
     /// Returns the role of this node for the current epoch, computed from
     /// committee membership and observer configuration.
     pub fn node_role(&self) -> NodeRole {
-        if self.committee.authority_exists(&self.name) {
-            NodeRole::Validator
-        } else if self.has_observer_config {
-            NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
-        } else {
-            NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
-        }
+        NodeRole::from_committee(&self.committee, &self.name, self.has_observer_config)
     }
 
     /// Whether this node is a validator in this epoch.

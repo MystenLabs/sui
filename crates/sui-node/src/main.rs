@@ -118,8 +118,6 @@ fn main() {
         config.network_address = listen_address;
     }
 
-    let is_validator = config.node_role().is_validator();
-
     let admin_interface_port = config.admin_interface_port;
 
     // Run node in a separate runtime so that admin/monitoring functions continue to work
@@ -164,6 +162,7 @@ fn main() {
     runtimes.metrics.spawn(async move {
         let node = node_once_cell_clone.get().await;
         let chain_identifier = node.state().get_chain_identifier().to_string();
+        let is_validator = node.node_role().is_validator();
         info!("Sui chain identifier: {chain_identifier}");
         prometheus_registry
             .register(mysten_metrics::uptime_metric(
@@ -183,6 +182,7 @@ fn main() {
     runtimes.metrics.spawn(async move {
         let node = node_once_cell.get().await;
         let state = node.state();
+        let is_validator = node.node_role().is_validator();
         loop {
             send_telemetry_event(state.clone(), is_validator).await;
             sleep(Duration::from_secs(3600)).await;
