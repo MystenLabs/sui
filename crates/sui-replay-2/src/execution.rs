@@ -43,7 +43,7 @@ use tracing::{debug, debug_span, trace};
 #[derive(Clone)]
 pub struct ReplayExecutor {
     protocol_config: ProtocolConfig,
-    executor: Arc<dyn Executor + Send + Sync>,
+    pub(crate) executor: Arc<dyn Executor + Send + Sync>,
     execution_metrics: Arc<ExecutionMetrics>,
 }
 
@@ -59,6 +59,8 @@ pub struct TxnContextAndEffects {
     pub inner_store: InnerTemporaryStore,      // temporary store used during execution
     pub checkpoint: u64,                       // checkpoint where the transaction was included
     pub protocol_version: u64,                 // protocol version used for execution
+    #[cfg(feature = "tracing")]
+    pub bytecode_profile: sui_execution::profiling::BytecodeSnapshot, // bytecode execution profile
 }
 
 // Entry point. Executes a transaction.
@@ -78,6 +80,11 @@ pub fn execute_transaction_to_effects(
     Error,
 > {
     debug!(op = "execute_tx", phase = "start", "execution");
+
+    // Read the configured profile mode once per transaction. Cheap (one env
+    // lookup) and avoids threading the mode through call sites.
+    let profile_mode = crate::profiling::BytecodeProfileMode::from_env();
+
     // TODO: Hook up...
     let config_certificate_deny_set: HashSet<TransactionDigest> = HashSet::new();
 
@@ -129,6 +136,13 @@ pub fn execute_transaction_to_effects(
         Some(error) => ExecutionOrEarlyError::Err(error),
         None => ExecutionOrEarlyError::Ok(()),
     };
+    let profile_sink = crate::profiling::ExecutorProfileSink(&*executor.executor);
+    // RAII guard: runs before_transaction now, after_transaction on drop.
+    // Keeps the per-tx hooks paired even if the code below returns early
+    // (e.g. the "created object not found" check) or panics inside the
+    // executor.
+    let _profile_guard = crate::profiling::ProfileGuard::enter(profile_mode, &profile_sink, digest);
+
     let (inner_store, gas_status, effects, _execution_timing, result) = executor
         .executor
         .execute_transaction_to_effects_and_execution_error(
@@ -173,6 +187,14 @@ pub fn execute_transaction_to_effects(
         }
     }
 
+    // Capture the snapshot before the guard drops (its Drop impl runs
+    // after_transaction, which may reset the counters).
+    #[cfg(feature = "tracing")]
+    let bytecode_profile = executor
+        .executor
+        .bytecode_profile_snapshot()
+        .unwrap_or_default();
+
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((
         result,
@@ -185,6 +207,8 @@ pub fn execute_transaction_to_effects(
             inner_store,
             checkpoint,
             protocol_version: protocol_config.version.as_u64(),
+            #[cfg(feature = "tracing")]
+            bytecode_profile,
         },
     ))
 }

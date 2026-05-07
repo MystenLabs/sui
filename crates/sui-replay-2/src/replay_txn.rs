@@ -89,6 +89,13 @@ impl ExecutorProvider {
         self.cache.insert(protocol_version, executor.clone());
         Ok(executor)
     }
+
+    /// Iterate over the cached executors. Used by the profiling
+    /// end-of-session hook to emit accumulated counters across the run.
+    /// When caching is disabled this is empty (executors are short-lived).
+    pub fn cached_executors(&self) -> impl Iterator<Item = &ReplayExecutor> {
+        self.cache.values()
+    }
 }
 
 // `ReplayTransaction` contains all the data needed to replay a transaction.

@@ -14,6 +14,8 @@ pub use verifier::Verifier;
 pub mod executor;
 pub mod verifier;
 
+pub use move_vm_runtime_latest::profiling;
+
 mod latest;
 mod v0;
 mod v1;

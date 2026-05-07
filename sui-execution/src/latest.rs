@@ -259,6 +259,23 @@ impl executor::Executor for Executor {
     ) -> Box<dyn LayoutResolver + 'r> {
         Box::new(TypeLayoutResolver::new(&self.0, protocol_config, store))
     }
+
+    #[cfg(feature = "tracing")]
+    fn emit_bytecode_profile(&self) {
+        self.0.emit_bytecode_profile();
+    }
+
+    #[cfg(feature = "tracing")]
+    fn bytecode_profile_snapshot(
+        &self,
+    ) -> Option<move_vm_runtime_latest::profiling::BytecodeSnapshot> {
+        Some(self.0.bytecode_profile_snapshot())
+    }
+
+    #[cfg(feature = "tracing")]
+    fn reset_bytecode_profile(&self) {
+        self.0.reset_bytecode_profile();
+    }
 }
 
 impl verifier::Verifier for Verifier<'_> {

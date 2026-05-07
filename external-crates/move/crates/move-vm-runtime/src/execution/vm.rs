@@ -456,9 +456,13 @@ impl<'extensions> MoveVM<'extensions> {
         ty_args: Vec<Type>,
         args: Vec<Value>,
     ) -> VMResult<Vec<Value>> {
+        #[cfg(feature = "tracing")]
+        let bytecode_counters = self.telemetry.bytecode_counters();
         interpreter::run(
             &mut self.virtual_tables,
             txn_telemetry,
+            #[cfg(feature = "tracing")]
+            bytecode_counters,
             self.vm_config.clone(),
             &mut *self.native_extensions.try_borrow_mut().map_err(|e| {
                 partial_vm_error!(

@@ -64,3 +64,6 @@ tiered-gas = []
 tracing = [
     "move-vm-config/tracing",
 ]
+# Enable the basic-block-local register-allocator pass. Off by default while
+# the optimizer is being validated; flip on for measurement runs.
+bb_regalloc = []

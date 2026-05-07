@@ -33,6 +33,7 @@ pub mod artifacts;
 pub mod displays;
 pub mod execution;
 pub mod package_tools;
+pub mod profiling;
 pub mod replay_txn;
 pub mod summary_metrics;
 pub mod tracing;
@@ -508,6 +509,25 @@ where
     use crate::replay_txn::ExecutorProvider;
     use std::time::Instant;
 
+    // EndOfReplay accumulates counters across the run, which only works if
+    // executors live across transactions. Without --cache-executor each
+    // transaction drops its executor (and counters) before the session-end
+    // hook runs, silently producing no output. Auto-enable caching and warn
+    // rather than fail — the user clearly intends to profile.
+    let cache_executor = if matches!(
+        crate::profiling::BytecodeProfileMode::from_env(),
+        crate::profiling::BytecodeProfileMode::EndOfReplay,
+    ) && !cache_executor
+    {
+        warn!(
+            "MOVE_VM_PROFILE_MODE=end-of-replay needs --cache-executor to retain \
+             counters across transactions; auto-enabling it."
+        );
+        true
+    } else {
+        cache_executor
+    };
+
     data_store.setup(None)?;
     let mut total_metrics = TotalMetrics::new();
     let mut executor_provider = ExecutorProvider::new(cache_executor);
@@ -572,6 +592,16 @@ where
     }
 
     tx_spinner.finish_and_clear();
+
+    // End-of-session bytecode profile emission. Only the EndOfReplay mode
+    // does anything here; the per-transaction modes have already emitted.
+    // Note: `cached_executors()` is empty unless `--cache-executor` is set,
+    // so EndOfReplay only does useful work in that case (the counters live
+    // inside the executor).
+    let profile_mode = crate::profiling::BytecodeProfileMode::from_env();
+    for executor in executor_provider.cached_executors() {
+        profile_mode.end_of_session(&crate::profiling::ExecutorProfileSink(&*executor.executor));
+    }
 
     if verbose {
         let mut out = std::io::stdout().lock();

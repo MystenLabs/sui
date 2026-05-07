@@ -8576,6 +8576,7 @@ dependencies = [
  "move-abstract-interpreter",
  "move-core-types",
  "move-proc-macros",
+ "num_enum 0.6.1",
  "ref-cast",
  "serde",
  "variant_count",

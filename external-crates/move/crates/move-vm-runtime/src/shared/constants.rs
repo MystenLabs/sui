@@ -40,3 +40,16 @@ pub const VIRTUAL_DISPATCH_TABLE_CACHE_SIZE: usize = 1_000_000;
 /// Maximum number of identifiers we can ever intern.
 /// TODO Set to 10 billion, but should be experimentally determined based on actual run data.
 pub const IDENTIFIER_INTERNER_SIZE_LIMIT: usize = 10_000_000_000;
+
+// -------------------------------------------------------------------------------------------------
+// Profiling Env Vars
+// -------------------------------------------------------------------------------------------------
+
+/// Env var naming a path that the bytecode profiler writes JSON to when
+/// `BytecodeSnapshot::maybe_dump_to_env_file` or an equivalent hook is
+/// invoked. Unset = no file dump.
+pub const MOVE_VM_DUMP_PROFILE_FILE_ENV: &str = "MOVE_VM_DUMP_PROFILE_FILE";
+
+/// Env var controlling the replay-time bytecode-profile dumping policy
+/// (see `sui_replay_2::profiling::BytecodeProfileMode`).
+pub const MOVE_VM_PROFILE_MODE_ENV: &str = "MOVE_VM_PROFILE_MODE";

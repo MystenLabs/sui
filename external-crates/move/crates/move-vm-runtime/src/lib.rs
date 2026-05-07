@@ -34,6 +34,7 @@ pub mod cache;
 pub mod dev_utils;
 pub mod execution;
 pub mod natives;
+pub mod profiling;
 pub mod runtime;
 pub mod validation;
 
