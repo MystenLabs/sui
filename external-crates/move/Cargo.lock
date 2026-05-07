@@ -3230,6 +3230,7 @@ dependencies = [
  "bcs",
  "better_any",
  "bumpalo",
+ "crossbeam-utils",
  "dashmap",
  "fail",
  "hex",

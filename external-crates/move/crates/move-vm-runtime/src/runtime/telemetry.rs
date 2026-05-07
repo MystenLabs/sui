@@ -7,6 +7,8 @@ use std::{
     time::Duration,
 };
 
+use crossbeam_utils::CachePadded;
+
 use crate::cache::move_cache::MoveCache;
 
 // -------------------------------------------------------------------------------------------------
@@ -88,36 +90,36 @@ pub struct MoveRuntimeTelemetry {
 #[derive(Debug)]
 pub(crate) struct TelemetryContext {
     /// Load Time (ms)
-    pub(crate) total_load_time: AtomicU64,
+    pub(crate) total_load_time: CachePadded<AtomicU64>,
     /// Load Count -- number of individual packages loaded
-    pub(crate) load_count: AtomicU64,
+    pub(crate) load_count: CachePadded<AtomicU64>,
     /// Validation Time (ms)
-    pub(crate) total_validation_time: AtomicU64,
+    pub(crate) total_validation_time: CachePadded<AtomicU64>,
     /// Validation Count -- number of individual packages validated
-    pub(crate) validation_count: AtomicU64,
+    pub(crate) validation_count: CachePadded<AtomicU64>,
     /// JIT Time (ms)
-    pub(crate) total_jit_time: AtomicU64,
+    pub(crate) total_jit_time: CachePadded<AtomicU64>,
     /// JIT Count -- number of individual packages JITted
-    pub(crate) jit_count: AtomicU64,
+    pub(crate) jit_count: CachePadded<AtomicU64>,
     /// Code Execution Time (ms)
-    pub(crate) total_execution_time: AtomicU64,
+    pub(crate) total_execution_time: CachePadded<AtomicU64>,
     /// Execution Count -- Number of execution calls
-    pub(crate) execution_count: AtomicU64,
+    pub(crate) execution_count: CachePadded<AtomicU64>,
     /// Interpreter Time (ms)
-    pub(crate) total_interpreter_time: AtomicU64,
+    pub(crate) total_interpreter_time: CachePadded<AtomicU64>,
     /// Interpreter Count -- Number of interpreter calls
-    pub(crate) interpreter_count: AtomicU64,
+    pub(crate) interpreter_count: CachePadded<AtomicU64>,
     /// Total Time (ms)
-    pub(crate) total_time: AtomicU64,
+    pub(crate) total_time: CachePadded<AtomicU64>,
     /// Total Transaction Count
-    pub(crate) total_count: AtomicU64,
+    pub(crate) total_count: CachePadded<AtomicU64>,
     /// Total number of packages that were compiled, but later thrown away since they were already
     /// cached when we went to insert them into it (i.e., redundant compilations)
-    pub(crate) redundant_compilations: AtomicU64,
+    pub(crate) redundant_compilations: CachePadded<AtomicU64>,
     /// Max Callstack Size -- the maximum callstack size observed for this transactions
-    pub(crate) max_callstack_size: AtomicU64,
+    pub(crate) max_callstack_size: CachePadded<AtomicU64>,
     /// Max Value Stack Size -- the maximum value stack size observed for this transaction
-    pub(crate) max_valuestack_size: AtomicU64,
+    pub(crate) max_valuestack_size: CachePadded<AtomicU64>,
 }
 
 /// Transaction Telemetry Information
@@ -193,21 +195,21 @@ pub(crate) struct Timer {
 impl TelemetryContext {
     pub(crate) fn new() -> Self {
         Self {
-            total_load_time: AtomicU64::new(0),
-            load_count: AtomicU64::new(0),
-            total_execution_time: AtomicU64::new(0),
-            execution_count: AtomicU64::new(0),
-            total_interpreter_time: AtomicU64::new(0),
-            interpreter_count: AtomicU64::new(0),
-            total_validation_time: AtomicU64::new(0),
-            validation_count: AtomicU64::new(0),
-            total_jit_time: AtomicU64::new(0),
-            jit_count: AtomicU64::new(0),
-            total_time: AtomicU64::new(0),
-            total_count: AtomicU64::new(0),
-            redundant_compilations: AtomicU64::new(0),
-            max_callstack_size: AtomicU64::new(0),
-            max_valuestack_size: AtomicU64::new(0),
+            total_load_time: CachePadded::new(AtomicU64::new(0)),
+            load_count: CachePadded::new(AtomicU64::new(0)),
+            total_execution_time: CachePadded::new(AtomicU64::new(0)),
+            execution_count: CachePadded::new(AtomicU64::new(0)),
+            total_interpreter_time: CachePadded::new(AtomicU64::new(0)),
+            interpreter_count: CachePadded::new(AtomicU64::new(0)),
+            total_validation_time: CachePadded::new(AtomicU64::new(0)),
+            validation_count: CachePadded::new(AtomicU64::new(0)),
+            total_jit_time: CachePadded::new(AtomicU64::new(0)),
+            jit_count: CachePadded::new(AtomicU64::new(0)),
+            total_time: CachePadded::new(AtomicU64::new(0)),
+            total_count: CachePadded::new(AtomicU64::new(0)),
+            redundant_compilations: CachePadded::new(AtomicU64::new(0)),
+            max_callstack_size: CachePadded::new(AtomicU64::new(0)),
+            max_valuestack_size: CachePadded::new(AtomicU64::new(0)),
         }
     }
 
