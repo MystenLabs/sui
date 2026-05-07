@@ -139,9 +139,7 @@ mod checked {
     ) -> BTreeMap<(SuiAddress, TypeTag), u64> {
         use sui_types::balance::Balance;
         use sui_types::gas_coin::GAS;
-        use sui_types::transaction::{
-            Reservation, WithdrawFrom, is_gas_paid_from_address_balance,
-        };
+        use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
 
         let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
         let sui_balance_type = Balance::type_tag(GAS::type_tag());
@@ -151,9 +149,7 @@ mod checked {
                 WithdrawFrom::Sender => transaction_signer,
                 WithdrawFrom::Sponsor => gas_data.owner,
             };
-            let reservation = match arg.reservation {
-                Reservation::MaxAmountU64(n) => n,
-            };
+            let Reservation::MaxAmountU64(reservation) = arg.reservation;
             *reservations
                 .entry((owner, arg.type_arg.to_type_tag()))
                 .or_insert(0) += reservation;
@@ -614,7 +610,7 @@ mod checked {
                             let mut layout_resolver = TypeLayoutResolver::new(
                                 move_vm,
                                 store.protocol_config(),
-                                Box::new(&*store),
+                                Box::new(store),
                             );
                             store.check_sui_conserved_expensive(
                                 cost_summary,

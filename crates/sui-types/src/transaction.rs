@@ -2081,7 +2081,9 @@ impl TransactionKind {
         Ok(input_objects)
     }
 
-    pub fn get_funds_withdrawals<'a>(&'a self) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
+    pub fn get_funds_withdrawals<'a>(
+        &'a self,
+    ) -> impl Iterator<Item = &'a FundsWithdrawalArg> + 'a {
         let TransactionKind::ProgrammableTransaction(pt) = &self else {
             return Either::Left(iter::empty());
         };
