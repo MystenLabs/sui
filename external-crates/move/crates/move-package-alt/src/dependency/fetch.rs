@@ -13,11 +13,10 @@ use thiserror::Error;
 use crate::{
     git::GitError,
     package::paths::{PackagePath, PackagePathError},
-    schema::LocalDepInfo,
+    schema::{EnvironmentID, LocalDepInfo},
 };
 
 use super::Pinned;
-use crate::schema::EnvironmentID;
 
 #[derive(Error, Debug)]
 pub enum FetchError {
@@ -36,14 +35,15 @@ pub type FetchResult<T> = Result<T, FetchError>;
 /// Ensure that the dependency's files are present on the disk and return a path to them.
 /// Assumes that `pinned` is already normalized - paths of any local dependencies are relative
 /// to the current working directory, and local dependencies of git dependencies have been
-/// transformed into git dependencies. `chain_id` is passed through to [Pinned::unfetched_path].
+/// transformed into git dependencies. `chain_id` is used to determine the cache location for
+/// on-chain dependencies.
 pub async fn fetch(
     pinned: &Pinned,
     allow_dirty: bool,
     chain_id: &EnvironmentID,
 ) -> FetchResult<PackagePath> {
     let path = match &pinned {
-        Pinned::OnChain => return Err(FetchError::OnChainNotSupported),
+        Pinned::OnChain { .. } => return Err(FetchError::OnChainNotSupported),
         Pinned::Git(dep) => dep
             .inner
             .checkout_repo(allow_dirty)

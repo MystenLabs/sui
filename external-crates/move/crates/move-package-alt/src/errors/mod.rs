@@ -133,12 +133,9 @@ pub enum PackageError {
 
     #[error(
         "On-chain dependency `{name}` requires `published-at` and `original-id` addresses. Add a \
-         `[dep-replacements.<env>.{name}]` entry with these fields."
+         `[dep-replacements.{env}.{name}]` entry with these fields."
     )]
-    OnChainDepMissingAddress { name: String },
-
-    #[error("On-chain packages cannot have local transitive dependencies")]
-    OnChainLocalDep,
+    OnChainDepMissingAddress { name: String, env: String },
 }
 
 /// Truncate `s` to the first `head` characters and the last `tail` characters of `s`, separated by

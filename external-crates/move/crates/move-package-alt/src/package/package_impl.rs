@@ -140,10 +140,7 @@ impl<F: MoveFlavor> Package<F> {
             dummy_addr,
         };
 
-        debug!(
-            "successfully loaded {:?}",
-            result.dep_for_self.unfetched_path(&config.chain_id)
-        );
+        debug!("successfully loaded {}", result.dep_for_self);
         Ok(result)
     }
 
