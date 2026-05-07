@@ -947,7 +947,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "upgrade")?;
                 verify_no_build_env(&args.build_config, "upgrade")?;
-                let _ = context.cache_chain_id().await?;
                 upgrade_command(args, context, false).await?
             }
 
@@ -960,7 +959,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "publish")?;
                 verify_no_build_env(&args.build_config, "publish")?;
-                let _ = context.cache_chain_id().await?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
                     context,
                     &args.build_config,
