@@ -506,7 +506,7 @@ impl RandomnessManager {
 
         // Once we have enough Messages, merge them.
         if !self.dkg_output.initialized() && !self.used_messages.initialized() {
-            // Process all enqueued messages (Party path only — observer inserts directly).
+            // Process all enqueued messages.
             let mut handles: FuturesUnordered<_> = std::mem::take(&mut self.enqueued_messages)
                 .into_values()
                 .collect();
@@ -615,7 +615,13 @@ impl RandomnessManager {
                     .values()
                     .map(|c| c.unwrap_v1().clone())
                     .collect();
-                observer.complete(&raw_messages, &confirmations)
+                observer
+                    .complete::<rand::rngs::ThreadRng>(&raw_messages, &confirmations)
+                    .map(|obs_output| Output {
+                        nodes: obs_output.nodes,
+                        vss_pk: obs_output.vss_pk,
+                        shares: None,
+                    })
             } else {
                 // Party: complete with decrypted shares.
                 let party = self.party.clone().expect("party must be set for validator");
@@ -738,19 +744,19 @@ impl RandomnessManager {
         }
 
         if let Some(observer) = &self.observer {
-            // Observer: lightweight validation (no decryption), store directly.
+            // Observer: validate synchronously, then stage via enqueued_messages
+            // so advance_dkg persists to consensus_output in the same place as Party.
             let raw_msg = msg.unwrap_v1();
             match observer.process_message(raw_msg.clone()) {
                 Ok(()) => {
-                    let processed = dkg_v1::ProcessedMessage {
+                    let processed = VersionedProcessedMessage::V1(dkg_v1::ProcessedMessage {
                         message: raw_msg,
                         shares: vec![],
                         complaint: None,
-                    };
-                    self.processed_messages.insert(
-                        processed.message.sender,
-                        VersionedProcessedMessage::V1(processed),
-                    );
+                    });
+                    let sender = processed.sender();
+                    self.enqueued_messages
+                        .insert(sender, tokio::task::spawn(async move { Some(processed) }));
                 }
                 Err(err) => {
                     debug!("random beacon: observer error validating DKG Message: {err:?}");
