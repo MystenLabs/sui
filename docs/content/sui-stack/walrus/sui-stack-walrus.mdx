@@ -2,54 +2,18 @@
 title: Data Storage Using Walrus
 description: Learn how to store and retrieve data on Walrus by walking through OnlyFins, a content platform built on Sui and Walrus.
 keywords: [walrus, blob storage, walrus SDK, OnlyFins, Sui Stack, upload, read, seal]
-verified_against:
-  sui_ts_sdk: "^1.x"
-  walrus_sdk: "^0.x"
-  move_edition: "2024.beta"
-  last_verified: 2026-04-15
-  owner: "@sui-docs/stack-guides"
+last_verified: 2026-04-15
 ---
 
-This guide uses [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) as a concrete example throughout. OnlyFins is a demo content platform where creators post images stored on [Walrus](https://docs.wal.app/), some encrypted with [Seal](https://seal-docs.wal.app/). Each post is a Sui object. Users request access onchain to unlock encrypted posts, demonstrating how Sui, Walrus, and Seal work together as a stack.
-
-Each section explains a Walrus concept or operation and shows where it appears in OnlyFins. For patterns OnlyFins does not cover, the guide draws on [Walrus Onboarding](https://github.com/MystenLabs/Walrus-Onboarding) modules and [walrus-pocs](https://github.com/MystenLabs/walrus-pocs), a collection of focused Walrus proof-of-concept examples maintained by Mysten Labs. The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the authoritative reference for all SDK options. The [Encryption with Seal](/sui-stack/walrus-seal/sui-stack-seal) guide builds on this same app.
-
-## Introduction to Walrus
-
 Walrus is a decentralized storage and data availability protocol built specifically for large binary files, or blobs. It uses Sui for coordination, payment, and governance, making it a natural storage layer for apps built on Sui.
+
+Each section explains a Walrus concept or operation and shows where it appears in the encrypted social media example [OnlyFins](only-fins.mdx). OnlyFins is a demo content platform where creators post images stored on [Walrus](https://docs.wal.app/), some encrypted with [Seal](https://seal-docs.wal.app/). Each post is a Sui object. Users request access onchain to unlock encrypted posts, demonstrating how Sui, Walrus, and Seal work together as a stack.
+
+For patterns OnlyFins does not cover, the guide draws on [Walrus Onboarding](https://github.com/MystenLabs/Walrus-Onboarding) modules and [walrus-pocs](https://github.com/MystenLabs/walrus-pocs), a collection of focused Walrus proof-of-concept examples maintained by Mysten Labs. The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the authoritative reference for all SDK options. The [Encryption with Seal](/sui-stack/walrus-seal/sui-stack-seal) guide builds on this same app.
 
 ### Architecture
 
 ```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: '#000000'
-    primaryTextColor: '#FFFFFF'
-    primaryBorderColor: '#6C7584'
-    secondaryColor: '#6C7584'
-    secondaryTextColor: '#FFFFFF'
-    tertiaryColor: '#298DFF'
-    tertiaryTextColor: '#FFFFFF'
-    lineColor: '#298DFF'
-    background: '#FFFFFF'
-    mainBkg: '#000000'
-    secondBkg: '#6C7584'
-    noteBkgColor: '#E6F1FB'
-    noteTextColor: '#000000'
-    noteBorderColor: '#298DFF'
-    activationBkgColor: '#298DFF'
-    activationBorderColor: '#185FA5'
-    fontSize: '14px'
-    fontFamily: 'Inter, sans-serif'
-    signalColor: '#298DFF'
-    signalTextColor: '#298DFF'
-    labelBoxBkgColor: '#000000'
-    labelBoxBorderColor: '#6C7584'
-    labelTextColor: '#FFFFFF'
-    loopTextColor: '#FFFFFF'
----
 flowchart LR
     APP["YOUR APP"]
 

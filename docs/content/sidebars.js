@@ -498,13 +498,20 @@ suiStackSidebar: [
     'sui-stack/sagat',
     {
       type: 'category',
-      label: 'Walrus and Seal',
-      link: { type: 'doc', id: 'sui-stack/walrus-seal/index' },
+      label: 'Walrus',
+      link: { type: 'doc', id: 'sui-stack/walrus/index' },
       items: [
-        'sui-stack/walrus-seal/sui-stack-walrus',
-        'sui-stack/walrus-seal/sui-stack-seal',
-        'sui-stack/walrus-seal/indexer-walrus',
+        'sui-stack/walrus/sui-stack-walrus',
+        'sui-stack/walrus/indexer-walrus',
         'sui-stack/walrus/only-fins',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Seal',
+      link: { type: 'doc', id: 'sui-stack/seal/index' },
+      items: [
+        'sui-stack/seal/sui-stack-seal',
         'sui-stack/seal/sui-chat-app',
       ],
     },

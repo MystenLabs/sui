@@ -6,39 +6,44 @@ example_id: onlyfins-example-app
 last_verified: 2026-04-28
 repo: https://github.com/MystenLabs/onlyfins-example-app
 path: /
-languages: [move, typescript]
-concepts: [shared_objects, capability_pattern, seal_encryption, sponsored_transactions, walrus_storage, zklogin]
-entry_functions:
-  - { module: posts, name: create_post, file: "frontend/move/posts/sources/posts.move" }
-  - { module: posts, name: grant_access, file: "frontend/move/posts/sources/posts.move" }
-  - { module: posts, name: seal_approve_access, file: "frontend/move/posts/sources/posts.move" }
-events_emitted: []
-shared_objects:
-  - { struct: Post, module: posts }
-related_examples: [seal-example, walrus-sites]
+concepts:
+  - shared_objects
+  - capability_pattern
+  - seal_encryption
+  - sponsored_transactions
+  - walrus_storage
+  - zklogin
 ---
 
-OnlyFins is a Web3 social platform that demonstrates encrypted content sharing with onchain access control. Creators publish posts with images they store on Walrus and encrypt through Seal, while viewers purchase `ViewerToken` capability objects to decrypt and view content. The example targets Testnet and suits readers who already know the basics of Move modules, React, and the Sui TypeScript SDK.
+OnlyFins is a Web3 social platform that demonstrates encrypted content sharing with onchain access control. Creators publish posts with images they store on [Walrus](https://docs.wal.app) and encrypt through [Seal](https://seal-docs.wal.app), while viewers purchase `ViewerToken` capability objects to decrypt and view content. The app uses [Enoki](https://docs.enoki.mystenlabs.com/) for [zkLogin](/sui-stack/zklogin-integration/zklogin) authentication and [sponsored transactions](/develop/transaction-payment/sponsor-txn) so users interact without holding SUI for gas.
+
+## When to use this pattern
+
+Use this pattern when you need to:
+
+- Gate access to encrypted content with onchain ownership tokens rather than a centralized paywall server.
+
+- Store encrypted files on Walrus and control decryption through Seal threshold encryption tied to Move-level access control.
+
+- Let users authenticate with Google through zkLogin and interact without holding SUI for gas.
+
+- Build a content marketplace where creators publish and viewers pay for access, all verifiable onchain.
+
+- Combine shared objects (posts visible to all) with owned objects (viewer tokens that prove access) in a single application.
 
 ## What you learn
 
 This example teaches:
 
-- **Shared objects:** Posts function as shared objects any user can read, but only authorized users can decrypt.
-- **Capability pattern:** ViewerTokens act as owned objects that prove access.
-- **Seal encryption:** Threshold encryption where the Move contract itself authorizes decryption key release.
-- **Sponsored transactions:** A backend pays gas so users interact without holding SUI.
-- **Walrus storage:** The frontend stores encrypted image blobs offchain and references them by blob ID.
+- **Shared objects:** Posts are [shared objects](/develop/objects/object-ownership/shared) that any user can read metadata from, but only authorized users can decrypt the attached content.
 
-## Prerequisites
+- **Capability pattern:** `ViewerToken` objects act as owned [capability](/develop/write-move/sui-move-concepts) tokens that prove a user purchased access to a specific post.
 
-<Tabs className="tabsHeadingCentered--small">
-<TabItem value="prereq" label="Prerequisites">
-- [x] Sui CLI installed and configured for Testnet
-- [x] Node.js 18 or later, with pnpm installed
-- [x] A browser wallet (Slush Wallet or another Sui-compatible wallet) or willingness to use Enoki zkLogin
-</TabItem>
-</Tabs>
+- **Seal encryption:** Threshold encryption where the Move contract itself authorizes decryption key release. Seal key servers only return the decryption key after dry-running a `seal_approve_access` transaction that confirms the caller holds a valid `ViewerToken`.
+
+- **Sponsored transactions:** A backend pays gas so users interact without holding SUI. The frontend sends unsigned transactions to the sponsor backend, which co-signs and returns the sponsored bytes.
+
+- **Walrus storage:** The frontend stores encrypted image blobs offchain on Walrus and references them by blob ID. Walrus blobs are publicly addressable, so encryption is required to restrict access.
 
 ## Architecture
 
@@ -64,7 +69,95 @@ graph LR
   backend --> package
 ```
 
-The **Frontend** builds transactions and renders post feeds as a React app. The **Enoki wallet** handles zkLogin authentication and transaction signing. The **posts Move package** stores post metadata and issues ViewerTokens as shared and owned objects on Sui. **Seal key servers** hold threshold encryption keys and release them only when the Move contract confirms access through `seal_approve_access`. **Walrus** stores the actual image blobs, both encrypted and unencrypted. The **Sponsor backend** covers gas fees so users do not need SUI in their wallet.
+The **Frontend** builds transactions and renders post feeds as a React app. The **Enoki wallet** handles zkLogin authentication and transaction signing. The **posts Move package** stores post metadata and issues `ViewerToken` objects as [shared](/develop/objects/object-ownership/shared) and [address-owned](/develop/objects/object-ownership/address-owned) objects on Sui. **Seal key servers** hold threshold encryption keys and release them only when the Move contract confirms access through `seal_approve_access`. **Walrus** stores the actual image blobs, both encrypted and unencrypted. The **Sponsor backend** covers gas fees so users do not need SUI in their wallet.
+
+The diagram below traces 1 full interaction from a user unlocking content to viewing the decrypted image.
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant Frontend
+  participant Backend as Sponsor backend
+  participant Wallet as Enoki wallet
+  participant Package as posts Move package
+  participant Seal as Seal key servers
+  participant Walrus
+
+  User->>Frontend: Click Unlock Image
+  Frontend->>Frontend: Build grant_access PTB
+  Frontend->>Backend: Request sponsorship
+  Backend->>Backend: Sign as sponsor
+  Backend-->>Frontend: Sponsored transaction bytes
+  Frontend->>Wallet: Sign transaction
+  Wallet->>Package: Submit grant_access
+  Package-->>Frontend: ViewerToken created
+  Frontend->>Frontend: Build seal_approve_access PTB
+  Frontend->>Seal: Request decryption key
+  Seal->>Package: Verify access (dry run)
+  Package-->>Seal: Access confirmed
+  Seal-->>Frontend: Decryption key
+  Frontend->>Walrus: Fetch encrypted image blob
+  Walrus-->>Frontend: Encrypted bytes
+  Frontend->>Frontend: Decrypt image locally
+  Frontend->>User: Display decrypted image
+```
+
+The following steps walk through the flow:
+
+1. The user clicks **Unlock Image** on a locked post, triggering the `usePayForContent` hook.
+
+2. The frontend builds a `grant_access` transaction and sends it to the sponsor backend, which pays for gas and returns the co-signed transaction.
+
+3. The wallet signs and submits the transaction. The Move package creates a `ViewerToken` owned by the user.
+
+4. The frontend detects the new token, builds a `seal_approve_access` transaction, and sends it to the Seal key servers.
+
+5. Seal dry-runs the transaction against the Move contract. Because the user now holds a valid `ViewerToken`, the contract confirms access.
+
+6. Seal returns the decryption key. The frontend fetches the encrypted blob from Walrus, decrypts it locally, and renders the image.
+
+Errors can occur at the sponsorship step (backend unreachable), the Seal step (session key expired), or the Walrus fetch (blob not found).
+
+### How Seal and Walrus work together
+
+Walrus is a content-addressed storage protocol where data is retrieved by blob ID. All Walrus blobs are publicly addressable, so anyone who knows the blob ID can fetch the raw bytes. To restrict access, the frontend encrypts content before uploading to Walrus.
+
+Seal provides the encryption layer. When a creator publishes a post, the frontend encrypts the image with a key managed by Seal's threshold key servers. The Move contract defines who can decrypt: the `seal_approve_access` function checks whether the caller is the post author or holds a `ViewerToken` for that post. Seal key servers only release the decryption key after dry-running this function and confirming it does not abort.
+
+This combination means Walrus handles storage and availability, Seal handles key management and access control, and the Move contract defines the access policy.
+
+## Prerequisites
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+- [x] [Install the latest version of Sui](/getting-started/onboarding/sui-install).
+
+- [x] [Configure the Sui client](/getting-started/onboarding/configure-sui-client).
+
+- [x] [Create a Sui address](/getting-started/onboarding/get-address).
+
+- [x] [Get SUI Testnet tokens](/getting-started/onboarding/get-coins).
+
+- [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
+
+    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
+
+    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
+
+    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
+
+    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
+
+        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
+
+- [x] [Download and install Git](https://git-scm.com/downloads).
+
+- [x] [Node.js](https://nodejs.org/) 18 or later, with [pnpm](https://pnpm.io/installation) installed
+
+- [x] A Sui wallet ([Slush Wallet](https://slush.app/) or another compatible wallet) or willingness to use [Enoki](https://portal.enoki.mystenlabs.com/) zkLogin
+
+</TabItem>
+</Tabs>
 
 ## Setup
 
@@ -122,19 +215,21 @@ PACKAGE_ID=PACKAGE_ID_FROM_STEP_4
 
 ##### Step 7: Encrypt and upload images
 
-The backend has 2 scripts that prepare demo content. Run them in order:
+The backend has 2 scripts that prepare demo content. Run them in order.
+
+The first script creates encrypted image files in `backend/encrypted/` and outputs JSON mapping files:
 
 ```bash
 $ pnpm encrypt-images
 ```
 
-This creates encrypted image files in `backend/encrypted/` and outputs JSON mapping files. Upload the encrypted and unencrypted images to Walrus, then populate the blob IDs in the generated JSON files.
+Upload the encrypted and unencrypted images to Walrus, then populate the blob IDs in the generated JSON files.
+
+The second script publishes the posts onchain using the configured author key pairs:
 
 ```bash
 $ pnpm create-posts
 ```
-
-This publishes the posts onchain using the configured author key pairs.
 
 ## Run the example
 
@@ -151,7 +246,7 @@ Open `http://localhost:5173` in a browser. You see a feed of posts, some with lo
 
 The following snippets are the parts of the code worth reading carefully.
 
-### Move entry function for post creation
+### Post creation with optional encryption
 
 The `create_post` entry function creates a shared `Post` object with an optional encryption ID.
 
@@ -159,7 +254,7 @@ The `create_post` entry function creates a shared `Post` object with an optional
 
 When `encryption_id` contains a value, the post requires a `ViewerToken` to decrypt. When it contains `none`, the image is publicly viewable. The function shares the post so any user can read its metadata.
 
-### Move access control gate
+### Seal access control gate
 
 The `seal_approve_access` function is the onchain gate that Seal calls before releasing decryption keys.
 
@@ -167,7 +262,7 @@ The `seal_approve_access` function is the onchain gate that Seal calls before re
 
 This function checks 2 conditions: the caller is the post author, or the caller holds a `ViewerToken` linked to this post. It also verifies the requested `encryption_id` matches the post. If any check fails, the transaction aborts and Seal refuses to release the key.
 
-### Move function for granting access
+### Granting access with viewer tokens
 
 The `grant_access` function mints a new `ViewerToken` and returns it.
 
@@ -175,7 +270,7 @@ The `grant_access` function mints a new `ViewerToken` and returns it.
 
 The function creates an owned object and transfers it to the viewer. The token links the viewer address to a specific post ID, which `seal_approve_access` checks later.
 
-### Frontend hook for paying for content
+### Paying for content
 
 The `usePayForContent` hook builds and sponsors the transaction that grants a viewer access to a post.
 
@@ -183,7 +278,7 @@ The `usePayForContent` hook builds and sponsors the transaction that grants a vi
 
 The hook calls the `grant_access` Move function, transfers the resulting `ViewerToken` to the current account, and sponsors the transaction so the user pays no gas. After the transaction finalizes, it refetches the user's owned objects so the UI updates.
 
-### Frontend hook for decrypting images
+### Decrypting images through Seal
 
 The `usePostDecryption` hook fetches encrypted images from Walrus and decrypts them using Seal session keys.
 
@@ -191,7 +286,7 @@ The `usePostDecryption` hook fetches encrypted images from Walrus and decrypts t
 
 For each encrypted post the user has access to, the hook builds a `seal_approve_access` transaction, retrieves the decryption key from the Seal key servers, fetches the encrypted blob from Walrus, and decrypts it locally. It auto-detects the image MIME type from the first bytes of the decrypted data.
 
-### Frontend session key management
+### Session key management
 
 The `SessionKeyProvider` manages cryptographic session keys with a 30-minute TTL that Seal requires.
 
@@ -199,49 +294,17 @@ The `SessionKeyProvider` manages cryptographic session keys with a 30-minute TTL
 
 The provider persists session keys to localStorage and validates them on mount. When a key expires, the app shows a modal prompting the user to sign a new session key. The provider cleans up keys when the wallet disconnects.
 
-## Data flow
+## Common modifications
 
-The diagram below traces 1 full interaction from a user unlocking content to viewing the decrypted image.
+- **Add payment for access:** Require viewers to pay SUI or a custom token in the `grant_access` function before minting the `ViewerToken`. Transfer the payment to the post author.
 
-```mermaid
-sequenceDiagram
-  participant User
-  participant Frontend
-  participant Backend as Sponsor backend
-  participant Wallet as Enoki wallet
-  participant Package as posts Move package
-  participant Seal as Seal key servers
-  participant Walrus
+- **Add subscription tiers:** Create a `Subscription` object that grants access to all posts from a creator for a set duration. Check subscription validity in `seal_approve_access` alongside the per-post `ViewerToken` check.
 
-  User->>Frontend: Click Unlock Image
-  Frontend->>Frontend: Build grant_access PTB
-  Frontend->>Backend: Request sponsorship
-  Backend->>Backend: Sign as sponsor
-  Backend-->>Frontend: Sponsored transaction bytes
-  Frontend->>Wallet: Sign transaction
-  Wallet->>Package: Submit grant_access
-  Package-->>Frontend: ViewerToken created
-  Frontend->>Frontend: Build seal_approve_access PTB
-  Frontend->>Seal: Request decryption key
-  Seal->>Package: Verify access (dry run)
-  Package-->>Seal: Access confirmed
-  Seal-->>Frontend: Decryption key
-  Frontend->>Walrus: Fetch encrypted image blob
-  Walrus-->>Frontend: Encrypted bytes
-  Frontend->>Frontend: Decrypt image locally
-  Frontend->>User: Display decrypted image
-```
+- **Replace Enoki with wallet-only auth:** Remove the Enoki zkLogin flow and use a standard wallet connection through dApp Kit. Remove the sponsor backend and let users pay their own gas.
 
-The following steps walk through the flow:
+- **Add content categories:** Extend the `Post` struct with a `category` field. Filter posts by category in the frontend and allow creators to organize their content.
 
-1. The user clicks **Unlock Image** on a locked post, triggering `usePayForContent`.
-2. The frontend builds a `grant_access` transaction and sends it to the sponsor backend, which pays for gas and returns the co-signed transaction.
-3. The wallet signs and submits the transaction. The Move package creates a `ViewerToken` owned by the user.
-4. The frontend detects the new token, builds a `seal_approve_access` transaction, and sends it to the Seal key servers.
-5. Seal dry-runs the transaction against the Move contract. Because the user now holds a valid `ViewerToken`, the contract confirms access.
-6. Seal returns the decryption key. The frontend fetches the encrypted blob from Walrus, decrypts it locally, and renders the image.
-
-Errors can occur at the sponsorship step (backend unreachable), the Seal step (session key expired), or the Walrus fetch (blob not found). The hooks handle each case with retry logic and user-facing error messages.
+- **Add creator profiles:** Create a shared `CreatorProfile` object per author that stores a display name, bio, and avatar blob ID on Walrus. Link posts to the profile for a richer feed experience.
 
 ## Troubleshooting
 
@@ -249,7 +312,7 @@ Errors can occur at the sponsorship step (backend unreachable), the Seal step (s
 
 **Symptom:** The frontend logs `Error: invalid package ID` or transactions fail with `PackageNotFound`.
 
-**Cause:** The `POSTS_PACKAGE_ID` in `constants.ts` still has the default value, or the published package targets a different network than the wallet.
+**Cause:** The `POSTS_PACKAGE_ID` in `constants.ts` still has the default value, or you published the package on a different network than the wallet targets.
 
 **Fix:** Re-run the publish step on Testnet, then update `constants.ts` with the new package ID and restart the dev server.
 
@@ -273,7 +336,7 @@ Errors can occur at the sponsorship step (backend unreachable), the Seal step (s
 
 **Symptom:** A post unlocks (the app grants a `ViewerToken`) but the image shows as broken or never loads.
 
-**Cause:** The Walrus aggregator is unreachable, the blob ID is invalid, or the encrypted image has not been uploaded to Walrus.
+**Cause:** The Walrus aggregator is unreachable, the blob ID is invalid, or you did not upload the encrypted image to Walrus.
 
 **Fix:** Verify the blob ID in the post object with `sui client object POST_ID`. Check that the Walrus aggregator URL in `constants.ts` is reachable. Re-upload the image if the blob ID is a placeholder.
 

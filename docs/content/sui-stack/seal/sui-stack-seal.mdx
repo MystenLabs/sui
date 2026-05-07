@@ -13,40 +13,19 @@ verified_against:
 
 This guide continues from [Data Storage Using Walrus](/sui-stack/walrus-seal/sui-stack-walrus) and builds on the same [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) app. The Walrus guide covers how OnlyFins stores and reads images. This guide covers how it protects them: encrypting images before upload and enforcing onchain access control so only authorized users can decrypt them.
 
-By the end of this guide, you understand how to design a [Seal](https://seal-docs.wal.app/) access control policy in [Move](/develop/write-move/sui-move-concepts), how to encrypt data before uploading it to [Walrus](https://docs.wal.app/), and how to implement the full client-side decryption flow in a browser app.
+Seal is a decentralized secrets management (DSM) service that uses access control policies defined and validated on Sui. You use Seal to encrypt sensitive data before storing it on Walrus, onchain, or in any other storage, and then issue decryption keys only to users who satisfy your onchain access conditions.
+
+Seal has 3 core components:
+
+- **Onchain access policies:** Move functions you write that define who is allowed to decrypt. [Key servers](https://seal-docs.wal.app/ServerOverview) evaluate your policy by running a `dry_run_transaction_block` on Sui when a user requests decryption key shares. If the policy approves, the key shares are returned.
+- **Key servers:** Offchain services that hold [IBE (identity-based encryption)](https://seal-docs.wal.app/Design) master secret keys. Each server returns derived decryption key shares only when the request satisfies the associated onchain policy. You configure a threshold, so decryption requires at least `t` out of `n` servers to agree.
+- **Client-side encryption:** The user encrypts and decrypts data locally in their environment. Key servers never see plaintext.
+
+In OnlyFins, the access policy is: the user must own a `ViewerToken` object for the specific post they want to unlock. The user receives a `ViewerToken`, a [Sui object](/develop/sui-architecture/object-model), after requesting access onchain. Seal key servers check this ownership before issuing key shares.
 
 ### Encrypt-upload-decrypt sequence
 
 ```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: '#000000'
-    primaryTextColor: '#FFFFFF'
-    primaryBorderColor: '#6C7584'
-    secondaryColor: '#6C7584'
-    secondaryTextColor: '#FFFFFF'
-    tertiaryColor: '#298DFF'
-    tertiaryTextColor: '#FFFFFF'
-    lineColor: '#298DFF'
-    background: '#FFFFFF'
-    mainBkg: '#000000'
-    secondBkg: '#6C7584'
-    noteBkgColor: '#E6F1FB'
-    noteTextColor: '#000000'
-    noteBorderColor: '#298DFF'
-    activationBkgColor: '#298DFF'
-    activationBorderColor: '#185FA5'
-    fontSize: '14px'
-    fontFamily: 'Inter, sans-serif'
-    signalColor: '#298DFF'
-    signalTextColor: '#298DFF'
-    labelBoxBkgColor: '#000000'
-    labelBoxBorderColor: '#6C7584'
-    labelTextColor: '#FFFFFF'
-    loopTextColor: '#FFFFFF'
----
 sequenceDiagram
     participant B as BACKEND SCRIPT
     participant KS as KEY SERVERS
@@ -80,18 +59,6 @@ sequenceDiagram
 :::caution
 Seal should not be used to protect highly sensitive data such as wallet keys, personal health information, or government-level secrets. Review the [Seal Terms of Service](https://seal-docs.wal.app/TermsOfService) and [security best practices](https://seal-docs.wal.app/) before deploying to production.
 :::
-
-## Introduction to Seal
-
-Seal is a decentralized secrets management (DSM) service that uses access control policies defined and validated on Sui. You use Seal to encrypt sensitive data before storing it on Walrus, onchain, or in any other storage, and then issue decryption keys only to users who satisfy your onchain access conditions.
-
-Seal has 3 core components:
-
-- **Onchain access policies:** Move functions you write that define who is allowed to decrypt. [Key servers](https://seal-docs.wal.app/ServerOverview) evaluate your policy by running a `dry_run_transaction_block` on Sui when a user requests decryption key shares. If the policy approves, the key shares are returned.
-- **Key servers:** Offchain services that hold [IBE (identity-based encryption)](https://seal-docs.wal.app/Design) master secret keys. Each server returns derived decryption key shares only when the request satisfies the associated onchain policy. You configure a threshold, so decryption requires at least `t` out of `n` servers to agree.
-- **Client-side encryption:** The user encrypts and decrypts data locally in their environment. Key servers never see plaintext.
-
-In OnlyFins, the access policy is: the user must own a `ViewerToken` object for the specific post they want to unlock. The user receives a `ViewerToken`, a [Sui object](/develop/sui-architecture/object-model), after requesting access onchain. Seal key servers check this ownership before issuing key shares.
 
 ### How Seal fits with Walrus
 
