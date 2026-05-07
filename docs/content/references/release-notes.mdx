@@ -557,7 +557,7 @@ The following execution-level adjustments are being introduced:
 - **`MoveLoc` is cheaper:** We previously (incorrectly) charged proportionally to value size, even though no value is created. We now charge a constant amount.
 - **`ReadRef` is slightly more expensive:** This creates value copies, which we now account for.
 - **Execution stack tracking:** More accurate stack-height metering reduces over-charging for some instructions.
-- **Primitive size accounting tuning:** The computed “size” for several primitive types now better match their actual size, including some decreases and increases.
+- **Primitive size accounting tuning:** The computed "size" for several primitive types now better match their actual size, including some decreases and increases.
 
 #### Observed impact from transaction sampling
 
@@ -596,7 +596,7 @@ Your transactions should get cheaper if they do **any** of the following:
 - Read **a small set of dynamic fields repeatedly** within the same transaction
 - **Create dynamic fields** and then access them again in-transaction
 
-These now benefit from the cache-aware and “created in-transaction” discounts.
+These now benefit from the cache-aware and "created in-transaction" discounts.
 
 #### Secondary effects
 
@@ -650,9 +650,9 @@ Below we will dig deeper into why these rules exist and how the rules are define
 
 #### Motivation
 
-You might wonder why have any rules for the usage of values with `entry` functions? The original motivation was to ensure that package developers had a way of ensuring a certain sense of “atomicity” for the arguments to their `entry` functions. Meaning a way of ensuring that the arguments would behave the same if the specific `entry` function was the only command in the PTB. A canonical example for this is flash loans—a developer might want to ensure that a given `Coin` is not from a flash loan and is ostensibly “owned” by the sender of the transaction.
+You might wonder why have any rules for the usage of values with `entry` functions? The original motivation was to ensure that package developers had a way of ensuring a certain sense of "atomicity" for the arguments to their `entry` functions. Meaning a way of ensuring that the arguments would behave the same if the specific `entry` function was the only command in the PTB. A canonical example for this is flash loans—a developer might want to ensure that a given `Coin` is not from a flash loan and is ostensibly "owned" by the sender of the transaction.
 
-In Move, flash loans (and similar paradigms) use [“hot potato”](https://move-book.com/programmability/hot-potato-pattern) patterns to force behavior.
+In Move, flash loans (and similar paradigms) use ["hot potato"](https://move-book.com/programmability/hot-potato-pattern) patterns to force behavior.
 For example
 
 ```move
@@ -698,25 +698,25 @@ Some brief terminology before looking at the rules and their defining algorithm.
 - A _result_ is a value that was returned from a PTB command. These are referred to via `Result` and `NestedResult`.
 - Arguments to a PTB command have two usage types: by-reference (`&` or `&mut`) or by-value (either copied or moved).
 - A value is considered _hot_ if its type has neither `store` nor `drop`.
-- This means a hot value’s type can be in one of the following cases:
+- This means a hot value's type can be in one of the following cases:
   - No abilities
   - `copy`
   - `key`
   - Note that a value cannot have both `key` and `copy` since `sui::object::UID` does not have `copy`
 - Each value belongs to a _clique_. A clique represents values that have been used together as arguments and their results.
-- Each clique has a count with the number of hot values. Meaning that the clique’s count is incremented when results are hot (once per result), and the clique’s count is decremented when a hot value is moved (taken by-value and not copied).
+- Each clique has a count with the number of hot values. Meaning that the clique's count is incremented when results are hot (once per result), and the clique's count is decremented when a hot value is moved (taken by-value and not copied).
   - The count here is tracking how many hot potato (or similar) values are outstanding, and the clique is tracking which values they could restrict or otherwise influence.
 
 #### The Algorithm
 
 - Each input to the PTB starts off in its own clique with a count of zero.
-- When values are used (by reference or by-value) together in a command, their cliques are merged, adding together each clique’s count.
-- The count of the arguments’ merged clique is decremented for each hot value moved (taken by-value and not copied).
-- If the command is a Move call for a non-public `entry` function, the count of the arguments’ merged clique must be zero at this point.
+- When values are used (by reference or by-value) together in a command, their cliques are merged, adding together each clique's count.
+- The count of the arguments' merged clique is decremented for each hot value moved (taken by-value and not copied).
+- If the command is a Move call for a non-public `entry` function, the count of the arguments' merged clique must be zero at this point.
   - Note that this means a non-public `entry` function _can_ take hot values! They must just be the last hot values in their clique.
-- Results of each command are included in the arguments’ merged clique. The clique’s count is incremented for each hot result value.
-- **NOTE:** Shared objects taken by-value have a special rule in that during the accounting for the result values, the argument’s merged clique’s count is set to infinity.
-  - See the “Limitations” section below for more detail
+- Results of each command are included in the arguments' merged clique. The clique's count is incremented for each hot result value.
+- **NOTE:** Shared objects taken by-value have a special rule in that during the accounting for the result values, the argument's merged clique's count is set to infinity.
+  - See the "Limitations" section below for more detail
 
 #### Examples
 
@@ -768,7 +768,7 @@ As mentioned above, a clique with a shared object by-value is always hot. In oth
 
 Why? This rule is needed since shared objects cannot be wrapped—they either have to be re-shared or deleted. This means that a shared-object could be used to force behavior in a way similar to a hot potato. But unlike a hot potato, we cannot tell from signature of the function if it is used properly.
 
-If this algorithm was “dynamic” rather than “static”, it could be more precise at the cost of clarity. That is, a static set of rules is typically easier to describe and follow as compared to a dynamic set of rules. However, [party objects](https://docs.sui.io/guides/developer/objects/object-ownership/party) will fall under this restriction under more narrow cases than with shared objects. As such, we think that this restriction will be acceptable long term without having to sacrifice the clarity of the static system.
+If this algorithm was "dynamic" rather than "static", it could be more precise at the cost of clarity. That is, a static set of rules is typically easier to describe and follow as compared to a dynamic set of rules. However, [party objects](/develop/objects/object-ownership/party) will fall under this restriction under more narrow cases than with shared objects. As such, we think that this restriction will be acceptable long term without having to sacrifice the clarity of the static system.
 
 #### Coming Soon (v1.63 or later)
 
@@ -786,11 +786,11 @@ In a later version, we will remove the signature restrictions for `entry` functi
 
 #### JSON-RPC
 
-[#23737](https://github.com/MystenLabs/sui/pull/23737): This PR, in tandem with [[#24192](https://github.com/MystenLabs/sui/pull/24192)]([#2419](https://github.com/MystenLabs/sui/pull/2419)2), unifies how indexers determine their ingestion starting point and introduce watermark-gated backfill tasks.
+[#23737](https://github.com/MystenLabs/sui/pull/23737): This PR, in tandem with [[#24192](https://github.com/MystenLabs/sui/pull/24192)]([#2419](https://github.com/MystenLabs/sui/pull/2419)2), unifies how indexers determine their ingestion starting point and introduce watermark-gated backfill tasks.
 
-1. `--skip-watermark` is removed, and the previous ability to bypass
+1. `--skip-watermark` is removed, and the previous ability to bypass
 watermark safety checks for concurrent pipelines is no longer supported.
-2. `--first-checkpoint` no longer forces the indexer to start ingesting
+2. `--first-checkpoint` no longer forces the indexer to start ingesting
 from the configured checkpoint. The indexer now always determines its
 starting ingestion point as the minimum next checkpoint across all
 pipelines to resume processing from. From this release,
@@ -800,21 +800,21 @@ configured value. Pipelines with existing watermarks will always resume
 processing from their own next checkpoint.
 3. A new mechanism, watermark tasks, allows operators to run the same
 pipelines on multiple indexer instances for historical backfilling. Two
-new flags, `--task` and `--reader-interval-ms`, enable this mechanism.
+new flags, `--task` and `--reader-interval-ms`, enable this mechanism.
 These flags create a tasked indexer whose pipelines commit checkpoint
-data as long as the checkpoint is not below the `reader_lo` watermark of
+data as long as the checkpoint is not below the `reader_lo` watermark of
 their corresponding main pipelines. The indexer controls how frequently
 these tasked pipelines poll the main pipelines' watermarks
-per `--reader-interval-ms`.
+per `--reader-interval-ms`.
 
 Migration guidance:  
-1. If you use `--first-checkpoint` only for _initial_ ingestion of a
+1. If you use `--first-checkpoint` only for _initial_ ingestion of a
 fresh pipeline, no further action is needed.
-2. If you previously used `--first-checkpoint` and
-optionally `--skip-watermark` to backfill existing tables, you can
+2. If you previously used `--first-checkpoint` and
+optionally `--skip-watermark` to backfill existing tables, you can
 achieve the same workflow by starting a new indexer instance with a
-configured `--task`, `--reader-interval-ms`, and `--first-checkpoint`.
-3. Like `--skip-watermark`, `--task` cannot be used to run sequential
+configured `--task`, `--reader-interval-ms`, and `--first-checkpoint`.
+3. Like `--skip-watermark`, `--task` cannot be used to run sequential
 pipelines.
 
 #### GraphQL
