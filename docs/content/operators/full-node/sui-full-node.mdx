@@ -98,10 +98,10 @@ rpc:
 
 The `rpc` configuration block supports additional settings. The most important options are:
 
-- **`enable-indexing`:** Set to `true` to enable gRPC-specific data indexing.
-- **`https-address`:** The HTTPS address for the RPC server, if TLS termination is handled by the node.
-- **`tls`:** TLS configuration for the RPC server.
-- **`max-json-move-value-size`:** Maximum size in bytes for JSON Move values returned by the RPC server.
+- `enable-indexing`: Set to `true` to enable gRPC-specific data indexing.
+- `https-address`: The HTTPS address for the RPC server, if TLS termination is handled by the node.
+- `tls`: TLS configuration for the RPC server.
+- `max-json-move-value-size`: Maximum size in bytes for JSON Move values returned by the RPC server.
 
 Refer to the [full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml) for the complete list of available `rpc` options.
 
