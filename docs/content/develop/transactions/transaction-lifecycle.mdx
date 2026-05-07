@@ -12,15 +12,15 @@ The following steps align with those in the diagram:
 
 1. A user with the private key to their Sui account creates and signs a transaction.
 
-1. The user sends the transaction to a [full node](/operators/full-node/sui-full-node). The full node runs *Transaction Driver*, which manages transaction submission and finality. *Transaction Driver* submits the transaction to a selected [validator](/operators/validator). The validator performs validity and safety checks, and includes the transaction in its next proposed Mysticeti consensus block.
+1. The user sends the transaction to a [full node](/operators/full-node/sui-full-node). The full node runs *Transaction Driver*, which manages submitting transactions and receiving effects. *Transaction Driver* submits the transaction to a selected [validator](/operators/validator). The validator performs validity and safety checks, and includes the transaction in its next proposed Mysticeti consensus block.
 
 1. The Mysticeti [consensus protocol](/develop/sui-architecture/consensus) sequences the block. As later blocks from peer validators reference it, peer validators can reject transactions that fail their own validity checks. When transactions are committed, only those that accumulate enough accept votes in consensus are accepted.
 
 1. Each validator executes the transaction once it is committed and accepted by consensus. Execution is deterministic, so all honest validators produce the same sequence of effects.
 
-1. After the validators execute the transaction, they return the transaction output (effects) to the *Transaction Driver* on the full node. *Transaction Driver* certifies the effects by ensuring either that a quorum of validators acknowledge them, or that a certified checkpoint includes them. At this point the full node holds proof of settlement finality: the transaction is irreversible.
+1. After the validators execute the transaction, they return the transaction output (effects) to the full node. The full node certifies the effects by ensuring either that a quorum of validators acknowledge them, or that a certified checkpoint includes them. At this point the full node holds proof of settlement finality: the transaction is irreversible.
 
-1. *Transaction Driver* returns the certified effects to the user (or the calling application). The user now has confirmation that the transaction has settled and can act on its outcome.
+1. The full node returns the certified effects to the user (or the calling application). The user now has confirmation that the transaction has settled and can act on its outcome.
 
 1. Validators build [checkpoints](/develop/sui-architecture/checkpoint-verification) from consensus commits. Once a checkpoint containing the transaction is signed by a quorum of validators, the transaction becomes part of the permanent record used for state sync; indexers consume the certified checkpoint stream and persist the transaction, its effects, events, and any created or updated objects into queryable indexes used by clients and explorers.
 
@@ -58,9 +58,9 @@ Sui's parallel execution engine executes transactions emitted by consensus. Tran
 
 - The execution status (success or an error code) of the transaction.
 
-After execution, the validator returns either the effects digest or the full effects together with related data such as events and updated objects, depending on what the full node requested. The full node only needs full effects from a single validator, plus quorum acknowledgments of the same effects digest from the others.
+After execution, the validator returns either the effects digest or the full effects together with related data such as events and updated objects, depending on what the *Transaction Driver* on the full node requested. *Transaction Driver* only needs full effects from a single validator, plus quorum acknowledgments of the same effects digest from the others.
 
-If the *Transaction Driver* cannot collect a quorum of acknowledgments (for example, when slow or partitioned validators delay responding), it falls back to waiting for the transaction to appear in a certified checkpoint. Inclusion in a certified checkpoint is itself proof of finality.
+If a quorum of acknowledgments does not arrive (for example, when slow or partitioned validators delay responding), the full node instead waits for the transaction to appear in a certified checkpoint. Inclusion in a certified checkpoint is itself proof of finality.
 
 :::tip
 
