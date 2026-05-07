@@ -4,20 +4,22 @@ Translate the informal spec into Verus syntax and iterate until zero errors.
 
 ## Writing the spec
 
-### Start from caller needs, not the implementation
+### Model the formal spec after the informal algebraic spec
 
-The spec must describe what the function *should* do, not what it *happens* to do.
+The `requires`/`ensures` clauses are a direct translation of the informal algebraic spec, not a description of the implementation.
+
+Take the algebraic model — abstract state, state transitions, invariants, semantic guarantees — and mechanically render each piece into Verus syntax:
+
+- The abstract state predicate becomes an `open spec fn` (e.g. `has_voted`, `invariant_holds`)
+- The state transition "voted = old(voted) ∪ {authority}" becomes a `forall` biconditional in `ensures`
+- The invariant becomes both a `requires` and an `ensures`
+- Monotonicity, commutativity, and value-preservation become additional `ensures` clauses
 
 **Never read the implementation and transcribe it into `requires`/`ensures`.** That produces a spec trivially satisfied by the current code but useless for catching bugs or constraining future refactors. A spec that mirrors the implementation is a tautology, not a specification.
 
-Instead, ask these questions before looking at any code:
-- What abstract state does this function change, and how?
-- What does a caller need to know about the result?
-- What properties must hold before and after, regardless of how the function is implemented?
+Only consult the implementation to understand *how* to express something in Verus syntax — never to decide *what* to say.
 
-Only consult the implementation to understand *how* to express a postcondition in Verus syntax — never to decide *what* to say.
-
-If you find yourself writing a postcondition that starts "the function calls X, so ensures X ran," stop. That is describing the implementation, not specifying behavior. Ask instead: "What property does the caller care about after this returns?"
+If you find yourself writing a postcondition that starts "the function calls X, so ensures X ran," stop. That is describing the implementation, not specifying behavior.
 
 **Name your predicates.** Define `open spec fn has_voted`, `invariant_holds`, `all_sigs_valid`, etc. rather than inlining complex expressions in `requires`/`ensures`. Named predicates are reusable across lemmas and make specs readable.
 
