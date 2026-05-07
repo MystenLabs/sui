@@ -52,8 +52,8 @@ fn build_tonic_services(out_dir: &Path) {
             tonic_build::manual::Method::builder()
                 .name("fetch_blocks")
                 .route_name("FetchBlocks")
-                .input_type("crate::network::tonic_network::FetchBlocksRequest")
-                .output_type("crate::network::tonic_network::FetchBlocksResponse")
+                .input_type("crate::network::tonic_common::FetchBlocksRequest")
+                .output_type("crate::network::tonic_common::FetchBlocksResponse")
                 .codec_path(codec_path)
                 .server_streaming()
                 .build(),
@@ -62,8 +62,8 @@ fn build_tonic_services(out_dir: &Path) {
             tonic_build::manual::Method::builder()
                 .name("fetch_commits")
                 .route_name("FetchCommits")
-                .input_type("crate::network::tonic_network::FetchCommitsRequest")
-                .output_type("crate::network::tonic_network::FetchCommitsResponse")
+                .input_type("crate::network::tonic_common::FetchCommitsRequest")
+                .output_type("crate::network::tonic_common::FetchCommitsResponse")
                 .codec_path(codec_path)
                 .build(),
         )
@@ -106,8 +106,8 @@ fn build_tonic_services(out_dir: &Path) {
             tonic_build::manual::Method::builder()
                 .name("fetch_blocks")
                 .route_name("FetchBlocks")
-                .input_type("crate::network::observer::FetchBlocksRequest")
-                .output_type("crate::network::observer::FetchBlocksResponse")
+                .input_type("crate::network::tonic_common::FetchBlocksRequest")
+                .output_type("crate::network::tonic_common::FetchBlocksResponse")
                 .codec_path(codec_path)
                 .server_streaming()
                 .build(),
@@ -116,8 +116,8 @@ fn build_tonic_services(out_dir: &Path) {
             tonic_build::manual::Method::builder()
                 .name("fetch_commits")
                 .route_name("FetchCommits")
-                .input_type("crate::network::observer::FetchCommitsRequest")
-                .output_type("crate::network::observer::FetchCommitsResponse")
+                .input_type("crate::network::tonic_common::FetchCommitsRequest")
+                .output_type("crate::network::tonic_common::FetchCommitsResponse")
                 .codec_path(codec_path)
                 .build(),
         )
