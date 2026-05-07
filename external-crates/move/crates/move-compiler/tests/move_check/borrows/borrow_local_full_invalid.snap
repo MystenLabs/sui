@@ -31,7 +31,7 @@ error[E07003]: invalid operation, could create a dangling reference
 24 │         *y = 0;
    │         ^^^^^^ Invalid mutation of reference.
 
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
    ┌─ tests/move_check/borrows/borrow_local_full_invalid.move:33:17
    │
 32 │         let x = &mut v;

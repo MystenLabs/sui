@@ -21,7 +21,7 @@ error[E02015]: invalid attribute
   │
   = Attribute defines_primitive requires the name of the primitive being defined, e.g., '#[defines_primitive(vector)]'
 
-error[E10004]: invalid use of recognized attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_check/parser/invalid_attr_defines_prim.move:9:21
   │
 9 │ #[defines_primitive(Foo)]

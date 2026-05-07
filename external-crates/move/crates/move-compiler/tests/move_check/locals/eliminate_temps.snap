@@ -21,7 +21,7 @@ error[E07002]: mutable borrow rule violated
    │                                    │   
    │                                    It is still being mutably borrowed by this reference
 
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
    ┌─ tests/move_check/locals/eliminate_temps.move:20:46
    │
 20 │         let (f, u): (&u64, u64) = (&mut s.f, s.f);

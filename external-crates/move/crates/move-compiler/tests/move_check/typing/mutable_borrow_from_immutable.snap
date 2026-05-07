@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
   ┌─ tests/move_check/typing/mutable_borrow_from_immutable.move:6:9
   │
 6 │         &mut (&s).v;
@@ -14,7 +14,7 @@ error[E07001]: invalid borrow
   │         │     Immutable because of this position
   │         Invalid mutable borrow from an immutable reference
 
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
   ┌─ tests/move_check/typing/mutable_borrow_from_immutable.move:7:9
   │
 7 │         &mut (&s.x).f;
@@ -23,7 +23,7 @@ error[E07001]: invalid borrow
   │         │     Immutable because of this position
   │         Invalid mutable borrow from an immutable reference
 
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
    ┌─ tests/move_check/typing/mutable_borrow_from_immutable.move:10:9
    │
  8 │         let sref = &s;
@@ -32,7 +32,7 @@ error[E07001]: invalid borrow
 10 │         &mut sref.v;
    │         ^^^^^^^^^^^ Invalid mutable borrow from an immutable reference
 
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
    ┌─ tests/move_check/typing/mutable_borrow_from_immutable.move:11:9
    │
  9 │         let xref = &s.x;
@@ -47,7 +47,7 @@ error[E03010]: unbound field
 11 │         &mut xref.v;
    │              ^^^^^^ Unbound field 'v' in '0x8675309::M::X'
 
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
    ┌─ tests/move_check/typing/mutable_borrow_from_immutable.move:15:9
    │
 14 │     fun t2(s: &S, x: &X) {
@@ -55,7 +55,7 @@ error[E07001]: invalid borrow
 15 │         x.f = x.f + 1;
    │         ^^^ Invalid mutable borrow from an immutable reference
 
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
    ┌─ tests/move_check/typing/mutable_borrow_from_immutable.move:16:9
    │
 14 │     fun t2(s: &S, x: &X) {

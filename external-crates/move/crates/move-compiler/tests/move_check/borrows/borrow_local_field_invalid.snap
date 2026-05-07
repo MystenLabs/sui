@@ -14,7 +14,7 @@ error[E07003]: invalid operation, could create a dangling reference
 14 │         *s = S { f: 0, g: 0 };
    │         ^^^^^^^^^^^^^^^^^^^^^ Invalid mutation of reference.
 
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
    ┌─ tests/move_check/borrows/borrow_local_field_invalid.move:19:17
    │
 18 │         let f = &mut v.f;

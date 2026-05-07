@@ -5,7 +5,7 @@ info:
   edition: legacy
   lint: false
 ---
-error[E10004]: invalid use of recognized attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_check/unit_test/attribute_location_invalid.move:5:7
   │
 5 │     #[expected_failure(abort_code = 0)]

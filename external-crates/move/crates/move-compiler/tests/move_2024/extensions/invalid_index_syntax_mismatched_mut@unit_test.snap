@@ -15,7 +15,7 @@ error[E02019]: invalid 'syntax' method type
    │                   │             
    │                   Immutable subject type defined here
 
-error[E07001]: invalid borrow
+error[E07001]: referential transparency violated
    ┌─ tests/move_2024/extensions/invalid_index_syntax_mismatched_mut.move:13:9
    │
 12 │     fun borrow(s: &S, i: u64): &mut u64 {

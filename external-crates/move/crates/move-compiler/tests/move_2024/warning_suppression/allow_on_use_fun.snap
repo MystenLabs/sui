@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E10004]: invalid use of recognized attribute
+error[E10004]: invalid usage of known attribute
   ┌─ tests/move_2024/warning_suppression/allow_on_use_fun.move:2:7
   │
 2 │     #[allow(unused)]

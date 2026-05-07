@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04038]: invalid string literal usage
+error[E04038]: invalid string after type inference
   ┌─ tests/move_2024/matching/string_literal_crash.move:4:13
   │
 4 │             "a" => {},

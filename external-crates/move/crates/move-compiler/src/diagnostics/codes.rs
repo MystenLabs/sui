@@ -246,7 +246,7 @@ codes!(
         CyclicInstantiation:
             { msg: "cyclic type instantiation", severity: NonblockingError },
         MissingAcquires: { msg: "missing acquires annotation", severity: NonblockingError },
-        InvalidNum: { msg: "invalid numeric literal for inferred type", severity: NonblockingError },
+        InvalidNum: { msg: "numeric literal out of range", severity: NonblockingError },
         NonInvocablePublicScript: {
             msg: "script function cannot be invoked with this signature \
                 (NOTE: this may become an error in the future)",
@@ -268,7 +268,7 @@ codes!(
         InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
         IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
         DeprecatedUsage: { msg: "use of deprecated item", severity: Warning },
-        InvalidString: { msg: "invalid string literal usage", severity: NonblockingError },
+        InvalidString: { msg: "invalid string after type inference", severity: NonblockingError },
         MissingLiteralType:
             { msg: "unable to determine type of literal", severity: Warning },
     ],
@@ -284,7 +284,7 @@ codes!(
     ],
     // errors for move rules. mostly cfgir/borrows
     ReferenceSafety: [
-        RefTrans: { msg: "invalid borrow", severity: BlockingError },
+        RefTrans: { msg: "referential transparency violated", severity: BlockingError },
         MutOwns: { msg: "mutable borrow rule violated", severity: NonblockingError },
         Dangling: {
             msg: "invalid operation, could create a dangling reference",
@@ -319,10 +319,10 @@ codes!(
         Duplicate: { msg: "invalid duplicate attribute", severity: NonblockingError },
         InvalidName: { msg: "invalid attribute name", severity: NonblockingError },
         InvalidValue: { msg: "invalid attribute value", severity: NonblockingError },
-        InvalidUsage: { msg: "invalid use of recognized attribute", severity: NonblockingError },
+        InvalidUsage: { msg: "invalid usage of known attribute", severity: NonblockingError },
         InvalidTest: { msg: "unable to generate test", severity: NonblockingError },
         InvalidBytecodeInst:
-            { msg: "unknown bytecode instruction", severity: NonblockingError },
+            { msg: "unknown bytecode instruction function", severity: NonblockingError },
         ValueWarning: { msg: "issue with attribute value", severity: Warning },
         AmbiguousAttributeValue: { msg: "ambiguous attribute value", severity: NonblockingError },
     ],
