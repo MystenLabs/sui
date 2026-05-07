@@ -273,7 +273,7 @@ impl ConsensusManager {
             consensus_handler,
             commit_receiver,
             monitor.clone(),
-            node_role.should_process_consensus_commits(),
+            node_role,
         );
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);

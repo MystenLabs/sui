@@ -79,6 +79,10 @@ impl NodeRole {
     pub fn should_run_rpc_servers(&self) -> bool {
         matches!(self, Self::FullNode(_))
     }
+
+    pub fn is_withdraw_scheduler_enabled(&self) -> bool {
+        matches!(self, Self::Validator | Self::FullNode(FullNodeSyncMode::ConsensusObserver))
+    }
 }
 
 impl std::fmt::Display for NodeRole {
@@ -103,7 +107,6 @@ mod tests {
         assert!(role.runs_consensus());
         assert!(!role.should_enable_index_processing());
         assert!(!role.should_run_rpc_servers());
-        assert!(role.should_process_consensus_commits());
     }
 
     #[test]
@@ -112,7 +115,6 @@ mod tests {
         assert!(role.runs_consensus());
         assert!(role.should_enable_index_processing());
         assert!(role.should_run_rpc_servers());
-        assert!(!role.should_process_consensus_commits());
     }
 
     #[test]
@@ -121,6 +123,5 @@ mod tests {
         assert!(!role.runs_consensus());
         assert!(role.should_enable_index_processing());
         assert!(role.should_run_rpc_servers());
-        assert!(!role.should_process_consensus_commits());
     }
 }
