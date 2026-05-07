@@ -44,7 +44,7 @@ $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming
 - Use full node gRPC as your primary source by default.
 - Always configure a polling-based fallback source to ensure reliability and access to historical data.
 - Use `https://checkpoints.<network>.sui.io` only as a fallback, not as your default steady-state source.
-- `https://checkpoints.mainnet.sui.io` retains only the most recent 30 days of checkpoints. Testnet still provides full history.
+- `https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints. For full retention, use `gs://mysten-mainnet-checkpoints-use4` or `gs://mysten-testnet-checkpoints-use4` with Requester Pays enabled.
 - The streaming connection automatically falls back to the polling source when streaming is unavailable or when historical checkpoints are needed.
 
 :::
@@ -57,14 +57,14 @@ Polling-based sources periodically check for new checkpoints using the polling m
 
 Remote checkpoint stores are intended for fallback and backfill. Sui provides the following endpoints:
 
-- **Testnet**: `https://checkpoints.testnet.sui.io`
-- **Mainnet**: `https://checkpoints.mainnet.sui.io`
+- **Testnet**: `https://checkpoints.testnet.sui.io` for the most recent 30 days only
+- **Mainnet**: `https://checkpoints.mainnet.sui.io` for the most recent 30 days only
 
 ```sh
 $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io
 ```
 
-Do not use `https://checkpoints.<network>.sui.io` as your default steady-state source if you have access to a full node gRPC endpoint. On Mainnet, `https://checkpoints.mainnet.sui.io` retains only the latest 30 days of checkpoints. If you need to backfill older Mainnet history, use `gs://mysten-mainnet-checkpoints-use4` via `--remote-store-gcs mysten-mainnet-checkpoints-use4`. This bucket is Requester Pays enabled and is intended to be accessed through the indexing framework's `--remote-store-gcs` option rather than `--remote-store-url`. Testnet still provides full history through `https://checkpoints.testnet.sui.io`. See [Running a Remote Store](/operators/data-management/remote-store-setup) and Google Cloud [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays).
+Do not use `https://checkpoints.<network>.sui.io` as your default steady-state source if you have access to a full node gRPC endpoint. The public HTTPS endpoints retain only the latest 30 days of checkpoints. If you need full-retention backfill, use `gs://mysten-mainnet-checkpoints-use4` via `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` via `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet. These buckets are Requester Pays enabled and are intended to be accessed through the indexing framework's `--remote-store-gcs` option rather than `--remote-store-url`. See [Running a Remote Store](/operators/data-management/remote-store-setup) and Google Cloud [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays).
 
 #### Local path
 

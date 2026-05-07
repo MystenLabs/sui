@@ -42,7 +42,7 @@ The indexing framework supports multiple data sources to give you flexibility in
 
 **Polling-based sources** that periodically check for new checkpoints:
 
-- **Remote stores** can connect to public checkpoint repositories such as [`https://checkpoints.mainnet.sui.io`](https://checkpoints.mainnet.sui.io/), but these HTTPS endpoints retain only the most recent 30 days of checkpoints and should be used only as fallback sources. For Mainnet backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` with `--remote-store-gcs`.
+- **Remote stores** can connect to public checkpoint repositories such as [`https://checkpoints.mainnet.sui.io`](https://checkpoints.mainnet.sui.io/) and [`https://checkpoints.testnet.sui.io`](https://checkpoints.testnet.sui.io/), but these HTTPS endpoints retain only the most recent 30 days of checkpoints and should be used only as fallback sources. For full-retention backfills, use `gs://mysten-mainnet-checkpoints-use4` or `gs://mysten-testnet-checkpoints-use4` with `--remote-store-gcs` and Requester Pays enabled.
 
 - **Local files** process checkpoint files produced by a local full node. This method offers the lowest latency but is recommended only for testing because the node does not automatically clean up these files.
 
