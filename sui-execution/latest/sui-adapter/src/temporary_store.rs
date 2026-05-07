@@ -1151,12 +1151,34 @@ impl TemporaryStore<'_> {
     ///
     /// Currently the only funds-accumulator type is `Balance<T>`, so the check is scoped to
     /// those events. As more accumulator shapes are added the filter and the integer
-    /// arithmetic here will need to grow with them.
+    /// arithmetic in `check_address_balance_changes_impl` will need to grow with them.
     ///
     /// PTB-emitted events are identified via `ptb_emitted_accumulator_event_ranges`, populated
     /// at `record_execution_results` time. They are trusted because Move enforces `&mut UID`
     /// and the native checks the actual balance.
+    ///
+    /// `protocol_config.enforce_address_balance_change_invariant()` selects the failure mode:
+    /// - On (post-flag): violations are returned as `Err` so the caller's
+    ///   conservation-recovery flow can abort the tx cleanly.
+    /// - Off (pre-flag): the check still runs, but a violation panics so unexpected
+    ///   violations surface loudly during rollout.
     pub fn check_address_balance_changes(
+        &self,
+        protocol_config: &ProtocolConfig,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
+    ) -> Result<(), ExecutionError> {
+        let result = self.check_address_balance_changes_impl(input_reservations);
+        if protocol_config.enforce_address_balance_change_invariant() {
+            result
+        } else {
+            if let Err(e) = result {
+                panic!("address-balance-change invariant violated pre-flag: {e}");
+            }
+            Ok(())
+        }
+    }
+
+    fn check_address_balance_changes_impl(
         &self,
         input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> Result<(), ExecutionError> {

@@ -625,7 +625,12 @@ mod checked {
                             Ok(())
                         }
                     })
-                    .and_then(|()| store.check_address_balance_changes(input_reservations))
+                    .and_then(|()| {
+                        store.check_address_balance_changes(
+                            store.protocol_config(),
+                            input_reservations,
+                        )
+                    })
             };
 
             if let Err(conservation_err) = run_checks(temporary_store) {

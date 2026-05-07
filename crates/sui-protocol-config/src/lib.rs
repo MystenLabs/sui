@@ -1083,6 +1083,13 @@ struct FeatureFlags {
     // MAX_PUBLIC_INPUTS public inputs.
     #[serde(skip_serializing_if = "is_false")]
     limit_groth16_pvk_inputs: bool,
+
+    // If true, the funds-accumulator address-balance change invariant
+    // (`TemporaryStore::check_address_balance_changes`) is enforced as a consensus check —
+    // violations abort the tx via the conservation-recovery flow. When false, the check still
+    // runs but a violation panics so unexpected violations surface during rollout.
+    #[serde(skip_serializing_if = "is_false")]
+    enforce_address_balance_change_invariant: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -2813,6 +2820,10 @@ impl ProtocolConfig {
 
     pub fn limit_groth16_pvk_inputs(&self) -> bool {
         self.feature_flags.limit_groth16_pvk_inputs
+    }
+
+    pub fn enforce_address_balance_change_invariant(&self) -> bool {
+        self.feature_flags.enforce_address_balance_change_invariant
     }
 }
 
