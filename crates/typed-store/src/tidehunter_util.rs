@@ -69,7 +69,7 @@ fn parse_env_usize(name: &str, minimum: usize) -> Option<usize> {
     })
 }
 
-fn default_max_dirty_keys() -> usize {
+pub fn default_max_dirty_keys() -> usize {
     parse_env_usize("TH_DEFAULT_MAX_DIRTY_KEYS", 1).unwrap_or(1024)
 }
 
@@ -110,9 +110,11 @@ fn thdb_config() -> Config {
     Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
-        snapshot_written_bytes: 64 * 1024 * 1024 * 1024,
+        snapshot_written_bytes: parse_env_usize("TH_SNAPSHOT_WRITTEN_BYTES", 1)
+            .unwrap_or(64 * 1024 * 1024 * 1024),
         // force unloading dirty index entries if behind 60 Gb of wal
-        snapshot_unload_threshold: 60 * 1024 * 1024 * 1024,
+        snapshot_unload_threshold: parse_env_usize("TH_SNAPSHOT_UNLOAD_THRESHOLD", 1)
+            .unwrap_or(60 * 1024 * 1024 * 1024),
         unload_jitter_pct: 30,
         max_dirty_keys: default_max_dirty_keys(),
         max_maps,
@@ -134,7 +136,7 @@ pub fn default_mutex_count() -> usize {
 }
 
 pub fn default_value_cache_size() -> usize {
-    1000
+    parse_env_usize("TH_DEFAULT_VALUE_CACHE_SIZE", 1).unwrap_or(1000)
 }
 
 pub(crate) fn apply_range_bounds(
