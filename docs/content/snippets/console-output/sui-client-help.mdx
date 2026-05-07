@@ -1,4 +1,3 @@
-```sh
 Client for interacting with the Sui network
 
 Usage: sui client [OPTIONS] [COMMAND]
@@ -36,6 +35,9 @@ Commands:
   pay-all-sui                 Pay all residual SUI coins to the recipient with input coins,
                                   after deducting the gas cost. The input coins also include the
                                   coin for gas payment, so no extra gas coin is required
+  send-funds                  Send funds to an address balance using the sui::coin::send_funds
+                                  API. This sends funds to the recipient's address balance (not as a
+                                  coin object)
   pay-sui                     Pay SUI coins to recipients following specified amounts, with
                                   input coins. Length of recipients must be the same as that of
                                   amounts. The input coins also include the coin for gas payment, so
@@ -79,4 +81,3 @@ Options:
       --json                    Return command outputs in json format
   -h, --help                    Print help
   -V, --version                 Print version
-```
