@@ -247,23 +247,24 @@ Event connection
 
 The [Sui by Example](https://github.com/gdanezis/sui-by-example/blob/main/src/05_reading_events/bin/main.rs) repo on GitHub contains a code sample that demonstrates how to query events using the `query_events` function. The package that `PACKAGE_ID_CONST` points to exists on Mainnet, so you can test this code using Cargo. To do so, clone the `sui-by-example` repo locally and follow the [Example 05 directions](https://github.com/gdanezis/sui-by-example/tree/main/src/05_reading_events).
 
+:::info
+The `sui_sdk::SuiClientBuilder` JSON-RPC client is deprecated. Use the `sui-rust-sdk` crate with `SuiGrpcClient` for new integrations.
+:::
+
 ```rust
-use sui_sdk::{rpc_types::EventFilter, types::Identifier, SuiClientBuilder};
+use sui_rust_sdk::SuiGrpcClient;
 
 const PACKAGE_ID_CONST: &str = "0x279525274aa623ef31a25ad90e3b99f27c8dbbad636a6454918855c81d625abc";
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui_mainnet = SuiClientBuilder::default()
-        .build("https://fullnode.mainnet.sui.io:443")
-        .await?;
+    let client = SuiGrpcClient::new("https://fullnode.mainnet.sui.io:443")?;
 
-    let events = sui_mainnet
-        .event_api()
+    let events = client
         .query_events(
-            EventFilter::MoveModule {
+            sui_rust_sdk::types::EventFilter::MoveModule {
                 package: PACKAGE_ID_CONST.parse()?,
-                module: Identifier::new("dev_trophy")?,
+                module: "dev_trophy".to_string(),
             },
             None,
             None,
@@ -390,4 +391,3 @@ async function getEventsByType(eventType: string, first: number = 10) {
 }
 ```
 </details>
-
