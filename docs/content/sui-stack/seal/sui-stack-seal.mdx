@@ -11,7 +11,7 @@ verified_against:
   owner: "@sui-docs/stack-guides"
 ---
 
-This guide continues from [Data Storage Using Walrus](/sui-stack/walrus-seal/sui-stack-walrus) and builds on the same [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) app. The Walrus guide covers how OnlyFins stores and reads images. This guide covers how it protects them: encrypting images before upload and enforcing onchain access control so only authorized users can decrypt them.
+This guide continues from [Data Storage Using Walrus](/sui-stack/walrus/sui-stack-walrus) and builds on the same [OnlyFins](https://github.com/MystenLabs/onlyfins-example-app) app. The Walrus guide covers how OnlyFins stores and reads images. This guide covers how it protects them: encrypting images before upload and enforcing onchain access control so only authorized users can decrypt them.
 
 Seal is a decentralized secrets management (DSM) service that uses access control policies defined and validated on Sui. You use Seal to encrypt sensitive data before storing it on Walrus, onchain, or in any other storage, and then issue decryption keys only to users who satisfy your onchain access conditions.
 
