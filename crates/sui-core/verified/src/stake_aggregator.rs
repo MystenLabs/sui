@@ -21,8 +21,9 @@ verus! {
 
 #[cfg(verus_only)]
 use crate::verus_shims::{
-    committee_threshold_spec, committee_unique, committee_weight_of,
-    lemma_voted_weight_empty, lemma_voted_weight_insert, voted_weight,
+    committee_epoch_spec, committee_threshold_spec, committee_unique,
+    committee_weight_of, lemma_voted_weight_empty, lemma_voted_weight_insert,
+    voted_weight,
 };
 
 // Verus cannot construct opaque external types directly. These wrappers
@@ -379,9 +380,35 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
 }
 
 impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
-    /// Insert an authority signature. This is the primary way to use the aggregator and a few
-    /// dedicated checks are performed to make sure things work.
-    /// If quorum is reached, we return AuthorityQuorumSignInfo directly.
+    /// Insert an authority signature.
+    ///
+    /// # Algebraic model
+    ///
+    /// Treat the aggregator as `{ valid_voted: Set<Authority>, committee }` where
+    /// `valid_voted` = authorities whose signature is cryptographically correct.
+    ///
+    /// `insert` is monotone with respect to `valid_voted`:
+    ///
+    ///   valid_voted(after) ⊇ valid_voted(before)   -- valid sigs are never lost
+    ///
+    /// And if the incoming sig is valid (epoch matches, sig verifies, authority is
+    /// new, weight > 0):
+    ///
+    ///   sig.authority ∈ valid_voted(after)
+    ///
+    /// The optimised implementation (batch BLS, then individual fallback with
+    /// eviction) is observationally equivalent to a simple per-sig verification
+    /// before insertion. The eviction loop only removes *invalid* sigs.
+    ///
+    /// # Verification status: unverified (external_body)
+    ///
+    /// Blocked by: Verus cannot register `Envelope<T: Message, S>` via
+    /// `external_type_specification` because the `Message` trait bound is opaque
+    /// to Verus's generic resolution in the current version. The intended Verus
+    /// spec is documented in `verus_shims.rs` (TODO comments near
+    /// `envelope_sig_epoch` etc.). Resolution: add accessor methods to Envelope
+    /// in sui-types so specs can avoid referencing Envelope directly, or wait
+    /// for improved external trait handling in a future Verus release.
     pub fn insert<T: Message + Serialize>(
         &mut self,
         envelope: Envelope<T, AuthoritySignInfo>,

@@ -12,8 +12,10 @@
 #![allow(non_local_definitions)]
 #![allow(dead_code)]
 
+use shared_crypto::intent::Intent;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, StakeUnit};
+use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait};
 use sui_types::error::{SuiError, SuiErrorKind};
 use vstd::prelude::*;
 
@@ -37,7 +39,7 @@ pub use sui_types_verified::authority_name::axiom_authority_name_key_model;
 #[verifier::external_body]
 pub struct ExCommittee(Committee);
 
-// SuiError / SuiErrorKind are constructed in error branches of insert_generic.
+// SuiError / SuiErrorKind are constructed in error branches.
 // Verus only needs to know they exist; we don't reason about their contents.
 #[verifier::external_type_specification]
 #[verifier::external_body]
@@ -48,12 +50,78 @@ pub struct ExSuiError(SuiError);
 pub struct ExSuiErrorKind(SuiErrorKind);
 
 // ---------------------------------------------------------------------------
+// Cryptographic signature types
+// ---------------------------------------------------------------------------
+
+// Register AuthoritySignInfo. Its pub fields (epoch, authority) are accessible
+// in spec because the struct itself is registered.
+#[verifier::external_type_specification]
+#[verifier::external_body]
+pub struct ExAuthoritySignInfo(AuthoritySignInfo);
+
+// Register AuthorityQuorumSignInfo — it appears in InsertResult::QuorumReached.
+#[verifier::external_type_specification]
+#[verifier::external_body]
+#[verifier::reject_recursive_types(STRENGTH)]
+pub struct ExAuthorityQuorumSignInfo<const STRENGTH: bool>(AuthorityQuorumSignInfo<STRENGTH>);
+
+// Register Intent so verify_secure can appear in assume_specification.
+#[verifier::external_type_specification]
+#[verifier::external_body]
+pub struct ExIntent(Intent);
+
+// Register Envelope generically (T = message payload, S = signature).
+
+// ---------------------------------------------------------------------------
+// Cryptographic validity predicate
+// ---------------------------------------------------------------------------
+//
+// `sig_is_valid(sig, committee)` captures whether `sig` is a cryptographically
+// correct signature by `sig.authority` against the committee's public key.
+//
+// The message the sig was made over is intentionally left implicit: in the
+// aggregator context all sigs are for the same message, so validity is a
+// property of the sig+committee pair once the message context is fixed.
+//
+// This is an uninterpreted axiom: Verus trusts the outcome of `verify_secure`
+// without modelling BLS internals.
+pub uninterp spec fn sig_is_valid(sig: &AuthoritySignInfo, committee: &Committee) -> bool;
+
+// ---------------------------------------------------------------------------
+// Envelope spec projectors (PARTIALLY IMPLEMENTED — see TODO below)
+// ---------------------------------------------------------------------------
+//
+// The full algebraic spec for `insert` requires spec projectors for the
+// Envelope type: envelope_sig_epoch, envelope_sig_authority, envelope_sig_is_valid.
+//
+// TODO: Registering Envelope<T: Message, S> via external_type_specification
+// fails in the current Verus version because the `Message` trait bound is
+// opaque to Verus's generic resolution. Once this is resolved (or Envelope
+// gains accessor methods in sui-types), add:
+//
+//   pub uninterp spec fn envelope_sig_epoch<T: Message>(env: &Envelope<T, AuthoritySignInfo>) -> u64;
+//   pub uninterp spec fn envelope_sig_authority<T: Message>(env: ...) -> AuthorityName;
+//   pub uninterp spec fn envelope_sig_is_valid<T: Message>(env: ..., committee: ...) -> bool;
+
+// TODO: add assume_specification for verify_secure once Envelope registration
+// is resolved (see TODO above). The intended spec:
+//   result.is_Ok() == sig_is_valid(sig, committee)
+
+// ---------------------------------------------------------------------------
 // Abstract committee model
 // ---------------------------------------------------------------------------
 //
 // We model the committee as having a canonical ordered list of authorities
 // and a parallel sequence of weights. `committee.weight(name)` returns the
 // weight at the position where `name` appears, or 0 if it doesn't.
+
+/// The epoch stored in the committee. Used by `insert` to check epoch-matching.
+pub uninterp spec fn committee_epoch_spec(c: &Committee) -> u64;
+
+/// Connect Committee::epoch() to the spec.
+pub assume_specification[ Committee::epoch ](c: &Committee) -> (e: u64)
+    ensures e == committee_epoch_spec(c),
+;
 
 // The committee's authorities, in some canonical order. Real `voting_rights`
 // is sorted by AuthorityName, so this corresponds to that sorted view.
