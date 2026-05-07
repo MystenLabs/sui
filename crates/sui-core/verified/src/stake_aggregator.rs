@@ -183,6 +183,14 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
                       && committee_weight_of(&self.committee, authority) > 0
                       && self.total_votes
                           < committee_threshold_spec(&self.committee, STRENGTH)),
+
+            // === Value preservation ===
+            // Stored values for previously-present authorities are never overwritten.
+            forall|a: AuthorityName|
+                old(self).has_voted(a) ==>
+                    #[trigger] self.data@[a] == old(self).data@[a],
+            // When the authority is new, its sig is stored exactly as given.
+            !old(self).has_voted(authority) ==> self.data@[authority] == s,
     {
         if self.data.contains_key(&authority) {
             // Repeated signer. The conflict bit is exec-only metadata.
@@ -373,6 +381,52 @@ pub proof fn lemma_insert_generic_commutes(
     }
 }
 
+/// Inserting two distinct valid-sig authorities via `insert` commutes: the
+/// resulting `has_voted` set is the same regardless of insertion order.
+///
+/// The proof is identical to `lemma_insert_generic_commutes` — commutativity
+/// of set union — because `insert` satisfies the same biconditional state
+/// transition as `insert_generic` when both sigs are cryptographically valid
+/// (valid sigs are never evicted by the BLS fallback path).
+///
+/// The biconditional is taken as a hypothesis rather than derived inline,
+/// so the caller is responsible for establishing it holds (e.g. by applying
+/// the monotonicity postcondition of `insert` under the valid-sig conditions).
+pub proof fn lemma_insert_commutes(
+    agg_voted: Set<AuthorityName>,
+    auth_a: AuthorityName,
+    auth_b: AuthorityName,
+    // has_voted sets along each ordering
+    after_a:  Set<AuthorityName>,
+    after_ab: Set<AuthorityName>,
+    after_b:  Set<AuthorityName>,
+    after_ba: Set<AuthorityName>,
+)
+    requires
+        auth_a != auth_b,
+        // Biconditional state-transition for insert(a) then insert(b):
+        // holds when sig_a and sig_b are both sig_is_valid.
+        forall|c: AuthorityName| after_a.contains(c)
+            <==> (#[trigger] agg_voted.contains(c) || c == auth_a),
+        forall|c: AuthorityName| after_ab.contains(c)
+            <==> (#[trigger] after_a.contains(c) || c == auth_b),
+        // Biconditional for the reversed order:
+        forall|c: AuthorityName| after_b.contains(c)
+            <==> (#[trigger] agg_voted.contains(c) || c == auth_b),
+        forall|c: AuthorityName| after_ba.contains(c)
+            <==> (#[trigger] after_b.contains(c) || c == auth_a),
+    ensures
+        forall|c: AuthorityName|
+            #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
+{
+    assert forall|c: AuthorityName|
+        #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
+    by {
+        assert(after_ab.contains(c) <==> (agg_voted.contains(c) || c == auth_a || c == auth_b));
+        assert(after_ba.contains(c) <==> (agg_voted.contains(c) || c == auth_b || c == auth_a));
+    }
+}
+
 } // verus!
 
 impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
@@ -442,6 +496,15 @@ fn try_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
         agg.invariant_holds(),
         // Eviction can only remove entries, never add new ones.
         forall|a: AuthorityName| agg.has_voted(a) ==> #[trigger] old(agg).has_voted(a),
+        // An entry is evicted only if its sig fails verification.  Any entry
+        // whose sig satisfies sig_is_valid is guaranteed to survive.
+        forall|a: AuthorityName|
+            old(agg).has_voted(a)
+            && sig_is_valid(&old(agg).data@[a], &old(agg).committee)
+                ==> #[trigger] agg.has_voted(a),
+        // Values of surviving entries are never modified.
+        forall|a: AuthorityName|
+            agg.has_voted(a) ==> #[trigger] agg.data@[a] == old(agg).data@[a],
 {
     match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
         agg.data.inner.values().cloned().collect(),
@@ -523,6 +586,13 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
             forall|a: AuthorityName|
                 self.has_voted(a)
                     ==> old(self).has_voted(a) || a == envelope_authority(&envelope),
+            // Monotonicity w.r.t. valid sigs: an entry present before the call
+            // whose sig satisfies sig_is_valid is guaranteed to still be present.
+            // (Valid sigs are never evicted by the BLS fallback path.)
+            forall|a: AuthorityName|
+                old(self).has_voted(a)
+                && sig_is_valid(&old(self).data@[a], &old(self).committee)
+                    ==> #[trigger] self.has_voted(a),
     {
         let ghost pre_sig = envelope_sig_spec(&envelope);
 
