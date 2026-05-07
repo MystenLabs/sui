@@ -1412,12 +1412,17 @@ impl SuiNode {
         // signatures buffer in the channel until the new DKG completes.
         randomness_receiver_handle.clear_public_key();
 
-        if epoch_store.randomness_state_enabled() {
+        if node_role.runs_consensus() && epoch_store.randomness_state_enabled() {
+            let authority_key_pair = if node_role.is_validator() {
+                Some(config.protocol_key_pair())
+            } else {
+                None
+            };
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 Box::new(consensus_adapter.clone()),
                 randomness_handle,
-                config.protocol_key_pair(),
+                authority_key_pair,
                 randomness_receiver_handle.clone(),
             )
             .await;

@@ -5490,7 +5490,11 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.9"
+<<<<<<< HEAD
 source = "git+https://github.com/MystenLabs/fastcrypto?rev=0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3#0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3"
+=======
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8e9ae9ba438a3219ad849d3f163c61868e1ce3c9#8e9ae9ba438a3219ad849d3f163c61868e1ce3c9"
+>>>>>>> 86a9ea0ec6 ([refactor] support randomness for observer sync nodes)
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5522,7 +5526,6 @@ dependencies = [
  "hex",
  "hex-literal 0.4.1",
  "hkdf",
- "itertools 0.12.1",
  "lazy_static",
  "merlin",
  "num-bigint 0.4.6",
@@ -5551,7 +5554,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3#0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8e9ae9ba438a3219ad849d3f163c61868e1ce3c9#8e9ae9ba438a3219ad849d3f163c61868e1ce3c9"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -5560,11 +5563,8 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3#0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3"
-dependencies = [
- "bcs",
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8e9ae9ba438a3219ad849d3f163c61868e1ce3c9#8e9ae9ba438a3219ad849d3f163c61868e1ce3c9"
  "digest 0.10.7",
- "fastcrypto",
  "hex",
  "itertools 0.10.5",
  "rand 0.8.5",
@@ -5580,7 +5580,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3#0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8e9ae9ba438a3219ad849d3f163c61868e1ce3c9#8e9ae9ba438a3219ad849d3f163c61868e1ce3c9"
 dependencies = [
  "bcs",
  "fastcrypto",
@@ -5597,7 +5597,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3#0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8e9ae9ba438a3219ad849d3f163c61868e1ce3c9#8e9ae9ba438a3219ad849d3f163c61868e1ce3c9"
 dependencies = [
  "ark-bn254",
  "ark-ec",

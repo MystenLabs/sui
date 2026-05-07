@@ -1352,7 +1352,9 @@ impl AuthorityPerEpochStore {
                 "BUG: `set_randomness_manager` called more than once; this should never happen"
             );
         }
-        if self.randomness_reporter.set(reporter).is_err() {
+        if let Some(reporter) = reporter
+            && self.randomness_reporter.set(reporter).is_err()
+        {
             debug_fatal!(
                 "BUG: `set_randomness_manager` called more than once; this should never happen"
             );
