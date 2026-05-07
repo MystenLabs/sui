@@ -428,9 +428,7 @@ impl PublicKey {
     }
 }
 
-// `AuthorityPublicKeyBytes` is now defined in `sui-types-verified` so that
-// `impl View for AuthorityPublicKeyBytes` is orphan-free. Re-export here to
-// preserve all existing imports unchanged.
+// Defined in `crates/sui-types/verified/` (orphan-free View impl).
 pub use sui_types_verified::AuthorityPublicKeyBytes;
 
 impl<'a> ConciseableName<'a> for AuthorityPublicKeyBytes {

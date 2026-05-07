@@ -65,11 +65,41 @@ impl<K: Eq + Hash, V> VerifiedHashMap<K, V> {
         self.inner.insert(k, v);
     }
 
-    /// Look up a value. No useful spec: callers use this only for exec-only
-    /// metadata that does not affect the verified invariant.
     #[verifier::external_body]
-    pub fn get_value<'a>(&'a self, k: &K) -> (out: Option<&'a V>) {
+    pub fn get_value<'a>(&'a self, k: &K) -> (out: Option<&'a V>)
+        ensures
+            // Key is present iff a value is returned, and the returned value
+            // matches what the ghost map records at that key.
+            match out {
+                Some(v) => self@.contains_key(*k) && self@[*k] == *v,
+                None => !self@.contains_key(*k),
+            },
+    {
         self.inner.get(k)
+    }
+
+    /// Remove a key. Used by unverified code (e.g. the AuthoritySignInfo
+    /// specialisation that evicts bad signers); spec states the key is gone
+    /// and the rest of the map is unchanged.
+    #[verifier::external_body]
+    pub fn remove(&mut self, k: &K) -> (out: Option<V>)
+        ensures
+            !self@.contains_key(*k),
+            match out {
+                Some(v) => old(self)@.contains_key(*k) && old(self)@[*k] == v,
+                None => !old(self)@.contains_key(*k),
+            },
+            forall|j: K| j != *k ==>
+                self@.contains_key(j) == old(self)@.contains_key(j),
+    {
+        self.inner.remove(k)
+    }
+
+    /// Iterate over keys. No spec beyond satisfying the trait; callers that
+    /// need spec-level reasoning about the domain should use `self@.dom()`.
+    #[verifier::external_body]
+    pub fn keys(&self) -> (out: impl Iterator<Item = &K>) {
+        self.inner.keys()
     }
 }
 

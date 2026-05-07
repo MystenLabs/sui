@@ -9,9 +9,9 @@ publish = false
 [lints]
 workspace = true
 
-# Crates following the `-verified` naming convention contain code whose
-# correctness is checked by Verus. CI runs `cargo verus check` on this crate
-# (see scripts/verus-check.sh). Stable `cargo build` ignores Verus annotations:
+# This crate lives at consensus/verified/ and contains code whose correctness
+# is checked by Verus. CI runs `cargo verus check` on this crate (see
+# scripts/verus-check.sh). Stable `cargo build` ignores Verus annotations:
 # the `verus!` macro erases all spec/proof material in non-Verus builds.
 [package.metadata.verus]
 verify = true

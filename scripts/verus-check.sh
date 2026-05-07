@@ -14,9 +14,9 @@ set -euo pipefail
 VERUS_RELEASE="0.2026.04.24.f8e1704"
 VERUS_RUSTC="1.95"
 
-# Crates to verify. By convention, crate names ending in `-verified` contain
-# code whose correctness is checked by Verus. Add new entries here as more
-# verification work lands.
+# Crates to verify. By convention, each verified crate lives as a `verified/`
+# subdirectory of its parent (e.g. consensus/verified/, crates/sui-core/verified/).
+# Add new entries here as more verification work lands.
 CRATES=(
     "consensus-verified"
     "sui-types-verified"

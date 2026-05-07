@@ -39,8 +39,7 @@ pub mod rpc_index;
 pub mod runtime;
 pub mod safe_client;
 pub mod signature_verifier;
-// Lives in `sui-core-verified` (the Verus-checked sister crate). Re-export
-// so existing `crate::stake_aggregator::...` imports continue to resolve.
+// Verified in `crates/sui-core/verified/`.
 pub(crate) use sui_core_verified::stake_aggregator;
 mod status_aggregator;
 pub mod storage;

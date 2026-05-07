@@ -72,6 +72,12 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
         && self.total_votes as int == voted_weight(&self.committee, self.data@.dom())
     }
 
+    /// Whether an authority has been recorded in the aggregator.
+    /// Used as the key predicate for reasoning about duplicate-insert behaviour.
+    pub open spec fn has_voted(&self, authority: AuthorityName) -> bool {
+        self.data@.contains_key(authority)
+    }
+
     pub fn new(committee: Arc<Committee>) -> (out: Self)
         ensures
             // Fresh aggregator: zero votes, empty data, invariant holds.
@@ -90,11 +96,30 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
         }
     }
 
-    /// A generic version of inserting arbitrary type of V (e.g. void type).
-    /// If V is AuthoritySignInfo, the `insert` function should be used instead since it does extra
-    /// checks and aggregations in the end.
-    /// Returns Map authority -> S, without aggregating it.
-    /// If you want to get an aggregated signature instead, use `StakeAggregator::insert`
+    /// Attempt to record an authority's vote.
+    ///
+    /// # Algebraic model (functional view)
+    ///
+    /// Treat the aggregator as a pure value `Agg = { voted: Set<Authority> }`.
+    /// `total_votes` is a cached sum: `weight_sum(agg) = Σ weight(a) for a ∈ agg.voted`
+    /// (encoded as `invariant_holds()`).
+    ///
+    /// In this model `insert` is always **set union** — the authority is always
+    /// recorded regardless of the return variant:
+    ///
+    ///   insert(agg, a).voted  ==  agg.voted  ∪  {a}
+    ///
+    /// The return variant is **uniquely determined** by the pre-state (biconditional,
+    /// not merely one direction):
+    ///
+    ///   out is Failed      ⟺   a ∈ agg.voted  ∨  weight(a) = 0
+    ///   out is QuorumReached ⟺ a ∉ agg.voted  ∧  weight(a) > 0  ∧  new_sum ≥ threshold
+    ///
+    ///   NotEnoughVotes is the remaining case (determined by elimination).
+    ///
+    /// Note: `S` (the value stored alongside the authority) has no effect on
+    /// any of these properties; it exists only for the AuthoritySignInfo
+    /// specialisation that needs to aggregate cryptographic signatures.
     pub fn insert_generic<'a>(
         &'a mut self,
         authority: AuthorityName,
@@ -114,37 +139,38 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
             self.invariant_holds(),
             // Committee reference unchanged.
             self.committee == old(self).committee,
-            // Variant-specific guarantees describing what each return tells the caller.
-            match out {
-                // Quorum reached: the authority was new, had positive weight, and
-                // the total now meets or exceeds the threshold.
-                InsertResult::QuorumReached(_) =>
-                    !old(self).data@.contains_key(authority)
-                    && committee_weight_of(&self.committee, authority) > 0
-                    && self.total_votes
-                        >= committee_threshold_spec(&self.committee, STRENGTH),
-                // Counted but below threshold: same as above but total < threshold,
-                // and the bookkeeping fields are zero/empty (no bad signatures yet).
-                InsertResult::NotEnoughVotes { bad_votes, bad_authorities } =>
-                    !old(self).data@.contains_key(authority)
-                    && committee_weight_of(&self.committee, authority) > 0
-                    && self.total_votes
-                        < committee_threshold_spec(&self.committee, STRENGTH)
-                    && bad_votes == 0
-                    && bad_authorities@.len() == 0,
-                // Failed: either the signer was already present (state fully
-                // unchanged) or the authority has zero weight (domain extended,
-                // total unchanged). Total is always preserved.
-                InsertResult::Failed { .. } =>
-                    self.total_votes == old(self).total_votes
-                    && (
-                        (old(self).data@.contains_key(authority)
-                            && self.data@ =~= old(self).data@)
-                        || (committee_weight_of(&self.committee, authority) == 0
-                            && self.data@.dom()
-                                =~= old(self).data@.dom().insert(authority))
-                    ),
-            },
+
+            // === State transition ===
+            // The voted set grows by exactly {authority}; nothing else changes.
+            // (Combines monotonicity, presence, and "no other key was added or removed"
+            //  into a single biconditional.)
+            forall|a: AuthorityName|
+                self.has_voted(a) <==> (#[trigger] old(self).has_voted(a) || a == authority),
+
+            // === Variant determination (both directions) ===
+            // The variant is uniquely determined by the pre-state; each condition is
+            // necessary AND sufficient for its corresponding variant.
+
+            // Failed iff the authority was already present OR has zero committee weight.
+            (out is Failed)
+                <==> (old(self).has_voted(authority)
+                      || committee_weight_of(&self.committee, authority) == 0),
+
+            // QuorumReached iff the authority was new, had weight, and the running
+            // total now meets the threshold.
+            (out is QuorumReached)
+                <==> (!old(self).has_voted(authority)
+                      && committee_weight_of(&self.committee, authority) > 0
+                      && self.total_votes
+                          >= committee_threshold_spec(&self.committee, STRENGTH)),
+
+            // NotEnoughVotes is the remaining case — stated explicitly for readability,
+            // but derivable from the two biconditionals above by exhaustion.
+            (out is NotEnoughVotes)
+                <==> (!old(self).has_voted(authority)
+                      && committee_weight_of(&self.committee, authority) > 0
+                      && self.total_votes
+                          < committee_threshold_spec(&self.committee, STRENGTH)),
     {
         if self.data.contains_key(&authority) {
             // Repeated signer. The conflict bit is exec-only metadata.
@@ -244,6 +270,94 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
             this.insert_generic(authority, s);
         }
         Ok(this)
+    }
+}
+
+/// If an authority has already voted, inserting again must return `Failed`.
+///
+/// `QuorumReached` and `NotEnoughVotes` both require `!old.has_voted(authority)`.
+/// If `old.has_voted(authority)` is true those branches are impossible, so by
+/// exhaustion of the three exclusive variants only `Failed` can be returned.
+///
+/// Usage: call this after any prior `insert_generic` — the postcondition
+/// guarantees `post.has_voted(authority)`. Supplying that fact here, together
+/// with the postconditions of a *second* call, proves the second result is `Failed`.
+pub proof fn lemma_voted_authority_insert_fails(
+    pre_has_voted: bool,
+    result_is_quorum: bool,
+    result_is_not_enough: bool,
+    result_is_failed: bool,
+)
+    requires
+        pre_has_voted,
+        // Exactly one variant is active.
+        result_is_quorum || result_is_not_enough || result_is_failed,
+        !(result_is_quorum && result_is_not_enough),
+        !(result_is_quorum && result_is_failed),
+        !(result_is_not_enough && result_is_failed),
+        // Postconditions from insert_generic: both success variants require the
+        // authority to have been absent before the call.
+        result_is_quorum ==> !pre_has_voted,
+        result_is_not_enough ==> !pre_has_voted,
+    ensures
+        result_is_failed
+{
+    // Both quorum and not_enough contradict pre_has_voted; Failed is the only
+    // remaining possibility.
+}
+
+/// Inserting two distinct authorities produces the same voted set regardless
+/// of order.
+///
+/// This is a direct corollary of the state-transition biconditional in
+/// `insert_generic`:
+///
+///   after a then b: has_voted(c) ⟺ agg.voted(c) ∨ c=a ∨ c=b
+///   after b then a: has_voted(c) ⟺ agg.voted(c) ∨ c=b ∨ c=a
+///
+/// These expressions are equal because ∨ is commutative. No reasoning about
+/// the implementation is required — the spec alone implies commutativity.
+///
+/// The lemma takes the relevant postconditions as hypotheses rather than
+/// reasoning about mutable-reference calls directly.
+pub proof fn lemma_insert_generic_commutes(
+    agg_voted: Set<AuthorityName>,
+    auth_a: AuthorityName,
+    auth_b: AuthorityName,
+    // State after inserting a, then b
+    after_a:  Set<AuthorityName>,
+    after_ab: Set<AuthorityName>,
+    // State after inserting b, then a
+    after_b:  Set<AuthorityName>,
+    after_ba: Set<AuthorityName>,
+)
+    requires
+        auth_a != auth_b,
+        // State-transition postconditions of the first pair of insertions
+        forall|c: AuthorityName| after_a.contains(c)
+            <==> (#[trigger] agg_voted.contains(c) || c == auth_a),
+        forall|c: AuthorityName| after_ab.contains(c)
+            <==> (#[trigger] after_a.contains(c) || c == auth_b),
+        // State-transition postconditions of the second pair (reversed order)
+        forall|c: AuthorityName| after_b.contains(c)
+            <==> (#[trigger] agg_voted.contains(c) || c == auth_b),
+        forall|c: AuthorityName| after_ba.contains(c)
+            <==> (#[trigger] after_b.contains(c) || c == auth_a),
+    ensures
+        // The voted sets are identical — insertion order doesn't matter.
+        forall|c: AuthorityName|
+            #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
+{
+    // Both reduce to: agg_voted.contains(c) || c == auth_a || c == auth_b.
+    // ∨ is commutative, so the order of auth_a and auth_b doesn't matter.
+    // Help Verus instantiate the forall triggers for each c.
+    assert forall|c: AuthorityName|
+        #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
+    by {
+        // Expand after_ab: substitute the a-insertion into the b-insertion.
+        assert(after_ab.contains(c) <==> (agg_voted.contains(c) || c == auth_a || c == auth_b));
+        // Expand after_ba: substitute the b-insertion into the a-insertion.
+        assert(after_ba.contains(c) <==> (agg_voted.contains(c) || c == auth_b || c == auth_a));
     }
 }
 

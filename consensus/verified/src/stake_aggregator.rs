@@ -259,6 +259,12 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
         && self.stake as int == sum_stakes(committee_stake_seq(c), self.votes@)
     }
 
+    /// Whether an authority index has been recorded in this aggregator.
+    /// Used as the key predicate for reasoning about duplicate-vote behaviour.
+    pub open spec fn has_voted(&self, v: AuthorityIndex) -> bool {
+        self.votes@.contains(authority_index_value_spec(v))
+    }
+
     pub fn new() -> (out: Self)
         ensures
             // Fresh aggregator has zero stake.
@@ -268,7 +274,6 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
             // The invariant holds against every possible committee — caller picks `c` later.
             forall|c: &Committee| out.invariant_against(c),
     {
-        // Pull in the lemma that `sum_stakes(c, empty) == 0` so the invariant follows automatically.
         broadcast use lemma_sum_stakes_empty_full;
         Self {
             votes: VoteSet::default(),
@@ -304,6 +309,11 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
             self.stake == old(self).stake
                 || self.stake as int == old(self).stake as int +
                     committee_stake_seq(committee)[authority_index_value_spec(vote)] as int,
+            // Behavioral: the vote is now recorded regardless of whether it was new.
+            self.has_voted(vote),
+            // Behavioral: the voter set only grows — no vote is evicted.
+            forall|i: int| #[trigger] old(self).votes@.contains(i)
+                ==> self.votes@.contains(i),
     {
         if self.votes.insert(vote) {
             self.stake = self.stake + committee.stake(vote);
@@ -351,11 +361,16 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
             // Invariant preserved.
             self.invariant_against(committee),
             // Returned bool says whether this vote was newly counted (vs. duplicate).
-            out == !old(self).votes@.contains(authority_index_value_spec(vote)),
+            out == !old(self).has_voted(vote),
             // Same idempotence guarantee as `add`.
             self.stake == old(self).stake
                 || self.stake as int == old(self).stake as int +
                     committee_stake_seq(committee)[authority_index_value_spec(vote)] as int,
+            // Behavioral: the vote is now recorded regardless of whether it was new.
+            self.has_voted(vote),
+            // Behavioral: the voter set only grows — no vote is evicted.
+            forall|i: int| #[trigger] old(self).votes@.contains(i)
+                ==> self.votes@.contains(i),
     {
         if self.votes.insert(vote) {
             self.stake = self.stake + committee.stake(vote);
@@ -408,12 +423,31 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
             // Invariant holds against any committee, exactly like `new()`.
             forall|c: &Committee| self.invariant_against(c),
     {
-        // Same lemma as in `new()`: sum_stakes over empty == 0 for all c.
         broadcast use lemma_sum_stakes_empty_full;
         self.votes.clear();
         self.stake = 0;
     }
 }
+
+/// If an authority has already voted, `add_unique` returns `false` (duplicate).
+///
+/// The postcondition of `add_unique` is `out == !old(self).has_voted(vote)`.
+/// If `has_voted` is already true, that simplifies to `out == false`.
+///
+/// Usage: after any prior `add` or `add_unique` call, the postcondition
+/// guarantees `post.has_voted(vote)`. Supplying that here proves a second
+/// `add_unique` call returns `false`.
+pub proof fn lemma_voted_authority_add_unique_is_duplicate(
+    pre_has_voted: bool,
+    out: bool,
+)
+    requires
+        pre_has_voted,
+        // Postcondition of add_unique: out == !old(self).has_voted(vote)
+        out == !pre_has_voted,
+    ensures
+        !out  // the call returned false — it was a duplicate
+{}
 
 } // verus!
 
