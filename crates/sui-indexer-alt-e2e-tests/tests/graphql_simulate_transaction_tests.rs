@@ -1181,6 +1181,7 @@ async fn test_simulate_transaction_effects_json() {
                 simulateTransaction(transaction: $txData) {
                     effects {
                         status
+                        version
                         effectsJson
                         balanceChangesJson
                     }

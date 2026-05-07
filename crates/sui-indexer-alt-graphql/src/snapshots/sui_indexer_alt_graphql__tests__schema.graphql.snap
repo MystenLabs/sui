@@ -4238,6 +4238,10 @@ type TransactionEffects {
 	The unchanged consensus-managed objects that were referenced by this transaction.
 	"""
 	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
+	"""
+	The schema version of the effects struct.
+	"""
+	version: Int
 }
 
 input TransactionFilter {
