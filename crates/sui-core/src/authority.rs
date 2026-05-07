@@ -1884,8 +1884,8 @@ impl AuthorityState {
         );
     }
 
-    /// Helper that runs the executor over an already-prepared transaction (i.e., after any coin
-    /// reservation rewriting has been done by the caller).
+    /// Runs the executor on an already-prepared transaction; the caller is responsible for any
+    /// coin reservation rewriting.
     fn execute_transaction_to_effects(
         &self,
         executor: &dyn Executor,
@@ -2004,8 +2004,8 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
-        // Skip rewriting if execution_params already indicates an error - the transaction will
-        // fail anyway, and rewriting could fail if the accumulator was deleted.
+        // Skip on early error: the tx will fail anyway and rewriting may fail if the accumulator
+        // was deleted.
         let rewritten_inputs = if execution_params.is_ok() {
             rewrite_transaction_for_coin_reservations(
                 self.chain_identifier,
@@ -2014,7 +2014,7 @@ impl AuthorityState {
                 &mut kind,
                 execution_env.assigned_versions.accumulator_version,
             )
-            .expect("coin reservation rewriting failed for a certified transaction")
+            .expect("rewriting must succeed for a certified transaction")
         } else {
             None
         };
@@ -2373,14 +2373,14 @@ impl AuthorityState {
             None => ExecutionOrEarlyError::Ok(()),
         };
 
-        // Skip rewriting when execution_params is already an error - the transaction will fail anyway.
+        // Skip on early error: the tx will fail anyway.
         let rewritten_inputs = if execution_params.is_ok() {
             rewrite_transaction_for_coin_reservations(
                 self.chain_identifier,
                 &*self.coin_reservation_resolver,
                 transaction.sender(),
                 &mut kind,
-                // Use latest accumulator version for dry run.
+                // dry run reads the latest accumulator
                 None,
             )?
         } else {

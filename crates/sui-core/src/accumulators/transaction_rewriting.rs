@@ -10,13 +10,11 @@ use sui_types::transaction::{CallArg, ObjectArg, ProgrammableTransaction, Transa
 /// Rewrites coin reservation inputs (fake coins encoded as masked ObjectRefs) into
 /// FundsWithdrawalArgs so the executor can resolve them as balance withdrawals.
 ///
-/// Returns `Ok(Some(rewritten_inputs))` if any inputs were rewritten, where each bool indicates
-/// whether the corresponding input was converted from a coin reservation. Returns `Ok(None)` if
-/// nothing was rewritten. Returns `Err` if a coin reservation cannot be resolved.
+/// Returns `Ok(Some(rewritten))` where each bool flags whether that input was rewritten,
+/// `Ok(None)` if nothing was rewritten, or `Err` if a reservation cannot be resolved.
 ///
-/// `accumulator_version` is the version of the accumulator root object to use for MVCC lookup.
-/// This is required during checkpoint replay to read the accumulator state at the correct version,
-/// before any settlement transactions have modified it.
+/// `accumulator_version` selects the accumulator version for MVCC lookup during checkpoint
+/// replay (read before any settlement modifies it); pass `None` for the latest version.
 pub fn rewrite_transaction_for_coin_reservations(
     chain_identifier: ChainIdentifier,
     coin_reservation_resolver: &dyn CoinReservationResolverTrait,
