@@ -88,24 +88,25 @@ pub struct ExIntent(Intent);
 pub uninterp spec fn sig_is_valid(sig: &AuthoritySignInfo, committee: &Committee) -> bool;
 
 // ---------------------------------------------------------------------------
-// Envelope spec projectors (PARTIALLY IMPLEMENTED — see TODO below)
+// Envelope spec projectors (TODO — blocked by Verus limitation)
 // ---------------------------------------------------------------------------
 //
-// The full algebraic spec for `insert` requires spec projectors for the
-// Envelope type: envelope_sig_epoch, envelope_sig_authority, envelope_sig_is_valid.
+// To spec `insert`, we need projectors that extract the epoch, authority, and
+// validity from an `Envelope<T: Message, AuthoritySignInfo>`.
 //
-// TODO: Registering Envelope<T: Message, S> via external_type_specification
-// fails in the current Verus version because the `Message` trait bound is
-// opaque to Verus's generic resolution. Once this is resolved (or Envelope
-// gains accessor methods in sui-types), add:
+// The canonical fix is to define spec functions in `sui-types` itself (where
+// both `Envelope` and `Message` are owned), then either:
+//   (a) compile sui-types with `verify = true` so Verus exports the .vir, or
+//   (b) wait for cargo-verus to support incremental .vir without full verify.
 //
-//   pub uninterp spec fn envelope_sig_epoch<T: Message>(env: &Envelope<T, AuthoritySignInfo>) -> u64;
-//   pub uninterp spec fn envelope_sig_authority<T: Message>(env: ...) -> AuthorityName;
-//   pub uninterp spec fn envelope_sig_is_valid<T: Message>(env: ..., committee: ...) -> bool;
-
-// TODO: add assume_specification for verify_secure once Envelope registration
-// is resolved (see TODO above). The intended spec:
-//   result.is_Ok() == sig_is_valid(sig, committee)
+// Attempting (a) currently fails because cargo-verus cannot find the .vir
+// file for sui-types when it is listed as a dep of sui-core-verified but not
+// included in the CRATES list of verus-check.sh.  Adding it to CRATES fails
+// because sui-types with `verify = true` triggers proc-macro compilation
+// errors (enum_dispatch etc.) in unrelated modules.
+//
+// Until this is resolved, the `insert` spec uses `external_body` with the
+// intended clauses shown as comments (see stake_aggregator.rs).
 
 // ---------------------------------------------------------------------------
 // Abstract committee model

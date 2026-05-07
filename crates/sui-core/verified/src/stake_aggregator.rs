@@ -396,19 +396,17 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
     ///
     ///   sig.authority ∈ valid_voted(after)
     ///
-    /// The optimised implementation (batch BLS, then individual fallback with
-    /// eviction) is observationally equivalent to a simple per-sig verification
-    /// before insertion. The eviction loop only removes *invalid* sigs.
+    /// The optimised implementation (batch BLS + individual fallback with eviction)
+    /// is observationally equivalent to simple per-sig verification before insertion.
     ///
-    /// # Verification status: unverified (external_body)
+    /// # Verification status: unverified
     ///
-    /// Blocked by: Verus cannot register `Envelope<T: Message, S>` via
-    /// `external_type_specification` because the `Message` trait bound is opaque
-    /// to Verus's generic resolution in the current version. The intended Verus
-    /// spec is documented in `verus_shims.rs` (TODO comments near
-    /// `envelope_sig_epoch` etc.). Resolution: add accessor methods to Envelope
-    /// in sui-types so specs can avoid referencing Envelope directly, or wait
-    /// for improved external trait handling in a future Verus release.
+    /// The intended Verus spec (epoch check, presence, monotonicity, containment)
+    /// requires spec projectors for `Envelope<T: Message, S>`, which cannot yet be
+    /// defined across crate boundaries due to the `T: Message` bound being opaque to
+    /// Verus's generic resolution.  The intended clauses are documented in
+    /// verus_shims.rs.  Fix: compile sui-types with `verify = true` AND resolve the
+    /// proc-macro compilation issues that currently prevent it.
     pub fn insert<T: Message + Serialize>(
         &mut self,
         envelope: Envelope<T, AuthoritySignInfo>,
