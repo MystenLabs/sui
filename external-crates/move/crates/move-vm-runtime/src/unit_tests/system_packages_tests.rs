@@ -297,7 +297,7 @@ fn move_stdlib_installs_and_user_calls_become_direct() {
     use move_compiler::{
         Compiler as MoveCompiler,
         compiled_unit::AnnotatedCompiledUnit,
-        diagnostics::warning_filters::WarningFiltersBuilder,
+        diagnostics::filter::empty_filter_scope,
         editions::{Edition, Flavor},
         shared::PackageConfig,
     };
@@ -313,7 +313,7 @@ fn move_stdlib_installs_and_user_calls_become_direct() {
     )
     .set_default_config(PackageConfig {
         is_dependency: false,
-        warning_filter: WarningFiltersBuilder::unused_warnings_filter_for_test(),
+        warning_filter: empty_filter_scope(),
         flavor: Flavor::Core,
         edition: Edition::E2024_ALPHA,
     })
@@ -350,7 +350,7 @@ fn move_stdlib_installs_and_user_calls_become_direct() {
     )
     .set_default_config(PackageConfig {
         is_dependency: false,
-        warning_filter: WarningFiltersBuilder::unused_warnings_filter_for_test(),
+        warning_filter: empty_filter_scope(),
         flavor: Flavor::Core,
         edition: Edition::E2024_ALPHA,
     })
