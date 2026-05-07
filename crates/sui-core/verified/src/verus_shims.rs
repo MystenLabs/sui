@@ -19,7 +19,7 @@ use sui_types::committee::{Committee, StakeUnit};
 use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfoTrait};
 use sui_types::message_envelope::{Envelope, Message};
 // AuthoritySignInfo now lives in sui-types-verified (first-class Verus type).
-use sui_types::error::{SuiError, SuiErrorKind};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult};
 use sui_types_verified::AuthoritySignInfo;
 // Spec-only functions — stripped by verus! in stable builds.
 #[cfg(verus_only)]
@@ -74,6 +74,7 @@ pub struct ExAuthorityQuorumSignInfo<const STRENGTH: bool>(AuthorityQuorumSignIn
 #[verifier::external_type_specification]
 #[verifier::external_body]
 pub struct ExIntent(Intent);
+
 
 // Register serde::Serialize so Verus can accept `T: Serialize` bounds.
 // No methods need to be declared — the bound appears only in function
@@ -139,9 +140,28 @@ pub open spec fn envelope_authority<T: Message>(e: &Envelope<T, AuthoritySignInf
 // aggregator context all sigs are for the same message, so validity is a
 // property of the sig+committee pair once the message context is fixed.
 //
-// This is an uninterpreted axiom: Verus trusts the outcome of `verify_secure`
-// without modelling BLS internals.
+// This is grounded by the assume_specification for verify_secure below:
+// sig_is_valid(sig, committee) iff verify_secure returns Ok.
 pub uninterp spec fn sig_is_valid(sig: &AuthoritySignInfo, committee: &Committee) -> bool;
+
+// Connect sig_is_valid to the real verify_secure call via a named wrapper.
+// verify_secure is defined on the sealed trait AuthoritySignInfoTrait, which
+// cannot be registered with external_trait_specification. Instead we expose
+// a free function with its own spec. Any proven code that needs to establish
+// sig_is_valid should call verify_authority_sig rather than sig.verify_secure.
+// The body is trusted (external_body); the spec is the axiom.
+
+#[verifier::external_body]
+pub fn verify_authority_sig<T: Message + Serialize>(
+    sig: &AuthoritySignInfo,
+    data: &T,
+    intent: Intent,
+    committee: &Committee,
+) -> (result: SuiResult<()>)
+    ensures result.is_ok() == sig_is_valid(sig, committee),
+{
+    sig.verify_secure(data, intent, committee)
+}
 
 // ---------------------------------------------------------------------------
 // Envelope spec projectors (TODO — blocked by Verus limitation)

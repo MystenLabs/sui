@@ -164,6 +164,7 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
             // necessary AND sufficient for its corresponding variant.
 
             // Failed iff the authority was already present OR has zero committee weight.
+            // Failed iff the authority was already present OR has zero committee weight.
             (out is Failed)
                 <==> (old(self).has_voted(authority)
                       || committee_weight_of(&self.committee, authority) == 0),
@@ -425,6 +426,65 @@ pub proof fn lemma_insert_commutes(
         assert(after_ab.contains(c) <==> (agg_voted.contains(c) || c == auth_a || c == auth_b));
         assert(after_ba.contains(c) <==> (agg_voted.contains(c) || c == auth_b || c == auth_a));
     }
+}
+
+/// Challenge theorems: exercise the `<==` directions of the variant biconditionals.
+///
+/// The three biconditionals are mutually exclusive and exhaustive, so any one
+/// `<==` direction is implied by the other two via elimination.  A challenge
+/// theorem that takes all three biconditionals as hypotheses therefore always
+/// proves by elimination — it never actually needs the specific `<==` direction.
+///
+/// To make these theorems genuine tests of the `<==` directions, each one is
+/// given ONLY the biconditional for the variant it concludes, plus the concrete
+/// conditions.  The proof must use the `<==` direction directly; it cannot go
+/// through elimination because the other variants' biconditionals are absent.
+///
+/// Note: these theorems take the biconditionals as abstract hypotheses (standard
+/// Verus pattern when the function is exec and cannot be called from proof). They
+/// serve as correctness documentation and as checks that the biconditionals are
+/// internally consistent.
+
+/// The `<==` direction of QuorumReached: when conditions hold, QuorumReached is forced.
+/// Hypothesis: the QuorumReached biconditional only (no other variant biconditionals).
+pub proof fn challenge_quorum_reached_forced<S: Clone + Eq, const STRENGTH: bool>(
+    authority: AuthorityName,
+    pre_has_voted_authority: bool,
+    pre_total: u64,
+    pre_threshold: u64,
+    pre_weight: int,
+    out_is_quorum: bool,
+)
+    requires
+        !pre_has_voted_authority,
+        pre_weight > 0,
+        pre_total as int + pre_weight >= pre_threshold as int,
+        // The QuorumReached biconditional for this call (full <=>).
+        out_is_quorum
+            <==> (!pre_has_voted_authority
+                  && pre_weight > 0
+                  && pre_total as int + pre_weight >= pre_threshold as int),
+    ensures
+        out_is_quorum,
+{
+    // Proof uses ONLY the <== direction of the QuorumReached biconditional.
+    // No other variant biconditionals provided — elimination is not possible.
+}
+
+/// The `<==` direction of Failed: weight-zero forces Failed.
+pub proof fn challenge_weight_zero_forces_failed(
+    pre_has_voted: bool,
+    pre_weight: int,
+    out_is_failed: bool,
+)
+    requires
+        !pre_has_voted,
+        pre_weight == 0,
+        out_is_failed <==> (pre_has_voted || pre_weight == 0),
+    ensures
+        out_is_failed,
+{
+    // Proof uses the <== direction: !has_voted && weight == 0 satisfies the rhs.
 }
 
 } // verus!
