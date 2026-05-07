@@ -25,6 +25,8 @@ use crate::verus_shims::{
     committee_weight_of, envelope_authority, envelope_epoch, envelope_sig_spec,
     lemma_voted_weight_empty, lemma_voted_weight_insert, sig_is_valid, voted_weight,
 };
+#[cfg(verus_only)]
+use sui_types_verified::authority_sign_info::{auth_sig_authority_spec, auth_sig_epoch_spec};
 
 // Verus cannot construct opaque external types directly. These wrappers
 // build the SuiErrors used by `insert_generic`'s error branches. Bodies
@@ -43,6 +45,15 @@ fn err_repeated_signer(signer: AuthorityName, conflicting_sig: bool) -> (out: Su
 #[verifier::external_body]
 fn err_invalid_authenticator() -> (out: SuiError) {
     SuiErrorKind::InvalidAuthenticator.into()
+}
+
+#[verifier::external_body]
+fn err_wrong_epoch(expected: u64, actual: u64) -> (out: SuiError) {
+    SuiErrorKind::WrongEpoch {
+        expected_epoch: expected,
+        actual_epoch: actual,
+    }
+    .into()
 }
 
 } // verus!
@@ -379,114 +390,6 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
     }
 }
 
-impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
-    /// Insert an authority signature.
-    ///
-    /// # Algebraic model
-    ///
-    /// Treat the aggregator as `{ valid_voted: Set<Authority>, committee }` where
-    /// `valid_voted` = authorities whose signature is cryptographically correct.
-    ///
-    /// `insert` is monotone with respect to `valid_voted`:
-    ///
-    ///   valid_voted(after) ⊇ valid_voted(before)   -- valid sigs are never lost
-    ///
-    /// And if the incoming sig is valid (epoch matches, sig verifies, authority is
-    /// new, weight > 0):
-    ///
-    ///   sig.authority ∈ valid_voted(after)
-    ///
-    /// The optimised implementation (batch BLS + individual fallback with eviction)
-    /// is observationally equivalent to simple per-sig verification before insertion.
-    ///
-    /// # Verification status: unverified
-    ///
-    /// The intended Verus spec (epoch check, presence, monotonicity, containment)
-    /// requires spec projectors for `Envelope<T: Message, S>`, which cannot yet be
-    /// defined across crate boundaries due to the `T: Message` bound being opaque to
-    /// Verus's generic resolution.  The intended clauses are documented in
-    /// verus_shims.rs.  Fix: compile sui-types with `verify = true` AND resolve the
-    /// proc-macro compilation issues that currently prevent it.
-    pub fn insert<T: Message + Serialize>(
-        &mut self,
-        envelope: Envelope<T, AuthoritySignInfo>,
-    ) -> InsertResult<AuthorityQuorumSignInfo<STRENGTH>> {
-        let (data, sig) = envelope.into_data_and_sig();
-        if self.committee.epoch != sig.epoch {
-            return InsertResult::Failed {
-                error: SuiErrorKind::WrongEpoch {
-                    expected_epoch: self.committee.epoch,
-                    actual_epoch: sig.epoch,
-                }
-                .into(),
-            };
-        }
-        match self.insert_generic(sig.authority, sig) {
-            InsertResult::QuorumReached(_) => {
-                match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
-                    self.data.inner.values().cloned().collect(),
-                    self.committee(),
-                ) {
-                    Ok(aggregated) => {
-                        match aggregated.verify_secure(
-                            &data,
-                            Intent::sui_app(T::SCOPE),
-                            self.committee(),
-                        ) {
-                            // In the happy path, the aggregated signature verifies ok and no need to verify
-                            // individual.
-                            Ok(_) => InsertResult::QuorumReached(aggregated),
-                            Err(_) => {
-                                // If the aggregated signature fails to verify, fallback to iterating through
-                                // all signatures and verify individually. Decrement total votes and continue
-                                // to find new authority for signature to reach the quorum.
-                                //
-                                // TODO(joyqvq): It is possible for the aggregated signature to fail every time
-                                // when the latest one single signature fails to verify repeatedly, and trigger
-                                // this for loop to run. This can be optimized by caching single sig verification
-                                // result only verify the net new ones.
-                                let mut bad_votes = 0;
-                                let mut bad_authorities = vec![];
-                                for (name, sig) in &self.data.inner.clone() {
-                                    if let Err(err) = sig.verify_secure(
-                                        &data,
-                                        Intent::sui_app(T::SCOPE),
-                                        self.committee(),
-                                    ) {
-                                        // TODO(joyqvq): Currently, the aggregator cannot do much with an authority that
-                                        // always returns an invalid signature other than saving to errors in state. It
-                                        // is possible to add the authority to a denylist or  punish the byzantine authority.
-                                        warn!(name=?name.concise(), "Bad stake from validator: {:?}", err);
-                                        self.data.inner.remove(name);
-                                        let votes = self.committee.weight(name);
-                                        self.total_votes -= votes;
-                                        bad_votes += votes;
-                                        bad_authorities.push(*name);
-                                    }
-                                }
-                                InsertResult::NotEnoughVotes {
-                                    bad_votes,
-                                    bad_authorities,
-                                }
-                            }
-                        }
-                    }
-                    Err(error) => InsertResult::Failed { error },
-                }
-            }
-            // The following is necessary to change the template type of InsertResult.
-            InsertResult::Failed { error } => InsertResult::Failed { error },
-            InsertResult::NotEnoughVotes {
-                bad_votes,
-                bad_authorities,
-            } => InsertResult::NotEnoughVotes {
-                bad_votes,
-                bad_authorities,
-            },
-        }
-    }
-}
-
 verus! {
 
 pub enum InsertResult<CertT> {
@@ -509,26 +412,25 @@ impl<CertT> InsertResult<CertT> {
 }
 
 // ---------------------------------------------------------------------------
-// Spec for StakeAggregator<AuthoritySignInfo, STRENGTH>::insert
+// BLS aggregation + individual-verify fallback (external_body)
 // ---------------------------------------------------------------------------
 //
-// `insert` is a thin wrapper around `insert_generic` that:
-//   1. Extracts the AuthoritySignInfo from the envelope.
-//   2. Rejects envelopes whose epoch doesn't match the committee.
-//   3. Delegates to `insert_generic`, then aggregates and verifies if quorum
-//      is reached (with an individual-verification fallback that may evict
-//      previously-stored bad signatures).
+// This function encapsulates the BLS-specific logic inside the QuorumReached
+// arm of `insert`:
 //
-// We spec the parts that are unconditionally true regardless of the BLS
-// aggregation outcome. Full QuorumReached ↔ validity biconditionals require
-// connecting `sig_is_valid` to the real `verify_secure` result, which would
-// need specs for `AuthorityQuorumSignInfo::verify_secure` — left for future work.
+//   1. Attempt to aggregate all stored sigs into a quorum certificate.
+//   2. If the batch BLS verification passes, return QuorumReached.
+//   3. Otherwise fall back to verifying each sig individually, evicting any
+//      that fail, and returning NotEnoughVotes.
+//
+// The body is trusted (external_body): it manipulates `agg.data.inner` and
+// `agg.total_votes` directly, bypassing the VerifiedHashMap wrapper.
+// The postconditions are what the proven `insert` function needs.
 
-pub assume_specification<const STRENGTH: bool, T: Message + Serialize>[
-    StakeAggregator::<AuthoritySignInfo, STRENGTH>::insert::<T>
-](
+#[verifier::external_body]
+fn try_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
     agg: &mut StakeAggregator<AuthoritySignInfo, STRENGTH>,
-    envelope: Envelope<T, AuthoritySignInfo>,
+    data: T,
 ) -> (out: InsertResult<AuthorityQuorumSignInfo<STRENGTH>>)
     requires
         old(agg).invariant_holds(),
@@ -536,20 +438,141 @@ pub assume_specification<const STRENGTH: bool, T: Message + Serialize>[
     ensures
         // Committee reference is never mutated.
         agg.committee == old(agg).committee,
-        // Invariant is preserved across all branches (including eviction).
+        // Sum invariant is re-established after any eviction.
         agg.invariant_holds(),
-        // Epoch mismatch always produces Failed; no state change occurs.
-        envelope_epoch(&envelope) != committee_epoch_spec(&old(agg).committee)
-            ==> out is Failed,
-        // A valid new sig from a weighted authority is accepted (not Failed).
-        // "Accepted" means the authority is recorded and the result reflects
-        // the running total — either QuorumReached or NotEnoughVotes.
-        envelope_epoch(&envelope) == committee_epoch_spec(&old(agg).committee)
-        && sig_is_valid(&envelope_sig_spec(&envelope), &old(agg).committee)
-        && !old(agg).has_voted(envelope_authority(&envelope))
-        && committee_weight_of(&old(agg).committee, envelope_authority(&envelope)) > 0
-            ==> !(out is Failed),
-;
+        // Eviction can only remove entries, never add new ones.
+        forall|a: AuthorityName| agg.has_voted(a) ==> #[trigger] old(agg).has_voted(a),
+{
+    match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
+        agg.data.inner.values().cloned().collect(),
+        agg.committee(),
+    ) {
+        Ok(aggregated) => {
+            match aggregated.verify_secure(
+                &data,
+                Intent::sui_app(T::SCOPE),
+                agg.committee(),
+            ) {
+                Ok(_) => InsertResult::QuorumReached(aggregated),
+                Err(_) => {
+                    // Batch BLS failed: verify each sig individually and evict bad ones.
+                    // TODO(joyqvq): if the latest single sig fails repeatedly, this loop
+                    // can be triggered every time. Caching single-sig results would help.
+                    let mut bad_votes = 0;
+                    let mut bad_authorities = vec![];
+                    for (name, sig) in &agg.data.inner.clone() {
+                        if let Err(err) = sig.verify_secure(
+                            &data,
+                            Intent::sui_app(T::SCOPE),
+                            agg.committee(),
+                        ) {
+                            warn!(name=?name.concise(), "Bad stake from validator: {:?}", err);
+                            agg.data.inner.remove(name);
+                            let votes = agg.committee.weight(name);
+                            agg.total_votes -= votes;
+                            bad_votes += votes;
+                            bad_authorities.push(*name);
+                        }
+                    }
+                    InsertResult::NotEnoughVotes {
+                        bad_votes,
+                        bad_authorities,
+                    }
+                }
+            }
+        }
+        Err(error) => InsertResult::Failed { error },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// StakeAggregator<AuthoritySignInfo, STRENGTH>::insert — proven correct
+// ---------------------------------------------------------------------------
+
+impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
+    /// Insert an authority signature carried in a signed envelope.
+    ///
+    /// # Algebraic model
+    ///
+    /// Treat the aggregator as `{ voted: Set<Authority>, committee }`.
+    /// `insert` can only grow `voted` by one element (the incoming authority)
+    /// or shrink it (eviction of bad sigs in the BLS fallback path).
+    ///
+    /// After `insert`, `voted` is a subset of `old(voted) ∪ {authority}`.
+    pub fn insert<T: Message + Serialize>(
+        &mut self,
+        envelope: Envelope<T, AuthoritySignInfo>,
+    ) -> (out: InsertResult<AuthorityQuorumSignInfo<STRENGTH>>)
+        requires
+            old(self).invariant_holds(),
+            committee_unique(&old(self).committee),
+            // Overflow guard: required by insert_generic. In practice bounded
+            // by the total committee stake, but we leave that proof for later.
+            old(self).total_votes as int
+                + committee_weight_of(&old(self).committee, envelope_authority(&envelope))
+                <= u64::MAX as int,
+        ensures
+            self.committee == old(self).committee,
+            self.invariant_holds(),
+            // Epoch mismatch always yields Failed with no state change.
+            envelope_epoch(&envelope) != committee_epoch_spec(&old(self).committee)
+                ==> out is Failed,
+            // has_voted can only change by gaining {authority} or losing entries
+            // via eviction; it never gains any authority other than the one in
+            // the envelope.
+            forall|a: AuthorityName|
+                self.has_voted(a)
+                    ==> old(self).has_voted(a) || a == envelope_authority(&envelope),
+    {
+        let ghost pre_sig = envelope_sig_spec(&envelope);
+
+        let (data, sig) = envelope.into_data_and_sig();
+        // sig == pre_sig  (from assume_specification of into_data_and_sig)
+
+        let comm_epoch = self.committee.epoch();
+        let sig_epoch = sig.get_epoch();
+
+        proof {
+            // Bridge exec epoch values to spec projectors so the ensures clause
+            // can be discharged.
+            assert(sig_epoch == auth_sig_epoch_spec(&pre_sig));
+            assert(comm_epoch == committee_epoch_spec(&self.committee));
+            // envelope_epoch unfolds to auth_sig_epoch_spec(envelope_sig_spec(&envelope))
+            // = auth_sig_epoch_spec(pre_sig) = sig_epoch.
+            assert(sig_epoch == envelope_epoch(&envelope));
+        }
+
+        if comm_epoch != sig_epoch {
+            return InsertResult::Failed {
+                error: err_wrong_epoch(comm_epoch, sig_epoch),
+            };
+        }
+
+        // Epochs match; extract the authority and delegate to insert_generic.
+        let authority = sig.get_authority();
+
+        proof {
+            assert(authority == auth_sig_authority_spec(&pre_sig));
+            assert(authority == envelope_authority(&envelope));
+        }
+
+        match self.insert_generic(authority, sig) {
+            // insert_generic ensures: has_voted(a) iff old.has_voted(a) || a == authority.
+            // In the QuorumReached arm, try_aggregate_and_verify may evict some entries,
+            // so has_voted can only shrink from here.
+            InsertResult::QuorumReached(_) => try_aggregate_and_verify(self, data),
+            // In the other arms, state is exactly as insert_generic left it.
+            InsertResult::Failed { error } => InsertResult::Failed { error },
+            InsertResult::NotEnoughVotes {
+                bad_votes,
+                bad_authorities,
+            } => InsertResult::NotEnoughVotes {
+                bad_votes,
+                bad_authorities,
+            },
+        }
+    }
+}
 
 } // verus!
 

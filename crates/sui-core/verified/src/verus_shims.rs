@@ -110,6 +110,14 @@ pub assume_specification<T: Message, S>[ Envelope::<T, S>::auth_sig ](
     ensures *s == envelope_sig_spec(e),
 ;
 
+// Spec for Envelope::into_data_and_sig: the second element of the pair is
+// the auth_signature, i.e. the same value as envelope_sig_spec would give.
+pub assume_specification<T: Message, S>[ Envelope::<T, S>::into_data_and_sig ](
+    e: Envelope<T, S>,
+) -> (pair: (T, S))
+    ensures pair.1 == envelope_sig_spec(&e),
+;
+
 // Convenience projectors for the specialized S = AuthoritySignInfo case.
 // These avoid deeply nested calls in postcondition expressions.
 pub open spec fn envelope_epoch<T: Message>(e: &Envelope<T, AuthoritySignInfo>) -> u64 {
