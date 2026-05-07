@@ -556,6 +556,10 @@ fn try_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
         agg.invariant_holds(),
         // Eviction can only remove entries, never add new ones.
         forall|a: AuthorityName| agg.has_voted(a) ==> #[trigger] old(agg).has_voted(a),
+        // QuorumReached is only returned when the running total meets the threshold.
+        // (BLS passed without eviction, so total_votes is unchanged from the post-
+        //  insert_generic state which already satisfied total >= threshold.)
+        out is QuorumReached ==> agg.total_votes >= committee_threshold_spec(&agg.committee, STRENGTH),
         // An entry is evicted only if its sig fails verification.  Any entry
         // whose sig satisfies sig_is_valid is guaranteed to survive.
         forall|a: AuthorityName|
@@ -653,6 +657,21 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                 old(self).has_voted(a)
                 && sig_is_valid(&old(self).data@[a], &old(self).committee)
                     ==> #[trigger] self.has_voted(a),
+
+            // === Return value characterization ===
+            // Duplicate authority always yields Failed.
+            old(self).has_voted(envelope_authority(&envelope)) ==> out is Failed,
+            // Weight-zero new authority always yields Failed.
+            !old(self).has_voted(envelope_authority(&envelope))
+            && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) == 0
+                ==> out is Failed,
+            // NotEnoughVotes means the authority was new and had positive weight.
+            out is NotEnoughVotes
+                ==> !old(self).has_voted(envelope_authority(&envelope))
+                    && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0,
+            // QuorumReached means the running total now meets the threshold.
+            out is QuorumReached
+                ==> self.total_votes >= committee_threshold_spec(&self.committee, STRENGTH),
     {
         let ghost pre_sig = envelope_sig_spec(&envelope);
 
