@@ -66,6 +66,14 @@ $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io
 
 Do not use `https://checkpoints.<network>.sui.io` as your default steady-state source if you have access to a full node gRPC endpoint. On Mainnet, `https://checkpoints.mainnet.sui.io` retains only the latest 30 days of checkpoints. If you need to backfill older Mainnet history, use `gs://mysten-mainnet-checkpoints-use4` via `--remote-store-gcs mysten-mainnet-checkpoints-use4`. This bucket is Requester Pays enabled and is intended to be accessed through the indexing framework's `--remote-store-gcs` option rather than `--remote-store-url`. Testnet still provides full history through `https://checkpoints.testnet.sui.io`. See [Running a Remote Store](/operators/data-management/remote-store-setup) and Google Cloud [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays).
 
+**Custom HTTP headers:** You can pass arbitrary HTTP headers to remote store requests using the `--remote-store-http-header` flag. This is useful when accessing authenticated or private remote stores that require API keys, authorization tokens, or other custom headers. You can specify the flag multiple times to include more than one header:
+
+```sh
+$ cargo run -- --remote-store-url https://my-private-store.example.com \
+    --remote-store-http-header "Authorization: Bearer <token>" \
+    --remote-store-http-header "X-Custom-Header: value"
+```
+
 #### Local path
 
 Local checkpoint files are useful for development and testing scenarios:
