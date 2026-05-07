@@ -4,11 +4,11 @@ description: Walrus is a content-addressable storage protocol, where data is ret
 keywords: [ walrus, indexer, custom indexer, custom indexer framework, blob, sequential pipeline, blog ]
 ---
 
-[Walrus](https://walrus.xyz) is a decentralized storage and data availability protocol designed specifically for large binary files. It is a content-addressable storage protocol, meaning data is identified and retrieved using a unique identifier called a blob. Blobs are derived from the content itself rather than from a file path or location. Consequently, if different users upload the same content, Walrus reuses the existing blob rather than creating a new one. 
+[Walrus](https://walrus.xyz) is a decentralized storage and data availability protocol designed specifically for large binary files. It is a content-addressable storage protocol, meaning data is identified and retrieved using a unique identifier called a blob. The protocol derives blobs from the content itself rather than from a file path or location. Consequently, if different users upload the same content, Walrus reuses the existing blob rather than creating a new one. 
 
 For uniqueness, each blob uploaded to Walrus also creates a corresponding [`Blob` NFT object on Sui](https://docs.wal.app/dev-guide/sui-struct#blob-and-storage-objects) with a unique ID. Furthermore, the associated `Blob` object can optionally have a `Metadata` [dynamic field](/develop/objects/dynamic-fields). 
 
-`Metadata` dynamic fields are a key-value extension that augment an onchain object's data at runtime.. If set, this dynamic field acts as [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes). 
+`Metadata` dynamic fields extend an onchain object's data at runtime.. If set, this dynamic field acts as [a mapping of key-value attribute pairs](https://docs.wal.app/usage/client-cli.html?highlight=attribute#blob-attributes). 
 
 You can use the [custom indexer framework](/develop/accessing-data/custom-indexer/custom-indexers) to extend the existing functionality of Walrus.
 
@@ -20,7 +20,7 @@ The Walrus Foundation operates and controls Walrus. For the most accurate and up
 
 ## Blog platform using Walrus
 
-The system derives the ID of a dynamic field from its type and parent object's ID. Each `Metadata` dynamic field ID is also unique. You can leverage these unique characteristics and the `Metadata` attribute pairs to build a blog platform that enables users to:
+Sui derives the ID of a dynamic field from its type and parent object's ID. Each `Metadata` dynamic field ID is also unique. You can leverage these unique characteristics and the `Metadata` attribute pairs to build a blog platform that enables users to:
 
 - Upload blog posts with titles.
 - View their own posts and metrics.
@@ -36,7 +36,7 @@ When a user views a post, the service retrieves the relevant blog post `Metadata
 
 One option for data modeling is to use a single table that maps publisher addresses to `Metadata` dynamic fields. With this approach, the table is keyed on `dynamic_field_id` because it both identifies your app data and uniquely represents the content of each uploaded blob. 
 
-For example, the `up.sql` file to create this table might looks like the following:
+For example, the `up.sql` file to create this table might look like the following:
 
 <ImportContent source="examples/rust/walrus-attributes-indexer/migrations/YYYY-MM-DD-HHMMSS_blog-post/up.sql" mode="code" />
 

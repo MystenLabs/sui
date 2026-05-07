@@ -89,7 +89,7 @@ The following steps walk through the flow:
 
 5. The frontend reads the `CardRevealed` event from the transaction result and updates the board state with the newly revealed card.
 
-6. If the transaction fails (the move was invalid), the frontend calls `handleFailedTransaction` to refetch the full onchain game state and reset the board.
+6. If the transaction fails (the move is invalid), the frontend calls `handleFailedTransaction` to refetch the full onchain game state and reset the board.
 
 ### How the game state works
 
@@ -207,7 +207,7 @@ Start the frontend:
 $ pnpm dev
 ```
 
-Open `http://localhost:3000` in a browser and sign in with Google. Choose **Normal** (standard Klondike) or **Easy** (Aces pre-placed). Drag cards between columns, to foundation piles, or from the deck. Each move sends a sponsored transaction. When all 4 piles are complete (Ace through King per suit), a victory modal shows your move count with a link to verify on Sui Explorer.
+Open `http://localhost:3000` in a browser and sign in with Google. Choose **Normal** (standard Klondike) or **Easy** (Aces pre-placed). Drag cards between columns, to foundation piles, or from the deck. Each move sends a sponsored transaction. When you complete all 4 piles (Ace through King per suit), a victory modal shows your move count with a link to verify on Sui Explorer.
 
 ## Key code highlights
 
@@ -227,7 +227,7 @@ The `from_column_to_column` function moves a card (or stack of cards) between ta
 
 <ImportContent source="move/solitaire/sources/solitaire.move" mode="code" org="MystenLabs" repo="solitaire" fun="from_column_to_column" />
 
-The function validates that the target placement follows Klondike rules (alternating color, descending rank, Kings on empty columns). When a face-down card is revealed, it calls `reveal_card` with `&Random` and emits a `CardRevealed` event that the frontend reads.
+The function validates that the target placement follows Klondike rules (alternating color, descending rank, Kings on empty columns). When the function reveals a face-down card, it calls `reveal_card` with `&Random` and emits a `CardRevealed` event that the frontend reads.
 
 ### Card placement validation
 
@@ -261,7 +261,7 @@ Each move function follows the same pattern: build a `Transaction` with the appr
 
 - **Add a leaderboard:** After `finish_game`, emit a `GameWon` event with the move count and elapsed time. Build a leaderboard page that queries these events through GraphQL.
 
-- **Change card visuals:** Replace the SVG card images in `cardMappings.ts` with custom artwork. The card IDs (0-51) map deterministically to suits and ranks.
+- **Change card visuals:** Replace the SVG card images in `cardMappings.ts` with custom artwork. The card IDs (0-51) deterministically map to suits and ranks.
 
 ## Troubleshooting
 
@@ -290,7 +290,7 @@ The following sections address common issues with this example.
 
 **Symptom:** A card move that looks correct on the board fails with an `EInvalidPlacement` or similar error.
 
-**Cause:** The frontend's local validation (`useSolitaireGameMoves`) and the Move contract disagree on the board state. This happens when a previous transaction's `CardRevealed` event was missed.
+**Cause:** The frontend's local validation (`useSolitaireGameMoves`) and the Move contract disagree on the board state. This happens when the frontend missed a previous transaction's `CardRevealed` event.
 
 **Fix:** The `handleFailedTransaction` function resyncs by fetching the full onchain `Game` object. If this happens repeatedly, check that event parsing in `useSolitaireActions` correctly handles `CardRevealed` events.
 
@@ -306,6 +306,6 @@ The following sections address common issues with this example.
 
 **Symptom:** After reloading the page, the board shows an old state or no game.
 
-**Cause:** The game state is fetched from the chain on load. If the previous session's game was deleted or finished, no game object exists.
+**Cause:** The game state is fetched from the chain on load. If the previous session deleted or finished the game, no game object exists.
 
 **Fix:** Start a new game. The app detects when no active game exists and shows the difficulty selection screen. If you had an active game, `getGameObjectDetails` fetches the latest state from the chain.

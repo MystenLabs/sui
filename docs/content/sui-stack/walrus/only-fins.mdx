@@ -98,7 +98,7 @@ Errors can occur at the sponsorship step (backend unreachable), the Seal step (s
 
 ### How Seal and Walrus work together
 
-Walrus is a content-addressed storage protocol where data is retrieved by blob ID. All Walrus blobs are publicly addressable, so anyone who knows the blob ID can fetch the raw bytes. To restrict access, the frontend encrypts content before uploading to Walrus.
+Walrus is a content-addressed storage protocol where you retrieve data by blob ID. Walrus makes all blobs publicly addressable, so anyone who knows the blob ID can fetch the raw bytes. To restrict access, the frontend encrypts content before uploading to Walrus.
 
 Seal provides the encryption layer. When a creator publishes a post, the frontend encrypts the image with a key managed by Seal's threshold key servers. The Move contract defines who can decrypt: the `seal_approve_access` function checks whether the caller is the post author or holds a `ViewerToken` for that post. Seal key servers only release the decryption key after dry-running this function and confirming it does not abort.
 
