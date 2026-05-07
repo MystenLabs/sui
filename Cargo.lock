@@ -9296,7 +9296,6 @@ dependencies = [
  "bcs",
  "better_any",
  "bumpalo",
- "crossbeam-utils",
  "dashmap 6.1.0",
  "fail",
  "hex",
