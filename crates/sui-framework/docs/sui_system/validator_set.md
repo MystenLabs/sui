@@ -25,7 +25,6 @@ title: Module `sui_system::validator_set`
 -  [Function `redeem_fungible_staked_sui`](#sui_system_validator_set_redeem_fungible_staked_sui)
 -  [Function `advance_epoch`](#sui_system_validator_set_advance_epoch)
 -  [Function `update_validator_positions_and_calculate_total_stake`](#sui_system_validator_set_update_validator_positions_and_calculate_total_stake)
--  [Function `effectuate_staged_metadata`](#sui_system_validator_set_effectuate_staged_metadata)
 -  [Function `derive_reference_gas_price`](#sui_system_validator_set_derive_reference_gas_price)
 -  [Function `total_stake`](#sui_system_validator_set_total_stake)
 -  [Function `validator_total_stake_amount`](#sui_system_validator_set_validator_total_stake_amount)
@@ -39,10 +38,7 @@ title: Module `sui_system::validator_set`
 -  [Function `next_epoch_validator_count`](#sui_system_validator_set_next_epoch_validator_count)
 -  [Function `is_active_validator_by_sui_address`](#sui_system_validator_set_is_active_validator_by_sui_address)
 -  [Function `is_duplicate_with_active_validator`](#sui_system_validator_set_is_duplicate_with_active_validator)
--  [Function `is_duplicate_validator`](#sui_system_validator_set_is_duplicate_validator)
--  [Function `count_duplicates_vec`](#sui_system_validator_set_count_duplicates_vec)
 -  [Function `is_duplicate_with_pending_validator`](#sui_system_validator_set_is_duplicate_with_pending_validator)
--  [Function `count_duplicates_tablevec`](#sui_system_validator_set_count_duplicates_tablevec)
 -  [Function `get_candidate_or_active_validator_mut`](#sui_system_validator_set_get_candidate_or_active_validator_mut)
 -  [Function `find_validator`](#sui_system_validator_set_find_validator)
 -  [Function `find_validator_from_table_vec`](#sui_system_validator_set_find_validator_from_table_vec)
@@ -61,10 +57,7 @@ title: Module `sui_system::validator_set`
 -  [Function `process_pending_removals`](#sui_system_validator_set_process_pending_removals)
 -  [Function `process_validator_departure`](#sui_system_validator_set_process_validator_departure)
 -  [Function `clean_report_records_leaving_validator`](#sui_system_validator_set_clean_report_records_leaving_validator)
--  [Function `sort_removal_list`](#sui_system_validator_set_sort_removal_list)
--  [Function `process_pending_stakes_and_withdraws`](#sui_system_validator_set_process_pending_stakes_and_withdraws)
 -  [Function `calculate_total_stakes`](#sui_system_validator_set_calculate_total_stakes)
--  [Function `adjust_stake_and_gas_price`](#sui_system_validator_set_adjust_stake_and_gas_price)
 -  [Function `compute_reward_adjustments`](#sui_system_validator_set_compute_reward_adjustments)
 -  [Function `compute_slashed_validators`](#sui_system_validator_set_compute_slashed_validators)
 -  [Function `compute_unadjusted_reward_distribution`](#sui_system_validator_set_compute_unadjusted_reward_distribution)
@@ -728,14 +721,12 @@ Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>: Validator,
     ctx: &<b>mut</b> TxContext,
 ) {
-    // The next assertions are not critical <b>for</b> the protocol, but they are here to catch problematic configs earlier.
-    <b>assert</b>!(
-        !self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>)
-            && !self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>),
-        <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>,
-    );
     <b>let</b> validator_address = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.sui_address();
     <b>assert</b>!(!self.validator_candidates.contains(validator_address), <a href="../sui_system/validator_set.md#sui_system_validator_set_EAlreadyValidatorCandidate">EAlreadyValidatorCandidate</a>);
+    // The next assertions are not critical <b>for</b> the protocol, but they are here
+    // to catch problematic configs earlier.
+    <b>assert</b>!(!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>);
+    <b>assert</b>!(!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>);
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.is_preactive(), <a href="../sui_system/validator_set.md#sui_system_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
     // Add <a href="../sui_system/validator.md#sui_system_validator">validator</a> to the candidates mapping and the pool id mappings so that users can start
     // staking with this candidate.
@@ -911,11 +902,8 @@ return (min, low, very low voting power) thresholds
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator,
 ) {
     // Validator here must be active or pending, and thus must be identified <b>as</b> duplicate exactly once.
-    <b>assert</b>!(
-        <a href="../sui_system/validator_set.md#sui_system_validator_set_count_duplicates_vec">count_duplicates_vec</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>) +
-            <a href="../sui_system/validator_set.md#sui_system_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(&self.pending_active_validators, <a href="../sui_system/validator.md#sui_system_validator">validator</a>) == 1,
-        <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>,
-    );
+    <b>assert</b>!(!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>);
+    <b>assert</b>!(!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>), <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>);
 }
 </code></pre>
 
@@ -1182,7 +1170,7 @@ It does the following things:
     );
     // Compute the adjusted amounts of stake each <a href="../sui_system/validator.md#sui_system_validator">validator</a> should get given the tallying rule
     // reward adjustments we computed before.
-    // `<a href="../sui_system/validator_set.md#sui_system_validator_set_compute_adjusted_reward_distribution">compute_adjusted_reward_distribution</a>` must be called before `<a href="../sui_system/validator_set.md#sui_system_validator_set_distribute_reward">distribute_reward</a>` and `<a href="../sui_system/validator_set.md#sui_system_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>` to
+    // `<a href="../sui_system/validator_set.md#sui_system_validator_set_compute_adjusted_reward_distribution">compute_adjusted_reward_distribution</a>` must be called before `<a href="../sui_system/validator_set.md#sui_system_validator_set_distribute_reward">distribute_reward</a>` and `adjust_stake_and_gas_price` to
     // make sure we are using the current epoch's stake information to compute reward distribution.
     <b>let</b> (
         adjusted_staking_reward_amounts,
@@ -1208,8 +1196,10 @@ It does the following things:
         storage_fund_reward,
         ctx,
     );
-    <a href="../sui_system/validator_set.md#sui_system_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(&<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>);
-    <a href="../sui_system/validator_set.md#sui_system_validator_set_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(&<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, ctx);
+    // Process the pending stake changes <b>for</b> each <a href="../sui_system/validator.md#sui_system_validator">validator</a>.
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.do_mut!(|v| v.adjust_stake_and_gas_price());
+    // Process all active validators' pending stake deposits and withdraws.
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.do_mut!(|v| v.process_pending_stakes_and_withdraws(ctx));
     // Emit events after we have processed all the rewards distribution and pending stakes.
     <a href="../sui_system/validator_set.md#sui_system_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(
         new_epoch,
@@ -1230,7 +1220,7 @@ It does the following things:
     <a href="../sui_system/voting_power.md#sui_system_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, new_total_stake);
     // At this point, self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a> are updated <b>for</b> next epoch.
     // Now we process the staged <a href="../sui_system/validator.md#sui_system_validator">validator</a> metadata.
-    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>();
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.do_mut!(|v| v.effectuate_staged_metadata());
 }
 </code></pre>
 
@@ -1358,42 +1348,12 @@ This function does the following:
             // <b>return</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> object to the candidate pool. want to do this directly instead of
             // calling <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator_candidate">request_add_validator_candidate</a> because <a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a> already <b>has</b> an
             // <b>entry</b> <b>for</b> this <a href="../sui_system/validator.md#sui_system_validator">validator</a>, and the duplicate checks are redundant
-            self
-                .validator_candidates
-                .add(
-                    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.sui_address(),
-                    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.wrap_v1(ctx),
-                );
+            self.validator_candidates.add(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.sui_address(), <a href="../sui_system/validator.md#sui_system_validator">validator</a>.wrap_v1(ctx));
             total_removed_stake = total_removed_stake + validator_stake;
         }
     });
     // <a href="../sui_system/validator_set.md#sui_system_validator_set_new">new</a> total stake is the initial total minus the amount removed via validators we kicked out
     initial_total_stake - total_removed_stake
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_effectuate_staged_metadata"></a>
-
-## Function `effectuate_staged_metadata`
-
-Effectuate pending next epoch metadata if they are staged.
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>) {
-    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.do_mut!(|v| v.<a href="../sui_system/validator_set.md#sui_system_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>());
 }
 </code></pre>
 
@@ -1745,7 +1705,7 @@ It differs from <code><a href="../sui_system/validator_set.md#sui_system_validat
 only the sui address but this function looks at more metadata.
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, new_validator: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): bool
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, search: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): bool
 </code></pre>
 
 
@@ -1754,59 +1714,10 @@ only the sui address but this function looks at more metadata.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
-    <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_validator">is_duplicate_validator</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, new_validator)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_is_duplicate_validator"></a>
-
-## Function `is_duplicate_validator`
-
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_validator">is_duplicate_validator</a>(validators: &vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;, new_validator: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_validator">is_duplicate_validator</a>(
-    validators: &vector&lt;Validator&gt;,
-    new_validator: &Validator,
-): bool {
-    <a href="../sui_system/validator_set.md#sui_system_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators, new_validator) &gt; 0
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_count_duplicates_vec"></a>
-
-## Function `count_duplicates_vec`
-
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators: &vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_count_duplicates_vec">count_duplicates_vec</a>(validators: &vector&lt;Validator&gt;, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator): u64 {
-    validators.count!(|v| v.is_duplicate(<a href="../sui_system/validator.md#sui_system_validator">validator</a>))
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, search: &Validator): bool {
+    self
+        .<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>
+        .any!(|v| v.sui_address() != search.sui_address() && v.is_duplicate(search))
 }
 </code></pre>
 
@@ -1821,7 +1732,7 @@ only the sui address but this function looks at more metadata.
 Checks whether <code>new_validator</code> is duplicate with any currently pending validators.
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, new_validator: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): bool
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, search: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): bool
 </code></pre>
 
 
@@ -1830,38 +1741,16 @@ Checks whether <code>new_validator</code> is duplicate with any currently pendin
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, new_validator: &Validator): bool {
-    <a href="../sui_system/validator_set.md#sui_system_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(&self.pending_active_validators, new_validator) &gt; 0
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_count_duplicates_tablevec"></a>
-
-## Function `count_duplicates_tablevec`
-
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(validators: &<a href="../sui/table_vec.md#sui_table_vec_TableVec">sui::table_vec::TableVec</a>&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>): u64
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_count_duplicates_tablevec">count_duplicates_tablevec</a>(validators: &TableVec&lt;Validator&gt;, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: &Validator): u64 {
-    <b>let</b> <b>mut</b> result = 0;
-    validators.length().do!(|i| {
-        <b>if</b> (validators[i].is_duplicate(<a href="../sui_system/validator.md#sui_system_validator">validator</a>)) {
-            result = result + 1;
-        };
-    });
-    result
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, search: &Validator): bool {
+    'search: {
+        self.pending_active_validators.length().do!(|i| {
+            <b>let</b> v = &self.pending_active_validators[i];
+            <b>if</b> (v.sui_address() != search.sui_address() && v.is_duplicate(search)) {
+                <b>return</b> 'search <b>true</b>
+            };
+        });
+        <b>false</b>
+    }
 }
 </code></pre>
 
@@ -1950,16 +1839,14 @@ If not found, returns (false, 0).
     validators: &TableVec&lt;Validator&gt;,
     validator_address: <b>address</b>,
 ): Option&lt;u64&gt; {
-    <b>let</b> length = validators.length();
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; length) {
-        <b>let</b> v = &validators[i];
-        <b>if</b> (v.sui_address() == validator_address) {
-            <b>return</b> option::some(i)
-        };
-        i = i + 1;
-    };
-    option::none()
+    'search: {
+        validators.length().do!(|i| {
+            <b>if</b> (validators[i].sui_address() == validator_address) {
+                <b>return</b> 'search option::some(i)
+            };
+        });
+        option::none()
+    }
 }
 </code></pre>
 
@@ -1988,12 +1875,9 @@ Aborts if any address isn't in the given validator set.
     validators: &vector&lt;Validator&gt;,
     validator_addresses: &vector&lt;<b>address</b>&gt;,
 ): vector&lt;u64&gt; {
-    <b>let</b> <b>mut</b> res = vector[];
-    validator_addresses.do_ref!(|addr| {
-        <b>let</b> idx = <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(validators, *addr).destroy_or!(<b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAValidator">ENotAValidator</a>);
-        res.push_back(idx);
-    });
-    res
+    validator_addresses.map_ref!(|addr| {
+        <a href="../sui_system/validator_set.md#sui_system_validator_set_find_validator">find_validator</a>(validators, *addr).destroy_or!(<b>abort</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAValidator">ENotAValidator</a>)
+    })
 }
 </code></pre>
 
@@ -2377,7 +2261,10 @@ is removed from <code>validators</code> and its staking pool is put into the <co
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <a href="../sui_system/validator_set.md#sui_system_validator_set_sort_removal_list">sort_removal_list</a>(&<b>mut</b> self.pending_removals);
+    // Pending removals needs to be sorted in ASC order. So we maintain the
+    // indexes after each <a href="../sui_system/validator.md#sui_system_validator">validator</a>'s removal.
+    self.pending_removals.insertion_sort_by!(|a, b| *a &lt;= *b);
+    // Drain pending removals and process <a href="../sui_system/validator.md#sui_system_validator">validator</a>'s departure.
     self.pending_removals.length().do!(|_| {
         <b>let</b> index = self.pending_removals.pop_back();
         <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.remove(index);
@@ -2436,12 +2323,7 @@ Remove <code><a href="../sui_system/validator.md#sui_system_validator">validator
     // Deactivate the <a href="../sui_system/validator.md#sui_system_validator">validator</a> and its staking pool
     <b>let</b> removed_stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>();
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.deactivate(new_epoch);
-    self
-        .inactive_validators
-        .add(
-            validator_pool_id,
-            <a href="../sui_system/validator.md#sui_system_validator">validator</a>.wrap_v1(ctx),
-        );
+    self.inactive_validators.add(validator_pool_id, <a href="../sui_system/validator.md#sui_system_validator">validator</a>.wrap_v1(ctx));
     removed_stake
 }
 </code></pre>
@@ -2492,70 +2374,6 @@ Remove <code><a href="../sui_system/validator.md#sui_system_validator">validator
 
 </details>
 
-<a name="sui_system_validator_set_sort_removal_list"></a>
-
-## Function `sort_removal_list`
-
-Sort all the pending removal indexes.
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_sort_removal_list">sort_removal_list</a>(withdraw_list: &<b>mut</b> vector&lt;u64&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_sort_removal_list">sort_removal_list</a>(withdraw_list: &<b>mut</b> vector&lt;u64&gt;) {
-    <b>let</b> length = withdraw_list.length();
-    <b>let</b> <b>mut</b> i = 1;
-    <b>while</b> (i &lt; length) {
-        <b>let</b> cur = withdraw_list[i];
-        <b>let</b> <b>mut</b> j = i;
-        <b>while</b> (j &gt; 0) {
-            j = j - 1;
-            <b>if</b> (withdraw_list[j] &gt; cur) {
-                withdraw_list.swap(j, j + 1);
-            } <b>else</b> {
-                <b>break</b>
-            };
-        };
-        i = i + 1;
-    };
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_process_pending_stakes_and_withdraws"></a>
-
-## Function `process_pending_stakes_and_withdraws`
-
-Process all active validators' pending stake deposits and withdraws.
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(validators: &<b>mut</b> vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(validators: &<b>mut</b> vector&lt;Validator&gt;, ctx: &TxContext) {
-    validators.do_mut!(|v| v.<a href="../sui_system/validator_set.md#sui_system_validator_set_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(ctx))
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="sui_system_validator_set_calculate_total_stakes"></a>
 
 ## Function `calculate_total_stakes`
@@ -2576,31 +2394,6 @@ Calculate the total active validator stake.
     <b>let</b> <b>mut</b> stake = 0;
     validators.do_ref!(|v| stake = stake + v.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>());
     stake
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_adjust_stake_and_gas_price"></a>
-
-## Function `adjust_stake_and_gas_price`
-
-Process the pending stake changes for each validator.
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(validators: &<b>mut</b> vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(validators: &<b>mut</b> vector&lt;Validator&gt;) {
-    validators.do_mut!(|v| v.<a href="../sui_system/validator_set.md#sui_system_validator_set_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>())
 }
 </code></pre>
 
