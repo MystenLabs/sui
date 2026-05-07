@@ -17,7 +17,7 @@ Seal is a decentralized secrets management (DSM) service that uses access contro
 
 Seal has 3 core components:
 
-- **Onchain access policies:** Move functions you write that define who is allowed to decrypt. [Key servers](https://seal-docs.wal.app/ServerOverview) evaluate your policy by running a `dry_run_transaction_block` on Sui when a user requests decryption key shares. If the policy approves, the key shares are returned.
+- **Onchain access policies:** Move functions you write that define who is allowed to decrypt. [Key servers](https://seal-docs.wal.app/ServerOverview) evaluate your policy by running a `dry_run_transaction_block` on Sui when a user requests decryption key shares. If the policy approves, the servers return the key shares.
 - **Key servers:** Offchain services that hold [IBE (identity-based encryption)](https://seal-docs.wal.app/Design) master secret keys. Each server returns derived decryption key shares only when the request satisfies the associated onchain policy. You configure a threshold, so decryption requires at least `t` out of `n` servers to agree.
 - **Client-side encryption:** The user encrypts and decrypts data locally in their environment. Key servers never see plaintext.
 
