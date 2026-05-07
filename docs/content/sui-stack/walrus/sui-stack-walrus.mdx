@@ -9,7 +9,7 @@ Walrus is a decentralized storage and data availability protocol built specifica
 
 Each section explains a Walrus concept or operation and shows where it appears in the encrypted social media example [OnlyFins](only-fins.mdx). OnlyFins is a demo content platform where creators post images stored on [Walrus](https://docs.wal.app/), some encrypted with [Seal](https://seal-docs.wal.app/). Each post is a Sui object. Users request access onchain to unlock encrypted posts, demonstrating how Sui, Walrus, and Seal work together as a stack.
 
-For patterns OnlyFins does not cover, the guide draws on [Walrus Onboarding](https://github.com/MystenLabs/Walrus-Onboarding) modules and [walrus-pocs](https://github.com/MystenLabs/walrus-pocs), a collection of focused Walrus proof-of-concept examples maintained by Mysten Labs. The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the authoritative reference for all SDK options. The [Encryption with Seal](/sui-stack/walrus-seal/sui-stack-seal) guide builds on this same app.
+For patterns OnlyFins does not cover, the guide draws on [Walrus Onboarding](https://github.com/MystenLabs/Walrus-Onboarding) modules and [walrus-pocs](https://github.com/MystenLabs/walrus-pocs), a collection of focused Walrus proof-of-concept examples maintained by Mysten Labs. The [Walrus SDK documentation](https://sdk.mystenlabs.com/walrus) is the authoritative reference for all SDK options. The [Encryption with Seal](/sui-stack/seal/sui-stack-seal) guide builds on this same app.
 
 ### Architecture
 
@@ -383,4 +383,4 @@ All blobs stored on Walrus are public. To restrict access to content, you must e
 
 Seal is a decentralized secrets management service that provides threshold encryption and onchain access control for Walrus data. It integrates directly with Sui's object model, letting you tie decryption access to ownership of specific Sui objects or other onchain conditions. In OnlyFins, a user receives a `ViewerToken` Sui object after paying for a post, and Seal checks ownership of that token before issuing decryption key shares.
 
-The backend `encryptImages.ts` script handles encryption before upload. The frontend `usePostDecryption` hook handles decryption after reading. Both are covered in depth in [Encryption with Seal](/sui-stack/walrus-seal/sui-stack-seal), which builds on this same OnlyFins app.
+The backend `encryptImages.ts` script handles encryption before upload. The frontend `usePostDecryption` hook handles decryption after reading. Both are covered in depth in [Encryption with Seal](/sui-stack/seal/sui-stack-seal), which builds on this same OnlyFins app.
