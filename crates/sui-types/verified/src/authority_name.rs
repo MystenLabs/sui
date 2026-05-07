@@ -145,7 +145,7 @@ verus! {
 // spec contexts and have spec traits like `View` implemented for it.
 #[verifier::external_type_specification]
 #[verifier::external_body]
-pub struct ExAuthorityPublicKeyBytes(AuthorityPublicKeyBytes);
+pub struct ExAuthorityPublicKeyBytes(pub AuthorityPublicKeyBytes);
 
 // Identity view: `k@ == k` for all `k`.
 // This makes `Map<AuthorityName, V>` the spec view type for any

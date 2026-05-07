@@ -49,7 +49,7 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::{self, Display, Formatter};
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::str::FromStr;
 use strum::EnumString;
 use tracing::{instrument, warn};
@@ -1032,12 +1032,10 @@ impl AuthoritySignInfoTrait for EmptySignInfo {
     }
 }
 
-#[derive(Clone, Debug, Eq, Serialize, Deserialize)]
-pub struct AuthoritySignInfo {
-    pub epoch: EpochId,
-    pub authority: AuthorityName,
-    pub signature: AuthoritySignature,
-}
+// `AuthoritySignInfo` is defined in `sui-types-verified` so that Verus can
+// attach spec functions to it as a first-class owned type.  Re-exported here
+// so all existing `sui_types::crypto::AuthoritySignInfo` imports are unchanged.
+pub use sui_types_verified::AuthoritySignInfo;
 
 impl AuthoritySignInfoTrait for AuthoritySignInfo {
     fn verify_secure<T: Serialize>(
@@ -1095,53 +1093,8 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
     }
 }
 
-impl AuthoritySignInfo {
-    pub fn new<T>(
-        epoch: EpochId,
-        value: &T,
-        intent: Intent,
-        name: AuthorityName,
-        secret: &dyn Signer<AuthoritySignature>,
-    ) -> Self
-    where
-        T: Serialize,
-    {
-        Self {
-            epoch,
-            authority: name,
-            signature: AuthoritySignature::new_secure(
-                &IntentMessage::new(intent, value),
-                &epoch,
-                secret,
-            ),
-        }
-    }
-}
-
-impl Hash for AuthoritySignInfo {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.epoch.hash(state);
-        self.authority.hash(state);
-    }
-}
-
-impl Display for AuthoritySignInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "AuthoritySignInfo {{ epoch: {:?}, authority: {} }}",
-            self.epoch, self.authority,
-        )
-    }
-}
-
-impl PartialEq for AuthoritySignInfo {
-    fn eq(&self, other: &Self) -> bool {
-        // We do not compare the signature, because there can be multiple
-        // valid signatures for the same epoch and authority.
-        self.epoch == other.epoch && self.authority == other.authority
-    }
-}
+// The inherent impl, Hash, Display, and PartialEq for AuthoritySignInfo
+// now live in sui-types-verified/src/authority_sign_info.rs.
 
 /// Represents at least a quorum (could be more) of authority signatures.
 /// STRONG_THRESHOLD indicates whether to use the quorum threshold for quorum check.

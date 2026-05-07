@@ -15,8 +15,10 @@
 use shared_crypto::intent::Intent;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, StakeUnit};
-use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait};
+use sui_types::crypto::{AuthorityQuorumSignInfo, AuthoritySignInfoTrait};
+// AuthoritySignInfo now lives in sui-types-verified (first-class Verus type).
 use sui_types::error::{SuiError, SuiErrorKind};
+use sui_types_verified::AuthoritySignInfo;
 use vstd::prelude::*;
 
 verus! {
@@ -53,13 +55,11 @@ pub struct ExSuiErrorKind(SuiErrorKind);
 // Cryptographic signature types
 // ---------------------------------------------------------------------------
 
-// Register AuthoritySignInfo. Its pub fields (epoch, authority) are accessible
-// in spec because the struct itself is registered.
-#[verifier::external_type_specification]
-#[verifier::external_body]
-pub struct ExAuthoritySignInfo(AuthoritySignInfo);
+// AuthoritySignInfo is now defined in sui-types-verified (where it is a
+// first-class Verus type). No external_type_specification needed — it is
+// owned by this crate's dependency.
 
-// Register AuthorityQuorumSignInfo — it appears in InsertResult::QuorumReached.
+// AuthorityQuorumSignInfo still comes from sui-types; register it here.
 #[verifier::external_type_specification]
 #[verifier::external_body]
 #[verifier::reject_recursive_types(STRENGTH)]

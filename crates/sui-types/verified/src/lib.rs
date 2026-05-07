@@ -8,9 +8,11 @@
 //! scripts/verus-check.sh.
 
 pub mod authority_name;
+pub mod authority_sign_info;
 pub mod collections;
 pub mod serde_helpers;
 
 // Re-export so downstream verified crates can import directly from here.
 pub use authority_name::AuthorityPublicKeyBytes;
+pub use authority_sign_info::AuthoritySignInfo;
 pub use collections::VerifiedHashMap;

@@ -17274,11 +17274,14 @@ name = "sui-types-verified"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "derive_more 1.0.0",
  "fastcrypto",
  "schemars 0.8.21",
  "serde",
+ "serde-name",
  "serde_with",
+ "shared-crypto",
  "sui-sdk-types",
  "vstd",
 ]
