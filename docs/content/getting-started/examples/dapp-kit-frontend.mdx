@@ -156,7 +156,7 @@ The following snippets are the parts of the code worth reading carefully.
 
 The `dapp-kit.ts` file configures multi-network gRPC clients for Devnet, Testnet, and Mainnet.
 
-<ImportContent source="E2/my-first-sui-dapp/src/dapp-kit.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" />
+<ImportContent source="E2/my-first-sui-dapp/src/dapp-kit.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" />
 
 The `createDAppKit` factory takes an array of network configs, each with a `chain` identifier and a `createClient` factory. The `SuiGrpcClient` uses binary protocol for faster communication than JSON-RPC. The module declaration augments dApp Kit's types so TypeScript knows about the configured networks.
 
@@ -164,7 +164,7 @@ The `createDAppKit` factory takes an array of network configs, each with a `chai
 
 The `MintNFTForm` component builds a transaction, signs it with the wallet, and invalidates the cache after confirmation.
 
-<ImportContent source="E2/my-first-sui-dapp/src/components/ui/MintNFTForm.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="MintNFTForm" />
+<ImportContent source="E2/my-first-sui-dapp/src/components/ui/MintNFTForm.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="MintNFTForm" />
 
 The `handleMint` function builds a `Transaction` with `moveCall` targeting the deployed `mint_hero` function, then `transferObjects` to send the hero to the user's address. After `signAndExecuteTransaction` returns the digest, it waits for confirmation and invalidates the `["ownedObjects", address]` query key so the heroes list refetches.
 
@@ -172,7 +172,7 @@ The `handleMint` function builds a `Transaction` with `moveCall` targeting the d
 
 The `OwnedObjects` component uses `listOwnedObjects` with a `StructType` filter to show only Hero NFTs.
 
-<ImportContent source="E2/my-first-sui-dapp/src/OwnedObjects.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="OwnedObjects" />
+<ImportContent source="E2/my-first-sui-dapp/src/OwnedObjects.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="OwnedObjects" />
 
 The `useQuery` hook fetches owned objects only when a wallet is connected (`enabled: !!account`). The `StructType` filter limits results to the Hero type. The query key includes the address so the cache is per-wallet. React Query handles loading, error, and empty states.
 
@@ -180,7 +180,7 @@ The `useQuery` hook fetches owned objects only when a wallet is connected (`enab
 
 The `main.tsx` entry point wraps the app in the required providers.
 
-<ImportContent source="E2/my-first-sui-dapp/src/main.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" />
+<ImportContent source="E2/my-first-sui-dapp/src/main.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" />
 
 The provider order matters: `QueryClientProvider` must wrap `DAppKitProvider` because dApp Kit hooks use React Query internally. The `initialChain` prop sets Testnet as the default network.
 

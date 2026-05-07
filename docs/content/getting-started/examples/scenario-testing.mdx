@@ -15,7 +15,7 @@ concepts:
   - transaction_effects
 ---
 
-This scenario testing example builds a small game system (heroes, XP tomes, and an access control list) and tests it end-to-end using Sui's [`test_scenario`](/develop/testing-debugging/testing) module. Each test simulates multiple transactions from different accounts, tracks object creation and transfer, and validates state changes across modules. 
+This scenario testing example builds a small game system (heroes, XP tomes, and an access control list) and tests it end-to-end using Sui's [`test_scenario`](/develop/testing-debugging/) module. Each test simulates multiple transactions from different accounts, tracks object creation and transfer, and validates state changes across modules. 
 
 ## When to use this pattern
 
@@ -153,7 +153,7 @@ The following snippets are the parts of the code worth reading carefully.
 
 The `Admins` shared object holds the list of authorized addresses. The `AdminCap` gates who can modify the list.
 
-<ImportContent source="G1/scenario/sources/acl.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" struct="Admins" />
+<ImportContent source="G1/scenario/sources/acl.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" struct="Admins" />
 
 The `authorize` function is `public(package)`, meaning only modules in the same package can call it. This prevents external packages from bypassing access control. The `Hero` and `XPTome` modules call `admins.authorize(ctx)` before minting.
 
@@ -161,7 +161,7 @@ The `authorize` function is `public(package)`, meaning only modules in the same 
 
 The `mint` function creates a `Hero` NFT and transfers it to a recipient. Only addresses in the `Admins` list can call it.
 
-<ImportContent source="G1/scenario/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="mint" />
+<ImportContent source="G1/scenario/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="mint" />
 
 The first line calls `admins.authorize(ctx)`, which checks that `ctx.sender()` is in the admin list. If not, the transaction aborts with `ENotAuthorized`. The function then creates a `Hero` with the given stats and transfers it to the recipient.
 
@@ -169,7 +169,7 @@ The first line calls `admins.authorize(ctx)`, which checks that `ctx.sender()` i
 
 The `level_up` function takes an `XPTome` by value (consuming it) and adds its stats to the hero.
 
-<ImportContent source="G1/scenario/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="level_up" />
+<ImportContent source="G1/scenario/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="level_up" />
 
 The `tome.destroy()` call destructs the `XPTome`, deletes its UID, and returns the health and stamina values. The function adds these to the hero's existing stats. After this call, the tome object no longer exists onchain.
 
@@ -177,7 +177,7 @@ The `tome.destroy()` call destructs the `XPTome`, deletes its UID, and returns t
 
 The `test_level_up` scenario test simulates 3 transactions: init, mint hero + tome, and level up.
 
-<ImportContent source="G1/scenario/tests/hero_tests.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="test_level_up" />
+<ImportContent source="G1/scenario/tests/hero_tests.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="test_level_up" />
 
 The test uses `test_scenario::begin(admin)` to start as the admin, then `scenario.next_tx(admin)` to advance to a new transaction where the admin mints both items. The next `next_tx(hero_owner)` switches to the player's perspective, takes the hero and tome from the scenario, calls `level_up`, and asserts the stats increased correctly.
 
@@ -185,7 +185,7 @@ The test uses `test_scenario::begin(admin)` to start as the admin, then `scenari
 
 The `test_add_admin` scenario test inspects the effects of each transaction to verify exactly what was created, shared, and transferred.
 
-<ImportContent source="G1/scenario/tests/acl_tests.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="test_add_admin" />
+<ImportContent source="G1/scenario/tests/acl_tests.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="test_add_admin" />
 
 After `next_tx`, the test calls `begin_effects.created()`, `begin_effects.shared()`, and `begin_effects.transferred_to_account()` to inspect exactly which objects the `init` transaction produced. It verifies that the init transaction created 3 objects (the `Publisher`, the `AdminCap`, and the `Admins`), shared 1, and transferred 2. This level of inspection catches bugs where a function creates the right object but fails to share or transfer it.
 

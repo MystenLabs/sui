@@ -196,7 +196,7 @@ The following snippets are the parts of the code worth reading carefully.
 
 The `useEphemeral` hook generates a short-lived Ed25519 key pair and computes the nonce that binds it to the OAuth session.
 
-<ImportContent source="K2/src/hooks/useEphemeral.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="useEphemeral" />
+<ImportContent source="K2/src/hooks/useEphemeral.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="useEphemeral" />
 
 The hook creates an `Ed25519Keypair`, extracts its public key, generates cryptographic randomness, fetches the current epoch to compute `maxEpoch`, and derives the nonce using `generateNonce`. The nonce is embedded in the OAuth URL so the JWT is bound to this specific ephemeral key. After `maxEpoch` passes, the key pair can no longer authorize transactions.
 
@@ -204,7 +204,7 @@ The hook creates an `Ed25519Keypair`, extracts its public key, generates cryptog
 
 The `useOauthPopup` hook runs in the OAuth callback popup window and sends the JWT back to the parent.
 
-<ImportContent source="K2/src/hooks/useOauthPopup.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="useOauthPopup" />
+<ImportContent source="K2/src/hooks/useOauthPopup.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="useOauthPopup" />
 
 When the OAuth provider redirects back to the application, the popup detects it has a `window.opener`, parses the `id_token` from the URL hash fragment, posts it to the parent window with `postMessage`, and closes itself. The parent window listens for this message in the `useOauthLogin` hook.
 
@@ -212,7 +212,7 @@ When the OAuth provider redirects back to the application, the popup detects it 
 
 The `useZkProof` hook prepares the proof payload and fetches it from the Mysten Labs prover service.
 
-<ImportContent source="K2/src/hooks/useZkProof.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="useZkProof" />
+<ImportContent source="K2/src/hooks/useZkProof.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="useZkProof" />
 
 The payload includes the JWT, the extended ephemeral public key (which encodes the key type and bytes), the max epoch, base64-encoded randomness and salt, and the key claim name (`sub`). The prover verifies the JWT signature and returns a ZK proof that the frontend stores for transaction signing.
 
@@ -220,7 +220,7 @@ The payload includes the JWT, the extended ephemeral public key (which encodes t
 
 The `useWallet` hook derives the deterministic Sui address from the JWT and salt.
 
-<ImportContent source="K2/src/hooks/useWallet.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="useWallet" />
+<ImportContent source="K2/src/hooks/useWallet.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="useWallet" />
 
 `jwtToAddress` maps the JWT's `sub` claim and the salt to a Sui address. `genAddressSeed` produces the address seed needed later for the zkLogin signature. The same JWT `sub` + salt always produces the same address, so the user's wallet persists across sessions.
 
@@ -228,7 +228,7 @@ The `useWallet` hook derives the deterministic Sui address from the JWT and salt
 
 The `suiWriteClient` builds a SUI transfer transaction and executes it with a zkLogin signature.
 
-<ImportContent source="K2/src/services/sui/writeClient.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="buildAndSignTransfer" />
+<ImportContent source="K2/src/services/sui/writeClient.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="buildAndSignTransfer" />
 
 The function fetches available coins and the reference gas price in parallel, selects the largest coin for gas, constructs a `splitCoins` + `transferObjects` transaction, and signs it with the ephemeral key pair. The `useLiveTransaction` hook then combines this signature with the ZK proof using `getZkLoginSignature` to produce the final zkLogin signature before calling `executeZkLoginTransaction`.
 
@@ -236,7 +236,7 @@ The function fetches available coins and the reference gas price in parallel, se
 
 The `fetchZkProof` utility calls the Mysten Labs prover endpoint.
 
-<ImportContent source="K2/src/utils/zk.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="fetchZkProof" />
+<ImportContent source="K2/src/utils/zk.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="fetchZkProof" />
 
 The function POSTs the proof payload to `https://prover-dev.mystenlabs.com/v1`. The error handling distinguishes network failures (which might indicate CORS issues) from prover errors. For production applications, consider proxying prover requests through a backend to avoid CORS restrictions.
 

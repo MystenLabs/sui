@@ -6,34 +6,15 @@ example_id: derived-objects-bootcamp
 last_verified: 2026-04-30
 repo: https://github.com/MystenLabs/sui-move-bootcamp
 path: /C5
-languages:
-  - move
-  - typescript
 concepts:
   - derived_objects
   - deterministic_ids
   - object_model
   - bcs_serialization
   - offchain_prediction
-entry_functions:
-  - module: objects
-    name: create_incremental
-    file: C5/contracts/derived_objects/sources/objects.move
-  - module: objects
-    name: create_address
-    file: C5/contracts/derived_objects/sources/objects.move
-  - module: objects
-    name: create_string
-    file: C5/contracts/derived_objects/sources/objects.move
-  - module: objects
-    name: create_struct
-    file: C5/contracts/derived_objects/sources/objects.move
-shared_objects:
-  - struct: ParentObject
-    module: parent
 ---
 
-[Derived objects](/develop/objects/derived-objects) are Sui objects with deterministic IDs computed from a parent object and a key. You can predict a derived object's ID offchain before the transaction that creates it runs, which enables indexer-free lookups, batch queries, and state verification.
+Derived objects are Sui objects with deterministic IDs computed from a parent object and a key. You can predict a derived object's ID offchain before the transaction that creates it runs, which enables indexer-free lookups, batch queries, and state verification.
 
 ## When to use this pattern
 
@@ -83,7 +64,7 @@ sequenceDiagram
 
 The following steps walk through the flow:
 
-1. The TypeScript test computes the expected object ID offchain using `deriveObjectID(parentObjectId, keyType, serializedKey)`. This requires no network call.
+1. The TypeScript test computes the expected object ID offchain using `deriveObjectID(parentObjectId, keyType, serializedKey)`. No network call is needed.
 
 2. The test builds and submits a transaction that calls 1 of the 4 `create_*` entry functions with the parent object and the key.
 
@@ -93,7 +74,7 @@ The following steps walk through the flow:
 
 This pattern means any client that knows the parent ID and the key can compute the derived object's ID without querying the chain.
 
-[Learn more about derived objects](/guides/developer/objects/derived-objects).
+[Learn more about derived objects](/develop/objects/derived-objects).
 
 ## Prerequisites
 
@@ -122,7 +103,7 @@ This pattern means any client that knows the parent ID and the key can compute t
 
 - [x] [Download and install Git](https://git-scm.com/downloads).
 
-- [x] [Node.js](https://nodejs.org/) 18 or later
+- [x] Node.js 18 or later
 
 </TabItem>
 </Tabs>
@@ -201,7 +182,7 @@ The following snippets are the parts of the code worth reading carefully.
 
 The `ParentObject` struct holds the shared UID that all derived objects derive from, plus an incremental counter for sequential derivation.
 
-<ImportContent source="C5/contracts/derived_objects/sources/parent.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" struct="ParentObject" />
+<ImportContent source="C5/contracts/derived_objects/sources/parent.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" struct="ParentObject" />
 
 The `uid_mut_ref` function exposes the parent's UID as a mutable reference, which `derived_object::claim` requires. The `incremental_counter` gives each sequentially derived object a unique key.
 
@@ -209,7 +190,7 @@ The `uid_mut_ref` function exposes the parent's UID as a mutable reference, whic
 
 The `create_incremental` function claims a derived object using the parent's current counter value as the key, then increments the counter for the next derivation.
 
-<ImportContent source="C5/contracts/derived_objects/sources/objects.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="create_incremental" />
+<ImportContent source="C5/contracts/derived_objects/sources/objects.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="create_incremental" />
 
 The `derived_object::claim` call takes the parent's mutable UID reference and the counter value. It returns a UID whose ID is deterministically computed from those 2 inputs. The function stores the parent's ID as `derivation_id` on the new object so offchain clients can verify the derivation chain.
 
@@ -217,7 +198,7 @@ The `derived_object::claim` call takes the parent's mutable UID reference and th
 
 The `create_address` function uses a Sui address as the derivation key, which creates a 1-to-1 mapping between addresses and derived objects under this parent.
 
-<ImportContent source="C5/contracts/derived_objects/sources/objects.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="create_address" />
+<ImportContent source="C5/contracts/derived_objects/sources/objects.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="create_address" />
 
 This pattern is useful for per-user objects. Given a user's address and the parent ID, any client can compute the derived object's ID without querying the chain.
 
@@ -225,7 +206,7 @@ This pattern is useful for per-user objects. Given a user's address and the pare
 
 The `deriveObjectIDFromParent` helper computes a derived object's ID using the Sui SDK, without any network call.
 
-<ImportContent source="C5/ts/src/helpers/deriveObjectID.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="deriveObjectIDFromParent" />
+<ImportContent source="C5/ts/src/helpers/deriveObjectID.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="deriveObjectIDFromParent" />
 
 The function serializes the key with BCS, passes it to `deriveObjectID` along with the parent object ID and the key's type tag, and returns the predicted ID. The tests verify this matches the onchain result.
 
@@ -233,17 +214,17 @@ The function serializes the key with BCS, passes it to `deriveObjectID` along wi
 
 The test suite includes a pagination pattern that queries derived objects in reverse order by computing IDs from a known counter range.
 
-<ImportContent source="C5/ts/tests/derive.test.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" ref="solution" fun="reverse search pagination" />
+<ImportContent source="C5/ts/tests/derive.test.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="reverse search pagination" />
 
 Because the counter is sequential, you can compute the ID for any index without an event query or indexer. This test reads the current counter, computes the last 10 IDs in reverse, and fetches them in a single `multiGetObjects` call.
 
 ## Common modifications
 
-- **Per-user profiles:** Use `create_address` with the player's wallet address as the key. Each user gets exactly 1 derived profile object per game. Look it up by computing `deriveObjectID(gameId, "address", userAddress)`.
+- Per-user profiles: Use `create_address` with the player's wallet address as the key. Each user gets exactly 1 derived profile object per game. Look it up by computing `deriveObjectID(gameId, "address", userAddress)`.
 
-- **Named configuration objects:** Use `create_string` with config names like `fee_schedule` or `whitelist`. Any client can find the config object by name without querying events.
+-Named configuration objects: Use `create_string` with config names like `"fee_schedule"` or `"whitelist"`. Any client can find the config object by name without querying events.
 
-- **Batch create and verify:** Build a PTB that calls `create_incremental` multiple times in a single transaction. Predict all IDs offchain from the current counter value before submitting, then verify the batch.
+- Batch create and verify: Build a PTB that calls `create_incremental` multiple times in a single transaction. Predict all IDs offchain from the current counter value before submitting, then verify the batch.
 
 ## Troubleshooting
 
@@ -251,7 +232,7 @@ Because the counter is sequential, you can compute the ID for any index without 
 
 **Symptom:** The test asserts that the onchain object ID equals the predicted ID, but they differ.
 
-**Cause:** The key type tag or BCS serialization does not match between the TypeScript prediction and the Move contract. Common issues: using `u64` instead of the full type path, or serializing a string without the BCS length prefix.
+**Cause:** The key type tag or BCS serialization does not match between the TypeScript prediction and the Move contract. Common issues: using `"u64"` instead of the full type path, or serializing a string without the BCS length prefix.
 
 **Fix:** Verify the `keyType` parameter matches the Move type exactly. For built-in types, use the `TYPE_TAGS` enum (`"0x1::string::String"`, `"address"`, `"u64"`). For custom structs, use the fully qualified type path including the package ID.
 
@@ -259,7 +240,7 @@ Because the counter is sequential, you can compute the ID for any index without 
 
 **Symptom:** The `derived_object::claim` call aborts because an object already exists at the computed ID.
 
-**Cause:** A previous transaction already created a derived object with the same parent + key combination. Derived IDs are unique per parent-key pair.
+**Cause:** A derived object with the same parent + key combination was already created. Derived IDs are unique per parent-key pair.
 
 **Fix:** Use a different key value. For incremental derivation, this happens automatically because the counter advances. For address or string keys, check whether the object already exists before creating.
 
@@ -267,9 +248,9 @@ Because the counter is sequential, you can compute the ID for any index without 
 
 **Symptom:** The transaction fails with an object-not-found error for the `ParentObject`.
 
-**Cause:** The `PARENT_OBJECT_ID` in `.env` is wrong, or you published the package on a different network than the client targets.
+**Cause:** The `PARENT_OBJECT_ID` in `.env` is wrong, or the package was published on a different network than the client targets.
 
-**Fix:** Verify the parent object ID from the publish transaction output. Confirm `NETWORK` in `.env` matches the network you published the package on.
+**Fix:** Verify the parent object ID from the publish transaction output. Confirm `NETWORK` in `.env` matches the network the package was published on.
 
 ### Type tag mismatch for struct keys
 

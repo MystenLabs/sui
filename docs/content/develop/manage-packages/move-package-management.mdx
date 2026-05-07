@@ -157,22 +157,6 @@ use math_b::muldiv;
 The `override` flag is used for combining packages that depend on different versions of the same package. The Move package system requires that there is only 1 version of each package in use within a package. For example, suppose that your package `a` wants to depend on packages `b` and `c`, but that `b` depends on version 1 of `d`, and `c` depends on version 2 of `d`:
 
 ```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: '#298DFF'
-    primaryTextColor: '#FFFFFF'
-    primaryBorderColor: '#FFFFFF'
-    secondaryColor: '#6C7584'
-    tertiaryColor: '#FFFFFF'
-    lineColor: '#298DFF'
-    background: '#FFFFFF'
-    mainBkg: '#000000'
-    secondBkg: '#6C7584'
-    fontSize: '14px'
-    fontFamily: 'Inter, sans-serif'
----
 graph LR;
   a --> b --> d1;
   a --> c --> d2;
@@ -183,22 +167,7 @@ The package system does not allow this by default, because running code in packa
 By adding `override = true` to a dependency, you force all of your dependencies to use the specified version of the dependency. In the preceding example, you could add an override dependency on `d` version 2, which would cause `b` to use version 2 of `d` instead of version 1.
 
 ```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    primaryColor: '#298DFF'
-    primaryTextColor: '#FFFFFF'
-    primaryBorderColor: '#FFFFFF'
-    secondaryColor: '#6C7584'
-    tertiaryColor: '#FFFFFF'
-    lineColor: '#298DFF'
-    background: '#FFFFFF'
-    mainBkg: '#000000'
-    secondBkg: '#6C7584'
-    fontSize: '14px'
-    fontFamily: 'Inter, sans-serif'
----
+
 graph LR;
   a --> b -.-> d1;
   a -->|override = true| d2;
