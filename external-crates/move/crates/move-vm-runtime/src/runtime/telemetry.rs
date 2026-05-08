@@ -274,9 +274,7 @@ impl TelemetryContext {
         let local = self.local();
         macro_rules! add {
             ($field:ident, $delta:expr) => {{
-                local
-                    .$field
-                    .set(local.$field.get().saturating_add($delta));
+                local.$field.set(local.$field.get().saturating_add($delta));
             }};
         }
         macro_rules! update_duration_field {
