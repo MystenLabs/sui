@@ -888,7 +888,7 @@ impl SuiNode {
                     .recover_end_of_publish(&epoch_store);
             }
 
-            if node_role.should_run_validator_service() {
+            if node_role.is_validator() {
                 // Start the gRPC server
                 components.validator_server_handle = Some(
                     components
@@ -1318,8 +1318,7 @@ impl SuiNode {
         let sui_tx_validator_metrics =
             SuiTxValidatorMetrics::new(&registry_service.default_registry());
 
-        let (validator_server_handle, admission_queue) = if node_role.should_run_validator_service()
-        {
+        let (validator_server_handle, admission_queue) = if node_role.is_validator() {
             let (handle, queue) = Self::start_grpc_validator_service(
                 &config,
                 state.clone(),
@@ -1336,7 +1335,7 @@ impl SuiNode {
 
         // Starts an overload monitor that monitors the execution of the authority.
         // Don't start the overload monitor when max_load_shedding_percentage is 0.
-        let validator_overload_monitor_handle = if node_role.should_run_overload_monitor()
+        let validator_overload_monitor_handle = if node_role.is_validator()
             && config
                 .authority_overload_config
                 .max_load_shedding_percentage
@@ -1423,7 +1422,7 @@ impl SuiNode {
             }
         }
 
-        if node_role.should_run_execution_time_observer() {
+        if node_role.is_validator() {
             ExecutionTimeObserver::spawn(
                 epoch_store.clone(),
                 Box::new(consensus_adapter.clone()),
@@ -1485,7 +1484,7 @@ impl SuiNode {
             .spawn(epoch_store.clone(), replay_waiter)
             .await;
 
-        if node_role.should_run_jwk_updater() && epoch_store.authenticator_state_enabled() {
+        if node_role.is_validator() && epoch_store.authenticator_state_enabled() {
             Self::start_jwk_updater(
                 config,
                 sui_node_metrics,
@@ -1708,6 +1707,15 @@ impl SuiNode {
                 "Creating checkpoint executor for epoch {}",
                 epoch_store.epoch()
             );
+            // Validators use the `verify_locally_built_checkpoint` path which
+            // skips checkpoint data processing for non-end-of-epoch checkpoints,
+            // creating gaps that cause the subscription service to panic.
+            let subscription_sender = if epoch_store.node_role().is_fullnode() {
+                self.subscription_service_checkpoint_sender.clone()
+            } else {
+                None
+            };
+
             let checkpoint_executor = CheckpointExecutor::new(
                 epoch_store.clone(),
                 self.checkpoint_store.clone(),
@@ -1716,7 +1724,7 @@ impl SuiNode {
                 self.backpressure_manager.clone(),
                 self.config.checkpoint_executor_config.clone(),
                 checkpoint_executor_metrics.clone(),
-                self.subscription_service_checkpoint_sender.clone(),
+                subscription_sender,
             );
 
             let run_with_range = self.config.run_with_range;
@@ -1954,7 +1962,7 @@ impl SuiNode {
                     )
                     .await?;
 
-                    if new_role.should_run_validator_service() {
+                    if new_role.is_validator() {
                         components.validator_server_handle = Some(
                             components
                                 .validator_server_handle

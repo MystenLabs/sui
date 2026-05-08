@@ -73,26 +73,6 @@ impl NodeRole {
         matches!(self, Self::FullNode(_))
     }
 
-    /// Whether this node should expose the gRPC validator service.
-    pub fn should_run_validator_service(&self) -> bool {
-        matches!(self, Self::Validator)
-    }
-
-    /// Whether this node should run the authority overload monitor.
-    pub fn should_run_overload_monitor(&self) -> bool {
-        matches!(self, Self::Validator)
-    }
-
-    /// Whether this node should submit JWK updates to consensus.
-    pub fn should_run_jwk_updater(&self) -> bool {
-        matches!(self, Self::Validator)
-    }
-
-    /// Whether this node should run the execution time observer.
-    pub fn should_run_execution_time_observer(&self) -> bool {
-        matches!(self, Self::Validator)
-    }
-
     /// Whether this node should expose HTTP/RPC servers (JSON-RPC, REST).
     pub fn should_run_rpc_servers(&self) -> bool {
         matches!(self, Self::FullNode(_))
