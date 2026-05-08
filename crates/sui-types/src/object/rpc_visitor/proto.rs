@@ -51,6 +51,35 @@ impl ProtoVisitor {
             &mut RV::RpcVisitor::<Value, _>::new(RV::LocalMeter::new(size_budget, MAX_DEPTH)),
         )
     }
+
+    /// Like `deserialize_value_with_budget`, but additionally caps the bytes
+    /// charged for this single render at `per_call_cap`, regardless of how
+    /// much shared `response_budget` remains. This combines two invariants
+    /// that multi-render endpoints need to hold simultaneously:
+    ///
+    /// * each individual Move value's JSON size is bounded by
+    ///   `per_call_cap` (so a single pathological value cannot consume the
+    ///   entire response budget on its own), and
+    /// * the sum across every render in the response is bounded by
+    ///   `response_budget`.
+    ///
+    /// On return, `response_budget` has been decremented by however much
+    /// this call actually consumed (at most `min(per_call_cap,
+    /// *response_budget)`), regardless of whether deserialization succeeded
+    /// or failed.
+    pub fn deserialize_value_with_dual_budget(
+        bytes: &[u8],
+        layout: &A::MoveTypeLayout,
+        response_budget: &mut usize,
+        per_call_cap: usize,
+    ) -> Result<Value, RV::Error> {
+        let starting = (*response_budget).min(per_call_cap);
+        let mut local = starting;
+        let result = Self::deserialize_value_with_budget(bytes, layout, &mut local);
+        let consumed = starting - local;
+        *response_budget = response_budget.saturating_sub(consumed);
+        result
+    }
 }
 
 impl RV::Format for Value {
@@ -280,6 +309,80 @@ pub(crate) mod tests {
         assert_eq!(budget, 0);
         ProtoVisitor::deserialize_value_with_budget(&bytes, &layout, &mut budget)
             .expect_err("third render must fail once the shared budget is exhausted");
+    }
+
+    #[test]
+    fn dual_budget_caps_per_call_below_remaining_response_budget() {
+        // The dual-budget primitive enforces both a per-render ceiling and a
+        // shared response-wide ceiling. Multi-render RPC endpoints rely on
+        // both: a single pathological Move value cannot consume the whole
+        // response budget, and the total across all renders is still bounded.
+        let layout = layout_("0x0::foo::Bar", vec![("a", L::U64)]);
+        let value = value_("0x0::foo::Bar", vec![("a", V::U64(42))]);
+        let expected = json!({ "a": "42" });
+        let per_call = required_budget(&expected);
+        let bytes = serialize(value);
+
+        // Per-call cap below what the value needs, plenty of response budget:
+        // the render must fail and at most `per_call_cap` is charged to the
+        // shared response budget — the rest of the response budget remains
+        // available for subsequent renders.
+        let starting_budget = per_call * 10;
+        let per_call_cap = per_call - 1;
+        let mut response_budget = starting_budget;
+        ProtoVisitor::deserialize_value_with_dual_budget(
+            &bytes,
+            &layout,
+            &mut response_budget,
+            per_call_cap,
+        )
+        .expect_err("render must fail when per-call cap is below the value's size");
+        let consumed = starting_budget - response_budget;
+        assert!(
+            consumed <= per_call_cap,
+            "consumed {consumed} bytes must not exceed per-call cap {per_call_cap}",
+        );
+        assert!(
+            response_budget >= starting_budget - per_call_cap,
+            "subsequent renders must still have at least starting - per_call_cap available",
+        );
+
+        // Per-call cap large enough, response budget shared across two calls:
+        // both renders succeed and the response budget reflects bytes used.
+        let mut response_budget = per_call * 3;
+        ProtoVisitor::deserialize_value_with_dual_budget(
+            &bytes,
+            &layout,
+            &mut response_budget,
+            per_call * 100,
+        )
+        .expect("first render should succeed");
+        assert_eq!(response_budget, per_call * 2);
+        ProtoVisitor::deserialize_value_with_dual_budget(
+            &bytes,
+            &layout,
+            &mut response_budget,
+            per_call * 100,
+        )
+        .expect("second render should succeed");
+        assert_eq!(response_budget, per_call);
+
+        // Response budget below what the value needs: the render must fail
+        // and the response budget is decremented by however many bytes the
+        // visitor charged before the meter rejected a further charge.
+        let starting_budget = per_call - 1;
+        let mut response_budget = starting_budget;
+        ProtoVisitor::deserialize_value_with_dual_budget(
+            &bytes,
+            &layout,
+            &mut response_budget,
+            per_call * 100,
+        )
+        .expect_err("render must fail once the shared response budget is exhausted");
+        assert!(
+            response_budget < starting_budget,
+            "the failed render must charge at least one byte to the shared budget",
+        );
     }
 
     fn proto_value_to_json_value(proto: Value) -> serde_json::Value {

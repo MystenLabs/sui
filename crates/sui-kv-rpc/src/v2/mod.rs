@@ -24,6 +24,11 @@ mod get_epoch;
 mod get_object;
 mod get_transaction;
 
+/// Maximum size in bytes for any single JSON-rendered Move value (1 MiB).
+/// Caps each per-item render so a single pathological value cannot consume
+/// the whole shared response budget on its own.
+pub(crate) const MAX_JSON_MOVE_VALUE_SIZE: usize = 1024 * 1024;
+
 /// Maximum aggregate size in bytes for JSON-rendered Move values across a
 /// single RPC response (16 MiB). Endpoints that render many values in one
 /// response (e.g. `BatchGetObjects`, `BatchGetTransactions`) share this
@@ -33,7 +38,8 @@ pub(crate) const MAX_JSON_MOVE_VALUE_RESPONSE_SIZE: usize = 16 * 1024 * 1024;
 
 /// Render a Move value as JSON using the package resolver for type layout.
 /// Draws the size budget from a caller-owned counter so all renders within
-/// a single response share one aggregate cap.
+/// a single response share one aggregate cap; each individual render is
+/// additionally capped at `MAX_JSON_MOVE_VALUE_SIZE`.
 pub(crate) async fn render_json_with_budget(
     resolver: &PackageResolver,
     struct_tag: &StructTag,
@@ -42,7 +48,13 @@ pub(crate) async fn render_json_with_budget(
 ) -> Option<prost_types::Value> {
     let type_tag = TypeTag::Struct(Box::new(struct_tag.clone()));
     let layout = resolver.type_layout(type_tag).await.ok()?;
-    ProtoVisitor::deserialize_value_with_budget(contents, &layout, size_budget).ok()
+    ProtoVisitor::deserialize_value_with_dual_budget(
+        contents,
+        &layout,
+        size_budget,
+        MAX_JSON_MOVE_VALUE_SIZE,
+    )
+    .ok()
 }
 
 #[tonic::async_trait]

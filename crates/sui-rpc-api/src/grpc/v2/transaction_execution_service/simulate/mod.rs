@@ -336,10 +336,14 @@ fn to_command_output(
         .ok()
         .flatten()
         .and_then(|layout| {
-            sui_types::object::rpc_visitor::proto::ProtoVisitor::deserialize_value_with_budget(
+            // Cap each individual return value at `max_json_move_value_size`
+            // while sharing the simulate response's JSON budget across all
+            // command outputs.
+            sui_types::object::rpc_visitor::proto::ProtoVisitor::deserialize_value_with_dual_budget(
                 &bcs,
                 &layout,
                 size_budget,
+                service.config.max_json_move_value_size(),
             )
             .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
             .ok()

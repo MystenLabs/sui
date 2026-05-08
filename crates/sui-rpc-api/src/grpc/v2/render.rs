@@ -13,17 +13,17 @@ use sui_types::full_checkpoint_content::ObjectSet;
 use crate::{RpcService, reader::DisplayStore};
 
 impl RpcService {
-    /// Render an object to its proto representation. Allocates a fresh
-    /// per-response JSON budget; multi-render endpoints should call
-    /// `render_object_to_proto_with_budget` instead so all renders share a
-    /// single bound on aggregate response memory.
+    /// Render a single object to its proto representation. Allocates a
+    /// `max_json_move_value_size` budget for this one render; multi-render
+    /// endpoints must call `render_object_to_proto_with_budget` instead so
+    /// every per-item render also draws from a shared per-response cap.
     pub fn render_object_to_proto(
         &self,
         object: &sui_types::object::Object,
         read_mask: &FieldMaskTree,
         output_objects: &ObjectSet,
     ) -> Object {
-        let mut size_budget = self.config.max_json_move_value_response_size();
+        let mut size_budget = self.config.max_json_move_value_size();
         self.render_object_to_proto_with_budget(object, read_mask, output_objects, &mut size_budget)
     }
 
@@ -75,13 +75,18 @@ impl RpcService {
         self.render_json_with_budget(struct_tag, contents, output_objects, &mut budget)
     }
 
-    /// Render a Move value as JSON, drawing the size budget from a caller-owned
-    /// counter. Endpoints that render many Move values in a single response
-    /// (e.g. every event in a checkpoint) share one budget across all renders
-    /// to bound the aggregate response memory rather than multiplying the
-    /// per-render limit by the number of items. The budget is updated in place
-    /// to reflect bytes consumed; once it reaches zero subsequent calls fail
-    /// fast and return `None`.
+    /// Render a Move value as JSON, drawing the size budget from a
+    /// caller-owned counter shared across the entire response. Endpoints
+    /// that render many Move values in a single response (e.g. every event
+    /// in a checkpoint, every object in a batch) share one budget across
+    /// all renders so the aggregate response memory is bounded rather than
+    /// multiplying the per-render limit by the number of items.
+    ///
+    /// Each individual render is additionally capped at
+    /// `max_json_move_value_size`, so a single pathological Move value
+    /// cannot consume the entire shared budget. The shared budget is
+    /// decremented in place by the bytes actually charged; once it reaches
+    /// zero subsequent calls fail fast and return `None`.
     pub fn render_json_with_budget(
         &self,
         struct_tag: &move_core_types::language_storage::StructTag,
@@ -96,10 +101,11 @@ impl RpcService {
             .ok()
             .flatten()?;
 
-        sui_types::object::rpc_visitor::proto::ProtoVisitor::deserialize_value_with_budget(
+        sui_types::object::rpc_visitor::proto::ProtoVisitor::deserialize_value_with_dual_budget(
             contents,
             &layout,
             size_budget,
+            self.config.max_json_move_value_size(),
         )
         .map_err(|e| tracing::debug!("unable to convert move value to JSON: {e}"))
         .ok()
@@ -174,23 +180,12 @@ impl RpcService {
         Some(display)
     }
 
-    /// Render a transaction's events to their proto representation. Allocates
-    /// a fresh per-response JSON budget; multi-render endpoints should call
-    /// `render_events_to_proto_with_budget` instead so all renders share a
-    /// single bound on aggregate response memory.
-    pub fn render_events_to_proto(
-        &self,
-        events: &sui_types::effects::TransactionEvents,
-        mask: &FieldMaskTree,
-        output_objects: &ObjectSet,
-    ) -> TransactionEvents {
-        let mut size_budget = self.config.max_json_move_value_response_size();
-        self.render_events_to_proto_with_budget(events, mask, output_objects, &mut size_budget)
-    }
-
     /// Render a transaction's events to their proto representation, drawing
     /// the JSON-render size budget from a caller-owned counter shared across
-    /// the entire response.
+    /// the entire response. There is intentionally no non-budget wrapper
+    /// here: rendering an arbitrary number of events into one response
+    /// without a shared cap would multiply the per-render limit by the
+    /// number of events.
     pub fn render_events_to_proto_with_budget(
         &self,
         events: &sui_types::effects::TransactionEvents,
@@ -228,16 +223,17 @@ impl RpcService {
         message
     }
 
-    /// Render a single event to its proto representation. Allocates a fresh
-    /// per-response JSON budget; multi-render endpoints should call
-    /// `render_event_to_proto_with_budget` instead.
+    /// Render a single event to its proto representation. Allocates a
+    /// `max_json_move_value_size` budget for this one render; multi-render
+    /// endpoints must call `render_event_to_proto_with_budget` instead so
+    /// every per-item render also draws from a shared per-response cap.
     pub fn render_event_to_proto(
         &self,
         event: &sui_types::event::Event,
         mask: &FieldMaskTree,
         output_objects: &ObjectSet,
     ) -> Event {
-        let mut size_budget = self.config.max_json_move_value_response_size();
+        let mut size_budget = self.config.max_json_move_value_size();
         self.render_event_to_proto_with_budget(event, mask, output_objects, &mut size_budget)
     }
 
