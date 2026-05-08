@@ -475,8 +475,6 @@ export default {
         'onchain-finance/deepbook-margin/deepbook-margin-indexer',
       ],
     },
-      ],
-    },
     {
       type: 'category',
       label: 'DeepBook Predict',
