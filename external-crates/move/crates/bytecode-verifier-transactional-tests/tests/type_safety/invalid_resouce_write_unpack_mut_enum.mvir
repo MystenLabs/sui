@@ -1,9 +1,9 @@
 //# publish
-module 0x43::RTest {
-    enum Coin has store { V{ value: u64 } }
-    enum T { V{ f: Self::Coin } }
+mvir 0x43::RTest {
+    public enum Coin has store { V{ value: u64 } }
+    public enum T { V{ f: Self::Coin } }
 
-      public update(t: &mut Self::T, i: Self::Coin) {
+      public fun update(t: &mut Self::T, i: Self::Coin) {
         let x: &mut Self::Coin;
       label b0:
           &mut T::V { f: x } = move(t);

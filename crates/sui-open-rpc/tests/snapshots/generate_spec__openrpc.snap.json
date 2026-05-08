@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.72.0"
+    "version": "1.73.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "123",
+              "maxSupportedProtocolVersion": "124",
               "protocolVersion": "6",
               "featureFlags": {
                 "abstract_size_in_object_runtime": false,
@@ -1378,6 +1378,7 @@
                 "enable_vdf": false,
                 "enable_verify_bulletproofs_ristretto255": false,
                 "end_of_epoch_transaction_supported": false,
+                "enforce_address_balance_change_invariant": false,
                 "enforce_checkpoint_timestamp_monotonicity": false,
                 "fix_checkpoint_signature_mapping": false,
                 "flexible_tx_context_positions": false,
@@ -1391,6 +1392,7 @@
                 "include_cancelled_randomness_txns_in_prologue": false,
                 "include_checkpoint_artifacts_digest_in_summary": false,
                 "include_consensus_digest_in_prologue": false,
+                "limit_groth16_pvk_inputs": false,
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,

@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/matching/invalid_native_struct_field_binder.move:5:9
+  │  
+4 │       fun t(n: &N): u64 {
+  │                     --- Expected: 'u64'
+5 │ ╭         match (n) {
+6 │ │             N { x } => x,
+  │ │                 - Given: '&_'
+7 │ │         }
+  │ ╰─────────^ Invalid return expression
+
+error[E04015]: invalid use of native item
+  ┌─ tests/move_2024/matching/invalid_native_struct_field_binder.move:6:13
+  │
+2 │     public native struct N;
+  │            ------ Struct declared 'native' here
+  ·
+6 │             N { x } => x,
+  │             ^^^^^^^ Invalid pattern usage for native struct '0x42::m::N'. Native structs cannot be directly constructed/deconstructed, and their fields cannot be dirctly accessed

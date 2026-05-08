@@ -3,29 +3,29 @@
 
 //# publish
 
-module 0x2::loopy {
+mvir 0x2::loopy {
 
-struct List has copy, drop {
+public struct List has copy, drop {
     dummy: bool,
 }
 
-struct Node has copy, drop {
+public struct Node has copy, drop {
     val: u8,
     next: Self::List,
 }
 
-node(l: &mut Self::List): &mut Self::Node {
+fun node(l: &mut Self::List): &mut Self::Node {
 label l0:
     abort 0;
 }
 
-is_end(l: &Self::List): bool {
+fun is_end(l: &Self::List): bool {
 label l0:
    abort 0;
 }
 
 
-t(cond: bool, s:  Self::List): Self::List {
+fun t(cond: bool, s:  Self::List): Self::List {
     let cur: &mut Self::List;
 label l0:
     cur = &mut s;

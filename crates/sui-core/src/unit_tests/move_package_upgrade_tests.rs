@@ -1155,6 +1155,8 @@ async fn test_upgrade_package_add_new_module_in_dep_only_mode_pre_v68() {
     // Allow new modules in deps-only mode for this test.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_execution_version_for_testing(3);
+        // set up config values that would otherwise be incompatible with the execution version
+        config.set_gas_model_version_for_testing(11);
         config.set_disallow_new_modules_in_deps_only_packages_for_testing(false);
         config
     });

@@ -40,6 +40,7 @@
 //! ```
 
 mod checkpoint_stream_task;
+mod gap_recovery;
 mod package_eviction_task;
 mod processed_checkpoint;
 mod streamed_package_store;

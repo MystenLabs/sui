@@ -1,6 +1,6 @@
 //# publish
-module 0x1::Tester {
-    t() {
+mvir 0x1::Tester {
+    fun t() {
         let x: u64;
         let r1: &u64;
         let r2: &u64;

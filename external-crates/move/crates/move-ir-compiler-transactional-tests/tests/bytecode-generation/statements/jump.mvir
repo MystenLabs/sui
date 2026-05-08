@@ -1,16 +1,16 @@
 //# print-bytecode
-module 0x6::m {
+mvir 0x6::m {
 // An endless loop is valid Move IR.
-entry foo() {
+entry fun foo() {
 label loop:
     jump loop;
 }
 }
 
 //# print-bytecode
-module 0x7::m {
+mvir 0x7::m {
 // Jumping to a label that is declared after the jump statement itself is valid.
-entry foo() {
+entry fun foo() {
 label foo:
     jump bar;
 label bar:
@@ -20,12 +20,12 @@ label bar:
 
 //# print-bytecode
 // Jumping to a label that isn't declared in the same function is invalid.
-module 0x6::M {
-    f() {
+mvir 0x6::M {
+    fun f() {
     label foo:
         jump bar;
     }
-    g() {
+    fun g() {
     label bar:
         return;
     }

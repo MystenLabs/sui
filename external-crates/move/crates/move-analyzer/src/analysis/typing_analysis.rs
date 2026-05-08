@@ -15,7 +15,7 @@ use crate::{
 
 use move_command_line_common::files::FileHash;
 use move_compiler::{
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::filter::FilterScope,
     expansion::ast::{self as E, ModuleIdent},
     naming::ast as N,
     parser::ast::{self as P, ConstantName},
@@ -703,7 +703,7 @@ impl TypingAnalysisContext<'_> {
 
 impl TypingVisitorContext for TypingAnalysisContext<'_> {
     // Nothing to do -- we're not producing errors.
-    fn push_warning_filter_scope(&mut self, _filter: WarningFilters) {}
+    fn push_warning_filter_scope(&mut self, _filter: FilterScope) {}
 
     // Nothing to do -- we're not producing errors.
     fn pop_warning_filter_scope(&mut self) {}

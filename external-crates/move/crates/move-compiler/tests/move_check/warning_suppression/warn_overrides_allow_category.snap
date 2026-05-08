@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/warn_overrides_allow_category.move:7:13
+  │
+5 │     #[warn(unused_variable)]
+  │            --------------- the lint level is defined here
+6 │     fun foo() {
+7 │         let x = 0u64;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'

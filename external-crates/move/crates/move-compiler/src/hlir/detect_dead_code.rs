@@ -3,7 +3,7 @@
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     expansion::ast::ModuleIdent,
     ice,
     naming::ast::{self as N, BlockLabel},
@@ -212,7 +212,7 @@ impl<'env> Context<'env> {
         self.reporter.add_diags(diags);
     }
 
-    pub fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    pub fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 
@@ -374,7 +374,7 @@ fn modules(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::ModuleDefi
 }
 
 fn module(context: &mut Context, mdef: &T::ModuleDefinition) {
-    context.push_warning_filter_scope(mdef.warning_filter);
+    context.push_warning_filter_scope(mdef.warning_filter.clone());
     for (_, cname, cdef) in &mdef.constants {
         constant(context, cname, cdef);
     }
@@ -394,7 +394,7 @@ fn function(context: &mut Context, _name: &Symbol, f: &T::Function) {
         body,
         ..
     } = f;
-    context.push_warning_filter_scope(*warning_filter);
+    context.push_warning_filter_scope(warning_filter.clone());
     function_body(context, body);
     context.pop_warning_filter_scope();
 }
@@ -411,7 +411,7 @@ fn function_body(context: &mut Context, sp!(_, tb_): &T::FunctionBody) {
 //**************************************************************************************************
 
 fn constant(context: &mut Context, _name: &Symbol, cdef: &T::Constant) {
-    context.push_warning_filter_scope(cdef.warning_filter);
+    context.push_warning_filter_scope(cdef.warning_filter.clone());
     let eloc = cdef.value.exp.loc;
     let tseq = {
         let mut v = VecDeque::new();

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::Context as _;
 use futures::future::OptionFuture;
@@ -29,7 +30,6 @@ use sui_types::digests::TransactionDigest;
 use sui_types::effects::ObjectChange;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::event::Event;
 use sui_types::object::Object;
 use sui_types::signature::GenericSignature;
 use sui_types::transaction::TransactionData;
@@ -141,7 +141,7 @@ async fn events(
     digest: TransactionDigest,
     tx: &TransactionContents,
 ) -> Result<SuiTransactionBlockEvents, RpcError<Error>> {
-    let events: Vec<Event> = tx.events()?;
+    let events = tx.events()?;
     let mut sui_events = Vec::with_capacity(events.len());
 
     for (ix, event) in events.into_iter().enumerate() {
@@ -163,8 +163,14 @@ async fn events(
             ),
         };
 
-        let sui_event = SuiEvent::try_from(event, digest, ix as u64, tx.timestamp_ms(), layout)
-            .with_context(|| format!("Failed to convert Event {ix} into response"))?;
+        let sui_event = SuiEvent::try_from(
+            Arc::unwrap_or_clone(event),
+            digest,
+            ix as u64,
+            tx.timestamp_ms(),
+            layout,
+        )
+        .with_context(|| format!("Failed to convert Event {ix} into response"))?;
 
         sui_events.push(sui_event)
     }

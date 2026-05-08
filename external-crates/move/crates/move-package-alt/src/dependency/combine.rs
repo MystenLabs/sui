@@ -15,16 +15,19 @@ use crate::{
     },
 };
 
-use super::Dependency;
+use super::DependencyContext;
 
-// TODO: this should probably be its own type (not including system deps)
+/// The dep_info type for the combined stage.
 pub(super) type Combined = ManifestDependencyInfo;
 
-/// [CombinedDependency]s contain the dependency-type-specific things that users write in their
-/// Move.toml files. They are formed by combining the entries from the `[dependencies]` and the
-/// `[dep-replacements]` section of the manifest.
+/// A [CombinedDependency] contains dependency information from the `[dependencies]` and
+/// `[dep-replacements]` sections of a Move.toml file. System dependencies may be present
+/// temporarily but are filtered out during pinning (see [PinnedDependency::replace_system_deps]).
 #[derive(Debug, Clone)]
-pub struct CombinedDependency(pub(super) Dependency<Combined>);
+pub struct CombinedDependency {
+    pub(super) context: DependencyContext,
+    pub(super) dep_info: Combined,
+}
 
 impl CombinedDependency {
     /// Combine the `[dependencies]` and `[dep-replacements]` sections of `manifest` (which was read
@@ -89,16 +92,18 @@ impl CombinedDependency {
         source_env_name: EnvironmentName,
         default: DefaultDependency,
     ) -> Self {
-        Self(Dependency {
-            name,
+        Self {
+            context: DependencyContext {
+                name,
+                use_environment: source_env_name,
+                is_override: default.is_override,
+                addresses: None,
+                containing_file: file,
+                rename_from: default.rename_from,
+                modes: default.modes,
+            },
             dep_info: default.dependency_info,
-            use_environment: source_env_name,
-            is_override: default.is_override,
-            addresses: None,
-            containing_file: file,
-            rename_from: default.rename_from,
-            modes: default.modes,
-        })
+        }
     }
 
     /// Load from an entry in the `[dep-replacements]` section that has no corresponding entry in
@@ -118,16 +123,18 @@ impl CombinedDependency {
             return Err(ManifestError::with_file(file)(ManifestErrorKind::NoDepInfo));
         };
 
-        Ok(Self(Dependency {
-            name,
+        Ok(Self {
+            context: DependencyContext {
+                name,
+                use_environment: replacement.use_environment.unwrap_or(source_env_name),
+                is_override: dep.is_override,
+                addresses: replacement.addresses,
+                containing_file: file,
+                rename_from: dep.rename_from,
+                modes: dep.modes,
+            },
             dep_info: dep.dependency_info,
-            use_environment: replacement.use_environment.unwrap_or(source_env_name),
-            is_override: dep.is_override,
-            addresses: replacement.addresses,
-            containing_file: file,
-            rename_from: dep.rename_from,
-            modes: dep.modes,
-        }))
+        })
     }
 
     fn from_default_with_replacement(
@@ -140,22 +147,23 @@ impl CombinedDependency {
         let dep = replacement.dependency.unwrap_or(default);
 
         // TODO: possibly additional compatibility checks here?
-
-        Ok(Self(Dependency {
-            name,
+        Ok(Self {
+            context: DependencyContext {
+                name,
+                use_environment: replacement.use_environment.unwrap_or(source_env_name),
+                is_override: dep.is_override,
+                addresses: replacement.addresses,
+                containing_file: file,
+                rename_from: dep.rename_from,
+                modes: dep.modes,
+            },
             dep_info: dep.dependency_info,
-            use_environment: replacement.use_environment.unwrap_or(source_env_name),
-            is_override: dep.is_override,
-            addresses: replacement.addresses,
-            containing_file: file,
-            rename_from: dep.rename_from,
-            modes: dep.modes,
-        }))
+        })
     }
 
     /// Return the name for this dependency
     pub fn name(&self) -> &PackageName {
-        &self.0.name
+        &self.context.name
     }
 }
 
@@ -164,13 +172,13 @@ impl From<CombinedDependency> for ReplacementDependency {
         // note: if this changes, you may change the manifest digest format and cause repinning
         ReplacementDependency {
             dependency: Some(DefaultDependency {
-                dependency_info: combined.0.dep_info,
-                is_override: combined.0.is_override,
-                rename_from: combined.0.rename_from,
-                modes: combined.0.modes,
+                dependency_info: combined.dep_info,
+                is_override: combined.context.is_override,
+                rename_from: combined.context.rename_from,
+                modes: combined.context.modes,
             }),
-            addresses: combined.0.addresses,
-            use_environment: Some(combined.0.use_environment),
+            addresses: combined.context.addresses,
+            use_environment: Some(combined.context.use_environment),
         }
     }
 }

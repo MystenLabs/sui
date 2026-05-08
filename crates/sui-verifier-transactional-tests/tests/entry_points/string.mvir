@@ -4,12 +4,12 @@
 // valid, ASCII and UTF strings is allowed
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::tx_context;
     import 0x1::ascii;
     import 0x1::string;
 
-    public entry yes_ascii<T>(
+    public entry fun yes_ascii<T>(
         l0: ascii::String,
         l1: vector<ascii::String>,
         l2: vector<vector<ascii::String>>,
@@ -19,7 +19,7 @@ module 0x0::m {
         abort 0;
     }
 
-    public entry yes_utf8<T>(
+    public entry fun yes_utf8<T>(
         l0: string::String,
         l1: vector<string::String>,
         l2: vector<vector<string::String>>,

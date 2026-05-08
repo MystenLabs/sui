@@ -1,9 +1,9 @@
 //# publish
-module 0x1::M {
-    struct X has drop { f: Self::Y }
-    struct Y has drop { g: u64, h: u64 }
+mvir 0x1::M {
+    public struct X has drop { f: Self::Y }
+    public struct Y has drop { g: u64, h: u64 }
 
-    t1() {
+    fun t1() {
         let x: Self::X;
         let ref_x: &mut Self::X;
         let ref_x_f: &mut Self::Y;
@@ -21,17 +21,17 @@ module 0x1::M {
         return;
     }
 
-    foo(a: &mut u64, b: &mut Self::Y) {
+    fun foo(a: &mut u64, b: &mut Self::Y) {
     label b0:
         return;
     }
 }
 
 //# publish
-module 0x1::M2 {
-    struct X has drop { f: Self::Y }
-    struct Y has drop { g: u64, h: u64 }
-    t2() {
+mvir 0x1::M2 {
+    public struct X has drop { f: Self::Y }
+    public struct Y has drop { g: u64, h: u64 }
+    fun t2() {
         let x: Self::X;
         let ref_x: &mut Self::X;
         let ref_x_f: &mut Self::Y;
@@ -50,7 +50,7 @@ module 0x1::M2 {
     }
 
 
-    bar(a: &mut Self::Y, b: &mut u64) {
+    fun bar(a: &mut Self::Y, b: &mut u64) {
     label b0:
         return;
     }

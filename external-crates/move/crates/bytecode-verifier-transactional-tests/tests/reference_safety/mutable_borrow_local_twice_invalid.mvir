@@ -1,6 +1,6 @@
 //# publish
-module 0x1::M {
-    t1() {
+mvir 0x1::M {
+    fun t1() {
         let a: u64;
         let r1: &mut u64;
         let r2: &mut u64;

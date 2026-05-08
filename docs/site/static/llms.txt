@@ -106,31 +106,42 @@
 - [Components](https://docs.sui.io/develop/sui-architecture/components.md)
 - [Consensus](https://docs.sui.io/develop/sui-architecture/consensus.md)
 - [Epochs](https://docs.sui.io/develop/sui-architecture/epochs.md)
-- [Sui Architecture Index](https://docs.sui.io/develop/sui-architecture/index.md)
-- [Networks](https://docs.sui.io/develop/sui-architecture/networks.md)
 
 ## Getting Started
 
 - [Getting Started](https://docs.sui.io/getting-started.md)
 - [Dev Cheat Sheet](https://docs.sui.io/getting-started/dev-cheat-sheet.md)
 
+### Getting Started/Examples
+- [Capability Pattern](https://docs.sui.io/getting-started/examples/capability-pattern.md)
+- [Dapp Kit Frontend](https://docs.sui.io/getting-started/examples/dapp-kit-frontend.md)
+- [Derived Objects](https://docs.sui.io/getting-started/examples/derived-objects.md)
+- [Event Indexer](https://docs.sui.io/getting-started/examples/event-indexer.md)
+- [First Dapp](https://docs.sui.io/getting-started/examples/first-dapp.md)
+- [Examples Index](https://docs.sui.io/getting-started/examples/index.md)
+- [Lootbox Ctf](https://docs.sui.io/getting-started/examples/lootbox-ctf.md)
+- [Merchant Ctf](https://docs.sui.io/getting-started/examples/merchant-ctf.md)
+- [Plinko](https://docs.sui.io/getting-started/examples/plinko.md)
+- [Scenario Testing](https://docs.sui.io/getting-started/examples/scenario-testing.md)
+- [Staking Ctf](https://docs.sui.io/getting-started/examples/staking-ctf.md)
+
 ### Getting Started/Onboarding
 - [App Frontends](https://docs.sui.io/getting-started/onboarding/app-frontends.md)
 - [Configure Sui Client](https://docs.sui.io/getting-started/onboarding/configure-sui-client.md)
 - [Get Address](https://docs.sui.io/getting-started/onboarding/get-address.md)
 - [Get Coins](https://docs.sui.io/getting-started/onboarding/get-coins.md)
-- [Hello World](https://docs.sui.io/getting-started/onboarding/hello-world.md)
-- [Onboarding Index](https://docs.sui.io/getting-started/onboarding/index.md)
-- [Install Binaries](https://docs.sui.io/getting-started/onboarding/install-binaries.md)
-- [Install Source](https://docs.sui.io/getting-started/onboarding/install-source.md)
 
 ## Onchain Finance
 
 - [Onchain Finance](https://docs.sui.io/onchain-finance.md)
 
-### Onchain Finance/Asset Custody
-- [Address Balance
-    Migration](https://docs.sui.io/onchain-finance/asset-custody/address-balance-migration.md)
+### Onchain Finance/Asset Custody/Address Balances
+- [Address Balances
+    Index](https://docs.sui.io/onchain-finance/asset-custody/address-balances/index.md)
+- [Migrate Address
+    Balances](https://docs.sui.io/onchain-finance/asset-custody/address-balances/migrate-address-balances.md)
+- [Using Address
+    Balances](https://docs.sui.io/onchain-finance/asset-custody/address-balances/using-address-balances.md)
 - [Asset Custody Index](https://docs.sui.io/onchain-finance/asset-custody/index.md)
 
 ### Onchain Finance/Asset Custody/Wallets
@@ -182,6 +193,22 @@
     Referral](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/supply-referral.md)
 - [Tpsl](https://docs.sui.io/onchain-finance/deepbook-margin/contract-information/tpsl.md)
 
+### Onchain Finance/Deepbook Predict
+- [Contract
+    Information](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information.md)
+- [Design](https://docs.sui.io/onchain-finance/deepbook-predict/design.md)
+- [Deepbook Predict Index](https://docs.sui.io/onchain-finance/deepbook-predict/index.md)
+
+### Onchain Finance/Deepbook Predict/Contract Information
+- [Market
+    Keys](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/market-keys.md)
+- [Oracle](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/oracle.md)
+- [Predict
+    Manager](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/predict-manager.md)
+- [Predict](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/predict.md)
+- [Registry](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/registry.md)
+- [Vault](https://docs.sui.io/onchain-finance/deepbook-predict/contract-information/vault.md)
+
 ### Onchain Finance/Deepbookv3
 - [Contract Information](https://docs.sui.io/onchain-finance/deepbookv3/contract-information.md)
 - [Deepbook](https://docs.sui.io/onchain-finance/deepbookv3/deepbook.md)
@@ -207,14 +234,6 @@
     Pool](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/permissionless-pool.md)
 - [Query The
     Pool](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/query-the-pool.md)
-- [Referral](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/referral.md)
-- [Staking
-    Governance](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/staking-governance.md)
-- [Swaps](https://docs.sui.io/onchain-finance/deepbookv3/contract-information/swaps.md)
-
-### Onchain Finance/Examples Patterns
-- [Fixed Supply](https://docs.sui.io/onchain-finance/examples-patterns/fixed-supply.md)
-- [In Game Currency](https://docs.sui.io/onchain-finance/examples-patterns/in-game-currency.md)
 
 ## Operators
 
@@ -402,6 +421,7 @@
 - [Rust Sdk](https://docs.sui.io/references/rust-sdk.md)
 - [Sui Api](https://docs.sui.io/references/sui-api.md)
 - [Rpc Best Practices](https://docs.sui.io/references/sui-api/rpc-best-practices.md)
+- [Generated](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/generated.md)
 
 ### References/Sui Api/Sui Graphql/Beta/Reference/Operations/Directives
 -
@@ -643,35 +663,14 @@
     Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/end-of-epoch-transaction.md)
 - [Epoch
     Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/epoch-connection.md)
-- [Epoch
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/epoch-edge.md)
-- [Epoch](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/epoch.md)
-- [Event
-    Connection](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/event-connection.md)
-- [Event
-    Edge](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/event-edge.md)
-- [Event](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/event.md)
-- [Execution
-    Error](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/execution-error.md)
-- [Execution
-    Result](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/execution-result.md)
-- [Feature
-    Flag](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/feature-flag.md)
-- [Gas
-    Coin](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/gas-coin.md)
-- [Gas Cost
-    Summary](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/gas-cost-summary.md)
-- [Gas
-    Effects](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/gas-effects.md)
-- [Gas
-    Input](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/gas-input.md)
-- [Genesis
-    Transaction](https://docs.sui.io/references/sui-api/sui-graphql/beta/reference/types/objects/genesis-transaction.md)
 
 ## Sui Stack
 
 - [Sui Stack](https://docs.sui.io/sui-stack.md)
-- [Indexer Walrus](https://docs.sui.io/sui-stack/indexer-walrus.md)
+
+### Sui Stack/Enoki
+- [Solitaire](https://docs.sui.io/sui-stack/enoki/solitaire.md)
+- [Ticketing Poc](https://docs.sui.io/sui-stack/enoki/ticketing-poc.md)
 
 ### Sui Stack/Nautilus
 - [Community Dev Tools](https://docs.sui.io/sui-stack/nautilus/community-dev-tools.md)
@@ -679,6 +678,7 @@
 - [Nautilus Index](https://docs.sui.io/sui-stack/nautilus/index.md)
 - [Nautilus Design](https://docs.sui.io/sui-stack/nautilus/nautilus-design.md)
 - [Nautilus Overview](https://docs.sui.io/sui-stack/nautilus/nautilus-overview.md)
+- [Nautilus Weather Oracle](https://docs.sui.io/sui-stack/nautilus/nautilus-weather-oracle.md)
 - [Seal](https://docs.sui.io/sui-stack/nautilus/seal.md)
 - [Using Nautilus](https://docs.sui.io/sui-stack/nautilus/using-nautilus.md)
 
@@ -688,5 +688,11 @@
 - [Randomness Onchain](https://docs.sui.io/sui-stack/on-chain-primitives/randomness-onchain.md)
 - [Sagat](https://docs.sui.io/sui-stack/sagat.md)
 
+### Sui Stack/Seal
+- [Seal Index](https://docs.sui.io/sui-stack/seal/index.md)
+- [Sui Chat App](https://docs.sui.io/sui-stack/seal/sui-chat-app.md)
+- [Sui Stack Seal](https://docs.sui.io/sui-stack/seal/sui-stack-seal.md)
+
 ### Sui Stack/Suiplay0x1
 - [Best Practices](https://docs.sui.io/sui-stack/suiplay0x1/best-practices.md)
+- [Suiplay0x1 Index](https://docs.sui.io/sui-stack/suiplay0x1/index.md)

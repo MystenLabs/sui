@@ -19,27 +19,25 @@ module action {
                 let 0x0::action::Action::ChangeSpeed { pos0: reg_14 } = l2;
             },
         }
-        return 
     }
 
     public fun increase_speed () {
         let l3 = l0;
-        let l2 =         freeze(l3);
+        let l2 =         l3;
         match(l2: 0x0::action::Action) {
             0x0::action::Action::Stop => {
                 let 0x0::action::Action::Stop {} = &l2;
-                abort!(0u64);
+                abort 0u64;
             },
             0x0::action::Action::MoveTo => {
                 let 0x0::action::Action::MoveTo { x: reg_9, y: reg_10 } = &l2;
-                abort!(0u64);
+                abort 0u64;
             },
             0x0::action::Action::ChangeSpeed => {
                 let 0x0::action::Action::ChangeSpeed { pos0: reg_13 } = &l2;
                 let 0x0::action::Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
                 let l4 = reg_15 : &mut u64;
                 *l4 = l1
-                return 
             },
         }
     }
@@ -50,7 +48,7 @@ module action {
         match(l2: 0x0::action::Action) {
             0x0::action::Action::Stop => {
                 let 0x0::action::Action::Stop {} = &l2;
-                abort!(0u64);
+                abort 0u64;
             },
             0x0::action::Action::MoveTo => {
                 let 0x0::action::Action::MoveTo { x: reg_7, y: reg_8 } = &l2;

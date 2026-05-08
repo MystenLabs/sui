@@ -4,15 +4,15 @@
 // Modules with infinite loops to stress the ID leak verifier
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
     import 0x2::tx_context;
 
-    struct Obj has key {
+    public struct Obj has key {
         id: object::UID,
     }
 
-    public entry loop_forever(ctx: &mut tx_context::TxContext) {
+    public entry fun loop_forever(ctx: &mut tx_context::TxContext) {
         let tmp: object::UID;
         let uid: object::UID;
         let obj: Self::Obj;
@@ -28,15 +28,15 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
     import 0x2::tx_context;
 
-    struct Obj has key {
+    public struct Obj has key {
         id: object::UID,
     }
 
-    public entry loop_forever(ctx: &mut tx_context::TxContext) {
+    public entry fun loop_forever(ctx: &mut tx_context::TxContext) {
         let tmp: object::UID;
         let uid: object::UID;
         let obj: Self::Obj;

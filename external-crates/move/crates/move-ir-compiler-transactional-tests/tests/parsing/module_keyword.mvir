@@ -1,0 +1,5 @@
+//# print-bytecode
+// `module` is the Move source keyword. The IR uses `mvir` instead so that
+// IR snippets are visually distinct from Move source.
+module 0x42::M {
+}

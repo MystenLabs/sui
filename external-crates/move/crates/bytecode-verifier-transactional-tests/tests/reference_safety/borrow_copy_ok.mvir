@@ -1,14 +1,14 @@
 //# publish
 
-module 0x1::B {
-    struct T has drop {g: u64}
+mvir 0x1::B {
+    public struct T has drop {g: u64}
 
-    public new(g: u64): Self::T {
+    public fun new(g: u64): Self::T {
     label b0:
         return T{g: move(g)};
     }
 
-    public t(this: &Self::T) {
+    public fun t(this: &Self::T) {
         let g: &u64;
         let y: u64;
     label b0:
@@ -21,10 +21,10 @@ module 0x1::B {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::B;
 
-entry foo() {
+entry fun foo() {
     let x: B::T;
     let y: &B::T;
 label b0:

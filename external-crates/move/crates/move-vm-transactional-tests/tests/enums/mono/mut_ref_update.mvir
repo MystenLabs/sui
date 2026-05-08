@@ -1,20 +1,20 @@
 // Tests that mutable borrows from enum variants work correctly.
 
 //# print-bytecode
-module 0x6::MonomorphicEnums {
-    enum EnumWithTwoVariants has drop {
+mvir 0x6::MonomorphicEnums {
+    public enum EnumWithTwoVariants has drop {
         One { x: u64 },
         Two { x: u64, y: u64 }
     }
 
-    public f(t: u64): Self::EnumWithTwoVariants {
+    public fun f(t: u64): Self::EnumWithTwoVariants {
         let l: u64;
         label b0:
             l = 0;
             return EnumWithTwoVariants::Two { x: move(t), y: move(l) };
     }
 
-    public mutate(e: &mut Self::EnumWithTwoVariants, v: u64) {
+    public fun mutate(e: &mut Self::EnumWithTwoVariants, v: u64) {
         let x: &mut u64;
         let u: &mut u64;
         label b0:
@@ -32,7 +32,7 @@ module 0x6::MonomorphicEnums {
             return;
     }
 
-    public get(e: &Self::EnumWithTwoVariants): &u64 {
+    public fun get(e: &Self::EnumWithTwoVariants): &u64 {
         let x: &u64;
         let u: &u64;
         label b0:
@@ -50,20 +50,20 @@ module 0x6::MonomorphicEnums {
 }
 
 //# publish
-module 0x6::MonomorphicEnums {
-    enum EnumWithTwoVariants has drop {
+mvir 0x6::MonomorphicEnums {
+    public enum EnumWithTwoVariants has drop {
         One { x: u64 },
         Two { x: u64, y: u64 }
     }
 
-    public f(t: u64): Self::EnumWithTwoVariants {
+    public fun f(t: u64): Self::EnumWithTwoVariants {
         let l: u64;
         label b0:
             l = 0;
             return EnumWithTwoVariants::Two { x: move(t), y: move(l) };
     }
 
-    public mutate(e: &mut Self::EnumWithTwoVariants, v: u64) {
+    public fun mutate(e: &mut Self::EnumWithTwoVariants, v: u64) {
         let x: &mut u64;
         let u: &mut u64;
         label b0:
@@ -81,7 +81,7 @@ module 0x6::MonomorphicEnums {
             return;
     }
 
-    public get(e: &Self::EnumWithTwoVariants): &u64 {
+    public fun get(e: &Self::EnumWithTwoVariants): &u64 {
         let x: &u64;
         let u: &u64;
         label b0:
@@ -99,9 +99,9 @@ module 0x6::MonomorphicEnums {
 }
 
 //# run
-module 0x7::m {
+mvir 0x7::m {
 import 0x6::MonomorphicEnums;
-entry foo() {
+entry fun foo() {
     let x: MonomorphicEnums::EnumWithTwoVariants;
     let y: &u64;
     label b0:

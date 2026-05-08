@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E09002]: unused variable
+   ┌─ tests/move_check/warning_suppression/wildcard_inner_allow_all_outer_deny.move:10:16
+   │
+ 2 │ #[deny(unused_variable)]
+   │        --------------- the lint level is defined here
+   ·
+10 │     fun denied(b: u64) {
+   │                ^ Unused parameter 'b'. Consider removing or prefixing with an underscore: '_b'
+
+error[E09002]: unused variable
+   ┌─ tests/move_check/warning_suppression/wildcard_inner_allow_all_outer_deny.move:11:13
+   │
+ 2 │ #[deny(unused_variable)]
+   │        --------------- the lint level is defined here
+   ·
+11 │         let y;
+   │             ^ Unused local variable 'y'. Consider removing or prefixing with an underscore: '_y'

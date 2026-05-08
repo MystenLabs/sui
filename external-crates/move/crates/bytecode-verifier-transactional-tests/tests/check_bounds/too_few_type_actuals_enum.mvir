@@ -1,8 +1,8 @@
 //# publish
-module 0x1::M {
-    enum S<T> { V{ b: bool } }
+mvir 0x1::M {
+    public enum S<T> { V{ b: bool } }
 
-    foo() {
+    fun foo() {
         // missing type arg
         let x: Self::S<>;
     label b0:

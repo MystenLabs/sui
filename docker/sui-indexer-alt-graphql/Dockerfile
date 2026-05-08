@@ -7,6 +7,7 @@ ARG PROFILE=release-unwind
 FROM rust:1.92-bullseye AS builder
 ARG PROFILE
 ARG GIT_REVISION
+ARG FEATURES=""
 ENV GIT_REVISION=$GIT_REVISION
 WORKDIR "$WORKDIR/sui"
 
@@ -21,7 +22,11 @@ COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
 
-RUN cargo build --profile ${PROFILE} --bin sui-indexer-alt-graphql
+RUN if [ -n "$FEATURES" ]; then \
+        cargo build --profile ${PROFILE} --bin sui-indexer-alt-graphql --features "$FEATURES"; \
+    else \
+        cargo build --profile ${PROFILE} --bin sui-indexer-alt-graphql; \
+    fi
 
 # Production Image
 # debian:bullseye-slim

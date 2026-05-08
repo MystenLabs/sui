@@ -1,14 +1,14 @@
 //# publish
-module 0x6::M {
-    struct S<T> { b: bool }
+mvir 0x6::M {
+    public struct S<T> { b: bool }
 
-    f<T>() {
+    fun f<T>() {
     label b0:
         Self::g<Self::S<T>>();
         return;
     }
 
-    g<T>() {
+    fun g<T>() {
     label b0:
         Self::f<u64>();
         return;

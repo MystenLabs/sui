@@ -410,7 +410,11 @@ function stripFrontmatter(content, outputPath, filePath) {
 
   // Prepend the title as an h1 so the markdown export matches the HTML page.
   const titlePrefix = data.title ? `# ${data.title}\n\n` : '';
-  const cleaned = cleanMdxComponents(titlePrefix + markdownContent, filePath);
+
+  // Inject llms.txt directive near the top for afdocs llms-txt-directive-md compliance.
+  const llmsDirective = '*[Documentation index](/llms.txt) · [Full index](/llms-full.txt)*\n\n';
+
+  const cleaned = cleanMdxComponents(titlePrefix + llmsDirective + markdownContent, filePath);
 
   const meta = {};
   if (data.title) meta.title = data.title;

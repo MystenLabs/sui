@@ -313,6 +313,7 @@ impl PackageRebuilder {
             run_bytecode_verifier: false, // We don't need verification for rebuilding
             print_diags_to_stderr: true,  // Print diagnostics like build.rs does
             environment,
+            flavor: SuiFlavor::new(),
         };
 
         // Build the package (same as build.rs does)

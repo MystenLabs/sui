@@ -50,9 +50,11 @@ sui-indexer-alt-schema.workspace = true
 sui-pg-db.workspace = true
 sui-protocol-config.workspace = true
 sui-rpc.workspace = true
+sui-test-transaction-builder.workspace = true
 sui-types.workspace = true
 move-core-types.workspace = true
 sui-move-build.workspace = true
+test-cluster.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true
@@ -82,7 +84,5 @@ sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-sdk.workspace = true
 sui-swarm-config.workspace = true
-sui-test-transaction-builder.workspace = true
 sui-transactional-test-runner = { workspace = true, features = ["testing"] }
-test-cluster.workspace = true
 tracing.workspace = true

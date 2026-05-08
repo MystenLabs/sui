@@ -1,6 +1,6 @@
 //# print-bytecode
-module 0x6::m {
-entry foo() {
+mvir 0x6::m {
+entry fun foo() {
     let v: vector<u64>;
     let v_imm: &vector<u64>;
     let v_mut: &mut vector<u64>;

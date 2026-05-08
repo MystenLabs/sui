@@ -1,19 +1,19 @@
 //# publish
-module 0x42::M1 {
-    enum S { V { x: &u64 } }
+mvir 0x42::M1 {
+    public enum S { V { x: &u64 } }
 }
 
 //# publish
-module 0x42::M2 {
-    enum S { V { x: &mut u64 } }
+mvir 0x42::M2 {
+    public enum S { V { x: &mut u64 } }
 }
 
 //# publish
-module 0x42::M3 {
-    enum S<T> { V { t: &T } }
+mvir 0x42::M3 {
+    public enum S<T> { V { t: &T } }
 }
 
 //# publish
-module 0x42::M4 {
-    enum S<T> { V { t: &mut T } }
+mvir 0x42::M4 {
+    public enum S<T> { V { t: &mut T } }
 }

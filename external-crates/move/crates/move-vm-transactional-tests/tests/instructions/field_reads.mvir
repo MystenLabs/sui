@@ -1,13 +1,13 @@
 //# publish
-module 0x42::VTest {
-    struct T has drop {fint: u64, fv: bool}
+mvir 0x42::VTest {
+    public struct T has drop {fint: u64, fv: bool}
 
-    public new(x: u64, y: bool): Self::T {
+    public fun new(x: u64, y: bool): Self::T {
     label b0:
         return T{fint: move(x), fv: move(y)};
     }
 
-    public t1(this: &Self::T): u64 {
+    public fun t1(this: &Self::T): u64 {
         let x: &u64;
     label b0:
         x = &copy(this).T::fint;
@@ -15,7 +15,7 @@ module 0x42::VTest {
         return *move(x);
     }
 
-    public t2(this: &Self::T): u64 {
+    public fun t2(this: &Self::T): u64 {
         let x: &u64;
     label b0:
         x = &copy(this).T::fint;
@@ -23,7 +23,7 @@ module 0x42::VTest {
         return *move(x);
     }
 
-    public t3(this: &Self::T): bool {
+    public fun t3(this: &Self::T): bool {
         let x: &bool;
     label b0:
         x = &copy(this).T::fv;
@@ -34,15 +34,15 @@ module 0x42::VTest {
 
 //# publish
 
-module 0x43::RTest {
-    struct T{fint: u64, fv: bool}
+mvir 0x43::RTest {
+    public struct T{fint: u64, fv: bool}
 
-    public new(x: u64, y: bool): Self::T {
+    public fun new(x: u64, y: bool): Self::T {
     label b0:
         return T{fint: move(x), fv: move(y)};
     }
 
-    public t1(this: &Self::T): u64 {
+    public fun t1(this: &Self::T): u64 {
         let x: &u64;
     label b0:
         x = &copy(this).T::fint;
@@ -50,7 +50,7 @@ module 0x43::RTest {
         return *move(x);
     }
 
-    public t2(this: &Self::T): u64 {
+    public fun t2(this: &Self::T): u64 {
         let x: &u64;
     label b0:
         x = &copy(this).T::fint;
@@ -58,7 +58,7 @@ module 0x43::RTest {
         return *move(x);
     }
 
-    public t3(this: &Self::T): bool {
+    public fun t3(this: &Self::T): bool {
         let x: &bool;
     label b0:
         x = &copy(this).T::fv;
@@ -66,7 +66,7 @@ module 0x43::RTest {
         return *move(x);
     }
 
-    public destroy_t(t: Self::T) {
+    public fun destroy_t(t: Self::T) {
         let fint: u64;
         let fv: bool;
     label b0:
@@ -77,11 +77,11 @@ module 0x43::RTest {
 
 //# run
 
-module 0x44::m {
+mvir 0x44::m {
 import 0x43::RTest;
 import 0x42::VTest;
 
-entry foo() {
+entry fun foo() {
     let vt: VTest::T;
     let vref: &VTest::T;
     let rt: RTest::T;

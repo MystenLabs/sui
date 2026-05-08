@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E10001]: invalid duplicate attribute
+  ┌─ tests/move_check/warning_suppression/duplicate_allow_same_code.move:4:3
+  │
+3 │ #[allow(unused_variable)]
+  │   ---------------------- Attribute previously given here
+4 │ #[allow(unused_variable)]
+  │   ^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'allow' attached to the same item

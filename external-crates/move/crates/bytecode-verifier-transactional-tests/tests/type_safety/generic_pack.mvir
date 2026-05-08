@@ -1,8 +1,8 @@
 //# publish
-module 0x1::M {
-    struct Foo<T> { x: T }
+mvir 0x1::M {
+    public struct Foo<T> { x: T }
 
-    foo() {
+    fun foo() {
         let x: Self::Foo<u64>;
     label b0:
         x = Foo<u64> { x : 42 }; // valid
@@ -11,11 +11,11 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::N {
-    struct Foo<T1, T2: key> { x: T1, y: T2 }
-    struct Bar has key { f: bool }
+mvir 0x1::N {
+    public struct Foo<T1, T2: key> { x: T1, y: T2 }
+    public struct Bar has key { f: bool }
 
-    foo() {
+    fun foo() {
         let x: Self::Foo<u64, Self::Bar>;
     label b0:
         x = Foo<u64, Self::Bar> { x : 42, y: Bar { f: false } }; // valid
@@ -24,10 +24,10 @@ module 0x1::N {
 }
 
 //# publish
-module 0x2::M {
-    enum Foo<T> { V { x: T } }
+mvir 0x2::M {
+    public enum Foo<T> { V { x: T } }
 
-    foo() {
+    fun foo() {
         let x: Self::Foo<u64>;
     label b0:
         x = Foo::V<u64> { x : 42 }; // valid
@@ -36,11 +36,11 @@ module 0x2::M {
 }
 
 //# publish
-module 0x2::N {
-    enum Foo<T1, T2: key> { V { x: T1, y: T2 } }
-    enum Bar has key { V { f: bool } }
+mvir 0x2::N {
+    public enum Foo<T1, T2: key> { V { x: T1, y: T2 } }
+    public enum Bar has key { V { f: bool } }
 
-    foo() {
+    fun foo() {
         let x: Self::Foo<u64, Self::Bar>;
     label b0:
         x = Foo::V<u64, Self::Bar> { x : 42, y: Bar::V { f: false } }; // valid

@@ -78,16 +78,15 @@ pub struct IngestionClientArgs {
     #[arg(long, group = "source")]
     pub remote_store_gcs: Option<String>,
 
-    /// GCP project ID for requester-pays GCS buckets. When set, the
-    /// `x-goog-user-project` header is included in every request so that
-    /// charges are billed to this project instead of the bucket owner.
-    #[arg(long, requires = "remote_store_gcs")]
-    pub remote_store_gcs_project_id: Option<String>,
-
     /// Fetch checkpoints from Azure Blob Storage. Provide the container name.
     /// (env: AZURE_STORAGE_ACCOUNT_NAME, AZURE_STORAGE_ACCESS_KEY)
     #[arg(long, group = "source")]
     pub remote_store_azure: Option<String>,
+
+    /// Default header to include in remote store requests, as `<name>:<value>`.
+    /// Can be provided multiple times.
+    #[arg(long = "remote-store-header", value_parser = parse_remote_store_header)]
+    pub remote_store_headers: Vec<(HeaderName, HeaderValue)>,
 
     /// Path to the local ingestion directory.
     #[arg(long, group = "source")]
@@ -122,8 +121,8 @@ impl Default for IngestionClientArgs {
             remote_store_url: None,
             remote_store_s3: None,
             remote_store_gcs: None,
-            remote_store_gcs_project_id: None,
             remote_store_azure: None,
+            remote_store_headers: vec![],
             local_ingestion_path: None,
             rpc_api_url: None,
             rpc_username: None,
@@ -137,18 +136,32 @@ impl Default for IngestionClientArgs {
 impl IngestionClientArgs {
     fn client_options(&self) -> ClientOptions {
         let mut options = ClientOptions::default();
+
         options = if self.checkpoint_timeout_ms == 0 {
             options.with_timeout_disabled()
         } else {
             let timeout = Duration::from_millis(self.checkpoint_timeout_ms);
             options.with_timeout(timeout)
         };
+
         options = if self.checkpoint_connection_timeout_ms == 0 {
             options.with_connect_timeout_disabled()
         } else {
             let timeout = Duration::from_millis(self.checkpoint_connection_timeout_ms);
             options.with_connect_timeout(timeout)
         };
+
+        options = if !self.remote_store_headers.is_empty() {
+            let mut headers = HeaderMap::new();
+            for (name, value) in &self.remote_store_headers {
+                headers.append(name.clone(), value.clone());
+            }
+
+            options.with_default_headers(headers)
+        } else {
+            options
+        };
+
         options
     }
 }
@@ -203,21 +216,8 @@ impl IngestionClient {
                 .map(Arc::new)?;
             IngestionClient::with_store(store, metrics.clone())?
         } else if let Some(bucket) = args.remote_store_gcs.as_ref() {
-            let mut client_options = args.client_options();
-            if let Some(project_id) = &args.remote_store_gcs_project_id {
-                let header_value = HeaderValue::from_str(project_id)
-                    .expect("invalid project ID for requester-pays header");
-                let headers = HeaderMap::from_iter([
-                    (
-                        HeaderName::from_static("x-goog-user-project"),
-                        header_value.clone(),
-                    ),
-                    (HeaderName::from_static("userproject"), header_value),
-                ]);
-                client_options = client_options.with_default_headers(headers);
-            }
             let store = GoogleCloudStorageBuilder::from_env()
-                .with_client_options(client_options)
+                .with_client_options(args.client_options())
                 .with_retry(retry)
                 .with_bucket_name(bucket)
                 .build()
@@ -471,6 +471,19 @@ where
     Ok(data)
 }
 
+fn parse_remote_store_header(header: &str) -> Result<(HeaderName, HeaderValue), String> {
+    let (name, value) = header
+        .split_once(':')
+        .ok_or_else(|| "remote store header must be in `<name>:<value>` format".to_string())?;
+
+    let name = HeaderName::from_bytes(name.as_bytes())
+        .map_err(|err| format!("invalid remote store header name `{name}`: {err}"))?;
+    let value = HeaderValue::from_str(value)
+        .map_err(|err| format!("invalid remote store header value for `{name}`: {err}"))?;
+
+    Ok((name, value))
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use std::sync::Arc;
@@ -637,6 +650,80 @@ pub(crate) mod tests {
         .unwrap_err();
 
         assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn test_args_remote_store_headers() {
+        let args = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-goog-user-project:my-project",
+            "--remote-store-header",
+            "authorization:Bearer abc:def",
+        ])
+        .unwrap();
+
+        assert_eq!(args.ingestion.remote_store_headers.len(), 2);
+        assert_eq!(
+            args.ingestion.remote_store_headers[0].0,
+            HeaderName::from_static("x-goog-user-project")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[0].1,
+            HeaderValue::from_static("my-project")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[1].0,
+            HeaderName::from_static("authorization")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[1].1,
+            HeaderValue::from_static("Bearer abc:def")
+        );
+    }
+
+    #[test]
+    fn test_args_remote_store_header_requires_delimiter() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-goog-user-project",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_remote_store_header_rejects_invalid_name() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "bad name:value",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_remote_store_header_rejects_invalid_value() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-test:bad\nvalue",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
     }
 
     #[tokio::test]

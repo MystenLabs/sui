@@ -41,8 +41,7 @@ zkLogin is implemented and deployed on the Sui blockchain as an alternative to t
 
 - **Link:** https://arxiv.org/abs/2110.00960
 - **Publication:** Financial Cryptography and Data Security (FC), 2022
-- **Relevance:** Provides a performant leader election algorithm for partially-synchronous consensus protocol (such as Bullshark). Sui might want to use it
-  alongside Bullshark to support shared objects.
+- **Relevance:** Provides a performant leader election algorithm for partially-synchronous consensus protocols such as Bullshark. This work informed earlier designs for shared object support in Sui before the adoption of Mysticeti.
 - **Summary:** Advances in blockchains have influenced the State-Machine-Replication (SMR) world and many state-of-the-art blockchain-SMR solutions are
   based on two pillars: Chaining and Leader-rotation. A predetermined round-robin mechanism used for Leader-rotation, however, has an undesirable behavior:
   crashed parties become designated leaders infinitely often, slowing down overall system performance. In this paper, we provide a new Leader-Aware SMR
@@ -57,7 +56,7 @@ zkLogin is implemented and deployed on the Sui blockchain as an alternative to t
 
 - **Link:** https://arxiv.org/abs/2201.05677
 - **Publication:** Not published yet (under submission)
-- **Relevance:** Provides a partially-synchronous consensus protocol running over Narwhal. Sui might want to use it instead of Tusk.
+- **Relevance:** Provides a partially-synchronous consensus protocol running over Narwhal. Bullshark was a predecessor to Mysticeti and informed the consensus design of Sui before Mysticeti was adopted.
 - **Summary:** We present Bullshark, the first directed acyclic graph (DAG) based Byzantine Fault Tolerant (BFT) protocol that is optimized for partial synchrony.
   Bullshark inherits all the desired properties of its predecessor (DAG-Rider) such as optimal amortized complexity, asynchronous liveness, zero-overhead,
   and post-quantum safety; but at the same time Bullshark provides a practical low-latency fast-path that exploits synchronous periods. In addition, we introduce
@@ -81,11 +80,8 @@ zkLogin is implemented and deployed on the Sui blockchain as an alternative to t
 - **Link:** https://arxiv.org/pdf/2309.12713
 - **Publication:** IEEE International Conference on Distributed Computing Systems (ICDCS), 2024
 - **Relevance:** The need for high throughput and censorship resistance in
-blockchain technology has led to research on DAG-based consensus. The
-Sui blockchain protocol uses a variant of the Bullshark consensus
-algorithm due to its lower latency, but this leader-based protocol causes
-performance issues when candidate leaders crash. In this paper, we explore the ideas pioneered by Carousel on providing Leader-Utilization
-and present HammerHead. Unlike Carousel, which is built with a chained
+blockchain technology has led to research on DAG-based consensus. This paper explores ideas pioneered by Carousel on providing Leader-Utilization
+and presents HammerHead as an improvement over earlier leader-based DAG consensus protocols such as Bullshark. Unlike Carousel, which is built with a chained
 and pipelined consensus protocol in mind, HammerHead does not need
 to worry about chain quality as it is directly provided by the DAG, but
 needs to make sure that even though validators might commit blocks
@@ -97,7 +93,7 @@ increase when suffering faults (100 validators, 33 faults).
 
 - **Link:** https://arxiv.org/abs/2105.11827
 - **Publication:** EuroSys, 2022
-- **Relevance:** The consensus system that we will likely use to support shared-objects in Sui.
+- **Relevance:** Narwhal and Tusk provided the foundational DAG-based mempool and consensus design that informed earlier versions of Sui's shared-object support. Sui now uses Mysticeti as its consensus protocol.
 - **Summary:** We propose separating the task of reliable transaction dissemination from transaction ordering to enable high-performance Byzantine
   fault-tolerant quorum-based consensus. We design and evaluate a mempool protocol, Narwhal, specializing in high-throughput reliable dissemination
   and storage of causal histories of transactions. Narwhal tolerates an asynchronous network and maintains high performance despite failures. Narwhal

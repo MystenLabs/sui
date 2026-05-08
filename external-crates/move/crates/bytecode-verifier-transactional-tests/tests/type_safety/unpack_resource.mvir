@@ -1,19 +1,19 @@
 //# publish
-module 0x1::Test {
-    struct X { b: bool }
-    struct T { i: u64, x: Self::X, b: bool }
+mvir 0x1::Test {
+    public struct X { b: bool }
+    public struct T { i: u64, x: Self::X, b: bool }
 
-    public new_x(): Self::X {
+    public fun new_x(): Self::X {
     label b0:
         return X { b: true };
     }
 
-    public new_t(x: Self::X): Self::T {
+    public fun new_t(x: Self::X): Self::T {
     label b0:
         return T { i: 0, x: move(x), b: false };
     }
 
-    public destroy_x(x: Self::X) {
+    public fun destroy_x(x: Self::X) {
         let b: bool;
     label b0:
         X { b } = move(x);
@@ -21,7 +21,7 @@ module 0x1::Test {
     }
 
     // can unpack a resource and return it
-    public destroy_t(t: Self::T): u64 * Self::X * bool {
+    public fun destroy_t(t: Self::T): u64 * Self::X * bool {
         let i: u64;
         let x: Self::X;
         let flag: bool;
@@ -33,10 +33,10 @@ module 0x1::Test {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x1::Test;
 
-entry foo() {
+entry fun foo() {
     let x: Test::X;
     let i: u64;
     let t: Test::T;
@@ -51,21 +51,21 @@ label b0:
 }
 
 //# publish
-module 0x3::Test {
-    enum X { V{ b: bool } }
-    enum T { V{ i: u64, x: Self::X, b: bool } }
+mvir 0x3::Test {
+    public enum X { V{ b: bool } }
+    public enum T { V{ i: u64, x: Self::X, b: bool } }
 
-    public new_x(): Self::X {
+    public fun new_x(): Self::X {
     label b0:
         return X::V { b: true };
     }
 
-    public new_t(x: Self::X): Self::T {
+    public fun new_t(x: Self::X): Self::T {
     label b0:
         return T::V { i: 0, x: move(x), b: false };
     }
 
-    public destroy_x(x: Self::X) {
+    public fun destroy_x(x: Self::X) {
         let b: bool;
     label b0:
         X::V { b } = move(x);
@@ -73,7 +73,7 @@ module 0x3::Test {
     }
 
     // can unpack a resource and return it
-    public destroy_t(t: Self::T): u64 * Self::X * bool {
+    public fun destroy_t(t: Self::T): u64 * Self::X * bool {
         let i: u64;
         let x: Self::X;
         let flag: bool;
@@ -85,10 +85,10 @@ module 0x3::Test {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x3::Test;
 
-entry foo() {
+entry fun foo() {
     let x: Test::X;
     let i: u64;
     let t: Test::T;

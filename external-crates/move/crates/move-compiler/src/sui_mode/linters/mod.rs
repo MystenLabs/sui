@@ -4,7 +4,7 @@
 use crate::{
     cfgir::visitor::AbstractInterpreterVisitor,
     command_line::compiler::Visitor,
-    diagnostics::warning_filters::WarningFilter,
+    diagnostics::{codes::DiagnosticsID, filter::FilterName},
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
     linters::{ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX, LintLevel, LinterDiagnosticCategory},
@@ -98,80 +98,106 @@ pub enum LinterDiagnosticCode {
     UncallableFunction,
 }
 
-pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
+pub fn known_filters() -> (Option<Symbol>, Vec<(FilterName, Vec<DiagnosticsID>)>) {
+    let sui = LinterDiagnosticCategory::Sui as u8;
+    // `lint(all)` is registered by the core linter (`linters::known_filters`); don't
+    // register it again here or `filter_from_str` returns duplicate ids.
     let filters = vec![
-        WarningFilter::All(Some(LINT_WARNING_PREFIX)),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::ShareOwned as u8,
-            Some(SHARE_OWNED_FILTER_NAME),
+        (
+            Symbol::from(SHARE_OWNED_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::ShareOwned as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::SelfTransfer as u8,
-            Some(SELF_TRANSFER_FILTER_NAME),
+        (
+            Symbol::from(SELF_TRANSFER_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::SelfTransfer as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::CustomStateChange as u8,
-            Some(CUSTOM_STATE_CHANGE_FILTER_NAME),
+        (
+            Symbol::from(CUSTOM_STATE_CHANGE_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::CustomStateChange as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::CoinField as u8,
-            Some(COIN_FIELD_FILTER_NAME),
+        (
+            Symbol::from(COIN_FIELD_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::CoinField as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::FreezeWrapped as u8,
-            Some(FREEZE_WRAPPED_FILTER_NAME),
+        (
+            Symbol::from(FREEZE_WRAPPED_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::FreezeWrapped as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::CollectionEquality as u8,
-            Some(COLLECTION_EQUALITY_FILTER_NAME),
+        (
+            Symbol::from(COLLECTION_EQUALITY_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::CollectionEquality as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::PublicRandom as u8,
-            Some(PUBLIC_RANDOM_FILTER_NAME),
+        (
+            Symbol::from(PUBLIC_RANDOM_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::PublicRandom as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::MissingKey as u8,
-            Some(MISSING_KEY_FILTER_NAME),
+        (
+            Symbol::from(MISSING_KEY_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::MissingKey as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::FreezingCapability as u8,
-            Some(FREEZING_CAPABILITY_FILTER_NAME),
+        (
+            Symbol::from(FREEZING_CAPABILITY_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::FreezingCapability as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::PreferMutableTxContext as u8,
-            Some(PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME),
+        (
+            Symbol::from(PREFER_MUTABLE_TX_CONTEXT_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::PreferMutableTxContext as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
-            Some(UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME),
+        (
+            Symbol::from(UNNECESSARY_PUBLIC_ENTRY_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::UnnecessaryPublicEntry as u8,
+            )],
         ),
-        WarningFilter::code(
-            Some(LINT_WARNING_PREFIX),
-            LinterDiagnosticCategory::Sui as u8,
-            LinterDiagnosticCode::UncallableFunction as u8,
-            Some(UNCALLABLE_FUNCTION_FILTER_NAME),
+        (
+            Symbol::from(UNCALLABLE_FUNCTION_FILTER_NAME),
+            vec![DiagnosticsID::exact(
+                Some(LINT_WARNING_PREFIX),
+                sui,
+                LinterDiagnosticCode::UncallableFunction as u8,
+            )],
         ),
     ];
 

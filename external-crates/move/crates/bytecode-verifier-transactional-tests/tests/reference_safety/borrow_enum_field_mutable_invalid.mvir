@@ -1,10 +1,10 @@
 //# publish
-module 0x1::M {
-    enum E has drop {
+mvir 0x1::M {
+    public enum E has drop {
         V { f0: u64 }
     }
 
-    foo(b: bool, in: &mut Self::E, other: Self::E) {
+    fun foo(b: bool, in: &mut Self::E, other: Self::E) {
         let x: &mut u64;
         let y: &Self::E;
         let ye: &u64;
@@ -26,12 +26,12 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M1 {
-    enum E has drop {
+mvir 0x1::M1 {
+    public enum E has drop {
         V { f0: u64 }
     }
 
-    foo(b: bool, in: &mut Self::E, other: Self::E) {
+    fun foo(b: bool, in: &mut Self::E, other: Self::E) {
         let x: &mut u64;
         let y: &Self::E;
         let ye: &u64;
@@ -48,7 +48,7 @@ module 0x1::M1 {
         return;
     }
 
-    bar(a: &mut Self::E): &mut u64 {
+    fun bar(a: &mut Self::E): &mut u64 {
         let x: &mut u64;
     label b0:
         &mut E::V { g: x } = move(a);
@@ -57,12 +57,12 @@ module 0x1::M1 {
 }
 
 //# publish
-module 0x1::M2 {
-    enum E has drop {
+mvir 0x1::M2 {
+    public enum E has drop {
         V { f0: u64 }
     }
 
-    foo(b: bool, in: &mut Self::E, other: Self::E, t: u64) {
+    fun foo(b: bool, in: &mut Self::E, other: Self::E, t: u64) {
         let x: &mut u64;
         let y: &Self::E;
         let ye: &u64;
@@ -81,14 +81,14 @@ module 0x1::M2 {
         return;
     }
 
-    bar(a: &mut Self::E): &mut u64 {
+    fun bar(a: &mut Self::E): &mut u64 {
         let x: &mut u64;
     label b0:
         &mut E::V { g: x } = move(a);
         return move(x);
     }
 
-    baz(x: &mut u64) { 
+    fun baz(x: &mut u64) { 
         label b0:
             return;
     }

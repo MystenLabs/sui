@@ -1,13 +1,13 @@
 //# print-bytecode
-module 0x1d12::M {
-    struct T { b: bool }
+mvir 0x1d12::M {
+    public struct T { b: bool }
 
-    new(): Self::T {
+    fun new(): Self::T {
     label b0:
         return T { b: true };
     }
 
-    f() {
+    fun f() {
         let t: Self::T;
         let b: bool;
     label b0:
@@ -18,10 +18,10 @@ module 0x1d12::M {
 }
 
 //# publish
-module 0x2d12::M {
-    struct T { b: bool }
+mvir 0x2d12::M {
+    public struct T { b: bool }
 
-    public new(): Self::T {
+    public fun new(): Self::T {
     label b0:
         return T { b: true };
     }
@@ -30,10 +30,10 @@ module 0x2d12::M {
 
 //# print-bytecode
 // An unpack expression cannot reference a struct type defined in a separate module.
-module 0x2d13::N {
+mvir 0x2d13::N {
     import 0x2d12::M;
 
-    f() {
+    fun f() {
         let t: M::T;
         let b: bool;
     label b0:

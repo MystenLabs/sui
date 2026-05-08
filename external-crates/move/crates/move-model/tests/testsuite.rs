@@ -5,7 +5,7 @@
 use codespan_reporting::{diagnostic::Severity, term::termcolor::Buffer};
 use move_binary_format::file_format::{FunctionDefinitionIndex, StructDefinitionIndex};
 use move_command_line_common::insta_assert;
-use move_compiler::{diagnostics::warning_filters::WarningFiltersBuilder, shared::PackagePaths};
+use move_compiler::{diagnostics::filter::unused_for_test_filter_scope, shared::PackagePaths};
 use move_model::{run_bytecode_model_builder, run_model_builder};
 use std::path::Path;
 
@@ -15,11 +15,7 @@ fn test_runner(path: &Path) -> datatest_stable::Result<()> {
         paths: vec![path.to_str().unwrap().to_string()],
         named_address_map: std::collections::BTreeMap::<String, _>::new(),
     }];
-    let env = run_model_builder(
-        targets,
-        vec![],
-        Some(WarningFiltersBuilder::unused_warnings_filter_for_test()),
-    )?;
+    let env = run_model_builder(targets, vec![], Some(unused_for_test_filter_scope()))?;
     let diags = if env.diag_count(Severity::Warning) > 0 {
         let mut writer = Buffer::no_color();
         env.report_diag(&mut writer, Severity::Warning);

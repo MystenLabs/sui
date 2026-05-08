@@ -1,6 +1,6 @@
 //# publish
-module 0x1::Tester {
-    t() {
+mvir 0x1::Tester {
+    fun t() {
         let x: u64;
         let y: u64;
         let r1: &mut u64;
@@ -13,7 +13,7 @@ module 0x1::Tester {
         return;
     }
 
-    foo(r: &mut u64, r2: &mut u64): &mut u64 {
+    fun foo(r: &mut u64, r2: &mut u64): &mut u64 {
     label b0:
         return move(r2);
     }

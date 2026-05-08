@@ -4,11 +4,11 @@
 // clock has only key ability
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
     import 0x2::transfer;
 
-    t(clock: clock::Clock) {
+    fun t(clock: clock::Clock) {
         label l0:
         transfer::transfer<clock::Clock>(move(clock), 0x42);
         return;
@@ -16,11 +16,11 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
     import 0x2::transfer;
 
-    t(clock: clock::Clock) {
+    fun t(clock: clock::Clock) {
         label l0:
         transfer::share_object<clock::Clock>(move(clock));
         return;
@@ -28,11 +28,11 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
     import 0x2::transfer;
 
-    t(clock: clock::Clock) {
+    fun t(clock: clock::Clock) {
         label l0:
         transfer::freeze_object<clock::Clock>(move(clock));
         return;
@@ -40,12 +40,12 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::clock;
     import 0x2::transfer;
     import 0x2::object;
 
-    t(uid: &mut object::UID, clock: transfer::Receiving<clock::Clock>): clock::Clock {
+    fun t(uid: &mut object::UID, clock: transfer::Receiving<clock::Clock>): clock::Clock {
         let c: clock::Clock;
         label l0:
         c = transfer::receive<clock::Clock>(move(uid), move(clock));

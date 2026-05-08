@@ -120,7 +120,7 @@ members = [
     "crates/sui-faucet",
     "crates/sui-field-count",
     "crates/sui-field-count-derive",
-    "crates/sui-forking",
+    "crates/sui-fork",
     "crates/sui-framework",
     "crates/sui-framework-snapshot",
     "crates/sui-framework-tests",
@@ -228,7 +228,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.72.0"
+version = "1.73.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -424,8 +424,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "213e543d83b91c4aa904166bef255a6c0054c8a7", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "213e543d83b91c4aa904166bef255a6c0054c8a7", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "53016c1a9038154b1e47b96f0a314efa7e7d809b", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "53016c1a9038154b1e47b96f0a314efa7e7d809b", package = "msim-macros" }
 multiaddr = "0.18.2"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
@@ -517,7 +517,7 @@ test-fuzz = "3.0.4"
 thiserror = "1.0.40"
 timeout-tracing = "0.1.2"
 tiny-bip39 = "1.0.0"
-tokio = "=1.49.0"
+tokio = "=1.52.1"
 tokio-rustls = { version = "0.26", default-features = false, features = [
   "tls12",
   "ring",
@@ -614,10 +614,10 @@ move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack"
 move-analyzer = { path = "external-crates/move/crates/move-analyzer" }
 move-trace-format = { path = "external-crates/move/crates/move-trace-format" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f87e04bb21d295ef6b39375a06615d45cbb906c" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f87e04bb21d295ef6b39375a06615d45cbb906c" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f87e04bb21d295ef6b39375a06615d45cbb906c", package = "fastcrypto-zkp" }
-fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "5f87e04bb21d295ef6b39375a06615d45cbb906c", features = [
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3", package = "fastcrypto-zkp" }
+fastcrypto-vdf = { git = "https://github.com/MystenLabs/fastcrypto", rev = "0eea35ee442a798fb1f1e7c2f39dc021bd21dbc3", features = [
   "experimental",
 ] }
 passkey-types = { version = "0.4.0" }

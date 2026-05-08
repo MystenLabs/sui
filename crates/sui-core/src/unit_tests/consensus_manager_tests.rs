@@ -193,36 +193,24 @@ async fn test_consensus_manager_address_update() {
 
     // Test 1: Update with Admin source
     let admin_address: Multiaddr = "/ip4/192.168.1.100/udp/8080".parse().unwrap();
-    let manager_clone = manager.clone();
-    let pubkey = peer_network_pubkey.clone();
-    let addr = admin_address.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        manager_clone.update_address(pubkey, AddressSource::Admin, vec![addr])
-    })
-    .await
-    .unwrap();
+    let result = manager.update_address(
+        peer_network_pubkey.clone(),
+        AddressSource::Admin,
+        vec![admin_address.clone()],
+    );
     assert!(result.is_ok());
 
     // Test 2: Update with Config source (lower priority than Admin)
     let config_address: Multiaddr = "/ip4/192.168.1.101/udp/8081".parse().unwrap();
-    let manager_clone = manager.clone();
-    let pubkey = peer_network_pubkey.clone();
-    let addr = config_address.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        manager_clone.update_address(pubkey, AddressSource::Config, vec![addr])
-    })
-    .await
-    .unwrap();
+    let result = manager.update_address(
+        peer_network_pubkey.clone(),
+        AddressSource::Config,
+        vec![config_address.clone()],
+    );
     assert!(result.is_ok());
 
     // Test 3: Clear Admin source - Config should become active
-    let manager_clone = manager.clone();
-    let pubkey = peer_network_pubkey.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        manager_clone.update_address(pubkey, AddressSource::Admin, vec![])
-    })
-    .await
-    .unwrap();
+    let result = manager.update_address(peer_network_pubkey.clone(), AddressSource::Admin, vec![]);
     assert!(result.is_ok());
 
     // Shutdown and restart to verify persistence
@@ -231,14 +219,11 @@ async fn test_consensus_manager_address_update() {
 
     // Add an address update before restart - should be persisted but return error
     let persistent_address: Multiaddr = "/ip4/192.168.1.103/udp/8083".parse().unwrap();
-    let manager_clone = manager.clone();
-    let pubkey = peer_network_pubkey.clone();
-    let addr = persistent_address.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        manager_clone.update_address(pubkey, AddressSource::Config, vec![addr])
-    })
-    .await
-    .unwrap();
+    let result = manager.update_address(
+        peer_network_pubkey.clone(),
+        AddressSource::Config,
+        vec![persistent_address.clone()],
+    );
     // Should fail because consensus is not running, but the address is still persisted
     assert!(result.is_err());
 

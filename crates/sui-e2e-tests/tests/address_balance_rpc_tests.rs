@@ -366,13 +366,7 @@ async fn test_scenario_two_types_no_address_balances() {
 }
 
 async fn run_scenario(scenario: TestScenario) {
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let mut test_env = TestEnvBuilder::new().build().await;
 
     let (recipient, custom_type) = setup_scenario(&mut test_env, &scenario).await;
 
@@ -443,13 +437,7 @@ async fn run_scenario(scenario: TestScenario) {
 #[sim_test]
 async fn test_pagination_no_duplicate_fake_coins() {
     // Verify fake coins don't appear again in subsequent pages
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let mut test_env = TestEnvBuilder::new().build().await;
 
     let (sender, _) = test_env.get_sender_and_gas(0);
 
@@ -499,13 +487,7 @@ async fn test_pagination_no_duplicate_fake_coins() {
 #[sim_test]
 async fn test_pagination_consistency_get_all_coins() {
     // Verify paginated getAllCoins returns same results as fetching all at once
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let mut test_env = TestEnvBuilder::new().build().await;
 
     let (funder, _) = test_env.get_sender_and_gas(0);
 
@@ -575,13 +557,7 @@ async fn test_pagination_consistency_get_all_coins() {
 #[sim_test]
 async fn test_get_object_returns_fake_coin() {
     // Test that sui_getObject returns a fake coin object for a masked object ID
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let mut test_env = TestEnvBuilder::new().build().await;
 
     let (sender, _) = test_env.get_sender_and_gas(0);
     let amount = 1_000_000_000u64;
@@ -634,13 +610,7 @@ async fn test_get_object_returns_fake_coin() {
 #[sim_test]
 async fn test_get_balance_includes_address_balance() {
     // Test that getBalance includes address balance in the total
-    let mut test_env = TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_coin_reservation_for_testing();
-            cfg
-        }))
-        .build()
-        .await;
+    let mut test_env = TestEnvBuilder::new().build().await;
 
     let (sender, _) = test_env.get_sender_and_gas(0);
     let amount = 3_000_000_000u64;
@@ -695,7 +665,6 @@ async fn test_no_fake_coins_when_coin_reservations_disabled() {
     // Verify that getCoins does not return fake coins.
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_address_balance_gas_payments_for_testing();
             cfg.disable_coin_reservation_for_testing();
             cfg
         }))
@@ -726,7 +695,6 @@ async fn test_get_object_no_fake_coin_when_coin_reservations_disabled() {
     // Verify that sui_getObject does not return a fake coin for a masked object ID.
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_address_balance_gas_payments_for_testing();
             cfg.disable_coin_reservation_for_testing();
             cfg
         }))

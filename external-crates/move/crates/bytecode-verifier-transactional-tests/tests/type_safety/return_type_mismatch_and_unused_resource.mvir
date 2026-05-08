@@ -1,10 +1,10 @@
 //# publish
-module 0x1::M {
-    struct R { flag: bool }
+mvir 0x1::M {
+    public struct R { flag: bool }
 
     // Type checking is done before memory safety checks
     // wrong return type
-    t1(): bool {
+    fun t1(): bool {
         let c: Self::R;
     label b0:
         c = R { flag: false };
@@ -13,10 +13,10 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M2 {
+mvir 0x1::M2 {
     // Type checking is done before memory safety checks
     // wrong return type
-    t2(): bool {
+    fun t2(): bool {
         let u: u64;
         let r: &u64;
     label b0:
@@ -27,10 +27,10 @@ module 0x1::M2 {
 }
 
 //# publish
-module 0x1::M {
-    struct R { flag: bool }
+mvir 0x1::M {
+    public struct R { flag: bool }
 
-    t1(): u64 {
+    fun t1(): u64 {
         let c: Self::R;
     label b0:
         c = R { flag: false };
@@ -40,8 +40,8 @@ module 0x1::M {
 }
 
 //# publish
-module 0x1::M2 {
-    t2(): &u64 {
+mvir 0x1::M2 {
+    fun t2(): &u64 {
         let u: u64;
         let r: &u64;
     label b0:
@@ -53,12 +53,12 @@ module 0x1::M2 {
 }
 
 //# publish
-module 0x2::M {
-    enum R { V { flag: bool } }
+mvir 0x2::M {
+    public enum R { V { flag: bool } }
 
     // Type checking is done before memory safety checks
     // wrong return type
-    t1(): bool {
+    fun t1(): bool {
         let c: Self::R;
     label b0:
         c = R::V { flag: false };
@@ -67,10 +67,10 @@ module 0x2::M {
 }
 
 //# publish
-module 0x2::M {
-    enum R { V { flag: bool } }
+mvir 0x2::M {
+    public enum R { V { flag: bool } }
 
-    t1(): u64 {
+    fun t1(): u64 {
         let c: Self::R;
     label b0:
         c = R::V { flag: false };

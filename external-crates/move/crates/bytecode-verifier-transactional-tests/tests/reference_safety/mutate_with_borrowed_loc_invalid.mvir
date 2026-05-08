@@ -1,6 +1,6 @@
 //# publish
-module 0x1::M {
-    t1() {
+mvir 0x1::M {
+    fun t1() {
         let x: u64;
         let y: &u64;
     label b0:

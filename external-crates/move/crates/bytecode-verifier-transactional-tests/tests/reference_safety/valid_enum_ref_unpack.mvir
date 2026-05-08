@@ -1,11 +1,11 @@
 //# publish
-module 0x1::o {
-    enum X has drop { 
+mvir 0x1::o {
+    public enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
-    h(e: &mut Self::X) {
+    fun h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         label b0:
@@ -17,7 +17,7 @@ module 0x1::o {
             return;
     }
 
-    f(e: &mut Self::X) {
+    fun f(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         label b0:
@@ -28,7 +28,7 @@ module 0x1::o {
             return;
     }
 
-    g(e: &mut Self::X) {
+    fun g(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         label b0:
@@ -39,7 +39,7 @@ module 0x1::o {
             return;
     }
 
-    k(e: &mut Self::X) {
+    fun k(e: &mut Self::X) {
         let x: &u64;
         let y: &u64;
         label b0:
@@ -50,7 +50,7 @@ module 0x1::o {
             return;
     }
 
-    k1(e: &mut Self::X) {
+    fun k1(e: &mut Self::X) {
         let x: &u64;
         let y: &u64;
         let t: u64;

@@ -1,19 +1,19 @@
 //# publish
 
 // example using generics in a few common/interesting/non-trivial ways
-module 0x42::Option {
+mvir 0x42::Option {
     import 0x1::vector;
 
-    struct T<E> has copy, drop, store {
+    public struct T<E> has copy, drop, store {
         v: vector<E>
     }
 
-    public none<E: store>(): Self::T<E> {
+    public fun none<E: store>(): Self::T<E> {
     label b0:
         return T<E> { v: vector::empty<E>() };
     }
 
-    public some<E: store>(e: E): Self::T<E> {
+    public fun some<E: store>(e: E): Self::T<E> {
         let v: vector<E>;
     label b0:
         v = vector::empty<E>();
@@ -21,7 +21,7 @@ module 0x42::Option {
         return T<E> { v: move(v) };
     }
 
-    public unwrap_or<E: copy + drop + store>(x: Self::T<E>, e: E): E {
+    public fun unwrap_or<E: copy + drop + store>(x: Self::T<E>, e: E): E {
         let v: vector<E>;
     label b0:
         T<E> { v: v } = move(x);
@@ -32,7 +32,7 @@ module 0x42::Option {
         return move(e);
     }
 
-    public really_none<E: copy + drop + store>(): Self::T<E> {
+    public fun really_none<E: copy + drop + store>(): Self::T<E> {
     label b0:
         return Self::unwrap_or<Self::T<E>>(Self::none<Self::T<E>>(), Self::none<E>());
     }
@@ -41,23 +41,23 @@ module 0x42::Option {
 //# publish
 
 // example using generics in a few common/interesting/non-trivial ways -- with actual enums!
-module 0x43::Option {
-    enum T<E> has copy, drop, store {
+mvir 0x43::Option {
+    public enum T<E> has copy, drop, store {
         None { },
         Some { v: E }
     }
 
-    public none<E: store>(): Self::T<E> {
+    public fun none<E: store>(): Self::T<E> {
     label b0:
         return T::None<E> { };
     }
 
-    public some<E: store>(e: E): Self::T<E> {
+    public fun some<E: store>(e: E): Self::T<E> {
     label b0:
         return T::Some<E> { v: move(e) };
     }
 
-    public unwrap_or<E: copy + drop + store>(x: Self::T<E>, e: E): E {
+    public fun unwrap_or<E: copy + drop + store>(x: Self::T<E>, e: E): E {
         let v: E;
     label b0:
         variant_switch T (&x) {
@@ -71,7 +71,7 @@ module 0x43::Option {
         return move(e);
     }
 
-    public really_none<E: copy + drop + store>(): Self::T<E> {
+    public fun really_none<E: copy + drop + store>(): Self::T<E> {
     label b0:
         return Self::unwrap_or<Self::T<E>>(Self::none<Self::T<E>>(), Self::none<E>());
     }

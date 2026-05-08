@@ -1,13 +1,13 @@
 //# publish
-module 0x42::M {
-    enum Foo {
+mvir 0x42::M {
+    public enum Foo {
         V { 
             a: u64,
             b: u64,
         }
     }
 
-    public create_mutable_field_addresses(addr: &mut Self::Foo) {
+    public fun create_mutable_field_addresses(addr: &mut Self::Foo) {
         let a_ref: &mut u64;
         let b_ref: &mut u64;
         let aa_ref: &mut u64;

@@ -1,7 +1,7 @@
 //# run
-module 0x42::m {
+mvir 0x42::m {
 // check valid breaks in control flow check
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
     let vref: &mut vector<u64>;
     let r: &mut u64;

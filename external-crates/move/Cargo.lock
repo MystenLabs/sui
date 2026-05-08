@@ -2622,6 +2622,7 @@ dependencies = [
  "datatest-stable",
  "dunce",
  "hex",
+ "indexmap 2.8.0",
  "insta",
  "lsp-types",
  "move-abstract-interpreter",

@@ -1,18 +1,18 @@
 //# publish
-module 0x1::M {
-    struct Foo { f: bool }
+mvir 0x1::M {
+    public struct Foo { f: bool }
 
-    public id<T>(x: T): T {
+    public fun id<T>(x: T): T {
     label b0:
         return move(x);
     }
 
-    public bar<T1, T2>(x: T1, y: T2) {
+    public fun bar<T1, T2>(x: T1, y: T2) {
     label b0:
         abort 0;
     }
 
-    foo() {
+    fun foo() {
         let x: Self::Foo;
     label b0:
         _ = Self::id<u64>(3);
@@ -23,20 +23,20 @@ module 0x1::M {
 }
 
 //# publish
-module 0x2::M {
-    enum Foo { V{ f: bool } }
+mvir 0x2::M {
+    public enum Foo { V{ f: bool } }
 
-    public id<T>(x: T): T {
+    public fun id<T>(x: T): T {
     label b0:
         return move(x);
     }
 
-    public bar<T1, T2>(x: T1, y: T2) {
+    public fun bar<T1, T2>(x: T1, y: T2) {
     label b0:
         abort 0;
     }
 
-    foo() {
+    fun foo() {
         let x: Self::Foo;
     label b0:
         _ = Self::id<u64>(3);

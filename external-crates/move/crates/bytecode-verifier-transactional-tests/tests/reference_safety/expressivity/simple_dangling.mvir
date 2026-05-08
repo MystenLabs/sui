@@ -1,9 +1,9 @@
 // simple tests that the verifier stops the creation of a dangling reference
 
 //# publish
-module 0x2::field {
-    struct S has copy, drop { f: u64 }
-    t(s: &mut Self::S) {
+mvir 0x2::field {
+    public struct S has copy, drop { f: u64 }
+    fun t(s: &mut Self::S) {
         let f: &u64;
     label b0:
         f = &copy(s).S::f;
@@ -13,10 +13,10 @@ module 0x2::field {
 }
 
 //# publish
-module 0x3::nested_field {
-    struct S has copy, drop { f: u64 }
-    struct P has copy, drop { s: Self::S }
-    t(p: &mut Self::P) {
+mvir 0x3::nested_field {
+    public struct S has copy, drop { f: u64 }
+    public struct P has copy, drop { s: Self::S }
+    fun t(p: &mut Self::P) {
         let s: &mut Self::S;
         let f: &u64;
     label b0:
@@ -28,8 +28,8 @@ module 0x3::nested_field {
 }
 
 //# publish
-module 0x4::vector {
-    t(v: &mut vector<u64>) {
+mvir 0x4::vector {
+    fun t(v: &mut vector<u64>) {
         let r: &mut u64;
     label b0:
         r = vec_mut_borrow<u64>(copy(v), 0);
@@ -39,13 +39,13 @@ module 0x4::vector {
 }
 
 //# publish
-module 0x5::simple_call {
-    f(r: &mut u64): &u64 {
+mvir 0x5::simple_call {
+    fun f(r: &mut u64): &u64 {
     label b0:
         return freeze(move(r));
     }
 
-    t() {
+    fun t() {
         let a: u64;
         let m: &mut u64;
         let i: &u64;
@@ -61,15 +61,15 @@ module 0x5::simple_call {
 
 
 //# publish
-module 0x5::field_call {
-    struct S has copy, drop { f: u64 }
+mvir 0x5::field_call {
+    public struct S has copy, drop { f: u64 }
 
-    f(r: &mut Self::S): &u64 {
+    fun f(r: &mut Self::S): &u64 {
     label b0:
         return &move(r).S::f;
     }
 
-    t(s: &mut Self::S) {
+    fun t(s: &mut Self::S) {
         let f: &u64;
     label b0:
         f = Self::f(copy(s));

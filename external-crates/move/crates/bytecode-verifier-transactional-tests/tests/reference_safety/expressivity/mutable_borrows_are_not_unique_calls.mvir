@@ -1,16 +1,16 @@
 // mutable borrows are not unique
 
 //# publish
-module 0x4::call {
+mvir 0x4::call {
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
-    borrow_f(s: &mut Self::S): &mut u64 {
+    fun borrow_f(s: &mut Self::S): &mut u64 {
     label b0:
         return &mut move(s).S::f;
     }
 
-    create(s: &mut Self::S) {
+    fun create(s: &mut Self::S) {
         let call: &mut u64;
         let f: &mut u64;
     label b0:
@@ -27,16 +27,16 @@ module 0x4::call {
 }
 
 //# publish
-module 0x5::call_and_write_invalid {
+mvir 0x5::call_and_write_invalid {
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
-    borrow_f(s: &mut Self::S): &mut u64 {
+    fun borrow_f(s: &mut Self::S): &mut u64 {
     label b0:
         return &mut move(s).S::f;
     }
 
-    write(s: &mut Self::S) {
+    fun write(s: &mut Self::S) {
         let call: &mut u64;
         let f: &mut u64;
     label b0:
@@ -55,16 +55,16 @@ module 0x5::call_and_write_invalid {
 }
 
 //# publish
-module 0x6::call_and_write_valid {
+mvir 0x6::call_and_write_valid {
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
-    borrow_f(s: &mut Self::S): &mut u64 {
+    fun borrow_f(s: &mut Self::S): &mut u64 {
     label b0:
         return &mut move(s).S::f;
     }
 
-    write(s: &mut Self::S) {
+    fun write(s: &mut Self::S) {
         let call: &mut u64;
         let f: &mut u64;
     label b0:

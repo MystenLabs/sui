@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_2024/matching/invalid_extra_args_2.move:9:29
+  │
+9 │         let subject = E::C({abort 0},{abort 0},{abort 0});
+  │                             ^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/matching/invalid_extra_args_2.move:12:13
+   │
+ 3 │         A,
+   │         - 'A' is declared here
+   ·
+12 │             E::A(x) if (true) => x,
+   │             ^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '()' arguments from this pattern
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/matching/invalid_extra_args_2.move:14:13
+   │
+ 3 │         A,
+   │         - 'A' is declared here
+   ·
+14 │             E::A(x) | E::C(x, _, 0) => x,
+   │             ^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '()' arguments from this pattern

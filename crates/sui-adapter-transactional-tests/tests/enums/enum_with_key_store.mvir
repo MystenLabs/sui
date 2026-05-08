@@ -4,18 +4,18 @@
 //# init --addresses test=0x0
 
 //# publish
-module 0x0::f {
+mvir 0x0::f {
     import 0x2::transfer;
     import 0x2::object;
     import 0x2::dynamic_field;
     import 0x2::dynamic_object_field;
     import 0x2::tx_context;
 
-    enum X has store, key {
+    public enum X has store, key {
         A { } 
     }
 
-    public transfer() {
+    public fun transfer() {
         let x: Self::X;
         label  l0:
             x = X::A { };
@@ -23,7 +23,7 @@ module 0x0::f {
         return;
     }
 
-    public share() {
+    public fun share() {
         let x: Self::X;
         label  l0:
             x = X::A { };
@@ -31,7 +31,7 @@ module 0x0::f {
         return;
     }
 
-    public public_transfer() {
+    public fun public_transfer() {
         let x: Self::X;
         label  l0:
             x = X::A { };
@@ -39,7 +39,7 @@ module 0x0::f {
         return;
     }
 
-    public public_share() {
+    public fun public_share() {
         let x: Self::X;
         label  l0:
             x = X::A { };
@@ -47,7 +47,7 @@ module 0x0::f {
         return;
     }
 
-    public freezer() {
+    public fun freezer() {
         let x: Self::X;
         label l0:
             x = X::A { };
@@ -55,7 +55,7 @@ module 0x0::f {
         return;
     }
 
-    public public_freezer() {
+    public fun public_freezer() {
         let x: Self::X;
         label l0:
             x = X::A { };
@@ -63,7 +63,7 @@ module 0x0::f {
         return;
     }
 
-    public add_as_df(ctx: &mut tx_context::TxContext) {
+    public fun add_as_df(ctx: &mut tx_context::TxContext) {
         let x: Self::X;
         let id: object::UID;
         label l0:
@@ -75,7 +75,7 @@ module 0x0::f {
     
     }
 
-    public dof_add(ctx: &mut tx_context::TxContext) {
+    public fun dof_add(ctx: &mut tx_context::TxContext) {
         let x: Self::X;
         let id: object::UID;
         label l0:

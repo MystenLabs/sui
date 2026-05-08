@@ -229,7 +229,9 @@ mod tests {
 
     use crate::FieldCount;
     use crate::metrics::IndexerMetrics;
-    use crate::mocks::store::*;
+    use crate::mocks::store::ConnectionFailure;
+    use crate::mocks::store::FallibleMockConnection;
+    use crate::mocks::store::FallibleMockStore;
     use crate::pipeline::Processor;
     use crate::pipeline::WatermarkPart;
     use crate::pipeline::concurrent::BatchStatus;
@@ -265,7 +267,7 @@ mod tests {
 
     #[async_trait]
     impl Handler for DataPipeline {
-        type Store = MockStore;
+        type Store = FallibleMockStore;
         type Batch = Vec<Self::Value>;
 
         fn batch(
@@ -280,7 +282,7 @@ mod tests {
         async fn commit<'a>(
             &self,
             batch: &Self::Batch,
-            conn: &mut MockConnection<'a>,
+            conn: &mut FallibleMockConnection<'a>,
         ) -> anyhow::Result<usize> {
             for value in batch {
                 // If there's a delay, sleep for that duration
@@ -313,7 +315,7 @@ mod tests {
     }
 
     struct TestSetup {
-        store: MockStore,
+        store: FallibleMockStore,
         batch_tx: mpsc::Sender<BatchedRows<DataPipeline>>,
         watermark_rx: mpsc::Receiver<Vec<WatermarkPart>>,
         committer: Service,
@@ -325,7 +327,7 @@ mod tests {
     ///
     /// # Arguments
     /// * `store` - The mock store to use for testing
-    async fn setup_test(store: MockStore) -> TestSetup {
+    async fn setup_test(store: FallibleMockStore) -> TestSetup {
         let config = CommitterConfig::default();
         let metrics = IndexerMetrics::new(None, &Default::default());
 
@@ -353,7 +355,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_batch_processing() {
-        let mut setup = setup_test(MockStore::default()).await;
+        let mut setup = setup_test(FallibleMockStore::default()).await;
 
         // Send batches
         let batch1 = BatchedRows::from_vec(
@@ -432,7 +434,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_commit_with_retries_for_commit_failure() {
-        let mut setup = setup_test(MockStore::default()).await;
+        let mut setup = setup_test(FallibleMockStore::default()).await;
 
         // Create a batch with a single item that will fail once before succeeding
         let batch = BatchedRows::from_vec(
@@ -489,7 +491,7 @@ mod tests {
     #[tokio::test]
     async fn test_commit_with_retries_for_connection_failure() {
         // Create a batch with a single item
-        let store = MockStore {
+        let store = FallibleMockStore {
             connection_failure: Arc::new(Mutex::new(ConnectionFailure {
                 connection_failure_attempts: 1,
                 connection_delay_ms: 1_000, // Long connection delay for testing state between retry
@@ -550,7 +552,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_batch_handling() {
-        let mut setup = setup_test(MockStore::default()).await;
+        let mut setup = setup_test(FallibleMockStore::default()).await;
 
         let empty_batch = BatchedRows::from_vec(
             vec![], // Empty batch
@@ -587,7 +589,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_watermark_channel_closed() {
-        let setup = setup_test(MockStore::default()).await;
+        let setup = setup_test(FallibleMockStore::default()).await;
 
         let batch = BatchedRows::from_vec(
             vec![StoredData {

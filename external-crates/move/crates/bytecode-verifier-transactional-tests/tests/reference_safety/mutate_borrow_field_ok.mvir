@@ -1,19 +1,19 @@
 //# publish
-module 0x42::Test {
-    struct T has drop {v: u64}
+mvir 0x42::Test {
+    public struct T has drop {v: u64}
 
-    public new(g: u64): Self::T {
+    public fun new(g: u64): Self::T {
     label b0:
         return T{v: move(g)};
     }
 
-    public thousand(t : &mut Self::T) {
+    public fun thousand(t : &mut Self::T) {
     label b0:
         *(&mut move(t).T::v) = 1000;
         return;
     }
 
-    public value(this: &mut Self::T): u64 {
+    public fun value(this: &mut Self::T): u64 {
         let y: &u64;
     label b0:
         y = &move(this).T::v;
@@ -22,10 +22,10 @@ module 0x42::Test {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::Test;
 
-entry foo() {
+entry fun foo() {
     let x: Test::T;
     let x_ref: u64;
 label b0:

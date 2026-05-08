@@ -1,6 +1,6 @@
 //# publish
-module 0x42::M {
-    public max(a: u64, b: u64): u64 {
+mvir 0x42::M {
+    public fun max(a: u64, b: u64): u64 {
     label b0:
         jump_if (copy(a) > copy(b)) b2;
     label b1:
@@ -9,7 +9,7 @@ module 0x42::M {
         return copy(a);
     }
 
-    public sum(a: u64, b: u64): u64 {
+    public fun sum(a: u64, b: u64): u64 {
         let c: u64;
     label b0:
         c = copy(a) + copy(b);
@@ -18,10 +18,10 @@ module 0x42::M {
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 import 0x42::M;
 
-entry foo() {
+entry fun foo() {
     let a: u64;
     let b: u64;
     let c: u64;

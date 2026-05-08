@@ -6,8 +6,17 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[features]
+testing = ["dep:dashmap", "dep:tokio"]
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
+dashmap = { workspace = true, optional = true }
 scoped-futures.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"], optional = true }
+
+[dev-dependencies]
+dashmap.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }

@@ -41,12 +41,18 @@ if [ -z "$INSTA_UPDATE" ]; then
     export INSTA_UPDATE
 fi
 
-UPDATE=1 cargo test -p sui-framework --test build-system-packages
-cd "$ROOT/crates/sui-protocol-config" && cargo insta test
-cd "$ROOT/crates/sui-swarm-config" && cargo insta test
-cd "$ROOT/crates/sui-open-rpc" && cargo insta test
-cd "$ROOT/crates/sui-core" && cargo insta test -- snapshot_tests
-cd "$ROOT/crates/sui-types" && cargo insta test
-cd "$ROOT/crates/sui-indexer-alt-graphql" && cargo insta test -- test_schema_sdl_export
-cd "$ROOT/crates/sui-indexer-alt-graphql" && cargo insta test --features staging -- test_schema_sdl_export
+# This technically should be pulling from `.config/insta.yaml`, but we set the test runner again
+# here to be safe and explicit.
+INSTA=(cargo insta test --test-runner nextest --no-test-runner-fallback)
+
+cd "$ROOT"
+UPDATE=1 cargo nextest run -p sui-framework --test build-system-packages
+"${INSTA[@]}" \
+    -p sui-protocol-config \
+    -p sui-swarm-config \
+    -p sui-open-rpc \
+    -p sui-types
+"${INSTA[@]}" -p sui-core -- snapshot_tests
+"${INSTA[@]}" -p sui-indexer-alt-graphql -- test_schema_sdl_export
+"${INSTA[@]}" --features staging -p sui-indexer-alt-graphql -- test_schema_sdl_export
 exit 0

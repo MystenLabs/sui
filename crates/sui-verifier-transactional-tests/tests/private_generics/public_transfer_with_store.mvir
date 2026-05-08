@@ -5,11 +5,11 @@
 // has store
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
 
-    t(s: coin::Coin<u64>) {
+    fun t(s: coin::Coin<u64>) {
         label l0:
         transfer::public_transfer<coin::Coin<u64>>(move(s), 0x100);
         return;
@@ -17,11 +17,11 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
 
-    t(s: coin::Coin<u64>) {
+    fun t(s: coin::Coin<u64>) {
         label l0:
         transfer::public_freeze_object<coin::Coin<u64>>(move(s));
         return;
@@ -29,11 +29,11 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
 
-    t(s: coin::Coin<u64>) {
+    fun t(s: coin::Coin<u64>) {
         label l0:
         transfer::public_share_object<coin::Coin<u64>>(move(s));
         return;
@@ -41,12 +41,12 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
     import 0x2::object;
 
-    t(uid: &mut object::UID, coin: transfer::Receiving<coin::Coin<u64>>): coin::Coin<u64> {
+    fun t(uid: &mut object::UID, coin: transfer::Receiving<coin::Coin<u64>>): coin::Coin<u64> {
         let c: coin::Coin<u64>;
         label l0:
         c = transfer::public_receive<coin::Coin<u64>>(move(uid), move(coin));
@@ -55,12 +55,12 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::coin;
     import 0x2::transfer;
     import 0x2::party;
 
-    t(s: coin::Coin<u64>, p: party::Party) {
+    fun t(s: coin::Coin<u64>, p: party::Party) {
         label l0:
         transfer::public_party_transfer<coin::Coin<u64>>(move(s), move(p));
         return;

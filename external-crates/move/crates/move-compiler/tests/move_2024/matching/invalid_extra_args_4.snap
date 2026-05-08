@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/matching/invalid_extra_args_4.move:9:32
+  │
+4 │         B,
+  │         - 'B' is declared here
+  ·
+9 │             E::C(x, (0 | 1)) | E::B(x) | E::A(x) => x + 1u64,
+  │                                ^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+  │
+  = Remove '()' arguments from this pattern

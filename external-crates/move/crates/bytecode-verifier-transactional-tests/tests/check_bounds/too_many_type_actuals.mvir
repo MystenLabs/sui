@@ -1,8 +1,8 @@
 //# publish
-module 0x6::M {
-    struct S { b: bool }
+mvir 0x6::M {
+    public struct S { b: bool }
 
-    foo() {
+    fun foo() {
         // type arg mismatch
         let x: Self::S<u64>;
     label b0:

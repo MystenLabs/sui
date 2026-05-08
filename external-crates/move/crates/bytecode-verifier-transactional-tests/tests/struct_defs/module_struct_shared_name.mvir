@@ -1,18 +1,18 @@
 //# publish
-module 0x42::M {
-    struct M has drop { b: bool }
-    public new(): Self::M {
+mvir 0x42::M {
+    public struct M has drop { b: bool }
+    public fun new(): Self::M {
     label b0:
         return M{ b: true };
     }
 }
 
 //# run
-module 0x43::m {
+mvir 0x43::m {
 
 import 0x42::M;
 
-entry foo() {
+entry fun foo() {
     let x: M::M;
 label b0:
     x = M::new();

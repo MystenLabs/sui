@@ -430,11 +430,6 @@ pub enum SuiErrorKind {
     TooManyTransactionsPendingConsensus,
 
     #[error(
-        "Transaction was outbid by higher-gas-price transactions in the admission queue (current minimum gas price required: {min_gas_price})"
-    )]
-    TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: u64 },
-
-    #[error(
         "Input {object_id} already has {queue_len} transactions pending, above threshold of {threshold}"
     )]
     TooManyTransactionsPendingOnObject {
@@ -820,6 +815,11 @@ pub enum SuiErrorKind {
         claimed_object_id: ObjectID,
         found_object_ref: ObjectRef,
     },
+
+    #[error(
+        "Transaction was outbid by higher-gas-price transactions in the admission queue (current minimum gas price required: {min_gas_price})"
+    )]
+    TransactionRejectedDueToOutbiddingDuringCongestion { min_gas_price: u64 },
 }
 
 #[repr(u64)]

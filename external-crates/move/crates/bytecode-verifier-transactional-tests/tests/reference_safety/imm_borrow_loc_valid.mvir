@@ -1,11 +1,11 @@
 //# publish
-module 0x1::Tester {
+mvir 0x1::Tester {
 
-    struct Data has key { v1: u64, v2: u64 }
-    struct Box has key { f: u64 }
+    public struct Data has key { v1: u64, v2: u64 }
+    public struct Box has key { f: u64 }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
-    bump_and_pick(data: &mut Self::Data, b1: &mut Self::Box, b2: &mut Self::Box): &u64  {
+    fun bump_and_pick(data: &mut Self::Data, b1: &mut Self::Box, b2: &mut Self::Box): &u64  {
     label b0:
         *&mut copy(b1).Box::f = *&copy(data).Data::v1;
         *&mut copy(b2).Box::f = *&move(data).Data::v2;
@@ -18,7 +18,7 @@ module 0x1::Tester {
         return &move(b1).Box::f;
     }
 
-    larger_field(data: &mut Self::Data, b1: Self::Box, b2: Self::Box, drop: address, result: &mut u64) {
+    fun larger_field(data: &mut Self::Data, b1: Self::Box, b2: Self::Box, drop: address, result: &mut u64) {
         let returned_ref: &u64;
         let dump: u64;
     label b0:

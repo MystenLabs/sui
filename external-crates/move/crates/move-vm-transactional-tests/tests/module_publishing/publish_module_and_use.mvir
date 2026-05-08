@@ -1,15 +1,15 @@
 //# publish
-module 0x5::Coin {
-    struct Coin { value: u64 }
-    public value(c: &Self::Coin): u64 {
+mvir 0x5::Coin {
+    public struct Coin { value: u64 }
+    public fun value(c: &Self::Coin): u64 {
     label b0:
         return *&move(c).Coin::value;
     }
-    public zero(): Self::Coin {
+    public fun zero(): Self::Coin {
     label b0:
         return Coin { value: 0 };
     }
-    public destroy_zero(c: Self::Coin) {
+    public fun destroy_zero(c: Self::Coin) {
     label b0:
         Coin {} = move(c);
         assert(() == 0, 42);
@@ -18,17 +18,17 @@ module 0x5::Coin {
 }
 
 //# publish
-module 0x43::MoneyHolder {
+mvir 0x43::MoneyHolder {
     import 0x5::Coin;
 
-    struct T { money: Coin::Coin }
+    public struct T { money: Coin::Coin }
 
-    public new(m: Coin::Coin): Self::T {
+    public fun new(m: Coin::Coin): Self::T {
     label b0:
         return T{ money: move(m) };
     }
 
-    public value(this :&Self::T): u64 {
+    public fun value(this :&Self::T): u64 {
         let ref: &Coin::Coin;
         let val: u64;
     label b0:
@@ -38,7 +38,7 @@ module 0x43::MoneyHolder {
         return move(val);
     }
 
-    public destroy_t(t: Self::T) {
+    public fun destroy_t(t: Self::T) {
         let money: Coin::Coin;
     label b0:
         T{ money } = move(t);
@@ -48,11 +48,11 @@ module 0x43::MoneyHolder {
 }
 
 //# run
-module 0x44::m {
+mvir 0x44::m {
 import 0x43::MoneyHolder;
 import 0x5::Coin;
 
-entry foo() {
+entry fun foo() {
     let coin: Coin::Coin;
     let money_holder: MoneyHolder::T;
     let money_holder_ref: &MoneyHolder::T;

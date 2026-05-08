@@ -1,12 +1,12 @@
 //# publish
-module 0x42::M {
-    consume(s: signer) {
+mvir 0x42::M {
+    fun consume(s: signer) {
     label b0:
         Self::consume(move(s));
         return;
     }
 
-    t(cond: bool, s: signer) {
+    fun t(cond: bool, s: signer) {
     label b0:
         jump_if_false (move(cond)) b2;
     label b1:

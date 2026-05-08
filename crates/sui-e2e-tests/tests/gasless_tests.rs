@@ -27,13 +27,7 @@ use sui_types::{
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
 async fn setup_gasless_env() -> TestEnv {
-    TestEnvBuilder::new()
-        .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_gasless_for_testing();
-            cfg
-        }))
-        .build()
-        .await
+    TestEnvBuilder::new().build().await
 }
 
 async fn setup_custom_coin(test_env: &mut TestEnv, funding: &[(u64, SuiAddress)]) -> TypeTag {
@@ -277,7 +271,6 @@ async fn test_gasless_multi_recipient() {
 async fn test_gasless_disabled_rejects_transaction() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_address_balance_gas_payments_for_testing();
             cfg.disable_gasless_for_testing();
             cfg
         }))
@@ -352,7 +345,6 @@ async fn test_gasless_paid_tx_still_works() {
 async fn test_gasless_computation_cap() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_gasless_for_testing();
             cfg.set_gasless_max_computation_units_for_testing(1);
             cfg
         }))
@@ -973,7 +965,6 @@ async fn test_gasless_coin_split_and_keep_change() {
 async fn test_gasless_rate_limit_rejects() {
     let mut test_env = TestEnvBuilder::new()
         .with_proto_override_cb(Box::new(|_, mut cfg| {
-            cfg.enable_gasless_for_testing();
             cfg.set_gasless_max_tps_for_testing(0);
             cfg
         }))

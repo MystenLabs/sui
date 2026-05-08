@@ -175,6 +175,50 @@ async fn simulate_respects_explicit_price_over_gasless() {
     assert!(returned.effects().status().success());
 }
 
+/// A tx whose `Coin<T>` input is a type *not* on the gasless allowlist must not be classified
+/// as gasless-eligible: `is_gasless_candidate` should reject it via `check_gasless_object_inputs`,
+/// and the simulate flow should fall through to the priced flow rather than returning
+/// `gas_price=0`.
+#[sim_test]
+async fn simulate_falls_back_to_priced_when_coin_type_not_allowlisted() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    // Mint a coin for sender but deliberately skip `add_gasless_token_for_testing`, so the
+    // coin type is absent from `gasless_allowed_token_types`.
+    let (publisher, package_id, coin_type, treasury_cap_ref) = test_env.setup_mintable_coin().await;
+    let (_, coin_ref) = test_env
+        .mint_coin(publisher, package_id, treasury_cap_ref, 5_000, sender)
+        .await;
+    let tx = build_coin_send_funds_tx(sender, coin_ref, coin_type, recipient);
+
+    let rgp = test_env.rgp;
+    let response = connect(&test_env)
+        .await
+        .simulate_transaction(
+            SimulateTransactionRequest::new(to_unresolved_proto(tx, None))
+                .with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    let returned = response.transaction();
+    let gas_payment = returned.transaction().gas_payment();
+    assert_eq!(
+        gas_payment.price,
+        Some(rgp),
+        "non-allowlisted coin type must not be classified as gasless-eligible; \
+         priced fallback should resolve price to rgp",
+    );
+    assert!(
+        !gas_payment.objects.is_empty(),
+        "fallback priced flow must have run gas selection",
+    );
+    assert!(returned.effects().status().success());
+}
+
 /// A tx that passes structural + runtime-input gasless checks but fails the post-execution
 /// gasless requirements should transparently fall back to the priced flow. Here the tx tries
 /// to send a coin balance below the registered gasless minimum for its token type — the

@@ -1,11 +1,11 @@
 //# publish
 
-module 0x42::Test {
-    struct A { b: bool }
-    struct B { b: bool }
-    struct T { ft: Self::B }
+mvir 0x42::Test {
+    public struct A { b: bool }
+    public struct B { b: bool }
+    public struct T { ft: Self::B }
 
-    public t1(x: Self::A): Self::T {
+    public fun t1(x: Self::A): Self::T {
     label b0:
         // arg type mismatch
         return T{ft: move(x)};
@@ -15,12 +15,12 @@ module 0x42::Test {
 
 //# publish
 
-module 0x43::Test {
-    struct B { b: bool }
-    enum A { V { b: bool } }
-    enum T { V { ft: Self::B } }
+mvir 0x43::Test {
+    public struct B { b: bool }
+    public enum A { V { b: bool } }
+    public enum T { V { ft: Self::B } }
 
-    public t1(x: Self::A): Self::T {
+    public fun t1(x: Self::A): Self::T {
     label b0:
         // arg type mismatch
         return T::V{ft: move(x)};

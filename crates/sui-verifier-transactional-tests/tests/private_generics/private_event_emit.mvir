@@ -6,11 +6,11 @@
 //# init --addresses test=0x0 test2=0x0
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
     import 0x2::coin;
 
-    t(s: coin::CurrencyCreated<u64>) {
+    fun t(s: coin::CurrencyCreated<u64>) {
         label l0:
         event::emit<coin::CurrencyCreated<u64>>(move(s));
         return;
@@ -18,10 +18,10 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
-    t<T: copy + drop>(x: T) {
+    fun t<T: copy + drop>(x: T) {
         label l0:
         event::emit<T>(move(x));
         return;
@@ -29,10 +29,10 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
-    t(x: u64) {
+    fun t(x: u64) {
         label l0:
         event::emit<u64>(move(x));
         return;
@@ -40,14 +40,14 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
-    struct X has copy, drop {
+    public struct X has copy, drop {
         dummy: bool,
     }
 
-    t(x: vector<Self::X>) {
+    fun t(x: vector<Self::X>) {
         label l0:
         event::emit<vector<Self::X>>(move(x));
         return;
@@ -55,14 +55,14 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
-    enum X has copy, drop {
+    public enum X has copy, drop {
         V { }
     }
 
-    t(x: vector<Self::X>) {
+    fun t(x: vector<Self::X>) {
         label l0:
         event::emit<vector<Self::X>>(move(x));
         return;
@@ -70,12 +70,12 @@ module 0x0::m {
 }
 
 //# publish
-module test::m {
-    struct Y has copy, drop {
+mvir test::m {
+    public struct Y has copy, drop {
         dummy: bool,
     }
 
-    enum X has copy, drop {
+    public enum X has copy, drop {
         V { }
     }
 }
@@ -83,11 +83,11 @@ module test::m {
 //# set-address test object(6,0)
 
 //# publish --dependencies test
-module 0x0::t {
+mvir 0x0::t {
     import test::m;
     import 0x2::event;
 
-    t(x: m::X) {
+    fun t(x: m::X) {
         label l0:
         event::emit<m::X>(move(x));
         return;
@@ -95,11 +95,11 @@ module 0x0::t {
 }
 
 //# publish --dependencies test
-module 0x0::t {
+mvir 0x0::t {
     import test::m;
     import 0x2::event;
 
-    t(x: m::Y) {
+    fun t(x: m::Y) {
         label l0:
         event::emit<m::Y>(move(x));
         return;
@@ -107,11 +107,11 @@ module 0x0::t {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
     import 0x2::coin;
 
-    t(s: coin::CurrencyCreated<u64>) {
+    fun t(s: coin::CurrencyCreated<u64>) {
         label l0:
         event::emit_authenticated<coin::CurrencyCreated<u64>>(move(s));
         return;
@@ -119,10 +119,10 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
-    t<T: copy + drop>(x: T) {
+    fun t<T: copy + drop>(x: T) {
         label l0:
         event::emit_authenticated<T>(move(x));
         return;
@@ -130,10 +130,10 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
-    t(x: u64) {
+    fun t(x: u64) {
         label l0:
         event::emit_authenticated<u64>(move(x));
         return;
@@ -141,14 +141,14 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
-    struct X has copy, drop {
+    public struct X has copy, drop {
         dummy: bool,
     }
 
-    t(x: vector<Self::X>) {
+    fun t(x: vector<Self::X>) {
         label l0:
         event::emit_authenticated<vector<Self::X>>(move(x));
         return;
@@ -156,14 +156,14 @@ module 0x0::m {
 }
 
 //# publish
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::event;
 
-    enum X has copy, drop {
+    public enum X has copy, drop {
         V { }
     }
 
-    t(x: vector<Self::X>) {
+    fun t(x: vector<Self::X>) {
         label l0:
         event::emit_authenticated<vector<Self::X>>(move(x));
         return;
@@ -171,11 +171,11 @@ module 0x0::m {
 }
 
 //# publish --dependencies test
-module 0x0::t {
+mvir 0x0::t {
     import test::m;
     import 0x2::event;
 
-    t(x: m::X) {
+    fun t(x: m::X) {
         label l0:
         event::emit_authenticated<m::X>(move(x));
         return;
@@ -183,11 +183,11 @@ module 0x0::t {
 }
 
 //# publish --dependencies test
-module 0x0::t {
+mvir 0x0::t {
     import test::m;
     import 0x2::event;
 
-    t(x: m::Y) {
+    fun t(x: m::Y) {
         label l0:
         event::emit_authenticated<m::Y>(move(x));
         return;

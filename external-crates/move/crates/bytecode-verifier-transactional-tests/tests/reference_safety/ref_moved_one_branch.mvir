@@ -1,8 +1,8 @@
 //# publish
-module 0x1::A {
-    struct S {value: u64}
+mvir 0x1::A {
+    public struct S {value: u64}
 
-    public t(changed: bool, s: &mut Self::S) {
+    public fun t(changed: bool, s: &mut Self::S) {
     label b0:
         // valid to move a reference in one branch and not the other
         jump_if (move(changed)) b2;
@@ -13,7 +13,7 @@ module 0x1::A {
         return;
     }
 
-    foo(x: &mut u64) {
+    fun foo(x: &mut u64) {
     label b0:
         *copy(x) = *copy(x) + 1;
         return;

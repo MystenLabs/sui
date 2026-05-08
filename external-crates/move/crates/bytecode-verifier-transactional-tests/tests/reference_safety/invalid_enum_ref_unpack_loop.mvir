@@ -1,12 +1,12 @@
 //# publish
-module 0x1::o {
-    enum X has drop { 
+mvir 0x1::o {
+    public enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
     // Invalid since `y`'s referene stays live between loop iterations, but we then write to `y`'s root in the loop.
-    h(e: &mut Self::X) {
+    fun h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         label b0:
@@ -37,14 +37,14 @@ module 0x1::o {
 }
 
 //# publish
-module 0x1::o {
-    enum X has drop { 
+mvir 0x1::o {
+    public enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
     // Same as above, but we alias `y` to `counter` between loop iterations.
-    h(e: &mut Self::X) {
+    fun h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let counter: &mut u64;
@@ -76,14 +76,14 @@ module 0x1::o {
 }
 
 //# publish
-module 0x1::o {
-    enum X has drop { 
+mvir 0x1::o {
+    public enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
     // Same as above, but we alias `y` to `counter` with no loops
-    h(e: &mut Self::X) {
+    fun h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let counter: &mut u64;
@@ -114,14 +114,14 @@ module 0x1::o {
 }
 
 //# publish
-module 0x1::o {
-    enum X has drop { 
+mvir 0x1::o {
+    public enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
     // Same as above, but we alias `y` to an immutable ref `counter` between loop iterations.
-    h(e: &mut Self::X) {
+    fun h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let counter: &u64;
@@ -155,14 +155,14 @@ module 0x1::o {
 }
 
 //# publish
-module 0x1::o {
-    enum X has drop { 
+mvir 0x1::o {
+    public enum X has drop { 
         One { x: u64 },
         Two { x: u64, y: u64},
     }
 
     // Invalid since `counter` is invalidated, but not written again before the loop starts back up.
-    h(e: &mut Self::X) {
+    fun h(e: &mut Self::X) {
         let x: &mut u64;
         let y: &mut u64;
         let counter: &u64;

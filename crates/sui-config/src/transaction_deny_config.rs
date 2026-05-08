@@ -54,6 +54,10 @@ pub struct TransactionDenyConfig {
     #[serde(default)]
     user_transaction_disabled: bool,
 
+    /// Whether gasless transactions are disabled.
+    #[serde(default)]
+    gasless_disabled: bool,
+
     /// In-memory maps for faster lookup of various lists.
     #[serde(skip)]
     object_deny_set: OnceCell<HashSet<ObjectID>>,
@@ -122,6 +126,10 @@ impl TransactionDenyConfig {
         self.user_transaction_disabled
     }
 
+    pub fn gasless_disabled(&self) -> bool {
+        self.gasless_disabled
+    }
+
     pub fn receiving_objects_disabled(&self) -> bool {
         self.receiving_objects_disabled
     }
@@ -155,6 +163,11 @@ impl TransactionDenyConfigBuilder {
 
     pub fn disable_user_transaction(mut self) -> Self {
         self.config.user_transaction_disabled = true;
+        self
+    }
+
+    pub fn disable_gasless(mut self) -> Self {
+        self.config.gasless_disabled = true;
         self
     }
 

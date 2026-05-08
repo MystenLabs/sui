@@ -2,19 +2,19 @@
 
 // tests various mixed usage of signer in function arguments
 
-module 0x42::M {
+mvir 0x42::M {
 
-public main1(s1: signer, s2: &signer, s3: signer) {
+public fun main1(s1: signer, s2: &signer, s3: signer) {
     label l0:
     return;
 }
 
-public main2(s1: &signer, u: u64, s2: signer, f: bool, s3: &signer) {
+public fun main2(s1: &signer, u: u64, s2: signer, f: bool, s3: &signer) {
     label l0:
     return;
 }
 
-public main3(u: u64, f: bool, a: address, s1: signer, s2: &signer) {
+public fun main3(u: u64, f: bool, a: address, s1: signer, s2: &signer) {
     label l0:
     return;
 }

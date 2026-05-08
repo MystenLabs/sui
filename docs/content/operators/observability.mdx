@@ -1,7 +1,6 @@
 ---
 title: Logging, Tracing, Metrics, and Observability
 sidebar_label: Observability
-draft: true
 ---
 
 Good observability capabilities are key to the development and growth of Sui. The distributed and asynchronous nature of Sui, with multiple client and validator processes distributed over a potentially global network, makes this more challenging.
@@ -74,8 +73,8 @@ For more details, see the [EnvFilter](https://docs.rs/tracing-subscriber/latest/
 
 Sui includes Prometheus-based metrics:
 
-- `rpc_requests_by_route` and related for RPC Server API metrics and latencies (see `rpc-server.rs`)
-- Validator transaction metrics (see `AuthorityMetrics` in `authority.rs`)
+- `rpc_requests_by_route` and related metrics for RPC server API metrics and latencies
+- Validator transaction metrics (see `AuthorityMetrics` in the Sui source code)
 
 ## Viewing logs, traces, metrics {#viewing-logs-traces-metrics}
 

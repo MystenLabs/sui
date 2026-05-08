@@ -111,6 +111,51 @@ jobs:
           aws s3 cp s3://sui-releases/${{ env.s3_existing_archive }} ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
           tar -xf ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz -C ${{ env.TMP_BUILD_DIR }}
 
+      - name: Resolve sui_sha for prebuilt binary lookup (Linux)
+        if: ${{ startsWith(matrix.os, 'ubuntu') && env.s3_existing_archive == '' }}
+        shell: bash
+        run: |
+          echo "sui_sha=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Download prebuilt binaries from S3 (Linux)
+        if: ${{ startsWith(matrix.os, 'ubuntu') && env.s3_existing_archive == '' }}
+        shell: bash
+        run: |
+          # Pulls binaries that mp3 (sui-operations/prebuild-sui-images.yml) extracted
+          # from prebuilt sui images. amd64 lands at s3://sui-releases/<sui_sha>/<basename>,
+          # arm64 at s3://sui-releases/arm64/<sui_sha>/<basename> — see mp3's
+          # binary_upload_config in sui-operations/pulumi/apps/mp3 (sui-{node,tools}-arm64
+          # rules). Fails loudly if any binary in binary-build-list.json release_binaries
+          # is missing so the gap surfaces before the tag publishes.
+          mkdir -p ${{ env.TMP_BUILD_DIR }} ./tmp
+          [ ! -f ${{ env.BINARY_LIST_FILE }} ] && echo "${{ env.BINARY_LIST_FILE }} cannot be found" && exit 1
+
+          case "${arch}" in
+            aarch64|arm64) s3_prefix="s3://sui-releases/arm64/${sui_sha}" ;;
+            *)             s3_prefix="s3://sui-releases/${sui_sha}" ;;
+          esac
+
+          missing=()
+          for binary in $(jq -r '.release_binaries[]' ${{ env.BINARY_LIST_FILE }}); do
+            binary=$(echo "${binary}" | tr -d $'\r')
+            src="${s3_prefix}/${binary}"
+            dest="${{ env.TMP_BUILD_DIR }}/${binary}"
+            echo "Downloading ${src}"
+            if ! aws s3 cp "${src}" "${dest}"; then
+              missing+=("${binary}")
+              continue
+            fi
+            chmod +x "${dest}"
+          done
+
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing prebuilt binaries at ${s3_prefix}/ — these must be produced by sui-operations/prebuild-sui-images.yml + mp3:binary_upload_config before tagging: ${missing[*]}"
+            exit 1
+          fi
+
+          tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
+          aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
+
       - name: Install nexttest (Windows)
         if: ${{ matrix.os == 'windows-ghcloud' && env.s3_existing_archive == '' }}
         uses: taiki-e/install-action@88d897fbe3f79ed72a43e0dcbca36156ff03344e # pin@v2.67.14
@@ -139,12 +184,6 @@ jobs:
         run: |
           brew install postgresql
 
-      - name: Install postgres (Ubuntu arm64)
-        if: ${{ matrix.os == 'ubuntu-arm64' && env.s3_existing_archive == '' }}
-        shell: bash
-        run: |
-          sudo apt update && sudo apt install libpq-dev
-
       - name: Remove unused apps (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_existing_archive == '' }}
         continue-on-error: true
@@ -159,23 +198,24 @@ jobs:
           df -h /
 
       - uses: ./.github/actions/setup-sccache
-        if: ${{ env.s3_existing_archive == '' }}
+        if: ${{ !startsWith(matrix.os, 'ubuntu') && env.s3_existing_archive == '' }}
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           key-prefix: ${{ matrix.os }}
 
       - name: Register cargo problem matcher
+        if: ${{ !startsWith(matrix.os, 'ubuntu') && env.s3_existing_archive == '' }}
         run: echo "::add-matcher::.github/matchers/cargo.json"
 
       - name: Cargo build for ${{ matrix.os }} platform
-        if: ${{ env.s3_existing_archive == '' }}
+        if: ${{ !startsWith(matrix.os, 'ubuntu') && env.s3_existing_archive == '' }}
         shell: bash
         run: |
           [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --release --features tracing --bin sui && cargo build --profile=dev --bin sui --features tracing
 
       - name: Rename binaries for ${{ matrix.os }}
-        if: ${{ env.s3_existing_archive == '' }}
+        if: ${{ !startsWith(matrix.os, 'ubuntu') && env.s3_existing_archive == '' }}
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}

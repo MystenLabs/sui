@@ -38,6 +38,7 @@ impl Disassemble {
         self,
         package_path: Option<&Path>,
         build_config: BuildConfig,
+        flavor: SuiFlavor,
     ) -> anyhow::Result<()> {
         if base::reroot_path(Some(&self.module_path)).is_ok() {
             // disassembling bytecode inside the source package that produced it--use the source info
@@ -55,7 +56,7 @@ impl Disassemble {
                 debug: self.debug,
                 bytecode_map: self.bytecode_map,
             }
-            .execute(package_path, build_config, SuiFlavor::new())
+            .execute(package_path, build_config, flavor)
             .await?;
             return Ok(());
         }

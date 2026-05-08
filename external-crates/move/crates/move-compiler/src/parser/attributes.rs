@@ -41,6 +41,9 @@ pub(crate) fn to_known_attributes(
         KA::DeprecationAttribute::DEPRECATED => parse_deprecated(context, attribute),
         // -- diagnostic attributes ------
         KA::DiagnosticAttribute::ALLOW => parse_allow(context, attribute),
+        KA::DiagnosticAttribute::DENY => parse_deny(context, attribute),
+        KA::DiagnosticAttribute::EXPECT => parse_expect(context, attribute),
+        KA::DiagnosticAttribute::WARN => parse_warn(context, attribute),
         KA::DiagnosticAttribute::LINT_ALLOW => parse_lint_allow(context, attribute),
         // -- error attribtue ------------
         KA::ErrorAttribute::ERROR => {
@@ -200,11 +203,15 @@ fn parse_deprecated(context: &mut Context, attribute: ParsedAttribute) -> Vec<At
     }
 }
 
-// TODO: VALIDATE THIS
-fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+fn parse_diagnostic_filter_attr(
+    context: &mut Context,
+    attribute: ParsedAttribute,
+    attr_name: &str,
+    make_attr: impl FnOnce(BTreeSet<(Option<Name>, Name)>) -> Attribute_,
+) -> Vec<Attribute> {
     use ParsedAttribute_ as PA;
 
-    fn parse_allow_inner(
+    fn parse_filter_inner(
         context: &mut Context,
         attribute: ParsedAttribute,
     ) -> Vec<(Option<Name>, Name)> {
@@ -213,13 +220,13 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
             PA::Name(name) => vec![(None, name)],
             PA::Parameterized(prefix, sub_attrs) => {
                 let sp!(_, sub_attrs) = sub_attrs;
-                let mut allow_set = BTreeSet::new();
+                let mut filter_set = BTreeSet::new();
                 for attr in sub_attrs {
                     let Some(name) = expect_name_attr(context, attr) else {
                         continue;
                     };
                     let pair = (Some(prefix), name);
-                    if let Some((_, prev)) = allow_set.get(&pair) {
+                    if let Some((_, prev)) = filter_set.get(&pair) {
                         let msg = format!("Duplicate lint '{}'", name);
                         context.add_diag(diag!(
                             Declarations::InvalidAttribute,
@@ -227,10 +234,10 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
                             (prev.loc, "Lint first appears here"),
                         ));
                     } else {
-                        let _ = allow_set.insert(pair);
+                        let _ = filter_set.insert(pair);
                     }
                 }
-                allow_set.into_iter().collect()
+                filter_set.into_iter().collect()
             }
             attr @ PA::Assigned(_, _) => {
                 let msg = make_attribute_format_error(
@@ -247,11 +254,11 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
     match attr {
         PA::Parameterized(_, inner_attrs) => {
             let sp!(_, inner_attrs) = inner_attrs;
-            let mut allow_set = BTreeSet::new();
+            let mut filter_set = BTreeSet::new();
             for inner_attr in inner_attrs.into_iter() {
-                let new_attrs = parse_allow_inner(context, inner_attr);
+                let new_attrs = parse_filter_inner(context, inner_attr);
                 for pair @ (_prefix, name) in new_attrs {
-                    if let Some((_, prev)) = allow_set.get(&pair) {
+                    if let Some((_, prev)) = filter_set.get(&pair) {
                         let msg = format!("Duplicate lint '{}'", name);
                         context.add_diag(diag!(
                             Declarations::InvalidAttribute,
@@ -259,25 +266,48 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
                             (prev.loc, "Lint first appears here"),
                         ));
                     } else {
-                        let _ = allow_set.insert(pair);
+                        let _ = filter_set.insert(pair);
                     }
                 }
             }
-            let diagnostic = sp(loc, Attribute_::Allow { allow_set });
+            let diagnostic = sp(loc, make_attr(filter_set));
             vec![diagnostic]
         }
         PA::Name(_) | PA::Assigned(_, _) => {
             let msg = make_attribute_format_error(
                 &attr,
                 &format!(
-                    "parameterized attribute as '#[{}(<warning_name_1>, <warning_name_2>, ...)]'",
-                    KA::DiagnosticAttribute::ALLOW
+                    "parameterized attribute as '#[{attr_name}(<warning_name_1>, <warning_name_2>, ...)]'"
                 ),
             );
             context.add_diag(diag!(Attributes::ValueWarning, (loc, msg)));
             vec![]
         }
     }
+}
+
+fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+    parse_diagnostic_filter_attr(context, attribute, KA::DiagnosticAttribute::ALLOW, |set| {
+        Attribute_::Allow { allow_set: set }
+    })
+}
+
+fn parse_deny(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+    parse_diagnostic_filter_attr(context, attribute, KA::DiagnosticAttribute::DENY, |set| {
+        Attribute_::Deny { deny_set: set }
+    })
+}
+
+fn parse_expect(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+    parse_diagnostic_filter_attr(context, attribute, KA::DiagnosticAttribute::EXPECT, |set| {
+        Attribute_::Expect { expect_set: set }
+    })
+}
+
+fn parse_warn(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
+    parse_diagnostic_filter_attr(context, attribute, KA::DiagnosticAttribute::WARN, |set| {
+        Attribute_::Warn { warn_set: set }
+    })
 }
 
 fn parse_lint_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {

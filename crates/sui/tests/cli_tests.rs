@@ -2905,6 +2905,29 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
+    let forking_mode_tx = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(address1),
+        sui_coin_object_id: coin,
+        amount: Some(1),
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs {
+            serialize_signed_transaction: true,
+            forking_mode: true,
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data) = forking_mode_tx
+    else {
+        panic!("Expected SerializedSignedTransaction result");
+    };
+    assert!(sender_signed_data.tx_signatures().is_empty());
+
     // use alias for transfer
     SuiClientCommands::TransferSui {
         to: KeyIdentity::Alias(alias1),

@@ -46,6 +46,12 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:18:18
+   │
+18 │             Y::D(x, ..) => 0,
+   │                  ^ Could not infer this type. Try adding an annotation
+
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:19:13
    │
@@ -64,6 +70,12 @@ warning[W09002]: unused variable
    │                  ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:19:18
+   │
+19 │             Y::D{x, ..} => 0,
+   │                  ^ Could not infer this type. Try adding an annotation
 
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:25:13
@@ -112,6 +124,12 @@ warning[W09002]: unused variable
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:27:18
+   │
+27 │             X::D{x, ..} => 0,
+   │                  ^ Could not infer this type. Try adding an annotation
+
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:33:13
    │
@@ -158,3 +176,9 @@ warning[W09002]: unused variable
    │                  ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
    │
    = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:35:18
+   │
+35 │             Z::D(x, ..) => 0,
+   │                  ^ Could not infer this type. Try adding an annotation

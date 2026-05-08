@@ -1,0 +1,296 @@
+---
+title: Plinko
+description: Build a provably fair, gasless Plinko game on Sui using onchain randomness and sponsored transactions through Enoki.
+keywords: [example, plinko, onchain-randomness, sponsored-transactions, enoki, zklogin, game, move]
+sidebar_label: Plinko
+example_id: plinko-poc
+last_verified: 2026-04-28
+repo: https://github.com/MystenLabs/plinko-poc
+path: /
+languages: [move, typescript]
+concepts: [onchain_randomness, sponsored_transactions, shared_objects, dynamic_object_fields, events, house_pattern]
+---
+
+Plinko is a casino-style game where a ball is dropped through a pin board, randomly landing on a prize at the bottom. This Plinko example written in Move demonstrates Sui's [onchain randomness](/sui-stack/on-chain-primitives/randomness-onchain) and [sponsored transactions](/develop/transaction-payment/sponsor-txn). Players bet SUI tokens and drop balls through the pin board, where each ball lands in a multiplier bucket determined entirely by Sui's onchain random number generator.
+
+## When to use this pattern
+
+Use this pattern when you need to:
+
+- Generate verifiable random outcomes onchain without an external oracle.
+
+- Build a game or lottery where neither the operator nor the player can influence results after the transaction starts.
+
+- Implement a house-managed treasury with configurable stake limits, fee collection, and payout tables.
+
+- Sponsor transactions through Enoki so users interact without holding SUI for gas.
+
+- Store active game state as dynamic object fields tied to a shared treasury object.
+
+## What you learn
+
+This example teaches:
+
+- **Onchain randomness:** Sui's `Random` module provides verifiable, unbiasable random numbers that the contract consumes directly. No external oracle is needed.
+
+- **House pattern:** A shared `HouseData` object acts as the treasury. It holds the house balance, enforces stake limits, tracks fees, and stores the multiplier table.
+
+- **Dynamic object fields:** Each active game is a `Game` object attached to `HouseData` as a dynamic object field, which ties game lifecycle to the house.
+
+- **Sponsored transactions:** The backend sponsors both the player's `start_game` transaction and the house's `finish_game` transaction through Enoki, so players pay no gas.
+
+- **Events:** The contract emits `NewGameStarted` and `GameFinished` events. The frontend reads the `GameFinished` event to extract the random trace that drives the ball animation.
+
+## Architecture
+
+The example has 3 actors that interact with 1 onchain package. The following diagram shows the components and the calls between them.
+
+````mermaid
+graph LR
+  user([Player])
+  frontend[Next.js frontend]
+  backend[Next.js API routes]
+  enoki([Enoki])
+  package[plinko Move package]
+  random([Random module])
+
+  user --> frontend
+  frontend --> backend
+  backend --> enoki
+  enoki --> package
+  frontend --> enoki
+  package --> random
+````
+
+Two trust boundaries shape the design: the player never touches the package directly, and the house key pair lives only in the backend.
+
+The Next.js frontend renders the Plinko board with a Matter.js physics simulation and handles wallet connection through Enoki zkLogin. The Next.js API routes act as the backend. They sponsor transactions through Enoki and execute the house-side `finish_game` call with the house key pair.
+
+The `plinko` Move package holds game state, enforces betting rules, and computes payouts. The Random module is a Sui framework object that provides verifiable random bytes. The contract uses these bytes to determine ball paths, so anyone can reproduce outcomes onchain rather than relying on offchain decisions.
+
+### How onchain randomness works
+
+Sui provides a built-in `Random` shared object that any Move function can consume. The contract calls `random.new_generator(ctx)` to create a generator scoped to the current transaction, then calls methods like `generate_u8_in_range` to produce random values. The randomness is verifiable, unbiased, and scoped to each transaction.
+
+In this Plinko, the `finish_game` function generates 12 random bytes per ball. Each byte is checked for evenness. The count of even bytes determines which multiplier bucket the ball lands in. This maps to the 13-bucket layout on the board (0 through 12 even bytes out of 12 total).
+
+For more details on the randomness API, see [Onchain Randomness](/sui-stack/on-chain-primitives/randomness-onchain).
+
+## Prerequisites
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] [Install the latest version of Sui](/getting-started/onboarding/sui-install).
+
+- [x] [Configure the Sui client](/getting-started/onboarding/configure-sui-client).
+
+- [x] [Create a Sui address](/getting-started/onboarding/get-address).
+
+- [x] [Get SUI Testnet tokens](/getting-started/onboarding/get-coins).
+
+- [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
+
+    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
+
+    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
+
+    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
+
+    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
+    
+        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
+
+- [x] [Download and install Git](https://git-scm.com/downloads).
+
+- [x] [Node.js](https://nodejs.org/) 18 or later
+
+- [x] [Enoki developer portal access](https://portal.enoki.mystenlabs.com/).
+
+</TabItem>
+</Tabs>
+
+## Setup
+
+Follow these steps to set up the example locally.
+
+##### Step 1: Clone the repo
+
+```bash
+$ git clone https://github.com/MystenLabs/plinko-poc.git
+$ cd plinko-poc
+```
+
+##### Step 2: Publish the Move package
+
+```bash
+$ cd plinko
+$ sui client switch --env testnet
+$ sui move build
+$ sui client publish --gas-budget 200000000
+```
+
+Record the package ID and the `HouseCap` object ID from the publish output:
+
+```
+Transaction Digest: 2zT9TEbaUuK5CqTkVSiGN6jqbTJ2Uj5Gy5efxR7brjSb
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ Transaction Data                                                                                             │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Sender: 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803  <---  save to set as HOUSE_ADDRESS       │
+...
+                                                                                                   │
+│  │ ObjectID: 0xe71e62367b933162f267bafe87f3b96423df160bfb30b71b1017b4a06e80a86e                          │
+│  │ Sender: 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803                            │
+│  │ Owner: Account Address ( 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803 )         │
+│  │ ObjectType: 0xa59932a8d1ee5457f97650e6f9c84abb7152e3f35fb4f40fee73e67813cdecbe::house_data::HouseCap  <--- save to set as HOUSE_CAP │
+...                                                                                                    │
+│ Published Objects:                                                                                       │
+│  ┌──                                                                                                     │
+│  │ PackageID: 0xa59932a8d1ee5457f97650e6f9c84abb7152e3f35fb4f40fee73e67813cdecbe  <--- save to set as PACKAGE_ADDRESS                     │
+│  │ Version: 1                                                                                            │
+│  │ Digest: 4dhXLpBpaqRFeis5zyw6Nw9YUD4E8kt2BCAkmpsFQEq5                                                  │
+│  │ Modules: house_data, plinko                                                                           │
+│  └──                                                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+##### Step 3: Configure `.env` variables
+
+```bash
+$ cd ../app
+$ pnpm install
+$ cd ../setup
+$ pnpm install
+$ cp .env.example .env
+```
+
+Edit `.env` with the values from the publish step:
+
+```bash title='.env'
+NEXT_PUBLIC_SUI_NETWORK_NAME=testnet
+NEXT_PUBLIC_PACKAGE_ADDRESS=PACKAGE_ID_FROM_STEP_2
+HOUSE_ADDRESS=YOUR_WALLET_ADDRESS
+HOUSE_PRIVATE_KEY=YOUR_BASE64_PRIVATE_KEY
+NEXT_PUBLIC_HOUSE_DATA_ID=HOUSE_CAP_OBJECT_ID_FROM_STEP_2
+NEXT_PUBLIC_MIN_BET_AMOUNT=100000000 (0.1 SUI in MIST)
+NEXT_PUBLIC_MAX_BET_AMOUNT=10000000000 (10 SUI in MIST)
+ENOKI_SECRET_KEY=ENOKI_KEY
+```
+
+To get your base64 private key, first export your key as base32:
+
+```bash
+$ sui keytool export --key-identity YOUR_WALLET_ADDRESS
+```
+
+Then, convert it to base64 format and record the `publicBase64Key` value:
+
+```bash
+$ sui keytool convert YOUR_BASE32_PRIVATE_KEY
+```
+
+To get an Enoki secret key, visit the [Enoki dashboard](https://portal.enoki.mystenlabs.com/).
+
+## Run the example
+
+Start the frontend:
+
+```bash
+$ npm run dev
+```
+
+Open `http://localhost:3000` in a browser. Sign in with Google through Enoki. Set a bet size and number of balls, then click **Play**. The balls drop through the pin board, each following a path determined by the onchain random trace. After all balls land, the game card shows your total winnings and a link to the transaction on Sui Explorer.
+
+## Key code highlights
+
+The following snippets are the parts of the code worth reading carefully. The following steps walk through the flow:
+
+1. The player sets a bet size and number of balls, then clicks **Play**. The frontend builds a `start_game` transaction that splits the bet amount from the player's gas coins.
+
+2. The frontend sends the transaction bytes to `/api/sponsor`, which requests sponsorship from Enoki. The player's wallet signs the sponsored transaction, and Enoki executes it.
+
+3. The Move package validates the bet, creates a `Game` object attached to `HouseData`, and emits `NewGameStarted`. The frontend extracts the game ID from this event.
+
+4. The frontend calls `/api/game/plinko/end` with the game ID and ball count. The backend builds a `finish_game` transaction, sponsors it through Enoki, and signs it with the house key pair.
+
+5. The Move package generates 12 random bytes per ball using the `Random` module, computes the payout from the multiplier table, transfers winnings to the player, and emits `GameFinished` with the trace.
+
+6. The backend extracts the trace from the event and returns it to the frontend. The frontend converts the trace to per-ball direction arrays and feeds them to the Matter.js physics engine, which animates each ball bouncing through the pin board to its final bucket.
+
+Errors can occur at the sponsorship step (Enoki unreachable or rate-limited), the `start_game` step (bet outside stake limits or insufficient house balance), or the `finish_game` step (game ID not found). The frontend surfaces errors through a modal with a retry option.
+
+### Starting a game
+
+The `start_game` function validates the bet, creates a `Game` object, and attaches it to `HouseData` as a dynamic object field.
+
+<ImportContent source="plinko/sources/plinko.move" mode="code" org="MystenLabs" repo="plinko-poc" fun="start_game" />
+
+The function checks that the stake falls within the house's min and max limits, and that the house has enough balance to cover a maximum payout. It stores the `Game` as a dynamic object field on `HouseData` keyed by the game ID, which ties the game lifecycle to the house object. The function emits a `NewGameStarted` event with the game ID and stake.
+
+### Finishing a game
+
+The `finish_game` entry function consumes the `Random` module to generate the ball trace and compute the payout.
+
+<ImportContent source="plinko/sources/plinko.move" mode="code" org="MystenLabs" repo="plinko-poc" fun="finish_game" />
+
+For each ball, the function generates 12 random bytes and counts how many are even. This count (0 through 12) indexes into the multiplier table. The total payout across all balls is summed, the house fee is deducted, and the winnings transfer to the player. The function emits a `GameFinished` event containing the random trace, which the frontend uses to animate the ball paths.
+
+### House data management
+
+The `HouseData` struct holds the shared treasury, stake limits, fee configuration, and multiplier table.
+
+<ImportContent source="plinko/sources/house_data.move" mode="code" org="MystenLabs" repo="plinko-poc" struct="HouseData" />
+
+The house address is the only account authorized to withdraw funds, claim fees, and update configuration. Anyone can call `top_up` to add funds to the house balance.
+
+### Creating a game with sponsored transactions
+
+The `useCreateGame` hook builds the `start_game` transaction, sponsors it through Enoki, and then calls the backend to finish the game.
+
+<ImportContent source="app/src/hooks/moveTransactionCalls.ts/useCreateGame.ts" mode="code" org="MystenLabs" repo="plinko-poc" fun="useCreateGame" />
+
+The hook follows a 7-step flow: build the transaction, request sponsorship from the `/api/sponsor` endpoint, sign with the player's wallet, execute through `/api/execute`, extract the game ID from the `NewGameStarted` event, call `/api/game/plinko/end` to trigger `finish_game` on the backend, and normalize the returned trace into ball paths for the physics simulation.
+
+### Finishing the game server-side
+
+The `PlinkoGameService` executes `finish_game` using the house key pair and extracts the random trace from the emitted event.
+
+<ImportContent source="app/src/app/api/services/PlinkoGameService.ts" mode="code" org="MystenLabs" repo="plinko-poc" fun="finishGame" />
+
+The backend signs `finish_game` with the house key pair because only the house can call this entry function (it requires access to `HouseData`). The function extracts the trace from the `GameFinished` event, which encodes 12 bytes per ball. The frontend converts each byte to a left-or-right direction to animate the physics simulation.
+
+## Troubleshooting
+
+The following sections address common issues with this example.
+### Bet rejected as too low or too high
+
+**Symptom:** The `start_game` transaction aborts with `EStakeTooLow` or `EStakeTooHigh`.
+
+**Cause:** The bet amount falls outside the range the house configured. The default minimum is 1 SUI and the default maximum is 10 SUI.
+
+**Fix:** Adjust the bet to fall within the limits. Check the current limits with `sui client object HOUSE_DATA_ID` and inspect the `min_stake` and `max_stake` fields.
+
+### Insufficient house balance
+
+**Symptom:** The `start_game` transaction aborts with `EInsufficientHouseBalance`.
+
+**Cause:** The house does not hold enough SUI to cover the maximum possible payout for the bet.
+
+**Fix:** Top up the house by calling `house_data::top_up` with additional SUI. Use the setup script or build the transaction manually.
+
+### Game ID not found on finish
+
+**Symptom:** The `/api/game/plinko/end` endpoint returns an error, or the `finish_game` transaction aborts with `EGameDoesNotExist`.
+
+**Cause:** The game was already finished, the game ID is wrong, or the `start_game` transaction did not complete.
+
+**Fix:** Verify the game ID from the `NewGameStarted` event. Check the transaction status on Sui Explorer. If the game was already finished, the trace is available in the `GameFinished` event on the original finish transaction.
+
+### Enoki sponsorship fails
+
+**Symptom:** The `/api/sponsor` endpoint returns a 500 error or the frontend shows a network error.
+
+**Cause:** The Enoki API key is invalid, the Enoki secret key on the backend is wrong, or Enoki rate limits the request.
+
+**Fix:** Verify `ENOKI_SECRET_KEY` in the `.env` files. Check the Enoki dashboard for rate limit status. If rate-limited, wait and retry.

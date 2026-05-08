@@ -1,13 +1,13 @@
 //# publish
-module 0x6::B {
-    struct T has drop {g: u64}
+mvir 0x6::B {
+    public struct T has drop {g: u64}
 
-    public new(g: u64): Self::T {
+    public fun new(g: u64): Self::T {
     label b0:
         return T{g: move(g)};
     }
 
-    public t(this: &Self::T) {
+    public fun t(this: &Self::T) {
         let g: &u64;
         let y: u64;
     label b0:
@@ -19,17 +19,17 @@ module 0x6::B {
 }
 
 //# publish
-module 0x7::A {
+mvir 0x7::A {
     import 0x6::B;
 
-    struct T has drop {f: B::T}
+    public struct T has drop {f: B::T}
 
-    public new(f: B::T): Self::T {
+    public fun new(f: B::T): Self::T {
     label b0:
         return T{f: move(f)};
     }
 
-    public t(this: &Self::T) {
+    public fun t(this: &Self::T) {
         let f: &B::T;
     label b0:
         f = &move(this).T::f;
@@ -39,10 +39,10 @@ module 0x7::A {
 }
 
 //# run
-module 0x42::m {
+mvir 0x42::m {
 import 0x7::A;
 import 0x6::B;
-entry foo() {
+entry fun foo() {
     let b: B::T;
     let x: A::T;
     let x_ref: &A::T;

@@ -6,7 +6,7 @@ use move_cli::base::{self};
 use move_package_alt_compilation::build_config::BuildConfig as MoveBuildConfig;
 use std::{fs, path::Path};
 use sui_move_build::BuildConfig;
-use sui_package_alt::find_environment;
+use sui_package_alt::{SuiFlavor, find_environment};
 use sui_sdk::wallet_context::WalletContext;
 
 const LAYOUTS_DIR: &str = "layouts";
@@ -68,6 +68,7 @@ impl Build {
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
             environment,
+            flavor: SuiFlavor::with_client(wallet),
         }
         .build(rerooted_path)?;
 

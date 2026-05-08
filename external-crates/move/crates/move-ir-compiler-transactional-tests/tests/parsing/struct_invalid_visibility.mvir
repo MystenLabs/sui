@@ -1,0 +1,6 @@
+//# print-bytecode
+// Only bare `public` is supported on struct declarations today;
+// `public(friend)` and other variants are reserved for future use.
+mvir 0x42::M {
+    public(friend) struct T { v: u64 }
+}

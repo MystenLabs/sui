@@ -70,6 +70,7 @@ use crate::api::query::Query;
 #[cfg(feature = "staging")]
 use crate::api::subscription::Subscription;
 use crate::error::PanicHandler;
+use crate::extensions::logging::ClientInfo;
 use crate::extensions::logging::Logging;
 use crate::extensions::logging::Session;
 use crate::metrics::RpcMetrics;
@@ -362,36 +363,46 @@ pub async fn start_rpc(
         pg_pipelines,
         pg_reader.clone(),
         bigtable_reader,
-        ledger_grpc_reader,
+        ledger_grpc_reader.clone(),
         consistent_reader.clone(),
         metrics.clone(),
     );
 
-    let streaming_setup = subscription_args.checkpoint_stream_url.map(|uri| {
-        let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
-            package_store.clone(),
-        ));
-        // Unbounded is intentional: if `kv_packages` lags long enough for this queue to
-        // grow without bound, the indexer infrastructure itself has a bigger problem and
-        // OOM on this service is one failure mode among many. Monitor via metrics.
-        #[allow(clippy::disallowed_methods)]
-        let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
-        let readiness = task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
-        let stream_task = task::streaming::CheckpointStreamTask::new(
-            uri,
-            &config.subscription,
-            streaming_packages.clone(),
-            package_eviction_tx,
-            readiness.clone(),
-        );
-        let eviction_task = task::streaming::PackageEvictionTask::new(
-            streaming_packages.clone(),
-            package_eviction_rx,
-            watermark_task.watermarks(),
-            Duration::from_millis(config.subscription.package_eviction_interval_ms),
-        );
-        (stream_task, eviction_task, streaming_packages, readiness)
-    });
+    let streaming_setup = match subscription_args.checkpoint_stream_url {
+        Some(uri) => {
+            let ledger_grpc = ledger_grpc_reader
+                .clone()
+                .context("Ledger gRPC reader is required when streaming is enabled")?;
+
+            let streaming_packages = Arc::new(task::streaming::StreamingPackageStore::new(
+                package_store.clone(),
+            ));
+            // Unbounded is intentional: if `kv_packages` lags long enough for this queue to
+            // grow without bound, the indexer infrastructure itself has a bigger problem and
+            // OOM on this service is one failure mode among many. Monitor via metrics.
+            #[allow(clippy::disallowed_methods)]
+            let (package_eviction_tx, package_eviction_rx) = tokio::sync::mpsc::unbounded_channel();
+            let readiness =
+                task::streaming::SubscriptionReadiness::new(watermark_task.watermarks_rx());
+            let stream_task = task::streaming::CheckpointStreamTask::new(
+                uri,
+                &config.subscription,
+                streaming_packages.clone(),
+                package_eviction_tx,
+                readiness.clone(),
+                ledger_grpc,
+                watermark_task.watermarks_rx(),
+            );
+            let eviction_task = task::streaming::PackageEvictionTask::new(
+                streaming_packages.clone(),
+                package_eviction_rx,
+                watermark_task.watermarks(),
+                Duration::from_millis(config.subscription.package_eviction_interval_ms),
+            );
+            Some((stream_task, eviction_task, streaming_packages, readiness))
+        }
+        None => None,
+    };
 
     let mut rpc = rpc
         .route(GRAPHQL_PATH, post(graphql).get(graphql_get))
@@ -465,12 +476,13 @@ async fn graphql(
     Extension(watermark): Extension<WatermarksLock>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
+    headers: axum::http::HeaderMap,
     request: GraphQLRequest,
 ) -> GraphQLResponse {
     let mut request = request
         .into_inner()
         .data(content_length)
-        .data(Session::new(addr))
+        .data(Session::new(addr).with_client_info(ClientInfo::from_headers(&headers)))
         .data(watermark.read().await.clone())
         .data(rich::Meter::default());
 

@@ -3,16 +3,16 @@
 
 //# publish
 // allowed, even though a bit pointless
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
     import 0x2::tx_context;
     import 0x2::transfer;
 
-    struct Obj has key {
+    public struct Obj has key {
         id: object::UID,
     }
 
-    public entry transmute(ctx: &mut tx_context::TxContext) {
+    public entry fun transmute(ctx: &mut tx_context::TxContext) {
         let id: object::UID;
         let obj: Self::Obj;
         let i: u64;

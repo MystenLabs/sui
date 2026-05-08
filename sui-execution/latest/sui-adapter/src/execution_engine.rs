@@ -124,6 +124,54 @@ mod checked {
         }
     }
 
+    /// Compute the per-`(address, type)` funds-accumulator reservation budget consumed by
+    /// `TemporaryStore::check_address_balance_changes`. Today every funds accumulator is a
+    /// `Balance<T>`, but the `(address, TypeTag)` keying lets this generalize as more
+    /// accumulator types are added. Sources:
+    /// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender or sponsor as
+    ///   owner).
+    /// - Gas paid entirely from address balance (credits `(gas_owner, Balance<SUI>)`).
+    /// - Gas-data entries with coin-reservation digests (also credit `(gas_owner, Balance<SUI>)`).
+    fn compute_input_reservations(
+        transaction_kind: &TransactionKind,
+        gas_data: &GasData,
+        transaction_signer: SuiAddress,
+    ) -> BTreeMap<(SuiAddress, TypeTag), u64> {
+        use sui_types::balance::Balance;
+        use sui_types::gas_coin::GAS;
+        use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
+
+        let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
+        let sui_balance_type = Balance::type_tag(GAS::type_tag());
+
+        for arg in transaction_kind.get_funds_withdrawals() {
+            let owner = match arg.withdraw_from {
+                WithdrawFrom::Sender => transaction_signer,
+                WithdrawFrom::Sponsor => gas_data.owner,
+            };
+            let Reservation::MaxAmountU64(reservation) = arg.reservation;
+            *reservations
+                .entry((owner, arg.type_arg.to_type_tag()))
+                .or_insert(0) += reservation;
+        }
+
+        if is_gas_paid_from_address_balance(gas_data, transaction_kind) {
+            *reservations
+                .entry((gas_data.owner, sui_balance_type.clone()))
+                .or_insert(0) += gas_data.budget;
+        }
+
+        for entry in &gas_data.payment {
+            if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
+                *reservations
+                    .entry((gas_data.owner, sui_balance_type.clone()))
+                    .or_insert(0) += parsed.reservation_amount();
+            }
+        }
+
+        reservations
+    }
+
     #[allow(clippy::type_complexity)]
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
@@ -205,6 +253,9 @@ mod checked {
             && is_gasless_transaction(&gas_data, &transaction_kind);
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
+        let input_reservations =
+            compute_input_reservations(&transaction_kind, &gas_data, transaction_signer);
+
         let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
             store,
             &mut temporary_store,
@@ -219,6 +270,7 @@ mod checked {
             execution_params,
             trace_builder_opt,
             is_gasless,
+            &input_reservations,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -415,6 +467,7 @@ mod checked {
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
         is_gasless: bool,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, Mode::Error>,
@@ -525,6 +578,7 @@ mod checked {
             &cost_summary,
             is_genesis_tx,
             advance_epoch_gas_summary,
+            input_reservations,
         ) {
             // FIXME: we cannot fail the transaction if this is an epoch change transaction.
             result = Err(e);
@@ -544,22 +598,21 @@ mod checked {
         cost_summary: &GasCostSummary,
         is_genesis_tx: bool,
         advance_epoch_gas_summary: Option<(u64, u64)>,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> Result<(), Mode::Error> {
         let mut result: Result<(), Mode::Error> = Ok(());
         if !is_genesis_tx && !Mode::skip_conservation_checks() {
-            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-            let conservation_result = {
-                temporary_store
+            let run_checks = |store: &TemporaryStore<'_>| -> Result<(), ExecutionError> {
+                store
                     .check_sui_conserved(simple_conservation_checks, cost_summary)
                     .and_then(|()| {
                         if enable_expensive_checks {
-                            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
                             let mut layout_resolver = TypeLayoutResolver::new(
                                 move_vm,
-                                temporary_store.protocol_config(),
-                                Box::new(&*temporary_store),
+                                store.protocol_config(),
+                                Box::new(store),
                             );
-                            temporary_store.check_sui_conserved_expensive(
+                            store.check_sui_conserved_expensive(
                                 cost_summary,
                                 advance_epoch_gas_summary,
                                 &mut layout_resolver,
@@ -568,38 +621,25 @@ mod checked {
                             Ok(())
                         }
                     })
+                    .and_then(|()| {
+                        store.check_address_balance_changes(
+                            store.protocol_config(),
+                            input_reservations,
+                        )
+                    })
             };
-            if let Err(conservation_err) = conservation_result {
-                // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
-                // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
+
+            if let Err(conservation_err) = run_checks(temporary_store) {
+                // conservation violated. try to avoid panic by dumping all writes, charging for gas,
+                // re-checking conservation, and surfacing an aborted transaction with an invariant
+                // violation if all of that works.
                 result = Err(conservation_err.into());
                 gas_charger.reset(temporary_store);
                 gas_charger.charge_gas(temporary_store, &mut result);
-                // check conservation once more
-                if let Err(recovery_err) = {
-                    temporary_store
-                        .check_sui_conserved(simple_conservation_checks, cost_summary)
-                        .and_then(|()| {
-                            if enable_expensive_checks {
-                                // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-                                let mut layout_resolver = TypeLayoutResolver::new(
-                                    move_vm,
-                                    temporary_store.protocol_config(),
-                                    Box::new(&*temporary_store),
-                                );
-                                temporary_store.check_sui_conserved_expensive(
-                                    cost_summary,
-                                    advance_epoch_gas_summary,
-                                    &mut layout_resolver,
-                                )
-                            } else {
-                                Ok(())
-                            }
-                        })
-                } {
-                    // if we still fail, it's a problem with gas
-                    // charging that happens even in the "aborted" case--no other option but panic.
-                    // we will create or destroy SUI otherwise
+                if let Err(recovery_err) = run_checks(temporary_store) {
+                    // if we still fail, it's a problem with gas charging that happens even in the
+                    // "aborted" case — no other option but panic. We will create or destroy SUI
+                    // otherwise (or admit an unauthorized accumulator Split).
                     panic!(
                         "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
                         tx_digest,

@@ -680,6 +680,7 @@ impl SuiCommand {
                             run_bytecode_verifier: true,
                             print_diags_to_stderr: true,
                             environment,
+                            flavor: SuiFlavor::with_client(&context),
                         }
                         .build_async_from_root_pkg(&mut root_pkg)
                         .await?;
@@ -1760,6 +1761,11 @@ async fn download_package_and_deps_under(
         linkage.insert(*original_id, pkg_info.clone());
         type_origins.insert(*original_id, package.type_origin_table().clone());
     }
+
+    type_origins.insert(
+        root_package.original_package_id(),
+        root_package.type_origin_table().clone(),
+    );
 
     let package_path = path.join(
         root_package

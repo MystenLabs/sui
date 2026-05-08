@@ -15,10 +15,14 @@ use std::ops::Deref;
 use std::sync::Arc;
 use sui_config::node::RunWithRange;
 use sui_core::authority::shared_object_version_manager::{AssignedTxAndVersions, AssignedVersions};
-use sui_test_transaction_builder::PublishData;
+use sui_test_transaction_builder::{PublishData, TestTransactionBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
+use sui_types::digests::ChainIdentifier;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
-use sui_types::transaction::Transaction;
+use sui_types::gas_coin::GAS;
+use sui_types::transaction::DEFAULT_VALIDATOR_GAS_PRICE;
+use sui_types::transaction::{Argument, Command, Transaction};
+use sui_types::{Identifier, SUI_FRAMEWORK_PACKAGE_ID};
 use tracing::{info, warn};
 
 pub struct BenchmarkContext {
@@ -252,17 +256,21 @@ impl BenchmarkContext {
         );
 
         let is_consensus_tx = transactions.iter().any(|tx| tx.is_consensus_tx());
+        let mut durations: Vec<std::time::Duration>;
         if is_consensus_tx {
+            durations = Vec::with_capacity(tx_count);
             // With shared objects, we must execute each transaction in order.
             for transaction in transactions {
                 let key = transaction.key();
-                self.validator
+                let (_, dur) = self
+                    .validator
                     .execute_transaction(
                         transaction,
                         assigned_versions.get(&key).unwrap(),
                         self.benchmark_component,
                     )
                     .await;
+                durations.push(dur);
             }
         } else {
             let tasks: FuturesUnordered<_> = transactions
@@ -282,9 +290,7 @@ impl BenchmarkContext {
                 })
                 .collect();
             let results: Vec<_> = tasks.collect().await;
-            results.into_iter().for_each(|r| {
-                r.unwrap();
-            });
+            durations = results.into_iter().map(|r| r.unwrap().1).collect();
         }
 
         let elapsed = start_time.elapsed().as_millis() as f64 / 1000f64;
@@ -293,6 +299,8 @@ impl BenchmarkContext {
             elapsed,
             tx_count as f64 / elapsed
         );
+
+        Self::print_per_tx_timing(&mut durations);
     }
 
     pub(crate) async fn benchmark_transaction_execution_in_memory(
@@ -326,6 +334,23 @@ impl BenchmarkContext {
             elapsed,
             tx_count as f64 / elapsed,
             in_memory_store.get_num_object_reads() as f64 / tx_count as f64
+        );
+    }
+
+    fn print_per_tx_timing(durations: &mut [std::time::Duration]) {
+        durations.sort();
+        let n = durations.len();
+        let total: std::time::Duration = durations.iter().sum();
+        let avg = total / n as u32;
+        let p50 = durations[n / 2];
+        let p90 = durations[n * 90 / 100];
+        let p99 = durations[n * 99 / 100];
+        let min = durations[0];
+        let max = durations[n - 1];
+        info!(
+            "Per-tx execution timing (wall-clock, varies by component):\n  \
+             avg={:?}  min={:?}  p50={:?}  p90={:?}  p99={:?}  max={:?}",
+            avg, min, p50, p90, p99, max,
         );
     }
 
@@ -465,6 +490,80 @@ impl BenchmarkContext {
             let results: Vec<_> = tasks.collect().await;
             results.into_iter().map(|r| r.unwrap()).collect()
         }
+    }
+
+    pub(crate) fn get_chain_identifier(&self) -> ChainIdentifier {
+        self.validator.get_validator().get_chain_identifier()
+    }
+
+    pub(crate) fn get_epoch(&self) -> u64 {
+        self.validator.get_epoch()
+    }
+
+    /// Seed each user account's address balance by splitting from their gas coin,
+    /// converting to a Balance, and calling send_funds to self.
+    pub(crate) async fn seed_address_balances(&mut self, seed_amount: u64) {
+        info!(
+            "Seeding address balances with {} MIST for {} accounts",
+            seed_amount,
+            self.user_accounts.len()
+        );
+
+        let transactions: Vec<_> = self
+            .user_accounts
+            .values()
+            .map(|account| {
+                let gas_object = account.gas_objects[0];
+                let mut tx_builder = TestTransactionBuilder::new(
+                    account.sender,
+                    gas_object,
+                    DEFAULT_VALIDATOR_GAS_PRICE,
+                );
+                {
+                    let builder = tx_builder.ptb_builder_mut();
+                    let amount_arg = builder.pure(seed_amount).unwrap();
+                    let coin =
+                        builder.command(Command::SplitCoins(Argument::GasCoin, vec![amount_arg]));
+                    let Argument::Result(coin_idx) = coin else {
+                        panic!("SplitCoins should return Result");
+                    };
+                    let coin = Argument::NestedResult(coin_idx, 0);
+                    let coin_balance = builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("coin").unwrap(),
+                        Identifier::new("into_balance").unwrap(),
+                        vec![GAS::type_tag()],
+                        vec![coin],
+                    );
+                    let recipient_arg = builder.pure(account.sender).unwrap();
+                    builder.programmable_move_call(
+                        SUI_FRAMEWORK_PACKAGE_ID,
+                        Identifier::new("balance").unwrap(),
+                        Identifier::new("send_funds").unwrap(),
+                        vec![GAS::type_tag()],
+                        vec![coin_balance, recipient_arg],
+                    );
+                }
+                tx_builder.build_and_sign(account.keypair.as_ref())
+            })
+            .collect();
+
+        let results = self.execute_raw_transactions(transactions).await;
+        let mut new_gas_objects = HashMap::new();
+        let cache_commit = self.validator.get_validator().get_cache_commit().clone();
+        for effects in results {
+            let batch = cache_commit
+                .build_db_batch(effects.executed_epoch(), &[*effects.transaction_digest()]);
+            cache_commit.commit_transaction_outputs(
+                effects.executed_epoch(),
+                batch,
+                &[*effects.transaction_digest()],
+            );
+            let gas_object = effects.gas_object().unwrap().0;
+            new_gas_objects.insert(gas_object.0, gas_object);
+        }
+        self.refresh_gas_objects(new_gas_objects);
+        info!("Finished seeding address balances");
     }
 
     fn refresh_gas_objects(&mut self, mut new_gas_objects: HashMap<ObjectID, ObjectRef>) {

@@ -3,20 +3,20 @@
 
 //# publish
 // no allowed, the call tries to make a new UID
-module 0x0::m {
+mvir 0x0::m {
     import 0x2::object;
     import 0x2::transfer;
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
-    struct Object has key { id: object::UID }
+    public struct Object has key { id: object::UID }
 
-    new(id: object::UID): Self::Object {
+    fun new(id: object::UID): Self::Object {
         label l0:
         return Object { id: move(id) };
     }
 
-    entry bad(obj: Self::Object) {
+    entry fun bad(obj: Self::Object) {
         let id: object::UID;
         let s: Self::S;
         let new: Self::Object;

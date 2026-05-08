@@ -46,6 +46,12 @@ https://github.com/MystenLabs/ts-sdks/blob/main/packages/deepbook-v3/src/utils/c
 
 To work with DeepBook Margin, use the client extension to add DeepBook functionality to a Sui client. The [Sui TypeScript SDK](https://sdk.mystenlabs.com/typescript) provides the `SuiGrpcClient` and key functionality necessary to process transactions. The following example imports those libraries, as well.
 
+:::info
+
+The code examples in this section use Sui Foundation-managed RPC endpoints for illustration purposes. For production use, replace the `baseUrl` value with your own RPC provider endpoint.
+
+:::
+
 ```tsx
 import { deepbook, type DeepBookClient } from '@mysten/deepbook-v3';
 import type { ClientWithExtensions } from '@mysten/sui/client';

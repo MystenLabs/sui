@@ -64,7 +64,8 @@ impl ZkLoginAuthenticator {
     pub fn hash_inputs(&self) -> ZKLoginInputsDigest {
         use fastcrypto::hash::HashFunction;
         let mut hasher = DefaultHash::default();
-        hasher.update(bcs::to_bytes(&self.get_caching_params()).expect("serde should not fail"));
+        bcs::serialize_into(&mut hasher, &self.get_caching_params())
+            .expect("serde should not fail");
         ZKLoginInputsDigest::new(hasher.finalize().into())
     }
 
