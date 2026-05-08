@@ -3862,24 +3862,61 @@ async fn test_redeem_fss_from_inactive_validator() {
     // (which itself reads exchange_rates[deactivation_epoch]), and bind the
     // resulting transaction to the quote epoch. If any of those layers is
     // wrong this fails before submission.
-    run_redeem_flow(
+    let min_sui = 500_000_000i128;
+    let response = run_redeem_flow(
         &mut client,
         &rosetta_client,
         keystore,
         sender,
         validator,
         "AtLeast",
-        Some(500_000_000),
+        Some(min_sui as u64),
     )
     .await;
 
+    // The chain's AtLeast guarantee is on the *gross* SUI delivered by
+    // `redeem_fungible_staked_sui`, not the net wallet delta — gas comes out
+    // of the same address and would push the net delta below `min_sui` even
+    // when the protocol behaved correctly. Reconstruct the gross amount as
+    // `(balance_after - balance_before) + (computation_cost + storage_cost - storage_rebate)`.
     let balance_after = get_sui_balance(&mut client, sender).await;
-    let delta = balance_after as i128 - balance_before as i128;
+    let net_delta = balance_after as i128 - balance_before as i128;
+    let gas_net_cost = transaction_net_gas_cost(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await;
+    let gross_redeemed = net_delta + gas_net_cost;
     assert!(
-        delta >= 500_000_000,
+        gross_redeemed >= min_sui,
         "AtLeast guarantee violated for inactive-pool redeem: \
-         got {delta} MIST, expected >= 500_000_000"
+         gross_redeemed = {gross_redeemed} MIST (net_delta = {net_delta}, \
+         gas_net_cost = {gas_net_cost}), expected >= {min_sui}"
     );
+}
+
+/// Read `effects.gas_used` for a transaction and return the net gas cost
+/// (`computation_cost + storage_cost - storage_rebate`) as i128.
+///
+/// `i128` matters because storage_rebate can in principle exceed
+/// `computation_cost + storage_cost` (rare but allowed by the gas model);
+/// using u64 with saturating subtraction would silently round to zero.
+async fn transaction_net_gas_cost(client: &mut GrpcClient, tx_hash: &str) -> i128 {
+    let request = GetTransactionRequest::default()
+        .with_digest(tx_hash.to_string())
+        .with_read_mask(FieldMask::from_paths(["effects.gas_used"]));
+    let tx = client
+        .clone()
+        .ledger_client()
+        .get_transaction(request)
+        .await
+        .expect("get_transaction RPC")
+        .into_inner()
+        .transaction
+        .expect("transaction should be present in response");
+    let gas = tx.effects().gas_used();
+    gas.computation_cost_opt().unwrap_or(0) as i128 + gas.storage_cost_opt().unwrap_or(0) as i128
+        - gas.storage_rebate_opt().unwrap_or(0) as i128
 }
 
 #[tokio::test]
