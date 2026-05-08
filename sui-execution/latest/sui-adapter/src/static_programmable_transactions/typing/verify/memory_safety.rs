@@ -568,7 +568,7 @@ fn write_ref<E: ExecutionErrorTrait>(
         // TODO more specific error
         return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::CannotWriteToExtendedReference,
-            checked_as!(arg_idx, u16)?,
+            arg_idx as u16,
         )));
     }
     consume_value::<E>(context, value)?;
@@ -596,7 +596,7 @@ fn call<E: ExecutionErrorTrait>(
         };
         return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::InvalidReferenceArgument,
-            checked_as!(idx, u16)?,
+            idx as u16,
         )));
     }
     let mutabilities = signature
