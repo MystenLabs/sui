@@ -109,6 +109,7 @@ members = [
     "crates/sui-checkpoint-blob-indexer",
     "crates/sui-cluster-test",
     "crates/sui-config",
+    "crates/sui-consistent-store",
     "crates/sui-core",
     "crates/sui-cost",
     "crates/sui-data-ingestion-core",
@@ -667,6 +668,7 @@ sui-bridge = { path = "crates/sui-bridge" }
 sui-bridge-schema = { path = "crates/sui-bridge-schema" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-config = { path = "crates/sui-config" }
+sui-consistent-store = { path = "crates/sui-consistent-store" }
 sui-core = { path = "crates/sui-core" }
 sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
