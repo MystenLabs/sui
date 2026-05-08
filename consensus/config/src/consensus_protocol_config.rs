@@ -27,8 +27,8 @@ pub struct ConsensusProtocolConfig {
     bad_nodes_stake_threshold: u64,
     /// Whether to enable V3 logic.
     enable_v3: bool,
-    /// Number of recent commits retained by `LeaderScheduleV3` for its sliding-window scoring.
-    leader_schedule_running_length: u32,
+    /// Number of recent commits retained for leader schedule sliding-window scoring.
+    leader_schedule_window_size: u32,
 }
 
 impl Default for ConsensusProtocolConfig {
@@ -44,7 +44,7 @@ impl Default for ConsensusProtocolConfig {
             num_leaders_per_round: None,
             bad_nodes_stake_threshold: 0,
             enable_v3: false,
-            leader_schedule_running_length: 300,
+            leader_schedule_window_size: 300,
         }
     }
 }
@@ -61,7 +61,7 @@ impl ConsensusProtocolConfig {
         num_leaders_per_round: Option<usize>,
         bad_nodes_stake_threshold: u64,
         enable_v3: bool,
-        leader_schedule_running_length: u32,
+        leader_schedule_window_size: u32,
     ) -> Self {
         Self {
             protocol_version,
@@ -74,7 +74,7 @@ impl ConsensusProtocolConfig {
             num_leaders_per_round,
             bad_nodes_stake_threshold,
             enable_v3,
-            leader_schedule_running_length,
+            leader_schedule_window_size,
         }
     }
 
@@ -92,7 +92,7 @@ impl ConsensusProtocolConfig {
             num_leaders_per_round: Some(1),
             bad_nodes_stake_threshold: 30,
             enable_v3: false,
-            leader_schedule_running_length: 300,
+            leader_schedule_window_size: 300,
         }
     }
 
@@ -138,8 +138,8 @@ impl ConsensusProtocolConfig {
         self.enable_v3
     }
 
-    pub fn leader_schedule_running_length(&self) -> u32 {
-        self.leader_schedule_running_length
+    pub fn leader_schedule_window_size(&self) -> u32 {
+        self.leader_schedule_window_size
     }
 
     // Test setter methods
@@ -176,7 +176,7 @@ impl ConsensusProtocolConfig {
         self.enable_v3 = val;
     }
 
-    pub fn set_leader_schedule_running_length_for_testing(&mut self, val: u32) {
-        self.leader_schedule_running_length = val;
+    pub fn set_leader_schedule_window_size_for_testing(&mut self, val: u32) {
+        self.leader_schedule_window_size = val;
     }
 }

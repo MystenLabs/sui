@@ -35,19 +35,21 @@ use crate::{
 pub(crate) struct LeaderScheduleV3 {
     context: Arc<Context>,
     next_commit_index: CommitIndex,
+    // Total scores per authority in the running window, indexed by AuthorityIndex.
     total_scores_per_authority: Vec<u64>,
-    // Sum of `num_leaders` across all entries in `scores_entry`.
+    // Total number of leaders across the running window.
+    // Used for metrics.
     total_num_leaders: usize,
-    // Sum of `leader_stakes` across all entries in `scores_entry`.
+    // Total stake of leaders across the running window
+    // Used for metrics.
     total_leader_stakes: u64,
 
-    // Holds at most the last two committed subdags, used as C-2 and C-1 when
-    // scoring the next commit. Populated from CommittedSubDag directly so no
-    // DagState lookup is needed.
+    // Holds at most the last two committed subdags, used as C-2 and C-1
+    // when computing scores with leaders from C-3.
     pending_commits: VecDeque<CommittedSubDag>,
     // One entry per scored commit still in the running window. Used to
     // subtract a commit's contributions from `total_scores_per_authority` on
-    // eviction. Bounded by `leader_schedule_running_length`.
+    // eviction. Bounded by `leader_schedule_window_size`.
     scores_entry: VecDeque<ScoresEntry>,
 }
 
@@ -115,7 +117,7 @@ impl LeaderScheduleV3 {
         total_scores_per_authority: Vec<u64>,
     ) -> Self {
         assert_eq!(total_scores_per_authority.len(), context.committee.size());
-        let running_length = context.protocol_config.leader_schedule_running_length() as usize;
+        let running_length = context.protocol_config.leader_schedule_window_size() as usize;
         Self {
             context,
             next_commit_index,
@@ -128,11 +130,11 @@ impl LeaderScheduleV3 {
     }
 
     /// Number of recent committed sub-dags that must be replayed on startup
-    /// to reconstruct the full state: `leader_schedule_running_length`
+    /// to reconstruct the full state: `leader_schedule_window_size`
     /// for the scoring window plus 2 for the pending commits held before
     /// scoring begins.
     fn replay_length(context: &Context) -> u32 {
-        context.protocol_config.leader_schedule_running_length() + 2
+        context.protocol_config.leader_schedule_window_size() + 2
     }
 
     /// Returns the leader schedule for the next commit.
@@ -380,7 +382,7 @@ impl LeaderScheduleV3 {
     fn running_length(&self) -> usize {
         self.context
             .protocol_config
-            .leader_schedule_running_length() as usize
+            .leader_schedule_window_size() as usize
     }
 
     /// Average number of leader-round blocks per scored commit in the current
@@ -447,7 +449,7 @@ mod tests {
         if let Some(len) = running_length {
             context
                 .protocol_config
-                .set_leader_schedule_running_length_for_testing(len);
+                .set_leader_schedule_window_size_for_testing(len);
         }
         Arc::new(context)
     }
@@ -734,7 +736,7 @@ mod tests {
     async fn test_replay_length() {
         let (mut ctx, _) = Context::new_for_test(4);
         ctx.protocol_config
-            .set_leader_schedule_running_length_for_testing(5);
+            .set_leader_schedule_window_size_for_testing(5);
         let context = Arc::new(ctx);
         assert_eq!(LeaderScheduleV3::replay_length(&context), 7);
     }
@@ -749,7 +751,7 @@ mod tests {
 
         let (mut ctx, _) = Context::new_for_test(4);
         ctx.protocol_config
-            .set_leader_schedule_running_length_for_testing(5);
+            .set_leader_schedule_window_size_for_testing(5);
         let context = Arc::new(ctx);
 
         // Uniform chain: rounds 1..=10, authorities 0 and 1 produce blocks
