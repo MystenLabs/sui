@@ -1,11 +1,37 @@
 ---
 title: Onchain Websites with Walrus Sites
+sidebar_label: Walrus Sites
 description: Learn how to deploy and manage static websites on Walrus using the site-builder CLI, with configuration, custom headers, and SuiNS domain names.
 keywords: [walrus sites, site-builder, static site, onchain website, portal, SuiNS, ws-resources, Sui Stack]
-draft: true
+verified_against:
+  walrus_sdk: "^0.x"
+  last_verified: 2026-04-15
+  owner: "@sui-docs/stack-guides"
 ---
 
-This guide uses the [Walrus Snake](https://github.com/MystenLabs/walrus-sites/tree/main/examples/snake) game as a concrete deployment example throughout. Walrus Snake is a minimal static site that demonstrates the complete Walrus Sites workflow: deploying files to Walrus, creating an onchain site object, configuring resources with `ws-resources.json`, and accessing the site through a portal. The [Domain Names with SuiNS](/sui-stack/suins/sui-stack-suins) guide builds on this guide to show how to attach a human-readable name to your deployed site.
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+By the end of this guide, you can:
+
+- Deploy a static site to Walrus and manage it with the `site-builder` CLI.
+- Configure custom HTTP headers, routing, redirects, and metadata with `ws-resources.json`.
+- Update a deployed site and verify it is live.
+- Attach a SuiNS name to give your site a human-readable URL.
+
+<Tabs className="tabsHeadingCentered--small">
+<TabItem value="prereq" label="Prerequisites">
+
+- [x] [Sui CLI](/guides/developer/getting-started/sui-install) installed
+- [x] `suiup` installed: `curl -sSfL https://raw.githubusercontent.com/Mystenlabs/suiup/main/install.sh | sh`
+- [x] `site-builder` installed: `suiup install site-builder@mainnet`
+- [x] A funded wallet with WAL tokens for storage costs
+- [x] `$HOME/.local/bin` in your `PATH`
+
+</TabItem>
+</Tabs>
+
+This guide uses the [Walrus Snake](https://github.com/MystenLabs/walrus-sites/tree/main/examples/snake) game as a concrete deployment example throughout. Walrus Snake is a minimal static site that demonstrates the complete Walrus Sites workflow: deploying files to Walrus, creating an onchain site object, configuring resources with `ws-resources.json`, and accessing the site through a portal. The [Domain Names with SuiNS](/sui-stack/sui-stack-suins) guide builds on this guide to show how to attach a human-readable name to your deployed site.
 
 ## Introduction to Walrus Sites
 
@@ -15,7 +41,7 @@ Walrus Sites have 4 components that work together.
 
 ### Site files on Walrus
 
-Your site's static assets (HTML, CSS, JavaScript, images, fonts, and so on) are stored as blobs on Walrus. The site-builder groups them into a single quilt, a Walrus storage format that reduces upload cost and improves speed. Each file in the quilt is assigned a `QuiltPatchID` the site object uses to locate it. See [Walrus Sites Components](https://docs.wal.app/docs/sites/introduction/components) for a full breakdown of the architecture.
+Walrus stores your site's static assets (HTML, CSS, JavaScript, images, fonts, and so on) as blobs. The site-builder groups them into a single quilt, a Walrus storage format that reduces upload cost and improves speed. The quilt assigns each file a `QuiltPatchID` the site object uses to locate it. See [Walrus Sites Components](https://docs.wal.app/docs/sites/introduction/components) for a full breakdown of the architecture.
 
 ### The Sui site object
 
@@ -58,6 +84,26 @@ A portal resolves and serves a Walrus Site to a visitor's browser. When a visito
 2. Reads the site object's dynamic fields from Sui to get the resource map.
 3. Fetches each resource from Walrus using the `blob_id` from that map.
 4. Returns the resource to the browser with the appropriate headers.
+
+```mermaid
+sequenceDiagram
+    participant BR as BROWSER
+    participant P as PORTAL
+    participant SUI as SUI
+    participant WAL as WALRUS
+
+    BR->>P: GET mysite.wal.app
+    Note over P: Resolve subdomain
+    P->>SUI: SuiNS lookup or Base36 decode
+    SUI-->>P: site object ID
+    P->>SUI: Read dynamic fields
+    SUI-->>P: resource map (path → blob_id)
+    loop For each resource
+        P->>WAL: GET /v1/blobs/{blob_id}
+        WAL-->>P: resource bytes
+    end
+    P-->>BR: response with headers
+```
 
 The public Mainnet portal operated by Mysten Labs is at `https://wal.app`. Anyone can self-host a portal. See [Deploy a Local Portal](https://docs.wal.app/docs/sites/portals/deploy-locally) for setup instructions.
 
@@ -161,7 +207,7 @@ $ git clone https://github.com/MystenLabs/walrus-sites.git && cd walrus-sites
 $ site-builder --context=testnet deploy examples/snake --epochs 1
 ```
 
-On Testnet, 1 epoch lasts 1 day. Use a larger number to keep the site available longer.
+On Testnet, 1 epoch lasts 1 day. Use a larger number to keep the site available longer. Deploying a small static site (under 1 MB) for 1 epoch on Testnet costs approximately 0.1 WAL. Mainnet costs vary with the WAL token price and the size of your site.
 
 A successful deployment prints the object ID of the new site and the URL where it can be browsed:
 
@@ -175,6 +221,14 @@ For public sharing:    http://2ffmxm7j...yourdomain.com:3000
 
 The `deploy` command writes the site object ID to `ws-resources.json` automatically. Subsequent deploys read this ID to update the existing site.
 
+To confirm the deployment succeeded, run `sitemap` with the object ID:
+
+```bash
+$ site-builder sitemap --id 0x617221edd060dafb4070b73160ebf535e1516bf7f246890ed35190eba786d7ac
+```
+
+`sitemap` lists every resource that `deploy` uploaded. If the list matches your build output, the site is live.
+
 **Testnet note.** Testnet sites have no public portal. To browse a Testnet site, self-host a portal locally or use a third-party hosted Testnet portal. On Mainnet, your site is accessible at `https://wal.app` after you configure a SuiNS name.
 
 **Web frameworks.** If you use a framework like React, Vue, or Vite, point `site-builder` at your build output folder, not the project root. Deploying the project root uploads `node_modules/` and source files, which results in very long upload times, higher storage costs, and unnecessary files on your site. For a Vite project, deploy the `dist/` folder:
@@ -185,56 +239,25 @@ $ site-builder --context=testnet deploy --epochs 1 my-website/dist
 
 Common build output directories by framework: Vite uses `dist/`, Create React App uses `build/`, Next.js uses `out/`, Docusaurus uses `build/`.
 
+**CI/CD.** For automated deployments on every push, the [OnlyFins deploy workflow](https://github.com/MystenLabs/onlyfins-example-app/blob/main/.github/workflows/deploy-site.yml) shows a complete GitHub Actions example using `site-builder` with a funded wallet stored as a secret.
+
 ## Configuring headers and metadata
 
-`ws-resources.json` is a configuration file `site-builder` reads during deployment to control how your site is built and served. The file itself is not uploaded to Walrus and is not visible to visitors.
+`ws-resources.json` is a configuration file `site-builder` reads during deployment to control how your site is built and served. The site-builder does not upload this file to Walrus and visitors cannot access it.
 
 The Walrus Snake example shows all supported fields:
 
-```json
-{
-  "headers": {
-    "/*.svg": {
-      "Cache-Control": "public, max-age=86400",
-      "ETag": "\"abc123\""
-    },
-    "/index.html": {
-      "Cache-Control": "max-age=3500",
-      "Content-Type": "text/html; charset=utf-8"
-    }
-  },
-  "routes": {
-    "/path/*": "/file.svg"
-  },
-  "redirects": {
-    "/old-game": {
-      "location": "/index.html",
-      "status_code": 308
-    },
-    "/walrus-docs": {
-      "location": "https://docs.wal.app",
-      "status_code": 301
-    }
-  },
-  "metadata": {
-    "link": "https://docs.wal.app",
-    "image_url": "https://www.walrus.xyz/walrus-site",
-    "description": "This is a walrus site.",
-    "project_url": "https://github.com/MystenLabs/walrus-sites/",
-    "creator": "MystenLabs"
-  },
-  "site_name": "Walrus Snake Game",
-  "ignore": [
-    "/private",
-    "/private/*",
-    "/secret.txt"
-  ]
-}
-```
+<ImportContent
+  source="examples/snake/ws-resources.json"
+  mode="code"
+  org="MystenLabs"
+  repo="walrus-sites"
+  language="json"
+/>
 
 The fields are:
 
-- **`object_id`:** Written automatically after the first `deploy`. Subsequent deploys update this site.
+- **`object_id`:** Written automatically by `deploy` after the first deployment. The field is absent from the source file but appears in your local copy after the first run. Subsequent deploys read it to update the same site.
 - **`headers`:** Custom HTTP response headers per resource path. Supports glob patterns.
 - **`routes`:** Client-side routing rules for SPAs. Wildcards may only appear at the end of a pattern.
 - **`redirects`:** Static redirects with explicit HTTP status codes. The target can be an internal path or an external URL.
@@ -246,7 +269,7 @@ For full field reference, validation rules, and additional examples, see [Site C
 
 ## Updating a site
 
-When you update a site, all resources are deleted and re-uploaded together as a single quilt, even resources that have not changed. To update the Walrus Snake example, edit `examples/snake/index.html` and run `deploy` again:
+When you update a site, the `deploy` command deletes all resources and re-uploads them together as a single quilt, even resources that have not changed. To update the Walrus Snake example, edit `examples/snake/index.html` and run `deploy` again:
 
 ```bash
 $ site-builder --context=testnet deploy --epochs 1 examples/snake
@@ -272,4 +295,31 @@ Without a SuiNS name, your site is only accessible through a Base36-encoded subd
 
 SuiNS is a decentralized naming service on Sui that maps human-readable names (ending in `.sui`) to Sui object IDs and wallet addresses. After deploying your site and obtaining its object ID, you register a SuiNS name and point its target address to the site object ID. The portal at `https://wal.app` resolves SuiNS names and serves the corresponding site.
 
-For the step-by-step process of registering a name and linking it to your site object ID, see [Setting a SuiNS Name](https://docs.wal.app/docs/sites/custom-domains/setting-a-suins-name) in the Walrus documentation. For a complete walkthrough of SuiNS integration, including resolution, reverse lookup, and subnames, see [Domain Names with SuiNS](/sui-stack/suins/sui-stack-suins).
+For the step-by-step process of registering a name and linking it to your site object ID, see [Setting a SuiNS Name](https://docs.wal.app/docs/sites/custom-domains/setting-a-suins-name) in the Walrus documentation. For a complete walkthrough of SuiNS integration, including resolution, reverse lookup, and subnames, see [Domain Names with SuiNS](/sui-stack/sui-stack-suins).
+
+## Failure modes
+
+| Error | Cause | Resolution |
+|---|---|---|
+| `site-builder` not found | Binary not in `PATH` after install | Add `$HOME/.local/bin` to `PATH`; reload shell profile |
+| Insufficient WAL | Wallet has no WAL tokens for storage | Fund wallet at [faucet.mystenlabs.com](https://faucet.mystenlabs.com) |
+| Insufficient gas | Wallet has no SUI for the Sui transaction | Fund wallet with SUI on the target network |
+| Deploy fails: wallet does not own site | `--object-id` points to a site owned by a different wallet | Use the wallet that originally deployed the site, or omit `--object-id` to publish a new one |
+| No `index.html` at root | `deploy` directory does not contain `index.html` | Point `deploy` at the framework build output folder, not the project root |
+| `ws-resources.json` validation error | Wildcard in middle of a route or ignore pattern | Move wildcards to the end of patterns only |
+| Testnet site not browsable | Testnet has no public portal | Self-host a local portal; see [Deploy a Local Portal](https://docs.wal.app/docs/sites/portals/deploy-locally) |
+| Base36 subdomain not working on `wal.app` | `wal.app` requires a SuiNS name | Register a SuiNS name and link it to the site object ID |
+
+## Troubleshooting
+
+**`site-builder` not found.** The binary is not in your `PATH`. Run `echo $PATH` and confirm `$HOME/.local/bin` appears. If not, add `export PATH="$HOME/.local/bin:$PATH"` to your shell profile and reload it.
+
+**Deploy fails with insufficient gas or insufficient WAL.** Your wallet has no WAL tokens or not enough SUI for gas. Fund your wallet with WAL on Testnet using the faucet at [faucet.mystenlabs.com](https://faucet.mystenlabs.com), then retry.
+
+**Deploy fails: wallet does not own the site object.** You are passing `--object-id` for a site owned by a different wallet. Run `deploy` without `--object-id` to publish a new site, or switch to the wallet that originally deployed it.
+
+**Deploy fails: directory has no `index.html`.** `site-builder` requires `index.html` at the root of the directory you pass to `deploy`. For frameworks that output to a subfolder, pass the subfolder (for example, `dist/`, `build/`, or `out/`), not the project root.
+
+**`ws-resources.json` validation error.** A wildcard in `routes` or `ignore` appears in the middle of a path pattern (for example, `/path/*/to`). Wildcards may only appear at the end of a pattern.
+
+**Testnet site not visible.** Testnet has no public portal. Self-host a local portal using the [local portal setup guide](https://docs.wal.app/docs/sites/portals/deploy-locally) or use a community-hosted Testnet portal.
