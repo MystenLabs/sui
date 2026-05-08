@@ -9,7 +9,8 @@ use move_compiler::editions::Edition;
 use crate::compatibility::legacy::LegacyData;
 
 use super::{
-    EnvironmentName, LocalDepInfo, OnChainDepInfo, PackageName, PublishAddresses, ResolverName,
+    EnvironmentName, LocalDepInfo, OnChainAddress, OnChainFlag, PackageName, PublishAddresses,
+    ResolverName,
 };
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
@@ -109,7 +110,8 @@ pub enum ManifestDependencyInfo {
     Git(ManifestGitDependency),
     External(ExternalDependency),
     Local(LocalDepInfo),
-    OnChain(OnChainDepInfo),
+    OnChain(OnChainFlag),
+    OnChainAt(OnChainAddress),
     System(SystemDependency),
 }
 
@@ -193,8 +195,18 @@ impl<'de> Deserialize<'de> for ManifestDependencyInfo {
                 let dep = LocalDepInfo::deserialize(data).map_err(de::Error::custom)?;
                 Ok(ManifestDependencyInfo::Local(dep))
             } else if tbl.contains_key("on-chain") {
-                let dep = OnChainDepInfo::deserialize(data).map_err(de::Error::custom)?;
-                Ok(ManifestDependencyInfo::OnChain(dep))
+                let val = &tbl["on-chain"];
+                if val.is_bool() {
+                    let dep = OnChainFlag::deserialize(data).map_err(de::Error::custom)?;
+                    Ok(ManifestDependencyInfo::OnChain(dep))
+                } else if val.is_str() {
+                    let dep = OnChainAddress::deserialize(data).map_err(de::Error::custom)?;
+                    Ok(ManifestDependencyInfo::OnChainAt(dep))
+                } else {
+                    Err(de::Error::custom(
+                        "on-chain must be `true` or a hex address string like \"0x...\"",
+                    ))
+                }
             } else {
                 Err(de::Error::custom(
                     "Invalid dependency; dependencies must have exactly one of the following fields: `system`, `git`, `r.<resolver>`, `local`, or `on-chain`.",
@@ -982,6 +994,98 @@ mod tests {
         7 |             a = { local = 1 }
           |                 ^^^^^^^^^^^^^
         invalid type: integer `1`, expected path string for key `local`
+        "###);
+    }
+
+    // On-chain dependency parsing ///////////////////////////////////////////////////
+
+    /// Parsing `on-chain = true` in [dependencies] succeeds
+    #[test]
+    fn parse_on_chain_flag() {
+        let manifest: ParsedManifest = toml_edit::de::from_str(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dependencies]
+            foo = { on-chain = true }
+            "#,
+        )
+        .unwrap();
+
+        assert!(matches!(
+            manifest.get_dep("foo").dependency_info,
+            ManifestDependencyInfo::OnChain(_)
+        ));
+    }
+
+    /// Parsing `on-chain = "0x1234"` in [dep-replacements] succeeds
+    #[test]
+    fn parse_on_chain_address_in_replacement() {
+        let _: ParsedManifest = toml_edit::de::from_str(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dependencies]
+            foo = { on-chain = true }
+
+            [dep-replacements]
+            mainnet.foo = { on-chain = "0x0000000000000000000000000000000000000000000000000000000000000001" }
+            "#,
+        )
+        .unwrap();
+    }
+
+    /// Parsing `on-chain = false` is rejected
+    #[test]
+    fn parse_on_chain_false() {
+        let error = toml_edit::de::from_str::<ParsedManifest>(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dependencies]
+            foo = { on-chain = false }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert_snapshot!(error, @r###"
+        TOML parse error at line 7, column 19
+          |
+        7 |             foo = { on-chain = false }
+          |                   ^^^^^^^^^^^^^^^^^^^^
+        Expected the constant `true` for key `on-chain`
+        "###);
+    }
+
+    /// Parsing `on-chain = 42` is rejected
+    #[test]
+    fn parse_on_chain_integer() {
+        let error = toml_edit::de::from_str::<ParsedManifest>(
+            r#"
+            [package]
+            name = "test"
+            edition = "2024"
+
+            [dependencies]
+            foo = { on-chain = 42 }
+            "#,
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert_snapshot!(error, @r###"
+        TOML parse error at line 7, column 19
+          |
+        7 |             foo = { on-chain = 42 }
+          |                   ^^^^^^^^^^^^^^^^^
+        on-chain must be `true` or a hex address string like "0x..."
         "###);
     }
 

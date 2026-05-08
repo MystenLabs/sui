@@ -3,7 +3,10 @@ use std::fmt::Display;
 use anyhow::ensure;
 use serde::{Deserialize, Serialize};
 
-use super::{EnvironmentID, EnvironmentName, LocalDepInfo, ManifestGitDependency, OnChainDepInfo};
+use super::{
+    EnvironmentID, EnvironmentName, LocalDepInfo, ManifestGitDependency, OnChainAddress,
+    OnChainFlag,
+};
 
 pub const EXTERNAL_RESOLVE_ARG: &str = "--resolve-deps";
 pub const EXTERNAL_RESOLVE_METHOD: &str = "resolve";
@@ -18,7 +21,8 @@ pub struct ResolverName(String);
 pub enum ResolverDependencyInfo {
     Local(LocalDepInfo),
     Git(ManifestGitDependency),
-    OnChain(OnChainDepInfo),
+    OnChain(OnChainFlag),
+    OnChainAt(OnChainAddress),
 }
 
 /// Requests from the package mananger to the external resolver

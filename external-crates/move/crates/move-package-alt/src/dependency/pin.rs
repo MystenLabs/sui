@@ -14,9 +14,9 @@ use crate::{
     git::{GitCache, GitError, GitTree},
     package::paths::PackagePath,
     schema::{
-        ConstTrue, EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
+        EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
         LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
-        OnChainDepInfo, PackageName, PublishAddresses, PublishedID, RenderToml, RootDepInfo,
+        OnChainAddress, PackageName, PublishedID, RenderToml, RootDepInfo,
     },
 };
 
@@ -101,16 +101,14 @@ impl PinnedDependency {
                 Resolved::Local(ref loc) => loc.clone().pin(parent)?,
                 Resolved::Git(ref git) => git.pin().await?,
                 Resolved::OnChain(_) => {
-                    let addresses = dep.context.addresses.as_ref().ok_or_else(|| {
-                        PackageError::OnChainDepMissingAddress {
-                            name: dep.context.name.to_string(),
-                            env: environment_id.clone(),
-                        }
-                    })?;
-                    Pinned::OnChain {
-                        published_at: addresses.published_at.clone(),
-                    }
+                    return Err(PackageError::OnChainDepMissingAddress {
+                        name: dep.context.name.to_string(),
+                        env: environment_id.clone(),
+                    });
                 }
+                Resolved::OnChainAt(ref addr) => Pinned::OnChain {
+                    published_at: addr.on_chain.clone(),
+                },
             };
 
             result.push(PinnedDependency {
@@ -160,7 +158,7 @@ impl PinnedDependency {
                 let file = dep.context.containing_file;
                 let pinned_dep = PinnedDependency {
                     context: dep.context,
-                    dep_info: Pinned::from_lockfile(file, lockfile_dep, None)
+                    dep_info: Pinned::from_lockfile(file, lockfile_dep)
                         .expect("system dependencies are valid pins"),
                 };
                 system_deps.push(pinned_dep);
@@ -236,14 +234,12 @@ impl Pinned {
         }
     }
 
-    /// Create a [Pinned] from a lockfile dependency source and optional address override.
+    /// Create a [Pinned] from a lockfile dependency source.
     ///
     /// `containing_file` is the lockfile path, used to resolve relative local dependency paths.
-    /// `address_override` provides the `published_at` address for on-chain dependencies.
     pub(crate) fn from_lockfile(
         containing_file: FileHandle,
         source: &LockfileDependencyInfo,
-        address_override: Option<&PublishAddresses>,
     ) -> PackageResult<Self> {
         match source {
             LockfileDependencyInfo::Local(loc) => Ok(Pinned::Local(PinnedLocalDependency {
@@ -256,16 +252,9 @@ impl Pinned {
                     .clean(),
                 relative_path_from_root_package: loc.local.to_path_buf().clean(),
             })),
-            LockfileDependencyInfo::OnChain(_) => {
-                let published_at = address_override
-                    .ok_or_else(|| PackageError::OnChainDepMissingAddress {
-                        name: "(from lockfile)".to_string(),
-                        env: "(unknown)".to_string(),
-                    })?
-                    .published_at
-                    .clone();
-                Ok(Pinned::OnChain { published_at })
-            }
+            LockfileDependencyInfo::OnChain(on_chain) => Ok(Pinned::OnChain {
+                published_at: on_chain.on_chain.clone(),
+            }),
             LockfileDependencyInfo::Git(git) => Ok(Pinned::Git(git.clone().try_into()?)),
             LockfileDependencyInfo::Root(_) => Ok(Pinned::Root(PackagePath::new(
                 containing_file
@@ -383,8 +372,8 @@ impl From<Pinned> for LockfileDependencyInfo {
                 rev: git.inner.sha().clone(),
                 path: git.inner.path_in_repo().to_path_buf(),
             }),
-            Pinned::OnChain { .. } => Self::OnChain(OnChainDepInfo {
-                on_chain: ConstTrue,
+            Pinned::OnChain { published_at } => Self::OnChain(OnChainAddress {
+                on_chain: published_at,
             }),
             Pinned::Root(_) => Self::Root(RootDepInfo { root: true }),
         }

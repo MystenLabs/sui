@@ -128,7 +128,8 @@ impl ResolvedDependency {
                 dep_info: match dep.dep_info {
                     Combined::Local(loc) => Resolved::Local(loc),
                     Combined::Git(git) => Resolved::Git(git),
-                    Combined::OnChain(onchain) => Resolved::OnChain(onchain),
+                    Combined::OnChain(flag) => Resolved::OnChain(flag),
+                    Combined::OnChainAt(addr) => Resolved::OnChainAt(addr),
                     Combined::External(_) => {
                         ext.expect("resolve_single outputs same keys as input")
                     }
