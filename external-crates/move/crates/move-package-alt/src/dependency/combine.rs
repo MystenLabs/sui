@@ -223,140 +223,83 @@ impl From<CombinedDependency> for ReplacementDependency {
 
 #[cfg(test)]
 mod tests {
+    use insta::assert_snapshot;
     use test_log::test;
 
-    use crate::{
-        PackageLoader,
-        flavor::Vanilla,
-        schema::Environment,
-        test_utils::{self, basic_manifest},
-    };
+    use crate::{flavor::vanilla::DEFAULT_ENV_NAME, test_utils::graph_builder::TestPackageGraph};
 
-    fn test_env() -> Environment {
-        Environment::new("mainnet".to_string(), "35834a8a".to_string())
-    }
+    const ADDR: &str = "0x0000000000000000000000000000000000000000000000000000000000000001";
 
     /// on-chain = "0x..." in [dependencies] is rejected
     #[test(tokio::test)]
     async fn on_chain_address_in_deps_rejected() {
-        let project = test_utils::project()
-            .file(
-                "Move.toml",
-                &format!(
-                    "{}\n[dependencies]\nfoo = {{ on-chain = \"0x01\" }}\n",
-                    basic_manifest("test", "0.0.1")
-                ),
-            )
+        let scenario = TestPackageGraph::new(["root"])
+            .add_on_chain_dep("root", "dep", ADDR, |d| d)
             .build();
 
-        let err = PackageLoader::new(&project.root(), test_env(), Vanilla)
-            .load()
-            .await
-            .unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("must use `on-chain = true`"), "got: {msg}");
+        assert_snapshot!(
+            scenario.root_package_err("root").await,
+            @r###"Error while loading dependency <ROOT>/root: On-chain dependency `dep` in `[dependencies]` must use `on-chain = true`. Specify the address in `[dep-replacements]` with `on-chain = "0x..."`.
+        "###
+        );
     }
 
     /// on-chain = true in [dependencies] with no replacement is rejected
     #[test(tokio::test)]
     async fn on_chain_flag_without_replacement_rejected() {
-        let project = test_utils::project()
-            .file(
-                "Move.toml",
-                &format!(
-                    "{}\n[dependencies]\nfoo = {{ on-chain = true }}\n",
-                    basic_manifest("test", "0.0.1")
-                ),
-            )
+        let scenario = TestPackageGraph::new(["root"])
+            .add_on_chain_dep("root", "dep", "true", |d| d)
             .build();
 
-        let err = PackageLoader::new(&project.root(), test_env(), Vanilla)
-            .load()
-            .await
-            .unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("requires an address"), "got: {msg}");
+        assert_snapshot!(
+            scenario.root_package_err("root").await,
+            @r###"Error while loading dependency <ROOT>/root: On-chain dependency `dep` requires an address. Add a `[dep-replacements]` entry with `on-chain = "0x..."`.
+        "###
+        );
     }
 
     /// on-chain = true in [dep-replacements] is rejected
     #[test(tokio::test)]
     async fn on_chain_flag_in_replacement_rejected() {
-        let project = test_utils::project()
-            .file(
-                "Move.toml",
-                &format!(
-                    "{}\n[dep-replacements]\nmainnet.foo = {{ on-chain = true }}\n",
-                    basic_manifest("test", "0.0.1")
-                ),
-            )
+        let scenario = TestPackageGraph::new(["root"])
+            .add_on_chain_dep("root", "dep", "true", |d| d.in_env(DEFAULT_ENV_NAME))
             .build();
 
-        let err = PackageLoader::new(&project.root(), test_env(), Vanilla)
-            .load()
-            .await
-            .unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("must specify an address"), "got: {msg}");
+        assert_snapshot!(
+            scenario.root_package_err("root").await,
+            @r###"Error while loading dependency <ROOT>/root: On-chain dependency `dep` in `[dep-replacements]` must specify an address: `on-chain = "0x..."`.
+        "###
+        );
     }
 
     /// on-chain = "0x..." in [dependencies] is rejected even with a replacement
     #[test(tokio::test)]
     async fn on_chain_address_in_deps_with_replacement_rejected() {
-        let project = test_utils::project()
-            .file(
-                "Move.toml",
-                &format!(
-                    "{}\n\
-                     [dependencies]\n\
-                     foo = {{ on-chain = \"0x01\" }}\n\
-                     \n\
-                     [dep-replacements]\n\
-                     mainnet.foo = {{ on-chain = \"0x02\" }}\n",
-                    basic_manifest("test", "0.0.1")
-                ),
-            )
+        let scenario = TestPackageGraph::new(["root"])
+            .add_on_chain_dep("root", "dep", ADDR, |d| d)
+            .add_on_chain_dep("root", "dep", ADDR, |d| d.in_env(DEFAULT_ENV_NAME))
             .build();
 
-        let err = PackageLoader::new(&project.root(), test_env(), Vanilla)
-            .load()
-            .await
-            .unwrap_err();
-        let msg = err.to_string();
-        assert!(msg.contains("must use `on-chain = true`"), "got: {msg}");
+        assert_snapshot!(
+            scenario.root_package_err("root").await,
+            @r###"Error while loading dependency <ROOT>/root: On-chain dependency `dep` in `[dependencies]` must use `on-chain = true`. Specify the address in `[dep-replacements]` with `on-chain = "0x..."`.
+        "###
+        );
     }
 
-    /// on-chain = true in [dependencies] with on-chain = "0x..." replacement succeeds
+    /// on-chain = true + address replacement passes combining and fails during fetch.
+    /// This error should change when on-chain dep fetching is implemented.
     #[test(tokio::test)]
-    async fn on_chain_flag_with_address_replacement_ok() {
-        let project = test_utils::project()
-            .file(
-                "Move.toml",
-                &format!(
-                    "{}\n\
-                     [dependencies]\n\
-                     foo = {{ on-chain = true }}\n\
-                     \n\
-                     [dep-replacements]\n\
-                     mainnet.foo = {{ on-chain = \"0x0000000000000000000000000000000000000000000000000000000000000001\" }}\n",
-                    basic_manifest("test", "0.0.1")
-                ),
-            )
+    async fn on_chain_with_address_replacement_passes_combining() {
+        let scenario = TestPackageGraph::new(["root"])
+            .add_on_chain_dep("root", "dep", "true", |d| d)
+            .add_on_chain_dep("root", "dep", ADDR, |d| d.in_env(DEFAULT_ENV_NAME))
             .build();
 
-        // This should fail later (during fetch, not during combining), since we can't
-        // actually fetch from chain in tests. But it should NOT fail with a combine error.
-        let result = PackageLoader::new(&project.root(), test_env(), Vanilla)
-            .load()
-            .await;
-        match result {
-            Ok(_) => panic!("expected fetch error, got success"),
-            Err(e) => {
-                let msg = e.to_string();
-                // Should NOT be a combine-time error
-                assert!(!msg.contains("must use `on-chain = true`"), "got: {msg}");
-                assert!(!msg.contains("must specify an address"), "got: {msg}");
-                assert!(!msg.contains("requires an address"), "got: {msg}");
-            }
-        }
+        let err = scenario.root_package_err("root").await;
+        assert!(
+            err.contains("On-chain dependencies are not yet supported"),
+            "expected fetch error, got: {err}"
+        );
     }
 }

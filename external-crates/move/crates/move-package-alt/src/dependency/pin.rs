@@ -14,7 +14,7 @@ use crate::{
     git::{GitCache, GitError, GitTree},
     package::paths::PackagePath,
     schema::{
-        EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
+        Environment, EnvironmentID, EnvironmentName, EphemeralDependencyInfo, LocalDepInfo,
         LockfileDependencyInfo, LockfileGitDepInfo, ManifestGitDependency, ModeName,
         OnChainAddress, PackageName, PublishedID, RenderToml, RootDepInfo,
     },
