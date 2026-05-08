@@ -697,10 +697,19 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                       && !reaches_quorum::<STRENGTH>(self)),
 
             // On any non-Failed path the authority is recorded in the aggregator.
-            // This is the load-bearing postcondition for liveness: without it the
-            // spec would be satisfied by an implementation that always forgets votes
-            // (keeping data.dom() empty, total_votes = 0, never reaching quorum).
             !(out is Failed) ==> self.has_voted(envelope_authority(&envelope)),
+
+            // Monotonicity: every previously-recorded weighted vote survives.
+            // Under all_sigs_valid(old(self)), every weighted voted authority has
+            // a valid sig, so the valid-sig-preservation postcondition of
+            // try_aggregate_and_verify guarantees they are never evicted.
+            // Without this, a "forgetful" implementation that clears data.dom()
+            // before each call would satisfy every other postcondition while
+            // preventing quorum from ever being reached.
+            forall|a: AuthorityName|
+                old(self).has_voted(a)
+                && committee_weight_of(&old(self).committee, a) > 0
+                    ==> #[trigger] self.has_voted(a),
     {
         let ghost pre_sig = envelope_sig_spec(&envelope);
 
