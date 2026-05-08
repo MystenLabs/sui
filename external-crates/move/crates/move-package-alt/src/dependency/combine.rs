@@ -17,7 +17,10 @@ use crate::{
 
 use super::DependencyContext;
 
-/// The dep_info type for the combined stage.
+/// The dep_info type for the combined stage. This is `ManifestDependencyInfo`, but with the
+/// additional invariant that all on-chain dependencies have addresses (i.e. they use the
+/// `OnChainAt` variant, not `OnChain`). This is enforced during combining: `on-chain = true`
+/// without a dep-replacement is rejected.
 pub(super) type Combined = ManifestDependencyInfo;
 
 /// A [CombinedDependency] contains dependency information from the `[dependencies]` and
@@ -92,10 +95,17 @@ impl CombinedDependency {
         source_env_name: EnvironmentName,
         default: DefaultDependency,
     ) -> ManifestResult<Self> {
-        // On-chain deps in [dependencies] must use `on-chain = true`, not an address
+        // on-chain = "0x..." belongs in [dep-replacements], not [dependencies]
         if let ManifestDependencyInfo::OnChainAt(_) = &default.dependency_info {
             return Err(ManifestError::with_file(file)(
                 ManifestErrorKind::OnChainDepWithAddress { name },
+            ));
+        }
+
+        // on-chain = true with no dep-replacement means no address — error
+        if let ManifestDependencyInfo::OnChain(_) = &default.dependency_info {
+            return Err(ManifestError::with_file(file)(
+                ManifestErrorKind::OnChainDepMissingReplacement { name },
             ));
         }
 
@@ -158,16 +168,9 @@ impl CombinedDependency {
         default: DefaultDependency,
         replacement: ReplacementDependency,
     ) -> ManifestResult<Self> {
-        let has_replacement_dep = replacement.dependency.is_some();
         let dep = replacement.dependency.unwrap_or(default);
 
-        // If the replacement explicitly provides an on-chain dep, it must have an address
-        if has_replacement_dep && let ManifestDependencyInfo::OnChain(_) = &dep.dependency_info {
-            return Err(ManifestError::with_file(file)(
-                ManifestErrorKind::OnChainReplacementWithoutAddress { name },
-            ));
-        }
-
+        // TODO: possibly additional compatibility checks here?
         Ok(Self {
             context: DependencyContext {
                 name,
