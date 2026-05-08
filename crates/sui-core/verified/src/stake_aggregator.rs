@@ -695,6 +695,12 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                       && !old(self).has_voted(envelope_authority(&envelope))
                       && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
                       && !reaches_quorum::<STRENGTH>(self)),
+
+            // On any non-Failed path the authority is recorded in the aggregator.
+            // This is the load-bearing postcondition for liveness: without it the
+            // spec would be satisfied by an implementation that always forgets votes
+            // (keeping data.dom() empty, total_votes = 0, never reaching quorum).
+            !(out is Failed) ==> self.has_voted(envelope_authority(&envelope)),
     {
         let ghost pre_sig = envelope_sig_spec(&envelope);
 
@@ -835,14 +841,25 @@ pub proof fn challenge_liveness<const STRENGTH: bool>(
         // The collective weight of this set meets the quorum threshold.
         weight_prefix_sum(weights, authorities.len() as int)
             >= committee_threshold_spec(committee, STRENGTH) as int,
-        // QuorumReached biconditional from insert, instantiated for each position:
-        // insertion i returns QuorumReached iff the accumulated weight (post-insert)
-        // first meets threshold.  (Epoch match, !has_voted, weight > 0 all hold by
-        // the other preconditions; all_sigs_valid and sig_is_valid are also assumed.)
+        // The liveness direction of the QuorumReached biconditional: if the
+        // accumulated weight of the first i+1 insertions meets the threshold,
+        // then the i-th insert returns QuorumReached.
+        //
+        // This is the one-directional form derivable from insert's spec, via:
+        //   (a) !(out is Failed) ==> self.has_voted(authority)      [new postcondition]
+        //   (b) monotonicity: old valid sigs survive each insert
+        //   (c) invariant_holds: total_votes = sum of voted weights
+        //   (d) {a_0,...,a_i} ⊆ data.dom() after i+1 inserts (by a+b)
+        //   (e) total_votes >= sum of those weights = weight_prefix_sum(weights, i+1)
+        //   (f) QuorumReached biconditional: total_votes >= threshold => QuorumReached
+        //
+        // The biconditional form (<=>) would additionally require knowing
+        // total_votes is exactly weight_prefix_sum, which the spec does not
+        // guarantee (extra valid sigs could inflate total_votes further).
         forall|i: int| 0 <= i < authorities.len() as int ==>
-            out_is_quorum[i] <==>
-                (#[trigger] weight_prefix_sum(weights, i + 1)
-                    >= committee_threshold_spec(committee, STRENGTH) as int),
+            (#[trigger] weight_prefix_sum(weights, i + 1)
+                >= committee_threshold_spec(committee, STRENGTH) as int)
+                ==> out_is_quorum[i],
     ensures
         // QuorumReached is returned at some point in the sequence.
         exists|k: int| 0 <= k < out_is_quorum.len() as int && #[trigger] out_is_quorum[k],
