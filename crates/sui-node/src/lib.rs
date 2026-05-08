@@ -1737,7 +1737,10 @@ impl SuiNode {
                 .set(cur_epoch_store.protocol_config().version.as_u64() as i64);
 
             // Advertise capabilities to committee, if we are a validator.
-            if let Some(components) = &*self.validator_components.lock().await {
+            // FullNodes that state sync via consensus will also have validator components, by they are not supposed to submit any capabilities.
+            if let Some(components) = &*self.validator_components.lock().await
+                && cur_epoch_store.is_validator()
+            {
                 // TODO: without this sleep, the consensus message is not delivered reliably.
                 tokio::time::sleep(Duration::from_millis(1)).await;
 
