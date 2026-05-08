@@ -23,7 +23,7 @@ By the end of this page, you can:
 <Tabs className="tabsHeadingCentered--small">
 <TabItem value="prereq" label="Prerequisites">
 
-- [x] [Sui CLI](/guides/developer/getting-started/sui-install) installed (for onchain resolution examples)
+- [x] [Sui CLI](/getting-started/onboarding/sui-install) installed (for onchain resolution examples)
 - [x] Node.js 18+ with `@mysten/sui` installed: `pnpm add @mysten/sui`
 - [x] A deployed Sui Move package if implementing onchain resolution
 - [x] A SuiNS domain if creating subnames (register at [suins.io](https://suins.io/))
@@ -32,7 +32,7 @@ By the end of this page, you can:
 </TabItem>
 </Tabs>
 
-This guide uses [Sui Messenger](https://github.com/MystenLabs/messaging-sdk-example) as a concrete example throughout. Sui Messenger is a demo encrypted messaging app built on Sui that assigns every user a SuiNS subname under the `sui-stack.sui` parent domain. These subnames serve as human-readable identities in the app's channel system, replacing raw wallet addresses with names like `alice.sui-stack.sui`. The [Onchain Websites with Walrus Sites](/sui-stack/sui-stack-walrus-sites) guide uses SuiNS to attach a readable URL to a deployed Walrus Site.
+This guide uses [Sui Messenger](https://github.com/MystenLabs/messaging-sdk-example) as a concrete example throughout. Sui Messenger is a demo encrypted messaging app built on Sui that assigns every user a SuiNS subname under the `sui-stack.sui` parent domain. These subnames serve as human-readable identities in the app's channel system, replacing raw wallet addresses with names like `alice.sui-stack.sui`. The [Onchain Websites with Walrus Sites](/sui-stack/walrus/sui-stack-walrus-sites) guide uses SuiNS to attach a readable URL to a deployed Walrus Site.
 
 ## Introduction to SuiNS
 
@@ -231,7 +231,7 @@ The key limitation of the Enoki approach is that each user gets at most 1 subnam
 
 ## Indexing
 
-For queries beyond a single name or address lookup (for example, all subnames under a parent domain, or all names pointing to a given address), run your own instance of the [`suins-indexer`](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer). See the [custom indexer documentation](/develop/advanced/custom-indexer) for setup instructions.
+For queries beyond a single name or address lookup (for example, all subnames under a parent domain, or all names pointing to a given address), run your own instance of the [`suins-indexer`](https://github.com/MystenLabs/sui/tree/main/crates/suins-indexer). See the [custom indexer documentation](/develop/accessing-data/custom-indexer) for setup instructions.
 
 ## Subnames
 
