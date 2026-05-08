@@ -170,6 +170,13 @@ impl CombinedDependency {
     ) -> ManifestResult<Self> {
         let dep = replacement.dependency.unwrap_or(default);
 
+        // Enforce invariant: after combining, all on-chain deps must have addresses
+        if let ManifestDependencyInfo::OnChain(_) = &dep.dependency_info {
+            return Err(ManifestError::with_file(file)(
+                ManifestErrorKind::OnChainReplacementWithoutAddress { name },
+            ));
+        }
+
         // TODO: possibly additional compatibility checks here?
         Ok(Self {
             context: DependencyContext {
