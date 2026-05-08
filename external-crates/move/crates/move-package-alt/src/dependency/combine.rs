@@ -168,6 +168,13 @@ impl CombinedDependency {
         default: DefaultDependency,
         replacement: ReplacementDependency,
     ) -> ManifestResult<Self> {
+        // on-chain = "0x..." belongs in [dep-replacements], not [dependencies]
+        if let ManifestDependencyInfo::OnChainAt(_) = &default.dependency_info {
+            return Err(ManifestError::with_file(file)(
+                ManifestErrorKind::OnChainDepWithAddress { name },
+            ));
+        }
+
         let dep = replacement.dependency.unwrap_or(default);
 
         // Enforce invariant: after combining, all on-chain deps must have addresses
@@ -210,6 +217,146 @@ impl From<CombinedDependency> for ReplacementDependency {
             }),
             addresses: combined.context.addresses,
             use_environment: Some(combined.context.use_environment),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use test_log::test;
+
+    use crate::{
+        PackageLoader,
+        flavor::Vanilla,
+        schema::Environment,
+        test_utils::{self, basic_manifest},
+    };
+
+    fn test_env() -> Environment {
+        Environment::new("mainnet".to_string(), "35834a8a".to_string())
+    }
+
+    /// on-chain = "0x..." in [dependencies] is rejected
+    #[test(tokio::test)]
+    async fn on_chain_address_in_deps_rejected() {
+        let project = test_utils::project()
+            .file(
+                "Move.toml",
+                &format!(
+                    "{}\n[dependencies]\nfoo = {{ on-chain = \"0x01\" }}\n",
+                    basic_manifest("test", "0.0.1")
+                ),
+            )
+            .build();
+
+        let err = PackageLoader::new(&project.root(), test_env(), Vanilla)
+            .load()
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("must use `on-chain = true`"), "got: {msg}");
+    }
+
+    /// on-chain = true in [dependencies] with no replacement is rejected
+    #[test(tokio::test)]
+    async fn on_chain_flag_without_replacement_rejected() {
+        let project = test_utils::project()
+            .file(
+                "Move.toml",
+                &format!(
+                    "{}\n[dependencies]\nfoo = {{ on-chain = true }}\n",
+                    basic_manifest("test", "0.0.1")
+                ),
+            )
+            .build();
+
+        let err = PackageLoader::new(&project.root(), test_env(), Vanilla)
+            .load()
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("requires an address"), "got: {msg}");
+    }
+
+    /// on-chain = true in [dep-replacements] is rejected
+    #[test(tokio::test)]
+    async fn on_chain_flag_in_replacement_rejected() {
+        let project = test_utils::project()
+            .file(
+                "Move.toml",
+                &format!(
+                    "{}\n[dep-replacements]\nmainnet.foo = {{ on-chain = true }}\n",
+                    basic_manifest("test", "0.0.1")
+                ),
+            )
+            .build();
+
+        let err = PackageLoader::new(&project.root(), test_env(), Vanilla)
+            .load()
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("must specify an address"), "got: {msg}");
+    }
+
+    /// on-chain = "0x..." in [dependencies] is rejected even with a replacement
+    #[test(tokio::test)]
+    async fn on_chain_address_in_deps_with_replacement_rejected() {
+        let project = test_utils::project()
+            .file(
+                "Move.toml",
+                &format!(
+                    "{}\n\
+                     [dependencies]\n\
+                     foo = {{ on-chain = \"0x01\" }}\n\
+                     \n\
+                     [dep-replacements]\n\
+                     mainnet.foo = {{ on-chain = \"0x02\" }}\n",
+                    basic_manifest("test", "0.0.1")
+                ),
+            )
+            .build();
+
+        let err = PackageLoader::new(&project.root(), test_env(), Vanilla)
+            .load()
+            .await
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("must use `on-chain = true`"), "got: {msg}");
+    }
+
+    /// on-chain = true in [dependencies] with on-chain = "0x..." replacement succeeds
+    #[test(tokio::test)]
+    async fn on_chain_flag_with_address_replacement_ok() {
+        let project = test_utils::project()
+            .file(
+                "Move.toml",
+                &format!(
+                    "{}\n\
+                     [dependencies]\n\
+                     foo = {{ on-chain = true }}\n\
+                     \n\
+                     [dep-replacements]\n\
+                     mainnet.foo = {{ on-chain = \"0x0000000000000000000000000000000000000000000000000000000000000001\" }}\n",
+                    basic_manifest("test", "0.0.1")
+                ),
+            )
+            .build();
+
+        // This should fail later (during fetch, not during combining), since we can't
+        // actually fetch from chain in tests. But it should NOT fail with a combine error.
+        let result = PackageLoader::new(&project.root(), test_env(), Vanilla)
+            .load()
+            .await;
+        match result {
+            Ok(_) => panic!("expected fetch error, got success"),
+            Err(e) => {
+                let msg = e.to_string();
+                // Should NOT be a combine-time error
+                assert!(!msg.contains("must use `on-chain = true`"), "got: {msg}");
+                assert!(!msg.contains("must specify an address"), "got: {msg}");
+                assert!(!msg.contains("requires an address"), "got: {msg}");
+            }
         }
     }
 }
