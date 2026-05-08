@@ -180,9 +180,21 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                                         bad_authorities.push(*name);
                                     }
                                 }
-                                InsertResult::NotEnoughVotes {
-                                    bad_votes,
-                                    bad_authorities,
+                                // After evicting invalid sigs, the remaining valid sigs may
+                                // still constitute a quorum on their own.
+                                if self.total_votes >= self.committee.threshold::<STRENGTH>() {
+                                    match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
+                                        self.data.values().cloned().collect(),
+                                        self.committee(),
+                                    ) {
+                                        Ok(aggregated) => InsertResult::QuorumReached(aggregated),
+                                        Err(error) => InsertResult::Failed { error },
+                                    }
+                                } else {
+                                    InsertResult::NotEnoughVotes {
+                                        bad_votes,
+                                        bad_authorities,
+                                    }
                                 }
                             }
                         }
