@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::cast_possible_truncation)]
-// `ThreadCounters` is written exclusively by its owning thread and read at snapshot points by the
-// reporter; we manually `unsafe impl Sync` on it to share `&'static ThreadCounters` via the
-// per-context registry without paying for atomics or a Mutex.
-#![allow(unsafe_code)]
 
 use std::{
-    cell::Cell,
-    sync::atomic::{AtomicU64, Ordering},
+    cell::RefCell,
+    sync::{
+        Arc, Weak,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -88,55 +87,27 @@ pub struct MoveRuntimeTelemetry {
 // Internal Context for Reporting / Storage
 // -----------------------------------------------
 
-/// Per-thread telemetry counters. Each thread writes only to its own instance, so the writes are
-/// single-threaded and need no atomicity. The reporter (`to_runtime_telemetry`) iterates the
-/// registry and snapshots each thread's `Cell`s; reads accept that they may observe a write in
-/// progress (counters are monotonic and reports are advisory).
-#[derive(Debug)]
+/// Per-thread telemetry counters. Each thread is the only writer to its own instance, so
+/// `fetch_add(_, Relaxed)` runs on a cache line owned exclusively by that thread's core (no
+/// cross-core MESI traffic). The reporter reads with `load(Relaxed)` and accepts that it may
+/// observe a write in progress; counters are monotonic and reports are advisory.
+#[derive(Debug, Default)]
 pub(crate) struct ThreadCounters {
-    pub(crate) total_load_time: Cell<u64>,
-    pub(crate) load_count: Cell<u64>,
-    pub(crate) total_validation_time: Cell<u64>,
-    pub(crate) validation_count: Cell<u64>,
-    pub(crate) total_jit_time: Cell<u64>,
-    pub(crate) jit_count: Cell<u64>,
-    pub(crate) total_execution_time: Cell<u64>,
-    pub(crate) execution_count: Cell<u64>,
-    pub(crate) total_interpreter_time: Cell<u64>,
-    pub(crate) interpreter_count: Cell<u64>,
-    pub(crate) total_time: Cell<u64>,
-    pub(crate) total_count: Cell<u64>,
-    pub(crate) redundant_compilations: Cell<u64>,
-    pub(crate) max_callstack_size: Cell<u64>,
-    pub(crate) max_valuestack_size: Cell<u64>,
-}
-
-// SAFETY: `ThreadCounters` is registered into the per-`TelemetryContext` registry the first time
-// its owning thread touches telemetry, and from then on only that thread mutates it. The reporter
-// reads via `Cell::get` from another thread; any tearing this exposes is acceptable for advisory
-// telemetry counters.
-unsafe impl Sync for ThreadCounters {}
-
-impl ThreadCounters {
-    const fn new() -> Self {
-        Self {
-            total_load_time: Cell::new(0),
-            load_count: Cell::new(0),
-            total_validation_time: Cell::new(0),
-            validation_count: Cell::new(0),
-            total_jit_time: Cell::new(0),
-            jit_count: Cell::new(0),
-            total_execution_time: Cell::new(0),
-            execution_count: Cell::new(0),
-            total_interpreter_time: Cell::new(0),
-            interpreter_count: Cell::new(0),
-            total_time: Cell::new(0),
-            total_count: Cell::new(0),
-            redundant_compilations: Cell::new(0),
-            max_callstack_size: Cell::new(0),
-            max_valuestack_size: Cell::new(0),
-        }
-    }
+    pub(crate) total_load_time: AtomicU64,
+    pub(crate) load_count: AtomicU64,
+    pub(crate) total_validation_time: AtomicU64,
+    pub(crate) validation_count: AtomicU64,
+    pub(crate) total_jit_time: AtomicU64,
+    pub(crate) jit_count: AtomicU64,
+    pub(crate) total_execution_time: AtomicU64,
+    pub(crate) execution_count: AtomicU64,
+    pub(crate) total_interpreter_time: AtomicU64,
+    pub(crate) interpreter_count: AtomicU64,
+    pub(crate) total_time: AtomicU64,
+    pub(crate) total_count: AtomicU64,
+    pub(crate) redundant_compilations: AtomicU64,
+    pub(crate) max_callstack_size: AtomicU64,
+    pub(crate) max_valuestack_size: AtomicU64,
 }
 
 /// Unique id source so a recycled `TelemetryContext` heap address never aliases a previous one's
@@ -144,23 +115,113 @@ impl ThreadCounters {
 static NEXT_TELEMETRY_ID: AtomicU64 = AtomicU64::new(1);
 
 thread_local! {
-    /// Id of the `TelemetryContext` whose counters this thread is currently registered with.
-    /// `0` means "unregistered".
-    static LOCAL_ID: Cell<u64> = const { Cell::new(0) };
-    /// `ThreadCounters` registered for `LOCAL_ID`. Heap-leaked on registration so the `'static`
-    /// reference outlives both the thread and the context.
-    static LOCAL_REF: Cell<Option<&'static ThreadCounters>> = const { Cell::new(None) };
+    /// `(context_id, slot)` for the context this thread is currently registered with. Replacing
+    /// or dropping this folds the slot's counters into the context's aggregated total via
+    /// `LocalSlot::drop`.
+    static LOCAL: RefCell<Option<(u64, LocalSlot)>> = const { RefCell::new(None) };
+}
+
+/// Plain-`u64` snapshot used both for the dead-thread aggregate and the final report. Kept
+/// separate from `ThreadCounters` so reads through this type don't pay any atomic cost.
+#[derive(Debug, Default, Clone)]
+struct CountersSnapshot {
+    total_load_time: u64,
+    load_count: u64,
+    total_validation_time: u64,
+    validation_count: u64,
+    total_jit_time: u64,
+    jit_count: u64,
+    total_execution_time: u64,
+    execution_count: u64,
+    total_interpreter_time: u64,
+    interpreter_count: u64,
+    total_time: u64,
+    total_count: u64,
+    redundant_compilations: u64,
+    max_callstack_size: u64,
+    max_valuestack_size: u64,
+}
+
+impl CountersSnapshot {
+    fn add_from(&mut self, c: &ThreadCounters) {
+        self.total_load_time = self
+            .total_load_time
+            .saturating_add(c.total_load_time.load(Ordering::Relaxed));
+        self.load_count = self
+            .load_count
+            .saturating_add(c.load_count.load(Ordering::Relaxed));
+        self.total_validation_time = self
+            .total_validation_time
+            .saturating_add(c.total_validation_time.load(Ordering::Relaxed));
+        self.validation_count = self
+            .validation_count
+            .saturating_add(c.validation_count.load(Ordering::Relaxed));
+        self.total_jit_time = self
+            .total_jit_time
+            .saturating_add(c.total_jit_time.load(Ordering::Relaxed));
+        self.jit_count = self
+            .jit_count
+            .saturating_add(c.jit_count.load(Ordering::Relaxed));
+        self.total_execution_time = self
+            .total_execution_time
+            .saturating_add(c.total_execution_time.load(Ordering::Relaxed));
+        self.execution_count = self
+            .execution_count
+            .saturating_add(c.execution_count.load(Ordering::Relaxed));
+        self.total_interpreter_time = self
+            .total_interpreter_time
+            .saturating_add(c.total_interpreter_time.load(Ordering::Relaxed));
+        self.interpreter_count = self
+            .interpreter_count
+            .saturating_add(c.interpreter_count.load(Ordering::Relaxed));
+        self.total_time = self
+            .total_time
+            .saturating_add(c.total_time.load(Ordering::Relaxed));
+        self.total_count = self
+            .total_count
+            .saturating_add(c.total_count.load(Ordering::Relaxed));
+        self.redundant_compilations = self
+            .redundant_compilations
+            .saturating_add(c.redundant_compilations.load(Ordering::Relaxed));
+        self.max_callstack_size = self
+            .max_callstack_size
+            .max(c.max_callstack_size.load(Ordering::Relaxed));
+        self.max_valuestack_size = self
+            .max_valuestack_size
+            .max(c.max_valuestack_size.load(Ordering::Relaxed));
+    }
+}
+
+/// TLS-owned guard. Holds the only strong `Arc` to this thread's counters; on drop (thread exit
+/// or context switch) it folds counters into the context's aggregated total before releasing the
+/// `Arc`. After the `Arc` drops, the registry's `Weak` will upgrade to `None` and the reporter
+/// removes the entry on its next sweep.
+struct LocalSlot {
+    counters: Arc<ThreadCounters>,
+    ctx: Weak<TelemetryContext>,
+}
+
+impl Drop for LocalSlot {
+    fn drop(&mut self) {
+        if let Some(ctx) = self.ctx.upgrade() {
+            ctx.aggregated.lock().add_from(&self.counters);
+        }
+    }
 }
 
 /// Telemetry block held by the runtime for global timing information.
 /// A U64 should be able to hold approximately 59_9730_287 _years_ worth of milliseconds, so this
 /// should be more than large enough for anything we care about. This also means we cannot overflow
 /// this value in a single epoch.
-/// [SAFETY]: This is thread safe.
 #[derive(Debug)]
 pub(crate) struct TelemetryContext {
     id: u64,
-    threads: Mutex<Vec<&'static ThreadCounters>>,
+    /// Counters folded in from threads/contexts that have already torn down. Locked briefly by
+    /// dying-thread `Drop` and by the reporter; never on the per-transaction path.
+    aggregated: Mutex<CountersSnapshot>,
+    /// Live thread counters. `Weak` so the registry never extends `ThreadCounters'` lifetime —
+    /// the strong `Arc` lives only in TLS.
+    threads: Mutex<Vec<Weak<ThreadCounters>>>,
 }
 
 /// Transaction Telemetry Information
@@ -237,29 +298,37 @@ impl TelemetryContext {
     pub(crate) fn new() -> Self {
         Self {
             id: NEXT_TELEMETRY_ID.fetch_add(1, Ordering::Relaxed),
+            aggregated: Mutex::new(CountersSnapshot::default()),
             threads: Mutex::new(Vec::new()),
         }
     }
 
-    /// Returns this thread's counters for this context, registering on first use (or after a
-    /// context switch).
-    fn local(&self) -> &'static ThreadCounters {
-        match LOCAL_REF.with(|c| c.get()) {
-            Some(tc) if LOCAL_ID.with(|c| c.get()) == self.id => tc,
-            _ => self.register_local(),
-        }
+    /// Run `f` against this thread's counters for this context, registering on first use (or
+    /// after a context switch). The closure form keeps the strong `Arc` inside TLS — no Arc
+    /// clone, no raw pointer cache, no `unsafe`.
+    fn with_local<R>(self: &Arc<Self>, f: impl FnOnce(&ThreadCounters) -> R) -> R {
+        LOCAL.with_borrow_mut(|slot| {
+            let local: &mut LocalSlot = match slot {
+                Some((id, local)) if *id == self.id => local,
+                // Replacing the slot via `Option::insert` drops the old `LocalSlot`; its `Drop`
+                // folds the previous context's counters into that context's aggregated total.
+                other => &mut other.insert((self.id, self.register_local())).1,
+            };
+            f(&local.counters)
+        })
     }
 
     #[cold]
-    fn register_local(&self) -> &'static ThreadCounters {
-        let leaked: &'static ThreadCounters = Box::leak(Box::new(ThreadCounters::new()));
-        self.threads.lock().push(leaked);
-        LOCAL_REF.with(|c| c.set(Some(leaked)));
-        LOCAL_ID.with(|c| c.set(self.id));
-        leaked
+    fn register_local(self: &Arc<Self>) -> LocalSlot {
+        let counters = Arc::new(ThreadCounters::default());
+        self.threads.lock().push(Arc::downgrade(&counters));
+        LocalSlot {
+            counters,
+            ctx: Arc::downgrade(self),
+        }
     }
 
-    pub(crate) fn with_transaction_telemetry<F, R>(&self, f: F) -> R
+    pub(crate) fn with_transaction_telemetry<F, R>(self: &Arc<Self>, f: F) -> R
     where
         F: FnOnce(&mut TransactionTelemetryContext) -> R,
     {
@@ -270,108 +339,93 @@ impl TelemetryContext {
     }
 
     /// Update the telemetry by folding the transaction context into this thread's counters.
-    pub(crate) fn record_transaction(&self, transaction: TransactionTelemetryContext) {
-        let local = self.local();
-        macro_rules! add {
-            ($field:ident, $delta:expr) => {{
-                local.$field.set(local.$field.get().saturating_add($delta));
-            }};
-        }
-        macro_rules! update_duration_field {
-            ($duration:expr, $count:expr, $total_field:ident, $count_field:ident) => {{
-                if let Some(time) = $duration {
-                    add!($total_field, time.as_millis() as u64);
-                    add!($count_field, $count);
-                }
-            }};
-            ($duration:expr, $total_field:ident, $count_field:ident) => {{
-                if let Some(time) = $duration {
-                    add!($total_field, time.as_millis() as u64);
-                    add!($count_field, 1);
-                }
-            }};
-        }
+    pub(crate) fn record_transaction(self: &Arc<Self>, transaction: TransactionTelemetryContext) {
+        self.with_local(|local| {
+            macro_rules! add {
+                ($field:ident, $delta:expr) => {{
+                    local.$field.fetch_add($delta, Ordering::Relaxed);
+                }};
+            }
+            macro_rules! update_duration_field {
+                ($duration:expr, $count:expr, $total_field:ident, $count_field:ident) => {{
+                    if let Some(time) = $duration {
+                        add!($total_field, time.as_millis() as u64);
+                        add!($count_field, $count);
+                    }
+                }};
+                ($duration:expr, $total_field:ident, $count_field:ident) => {{
+                    if let Some(time) = $duration {
+                        add!($total_field, time.as_millis() as u64);
+                        add!($count_field, 1);
+                    }
+                }};
+            }
 
-        let TransactionTelemetryContext {
-            load_count,
-            load_time,
-            validation_time,
-            validation_count,
-            jit_time,
-            jit_count,
-            execution_time,
-            interpreter_time,
-            total_time,
-            redundant_compilations,
-            max_callstack_size,
-            max_valuestack_size,
-        } = transaction;
+            let TransactionTelemetryContext {
+                load_count,
+                load_time,
+                validation_time,
+                validation_count,
+                jit_time,
+                jit_count,
+                execution_time,
+                interpreter_time,
+                total_time,
+                redundant_compilations,
+                max_callstack_size,
+                max_valuestack_size,
+            } = transaction;
 
-        local
-            .max_callstack_size
-            .set(local.max_callstack_size.get().max(max_callstack_size));
-        local
-            .max_valuestack_size
-            .set(local.max_valuestack_size.get().max(max_valuestack_size));
+            local
+                .max_callstack_size
+                .fetch_max(max_callstack_size, Ordering::Relaxed);
+            local
+                .max_valuestack_size
+                .fetch_max(max_valuestack_size, Ordering::Relaxed);
 
-        update_duration_field!(load_time, load_count, total_load_time, load_count);
-        update_duration_field!(
-            validation_time,
-            validation_count,
-            total_validation_time,
-            validation_count
-        );
-        update_duration_field!(jit_time, jit_count, total_jit_time, jit_count);
+            update_duration_field!(load_time, load_count, total_load_time, load_count);
+            update_duration_field!(
+                validation_time,
+                validation_count,
+                total_validation_time,
+                validation_count
+            );
+            update_duration_field!(jit_time, jit_count, total_jit_time, jit_count);
 
-        update_duration_field!(execution_time, total_execution_time, execution_count);
-        update_duration_field!(interpreter_time, total_interpreter_time, interpreter_count);
+            update_duration_field!(execution_time, total_execution_time, execution_count);
+            update_duration_field!(interpreter_time, total_interpreter_time, interpreter_count);
 
-        add!(total_time, total_time.as_millis() as u64);
-        add!(total_count, 1);
-        add!(redundant_compilations, redundant_compilations);
+            add!(total_time, total_time.as_millis() as u64);
+            add!(total_count, 1);
+            add!(redundant_compilations, redundant_compilations);
+        });
     }
 
     /// Generate a runtime telemetry report from the telemetry data.
     /// This is a touch expensive and should be done infrequently.
-    /// [SAFETY] This may produce a partial result if telemetry udpates happen in the middle of
-    /// generating the report. This is a known risk, and deemed better than the alternative of
-    /// using locks (wherein an RwLock would be read-acquired for the writes and write-acquired for
-    /// the read).
-    pub fn to_runtime_telemetry(&self, package_cache: &MoveCache) -> MoveRuntimeTelemetry {
-        // Aggregate per-thread counters.
-        let mut total_load_time = 0u64;
-        let mut load_count = 0u64;
-        let mut total_validation_time = 0u64;
-        let mut validation_count = 0u64;
-        let mut total_jit_time = 0u64;
-        let mut jit_count = 0u64;
-        let mut total_execution_time = 0u64;
-        let mut execution_count = 0u64;
-        let mut total_interpreter_time = 0u64;
-        let mut interpreter_count = 0u64;
-        let mut total_time = 0u64;
-        let mut total_count = 0u64;
-        let mut max_callstack_size = 0u64;
-        let mut max_valuestack_size = 0u64;
-        for tc in self.threads.lock().iter() {
-            total_load_time = total_load_time.saturating_add(tc.total_load_time.get());
-            load_count = load_count.saturating_add(tc.load_count.get());
-            total_validation_time =
-                total_validation_time.saturating_add(tc.total_validation_time.get());
-            validation_count = validation_count.saturating_add(tc.validation_count.get());
-            total_jit_time = total_jit_time.saturating_add(tc.total_jit_time.get());
-            jit_count = jit_count.saturating_add(tc.jit_count.get());
-            total_execution_time =
-                total_execution_time.saturating_add(tc.total_execution_time.get());
-            execution_count = execution_count.saturating_add(tc.execution_count.get());
-            total_interpreter_time =
-                total_interpreter_time.saturating_add(tc.total_interpreter_time.get());
-            interpreter_count = interpreter_count.saturating_add(tc.interpreter_count.get());
-            total_time = total_time.saturating_add(tc.total_time.get());
-            total_count = total_count.saturating_add(tc.total_count.get());
-            max_callstack_size = max_callstack_size.max(tc.max_callstack_size.get());
-            max_valuestack_size = max_valuestack_size.max(tc.max_valuestack_size.get());
-        }
+    /// May produce a partial result if telemetry updates happen mid-report; this is a known and
+    /// accepted risk for advisory counters.
+    pub fn to_runtime_telemetry(
+        self: &Arc<Self>,
+        package_cache: &MoveCache,
+    ) -> MoveRuntimeTelemetry {
+        // Single sweep: lock both `threads` and `aggregated` so any concurrent dying-thread
+        // `Drop` blocks on `aggregated` until we're done — avoids double-counting (it would only
+        // ever lose, not duplicate, but we also avoid the temporary undercount).
+        let totals = {
+            let mut threads = self.threads.lock();
+            let agg = self.aggregated.lock();
+            let mut totals = agg.clone();
+            threads.retain(|w| match w.upgrade() {
+                Some(arc) => {
+                    totals.add_from(&arc);
+                    true
+                }
+                // `LocalSlot::drop` already folded into `aggregated`.
+                None => false,
+            });
+            totals
+        };
 
         // Retrieve package cache statistics.
         let MoveCacheTelemetry {
@@ -399,20 +453,20 @@ impl TelemetryContext {
             vtable_cache_misses,
 
             // Telemetry metrics.
-            total_load_time,
-            load_count,
-            total_validation_time,
-            validation_count,
-            total_jit_time,
-            jit_count,
-            total_execution_time,
-            execution_count,
-            total_interpreter_time,
-            interpreter_count,
-            max_callstack_size,
-            max_valuestack_size,
-            total_time,
-            total_count,
+            total_load_time: totals.total_load_time,
+            load_count: totals.load_count,
+            total_validation_time: totals.total_validation_time,
+            validation_count: totals.validation_count,
+            total_jit_time: totals.total_jit_time,
+            jit_count: totals.jit_count,
+            total_execution_time: totals.total_execution_time,
+            execution_count: totals.execution_count,
+            total_interpreter_time: totals.total_interpreter_time,
+            interpreter_count: totals.interpreter_count,
+            max_callstack_size: totals.max_callstack_size,
+            max_valuestack_size: totals.max_valuestack_size,
+            total_time: totals.total_time,
+            total_count: totals.total_count,
         }
     }
 }
