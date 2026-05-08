@@ -14451,6 +14451,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-consistent-store"
+version = "1.74.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "parking_lot 0.12.3",
+ "prometheus",
+ "prost 0.14.1",
+ "rocksdb",
+ "scoped-futures",
+ "sui-futures",
+ "sui-indexer-alt-framework",
+ "sui-indexer-alt-framework-store-traits",
+ "sui-types",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-core"
 version = "0.1.0"
 dependencies = [
