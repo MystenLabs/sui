@@ -34,8 +34,8 @@ graph LR
 - Access to the Sui checkpoint buckets for your target network:
    - **Mainnet fallback endpoint:** `https://checkpoints.mainnet.sui.io` for the latest 30 days only.
    - **Testnet fallback endpoint:** `https://checkpoints.testnet.sui.io` for the latest 30 days only.
-   - **Mainnet full-retention backfill bucket:** `gs://mysten-mainnet-checkpoints-use4` via `--remote-store-gcs mysten-mainnet-checkpoints-use4`. This bucket is Requester Pays enabled.
-   - **Testnet full-retention backfill bucket:** `gs://mysten-testnet-checkpoints-use4` via `--remote-store-gcs mysten-testnet-checkpoints-use4`. This bucket is Requester Pays enabled.
+   - **Mainnet full-retention backfill bucket:** `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4`. This bucket is Requester Pays enabled.
+   - **Testnet full-retention backfill bucket:** `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4`. This bucket is Requester Pays enabled.
 - A [Sui full node](/operators/full-node/sui-full-node) with gRPC enabled. After the initial backfill, you can stream checkpoints from a full node instead of polling the bucket for lower latency. See [Steady-state operation](#steady-state-operation).
 
 </TabItem>

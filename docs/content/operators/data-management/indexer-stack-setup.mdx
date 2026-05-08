@@ -97,7 +97,7 @@ For prunable pipelines, calculate the `first-checkpoint` based on your retention
 
 #### Examples
 
-**Unprunable pipeline (from genesis via GCS bucket):**
+**Unprunable pipeline (from genesis through GCS bucket):**
 ```sh
 $ sui-indexer-alt indexer \
     --config unpruned.toml \
@@ -355,7 +355,7 @@ $ sui-indexer-alt-consistent-store restore \
     --remote-store-url https://checkpoints.mainnet.sui.io
 ```
 
-`https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints. For full-retention backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` via `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` via `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet instead of `--remote-store-url`.
+`https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints. For full-retention backfills older than 30 days, use `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet or `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet instead of `--remote-store-url`.
 
 ### Run command
 
