@@ -1187,12 +1187,20 @@ impl TemporaryStore<'_> {
         let mut actual_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
         let mut ptb_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
         for (idx, event) in self.execution_results.accumulator_events.iter().enumerate() {
-            // Only Balance<T> accumulators are supported today; extend this filter when
-            // additional funds-accumulator types are introduced. The debug_fatal flags any
-            // new shape so this check is updated alongside it instead of silently skipping.
+            // Filter on the value shape first: only `Integer` carries the funds-flow we care
+            // about. Other shapes (e.g. `EventDigest` for event-stream heads) belong to
+            // non-Balance accumulators and are out of scope here. If we ever see an `Integer`
+            // value at a non-`Balance<T>` type, the accounting invariants below don't apply
+            // — debug_fatal so that case is surfaced instead of silently accepted.
+            let amount = match event.write.value {
+                AccumulatorValue::Integer(amount) => amount as i128,
+                AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+                    continue;
+                }
+            };
             if !Balance::is_balance_type(&event.write.address.ty) {
                 debug_fatal!(
-                    "Unexpected non-Balance accumulator event type: {:?}",
+                    "Integer accumulator value at non-Balance type: {:?}",
                     event.write.address.ty
                 );
                 continue;
@@ -1202,14 +1210,6 @@ impl TemporaryStore<'_> {
                 .iter()
                 .any(|range| range.contains(&idx));
             let key = (event.write.address.address, event.write.address.ty.clone());
-            let AccumulatorValue::Integer(amount) = event.write.value else {
-                debug_fatal!(
-                    "Unexpected non-integer value in funds-accumulator event: {:?}",
-                    event.write.value
-                );
-                continue;
-            };
-            let amount = amount as i128;
             let change = match event.write.operation {
                 AccumulatorOperation::Split => -amount,
                 AccumulatorOperation::Merge => amount,
