@@ -844,10 +844,9 @@ impl AuthorityStorePruner {
                 tokio::task::spawn(async move {
                     loop {
                         tokio::select! {
+                            // TEMP: object pruner disabled
                             _ = objects_prune_interval.tick() => {
-                                if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
-                                    error!("Failed to prune objects: {:?}", err);
-                                }
+                                let _ = (&perpetual_db, &checkpoint_store, &rpc_index, &config, &metrics, epoch_duration_ms);
                             },
                             _ = checkpoints_prune_interval.tick() => {
                                 if let Err(err) = Self::prune_th(&perpetual_db, &checkpoint_store, num_epochs_to_retain, pruner_watermarks.clone()) {
@@ -892,10 +891,8 @@ impl AuthorityStorePruner {
             tokio::task::spawn(async move {
                 loop {
                     tokio::select! {
+                        // TEMP: object pruner disabled
                         _ = objects_prune_interval.tick(), if config.num_epochs_to_retain != u64::MAX => {
-                            if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
-                                error!("Failed to prune objects: {:?}", err);
-                            }
                             if let Err(err) = Self::prune_executed_tx_digests(&perpetual_db, &checkpoint_store).await {
                                 error!("Failed to prune executed_tx_digests: {:?}", err);
                             }
