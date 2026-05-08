@@ -100,7 +100,7 @@ impl<'d> serde::de::Visitor<'d> for CompressedStructFieldVisitor<'_> {
         let mut vals = Vec::new();
         for (i, (name, field_layout)) in self.0.fields().enumerate() {
             match seq.next_element_seed(&field_layout)? {
-                Some(val) => vals.push((name.clone(), val)),
+                Some(val) => vals.push(((**name).clone(), val)),
                 None => return Err(A::Error::invalid_length(i, &self)),
             }
         }

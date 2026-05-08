@@ -735,9 +735,9 @@ pub(crate) fn visit_value<'c, 'b, V: Visitor<'b> + ?Sized>(
             visitor.visit_signer(&driver, v)
         }
 
-        L::Vector(l) => visit_vector(driver, *l, visitor),
-        L::Struct(l) => visit_struct(driver, *l, visitor),
-        L::Enum(e) => visit_variant(driver, *e, visitor),
+        L::Vector(l) => visit_vector(driver, l, visitor),
+        L::Struct(l) => visit_struct(driver, l, visitor),
+        L::Enum(e) => visit_variant(driver, e, visitor),
     }
 }
 

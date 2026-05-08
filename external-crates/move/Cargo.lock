@@ -2662,6 +2662,7 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "bcs",
+ "criterion",
  "enum-compat-util",
  "ethnum",
  "hex",

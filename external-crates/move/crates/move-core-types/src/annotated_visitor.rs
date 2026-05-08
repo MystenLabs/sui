@@ -473,7 +473,7 @@ pub struct VariantDriver<'c, 'b> {
     inner: ValueDriver<'c, 'b>,
     layout: MoveEnumLayout,
     tag: u16,
-    variant_name: Identifier,
+    variant_name: std::sync::Arc<Identifier>,
     variant_layout: MoveFieldsLayout,
     off: u64,
 }
@@ -496,8 +496,10 @@ pub enum Error {
     NoValueLayout,
 }
 
-/// A field encountered while traversing a struct or variant: its name and layout.
-pub type Field = (Identifier, MoveTypeLayout);
+/// A field encountered while traversing a struct or variant: its name and
+/// layout. `name` is `Arc<Identifier>` so cloning it during traversal is a
+/// refcount bump, not a `Box<str>` realloc.
+pub type Field = (std::sync::Arc<Identifier>, MoveTypeLayout);
 
 /// The null traversal implements `Traversal` and `Visitor` but without doing anything (does not
 /// return a value, and does not modify any state). This is useful for skipping over parts of the
@@ -691,7 +693,7 @@ impl<'c, 'b> StructDriver<'c, 'b> {
 
     /// The layout of the next field to be visited (if there is one), or `None` otherwise.
     /// Returns the field name (borrowed from the struct layout) and its type layout.
-    pub fn peek_field(&self) -> Option<(&Identifier, MoveTypeLayout)> {
+    pub fn peek_field(&self) -> Option<(&std::sync::Arc<Identifier>, MoveTypeLayout)> {
         self.layout.field(self.off as u16)
     }
 
@@ -730,7 +732,7 @@ impl<'c, 'b> VariantDriver<'c, 'b> {
         inner: ValueDriver<'c, 'b>,
         layout: MoveEnumLayout,
         variant_layout: MoveFieldsLayout,
-        variant_name: Identifier,
+        variant_name: std::sync::Arc<Identifier>,
         tag: u16,
     ) -> Self {
         Self {
@@ -797,7 +799,7 @@ impl<'c, 'b> VariantDriver<'c, 'b> {
 
     /// The layout of the next field to be visited (if there is one), or `None` otherwise.
     /// Returns the field name (borrowed from the variant layout) and its type layout.
-    pub fn peek_field(&self) -> Option<(&Identifier, MoveTypeLayout)> {
+    pub fn peek_field(&self) -> Option<(&std::sync::Arc<Identifier>, MoveTypeLayout)> {
         self.variant_layout.field(self.off as u16)
     }
 
@@ -890,9 +892,9 @@ pub(crate) fn visit_value<'c, 'b, V: Visitor<'b> + ?Sized>(
             visitor.visit_signer(&driver, v)
         }
 
-        L::Vector(l) => visit_vector(driver, *l, visitor),
-        L::Struct(l) => visit_struct(driver, *l, visitor),
-        L::Enum(e) => visit_variant(driver, *e, visitor),
+        L::Vector(l) => visit_vector(driver, l, visitor),
+        L::Struct(l) => visit_struct(driver, l, visitor),
+        L::Enum(e) => visit_variant(driver, e, visitor),
     }
 }
 

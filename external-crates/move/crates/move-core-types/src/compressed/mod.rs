@@ -2,6 +2,32 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+//! Compressed (`Arc`-pool-backed, deduplicated) Move type layouts.
+//!
+//! The submodules are organized along two axes:
+//!
+//! 1. **Annotated vs. runtime**:
+//!    - [`annotated`] carries field names, variant names, and `StructTag`s.
+//!      Use for display, JSON, schema-aware decoding.
+//!    - [`runtime`] is the structural form — no names. Cheaper to build,
+//!      clone, and traverse. Use when names aren't needed.
+//!
+//! 2. **Owned vs. borrowed**:
+//!    - The `layout` submodule of each (`annotated::layout`,
+//!      `runtime::layout`) hosts the **owned** types: `MoveTypeLayout`,
+//!      `MoveLayoutView`, etc. `Arc`-backed; cheap to clone; can be stored
+//!      across lifetimes.
+//!    - The `ref_layout` submodule hosts the **borrowed** counterparts:
+//!      `MoveTypeLayoutRef<'a>`, `MoveLayoutViewRef<'a>`, etc. All `Copy`,
+//!      zero-allocation, lifetime-bound to the source layout. Use for hot
+//!      traversal paths.
+//!    - The `Exp*`-prefixed types in [`annotated`] are a parallel
+//!      **experimental** owned+borrowed family with a different pool
+//!      representation (struct-of-vecs, packed refs). Kept for benchmarking.
+//!
+//! The `LayoutRef` and `LeafType` defined here are shared across
+//! annotated and runtime: a leaf-flag bit + a 15-bit table index.
+
 pub mod annotated;
 pub mod runtime;
 

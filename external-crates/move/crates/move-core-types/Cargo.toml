@@ -37,7 +37,16 @@ regex.workspace = true
 serde_json.workspace = true
 arbitrary = { workspace = true, features = ["derive_arbitrary"] }
 insta.workspace = true
+criterion.workspace = true
 
 [features]
 default = []
 fuzzing = ["proptest", "proptest-derive", "arbitrary"]
+
+[[bench]]
+name = "layout_ref"
+harness = false
+
+[[bench]]
+name = "visitor"
+harness = false

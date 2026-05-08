@@ -122,7 +122,7 @@ impl<'d> serde::de::Visitor<'d> for CompressedEnumFieldVisitor<'_> {
             None => return Err(A::Error::invalid_length(tag as usize, &self)),
         };
 
-        let Some(fields) = seq.next_element_seed(CompressedVariantFieldSeed(variant_fv))? else {
+        let Some(fields) = seq.next_element_seed(CompressedVariantFieldSeed(&variant_fv))? else {
             return Err(A::Error::invalid_length(1, &self));
         };
 

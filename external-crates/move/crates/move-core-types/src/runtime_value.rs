@@ -295,7 +295,7 @@ impl MoveStruct {
             fields: vals
                 .into_iter()
                 .zip(layout.fields())
-                .map(|(v, l)| (l.0.clone(), v.decorate_compressed(&l.1)))
+                .map(|(v, l)| ((**l.0).clone(), v.decorate_compressed(&l.1)))
                 .collect(),
         }
     }
@@ -349,9 +349,9 @@ impl MoveVariant {
             fields: fields
                 .into_iter()
                 .zip(field_layouts.fields())
-                .map(|(v, l)| (l.0.clone(), v.decorate_compressed(&l.1)))
+                .map(|(v, l)| ((**l.0).clone(), v.decorate_compressed(&l.1)))
                 .collect(),
-            variant_name: v_name.clone(),
+            variant_name: (*v_name).clone(),
         }
     }
 

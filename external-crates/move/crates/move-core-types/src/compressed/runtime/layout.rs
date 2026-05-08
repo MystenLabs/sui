@@ -2,6 +2,36 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+//! Owned compressed runtime layout — the canonical, cloneable layout type
+//! for the **untyped** runtime form (no field names, no variant names, no
+//! `StructTag`s).
+//!
+//! ## Representation
+//!
+//! [`MoveTypeLayout`] is `(Arc<MoveTypeLayoutPool>, LayoutRef)` — the same
+//! shape as [`crate::compressed::annotated::MoveTypeLayout`], but pool
+//! entries hold only structural information:
+//!   - `MoveStructNode { fields: Arc<[LayoutRef]> }` — just field types.
+//!   - `MoveEnumNode { variants: Arc<[Option<Arc<[LayoutRef]>>]> }` — each
+//!     variant is either a list of field types (`Some`) or unknown (`None`).
+//!
+//! Variants in [`MoveEnumLayout`] are materialized lazily on access, so
+//! `as_view()` on a wide enum is O(1).
+//!
+//! ## How it differs from the annotated family
+//!
+//! Use `crate::compressed::annotated` when you need names and tags for
+//! display, debugging, JSON serialization, or schema-driven decoding.
+//! Use this `runtime` family when you only need the structural information
+//! for serialization/deserialization — it's cheaper to build, clone, and
+//! traverse because there's no `Identifier` / `StructTag` data to manage.
+//!
+//! ## When to use the borrowed variant
+//!
+//! For zero-allocation traversal, prefer the borrowed family in
+//! [`super::ref_layout`] (`MoveTypeLayoutRef<'a>`), reachable via
+//! [`MoveTypeLayout::as_layout_ref`] / [`MoveTypeLayout::as_view_ref`].
+
 use crate::compressed::{LayoutRef, LeafType, ResolvedRef, VariantTag};
 use crate::runtime_value as RV;
 use anyhow::Result as AResult;
@@ -60,8 +90,8 @@ pub(crate) type MoveTypeLayoutPool = [MoveTypeNode];
 /// negatives. `Hash` is intentionally not implemented (no canonical form).
 #[derive(Debug, Clone)]
 pub struct MoveTypeLayout {
-    pool: Arc<MoveTypeLayoutPool>,
-    root: LayoutRef,
+    pub(crate) pool: Arc<MoveTypeLayoutPool>,
+    pub(crate) root: LayoutRef,
 }
 
 /// A resolved view of a layout node. Leaf types are unit variants;
@@ -77,22 +107,26 @@ pub enum MoveLayoutView {
     U256,
     Address,
     Signer,
-    Vector(Box<MoveTypeLayout>),
-    Struct(Box<MoveStructLayout>),
-    Enum(Box<MoveEnumLayout>),
+    Vector(MoveTypeLayout),
+    Struct(MoveStructLayout),
+    Enum(MoveEnumLayout),
 }
 
 /// The layout of a Move datatype, which is either a struct or an enum.
 #[derive(Debug, Clone)]
 pub enum MoveDatatypeLayout {
-    Struct(Box<MoveStructLayout>),
-    Enum(Box<MoveEnumLayout>),
+    Struct(MoveStructLayout),
+    Enum(MoveEnumLayout),
 }
 
-/// The enum layout of an enum type, as a view into a shared pool.
+/// The enum layout of an enum type, as a view into a shared pool. Variant
+/// `VariantLayout`s are materialized lazily from the underlying pool entries
+/// — `as_view()` no longer pre-collects a `Vec<VariantLayout>`, so wide
+/// enums see O(1) view construction.
 #[derive(Debug, Clone)]
 pub struct MoveEnumLayout {
-    pub(crate) variants: Arc<[VariantLayout]>,
+    pool: Arc<MoveTypeLayoutPool>,
+    pub(crate) variants: Arc<[Option<Arc<[LayoutRef]>>]>,
 }
 
 /// The struct layout of a struct type, as a view into a shared pool.
@@ -191,7 +225,7 @@ impl MoveTypeLayout {
     /// If this layout is a struct, return it. Otherwise `None`.
     pub fn into_struct(self) -> Option<MoveStructLayout> {
         match self.as_view() {
-            MoveLayoutView::Struct(s) => Some(*s),
+            MoveLayoutView::Struct(s) => Some(s),
             _ => None,
         }
     }
@@ -199,7 +233,7 @@ impl MoveTypeLayout {
     /// If this layout is an enum, return it. Otherwise `None`.
     pub fn into_enum(self) -> Option<MoveEnumLayout> {
         match self.as_view() {
-            MoveLayoutView::Enum(e) => Some(*e),
+            MoveLayoutView::Enum(e) => Some(e),
             _ => None,
         }
     }
@@ -286,8 +320,8 @@ impl fmt::Display for MoveTypeLayout {
             MoveLayoutView::Signer => write!(f, "signer"),
             MoveLayoutView::Vector(vv) if f.alternate() => write!(f, "vector<{:#}>", vv),
             MoveLayoutView::Vector(vv) => write!(f, "vector<{}>", vv),
-            MoveLayoutView::Struct(fv) if f.alternate() => write!(f, "{:#}", &*fv),
-            MoveLayoutView::Struct(fv) => write!(f, "{}", &*fv),
+            MoveLayoutView::Struct(fv) if f.alternate() => write!(f, "{:#}", &fv),
+            MoveLayoutView::Struct(fv) => write!(f, "{}", &fv),
             MoveLayoutView::Enum(ev) if f.alternate() => write!(f, "{ev:#}"),
             MoveLayoutView::Enum(ev) => write!(f, "{ev}"),
         }
@@ -318,7 +352,6 @@ impl MoveLayoutView {
             MoveLayoutView::Enum(ev) => {
                 let variants = ev
                     .variants()
-                    .iter()
                     .map(|vfv| match vfv {
                         VariantLayout::Known(fv) => {
                             fv.fields().map(|f| f.inflate()).collect::<AResult<_>>()
@@ -471,14 +504,20 @@ impl MoveEnumLayout {
         self.variants.len()
     }
 
-    /// Access a variant by index.
-    pub fn variant(&self, i: VariantTag) -> Option<&VariantLayout> {
-        self.variants.get(i as usize)
+    /// Access a variant by index. Materializes on demand.
+    pub fn variant(&self, i: VariantTag) -> Option<VariantLayout> {
+        self.variants
+            .get(i as usize)
+            .map(|entry| materialize_runtime_variant(&self.pool, entry))
     }
 
-    /// Iterate over all variants.
-    pub fn variants(&self) -> &[VariantLayout] {
-        &self.variants
+    /// Iterate over all variants. Each yielded [`VariantLayout`] is
+    /// materialized on demand.
+    pub fn variants(&self) -> impl ExactSizeIterator<Item = VariantLayout> + '_ {
+        let pool = &self.pool;
+        self.variants
+            .iter()
+            .map(move |entry| materialize_runtime_variant(pool, entry))
     }
 
     /// Returns `true` iff `self` and `other` describe the same enum type,
@@ -488,21 +527,40 @@ impl MoveEnumLayout {
         if self.variants.len() != other.variants.len() {
             return false;
         }
+        let mut memo = HashSet::new();
         self.variants
             .iter()
             .zip(other.variants.iter())
             .all(|pair| match pair {
-                (VariantLayout::Unknown, VariantLayout::Unknown) => true,
-                (VariantLayout::Known(a), VariantLayout::Known(b)) => a.equivalent(b),
+                (None, None) => true,
+                (Some(fa), Some(fb)) => {
+                    fa.len() == fb.len()
+                        && fa.iter().zip(fb.iter()).all(|(a, b)| {
+                            nodes_equivalent(&self.pool, *a, &other.pool, *b, &mut memo)
+                        })
+                }
                 _ => false,
             })
+    }
+}
+
+fn materialize_runtime_variant(
+    pool: &Arc<MoveTypeLayoutPool>,
+    entry: &Option<Arc<[LayoutRef]>>,
+) -> VariantLayout {
+    match entry {
+        Some(fields) => VariantLayout::Known(MoveFieldsLayout {
+            pool: pool.clone(),
+            fields: fields.clone(),
+        }),
+        None => VariantLayout::Unknown,
     }
 }
 
 impl fmt::Display for MoveEnumLayout {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "enum ")?;
-        for (tag, vfv) in self.variants().iter().enumerate() {
+        for (tag, vfv) in self.variants().enumerate() {
             write!(f, "variant_tag: {} {{ ", tag)?;
             match vfv {
                 VariantLayout::Known(fv) => {
@@ -692,32 +750,19 @@ fn resolve_ref(pool: &Arc<MoveTypeLayoutPool>, r: LayoutRef) -> MoveLayoutView {
     match r.resolve() {
         ResolvedRef::Leaf(leaf) => leaf_to_layout_view(leaf),
         ResolvedRef::Index(idx) => match &pool[idx] {
-            MoveTypeNode::Vector(inner) => MoveLayoutView::Vector(Box::new(MoveTypeLayout {
+            MoveTypeNode::Vector(inner) => MoveLayoutView::Vector(MoveTypeLayout {
                 pool: pool.clone(),
                 root: *inner,
+            }),
+            MoveTypeNode::Struct(s) => MoveLayoutView::Struct(MoveStructLayout(MoveFieldsLayout {
+                pool: pool.clone(),
+                fields: s.fields.clone(),
             })),
-            MoveTypeNode::Struct(s) => {
-                MoveLayoutView::Struct(Box::new(MoveStructLayout(MoveFieldsLayout {
-                    pool: pool.clone(),
-                    fields: s.fields.clone(),
-                })))
-            }
-            MoveTypeNode::Enum(e) => MoveLayoutView::Enum(Box::new(MoveEnumLayout {
-                variants: e
-                    .variants
-                    .iter()
-                    .map(|v| {
-                        v.as_ref().map(|fields| MoveFieldsLayout {
-                            pool: pool.clone(),
-                            fields: fields.clone(),
-                        })
-                    })
-                    .map(|v| match v {
-                        Some(fields) => VariantLayout::Known(fields),
-                        None => VariantLayout::Unknown,
-                    })
-                    .collect(),
-            })),
+            // Two Arc bumps and zero per-variant work — variants materialize on access.
+            MoveTypeNode::Enum(e) => MoveLayoutView::Enum(MoveEnumLayout {
+                pool: pool.clone(),
+                variants: e.variants.clone(),
+            }),
         },
     }
 }

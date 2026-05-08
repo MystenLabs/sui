@@ -238,7 +238,7 @@ impl<'b> Visitor<'b> for PrintVisitor {
         &mut self,
         driver: &mut StructDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
-        let layout = MoveLayoutView::Struct(Box::new(driver.struct_layout()))
+        let layout = MoveLayoutView::Struct(driver.struct_layout())
             .inflate()
             .unwrap();
         write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
@@ -250,7 +250,7 @@ impl<'b> Visitor<'b> for PrintVisitor {
         };
 
         while let Some(((name, _), value)) = driver.next_field(&mut field_visitor)? {
-            fields.push((name, value));
+            fields.push(((*name).clone(), value));
         }
 
         self.output = field_visitor.output;
@@ -262,7 +262,7 @@ impl<'b> Visitor<'b> for PrintVisitor {
         &mut self,
         driver: &mut VariantDriver<'_, 'b>,
     ) -> Result<Self::Value, Self::Error> {
-        let layout = MoveLayoutView::Enum(Box::new(driver.enum_layout()))
+        let layout = MoveLayoutView::Enum(driver.enum_layout())
             .inflate()
             .unwrap();
         write!(self.output, "\n[{}] {layout:#}", self.depth).unwrap();
@@ -274,7 +274,7 @@ impl<'b> Visitor<'b> for PrintVisitor {
         };
 
         while let Some(((name, _), value)) = driver.next_field(&mut field_visitor)? {
-            fields.push((name, value));
+            fields.push(((*name).clone(), value));
         }
 
         self.output = field_visitor.output;
@@ -904,7 +904,7 @@ fn byte_offset_test() {
             &mut self,
             driver: &mut StructDriver<'_, 'b>,
         ) -> Result<(), Self::Error> {
-            let layout = MoveLayoutView::Struct(Box::new(driver.struct_layout()))
+            let layout = MoveLayoutView::Struct(driver.struct_layout())
                 .inflate()
                 .unwrap();
             write!(
@@ -924,7 +924,7 @@ fn byte_offset_test() {
             &mut self,
             driver: &mut VariantDriver<'_, 'b>,
         ) -> Result<(), Self::Error> {
-            let layout = MoveLayoutView::Enum(Box::new(driver.enum_layout()))
+            let layout = MoveLayoutView::Enum(driver.enum_layout())
                 .inflate()
                 .unwrap();
             write!(
@@ -1019,7 +1019,7 @@ pub(crate) fn struct_layout_(
 /// Extract the [`MoveStructLayout`] inside a layout that is known to wrap a struct.
 pub(crate) fn struct_only_(layout: &MoveTypeLayout) -> MoveStructLayout {
     match layout.as_view() {
-        MoveLayoutView::Struct(s) => *s,
+        MoveLayoutView::Struct(s) => s,
         _ => panic!("Not a struct layout"),
     }
 }

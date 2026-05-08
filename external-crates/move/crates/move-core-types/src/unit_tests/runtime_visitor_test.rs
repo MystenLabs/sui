@@ -322,7 +322,7 @@ fn traversal() {
     MoveValue::visit_deserialize(&bytes, type_layout, &mut value_traversal).unwrap();
 
     let mut struct_traversal = CountingTraversal::default();
-    MoveStruct::visit_deserialize(&bytes, *struct_layout, &mut struct_traversal).unwrap();
+    MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_traversal).unwrap();
 
     assert_eq!(18, value_traversal.0);
     assert_eq!(18, struct_traversal.0);
@@ -370,7 +370,7 @@ fn unexpected_eof() {
 
     assert_eq!(
         "unexpected end of input",
-        MoveStruct::visit_deserialize(&bytes, *struct_layout, &mut NullTraversal)
+        MoveStruct::visit_deserialize(&bytes, struct_layout, &mut NullTraversal)
             .unwrap_err()
             .to_string(),
     );
@@ -508,7 +508,7 @@ fn nested_datatype_visit() {
 
     let mut struct_visitor = PrintVisitor::default();
     let from_struct =
-        MoveStruct::visit_deserialize(&bytes, *struct_layout, &mut struct_visitor).unwrap();
+        MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
 
     // This is a little strange -- even though we are deserializing a struct, we still get a value.
     // This is because the return type comes from the visitor, not the deserializer.
@@ -682,7 +682,7 @@ fn peek_field_test() {
     let visit_struct = |fields| {
         MoveStruct::visit_deserialize(
             &bytes,
-            (*struct_layout).clone(),
+            struct_layout.clone(),
             &mut PeekU64Visitor { fields },
         )
         .unwrap()
@@ -924,7 +924,7 @@ fn byte_offset_test() {
     MoveValue::visit_deserialize(&bytes, type_layout, &mut value_visitor).unwrap();
 
     let mut struct_visitor = ByteOffsetVisitor::default();
-    MoveStruct::visit_deserialize(&bytes, *struct_layout, &mut struct_visitor).unwrap();
+    MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
 
     assert_eq!(value_visitor.0, struct_visitor.0);
     insta::assert_snapshot!(value_visitor.0);
