@@ -587,10 +587,22 @@ suiStackSidebar: [
     {
       type: 'category',
       label: 'DeepBook',
-      items: [
-        'onchain-finance/deepbookv3/deepbook',
-        'onchain-finance/deepbook-margin/deepbook-margin',
-		'onchain-finance/deepbook-predict/deepbook-predict',
+	  items: [
+		{
+          type: 'link',
+          label: 'DeepBookV3',
+          href: 'https://docs.sui.io/onchain-finance/deepbookv3/deepbook',
+        },
+		{
+          type: 'link',
+          label: 'DeepBook Margin',
+          href: 'https://docs.sui.io/onchain-finance/deepbook-margin/deepbook-margin',
+        },
+		{
+          type: 'link',
+          label: 'DeepBook Predict',
+          href: 'https://docs.sui.io/onchain-finance/deepbook-predict/deepbook-predict',
+        },
       ],
     },
     {
