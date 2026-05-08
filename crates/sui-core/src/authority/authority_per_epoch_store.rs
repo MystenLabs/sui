@@ -3342,6 +3342,19 @@ impl AuthorityPerEpochStore {
                     return None;
                 }
             }
+            SequencedConsensusTransactionKind::External(ConsensusTransaction {
+                kind: ConsensusTransactionKind::UpdateTransactionDenyConfig(msg),
+                ..
+            }) => {
+                if transaction.sender_authority() != msg.authority() {
+                    warn!(
+                        "UpdateTransactionDenyConfig authority {} does not match its author from consensus {}",
+                        msg.authority(),
+                        transaction.certificate_author_index
+                    );
+                    return None;
+                }
+            }
             SequencedConsensusTransactionKind::System(_) => {}
         }
         Some(VerifiedSequencedConsensusTransaction(transaction))

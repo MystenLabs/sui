@@ -84,7 +84,6 @@ use mysten_metrics::{RegistryService, spawn_monitored_task};
 use mysten_service::server_timing::server_timing_middleware;
 use sui_config::node::{DBCheckpointConfig, RunWithRange};
 use sui_config::node::{ForkCrashBehavior, ForkRecoveryConfig};
-use sui_config::node_config_metrics::NodeConfigMetrics;
 use sui_config::{ConsensusConfig, NodeConfig};
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
@@ -454,7 +453,6 @@ impl SuiNode {
         registry_service: RegistryService,
         server_version: ServerVersion,
     ) -> Result<Arc<SuiNode>> {
-        NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {
             info!(
@@ -1609,6 +1607,18 @@ impl SuiNode {
         self.state.clone()
     }
 
+    /// Returns the validator's `ConsensusAdapter` if this node currently has validator
+    /// components running. The Arc is cloned out and the lock is released immediately
+    /// so callers never hold the `validator_components` mutex across consensus
+    /// submission.
+    pub async fn consensus_adapter(&self) -> Option<Arc<ConsensusAdapter>> {
+        self.validator_components
+            .lock()
+            .await
+            .as_ref()
+            .map(|c| c.consensus_adapter.clone())
+    }
+
     // Only used for testing because of how epoch store is loaded.
     pub fn reference_gas_price_for_testing(&self) -> Result<u64, anyhow::Error> {
         self.state.reference_gas_price_for_testing()
@@ -1650,6 +1660,12 @@ impl SuiNode {
     ) -> Result<()> {
         let checkpoint_executor_metrics =
             CheckpointExecutorMetrics::new(&self.registry_service.default_registry());
+
+        // Holds the startup-specific deny-config broadcast setting; consumed by the
+        // first iteration. Subsequent iterations fall back to the epoch-change
+        // setting.
+        let mut broadcast_on_startup: Option<bool> =
+            Some(self.config.peer_deny_sync_config.broadcast_on_startup);
 
         loop {
             let mut hasher_guard = self.global_state_hasher.lock().await;
@@ -1729,6 +1745,38 @@ impl SuiNode {
                     None,
                     None,
                 )?;
+
+                // Broadcast our local TransactionDenyConfig recommendation, if enabled.
+                let sync_cfg = &self.config.peer_deny_sync_config;
+                let should_broadcast = broadcast_on_startup
+                    .take()
+                    .unwrap_or(sync_cfg.broadcast_on_epoch_change);
+                if should_broadcast
+                    && cur_epoch_store
+                        .protocol_config()
+                        .share_transaction_deny_config_in_consensus()
+                {
+                    let manager = self.state.transaction_deny_config_manager();
+                    let local_rules = manager.local().rules().clone();
+                    let payload = (!local_rules.is_empty()).then_some(local_rules);
+                    match manager.build_share_consensus_tx(self.state.name, payload) {
+                        Ok((tx, _generation)) => {
+                            info!(?tx, "Broadcasting transaction deny config");
+                            if let Err(e) = components.consensus_adapter.submit(
+                                tx,
+                                None,
+                                &cur_epoch_store,
+                                None,
+                                None,
+                            ) {
+                                warn!("Failed to broadcast transaction deny config: {e:?}");
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to build deny config broadcast: {e:?}");
+                        }
+                    }
+                }
             }
 
             let stop_condition = checkpoint_executor.run_epoch(run_with_range).await;

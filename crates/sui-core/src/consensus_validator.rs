@@ -177,6 +177,28 @@ impl SuiTxValidator {
                         .into());
                     }
                 }
+
+                ConsensusTransactionKind::UpdateTransactionDenyConfig(msg) => {
+                    if !epoch_store
+                        .protocol_config()
+                        .share_transaction_deny_config_in_consensus()
+                    {
+                        return Err(SuiErrorKind::UnexpectedMessage(
+                            "UpdateTransactionDenyConfig is not supported by current protocol \
+                             version"
+                                .to_string(),
+                        )
+                        .into());
+                    }
+                    if let Some(rules) = msg.rules() {
+                        rules.check_share_limits().map_err(|e| -> SuiError {
+                            SuiErrorKind::UnexpectedMessage(format!(
+                                "UpdateTransactionDenyConfig: {e}"
+                            ))
+                            .into()
+                        })?;
+                    }
+                }
             }
         }
 

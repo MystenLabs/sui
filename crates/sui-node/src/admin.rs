@@ -21,7 +21,7 @@ use std::{
 };
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_types::{
-    base_types::AuthorityName,
+    base_types::{AuthorityName, ConciseableName},
     crypto::{NetworkPublicKey, RandomnessPartialSignature, RandomnessRound, RandomnessSignature},
     digests::TransactionDigest,
     error::SuiErrorKind,
@@ -103,6 +103,9 @@ const GET_TX_COST_ROUTE: &str = "/get-tx-cost";
 const DUMP_CONSENSUS_TX_COST_ESTIMATES_ROUTE: &str = "/dump-consensus-tx-cost-estimates";
 const TRAFFIC_CONTROL: &str = "/traffic-control";
 const UPDATE_ENDPOINT: &str = "/update-endpoint";
+const BROADCAST_TX_DENY_CONFIG: &str = "/broadcast-transaction-deny-config";
+const WITHDRAW_TX_DENY_CONFIG: &str = "/withdraw-transaction-deny-config";
+const TX_DENY_CONFIG: &str = "/transaction-deny-config";
 
 struct AppState {
     node: Arc<SuiNode>,
@@ -156,6 +159,15 @@ pub async fn run_admin_server(
         )
         .route(TRAFFIC_CONTROL, post(traffic_control))
         .route(UPDATE_ENDPOINT, post(update_endpoint))
+        .route(
+            BROADCAST_TX_DENY_CONFIG,
+            post(broadcast_transaction_deny_config),
+        )
+        .route(
+            WITHDRAW_TX_DENY_CONFIG,
+            post(withdraw_transaction_deny_config),
+        )
+        .route(TX_DENY_CONFIG, get(transaction_deny_config_dump))
         .with_state(Arc::new(app_state));
 
     let socket_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
@@ -654,4 +666,110 @@ async fn update_endpoint(
             parsed_addresses.len(),
         ),
     )
+}
+
+async fn submit_transaction_deny_config_update(
+    state: &Arc<AppState>,
+    rules: Option<sui_types::transaction_deny_rules::TransactionDenyRules>,
+) -> (StatusCode, String) {
+    let authority_state = state.node.state();
+    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
+    if !epoch_store
+        .protocol_config()
+        .share_transaction_deny_config_in_consensus()
+    {
+        return (
+            StatusCode::PRECONDITION_FAILED,
+            "share_transaction_deny_config_in_consensus protocol flag is not enabled\n".to_string(),
+        );
+    }
+
+    if let Some(rules) = rules.as_ref()
+        && let Err(e) = rules.check_share_limits()
+    {
+        return (StatusCode::BAD_REQUEST, format!("{e}\n"));
+    }
+
+    let consensus_adapter = match state.node.consensus_adapter().await {
+        Some(adapter) => adapter,
+        None => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "validator components not running; consensus adapter unavailable\n".to_string(),
+            );
+        }
+    };
+
+    let (consensus_tx, generation) = match authority_state
+        .transaction_deny_config_manager()
+        .build_share_consensus_tx(authority_state.name, rules)
+    {
+        Ok(pair) => pair,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\n")),
+    };
+
+    match consensus_adapter.submit(consensus_tx, None, &epoch_store, None, None) {
+        Ok(_) => (
+            StatusCode::OK,
+            format!("UpdateTransactionDenyConfig submitted at generation {generation}\n"),
+        ),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\n")),
+    }
+}
+
+async fn broadcast_transaction_deny_config(
+    State(state): State<Arc<AppState>>,
+) -> (StatusCode, String) {
+    let local_rules = state
+        .node
+        .state()
+        .local_transaction_deny_config()
+        .rules()
+        .clone();
+    submit_transaction_deny_config_update(&state, Some(local_rules)).await
+}
+
+async fn withdraw_transaction_deny_config(
+    State(state): State<Arc<AppState>>,
+) -> (StatusCode, String) {
+    submit_transaction_deny_config_update(&state, None).await
+}
+
+async fn transaction_deny_config_dump(State(state): State<Arc<AppState>>) -> (StatusCode, String) {
+    use serde_json::json;
+
+    let authority_state = state.node.state();
+    let manager = authority_state.transaction_deny_config_manager();
+    let local = manager.local();
+    let effective = manager.effective_config().load();
+    let peers = manager.peer_configs_snapshot();
+
+    let peer_dump: serde_json::Map<String, serde_json::Value> = peers
+        .iter()
+        .map(|(authority, msg)| {
+            let key = format!("{}", authority.concise());
+            let value = json!({
+                "generation": msg.generation(),
+                "rules": msg.rules(),
+            });
+            (key, value)
+        })
+        .collect();
+
+    let body = json!({
+        "local": {
+            "rules": local.rules(),
+            "has_dynamic_transaction_checks": local.has_dynamic_transaction_checks(),
+        },
+        "peers": peer_dump,
+        "effective": {
+            "rules": effective.rules(),
+            "has_dynamic_transaction_checks": effective.has_dynamic_transaction_checks(),
+        },
+    });
+
+    match serde_json::to_string_pretty(&body) {
+        Ok(s) => (StatusCode::OK, format!("{s}\n")),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e}\n")),
+    }
 }
