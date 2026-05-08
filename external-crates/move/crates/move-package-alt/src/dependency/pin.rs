@@ -54,8 +54,10 @@ pub(crate) enum Pinned {
     /// - On-chain packages never have local transitive dependencies, since their manifests
     ///   are system-generated.
     OnChain {
-        published_at: PublishedID,
+        address: PublishedID,
     },
+    /// The root package. Invariant: if a `PinnedDependency` has `dep_info` `Root`, then its
+    /// `containing_file` is either a manifest or a lockfile in the root package's directory.
     Root(PackagePath),
 }
 
@@ -100,14 +102,8 @@ impl PinnedDependency {
             let transformed = match dep.dep_info {
                 Resolved::Local(ref loc) => loc.clone().pin(parent)?,
                 Resolved::Git(ref git) => git.pin().await?,
-                Resolved::OnChain(_) => {
-                    return Err(PackageError::OnChainDepMissingAddress {
-                        name: dep.context.name.to_string(),
-                        env: environment_id.clone(),
-                    });
-                }
-                Resolved::OnChainAt(ref addr) => Pinned::OnChain {
-                    published_at: addr.on_chain.clone(),
+                Resolved::OnChain(ref addr) => Pinned::OnChain {
+                    address: addr.on_chain.clone(),
                 },
             };
 
@@ -225,11 +221,11 @@ impl Pinned {
             Pinned::Git(dep) => dep.inner.path_to_tree(),
             Pinned::Local(dep) => dep.absolute_path_to_package.clone(),
             Pinned::Root(path) => path.path().to_path_buf(),
-            Pinned::OnChain { published_at } => {
+            Pinned::OnChain { address } => {
                 PathBuf::from(move_command_line_common::env::MOVE_HOME.as_str())
                     .join("on-chain")
                     .join(chain_id)
-                    .join(published_at.to_string())
+                    .join(address.to_string())
             }
         }
     }
@@ -253,7 +249,7 @@ impl Pinned {
                 relative_path_from_root_package: loc.local.to_path_buf().clean(),
             })),
             LockfileDependencyInfo::OnChain(on_chain) => Ok(Pinned::OnChain {
-                published_at: on_chain.on_chain.clone(),
+                address: on_chain.on_chain.clone(),
             }),
             LockfileDependencyInfo::Git(git) => Ok(Pinned::Git(git.clone().try_into()?)),
             LockfileDependencyInfo::Root(_) => Ok(Pinned::Root(PackagePath::new(
@@ -278,8 +274,8 @@ impl Pinned {
                 let rev = fmt_truncated(git.inner.sha(), 6, 2);
                 format!(r#"git = "{repo}", path = "{path}", rev = "{rev}""#)
             }
-            Pinned::OnChain { published_at } => {
-                format!("on-chain = true, published-at = \"{published_at}\"")
+            Pinned::OnChain { address } => {
+                format!("on-chain = \"{address}\"")
             }
             Pinned::Root(_) => "local = \".\"".to_string(),
         }
@@ -372,9 +368,7 @@ impl From<Pinned> for LockfileDependencyInfo {
                 rev: git.inner.sha().clone(),
                 path: git.inner.path_in_repo().to_path_buf(),
             }),
-            Pinned::OnChain { published_at } => Self::OnChain(OnChainAddress {
-                on_chain: published_at,
-            }),
+            Pinned::OnChain { address } => Self::OnChain(OnChainAddress { on_chain: address }),
             Pinned::Root(_) => Self::Root(RootDepInfo { root: true }),
         }
     }

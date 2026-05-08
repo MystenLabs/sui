@@ -204,7 +204,8 @@ impl<'de> Deserialize<'de> for ManifestDependencyInfo {
                     Ok(ManifestDependencyInfo::OnChainAt(dep))
                 } else {
                     Err(de::Error::custom(
-                        "on-chain must be `true` or a hex address string like \"0x...\"",
+                        "on-chain must be `true` (in [dependencies]) or a hex address string \
+                         like \"0x...\" (in [dep-replacements])",
                     ))
                 }
             } else {
@@ -1085,7 +1086,7 @@ mod tests {
           |
         7 |             foo = { on-chain = 42 }
           |                   ^^^^^^^^^^^^^^^^^
-        on-chain must be `true` or a hex address string like "0x..."
+        on-chain must be `true` (in [dependencies]) or a hex address string like "0x..." (in [dep-replacements])
         "###);
     }
 

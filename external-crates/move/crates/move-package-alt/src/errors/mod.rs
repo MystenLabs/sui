@@ -132,8 +132,8 @@ pub enum PackageError {
     LegacyDependsOnModern,
 
     #[error(
-        "On-chain dependency `{name}` requires `published-at` and `original-id` addresses. Add a \
-         `[dep-replacements.{env}.{name}]` entry with these fields."
+        "On-chain dependency `{name}` needs an address. Add a \
+         `[dep-replacements.{env}.{name}]` entry with `on-chain = \"0x...\"`."
     )]
     OnChainDepMissingAddress { name: String, env: String },
 }
