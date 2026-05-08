@@ -58,7 +58,7 @@ impl CombinedDependency {
                     replacement.into_inner(),
                 )?
             } else {
-                Self::from_default(*file, pkg.clone(), env.name().to_string(), default.clone())
+                Self::from_default(*file, pkg.clone(), env.name().to_string(), default.clone())?
             };
             result.push(combined);
         }
@@ -91,8 +91,15 @@ impl CombinedDependency {
         name: PackageName,
         source_env_name: EnvironmentName,
         default: DefaultDependency,
-    ) -> Self {
-        Self {
+    ) -> ManifestResult<Self> {
+        // On-chain deps in [dependencies] must use `on-chain = true`, not an address
+        if let ManifestDependencyInfo::OnChainAt(_) = &default.dependency_info {
+            return Err(ManifestError::with_file(file)(
+                ManifestErrorKind::OnChainDepWithAddress { name },
+            ));
+        }
+
+        Ok(Self {
             context: DependencyContext {
                 name,
                 use_environment: source_env_name,
@@ -103,7 +110,7 @@ impl CombinedDependency {
                 modes: default.modes,
             },
             dep_info: default.dependency_info,
-        }
+        })
     }
 
     /// Load from an entry in the `[dep-replacements]` section that has no corresponding entry in
@@ -122,6 +129,13 @@ impl CombinedDependency {
         let Some(dep) = replacement.dependency else {
             return Err(ManifestError::with_file(file)(ManifestErrorKind::NoDepInfo));
         };
+
+        // On-chain deps in [dep-replacements] must use `on-chain = "0x..."`, not `true`
+        if let ManifestDependencyInfo::OnChain(_) = &dep.dependency_info {
+            return Err(ManifestError::with_file(file)(
+                ManifestErrorKind::OnChainReplacementWithoutAddress { name },
+            ));
+        }
 
         Ok(Self {
             context: DependencyContext {
@@ -144,9 +158,16 @@ impl CombinedDependency {
         default: DefaultDependency,
         replacement: ReplacementDependency,
     ) -> ManifestResult<Self> {
+        let has_replacement_dep = replacement.dependency.is_some();
         let dep = replacement.dependency.unwrap_or(default);
 
-        // TODO: possibly additional compatibility checks here?
+        // If the replacement explicitly provides an on-chain dep, it must have an address
+        if has_replacement_dep && let ManifestDependencyInfo::OnChain(_) = &dep.dependency_info {
+            return Err(ManifestError::with_file(file)(
+                ManifestErrorKind::OnChainReplacementWithoutAddress { name },
+            ));
+        }
+
         Ok(Self {
             context: DependencyContext {
                 name,

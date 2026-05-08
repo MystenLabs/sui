@@ -116,8 +116,7 @@ impl<'a, F: MoveFlavor> PackageGraphBuilder<'a, F> {
 
         // First pass: create nodes for all packages
         for (pkg_id, pin) in pins.iter() {
-            let dep =
-                Pinned::from_lockfile(lockfile.file(), &pin.source, pin.address_override.as_ref())?;
+            let dep = Pinned::from_lockfile(lockfile.file(), &pin.source)?;
             let package = self.cache.fetch(&dep, env, mtx, self.config).await?;
             let package_manifest_digest = package.digest();
             if check_digests && package_manifest_digest != &pin.manifest_digest {
