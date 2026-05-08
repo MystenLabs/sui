@@ -13,7 +13,7 @@ pub mod move_functions;
 pub mod private_entry_arguments;
 
 pub fn transaction<Mode: ExecutionMode>(
-    env: &env::Env<'_, '_, '_, '_, '_, Mode>,
+    env: &env::Env<Mode>,
     ast: &mut T::Transaction,
 ) -> Result<(), Mode::Error> {
     input_arguments::verify::<Mode>(env, &*ast)?;

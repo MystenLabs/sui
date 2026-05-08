@@ -51,7 +51,7 @@ pub fn trace_move_call_end(trace_builder_opt: &mut Option<MoveTraceBuilder>) {
 /// Inserts transfer event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_transfer<Mode: ExecutionMode>(
-    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
+    context: &mut Context<Mode>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     values: &[CtxValue],
     tys: &[Type],
@@ -81,7 +81,7 @@ pub fn trace_transfer<Mode: ExecutionMode>(
 /// Inserts PTB summary event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_ptb_summary<Mode: ExecutionMode>(
-    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
+    context: &mut Context<Mode>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     commands: &Commands,
 ) -> Result<(), Mode::Error> {
@@ -159,7 +159,7 @@ pub fn trace_ptb_summary<Mode: ExecutionMode>(
 /// Inserts split coins event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_split_coins<Mode: ExecutionMode>(
-    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
+    context: &mut Context<Mode>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     coin_type: &Type,
     input_coin: Vec<ExtMoveValueInfo>,
@@ -207,7 +207,7 @@ pub fn trace_split_coins<Mode: ExecutionMode>(
 /// Inserts merge coins event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_merge_coins<Mode: ExecutionMode>(
-    _context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
+    _context: &mut Context<Mode>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     _coin_type: &Type,
     mut trace_values: Vec<ExtMoveValueInfo>,
@@ -252,7 +252,7 @@ pub fn trace_merge_coins<Mode: ExecutionMode>(
 /// Inserts make move vec event into the trace. As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn trace_make_move_vec<Mode: ExecutionMode>(
-    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
+    context: &mut Context<Mode>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     values: &[CtxValue],
     type_: &Type,
@@ -325,7 +325,7 @@ pub fn trace_execution_error(trace_builder_opt: &mut Option<MoveTraceBuilder>, m
 /// As is the case for all other public functions in this module,
 /// its body is (and must be) enclosed in an if statement checking if tracing is enabled.
 pub fn add_move_value_info_from_ctx_value<Mode: ExecutionMode>(
-    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
+    context: &mut Context<Mode>,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,
     move_values: &mut Vec<ExtMoveValueInfo>,
     type_: &Type,
@@ -341,7 +341,7 @@ pub fn add_move_value_info_from_ctx_value<Mode: ExecutionMode>(
 
 /// Creates `ExtMoveValueInfo` from `Value`.
 fn move_value_info_from_ctx_value<Mode: ExecutionMode>(
-    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
+    context: &mut Context<Mode>,
     type_: &Type,
     value: &CtxValue,
 ) -> Result<Option<ExtMoveValueInfo>, Mode::Error> {
@@ -352,7 +352,7 @@ fn move_value_info_from_ctx_value<Mode: ExecutionMode>(
 }
 
 fn annotated_type_layout_for_adapter_ty<Mode: ExecutionMode>(
-    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
+    context: &mut Context<Mode>,
     type_: &Type,
 ) -> Result<A::MoveTypeLayout, Mode::Error> {
     Ok(context.env.fully_annotated_layout(type_).map_err(|e| {

@@ -1570,7 +1570,7 @@ impl CtxValue {
 
 fn load_object_arg<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     input: T::ObjectInput,
 ) -> Result<(T::InputIndex, InputObjectMetadata, Value), Mode::Error> {
@@ -1583,7 +1583,7 @@ fn load_object_arg<Mode: ExecutionMode>(
 
 fn load_object_arg_impl<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     input_object_map: &mut BTreeMap<ObjectID, object_runtime::InputObject>,
     id: ObjectID,
     mutability: ObjectMutability,
@@ -1631,7 +1631,7 @@ fn load_object_arg_impl<Mode: ExecutionMode>(
 
 fn load_withdrawal_arg<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     withdrawal: &T::WithdrawalInput,
 ) -> Result<Value, Mode::Error> {
     let T::WithdrawalInput {
@@ -1648,7 +1648,7 @@ fn load_withdrawal_arg<Mode: ExecutionMode>(
 
 fn load_pure_value<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     bytes: &[u8],
     metadata: &T::PureInput,
 ) -> Result<Value, Mode::Error> {
@@ -1661,7 +1661,7 @@ fn load_pure_value<Mode: ExecutionMode>(
 
 fn load_receiving_value<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     metadata: &T::ReceivingInput,
 ) -> Result<Value, Mode::Error> {
     let (id, version, _) = metadata.object_ref;
@@ -1673,7 +1673,7 @@ fn load_receiving_value<Mode: ExecutionMode>(
 
 fn copy_value<Mode: ExecutionMode>(
     meter: &mut GasCharger,
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     value: &Value,
 ) -> Result<Value, Mode::Error> {
     charge_gas_!(meter, env, charge_copy_loc, value)?;
@@ -1896,7 +1896,7 @@ fn balance_change_accumulator_event(
 /// This function assumes proper generation of has_public_transfer, either from the abilities of
 /// the StructTag, or from the runtime correctly propagating from the inputs
 unsafe fn create_written_object<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     objects_modified_at: &BTreeMap<ObjectID, LoadedRuntimeObject>,
     id: ObjectID,
     type_: Type,

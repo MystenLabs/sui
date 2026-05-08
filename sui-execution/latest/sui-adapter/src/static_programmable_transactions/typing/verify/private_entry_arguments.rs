@@ -393,7 +393,7 @@ impl Context {
 /// - Note that command inputs are released before checking the rules, so an `entry` function can
 ///   consume a hot potato value if it is the last "heating" value in its clique.
 pub fn verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     txn: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     let mut context = Context::new(txn);
@@ -411,7 +411,7 @@ pub fn verify<Mode: ExecutionMode>(
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     context: &mut Context,
     sp!(_, c): &T::Command,
 ) -> Result<Vec<Option<Value>>, Mode::Error> {
@@ -460,7 +460,7 @@ fn command<Mode: ExecutionMode>(
 
 /// Returns the index of the first hot argument, if any
 fn arguments<'a, Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     context: &mut Context,
     args: impl IntoIterator<Item = &'a T::Argument>,
 ) -> Result<Vec<(u16, CliqueID)>, Mode::Error> {
@@ -474,7 +474,7 @@ fn arguments<'a, Mode: ExecutionMode>(
 }
 
 fn argument<Mode: ExecutionMode>(
-    _env: &Env<'_, '_, '_, '_, '_, Mode>,
+    _env: &Env<Mode>,
     context: &mut Context,
     arg: &T::Argument,
 ) -> Result<Option<CliqueID>, Mode::Error> {
@@ -490,7 +490,7 @@ fn argument<Mode: ExecutionMode>(
 ///
 /// Returns true iff any return type is a hot potato
 fn move_call<Mode: ExecutionMode>(
-    _env: &Env<'_, '_, '_, '_, '_, Mode>,
+    _env: &Env<Mode>,
     context: &mut Context,
     call: &T::MoveCall,
     argument_cliques: &[(u16, CliqueID)],

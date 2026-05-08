@@ -292,10 +292,7 @@ impl Location {
 }
 
 impl Context {
-    fn new<Mode: ExecutionMode>(
-        _env: &Env<'_, '_, '_, '_, '_, Mode>,
-        txn: &T::Transaction,
-    ) -> anyhow::Result<Self> {
+    fn new<Mode: ExecutionMode>(_env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<Self> {
         let T::Transaction {
             gas_payment,
             bytes: _,
@@ -551,16 +548,13 @@ impl Context {
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
 pub fn verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     txn: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     Ok(verify_(env, txn).map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))?)
 }
 
-fn verify_<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
-    txn: &T::Transaction,
-) -> anyhow::Result<()> {
+fn verify_<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<()> {
     let mut context = Context::new(env, txn)?;
     let T::Transaction {
         gas_payment: _,

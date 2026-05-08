@@ -162,7 +162,7 @@ where
 /// Execute a single command
 #[instrument(level = "trace", skip_all)]
 fn execute_command<Mode: ExecutionMode>(
-    context: &mut Context<'_, '_, '_, '_, '_, '_, '_, Mode>,
+    context: &mut Context<Mode>,
     mode_results: &mut Mode::ExecutionResults,
     c: T::Command_,
     trace_builder_opt: &mut Option<MoveTraceBuilder>,

@@ -10,7 +10,7 @@ pub mod memory_safety;
 pub mod type_check;
 
 pub fn transaction<Mode: ExecutionMode>(
-    env: &env::Env<'_, '_, '_, '_, '_, Mode>,
+    env: &env::Env<Mode>,
     tt: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     defining_ids_in_types::verify(env, tt)?;

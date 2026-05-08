@@ -182,7 +182,7 @@ impl Value {
     }
 
     pub fn deserialize<Mode: ExecutionMode>(
-        env: &Env<'_, '_, '_, '_, '_, Mode>,
+        env: &Env<Mode>,
         bytes: &[u8],
         ty: Type,
     ) -> Result<Value, Mode::Error> {

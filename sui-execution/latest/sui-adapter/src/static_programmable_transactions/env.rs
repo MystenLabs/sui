@@ -411,7 +411,7 @@ where
         tag: &TypeTag,
     ) -> Result<vm_runtime::Type, Mode::Error> {
         fn execution_error<Mode: ExecutionMode>(
-            env: &Env<'_, '_, '_, '_, '_, Mode>,
+            env: &Env<Mode>,
             type_arg_idx: Option<usize>,
             e: VMError,
             linkage: &ExecutableLinkage,
@@ -528,7 +528,7 @@ where
         ty: TypeInput,
     ) -> Result<vm_runtime::Type, Mode::Error> {
         fn to_type_tag_internal<Mode: ExecutionMode>(
-            env: &Env<'_, '_, '_, '_, '_, Mode>,
+            env: &Env<Mode>,
             type_arg_idx: usize,
             ty: TypeInput,
         ) -> Result<TypeTag, Mode::Error> {

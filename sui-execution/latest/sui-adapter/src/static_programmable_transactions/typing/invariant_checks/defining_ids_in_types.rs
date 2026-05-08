@@ -9,7 +9,7 @@ use crate::{
 };
 
 pub fn verify<Mode: ExecutionMode>(
-    env: &env::Env<'_, '_, '_, '_, '_, Mode>,
+    env: &env::Env<Mode>,
     tt: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     let check_type = |ty| ensure_type_defining_id_based(env, ty);
@@ -66,7 +66,7 @@ pub fn verify<Mode: ExecutionMode>(
 }
 
 fn ensure_type_defining_id_based<Mode: ExecutionMode>(
-    env: &env::Env<'_, '_, '_, '_, '_, Mode>,
+    env: &env::Env<Mode>,
     ty: &T::Type,
 ) -> Result<(), Mode::Error> {
     match ty {

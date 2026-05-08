@@ -10,7 +10,7 @@ use crate::{
 /// After, it verifies the following
 /// - No results without `drop` are unused (all unused non-input values have `drop`)
 pub fn refine_and_verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     ast: &mut T::Transaction,
 ) -> Result<(), Mode::Error> {
     refine::transaction(env, ast)?;
@@ -56,7 +56,7 @@ mod refine {
     /// After memory safety, we can switch the last usage of a `Copy` to a `Move` if it is not
     /// borrowed at the time of the last usage.
     pub fn transaction<Mode: ExecutionMode>(
-        env: &Env<'_, '_, '_, '_, '_, Mode>,
+        env: &Env<Mode>,
         ast: &mut T::Transaction,
     ) -> Result<(), Mode::Error> {
         let mut context = Context::new();
@@ -124,7 +124,7 @@ mod refine {
     /// For any withdrawal conversion where the value was not moved, send it back to the original
     /// owner
     fn return_unused_withdrawal_conversions<Mode: ExecutionMode>(
-        env: &Env<'_, '_, '_, '_, '_, Mode>,
+        env: &Env<Mode>,
         ast: &mut T::Transaction,
         moved_locations: &BTreeSet<T::Location>,
     ) -> Result<(), Mode::Error> {
@@ -231,10 +231,7 @@ mod verify {
     }
 
     impl Context {
-        fn new<Mode: ExecutionMode>(
-            _env: &Env<'_, '_, '_, '_, '_, Mode>,
-            ast: &T::Transaction,
-        ) -> Self {
+        fn new<Mode: ExecutionMode>(_env: &Env<Mode>, ast: &T::Transaction) -> Self {
             let objects = ast.objects.iter().map(|_| Some(Value)).collect::<Vec<_>>();
             let withdrawals = ast
                 .withdrawals
@@ -285,7 +282,7 @@ mod verify {
     /// Checks the following
     /// - All unused result values have `drop`
     pub fn transaction<Mode: ExecutionMode>(
-        env: &Env<'_, '_, '_, '_, '_, Mode>,
+        env: &Env<Mode>,
         ast: &T::Transaction,
     ) -> Result<(), Mode::Error> {
         let mut context = Context::new(env, ast);

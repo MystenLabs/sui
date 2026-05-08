@@ -65,7 +65,7 @@ pub fn execute<Mode: ExecutionMode>(
             )
         })?;
 
-    let mut env: Env<'_, '_, '_, '_, '_, Mode> = Env::new(
+    let mut env: Env<Mode> = Env::new(
         protocol_config,
         vm,
         state_view,

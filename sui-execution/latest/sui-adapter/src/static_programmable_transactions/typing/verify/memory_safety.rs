@@ -71,7 +71,7 @@ impl Value {
 
 impl Context {
     fn new<Mode: ExecutionMode>(
-        _env: &Env<'_, '_, '_, '_, '_, Mode>,
+        _env: &Env<Mode>,
         ast: &T::Transaction,
     ) -> Result<Self, Mode::Error> {
         let gas_coin = if ast.gas_payment.is_none() {
@@ -269,7 +269,7 @@ impl Context {
 /// - Values are not used after being moved
 /// - Reference safety is upheld (no dangling references)
 pub fn verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     ast: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     let mut context = Context::new(env, ast)?;

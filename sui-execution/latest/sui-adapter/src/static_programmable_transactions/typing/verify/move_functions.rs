@@ -19,7 +19,7 @@ use sui_verifier::private_generics_verifier_v2;
 ///    - Can be disabled under certain execution modes
 ///    - Can be disabled via a feature flag
 pub fn verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     txn: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     for c in &txn.commands {
@@ -29,7 +29,7 @@ pub fn verify<Mode: ExecutionMode>(
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     sp!(_, c): &T::Command,
 ) -> Result<(), Mode::Error> {
     let T::Command_ {
@@ -54,10 +54,7 @@ fn command<Mode: ExecutionMode>(
 /// - valid signature (no references in return type)
 /// - valid visibility
 /// - private generics rules
-fn move_call<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
-    call: &T::MoveCall,
-) -> Result<(), Mode::Error> {
+fn move_call<Mode: ExecutionMode>(env: &Env<Mode>, call: &T::MoveCall) -> Result<(), Mode::Error> {
     let T::MoveCall {
         function,
         arguments: _,
@@ -69,7 +66,7 @@ fn move_call<Mode: ExecutionMode>(
 }
 
 fn check_signature<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     function: &T::LoadedFunction,
 ) -> Result<(), Mode::Error> {
     fn check_return_type<Mode: ExecutionMode, E: ExecutionErrorTrait>(
@@ -99,7 +96,7 @@ fn check_signature<Mode: ExecutionMode>(
 }
 
 fn check_visibility<Mode: ExecutionMode>(
-    _env: &Env<'_, '_, '_, '_, '_, Mode>,
+    _env: &Env<Mode>,
     function: &T::LoadedFunction,
 ) -> Result<(), Mode::Error> {
     let visibility = function.visibility;

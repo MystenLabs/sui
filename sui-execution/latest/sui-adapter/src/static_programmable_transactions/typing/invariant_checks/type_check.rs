@@ -45,17 +45,14 @@ impl<'txn> Context<'txn> {
 }
 
 pub fn verify<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     txn: &T::Transaction,
 ) -> Result<(), Mode::Error> {
     Ok(verify_::<Mode>(env, txn)
         .map_err(|e| make_invariant_violation!("{}. Transaction {:?}", e, txn))?)
 }
 
-fn verify_<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
-    txn: &T::Transaction,
-) -> anyhow::Result<()> {
+fn verify_<Mode: ExecutionMode>(env: &Env<Mode>, txn: &T::Transaction) -> anyhow::Result<()> {
     let context = Context::new(txn);
     let T::Transaction {
         gas_payment: _,
@@ -137,7 +134,7 @@ fn receiving_input(r: &T::ReceivingInput) -> anyhow::Result<()> {
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     context: &Context,
     sp!(_, c): &T::Command,
 ) -> anyhow::Result<()> {
@@ -306,7 +303,7 @@ fn command<Mode: ExecutionMode>(
 }
 
 fn argument<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     context: &Context,
     sp!(_, (arg__, ty)): &T::Argument,
     param: &T::Type,
@@ -371,7 +368,7 @@ fn argument<Mode: ExecutionMode>(
 }
 
 fn usage<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     context: &Context,
     u: &T::Usage,
 ) -> anyhow::Result<T::Type> {
@@ -385,7 +382,7 @@ fn usage<Mode: ExecutionMode>(
 }
 
 fn location<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     context: &Context,
     l: T::Location,
 ) -> anyhow::Result<T::Type> {
@@ -426,7 +423,7 @@ fn location<Mode: ExecutionMode>(
 }
 
 fn withdrawal_compatibility_conversion<Mode: ExecutionMode>(
-    env: &Env<'_, '_, '_, '_, '_, Mode>,
+    env: &Env<Mode>,
     context: &Context,
     withdrawal_location: T::Location,
     conv: &T::WithdrawalCompatibilityConversion,
