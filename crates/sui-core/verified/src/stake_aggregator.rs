@@ -746,6 +746,132 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Liveness: eventually reaching quorum
+// ---------------------------------------------------------------------------
+//
+// The safety spec (biconditionals on Failed/QuorumReached/NotEnoughVotes) only
+// constrains individual calls.  This section proves the liveness direction:
+// if you insert enough valid sigs from distinct weighted authorities, you will
+// eventually get QuorumReached.
+//
+// The proof has two parts:
+//   1. A pure-math crossing-point lemma: any sequence of positive integers
+//      whose total is >= threshold has a first prefix that reaches threshold.
+//   2. A challenge theorem that applies the QuorumReached biconditional at the
+//      crossing point to conclude QuorumReached is returned there.
+
+/// Cumulative sum of the first n elements of a weight sequence.
+pub open spec fn weight_prefix_sum(weights: Seq<u64>, n: int) -> int
+    decreases n,
+{
+    if n <= 0 { 0 }
+    else { weight_prefix_sum(weights, n - 1) + weights[n - 1] as int }
+}
+
+/// In any sequence of positive-weight items whose total sum meets the threshold,
+/// there is a crossing point: a first index k where the cumulative sum reaches
+/// threshold (and the prefix up to k-1 was still below).
+pub proof fn lemma_crossing_point_exists(weights: Seq<u64>, n: int, threshold: int)
+    requires
+        0 < n <= weights.len() as int,
+        threshold > 0,
+        forall|i: int| 0 <= i < n ==> weights[i] as int > 0,
+        weight_prefix_sum(weights, n) >= threshold,
+    ensures
+        exists|k: int|
+            1 <= k <= n
+            && #[trigger] weight_prefix_sum(weights, k - 1) < threshold
+            && weight_prefix_sum(weights, k) >= threshold,
+    decreases n,
+{
+    if weight_prefix_sum(weights, n - 1) < threshold {
+        // The n-th element is itself the crossing point.
+        assert(1 <= n && weight_prefix_sum(weights, n - 1) < threshold
+            && weight_prefix_sum(weights, n) >= threshold);
+    } else {
+        // The crossing is somewhere in the first n-1 elements.
+        lemma_crossing_point_exists(weights, n - 1, threshold);
+        let k = choose|k: int|
+            1 <= k <= n - 1
+            && #[trigger] weight_prefix_sum(weights, k - 1) < threshold
+            && weight_prefix_sum(weights, k) >= threshold;
+        // k also satisfies 1 <= k <= n.
+        assert(1 <= k <= n);
+    }
+}
+
+/// Liveness challenge: inserting enough valid sigs eventually reaches quorum.
+///
+/// Given a sequence of distinct, positively-weighted authorities whose total
+/// weight meets the threshold, there is some position k in the sequence where
+/// the k-th insertion (into an initially empty aggregator) returns QuorumReached.
+///
+/// The proof applies `lemma_crossing_point_exists` to find the crossing index,
+/// then uses the QuorumReached biconditional from the `insert` spec to conclude
+/// QuorumReached is returned there.  The biconditionals are taken as hypotheses
+/// (standard Verus pattern when exec calls cannot be made from proof).
+pub proof fn challenge_liveness<const STRENGTH: bool>(
+    committee: &Committee,
+    authorities: Seq<AuthorityName>,
+    weights: Seq<u64>,
+    out_is_quorum: Seq<bool>,
+)
+    requires
+        committee_unique(committee),
+        authorities.len() == weights.len(),
+        authorities.len() == out_is_quorum.len(),
+        authorities.len() > 0,
+        // Each weight matches the committee weight for that authority.
+        forall|i: int| 0 <= i < authorities.len() as int
+            ==> #[trigger] weights[i] == committee_weight_of(committee, authorities[i]) as u64,
+        // All authorities have positive weight (are real committee members).
+        forall|i: int| 0 <= i < authorities.len() as int ==> weights[i] > 0,
+        // No authority appears twice.
+        forall|i: int, j: int|
+            0 <= i < j < authorities.len() as int ==> authorities[i] != authorities[j],
+        // The quorum threshold is positive (any meaningful committee).
+        committee_threshold_spec(committee, STRENGTH) > 0,
+        // The collective weight of this set meets the quorum threshold.
+        weight_prefix_sum(weights, authorities.len() as int)
+            >= committee_threshold_spec(committee, STRENGTH) as int,
+        // QuorumReached biconditional from insert, instantiated for each position:
+        // insertion i returns QuorumReached iff the accumulated weight (post-insert)
+        // first meets threshold.  (Epoch match, !has_voted, weight > 0 all hold by
+        // the other preconditions; all_sigs_valid and sig_is_valid are also assumed.)
+        forall|i: int| 0 <= i < authorities.len() as int ==>
+            out_is_quorum[i] <==>
+                (#[trigger] weight_prefix_sum(weights, i + 1)
+                    >= committee_threshold_spec(committee, STRENGTH) as int),
+    ensures
+        // QuorumReached is returned at some point in the sequence.
+        exists|k: int| 0 <= k < out_is_quorum.len() as int && #[trigger] out_is_quorum[k],
+{
+    let n = authorities.len() as int;
+    let threshold = committee_threshold_spec(committee, STRENGTH) as int;
+    // Bridge u64 > 0 to int > 0 for the lemma precondition.
+    assert(forall|i: int| 0 <= i < n ==> weights[i] as int > 0) by {
+        assert forall|i: int| 0 <= i < n implies weights[i] as int > 0 by {
+            assert(weights[i] > 0);
+        };
+    };
+    // n == weights.len() since authorities.len() == weights.len().
+    assert(n == weights.len() as int);
+    // Find the crossing index.
+    lemma_crossing_point_exists(weights, n, threshold);
+    let crossing = choose|k: int|
+        1 <= k <= n
+        && #[trigger] weight_prefix_sum(weights, k - 1) < threshold
+        && weight_prefix_sum(weights, k) >= threshold;
+    // At position crossing - 1, the post-insert weight equals prefix_sum(crossing).
+    // This triggers the biconditional forall with i = crossing - 1.
+    assert(weight_prefix_sum(weights, crossing) >= threshold);
+    assert(weight_prefix_sum(weights, (crossing - 1) + 1) >= threshold);
+    assert(0 <= crossing - 1 < n);
+    // The biconditional fires: out_is_quorum[crossing - 1] iff prefix_sum(crossing) >= threshold.
+    assert(out_is_quorum[crossing - 1]);
+}
+
 } // verus!
 
 /// MultiStakeAggregator is a utility data structure that tracks the stake accumulation of
