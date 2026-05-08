@@ -1024,9 +1024,20 @@ pub async fn download_formal_snapshot(
     // After a large backfill, rebuild the tidehunter control region to reclaim disk space
     // and reduce startup time. No-op when compiled without tidehunter.
     #[cfg(tidehunter)]
-    perpetual_db
-        .force_rebuild_control_region()
-        .expect("Failed to rebuild tidehunter control region after snapshot restore");
+    {
+        perpetual_db
+            .force_rebuild_control_region()
+            .expect("Failed to rebuild tidehunter control region after snapshot restore");
+        // The tidehunter Db spawns background threads (periodic snapshot, relocator,
+        // flusher pool, etc.) that own file handles inside the staging directory.
+        // Wait for them to exit before renaming staging -> live, otherwise a
+        // periodic timer could try to open a new file under the (now missing) path.
+        println!(
+            "Waiting for tidehunter background threads to finish before renaming staging to live"
+        );
+        perpetual_db.wait_for_tidehunter_background_threads();
+        println!("Tidehunter background threads finished, proceeding with rename");
+    }
 
     let new_path = path.parent().unwrap().join("live");
     if new_path.exists() {

@@ -438,6 +438,24 @@ impl AuthorityPerpetualTables {
         self.objects.db.force_rebuild_control_region()
     }
 
+    /// Wait for tidehunter background threads to finish before allowing the caller
+    /// to e.g. rename the database directory. Consumes `Arc<Self>` so all internal
+    /// `Arc<Database>` clones held by the column family `DBMap`s are released as
+    /// part of the drop, leaving only the `Arc<Database>` extracted here.
+    #[cfg(tidehunter)]
+    pub fn wait_for_tidehunter_background_threads(self: Arc<Self>) {
+        let strong = Arc::strong_count(&self);
+        if strong != 1 {
+            println!(
+                "WARNING: wait_for_tidehunter_background_threads called with Arc<AuthorityPerpetualTables> strong_count={} (expected 1); other clones will keep DBMap.db Arc<Database> alive past drop(self) and the inner Database wait will warn/timeout",
+                strong,
+            );
+        }
+        let db = self.objects.db.clone();
+        drop(self);
+        db.wait_for_tidehunter_background_threads();
+    }
+
     // This is used by indexer to find the correct version of dynamic field child object.
     // We do not store the version of the child object, but because of lamport timestamp,
     // we know the child must have version number less then or eq to the parent.

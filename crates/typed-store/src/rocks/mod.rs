@@ -423,6 +423,29 @@ impl Database {
         Ok(())
     }
 
+    /// Wait for tidehunter background threads to finish.
+    ///
+    /// Consumes the `Arc<Database>`. Caller must ensure no other clones of this
+    /// `Arc<Database>` (e.g. via `DBMap::db`) are alive — otherwise the inner
+    /// `Arc<TideHunterDb>` strong count will not reach zero and the wait will
+    /// poll until it panics.
+    #[cfg(tidehunter)]
+    pub fn wait_for_tidehunter_background_threads(self: Arc<Self>) {
+        let strong = Arc::strong_count(&self);
+        if strong != 1 {
+            println!(
+                "WARNING: wait_for_tidehunter_background_threads called with Arc<Database> strong_count={} (expected 1); other clones will keep the inner tidehunter Db alive and the wait may panic on timeout",
+                strong,
+            );
+        }
+        let Storage::TideHunter(th_arc) = &self.storage else {
+            return;
+        };
+        let th_arc = th_arc.clone();
+        drop(self);
+        th_arc.wait_for_background_threads_to_finish();
+    }
+
     #[cfg(tidehunter)]
     pub fn drop_cells_in_range(
         &self,
