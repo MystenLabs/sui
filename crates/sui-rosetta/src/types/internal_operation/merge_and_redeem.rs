@@ -767,7 +767,7 @@ impl TryConstructTransaction for MergeAndRedeemFungibleStakedSui {
         let redeem_token_amount = match plan {
             RedeemPlan::All => None,
             RedeemPlan::AtLeast { token_amount, .. } | RedeemPlan::AtMost { token_amount, .. } => {
-                Some(token_amount)
+                token_amount
             }
         };
 
@@ -835,7 +835,7 @@ pub(crate) fn build_redeem_plan(
                     ))
                 })?;
             Ok(RedeemPlan::AtLeast {
-                token_amount,
+                token_amount: full_redeem_or_split(token_amount, total_tokens),
                 min_sui,
             })
         }
@@ -861,10 +861,22 @@ pub(crate) fn build_redeem_plan(
                 )
                 })?;
             Ok(RedeemPlan::AtMost {
-                token_amount,
+                token_amount: full_redeem_or_split(token_amount, total_tokens),
                 max_sui,
             })
         }
+    }
+}
+
+/// Decide whether a `token_amount` selected by binary search needs a
+/// `split_fungible_staked_sui` step. If the search picked exactly the total,
+/// the merged FSS is already the right size — splitting would just leave a
+/// zero-value FSS object as dust.
+fn full_redeem_or_split(token_amount: u64, total_tokens: u64) -> Option<u64> {
+    if token_amount == total_tokens {
+        None
+    } else {
+        Some(token_amount)
     }
 }
 
@@ -912,10 +924,12 @@ pub fn merge_and_redeem_fss_pt(
         ));
     }
 
+    // None = redeem the merged FSS in full (no split). Splitting when
+    // token_amount equals the total would just leave a zero-value FSS as dust.
     let split_token_amount = match plan {
         RedeemPlan::All => None,
         RedeemPlan::AtLeast { token_amount, .. } | RedeemPlan::AtMost { token_amount, .. } => {
-            Some(*token_amount)
+            *token_amount
         }
     };
     let redeem_target = if let Some(token_amount) = split_token_amount {
@@ -1096,12 +1110,13 @@ mod tests {
                 token_amount,
                 min_sui,
             } => {
+                let inner = token_amount.expect("t=6 < total=100, plan keeps Some(token)");
                 assert_eq!(
-                    token_amount, 6,
+                    inner, 6,
                     "mirror picks t=6 (actual=6) over naive t=5 (actual=4)"
                 );
                 assert_eq!(min_sui, 5);
-                assert!(mirror_redeem_actual(&data, token_amount).unwrap() >= 5);
+                assert!(mirror_redeem_actual(&data, inner).unwrap() >= 5);
             }
             _ => panic!("wrong variant"),
         }
@@ -1126,11 +1141,9 @@ mod tests {
         let plan = build_redeem_plan(RedeemMode::AtLeast, Some(35), 30, 7, 3, Some(&data)).unwrap();
         match plan {
             RedeemPlan::AtLeast { token_amount, .. } => {
-                assert_eq!(
-                    token_amount, 16,
-                    "mirror search should pick t=16, not naive t=15"
-                );
-                assert!(mirror_redeem_actual(&data, token_amount).unwrap() >= 35);
+                let inner = token_amount.expect("t=16 < total=30, plan keeps Some(token)");
+                assert_eq!(inner, 16, "mirror search should pick t=16, not naive t=15");
+                assert!(mirror_redeem_actual(&data, inner).unwrap() >= 35);
             }
             _ => panic!("wrong variant"),
         }
@@ -1168,7 +1181,7 @@ mod tests {
                 token_amount,
                 max_sui,
             } => {
-                assert_eq!(token_amount, 49);
+                assert_eq!(token_amount, Some(49));
                 assert_eq!(max_sui, 100);
             }
             _ => panic!("wrong variant"),
@@ -1179,6 +1192,50 @@ mod tests {
     fn build_plan_all_returns_all() {
         let plan = build_redeem_plan(RedeemMode::All, None, 100, 200, 100, None).unwrap();
         assert!(matches!(plan, RedeemPlan::All));
+    }
+
+    #[test]
+    fn build_plan_atleast_full_redeem_omits_split() {
+        // Pool of 100 supply at 1:1 — to deliver 100 SUI we need all 100 tokens.
+        // binary_search returns total_tokens, so the plan should set
+        // `token_amount = None` and the PTB will skip `split_fungible_staked_sui`.
+        let data = fss(100, 100, 100, 100);
+        let plan =
+            build_redeem_plan(RedeemMode::AtLeast, Some(100), 100, 100, 100, Some(&data)).unwrap();
+        match plan {
+            RedeemPlan::AtLeast {
+                token_amount,
+                min_sui,
+            } => {
+                assert!(
+                    token_amount.is_none(),
+                    "full-redeem AtLeast should encode no-split as None, got {token_amount:?}"
+                );
+                assert_eq!(min_sui, 100);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn build_plan_atmost_full_redeem_omits_split() {
+        // Cap of 1_000_000 at rate 1:1 with 99 total tokens — every token
+        // fits, so `binary_search_at_most` returns total_tokens. Plan should
+        // encode this as no-split.
+        let plan = build_redeem_plan(RedeemMode::AtMost, Some(1_000_000), 99, 1, 1, None).unwrap();
+        match plan {
+            RedeemPlan::AtMost {
+                token_amount,
+                max_sui,
+            } => {
+                assert!(
+                    token_amount.is_none(),
+                    "full-redeem AtMost should encode no-split as None, got {token_amount:?}"
+                );
+                assert_eq!(max_sui, 1_000_000);
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 
     #[test]
@@ -1245,7 +1302,7 @@ mod tests {
     fn ptb_atleast_includes_balance_split_join_guard() {
         let sender = SuiAddress::random_for_testing_only();
         let plan = RedeemPlan::AtLeast {
-            token_amount: 100,
+            token_amount: Some(100),
             min_sui: 50,
         };
         let pt = merge_and_redeem_fss_pt(sender, vec![ref_(1), ref_(2)], &plan).unwrap();
@@ -1270,7 +1327,7 @@ mod tests {
     fn ptb_atmost_omits_balance_guard() {
         let sender = SuiAddress::random_for_testing_only();
         let plan = RedeemPlan::AtMost {
-            token_amount: 100,
+            token_amount: Some(100),
             max_sui: 50,
         };
         let pt = merge_and_redeem_fss_pt(sender, vec![ref_(1)], &plan).unwrap();
@@ -1287,6 +1344,65 @@ mod tests {
         assert!(move_calls.contains(&("sui_system", "redeem_fungible_staked_sui")));
         assert!(!move_calls.contains(&("balance", "split")));
         assert!(!move_calls.contains(&("balance", "join")));
+        assert!(move_calls.contains(&("coin", "from_balance")));
+    }
+
+    #[test]
+    fn ptb_atleast_full_redeem_omits_split_keeps_guard() {
+        // token_amount = None → no `split_fungible_staked_sui`. The chain
+        // guard (balance::split + balance::join) stays in place because
+        // AtLeast still needs runtime under-delivery protection regardless
+        // of whether we're redeeming all or a subset.
+        let sender = SuiAddress::random_for_testing_only();
+        let plan = RedeemPlan::AtLeast {
+            token_amount: None,
+            min_sui: 50,
+        };
+        let pt = merge_and_redeem_fss_pt(sender, vec![ref_(1)], &plan).unwrap();
+
+        let move_calls: Vec<(&str, &str)> = pt
+            .commands
+            .iter()
+            .filter_map(|c| match c {
+                Command::MoveCall(m) => Some((m.module.as_str(), m.function.as_str())),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !move_calls.contains(&("staking_pool", "split_fungible_staked_sui")),
+            "full-redeem AtLeast should not split FSS: {move_calls:?}"
+        );
+        assert!(move_calls.contains(&("sui_system", "redeem_fungible_staked_sui")));
+        assert!(move_calls.contains(&("balance", "split")));
+        assert!(move_calls.contains(&("balance", "join")));
+        assert!(move_calls.contains(&("coin", "from_balance")));
+    }
+
+    #[test]
+    fn ptb_atmost_full_redeem_omits_split_no_guard() {
+        // token_amount = None → no split, no balance guard. Bytes-on-chain
+        // are identical to a `RedeemPlan::All` PTB; the difference is only
+        // in `bind_epoch` which the parser can't recover, so this round-trips
+        // through parse as `Some(All)`.
+        let sender = SuiAddress::random_for_testing_only();
+        let plan = RedeemPlan::AtMost {
+            token_amount: None,
+            max_sui: 1_000_000,
+        };
+        let pt = merge_and_redeem_fss_pt(sender, vec![ref_(1)], &plan).unwrap();
+
+        let move_calls: Vec<(&str, &str)> = pt
+            .commands
+            .iter()
+            .filter_map(|c| match c {
+                Command::MoveCall(m) => Some((m.module.as_str(), m.function.as_str())),
+                _ => None,
+            })
+            .collect();
+        assert!(!move_calls.contains(&("staking_pool", "split_fungible_staked_sui")));
+        assert!(!move_calls.contains(&("balance", "split")));
+        assert!(!move_calls.contains(&("balance", "join")));
+        assert!(move_calls.contains(&("sui_system", "redeem_fungible_staked_sui")));
         assert!(move_calls.contains(&("coin", "from_balance")));
     }
 }

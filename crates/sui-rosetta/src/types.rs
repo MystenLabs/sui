@@ -499,16 +499,34 @@ pub enum RedeemMode {
 /// so the builder can attach mode-specific runtime guards. Only `AtLeast` adds
 /// a `balance::split` chain abort guard; `AtMost` relies on the staking pool
 /// invariant `actual <= floor(token * sui_balance / pool_token_balance)`.
+///
+/// `token_amount = None` on `AtLeast` / `AtMost` means "redeem the full merged
+/// FSS without splitting" — used when the binary search picked exactly the
+/// total token count. Splitting in that case is legal but leaves a zero-value
+/// FSS object in the wallet (`split_fungible_staked_sui` decrements value but
+/// doesn't delete the object), which is wasted dust. Skipping the split keeps
+/// the wallet clean.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum RedeemPlan {
     /// Redeem all FSS for the validator's pool.
     All,
     /// Redeem at least `min_sui` MIST. PTB enforces `balance.value >= min_sui`
     /// at execution time via `balance::split(min_sui)` and `balance::join`.
-    AtLeast { token_amount: u64, min_sui: u64 },
+    /// `token_amount = None` means redeem the full merged FSS (no
+    /// `split_fungible_staked_sui`); `Some(n)` splits off a `n`-token sub-FSS
+    /// and redeems only that.
+    AtLeast {
+        token_amount: Option<u64>,
+        min_sui: u64,
+    },
     /// Redeem at most `max_sui` MIST. Token count is chosen so the chain
     /// invariant `actual <= floor(token * SB / PTB) <= max_sui` holds.
-    AtMost { token_amount: u64, max_sui: u64 },
+    /// `token_amount = None` means the cap covers everything the user holds;
+    /// the PTB redeems the full merged FSS without splitting.
+    AtMost {
+        token_amount: Option<u64>,
+        max_sui: u64,
+    },
 }
 
 impl From<&TransactionKind> for OperationType {
