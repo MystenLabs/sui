@@ -579,6 +579,7 @@ webpki = { version = "0.103.10", package = "rustls-webpki", features = [
   "std",
   "ring",
 ] }
+which = "8.0.2"
 winnow = "0.7"
 wiremock = "0.5"
 x509-parser = { version = "0.17.0", features = ["verify"] }
@@ -776,4 +777,3 @@ tonic-reflection = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce6
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
-

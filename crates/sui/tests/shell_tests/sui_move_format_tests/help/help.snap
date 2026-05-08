@@ -1,22 +1,22 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-assertion_line: 112
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
-# `sui move format --help` renders the description.
-sui move format --help | sed -n '1,5p'
+# `--help` is forwarded to `prettier-move` (rather than intercepted by clap)
+# so the user sees prettier-move's full help.
+
+chmod +x stubs/prettier-move
+export PATH="$PWD/stubs:$(dirname "$(command -v sui)")"
+
+sui move --client.config $CONFIG format --help
 
 ----- results -----
 success: true
 exit_code: 0
 ----- stdout -----
-Format Move source files using `prettier-move`.
-
-This is a thin alias around the `prettier-move` shim shipped by the `@mysten/prettier-plugin-move`
-npm package — every argument is forwarded verbatim. If `prettier-move` is not found on `PATH`, the
-command offers to install it via `npm i -g`.
+prettier-move called with: --help
 
 ----- stderr -----

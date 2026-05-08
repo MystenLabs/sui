@@ -1,6 +1,5 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-assertion_line: 112
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -21,6 +20,7 @@ success: false
 exit_code: 1
 ----- stdout -----
 `prettier-move` is not installed and `npm` was not found on PATH.
-Install Node.js 18+ (which provides `npm`) from https://nodejs.org, then re-run `sui move format`.
+Install Node.js 18+ (which provides `npm`) from https://nodejs.org, then install `prettier-move` with:
+    npm i -g prettier @mysten/prettier-plugin-move
 
 ----- stderr -----
