@@ -234,14 +234,6 @@ The `decodeBcsEvent` function parses raw event bytes using a BCS schema that mat
 
 The `userRegisteredSchema` defines the BCS layout: `Address` for the owner, `string()` for the name, and `u64()` for the user ID. The function extracts the raw bytes from the event, converts them to a `Uint8Array`, and parses them with the schema. The function converts `user_id` to a string because JavaScript cannot safely represent all u64 values as numbers.
 
-### Registration test
-
-The test executes a `register_user` transaction and verifies that the contract emitted the event.
-
-<ImportContent source="K1/backend/tests/registerUser.test.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" fun="should successfully register a new user" />
-
-The test creates a unique username with a timestamp suffix (preventing nonce-like collisions), builds a `TransactionBlock` with a `moveCall` targeting `register_user`, signs and executes it, and asserts the transaction status is `success`. The `showEvents: true` option includes the emitted events in the response for inspection.
-
 ## Common modifications
 
 - **Persist events to a database:** Replace the `console.log` in `processCheckpoint` with an insert to PostgreSQL, SQLite, or Redis. Each decoded event becomes a row with the owner, name, user ID, and checkpoint number.

@@ -186,22 +186,6 @@ The `ParentObject` struct holds the shared UID that all derived objects derive f
 
 The `uid_mut_ref` function exposes the parent's UID as a mutable reference, which `derived_object::claim` requires. The `incremental_counter` gives each sequentially derived object a unique key.
 
-### Creating a derived object with an incremental key
-
-The `create_incremental` function claims a derived object using the parent's current counter value as the key, then increments the counter for the next derivation.
-
-<ImportContent source="C5/contracts/derived_objects/sources/objects.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="create_incremental" />
-
-The `derived_object::claim` call takes the parent's mutable UID reference and the counter value. It returns a UID whose ID is deterministically computed from those 2 inputs. The function stores the parent's ID as `derivation_id` on the new object so offchain clients can verify the derivation chain.
-
-### Creating a derived object with an address key
-
-The `create_address` function uses a Sui address as the derivation key, which creates a 1-to-1 mapping between addresses and derived objects under this parent.
-
-<ImportContent source="C5/contracts/derived_objects/sources/objects.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="create_address" />
-
-This pattern is useful for per-user objects. Given a user's address and the parent ID, any client can compute the derived object's ID without querying the chain.
-
 ### Offchain ID prediction
 
 The `deriveObjectIDFromParent` helper computes a derived object's ID using the Sui SDK, without any network call.
@@ -210,19 +194,11 @@ The `deriveObjectIDFromParent` helper computes a derived object's ID using the S
 
 The function serializes the key with BCS, passes it to `deriveObjectID` along with the parent object ID and the key's type tag, and returns the predicted ID. The tests verify this matches the onchain result.
 
-### Reverse search without an indexer
-
-The test suite includes a pagination pattern that queries derived objects in reverse order by computing IDs from a known counter range.
-
-<ImportContent source="C5/ts/tests/derive.test.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="reverse search pagination" />
-
-Because the counter is sequential, you can compute the ID for any index without an event query or indexer. This test reads the current counter, computes the last 10 IDs in reverse, and fetches them in a single `multiGetObjects` call.
-
 ## Common modifications
 
 - Per-user profiles: Use `create_address` with the player's wallet address as the key. Each user gets exactly 1 derived profile object per game. Look it up by computing `deriveObjectID(gameId, "address", userAddress)`.
 
--Named configuration objects: Use `create_string` with config names like `"fee_schedule"` or `"whitelist"`. Any client can find the config object by name without querying events.
+- Named configuration objects: Use `create_string` with config names like `"fee_schedule"` or `"whitelist"`. Any client can find the config object by name without querying events.
 
 - Batch create and verify: Build a PTB that calls `create_incremental` multiple times in a single transaction. Predict all IDs offchain from the current counter value before submitting, then verify the batch.
 

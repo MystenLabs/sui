@@ -254,14 +254,6 @@ The `WeatherNFT` struct stores verified weather data as a transferable Sui objec
 
 The `WeatherNFT` has `key` and `store` abilities. The `location`, `temperature`, and `timestamp_ms` fields are all verified by the enclave signature before the contract creates the object.
 
-### Enclave data handler
-
-The `process_data` function runs inside the TEE. It fetches weather data from the external API, validates freshness, and signs the response.
-
-<ImportContent source="K4/example/rust/mod.rs" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="process_data" />
-
-The handler fetches from `weatherapi.com`, extracts the location name and temperature, and validates that the data is no older than 1 hour (3,600,000 milliseconds). It creates a `WeatherResponse` struct (which must match the Move `WeatherResponse` for BCS compatibility) and signs it with the enclave's ephemeral key pair through `to_signed_response`.
-
 ## Common modifications
 
 - **Change the data source:** Replace the `weatherapi.com` fetch with any REST API. Update the `WeatherRequest` and `WeatherResponse` structs in both Rust and Move to match the new data shape. Add the new domain to `allowed_endpoints.yaml`.
