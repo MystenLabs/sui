@@ -396,11 +396,76 @@ pub proof fn lemma_voted_weight_empty_le(c: &Committee, n: int)
     }
 }
 
+/// `voted_weight` is monotone: a smaller voted set has no greater weight.
+pub proof fn lemma_voted_weight_le_subset(
+    c: &Committee,
+    s1: Set<AuthorityName>,
+    s2: Set<AuthorityName>,
+    n: int,
+)
+    requires
+        0 <= n,
+        forall|a: AuthorityName| s1.contains(a) ==> #[trigger] s2.contains(a),
+    ensures
+        voted_weight_le(c, s1, n) <= voted_weight_le(c, s2, n),
+    decreases n,
+{
+    if n <= 0 {
+    } else {
+        lemma_voted_weight_le_subset(c, s1, s2, n - 1);
+        let nm = committee_authorities(c)[n - 1];
+        if !s2.contains(nm) {
+            // s1 ⊆ s2, so nm ∉ s1 either.
+            assert(!s1.contains(nm));
+        }
+    }
+}
+
 pub broadcast proof fn lemma_voted_weight_empty(c: &Committee)
     // Broadcast lemma: Verus pulls this in automatically via the trigger.
     ensures #[trigger] voted_weight(c, Set::<AuthorityName>::empty()) == 0,
 {
     lemma_voted_weight_empty_le(c, committee_authorities(c).len() as int);
+}
+
+/// For positions strictly above `n`, `weight_of_aux` is unchanged because no
+/// later position matches `nm` (they're all different by `committee_unique`).
+pub proof fn lemma_weight_of_aux_drops_above(
+    c: &Committee,
+    nm: AuthorityName,
+    n: int,
+    k: int,
+)
+    requires
+        0 < n <= k <= committee_authorities(c).len(),
+        committee_authorities(c)[n - 1] == nm,
+        committee_unique(c),
+    ensures
+        weight_of_aux(c, nm, k) == weight_of_aux(c, nm, n),
+    decreases k,
+{
+    if k == n {
+    } else {
+        // Position k-1 ≠ nm by uniqueness (nm is at n-1, n-1 ≠ k-1).
+        assert(committee_authorities(c)[k - 1] != nm);
+        lemma_weight_of_aux_drops_above(c, nm, n, k - 1);
+    }
+}
+
+/// `committee_weight_of(c, nm)` equals `committee_weight_seq(c)[n-1]` when
+/// nm sits at position `n-1` in the canonical list.
+pub proof fn lemma_weight_seq_at_position(c: &Committee, nm: AuthorityName, n: int)
+    requires
+        0 < n <= committee_authorities(c).len(),
+        committee_authorities(c)[n - 1] == nm,
+        committee_unique(c),
+    ensures
+        committee_weight_of(c, nm) == committee_weight_seq(c)[n - 1] as int,
+{
+    // weight_of_aux(c, nm, n) hits nm at position n-1 by definition.
+    assert(weight_of_aux(c, nm, n) == committee_weight_seq(c)[n - 1] as int);
+    // Above position n, weight_of_aux is stable (no further matches).
+    lemma_weight_of_aux_drops_above(c, nm, n, committee_authorities(c).len() as int);
 }
 
 } // verus!

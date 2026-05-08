@@ -21,9 +21,10 @@ verus! {
 
 #[cfg(verus_only)]
 use crate::verus_shims::{
-    committee_epoch_spec, committee_threshold_spec, committee_unique,
-    committee_weight_of, envelope_authority, envelope_epoch, envelope_sig_spec,
-    lemma_voted_weight_empty, lemma_voted_weight_insert, sig_is_valid, voted_weight,
+    committee_authorities, committee_epoch_spec, committee_threshold_spec, committee_unique,
+    committee_weight_of, committee_weight_seq, envelope_authority, envelope_epoch, envelope_sig_spec,
+    lemma_voted_weight_empty, lemma_voted_weight_insert, lemma_voted_weight_le_subset,
+    lemma_weight_seq_at_position, sig_is_valid, voted_weight, voted_weight_le,
 };
 #[cfg(verus_only)]
 use sui_types_verified::authority_sign_info::{auth_sig_authority_spec, auth_sig_epoch_spec};
@@ -511,9 +512,7 @@ verus! {
 // ---------------------------------------------------------------------------
 
 /// All authorities with positive committee weight have cryptographically valid
-/// stored signatures.  This is the "clean state" invariant: established on a
-/// fresh aggregator and maintained by every call to `insert` when the caller
-/// supplies a valid signature.
+/// stored signatures.
 pub open spec fn all_sigs_valid<const STRENGTH: bool>(
     agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
 ) -> bool {
@@ -522,15 +521,98 @@ pub open spec fn all_sigs_valid<const STRENGTH: bool>(
             ==> #[trigger] sig_is_valid(&agg.data@[a], &agg.committee)
 }
 
-/// The aggregated weight meets the quorum threshold.
-/// Under `all_sigs_valid`, every stored weighted vote is valid, so
-/// `total_votes` already counts only valid votes and this reduces to
-/// `total_votes >= threshold`.  The spec is stated in those simple terms
-/// rather than re-summing over the valid subset.
+/// The total weight of cryptographically valid stored signatures.
+/// This is the ground-truth quorum predicate: it counts only authorities
+/// whose sig passes `sig_is_valid`, regardless of what else is in data.
+pub open spec fn valid_voted_weight<const STRENGTH: bool>(
+    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
+) -> int {
+    voted_weight(
+        &agg.committee,
+        agg.data@.dom().filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee)),
+    )
+}
+
+/// Quorum is reached when valid-only weight meets the threshold.
 pub open spec fn reaches_quorum<const STRENGTH: bool>(
     agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
 ) -> bool {
-    agg.total_votes >= committee_threshold_spec(&agg.committee, STRENGTH)
+    valid_voted_weight::<STRENGTH>(agg) >= committee_threshold_spec(&agg.committee, STRENGTH) as int
+}
+
+/// `valid_voted_weight` counts only a subset of stored votes, so it never
+/// exceeds `total_votes`.
+pub proof fn lemma_valid_voted_weight_le_total<const STRENGTH: bool>(
+    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
+)
+    requires agg.invariant_holds(), committee_unique(&agg.committee),
+    ensures valid_voted_weight::<STRENGTH>(agg) <= agg.total_votes as int,
+{
+    let full  = agg.data@.dom();
+    let valid = full.filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee));
+    assert(forall|a: AuthorityName| #[trigger] valid.contains(a) ==> full.contains(a));
+    lemma_voted_weight_le_subset(&agg.committee, valid, full, committee_authorities(&agg.committee).len() as int);
+}
+
+/// Under `all_sigs_valid`, every stored weighted vote is valid, so
+/// `valid_voted_weight` collapses to `total_votes`.
+pub proof fn lemma_valid_voted_weight_eq_total_under_all_valid<const STRENGTH: bool>(
+    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
+)
+    requires
+        agg.invariant_holds(),
+        committee_unique(&agg.committee),
+        all_sigs_valid::<STRENGTH>(agg),
+    ensures
+        valid_voted_weight::<STRENGTH>(agg) == agg.total_votes as int,
+{
+    let full = agg.data@.dom();
+    let valid = full.filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee));
+    assert(voted_weight(&agg.committee, valid) == voted_weight(&agg.committee, full)) by {
+        lemma_filter_eq_full_under_all_valid::<STRENGTH>(
+            agg, full, valid,
+            committee_authorities(&agg.committee).len() as int,
+        );
+    };
+}
+
+proof fn lemma_filter_eq_full_under_all_valid<const STRENGTH: bool>(
+    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
+    full: Set<AuthorityName>,
+    valid: Set<AuthorityName>,
+    n: int,
+)
+    requires
+        0 <= n <= committee_authorities(&agg.committee).len(),
+        full == agg.data@.dom(),
+        valid == full.filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee)),
+        all_sigs_valid::<STRENGTH>(agg),
+        committee_unique(&agg.committee),
+    ensures
+        voted_weight_le(&agg.committee, valid, n) == voted_weight_le(&agg.committee, full, n),
+    decreases n,
+{
+    if n <= 0 {
+    } else {
+        lemma_filter_eq_full_under_all_valid::<STRENGTH>(agg, full, valid, n - 1);
+        let nm = committee_authorities(&agg.committee)[n - 1];
+        assert(valid.contains(nm) <==>
+            full.contains(nm) && sig_is_valid(&agg.data@[nm], &agg.committee));
+        if full.contains(nm) {
+            assert(agg.has_voted(nm));
+            if committee_weight_of(&agg.committee, nm) > 0 {
+                // all_sigs_valid: this weighted authority has a valid sig → nm ∈ valid.
+                assert(sig_is_valid(&agg.data@[nm], &agg.committee));
+                assert(valid.contains(nm));
+            } else {
+                // weight 0: contribution is 0 regardless of which set is used.
+                // Use lemma_weight_seq_at_position to show weight_seq[n-1] == 0.
+                lemma_weight_seq_at_position(&agg.committee, nm, n);
+                // committee_weight_seq[n-1] == 0, so both sides add 0.
+                assert(committee_weight_seq(&agg.committee)[n - 1] == 0);
+            }
+        }
+    }
 }
 
 
@@ -590,10 +672,12 @@ fn try_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
         // Values of surviving entries are never modified.
         forall|a: AuthorityName|
             agg.has_voted(a) ==> #[trigger] agg.data@[a] == old(agg).data@[a],
-        // When all stored sigs were valid, batch BLS succeeds: no eviction, QuorumReached.
+        // When all stored sigs were valid, batch BLS succeeds: no eviction, QuorumReached,
+        // and all_sigs_valid is preserved (data is unchanged so validity status is unchanged).
         all_sigs_valid::<STRENGTH>(old(agg)) ==> out is QuorumReached,
         all_sigs_valid::<STRENGTH>(old(agg)) ==> agg.data@ == old(agg).data@,
         all_sigs_valid::<STRENGTH>(old(agg)) ==> agg.total_votes == old(agg).total_votes,
+        all_sigs_valid::<STRENGTH>(old(agg)) ==> all_sigs_valid::<STRENGTH>(agg),
 {
     match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
         agg.data.inner.values().cloned().collect(),
@@ -773,16 +857,30 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                         };
                     }
                 }
-                try_aggregate_and_verify(self, data)
+                let out = try_aggregate_and_verify(self, data);
+                proof {
+                    // When all sigs were valid, TAV left data and total_votes unchanged,
+                    // so all_sigs_valid(self) still holds.  Apply the weight-equality
+                    // lemma to connect valid_voted_weight to total_votes.
+                    if pre_all_valid && new_sig_valid {
+                        lemma_valid_voted_weight_eq_total_under_all_valid::<STRENGTH>(self);
+                        // valid_voted_weight(self) = total_votes >= threshold (from insert_generic QR)
+                        // reaches_quorum(self) is now established for the postcondition.
+                    }
+                }
+                out
             },
-            // In the other arms, state is exactly as insert_generic left it.
             InsertResult::Failed { error } => InsertResult::Failed { error },
             InsertResult::NotEnoughVotes {
                 bad_votes,
                 bad_authorities,
-            } => InsertResult::NotEnoughVotes {
-                bad_votes,
-                bad_authorities,
+            } => {
+                proof {
+                    // total_votes < threshold (insert_generic returned NaE).
+                    // valid_voted_weight ≤ total_votes < threshold → !reaches_quorum.
+                    lemma_valid_voted_weight_le_total::<STRENGTH>(self);
+                }
+                InsertResult::NotEnoughVotes { bad_votes, bad_authorities }
             },
         }
     }
