@@ -87,8 +87,28 @@ function injectIntoTOC() {
   ul.appendChild(buildLI());
 }
 
+function listenForFeedback() {
+  if (document.__pfListenerAttached) return;
+  document.__pfListenerAttached = true;
+  document.addEventListener("feedbackSent", () => {
+    try {
+      const instance = window.__plausible_instance__;
+      const track = instance?.track;
+      if (typeof track === "function") {
+        track("Feedback", {
+          props: {
+            user_agent: navigator.userAgent.substring(0, 150),
+            page: window.location.pathname,
+          },
+        });
+      }
+    } catch (_) {}
+  });
+}
+
 export function onRouteDidUpdate() {
   ensurePushFeedbackScript();
+  listenForFeedback();
 
   // Try a few times to survive async TOC hydration/re-render
   const tries = [0, 100, 300, 700];
