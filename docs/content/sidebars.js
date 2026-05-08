@@ -473,6 +473,27 @@ export default {
           ],
         },
         'onchain-finance/deepbook-margin/deepbook-margin-indexer',
+		  {
+      type: 'category',
+      label: 'DeepBook Predict',
+      link: { type: 'doc', id: 'onchain-finance/deepbook-predict/deepbook-predict' },
+      items: [
+        'onchain-finance/deepbook-predict/design',
+        {
+          type: 'category',
+          label: 'Contract Information',
+          link: { type: 'doc', id: 'onchain-finance/deepbook-predict/contract-information' },
+          items: [
+            'onchain-finance/deepbook-predict/contract-information/predict',
+            'onchain-finance/deepbook-predict/contract-information/predict-manager',
+            'onchain-finance/deepbook-predict/contract-information/market-keys',
+            'onchain-finance/deepbook-predict/contract-information/oracle',
+            'onchain-finance/deepbook-predict/contract-information/vault',
+            'onchain-finance/deepbook-predict/contract-information/registry',
+          ],
+        },
+      ],
+    },
       ],
     },
     {
