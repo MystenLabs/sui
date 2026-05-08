@@ -73,7 +73,9 @@ pub fn get_object(
     let (requests, read_mask) =
         validate_get_object_requests(vec![(object_id, version)], read_mask)?;
     let (object_id, version) = requests[0];
-    get_object_impl(service, object_id, version, &read_mask).map(GetObjectResponse::new)
+    let mut json_budget = service.config.max_json_move_value_response_size();
+    get_object_impl(service, object_id, version, &read_mask, &mut json_budget)
+        .map(GetObjectResponse::new)
 }
 
 #[tracing::instrument(skip(service))]
@@ -97,9 +99,15 @@ pub fn batch_get_objects(
         .map(|req| (req.object_id, req.version))
         .collect();
     let (requests, read_mask) = validate_get_object_requests(requests, read_mask)?;
+    // Share a single JSON-rendering budget across every object in the batch
+    // so an unauthenticated request cannot multiply the per-render cap by
+    // `MAX_BATCH_REQUESTS` to exhaust node memory.
+    let mut json_budget = service.config.max_json_move_value_response_size();
     let objects = requests
         .into_iter()
-        .map(|(object_id, version)| get_object_impl(service, object_id, version, &read_mask))
+        .map(|(object_id, version)| {
+            get_object_impl(service, object_id, version, &read_mask, &mut json_budget)
+        })
         .map(|result| match result {
             Ok(object) => GetObjectResult::new_object(object),
             Err(error) => GetObjectResult::new_error(error.into_status_proto()),
@@ -108,12 +116,13 @@ pub fn batch_get_objects(
     Ok(BatchGetObjectsResponse::new(objects))
 }
 
-#[tracing::instrument(skip(service))]
+#[tracing::instrument(skip(service, json_budget))]
 fn get_object_impl(
     service: &RpcService,
     object_id: Address,
     version: Option<u64>,
     read_mask: &FieldMaskTree,
+    json_budget: &mut usize,
 ) -> Result<Object, RpcError> {
     let object = if let Some(version) = version {
         service
@@ -129,5 +138,10 @@ fn get_object_impl(
             .ok_or_else(|| ObjectNotFoundError::new(object_id))?
     };
 
-    Ok(service.render_object_to_proto(&object, read_mask, &ObjectSet::default()))
+    Ok(service.render_object_to_proto_with_budget(
+        &object,
+        read_mask,
+        &ObjectSet::default(),
+        json_budget,
+    ))
 }

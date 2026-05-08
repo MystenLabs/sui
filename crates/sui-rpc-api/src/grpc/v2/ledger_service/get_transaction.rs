@@ -81,11 +81,13 @@ pub fn get_transaction(
 
     let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
 
+    let mut json_budget = service.config.max_json_move_value_response_size();
     let transaction = render_executed_transaction(
         service,
         transaction_read,
         transaction_checkpoint,
         &read_mask,
+        &mut json_budget,
     )?;
 
     Ok(GetTransactionResponse::new(transaction))
@@ -124,6 +126,11 @@ pub fn batch_get_transactions(
         .sequence_number;
     let lowest_available_checkpoint = service.reader.get_lowest_available_checkpoint()?;
 
+    // Share a single JSON-rendering budget across every transaction in the
+    // batch (and every event within each transaction) so an unauthenticated
+    // request cannot multiply the per-render cap by `MAX_BATCH_REQUESTS *
+    // max_num_event_emit` to exhaust node memory.
+    let mut json_budget = service.config.max_json_move_value_response_size();
     let transactions = digests
         .into_iter()
         .enumerate()
@@ -154,6 +161,7 @@ pub fn batch_get_transactions(
                 transaction_read,
                 transaction_checkpoint,
                 &read_mask,
+                &mut json_budget,
             )
         })
         .map(|result| match result {
@@ -179,6 +187,7 @@ fn render_executed_transaction(
     }: crate::reader::TransactionRead,
     checkpoint: u64,
     mask: &FieldMaskTree,
+    json_budget: &mut usize,
 ) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
 
@@ -248,8 +257,14 @@ fn render_executed_transaction(
     if let Some(submask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD) {
         // For historical transactions read from the ledger, packages should already be in the
         // backing store, so we pass an empty ObjectSet for overlay resolution.
-        message.events = events
-            .map(|events| service.render_events_to_proto(&events, &submask, &ObjectSet::default()));
+        message.events = events.map(|events| {
+            service.render_events_to_proto_with_budget(
+                &events,
+                &submask,
+                &ObjectSet::default(),
+                json_budget,
+            )
+        });
     }
 
     if mask.contains(ExecutedTransaction::CHECKPOINT_FIELD) {

@@ -90,6 +90,10 @@ pub fn list_owned_objects(
     )?;
     let mut objects = Vec::with_capacity(page_size);
     let mut size_bytes = 0;
+    // Share a single JSON-rendering budget across every object in the page
+    // so an unauthenticated request cannot multiply the per-render cap by
+    // `MAX_PAGE_SIZE` to exhaust node memory.
+    let mut json_budget = service.config.max_json_move_value_response_size();
     while let Some(object_info) = iter
         .next()
         .transpose()
@@ -109,7 +113,12 @@ pub fn list_owned_objects(
                 continue;
             };
 
-            service.render_object_to_proto(&object, &read_mask, &ObjectSet::default())
+            service.render_object_to_proto_with_budget(
+                &object,
+                &read_mask,
+                &ObjectSet::default(),
+                &mut json_budget,
+            )
         } else {
             owned_object_to_proto(object_info, &read_mask)
         };

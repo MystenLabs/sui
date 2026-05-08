@@ -15,7 +15,7 @@ use sui_rpc_api::{
 };
 use sui_types::storage::ObjectKey;
 
-use super::render_json;
+use super::{MAX_JSON_MOVE_VALUE_RESPONSE_SIZE, render_json_with_budget};
 use crate::PackageResolver;
 
 pub const MAX_BATCH_REQUESTS: usize = 1000;
@@ -48,10 +48,12 @@ pub(crate) async fn get_object(
     if read_mask.contains(Object::JSON_FIELD)
         && let Some(move_object) = object.data.try_as_move()
     {
-        message.json = render_json(
+        let mut size_budget = MAX_JSON_MOVE_VALUE_RESPONSE_SIZE;
+        message.json = render_json_with_budget(
             resolver,
             &move_object.type_().clone().into(),
             move_object.contents(),
+            &mut size_budget,
         )
         .await
         .map(Box::new);
@@ -106,14 +108,19 @@ pub(crate) async fn batch_get_objects(
 
     let needs_json = read_mask.contains(Object::JSON_FIELD);
     let mut objects = Vec::with_capacity(object_keys.len());
+    // Share a single JSON-rendering budget across every object in the batch
+    // so an unauthenticated request cannot multiply the per-render cap by
+    // `MAX_BATCH_REQUESTS` to exhaust node memory.
+    let mut size_budget = MAX_JSON_MOVE_VALUE_RESPONSE_SIZE;
     for object_key in object_keys {
         if let Some(object) = response.get(&(object_key.0, object_key.1)) {
             let mut message = Object::default();
             if needs_json && let Some(move_object) = object.data.try_as_move() {
-                message.json = render_json(
+                message.json = render_json_with_budget(
                     resolver,
                     &move_object.type_().clone().into(),
                     move_object.contents(),
+                    &mut size_budget,
                 )
                 .await
                 .map(Box::new);

@@ -256,6 +256,32 @@ pub(crate) mod tests {
         expect.assert_eq(&err.to_string());
     }
 
+    #[test]
+    fn shared_budget_is_consumed_across_calls() {
+        // Two calls draining one budget must succeed for the first value, leave
+        // a smaller remaining budget for the second, and fail once exhausted.
+        // This is the property the JSON-rendering middleware relies on to
+        // bound aggregate response memory across batch endpoints.
+        let layout = layout_("0x0::foo::Bar", vec![("a", L::U64)]);
+        let value = value_("0x0::foo::Bar", vec![("a", V::U64(42))]);
+        let expected = json!({ "a": "42" });
+        let per_call = required_budget(&expected);
+        let bytes = serialize(value);
+
+        // Budget for two renders: both succeed and the budget is fully drained.
+        let mut budget = per_call * 2;
+        let first = ProtoVisitor::deserialize_value_with_budget(&bytes, &layout, &mut budget)
+            .expect("first render should succeed");
+        assert_eq!(expected, proto_value_to_json_value(first));
+        assert_eq!(budget, per_call);
+        let second = ProtoVisitor::deserialize_value_with_budget(&bytes, &layout, &mut budget)
+            .expect("second render should succeed");
+        assert_eq!(expected, proto_value_to_json_value(second));
+        assert_eq!(budget, 0);
+        ProtoVisitor::deserialize_value_with_budget(&bytes, &layout, &mut budget)
+            .expect_err("third render must fail once the shared budget is exhausted");
+    }
+
     fn proto_value_to_json_value(proto: Value) -> serde_json::Value {
         match proto.kind {
             Some(Kind::NullValue(_)) | None => serde_json::Value::Null,

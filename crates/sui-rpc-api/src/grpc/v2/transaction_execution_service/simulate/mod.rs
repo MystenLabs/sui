@@ -214,6 +214,12 @@ pub fn simulate_transaction(
         ));
     }
 
+    // Share a single JSON-rendering budget across the entire response —
+    // events, rendered objects, and every command output — so an
+    // unauthenticated request cannot multiply the per-render cap by
+    // `max_num_event_emit + |objects| + commands * outputs`.
+    let mut json_budget = service.config.max_json_move_value_response_size();
+
     let transaction = if let Some(submask) = read_mask.subtree("transaction") {
         let mut message = ExecutedTransaction::default();
         let transaction = sui_sdk_types::Transaction::try_from(transaction)?;
@@ -242,7 +248,14 @@ pub fn simulate_transaction(
         message.events = submask
             .subtree(ExecutedTransaction::EVENTS_FIELD.name)
             .and_then(|mask| {
-                events.map(|events| service.render_events_to_proto(&events, &mask, &objects))
+                events.map(|events| {
+                    service.render_events_to_proto_with_budget(
+                        &events,
+                        &mask,
+                        &objects,
+                        &mut json_budget,
+                    )
+                })
             });
 
         message.transaction = submask
@@ -260,7 +273,14 @@ pub fn simulate_transaction(
                 ObjectSet::default().with_objects(
                     objects
                         .iter()
-                        .map(|o| service.render_object_to_proto(o, &mask, &objects))
+                        .map(|o| {
+                            service.render_object_to_proto_with_budget(
+                                o,
+                                &mask,
+                                &objects,
+                                &mut json_budget,
+                            )
+                        })
                         .collect(),
                 )
             });
@@ -278,11 +298,13 @@ pub fn simulate_transaction(
                 let mut message = CommandResult::default();
                 message.return_values = return_values
                     .into_iter()
-                    .map(|(bcs, ty)| to_command_output(service, None, bcs, ty))
+                    .map(|(bcs, ty)| to_command_output(service, None, bcs, ty, &mut json_budget))
                     .collect();
                 message.mutated_by_ref = reference_outputs
                     .into_iter()
-                    .map(|(arg, bcs, ty)| to_command_output(service, Some(arg), bcs, ty))
+                    .map(|(arg, bcs, ty)| {
+                        to_command_output(service, Some(arg), bcs, ty, &mut json_budget)
+                    })
                     .collect();
                 message
             })
@@ -305,6 +327,7 @@ fn to_command_output(
     arg: Option<sui_types::transaction::Argument>,
     bcs: Vec<u8>,
     ty: sui_types::TypeTag,
+    size_budget: &mut usize,
 ) -> CommandOutput {
     let json = service
         .reader
@@ -313,12 +336,14 @@ fn to_command_output(
         .ok()
         .flatten()
         .and_then(|layout| {
-            let bound = service.config.max_json_move_value_size();
-            sui_types::object::rpc_visitor::proto::ProtoVisitor::new(bound)
-                .deserialize_value(&bcs, &layout)
-                .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
-                .ok()
-                .map(Box::new)
+            sui_types::object::rpc_visitor::proto::ProtoVisitor::deserialize_value_with_budget(
+                &bcs,
+                &layout,
+                size_budget,
+            )
+            .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
+            .ok()
+            .map(Box::new)
         });
 
     let mut message = CommandOutput::default();

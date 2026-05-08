@@ -84,14 +84,23 @@ pub fn list_dynamic_fields(
         indexes.dynamic_field_iter(parent.into(), page_token.map(|t| t.field_id.into()))?;
     let mut dynamic_fields = Vec::with_capacity(page_size);
     let mut size_bytes = 0;
+    // Share a single JSON-rendering budget across every field on the page.
+    // Each field can render both its `field_object` and (for object fields)
+    // its `child_object` JSON, so the worst case without a shared budget is
+    // `2 * MAX_PAGE_SIZE` independent renders.
+    let mut json_budget = service.config.max_json_move_value_response_size();
     while let Some(key) = iter
         .next()
         .transpose()
         .map_err(|e| RpcError::new(tonic::Code::Internal, e.to_string()))?
     {
-        let Some(dynamic_field) =
-            get_dynamic_field(service, &key.parent, &key.field_id, &read_mask)
-        else {
+        let Some(dynamic_field) = get_dynamic_field(
+            service,
+            &key.parent,
+            &key.field_id,
+            &read_mask,
+            &mut json_budget,
+        ) else {
             continue;
         };
 
@@ -144,6 +153,7 @@ fn get_dynamic_field(
     parent: &ObjectID,
     field_id: &ObjectID,
     read_mask: &FieldMaskTree,
+    json_budget: &mut usize,
 ) -> Option<DynamicField> {
     let mut message = DynamicField::default();
 
@@ -156,7 +166,7 @@ fn get_dynamic_field(
     }
 
     if should_load_field(read_mask)
-        && let Err(e) = load_dynamic_field(service, field_id, read_mask, &mut message)
+        && let Err(e) = load_dynamic_field(service, field_id, read_mask, &mut message, json_budget)
     {
         tracing::warn!("error loading dynamic object: {e}");
         return None;
@@ -183,6 +193,7 @@ fn load_dynamic_field(
     field_id: &ObjectID,
     read_mask: &FieldMaskTree,
     message: &mut DynamicField,
+    json_budget: &mut usize,
 ) -> Result<(), anyhow::Error> {
     use sui_types::dynamic_field::DynamicFieldType;
     use sui_types::dynamic_field::visitor as DFV;
@@ -254,10 +265,11 @@ fn load_dynamic_field(
     }
 
     if let Some(submask) = read_mask.subtree(DynamicField::FIELD_OBJECT_FIELD) {
-        message.set_field_object(service.render_object_to_proto(
+        message.set_field_object(service.render_object_to_proto_with_budget(
             &field_object,
             &submask,
             &ObjectSet::default(),
+            json_budget,
         ));
     }
 
@@ -289,10 +301,11 @@ fn load_dynamic_field(
                 }
 
                 if let Some(submask) = read_mask.subtree(DynamicField::CHILD_OBJECT_FIELD) {
-                    message.set_child_object(service.render_object_to_proto(
+                    message.set_child_object(service.render_object_to_proto_with_budget(
                         &object,
                         &submask,
                         &ObjectSet::default(),
+                        json_budget,
                     ));
                 }
             }
