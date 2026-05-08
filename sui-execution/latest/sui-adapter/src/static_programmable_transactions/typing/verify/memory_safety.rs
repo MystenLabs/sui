@@ -566,6 +566,8 @@ fn write_ref<E: ExecutionErrorTrait>(
 
     if !context.is_writable::<E>(r)? {
         // TODO more specific error
+        // TODO checked_as!
+        #[allow(clippy::cast_possible_truncation)]
         return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::CannotWriteToExtendedReference,
             arg_idx as u16,
@@ -594,6 +596,8 @@ fn call<E: ExecutionErrorTrait>(
         let Some((idx, _)) = mut_idx else {
             invariant_violation!("non transferrable value was not found in arguments");
         };
+        // TODO checked_as!
+        #[allow(clippy::cast_possible_truncation)]
         return Err(E::from_kind(ExecutionErrorKind::command_argument_error(
             CommandArgumentError::InvalidReferenceArgument,
             idx as u16,

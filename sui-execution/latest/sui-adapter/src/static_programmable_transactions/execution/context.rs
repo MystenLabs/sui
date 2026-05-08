@@ -1966,10 +1966,7 @@ pub fn subst_signature(
     })
 }
 
-pub enum EitherError<E = ExecutionError>
-where
-    E: ExecutionErrorTrait,
-{
+pub enum EitherError<E: ExecutionErrorTrait = ExecutionError> {
     CommandArgument(CommandArgumentError),
     Execution(E),
 }

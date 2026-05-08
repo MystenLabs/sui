@@ -168,15 +168,12 @@ pub(crate) fn get_package<E: ExecutionErrorTrait>(
 
 // Add a package to the unification table, unifying it with any existing package in the table.
 // Errors if the packages cannot be unified (e.g., if one is exact and the other is not).
-pub(crate) fn add_and_unify<E>(
+pub(crate) fn add_and_unify<E: ExecutionErrorTrait>(
     object_id: &ObjectID,
     store: &dyn PackageStore,
     resolution_table: &mut ResolutionTable,
     resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
-) -> Result<(), E>
-where
-    E: ExecutionErrorTrait,
-{
+) -> Result<(), E> {
     let package = get_package(object_id, store)?;
 
     let Some(resolution) = resolution_fn(&package) else {
