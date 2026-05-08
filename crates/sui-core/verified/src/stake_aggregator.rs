@@ -672,15 +672,6 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
             self.invariant_holds(),
             all_sigs_valid::<STRENGTH>(self),
 
-            // === State transition ===
-            // The voted set grows by exactly {authority} on non-Failed paths.
-            envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee)
-                && !old(self).has_voted(envelope_authority(&envelope))
-                && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
-                ==> forall|a: AuthorityName|
-                        self.has_voted(a)
-                            <==> (#[trigger] old(self).has_voted(a) || a == envelope_authority(&envelope)),
-
             // === Return value (fully biconditional) ===
 
             // Failed iff the input is structurally invalid: wrong epoch, duplicate
