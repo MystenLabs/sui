@@ -596,12 +596,12 @@ suiStackSidebar: [
 		{
           type: 'link',
           label: 'DeepBook Margin',
-          href: 'https://docs.sui.io/onchain-finance/deepbook-margin/deepbook-margin',
+          href: 'https://docs.sui.io/onchain-finance/deepbook-margin/design',
         },
 		{
           type: 'link',
           label: 'DeepBook Predict',
-          href: 'https://docs.sui.io/onchain-finance/deepbook-predict/deepbook-predict',
+          href: 'https://docs.sui.io/onchain-finance/deepbook-predict/design',
         },
       ],
     },
