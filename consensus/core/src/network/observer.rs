@@ -659,7 +659,7 @@ mod tests {
             }
             if count >= 40 {
                 break;
-Yes, Y            }
+            }
         }
         assert_eq!(count, 40);
 

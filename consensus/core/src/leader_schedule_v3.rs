@@ -7,13 +7,13 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
-use consensus_types::block::Round;
+use consensus_types::block::{BlockRef, Round};
 use parking_lot::RwLock;
 use rand::{SeedableRng, prelude::SliceRandom, rngs::StdRng};
 
 use crate::{
     CommitIndex, CommitRef, CommittedSubDag, DagState,
-    block::{BlockAPI, GENESIS_ROUND},
+    block::{BlockAPI, GENESIS_ROUND, VerifiedBlock},
     commit::{CommitRange, load_committed_subdag_from_store},
     context::Context,
     leader_scoring::ReputationScores,
@@ -25,32 +25,49 @@ use crate::{
 /// running totals. When the running window is full, the oldest commit is evicted
 /// and its contributions are subtracted from the running totals.
 ///
-/// Scoring rule for commit C (requires `C >= 3` so that C-1 and C-2 are present):
-/// Let `r` be the leader round of commit C-2.
-/// For each authority A: consider A's blocks at round `r+1` ("voting block") across commits
-/// C and C-1.
-/// Collect the set of distinct authorities B, such that at least one of A's voting blocks
-/// vote to (has an ancestor that is) a B's round `r` ("leader block") block in commit C-2.
-/// Then `score[A] += sum_{B in distinct set} stake(B)`.
+/// Scoring rule for commit C:
+///
+/// When `C >= 4`, C-1, C-2 and C-3 exist as pending commits.
+/// Let `r` be the leader round of commit C-3.
+///
+/// For each authority A: consider A's block at round `r+1` (voting round) across commits
+/// from commit C-2 to commit with leader round > `r+1`.
+/// If there are multiple A blocks in this slot, `score[A] = 0`.
+///
+/// Collect the set of distinct authorities P, such that A's voting block votes to
+/// (has an ancestor link to) P's round `r` block (leader block) in commit C-3.
+/// Then `voted_for_stake[A] = sum_{P in distinct set} stake(P)`.
+///
+/// Collect the set of distinct authorities Q, such that a Q's round `r+2`
+/// block certifies (has an ancestor link to) A's voting block in round `r+1`,
+/// across commits from C-2 to commit with leader round > `r+2`.
+/// Then `certified_by_stake[A] = sum_{Q in distinct set} stake(Q)`.
+///
+/// The overall score for A is `score[A] = voted_for_stake[A] * certified_by_stake[A]`.
 pub(crate) struct LeaderScheduleV3 {
     context: Arc<Context>,
     next_commit_index: CommitIndex,
     // Total scores per authority in the running window, indexed by AuthorityIndex.
+    // Each scored commit contributes `voted_for_stake[A] * certified_by_stake[A]`
+    // (stake² units) per authority A, summed across the running window.
     total_scores_per_authority: Vec<u64>,
-    // Total number of leaders across the running window.
+    // Total number of leader-round blocks across the running window.
     // Used for metrics.
     total_num_leaders: usize,
-    // Total stake of leaders across the running window
-    // Used for metrics.
+    // Running sum of `Σ stake(leader_authors)` across the scored commits in
+    // the window. The normalized-score metric multiplies this by
+    // `committee.total_stake()` at report time to match the stake² units of
+    // `total_scores_per_authority`.
     total_leader_stakes: u64,
 
-    // Holds at most the last two committed subdags, used as C-2 and C-1
-    // when computing scores with leaders from C-3.
+    // Holds at most the last three committed subdags, for computing leader scores.
+    // Score entries are produced once 3 commits have accumulated; on each
+    // subsequent `add_commit`, the oldest is evicted and a new commit appended.
     pending_commits: VecDeque<CommittedSubDag>,
     // One entry per scored commit still in the running window. Used to
     // subtract a commit's contributions from `total_scores_per_authority` on
     // eviction. Bounded by `leader_schedule_window_size`.
-    scores_entry: VecDeque<ScoresEntry>,
+    scores_entries: VecDeque<ScoresEntry>,
 }
 
 /// This is used by the commit rule to figure out the next commit leaders.
@@ -60,24 +77,29 @@ pub(crate) struct NextCommitLeaderSchedule {
     pub(crate) next_commit_index: CommitIndex,
     // Minimum round of the next commit leader.
     pub(crate) min_next_leader_round: Round,
-    // Number of leaders to select.
+    // Number of leaders to select per round.
     pub(crate) num_leaders: usize,
-    // Allowed leaders to be selected from.
+    // Authorities allowed to be leaders.
     pub(crate) allowed_leaders: Vec<AuthorityIndex>,
 }
 
 struct ScoresEntry {
+    // CommitRef of the scored commit (the C-3-equivalent: oldest pending commit
+    // at the time the entry was produced).
     commit_ref: CommitRef,
-    // Per-authority incremental score contributed by processing this commit,
-    // indexed by AuthorityIndex. Retained so eviction can subtract it.
+    // Per-authority incremental score contributed by the scored commit, indexed
+    // by AuthorityIndex. Retained so eviction can subtract from
+    // `total_scores_per_authority`.
     score_contributions: Vec<u64>,
-    // Number of round `r` (leader) blocks in the scored commit (C-2).
-    // Retained so eviction can subtract it from `total_num_leaders`.
+    // Number of leader blocks in the scored commit. Retained so
+    // eviction can subtract from `total_num_leaders`.
     num_leaders: usize,
-    // Sum of stake(author) across all leader blocks in the scored commit.
-    // Retained so eviction can subtract it from `total_leader_stakes`.
+    // `Σ stake(leader_authors)` for the scored commit. Retained so eviction
+    // can subtract from `total_leader_stakes`.
     leader_stakes: u64,
 }
+
+const MAX_PENDING_COMMITS: usize = 3;
 
 impl LeaderScheduleV3 {
     /// Constructs a `LeaderScheduleV3`.
@@ -124,17 +146,17 @@ impl LeaderScheduleV3 {
             total_scores_per_authority,
             total_num_leaders: 0,
             total_leader_stakes: 0,
-            pending_commits: VecDeque::with_capacity(2),
-            scores_entry: VecDeque::with_capacity(running_length),
+            pending_commits: VecDeque::with_capacity(3),
+            scores_entries: VecDeque::with_capacity(running_length),
         }
     }
 
     /// Number of recent committed sub-dags that must be replayed on startup
-    /// to reconstruct the full state: `leader_schedule_window_size`
-    /// for the scoring window plus 2 for the pending commits held before
-    /// scoring begins.
+    /// to reconstruct the full state: `leader_schedule_window_size` for the
+    /// scoring window plus 3 for the pending commits held before scoring
+    /// begins.
     fn replay_length(context: &Context) -> u32 {
-        context.protocol_config.leader_schedule_window_size() + 2
+        context.protocol_config.leader_schedule_window_size() + MAX_PENDING_COMMITS as u32
     }
 
     /// Returns the leader schedule for the next commit.
@@ -222,25 +244,152 @@ impl LeaderScheduleV3 {
         by_score.into_iter().map(|(idx, _)| idx).collect()
     }
 
-    /// Scores a commit and adds it into the running window.
-    /// Evicts the oldest scored commit and drops its scores, if the window is full.
+    /// On each `add_commit(c)`, once 3 commits have accumulated, a score entry
+    /// corresponding to the front of `pending_commits` (the C-3-equivalent)
+    /// is produced; then C is appended to `pending_commits` and the front is
+    /// evicted. Evicts the oldest entry from the running window if full.
+    ///
+    /// Architectural contract: consecutive commits must have strictly
+    /// increasing leader rounds. Under the invariant, 3 commits are sufficient
+    /// to satisfy both the r+1 voting-block scan and the r+2 certifying-block
+    /// scan (some commit in [C-2, C-1, c] satisfies each `>` bound).
     pub(crate) fn add_commit(&mut self, c: CommittedSubDag) {
         // Ensure commits are added in order.
         assert_eq!(c.commit_ref.index, self.next_commit_index);
         self.next_commit_index += 1;
 
-        // There must be exactly 2 pending commits to compute the next scores.
-        // Otherwise, this is a new consensus instance (new epoch or recovery).
-        if self.pending_commits.len() < 2 {
+        // Need C-3, C-2, C-1 in pending before producing a score entry.
+        // Until then, this is warmup (new instance, new epoch, or recovery).
+        if self.pending_commits.len() < MAX_PENDING_COMMITS {
             self.pending_commits.push_back(c);
             self.report_metrics();
             return;
         }
 
-        // Keep at most `running_length - 1` commit scores so there is room to
-        // push one more below.
-        while self.scores_entry.len() >= self.running_length() {
-            let evicted = self.scores_entry.pop_front().expect("non empty");
+        let c_minus_3 = &self.pending_commits[0];
+        let c_minus_2 = &self.pending_commits[1];
+        let c_minus_1 = &self.pending_commits[2];
+        let leader_round = c_minus_3.leader.round;
+        let vote_round = leader_round + 1;
+        let certify_round = leader_round + 2;
+
+        // Architectural invariant check. Depth 3 is only enough to bracket
+        // both scan ranges if consecutive commits have strictly increasing
+        // leader rounds; trip loudly if upstream stops upholding this.
+        assert!(
+            c_minus_3.leader.round < c_minus_2.leader.round
+                && c_minus_2.leader.round < c_minus_1.leader.round
+                && c_minus_1.leader.round < c.leader.round,
+            "consecutive commits must have strictly increasing leader rounds; \
+             got {}, {}, {}, {}",
+            c_minus_3.leader.round,
+            c_minus_2.leader.round,
+            c_minus_1.leader.round,
+            c.leader.round,
+        );
+
+        // leader_refs: every round-r block in C-3. A commit may legitimately
+        // contain multiple round-r leader blocks; all of them count.
+        let leader_refs: BTreeSet<BlockRef> = c_minus_3
+            .blocks
+            .iter()
+            .filter(|b| b.round() == leader_round)
+            .map(|b| b.reference())
+            .collect();
+
+        // C-3's leader is by construction in C-3.blocks at round r, so it
+        // must show up in leader_refs. A failure here points at an
+        // malformed CommittedSubDag.
+        assert!(!leader_refs.is_empty());
+        assert!(
+            leader_refs.contains(&c_minus_3.leader),
+            "C-3's leader {} missing from its own leader blocks {:?}",
+            c_minus_3.leader,
+            leader_refs,
+        );
+
+        // Walk [C-2, C-1, C] up to and including the first commit whose
+        // leader round exceeds each bound.
+        let voting_commits =
+            Self::scan_commits_until_leader_round_above(&self.pending_commits, &c, vote_round);
+        let certifying_commits =
+            Self::scan_commits_until_leader_round_above(&self.pending_commits, &c, certify_round);
+
+        // Group r+1 voting blocks by author; len() != 1 detects equivocation.
+        let mut voting_blocks_by_author: BTreeMap<AuthorityIndex, Vec<&VerifiedBlock>> =
+            BTreeMap::new();
+        for cmt in &voting_commits {
+            for b in &cmt.blocks {
+                if b.round() == vote_round {
+                    voting_blocks_by_author
+                        .entry(b.author())
+                        .or_default()
+                        .push(b);
+                }
+            }
+        }
+        let mut certifying_blocks: Vec<&VerifiedBlock> = Vec::new();
+        for cmt in &certifying_commits {
+            for b in &cmt.blocks {
+                if b.round() == certify_round {
+                    certifying_blocks.push(b);
+                }
+            }
+        }
+
+        let mut score_contributions = vec![0u64; self.context.committee.size()];
+        for (a, voting_blocks) in &voting_blocks_by_author {
+            // Equivocation: more than one r+1 block from A → score[A] = 0.
+            if voting_blocks.len() != 1 {
+                continue;
+            }
+            let voting_block = voting_blocks[0];
+
+            // voted_for_stake[A]: distinct P authorities whose round-r block
+            // in C-3 is an ancestor of A's voting block.
+            let mut ps = BTreeSet::<AuthorityIndex>::new();
+            for anc in voting_block.ancestors() {
+                if leader_refs.contains(anc) {
+                    ps.insert(anc.author);
+                }
+            }
+            let voted_for_stake: u64 = ps
+                .into_iter()
+                .map(|i| self.context.committee.stake(i))
+                .sum();
+            // Product would be 0 anyway; skip the certifying-block scan.
+            if voted_for_stake == 0 {
+                continue;
+            }
+
+            // certified_by_stake[A]: distinct Q authorities whose r+2 block
+            // certifies A's voting block (has it as an ancestor).
+            let voting_block_ref = voting_block.reference();
+            let mut qs = BTreeSet::<AuthorityIndex>::new();
+            for q_block in &certifying_blocks {
+                if q_block.ancestors().contains(&voting_block_ref) {
+                    qs.insert(q_block.author());
+                }
+            }
+            let certified_by_stake: u64 = qs
+                .into_iter()
+                .map(|i| self.context.committee.stake(i))
+                .sum();
+
+            score_contributions[a.value()] =
+                voted_for_stake.checked_mul(certified_by_stake).unwrap();
+        }
+
+        let num_leaders = leader_refs.len();
+        let leader_stakes: u64 = leader_refs
+            .iter()
+            .map(|block_ref| self.context.committee.stake(block_ref.author))
+            .sum();
+
+        // All inputs validated and computed; eviction can now happen
+        // immediately before pushing the new entry.
+        while self.scores_entries.len() >= self.running_length() {
+            let evicted = self.scores_entries.pop_front().expect("non empty");
             tracing::trace!(
                 "LeaderScheduleV3 evicting scored commit {} from running window",
                 evicted.commit_ref
@@ -260,84 +409,55 @@ impl LeaderScheduleV3 {
                 .unwrap();
         }
 
-        // Compute score contributions for the new commit.
-        let c_minus_2 = &self.pending_commits[0];
-        let c_minus_1 = &self.pending_commits[1];
-
-        let leader_round = c_minus_2.leader.round;
-        let vote_round = leader_round + 1;
-
-        let leader_refs: BTreeSet<_> = c_minus_2
-            .blocks
-            .iter()
-            .filter(|b| b.round() == leader_round)
-            .map(|b| b.reference())
-            .collect();
-
-        let voting_blocks: Vec<_> = c_minus_1
-            .blocks
-            .iter()
-            .chain(c.blocks.iter())
-            .filter(|b| b.round() == vote_round)
-            .collect();
-
-        let mut score_contributions = vec![0u64; self.context.committee.size()];
-
-        if !voting_blocks.is_empty() && !leader_refs.is_empty() {
-            // Collect a map from authorities voting on leader blocks, to leader authorities they voted on.
-            // This consolidates votes and scores per authority.
-            let mut per_authority_votes: BTreeMap<AuthorityIndex, BTreeSet<AuthorityIndex>> =
-                BTreeMap::new();
-            for voting_block in voting_blocks {
-                let authority_votes = per_authority_votes
-                    .entry(voting_block.author())
-                    .or_default();
-                for voted_block in voting_block.ancestors() {
-                    if leader_refs.contains(voted_block) {
-                        authority_votes.insert(voted_block.author);
-                    }
-                }
-            }
-
-            for (voting_authority, leader_authorities) in per_authority_votes {
-                let total_leader_stake = leader_authorities
-                    .into_iter()
-                    .map(|i| self.context.committee.stake(i))
-                    .sum();
-                score_contributions[voting_authority.value()] = total_leader_stake;
-            }
-        }
-
-        // Add the contributions to the running totals.
         for (i, delta) in score_contributions.iter().enumerate() {
-            self.total_scores_per_authority[i] += *delta;
+            self.total_scores_per_authority[i] = self.total_scores_per_authority[i]
+                .checked_add(*delta)
+                .unwrap();
         }
-
-        // Record this commit's scores for future eviction.
-        let num_leaders = leader_refs.len();
-        let leader_stakes: u64 = leader_refs
-            .iter()
-            .map(|r| self.context.committee.stake(r.author))
-            .sum();
-        self.total_num_leaders += num_leaders;
-        self.total_leader_stakes += leader_stakes;
-        self.scores_entry.push_back(ScoresEntry {
-            commit_ref: c_minus_2.commit_ref,
+        self.total_num_leaders = self.total_num_leaders.checked_add(num_leaders).unwrap();
+        self.total_leader_stakes = self.total_leader_stakes.checked_add(leader_stakes).unwrap();
+        self.scores_entries.push_back(ScoresEntry {
+            commit_ref: c_minus_3.commit_ref,
             score_contributions,
             num_leaders,
             leader_stakes,
         });
 
-        // Rotate the pending commits: drop C-2, keep C-1, add C.
+        // Rotate pending: drop C-3, keep C-2 and C-1, append c.
         self.pending_commits.pop_front();
         self.pending_commits.push_back(c);
 
         self.report_metrics();
     }
 
+    /// Walks commits [C-2, C-1, C] in order.
+    /// Returning every commit up to and **including** the first one whose
+    /// leader round is strictly greater than `upper`.
+    fn scan_commits_until_leader_round_above<'a>(
+        pending: &'a VecDeque<CommittedSubDag>,
+        c: &'a CommittedSubDag,
+        upper: Round,
+    ) -> Vec<&'a CommittedSubDag> {
+        let mut out = Vec::new();
+        for cmt in pending.iter().skip(1).chain(std::iter::once(c)) {
+            out.push(cmt);
+            if cmt.leader.round > upper {
+                break;
+            }
+        }
+        assert!(
+            out.last()
+                .map(|cmt| cmt.leader.round > upper)
+                .unwrap_or(false),
+            "scan must end on a commit with leader.round > {upper}; \
+             strictly-increasing-leader-rounds invariant violated upstream",
+        );
+        out
+    }
+
     /// Snapshot of the running per-authority scores.
     pub(crate) fn current_reputation_scores(&self) -> ReputationScores {
-        let commit_range = match (self.scores_entry.front(), self.scores_entry.back()) {
+        let commit_range = match (self.scores_entries.front(), self.scores_entries.back()) {
             (Some(front), Some(back)) => {
                 CommitRange::new(front.commit_ref.index..=back.commit_ref.index)
             }
@@ -362,49 +482,52 @@ impl LeaderScheduleV3 {
                 .leader_schedule_total_scores
                 .with_label_values(&[hostname])
                 .set(*score as i64);
-            let normalized = if self.total_leader_stakes == 0 {
+            // Multiply at report time so the field stays raw `Σ stake(leaders)`
+            // and the metric formula divides stake² (numerator) by stake²
+            // (denominator) — i.e. a fraction with no stake dimension.
+            let denominator = self
+                .total_leader_stakes
+                .checked_mul(self.context.committee.total_stake())
+                .unwrap();
+            let normalized = if denominator == 0 {
                 0.0
             } else {
-                *score as f64 / self.total_leader_stakes as f64
+                *score as f64 / denominator as f64
             };
             metrics
                 .leader_schedule_normalized_scores
                 .with_label_values(&[hostname])
                 .set(normalized);
         }
-        if let Some(last) = self.scores_entry.back() {
+        if let Some(last) = self.scores_entries.back() {
             metrics
                 .leader_schedule_last_num_leaders
                 .set(last.num_leaders as i64);
+            metrics
+                .leader_schedule_average_num_leaders
+                .set(self.average_num_leaders());
         }
     }
 
     fn running_length(&self) -> usize {
-        self.context
-            .protocol_config
-            .leader_schedule_window_size() as usize
+        self.context.protocol_config.leader_schedule_window_size() as usize
     }
 
     /// Average number of leader-round blocks per scored commit in the current
     /// running window. Returns 0.0 when no commits have been scored yet.
-    #[cfg(test)]
     fn average_num_leaders(&self) -> f64 {
-        if self.scores_entry.is_empty() {
+        if self.scores_entries.is_empty() {
             0.0
         } else {
-            self.total_num_leaders as f64 / self.scores_entry.len() as f64
+            self.total_num_leaders as f64 / self.scores_entries.len() as f64
         }
     }
 
-    /// Average total leader stake per scored commit in the current running
-    /// window. Returns 0.0 when no commits have been scored yet.
+    /// Running sum of `Σ stake(leader_authors)` across the scored commits in
+    /// the current window.
     #[cfg(test)]
-    fn average_leader_stakes(&self) -> f64 {
-        if self.scores_entry.is_empty() {
-            0.0
-        } else {
-            self.total_leader_stakes as f64 / self.scores_entry.len() as f64
-        }
+    pub(crate) fn total_leader_stakes(&self) -> u64 {
+        self.total_leader_stakes
     }
 
     #[cfg(test)]
@@ -413,8 +536,8 @@ impl LeaderScheduleV3 {
     }
 
     #[cfg(test)]
-    pub(crate) fn scores_entry_len(&self) -> usize {
-        self.scores_entry.len()
+    pub(crate) fn scores_entries_len(&self) -> usize {
+        self.scores_entries.len()
     }
 
     #[cfg(test)]
@@ -484,101 +607,119 @@ mod tests {
         let context = setup(4);
         let schedule = LeaderScheduleV3::new(context, 1, vec![0; 4]);
         assert_eq!(schedule.total_scores_per_authority(), &[0u64; 4]);
-        assert_eq!(schedule.scores_entry_len(), 0);
+        assert_eq!(schedule.scores_entries_len(), 0);
         assert_eq!(schedule.pending_commits_len(), 0);
         assert_eq!(schedule.average_num_leaders(), 0.0);
-        assert_eq!(schedule.average_leader_stakes(), 0.0);
+        assert_eq!(schedule.total_leader_stakes(), 0);
     }
 
     #[tokio::test]
-    async fn test_first_two_commits_score_zero() {
+    async fn test_first_three_commits_score_zero() {
+        // The new rule needs C-3, C-2, C-1 in pending before producing the
+        // first score entry, so the first three commits are warmup.
         let context = setup(4);
         let mut schedule = LeaderScheduleV3::new(context, 1, vec![0; 4]);
 
         let leader1 = make_block(1, 0, vec![]);
         schedule.add_commit(make_commit(1, leader1.reference(), vec![leader1.clone()]));
         assert_eq!(schedule.total_scores_per_authority(), &[0u64; 4]);
-        assert_eq!(schedule.scores_entry_len(), 0);
+        assert_eq!(schedule.scores_entries_len(), 0);
         assert_eq!(schedule.pending_commits_len(), 1);
 
         let leader2 = make_block(2, 1, vec![leader1.reference()]);
         schedule.add_commit(make_commit(2, leader2.reference(), vec![leader2.clone()]));
         assert_eq!(schedule.total_scores_per_authority(), &[0u64; 4]);
-        assert_eq!(schedule.scores_entry_len(), 0);
+        assert_eq!(schedule.scores_entries_len(), 0);
         assert_eq!(schedule.pending_commits_len(), 2);
+
+        let leader3 = make_block(3, 2, vec![leader2.reference()]);
+        schedule.add_commit(make_commit(3, leader3.reference(), vec![leader3.clone()]));
+        assert_eq!(schedule.total_scores_per_authority(), &[0u64; 4]);
+        assert_eq!(schedule.scores_entries_len(), 0);
+        assert_eq!(schedule.pending_commits_len(), 3);
     }
 
     #[tokio::test]
-    async fn test_third_commit_scores_from_c_minus_2() {
+    async fn test_fourth_commit_scores_from_c_minus_3() {
+        // 4 commits with strictly increasing leader rounds (1, 2, 3, 4).
+        // C1 (the C-3-equivalent when scoring on C4) carries multiple round-1
+        // leader blocks, exercising "leader_refs = all round-r blocks in C-3".
+        // Voting blocks live at round 2 in C2, certifying blocks at round 3 in
+        // C3, and C4 acts as the > r+2 sentinel.
         let context = setup(4);
         let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
 
-        // Commit 1 (C-2): leader at round 1, authority 0. Blocks at round 1 from
-        // all four authorities (these are B-candidates at C-2 leader round).
-        let b0 = make_block(1, 0, vec![]);
-        let b1 = make_block(1, 1, vec![]);
-        let b2 = make_block(1, 2, vec![]);
-        let b3 = make_block(1, 3, vec![]);
+        // C1: leader = L0_1 (auth 0); blocks include L1_1 too, so leader_refs
+        // for C-3 = {L0_1, L1_1}.
+        let l0_1 = make_block(1, 0, vec![]);
+        let l1_1 = make_block(1, 1, vec![]);
         schedule.add_commit(make_commit(
             1,
-            b0.reference(),
-            vec![b0.clone(), b1.clone(), b2.clone(), b3.clone()],
+            l0_1.reference(),
+            vec![l0_1.clone(), l1_1.clone()],
         ));
 
-        // Commit 2 (C-1): two vote blocks at round 2 linking to commit 1 blocks.
-        // Authority 0's round-2 block links to B0 and B1 at round 1.
-        // Authority 1's round-2 block links to B2 only.
-        let v0_c1 = make_block(2, 0, vec![b0.reference(), b1.reference()]);
-        let v1_c1 = make_block(2, 1, vec![b2.reference()]);
-        schedule.add_commit(make_commit(
-            2,
-            v0_c1.reference(),
-            vec![v0_c1.clone(), v1_c1.clone()],
-        ));
-        // No scoring yet — we need C-2 to apply.
+        // C2: round-2 voting blocks for authorities 0 and 2.
+        //   v0 (auth 0) links L0_1 only.
+        //   v2 (auth 2) links L0_1 and L1_1.
+        let v0 = make_block(2, 0, vec![l0_1.reference()]);
+        let v2 = make_block(2, 2, vec![l0_1.reference(), l1_1.reference()]);
+        schedule.add_commit(make_commit(2, v0.reference(), vec![v0.clone(), v2.clone()]));
         assert_eq!(schedule.total_scores_per_authority(), &[0u64; 4]);
 
-        // Commit 3 (C): one vote block at round 2 (C-2's leader round was 1, so
-        // vote round = 2). Authority 2's round-2 block links to B1 and B3.
-        let v2_c = make_block(2, 2, vec![b1.reference(), b3.reference()]);
-        schedule.add_commit(make_commit(3, v2_c.reference(), vec![v2_c.clone()]));
+        // C3: round-3 certifying block q1 (auth 1) certifies v0 and v2.
+        let q1 = make_block(3, 1, vec![v0.reference(), v2.reference()]);
+        schedule.add_commit(make_commit(3, q1.reference(), vec![q1.clone()]));
 
-        // Expected contributions (equal stake per authority in new_for_test):
-        //   A=0: distinct Bs = {0, 1} → stake(0)+stake(1)
-        //   A=1: distinct Bs = {2}    → stake(2)
-        //   A=2: distinct Bs = {1, 3} → stake(1)+stake(3)
-        //   A=3: no vote blocks at round 2 → 0
+        // C4: leader at round 4. Add a round-3 block q3 (auth 3) certifying v0
+        // only — exercises "C4 (the inclusive r+2 sentinel) is searched too".
+        let q3 = make_block(3, 3, vec![v0.reference()]);
+        let lead4 = make_block(4, 0, vec![q1.reference()]);
+        schedule.add_commit(make_commit(
+            4,
+            lead4.reference(),
+            vec![lead4.clone(), q3.clone()],
+        ));
+
+        // Expected:
+        //   A=0: voting={v0}, voted_for_stake = s0 (links L0_1).
+        //        certifiers: q1 has v0 ancestor → qs={1}; q3 has v0 ancestor → qs={1,3}.
+        //        certified_by_stake = s1 + s3.   score[0] = s0 * (s1 + s3).
+        //   A=2: voting={v2}, voted_for_stake = s0 + s1 (links L0_1, L1_1).
+        //        certifiers: q1 has v2 → qs={1}; q3 doesn't → qs stays {1}.
+        //        certified_by_stake = s1.        score[2] = (s0 + s1) * s1.
+        //   A=1, A=3: no round-2 voting block → 0.
         let s0 = context.committee.stake(AuthorityIndex::new_for_test(0));
         let s1 = context.committee.stake(AuthorityIndex::new_for_test(1));
-        let s2 = context.committee.stake(AuthorityIndex::new_for_test(2));
         let s3 = context.committee.stake(AuthorityIndex::new_for_test(3));
         assert_eq!(
             schedule.total_scores_per_authority(),
-            &[s0 + s1, s2, s1 + s3, 0]
+            &[s0 * (s1 + s3), 0, (s0 + s1) * s1, 0]
         );
-        assert_eq!(schedule.scores_entry_len(), 1);
-        assert_eq!(schedule.pending_commits_len(), 2);
-        // C-2 (commit 1) has 4 leader-round blocks, so with one scored entry
-        // the average is 4.0 and the average leader stake equals the sum of
-        // all four authority stakes.
-        assert_eq!(schedule.average_num_leaders(), 4.0);
-        assert_eq!(schedule.average_leader_stakes(), (s0 + s1 + s2 + s3) as f64);
+        assert_eq!(schedule.scores_entries_len(), 1);
+        assert_eq!(schedule.pending_commits_len(), 3);
+        // C-3 (commit 1) has 2 leader-round blocks (auths 0 and 1) → average
+        // num_leaders=2, single scored entry contributes (s0 + s1) to the
+        // running total leader-stake.
+        assert_eq!(schedule.average_num_leaders(), 2.0);
+        assert_eq!(schedule.total_leader_stakes(), s0 + s1);
     }
 
     #[tokio::test]
     async fn test_eviction_subtracts_contributions() {
-        // Uniform chain: rounds 1..=6, two authorities (0 and 1) at each round,
-        // each round's blocks link to both blocks of the previous round.
-        // With `running_length=3`, scores_entry tops out at 3 entries; the
-        // 4th scored commit evicts the earliest. Because every scored commit
-        // contributes the same delta, post-eviction totals equal pre-eviction
-        // totals — which proves eviction is subtracting.
+        // Uniform chain: rounds 1..=8, two authorities (0 and 1) producing
+        // blocks at each round and linking to both of the previous round's
+        // blocks. With `running_length=3` and the new rule, the first score
+        // entry lands when commit 4 is added, the window fills at commit 6,
+        // and commit 7 evicts the earliest entry. Because every scored commit
+        // contributes an identical delta, post-eviction totals equal
+        // pre-eviction totals — proving eviction is subtracting correctly.
         let context = setup_with_running_length(4, Some(3));
         let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
 
         let mut blocks_by_round: Vec<Vec<VerifiedBlock>> = Vec::new();
         blocks_by_round.push(vec![make_block(1, 0, vec![]), make_block(1, 1, vec![])]);
-        for round in 2..=6u32 {
+        for round in 2..=7u32 {
             let prev = &blocks_by_round[(round - 2) as usize];
             let ancestors: Vec<_> = prev.iter().map(|b| b.reference()).collect();
             blocks_by_round.push(vec![
@@ -593,30 +734,34 @@ mod tests {
             make_commit(i, leader, blocks)
         };
 
-        for i in 1..=5 {
+        for i in 1..=6 {
             schedule.add_commit(commit(i, &blocks_by_round));
         }
-        let after_5 = schedule.total_scores_per_authority().to_vec();
-        assert_eq!(schedule.scores_entry_len(), 3);
+        let after_6 = schedule.total_scores_per_authority().to_vec();
+        // Window full: scored entries for C1, C2, C3.
+        assert_eq!(schedule.scores_entries_len(), 3);
 
-        // 3 scored commits in a uniform chain, each contributing
-        // `stake(0) + stake(1)` to authorities 0 and 1.
+        // Per-commit contribution to authority A in this uniform chain:
+        //   voted_for_stake[A]    = s0 + s1 (A's r+1 voting block links both leaders),
+        //   certified_by_stake[A] = s0 + s1 (both r+2 blocks certify A's voting block).
+        // → per_commit = (s0 + s1)^2 for authorities 0 and 1; 0 for 2 and 3.
         let s0 = context.committee.stake(AuthorityIndex::new_for_test(0));
         let s1 = context.committee.stake(AuthorityIndex::new_for_test(1));
-        let per_commit = s0 + s1;
-        assert_eq!(after_5, vec![3 * per_commit, 3 * per_commit, 0, 0]);
+        let per_commit = (s0 + s1) * (s0 + s1);
+        assert_eq!(after_6, vec![3 * per_commit, 3 * per_commit, 0, 0]);
 
-        schedule.add_commit(commit(6, &blocks_by_round));
-        assert_eq!(schedule.scores_entry_len(), 3);
-        // cs3 was evicted and cs6 added; both deltas are identical, so totals
-        // are unchanged. Had eviction not subtracted, totals would be 4 * per_commit.
-        assert_eq!(schedule.total_scores_per_authority().to_vec(), after_5);
-        // Every scored C-2 in this uniform chain has exactly 2 leader-round
-        // blocks from authorities 0 and 1; both averages are unaffected by
-        // eviction because each evicted entry's contributions are replaced
-        // by identical ones.
+        schedule.add_commit(commit(7, &blocks_by_round));
+        assert_eq!(schedule.scores_entries_len(), 3);
+        // C1's entry was evicted and C4's entry added; identical deltas leave
+        // totals unchanged. Had eviction not subtracted, totals would be
+        // 4 * per_commit.
+        assert_eq!(schedule.total_scores_per_authority().to_vec(), after_6);
+
+        // Each scored C-3 has exactly 2 leader-round blocks from auths 0/1;
+        // average_num_leaders=2.0 and the running leader-stake total is
+        // 3 entries × (s0 + s1) per commit.
         assert_eq!(schedule.average_num_leaders(), 2.0);
-        assert_eq!(schedule.average_leader_stakes(), (s0 + s1) as f64);
+        assert_eq!(schedule.total_leader_stakes(), 3 * (s0 + s1));
     }
 
     #[tokio::test]
@@ -734,17 +879,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_replay_length() {
+        // Replay covers `leader_schedule_window_size` scored entries plus the
+        // 3 pending commits held before scoring kicks in.
         let (mut ctx, _) = Context::new_for_test(4);
         ctx.protocol_config
             .set_leader_schedule_window_size_for_testing(5);
         let context = Arc::new(ctx);
-        assert_eq!(LeaderScheduleV3::replay_length(&context), 7);
+        assert_eq!(LeaderScheduleV3::replay_length(&context), 8);
     }
 
     #[tokio::test]
     async fn test_recovery_replay_produces_same_state_as_live() {
-        // Invariant behind the `+2` recovery rule: replaying only the last
-        // `running_length + 2` commits produces the same v3 state as feeding
+        // Invariant behind the `+3` recovery rule: replaying only the last
+        // `running_length + 3` commits produces the same v3 state as feeding
         // the full history live, because earlier commits would have been
         // evicted anyway. We simulate it without going through storage by
         // stepping two schedules through identical `add_commit` sequences.
@@ -777,15 +924,17 @@ mod tests {
         for i in 1..=10 {
             live.add_commit(commit_at(i, &blocks_by_round));
         }
-        assert_eq!(live.scores_entry_len(), 5);
-        assert_eq!(live.pending_commits_len(), 2);
+        // 10 commits → score entries for C1..C7 (7 entries), capped at
+        // running_length=5 (entries for C3..C7); pending = [C8, C9, C10].
+        assert_eq!(live.scores_entries_len(), 5);
+        assert_eq!(live.pending_commits_len(), 3);
 
-        // Recovery path: replay only the last `running_length + 2 = 7`
-        // commits (indices 4..=10) into a fresh schedule starting at index 4.
+        // Recovery path: replay only the last `running_length + 3 = 8`
+        // commits (indices 3..=10) into a fresh schedule starting at index 3.
         let replay_count = LeaderScheduleV3::replay_length(&context);
-        assert_eq!(replay_count, 7);
-        let mut replayed = LeaderScheduleV3::new(context.clone(), 4, vec![0; 4]);
-        for i in 4..=10 {
+        assert_eq!(replay_count, 8);
+        let mut replayed = LeaderScheduleV3::new(context.clone(), 3, vec![0; 4]);
+        for i in 3..=10 {
             replayed.add_commit(commit_at(i, &blocks_by_round));
         }
 
@@ -794,13 +943,10 @@ mod tests {
             live.total_scores_per_authority(),
             replayed.total_scores_per_authority()
         );
-        assert_eq!(live.scores_entry_len(), replayed.scores_entry_len());
+        assert_eq!(live.scores_entries_len(), replayed.scores_entries_len());
         assert_eq!(live.pending_commits_len(), replayed.pending_commits_len());
         assert_eq!(live.average_num_leaders(), replayed.average_num_leaders());
-        assert_eq!(
-            live.average_leader_stakes(),
-            replayed.average_leader_stakes()
-        );
+        assert_eq!(live.total_leader_stakes(), replayed.total_leader_stakes());
         // Selection is also seeded off the same pending commit, so the
         // authority ordering must match.
         let live_next = live.next_commit_leader_schedule();
@@ -832,29 +978,383 @@ mod tests {
 
     #[tokio::test]
     async fn test_authority_with_no_votes_scores_zero() {
+        // Score-zero comes from two distinct paths under the new rule:
+        //   (a) no r+1 voting block from A → A skipped entirely.
+        //   (b) A has a voting block but no r+2 block certifies it →
+        //       certified_by_stake = 0, multiplicative score = 0.
         let context = setup(4);
         let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
 
-        let b0 = make_block(1, 0, vec![]);
-        let b1 = make_block(1, 1, vec![]);
-        schedule.add_commit(make_commit(1, b0.reference(), vec![b0.clone(), b1.clone()]));
+        // C1: round-1 leader blocks for authorities 0 and 1.
+        let l0_1 = make_block(1, 0, vec![]);
+        let l1_1 = make_block(1, 1, vec![]);
+        schedule.add_commit(make_commit(
+            1,
+            l0_1.reference(),
+            vec![l0_1.clone(), l1_1.clone()],
+        ));
 
-        // Commit 2 has only authority 0's vote block at round 2 (linking to B0).
-        let v0_c1 = make_block(2, 0, vec![b0.reference()]);
-        schedule.add_commit(make_commit(2, v0_c1.reference(), vec![v0_c1.clone()]));
+        // C2: round-2 voting blocks from authorities 0 and 1.
+        //   v0 links L0_1, v1 links L1_1.
+        let v0 = make_block(2, 0, vec![l0_1.reference()]);
+        let v1 = make_block(2, 1, vec![l1_1.reference()]);
+        schedule.add_commit(make_commit(2, v0.reference(), vec![v0.clone(), v1.clone()]));
 
-        // Commit 3 has no round-2 vote blocks — just a round-3 leader.
-        let leader3 = make_block(3, 1, vec![v0_c1.reference()]);
-        schedule.add_commit(make_commit(3, leader3.reference(), vec![leader3.clone()]));
+        // C3: round-3 certifying block q_to_v0 certifies v0 only — leaves v1
+        // uncertified.
+        let q_to_v0 = make_block(3, 1, vec![v0.reference()]);
+        schedule.add_commit(make_commit(3, q_to_v0.reference(), vec![q_to_v0.clone()]));
 
-        // When processing commit 3: r = 1 (C-2's leader round), vote round = 2.
-        // Vote blocks at round 2 in {C, C-1} = {v0_c1}. Authority 0 links to B0,
-        // so score[0] = stake(0). Authorities 1, 2, 3 have no round-2 vote
-        // blocks, so they score 0.
+        // C4: round-4 leader (the > r+2 sentinel for scoring C1).
+        let l0_4 = make_block(4, 0, vec![q_to_v0.reference()]);
+        schedule.add_commit(make_commit(4, l0_4.reference(), vec![l0_4.clone()]));
+
+        // Expected:
+        //   A=0: voting={v0}, voted_for_stake=s0; certifiers from q_to_v0 → qs={1},
+        //        certified_by_stake=s1.   score[0] = s0 * s1.
+        //   A=1: voting={v1}, voted_for_stake=s1; nothing certifies v1 →
+        //        certified_by_stake=0. score[1] = 0 (multiplicative-zero arm).
+        //   A=2, A=3: no voting block → 0 (skipped arm).
         let s0 = context.committee.stake(AuthorityIndex::new_for_test(0));
-        assert_eq!(schedule.total_scores_per_authority()[0], s0);
+        let s1 = context.committee.stake(AuthorityIndex::new_for_test(1));
+        assert_eq!(schedule.total_scores_per_authority()[0], s0 * s1);
         assert_eq!(schedule.total_scores_per_authority()[1], 0);
         assert_eq!(schedule.total_scores_per_authority()[2], 0);
         assert_eq!(schedule.total_scores_per_authority()[3], 0);
+    }
+
+    #[tokio::test]
+    async fn test_voting_scan_excludes_blocks_past_sentinel() {
+        // 4 commits with strictly increasing leader rounds (1, 2, 3, 4).
+        // When scoring C1: vote_round=2, certify_round=3.
+        //   voting_commits    scan stops at C3 (leader.round=3 > 2): [C2, C3].
+        //   certifying_commits scan stops at C4 (leader.round=4 > 3): [C2, C3, C4].
+        //
+        // Plant a round-2 voting block in C3 (inside the voting range) AND a
+        // sibling round-2 block from the same author L1_2_in_C4 in C4
+        // (outside the voting range). If the bound were broken and C4 were
+        // scanned for r+1, auth 1 would have two voting blocks and score 0
+        // by equivocation. Correct behavior: C4 isn't in the voting range, so
+        // auth 1 has exactly one voting block (in C3) and score is nonzero.
+        let context = setup(4);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+
+        let l0_1 = make_block(1, 0, vec![]);
+        schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
+
+        let l0_2 = make_block(2, 0, vec![l0_1.reference()]);
+        schedule.add_commit(make_commit(2, l0_2.reference(), vec![l0_2.clone()]));
+
+        // C3 leader at round 3; pack a forged round-2 voting block from auth 1.
+        let l1_2_in_c3 = make_block(2, 1, vec![l0_1.reference()]);
+        let l0_3 = make_block(3, 0, vec![l0_2.reference(), l1_2_in_c3.reference()]);
+        schedule.add_commit(make_commit(
+            3,
+            l0_3.reference(),
+            vec![l0_3.clone(), l1_2_in_c3.clone()],
+        ));
+
+        // C4 leader at round 4. Pack ANOTHER round-2 block from auth 1 here —
+        // this one must NOT be scanned for r+1.
+        let l1_2_in_c4 = make_block(2, 1, vec![]);
+        let l0_4 = make_block(4, 0, vec![l0_3.reference()]);
+        schedule.add_commit(make_commit(
+            4,
+            l0_4.reference(),
+            vec![l0_4.clone(), l1_2_in_c4.clone()],
+        ));
+
+        // Expected (correct bound):
+        //   voting_blocks_by_author = {0: [l0_2], 1: [l1_2_in_c3]}.
+        //   A=0: voted_for_stake=s0, certifiers: l0_3 has l0_2 ancestor → qs={0},
+        //        certified_by_stake=s0. score[0] = s0*s0.
+        //   A=1: voted_for_stake=s0 (l1_2_in_c3 → l0_1), certifiers: l0_3 has
+        //        l1_2_in_c3 ancestor → qs={0}. certified_by_stake=s0.
+        //        score[1] = s0*s0.
+        // If C4 were scanned for r+1, auth 1 would have two voting blocks → 0.
+        let s0 = context.committee.stake(AuthorityIndex::new_for_test(0));
+        assert_eq!(schedule.total_scores_per_authority()[0], s0 * s0);
+        assert_eq!(schedule.total_scores_per_authority()[1], s0 * s0);
+        assert_eq!(schedule.total_scores_per_authority()[2], 0);
+        assert_eq!(schedule.total_scores_per_authority()[3], 0);
+    }
+
+    #[tokio::test]
+    async fn test_certifying_scan_includes_sentinel_block() {
+        // 4 commits with leader rounds 1, 2, 3, 4. When scoring C1, the
+        // certifying scan range is [C2, C3, C4] — C4 is the >r+2=3 inclusive
+        // sentinel. Place a round-3 block in C4 (as ancestor of C4's round-4
+        // leader) and verify it contributes to certified_by_stake.
+        let context = setup(4);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+
+        let l0_1 = make_block(1, 0, vec![]);
+        schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
+
+        let l0_2 = make_block(2, 0, vec![l0_1.reference()]);
+        schedule.add_commit(make_commit(2, l0_2.reference(), vec![l0_2.clone()]));
+
+        let l0_3 = make_block(3, 0, vec![l0_2.reference()]);
+        schedule.add_commit(make_commit(3, l0_3.reference(), vec![l0_3.clone()]));
+
+        // C4: leader at round 4, plus a round-3 block from auth 2 carried as
+        // an ancestor. The round-3 block certifies l0_2, so it must show up
+        // in certified_by_stake[0] alongside l0_3.
+        let late_3 = make_block(3, 2, vec![l0_2.reference()]);
+        let l0_4 = make_block(4, 0, vec![l0_3.reference(), late_3.reference()]);
+        schedule.add_commit(make_commit(
+            4,
+            l0_4.reference(),
+            vec![l0_4.clone(), late_3.clone()],
+        ));
+
+        // Expected:
+        //   A=0: voting={l0_2}, voted_for_stake=s0.
+        //        certifying blocks at round 3 in [C2, C3, C4] = {l0_3, late_3};
+        //        both certify l0_2 → qs={0, 2}, certified_by_stake = s0 + s2.
+        //        score[0] = s0 * (s0 + s2).
+        let s0 = context.committee.stake(AuthorityIndex::new_for_test(0));
+        let s2 = context.committee.stake(AuthorityIndex::new_for_test(2));
+        assert_eq!(schedule.total_scores_per_authority()[0], s0 * (s0 + s2));
+    }
+
+    #[tokio::test]
+    async fn test_round_skip_collapses_voting_range() {
+        // 4 commits with leader rounds 1, 3, 4, 5 (round 2 skipped). When
+        // scoring C1: r=1, vote_round=2, certify_round=3.
+        //   voting_commits:    starts at C2 (leader.round=3 > 2) → range=[C2].
+        //   certifying_commits: C2 (3) ≤ 3 ok; C3 (4) > 3 stop → range=[C2, C3].
+        //
+        // Plant a round-2 block in C3 (auth 2) — outside the voting range,
+        // must NOT contribute. l0_3 (in C2) links to it so that, IF the bound
+        // were broken and the block were scanned for r+1, auth 2 would
+        // accrue a nonzero score.
+        let context = setup(4);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+
+        let l0_1 = make_block(1, 0, vec![]);
+        schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
+
+        // C2: leader at round 3 (skipping round 2). Pack a round-2 voting
+        // block from auth 1 (inside the voting range).
+        let l1_2 = make_block(2, 1, vec![l0_1.reference()]);
+        let l2_2_in_c3 = make_block(2, 2, vec![l0_1.reference()]);
+        let l0_3 = make_block(
+            3,
+            0,
+            vec![l1_2.reference(), l2_2_in_c3.reference(), l0_1.reference()],
+        );
+        schedule.add_commit(make_commit(
+            2,
+            l0_3.reference(),
+            vec![l0_3.clone(), l1_2.clone()],
+        ));
+
+        // C3: leader at round 4. Pack the round-2 block from auth 2 here —
+        // outside the voting range; must be ignored.
+        let l0_4 = make_block(4, 0, vec![l0_3.reference()]);
+        schedule.add_commit(make_commit(
+            3,
+            l0_4.reference(),
+            vec![l0_4.clone(), l2_2_in_c3.clone()],
+        ));
+
+        // C4: leader at round 5.
+        let l0_5 = make_block(5, 0, vec![l0_4.reference()]);
+        schedule.add_commit(make_commit(4, l0_5.reference(), vec![l0_5.clone()]));
+
+        // Expected:
+        //   A=1: voted_for_stake=s0 (l1_2 → l0_1). certifiers: l0_3 has l1_2
+        //        ancestor → qs={0}. certified_by_stake=s0. score[1] = s0*s0.
+        //   A=2: NOT scanned (l2_2_in_c3 is in C3, which is not in voting range).
+        //        score[2] = 0. If the bound were broken, score[2] would be
+        //        s0*s0 (l2_2_in_c3 → l0_1, and l0_3 has l2_2_in_c3 ancestor).
+        let s0 = context.committee.stake(AuthorityIndex::new_for_test(0));
+        assert_eq!(schedule.total_scores_per_authority()[0], 0);
+        assert_eq!(schedule.total_scores_per_authority()[1], s0 * s0);
+        assert_eq!(schedule.total_scores_per_authority()[2], 0);
+        assert_eq!(schedule.total_scores_per_authority()[3], 0);
+    }
+
+    #[tokio::test]
+    async fn test_c_minus_3_with_multiple_round_r_leaders() {
+        // C-3 (= C1) packs three round-1 leader blocks (auths 0, 1, 2), so
+        // leader_refs is a multi-element set. A=3's voting block links all
+        // three; voted_for_stake[3] must include all three stakes.
+        let context = setup(4);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+
+        let l0_1 = make_block(1, 0, vec![]);
+        let l1_1 = make_block(1, 1, vec![]);
+        let l2_1 = make_block(1, 2, vec![]);
+        schedule.add_commit(make_commit(
+            1,
+            l0_1.reference(),
+            vec![l0_1.clone(), l1_1.clone(), l2_1.clone()],
+        ));
+
+        // A=3 produces the round-2 voting block, linking all three leaders.
+        let v3 = make_block(
+            2,
+            3,
+            vec![l0_1.reference(), l1_1.reference(), l2_1.reference()],
+        );
+        schedule.add_commit(make_commit(2, v3.reference(), vec![v3.clone()]));
+
+        // A=0 produces a round-3 certifying block (q0) certifying v3.
+        let q0 = make_block(3, 0, vec![v3.reference()]);
+        schedule.add_commit(make_commit(3, q0.reference(), vec![q0.clone()]));
+
+        let l0_4 = make_block(4, 0, vec![q0.reference()]);
+        schedule.add_commit(make_commit(4, l0_4.reference(), vec![l0_4.clone()]));
+
+        let s0 = context.committee.stake(AuthorityIndex::new_for_test(0));
+        let s1 = context.committee.stake(AuthorityIndex::new_for_test(1));
+        let s2 = context.committee.stake(AuthorityIndex::new_for_test(2));
+        // voted_for_stake[3] = s0 + s1 + s2; certified_by_stake[3] = s0.
+        assert_eq!(
+            schedule.total_scores_per_authority()[3],
+            (s0 + s1 + s2) * s0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_equivocation_zeros_voting_score() {
+        // Authority 0 produces two distinct round-2 voting blocks → score=0.
+        // Authority 1 produces exactly one → score follows the formula.
+        let context = setup(4);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+
+        let l0_1 = make_block(1, 0, vec![]);
+        schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
+
+        // C2: pack two round-2 blocks from auth 0 (distinct ancestors → distinct
+        // refs) plus one from auth 1.
+        let v0_a = make_block(2, 0, vec![l0_1.reference()]);
+        let v0_b = make_block(2, 0, vec![]);
+        let v1 = make_block(2, 1, vec![l0_1.reference()]);
+        schedule.add_commit(make_commit(
+            2,
+            v0_a.reference(),
+            vec![v0_a.clone(), v0_b.clone(), v1.clone()],
+        ));
+
+        // C3: round-3 block from auth 0 certifying v1 (so certified_by_stake[1] > 0).
+        let q = make_block(3, 0, vec![v1.reference()]);
+        schedule.add_commit(make_commit(3, q.reference(), vec![q.clone()]));
+
+        let l0_4 = make_block(4, 0, vec![q.reference()]);
+        schedule.add_commit(make_commit(4, l0_4.reference(), vec![l0_4.clone()]));
+
+        // A=0 has two round-2 blocks → equivocation → score=0.
+        // A=1: voted_for_stake=s0, certified_by_stake=s0 → score=s0*s0.
+        let s0 = context.committee.stake(AuthorityIndex::new_for_test(0));
+        assert_eq!(schedule.total_scores_per_authority()[0], 0);
+        assert_eq!(schedule.total_scores_per_authority()[1], s0 * s0);
+    }
+
+    #[tokio::test]
+    async fn test_score_is_product_of_voted_for_and_certified_by_stake() {
+        // 4 authorities. A=0's voting block links {auth 1, auth 2} round-1
+        // leader blocks (voted_for_stake = s1 + s2); two distinct r+2 blocks
+        // from auths 1 and 3 certify A=0's voting block
+        // (certified_by_stake = s1 + s3). Assert the exact product.
+        let context = setup(4);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+
+        let l1_1 = make_block(1, 1, vec![]);
+        let l2_1 = make_block(1, 2, vec![]);
+        schedule.add_commit(make_commit(
+            1,
+            l1_1.reference(),
+            vec![l1_1.clone(), l2_1.clone()],
+        ));
+
+        let v0 = make_block(2, 0, vec![l1_1.reference(), l2_1.reference()]);
+        schedule.add_commit(make_commit(2, v0.reference(), vec![v0.clone()]));
+
+        let q1 = make_block(3, 1, vec![v0.reference()]);
+        schedule.add_commit(make_commit(3, q1.reference(), vec![q1.clone()]));
+
+        let q3 = make_block(3, 3, vec![v0.reference()]);
+        let l_4 = make_block(4, 0, vec![q1.reference(), q3.reference()]);
+        schedule.add_commit(make_commit(
+            4,
+            l_4.reference(),
+            vec![l_4.clone(), q3.clone()],
+        ));
+
+        let s1 = context.committee.stake(AuthorityIndex::new_for_test(1));
+        let s2 = context.committee.stake(AuthorityIndex::new_for_test(2));
+        let s3 = context.committee.stake(AuthorityIndex::new_for_test(3));
+        assert_eq!(
+            schedule.total_scores_per_authority()[0],
+            (s1 + s2) * (s1 + s3)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_zero_voted_for_or_certified_by_stake_yields_zero() {
+        // Two zero-product paths under one fixture:
+        //   (a) A=1's voting block links no leader → voted_for_stake=0,
+        //       short-circuit skip.
+        //   (b) A=0's voting block links a leader, but no r+2 block certifies
+        //       it → certified_by_stake=0 → multiplicative zero.
+        let context = setup(4);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+
+        let l0_1 = make_block(1, 0, vec![]);
+        schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
+
+        let v0 = make_block(2, 0, vec![l0_1.reference()]);
+        let v1_no_leader = make_block(2, 1, vec![]);
+        schedule.add_commit(make_commit(
+            2,
+            v0.reference(),
+            vec![v0.clone(), v1_no_leader.clone()],
+        ));
+
+        // C3: round-3 leader doesn't certify v0 (so certified_by_stake[0] = 0).
+        let l0_3 = make_block(3, 0, vec![]);
+        schedule.add_commit(make_commit(3, l0_3.reference(), vec![l0_3.clone()]));
+
+        let l0_4 = make_block(4, 0, vec![l0_3.reference()]);
+        schedule.add_commit(make_commit(4, l0_4.reference(), vec![l0_4.clone()]));
+
+        assert_eq!(schedule.total_scores_per_authority(), &[0u64; 4]);
+    }
+
+    #[tokio::test]
+    async fn test_repeated_q_authority_counts_once() {
+        // Authority 1 produces two distinct round-3 certifying blocks (in C3
+        // and C4) that both certify A=0's voting block. certified_by_stake[0]
+        // must include stake(1) exactly once.
+        let context = setup(4);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+
+        let l0_1 = make_block(1, 0, vec![]);
+        schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
+
+        let v0 = make_block(2, 0, vec![l0_1.reference()]);
+        schedule.add_commit(make_commit(2, v0.reference(), vec![v0.clone()]));
+
+        let q1_a = make_block(3, 1, vec![v0.reference()]);
+        schedule.add_commit(make_commit(3, q1_a.reference(), vec![q1_a.clone()]));
+
+        // Distinct second round-3 block from auth 1 — both certify v0,
+        // distinct refs because of the extra l0_1 ancestor.
+        let q1_b = make_block(3, 1, vec![v0.reference(), l0_1.reference()]);
+        let l_4 = make_block(4, 0, vec![q1_a.reference(), q1_b.reference()]);
+        schedule.add_commit(make_commit(
+            4,
+            l_4.reference(),
+            vec![l_4.clone(), q1_b.clone()],
+        ));
+
+        // Both q1_a and q1_b certify v0; auth-1 hits qs twice, but the
+        // BTreeSet dedups → certified_by_stake = s1 (not 2*s1).
+        let s0 = context.committee.stake(AuthorityIndex::new_for_test(0));
+        let s1 = context.committee.stake(AuthorityIndex::new_for_test(1));
+        assert_eq!(schedule.total_scores_per_authority()[0], s0 * s1);
     }
 }

@@ -144,15 +144,14 @@ impl Core {
             Some(0)
         };
 
-        // Propagation scores are pushed later once `Core` exists.
         let ancestor_state_manager = AncestorStateManager::new(context.clone(), dag_state.clone());
+
+        // Create the ValidatorProposer.
         let leader_waiter = if let Some(schedule) = leader_schedule_v3.as_ref() {
             ProposalLeaderWaiter::V3(schedule.next_commit_leader_schedule())
         } else {
             ProposalLeaderWaiter::V2(committer.clone())
         };
-
-        // Create the ValidatorProposer
         let proposer = Some(Box::new(ValidatorProposer::new(
             dag_state.clone(),
             context.clone(),
@@ -179,10 +178,12 @@ impl Core {
             proposer,
         };
 
+        // Initialize propagation scores for the proposer before recovery.
         let propagation_scores = core.current_reputation_scores();
-        if let Some(proposer) = core.proposer.as_mut() {
-            proposer.set_propagation_scores(propagation_scores);
-        }
+        core.proposer
+            .as_mut()
+            .unwrap()
+            .set_propagation_scores(propagation_scores);
 
         core.recover_validator()
     }

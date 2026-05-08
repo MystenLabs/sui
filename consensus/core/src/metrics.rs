@@ -4,11 +4,11 @@
 use std::sync::Arc;
 
 use prometheus::{
-    GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
-    exponential_buckets, register_gauge_vec_with_registry, register_histogram_vec_with_registry,
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, register_int_gauge_vec_with_registry,
-    register_int_gauge_with_registry,
+    Gauge, GaugeVec, Histogram, HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec,
+    Registry, exponential_buckets, register_gauge_vec_with_registry, register_gauge_with_registry,
+    register_histogram_vec_with_registry, register_histogram_with_registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry,
 };
 
 use crate::network::metrics::NetworkMetrics;
@@ -172,6 +172,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) leader_schedule_total_scores: IntGaugeVec,
     pub(crate) leader_schedule_normalized_scores: GaugeVec,
     pub(crate) leader_schedule_last_num_leaders: IntGauge,
+    pub(crate) leader_schedule_average_num_leaders: Gauge,
     pub(crate) scope_processing_time: HistogramVec,
     pub(crate) sub_dags_per_commit_count: Histogram,
     pub(crate) block_suspensions: IntCounterVec,
@@ -625,19 +626,24 @@ impl NodeMetrics {
             ).unwrap(),
             leader_schedule_total_scores: register_int_gauge_vec_with_registry!(
                 "leader_schedule_total_scores",
-                "LeaderScheduleV3 running total score per authority over the scoring window",
+                "LeaderScheduleV3 running per-authority score over the scoring window. Each commit contributes voted_for_stake * certified_by_stake (stake^2 units)",
                 &["authority"],
                 registry,
             ).unwrap(),
             leader_schedule_normalized_scores: register_gauge_vec_with_registry!(
                 "leader_schedule_normalized_scores",
-                "LeaderScheduleV3 per-authority total score divided by total leader stake in the scoring window",
+                "LeaderScheduleV3 per-authority total score divided by (running sum of per-commit leader stake) * committee total stake. Stake^2 over stake^2; a fraction with no stake dimension",
                 &["authority"],
                 registry,
             ).unwrap(),
             leader_schedule_last_num_leaders: register_int_gauge_with_registry!(
                 "leader_schedule_last_num_leaders",
                 "LeaderScheduleV3 number of leader-round blocks in the most recently scored commit",
+                registry,
+            ).unwrap(),
+            leader_schedule_average_num_leaders: register_gauge_with_registry!(
+                "leader_schedule_average_num_leaders",
+                "LeaderScheduleV3 moving average of the number of leaders per commit across the scoring window",
                 registry,
             ).unwrap(),
             scope_processing_time: register_histogram_vec_with_registry!(

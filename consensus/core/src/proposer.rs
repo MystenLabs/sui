@@ -449,7 +449,11 @@ impl Proposer for ValidatorProposer {
             self.last_included_ancestors[ancestor.author()] = Some(ancestor.reference());
         }
 
-        if let Some(leader_slot) = leader_slots.first() {
+        // TODO(v3): support these metrics under v3 multi leader logic:
+        // - Leader slots can be empty when the quorum round is no greater than already committed leader round.
+        // - Record accepted time for each block, to decide the last leader and the amount of time waiting for it.
+        if !self.context.protocol_config.enable_v3() {
+            let leader_slot = leader_slots.first().unwrap();
             let leader_authority = &self
                 .context
                 .committee
