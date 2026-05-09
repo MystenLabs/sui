@@ -85,10 +85,9 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
 
-    /// The sync mode for full nodes. `None` means the node is configured as a
-    /// validator. `Some(mode)` means it is a full node using the given sync
-    /// strategy. This drives the `intended_node_role()` used for startup
-    /// infrastructure decisions.
+    /// The sync mode for full nodes.
+    /// When `None` is provided and this is a full node then the default is used which is `StateSyncOnly`.
+    /// For validator nodes this is expected to be `None`
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fullnode_sync_mode: Option<FullNodeSyncMode>,
 
@@ -916,30 +915,24 @@ impl NodeConfig {
     /// create RPC servers or index stores). The authoritative per-epoch role
     /// lives on `AuthorityPerEpochStore::node_role()`.
     pub fn intended_node_role(&self) -> NodeRole {
-        match self.fullnode_sync_mode {
-            Some(mode) => {
-                // Validate that consensus config has been set correctly when the the chosen sync mode has been set to consensus observer
-                if mode == FullNodeSyncMode::ConsensusObserver {
-                    assert!(
-                        self.has_observer_config_peers(),
-                        "Peers list should be set when full node is configured to sync as consensus observer."
-                    );
-                }
-                NodeRole::FullNode(mode)
+        let has_consensus_config = self.consensus_config.is_some();
+
+        match (self.fullnode_sync_mode, has_consensus_config) {
+            (Some(FullNodeSyncMode::ConsensusObserver), _) => {
+                assert!(
+                    self.has_observer_config_peers(),
+                    "Observer peers must be configured when sync mode is ConsensusObserver"
+                );
+                NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
             }
-            None => {
-                // If the full node sync mode has not been set, then we need to check whether the node has a consensus config set. If yes, then this is a validator.
-                if self.consensus_config.is_some() {
-                    assert!(
-                        !self.has_observer_config_peers(),
-                        "Peers list should be empty when the node is configured as validator"
-                    );
-                    NodeRole::Validator
-                } else {
-                    // If there is no fullnode sync mode set, and not consensus config set, then this is a full node with state sync only
-                    NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
-                }
+            (Some(FullNodeSyncMode::StateSyncOnly), true) => {
+                panic!("Consensus config should not be set for a StateSyncOnly full node");
             }
+            (Some(FullNodeSyncMode::StateSyncOnly), false) => {
+                NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+            }
+            (None, false) => NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly),
+            (None, true) => NodeRole::Validator,
         }
     }
 
