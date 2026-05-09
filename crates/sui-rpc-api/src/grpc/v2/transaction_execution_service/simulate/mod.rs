@@ -20,6 +20,8 @@ use sui_rpc::proto::sui::rpc::v2::SimulateTransactionResponse;
 use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_types::balance_change::derive_balance_changes_2;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::error::SuiError;
+use sui_types::error::SuiErrorKind;
 use sui_types::execution_status::ExecutionFailure;
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::transaction::InputObjectKind;
@@ -114,7 +116,7 @@ pub fn simulate_transaction(
 
                 let simulation_result = executor
                     .simulate_transaction(gasless_tx.clone(), checks, false)
-                    .map_err(anyhow::Error::from)?;
+                    .map_err(simulation_error_to_rpc_error)?;
 
                 if !is_gasless_post_execution_failure(simulation_result.effects.status()) {
                     transaction = gasless_tx;
@@ -151,7 +153,7 @@ pub fn simulate_transaction(
                         TransactionChecks::Enabled,
                         true, /* allow mock gas coin */
                     )
-                    .map_err(anyhow::Error::from)?;
+                    .map_err(simulation_error_to_rpc_error)?;
 
                 let estimate = estimate_gas_budget_from_gas_cost(
                     simulation_result.effects.gas_cost_summary(),
@@ -193,7 +195,7 @@ pub fn simulate_transaction(
 
         executor
             .simulate_transaction(transaction.clone(), checks, !perform_gas_selection)
-            .map_err(anyhow::Error::from)?
+            .map_err(simulation_error_to_rpc_error)?
     };
 
     let SimulateTransactionResult {
@@ -298,6 +300,18 @@ pub fn simulate_transaction(
         response.suggested_gas_price = suggested_gas_price;
     }
     Ok(response)
+}
+
+fn simulation_error_to_rpc_error(error: SuiError) -> RpcError {
+    match error.as_inner() {
+        SuiErrorKind::UserInputError { .. } => {
+            RpcError::new(tonic::Code::InvalidArgument, error.to_string())
+        }
+        SuiErrorKind::UnsupportedFeatureError { .. } => {
+            RpcError::new(tonic::Code::InvalidArgument, error.to_string())
+        }
+        _ => RpcError::new(tonic::Code::Internal, error.to_string()),
+    }
 }
 
 fn to_command_output(
@@ -709,4 +723,52 @@ fn is_gasless_post_execution_failure(status: &ExecutionStatus) -> bool {
             ..
         })
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sui_types::base_types::ObjectID;
+    use sui_types::error::UserInputError;
+
+    #[test]
+    fn maps_simulation_user_input_errors_to_invalid_argument() {
+        let error = SuiErrorKind::UserInputError {
+            error: UserInputError::ObjectNotFound {
+                object_id: ObjectID::ZERO,
+                version: None,
+            },
+        }
+        .into();
+
+        let status = simulation_error_to_rpc_error(error).into_status_proto();
+
+        assert_eq!(status.code, tonic::Code::InvalidArgument as i32);
+        assert!(
+            status
+                .message
+                .contains("Error checking transaction input objects")
+        );
+    }
+
+    #[test]
+    fn maps_simulation_unsupported_feature_errors_to_invalid_argument() {
+        let error = SuiErrorKind::UnsupportedFeatureError {
+            error: "not supported".to_string(),
+        }
+        .into();
+
+        let status = simulation_error_to_rpc_error(error).into_status_proto();
+
+        assert_eq!(status.code, tonic::Code::InvalidArgument as i32);
+    }
+
+    #[test]
+    fn maps_uncategorized_simulation_errors_to_internal() {
+        let error = SuiErrorKind::Unknown("boom".to_string()).into();
+
+        let status = simulation_error_to_rpc_error(error).into_status_proto();
+
+        assert_eq!(status.code, tonic::Code::Internal as i32);
+    }
 }
