@@ -1970,6 +1970,111 @@ remote-store-options:
         std::fs::remove_file(&service_account_file).ok();
         std::fs::remove_file(&aws_key_file).ok();
     }
+
+    mod intended_node_role_tests {
+        use super::*;
+        use crate::ConsensusConfig;
+        use consensus_config::Parameters as ConsensusParameters;
+        use fastcrypto::ed25519::Ed25519KeyPair;
+        use sui_types::node_role::{FullNodeSyncMode, NodeRole};
+
+        fn fullnode_template_config() -> NodeConfig {
+            const TEMPLATE: &str = include_str!("../data/fullnode-template.yaml");
+            serde_yaml::from_str(TEMPLATE).unwrap()
+        }
+
+        fn minimal_consensus_config() -> ConsensusConfig {
+            ConsensusConfig {
+                db_path: PathBuf::from("/tmp/consensus"),
+                db_retention_epochs: None,
+                db_pruner_period_secs: None,
+                max_pending_transactions: None,
+                parameters: Default::default(),
+                listen_address: None,
+                external_address: None,
+            }
+        }
+
+        fn consensus_config_with_observer_peers() -> ConsensusConfig {
+            let mut config = minimal_consensus_config();
+            let kp = Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32]));
+            let peer = consensus_config::PeerRecord {
+                public_key: consensus_config::NetworkPublicKey::new(kp.public().clone()),
+                address: "/ip4/127.0.0.1/udp/8080".parse().unwrap(),
+            };
+            let mut params = ConsensusParameters::default();
+            params.observer.peers = vec![peer];
+            config.parameters = Some(params);
+            config
+        }
+
+        #[test]
+        fn validator_with_consensus_config() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(minimal_consensus_config());
+            config.fullnode_sync_mode = None;
+
+            assert_eq!(config.intended_node_role(), NodeRole::Validator);
+        }
+
+        #[test]
+        fn fullnode_explicit_state_sync() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = None;
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::StateSyncOnly);
+
+            assert_eq!(
+                config.intended_node_role(),
+                NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+            );
+        }
+
+        #[test]
+        fn fullnode_implicit_state_sync() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = None;
+            config.fullnode_sync_mode = None;
+
+            assert_eq!(
+                config.intended_node_role(),
+                NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+            );
+        }
+
+        #[test]
+        fn fullnode_consensus_observer() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(consensus_config_with_observer_peers());
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::ConsensusObserver);
+
+            assert_eq!(
+                config.intended_node_role(),
+                NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+            );
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "Consensus config should not be set for a StateSyncOnly full node"
+        )]
+        fn state_sync_with_consensus_config_panics() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(minimal_consensus_config());
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::StateSyncOnly);
+
+            config.intended_node_role();
+        }
+
+        #[test]
+        #[should_panic(expected = "Observer peers must be configured")]
+        fn observer_without_peers_panics() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(minimal_consensus_config());
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::ConsensusObserver);
+
+            config.intended_node_role();
+        }
+    }
 }
 
 // RunWithRange is used to specify the ending epoch/checkpoint to process.

@@ -503,13 +503,14 @@ impl SuiNode {
         );
         let checkpoint_metrics = CheckpointMetrics::new(&registry_service.default_registry());
 
-        Self::check_and_recover_forks(
-            &checkpoint_store,
-            &checkpoint_metrics,
-            node_role.runs_consensus(),
-            config.fork_recovery.as_ref(),
-        )
-        .await?;
+        if node_role.runs_consensus() {
+            Self::check_and_recover_forks(
+                &checkpoint_store,
+                &checkpoint_metrics,
+                config.fork_recovery.as_ref(),
+            )
+            .await?;
+        }
 
         // By default, only enable write stall on nodes that run consensus.
         let enable_write_stall = config
@@ -886,9 +887,7 @@ impl SuiNode {
                 components
                     .consensus_adapter
                     .recover_end_of_publish(&epoch_store);
-            }
 
-            if node_role.is_validator() {
                 // Start the gRPC server
                 components.validator_server_handle = Some(
                     components
@@ -1878,6 +1877,8 @@ impl SuiNode {
                 consensus_manager.shutdown().await;
                 info!("Consensus has shut down.");
 
+                info!("Epoch store finished reconfiguration.");
+
                 // No other components should be holding a strong reference to state hasher
                 // at this point. Confirm here before we swap in the new hasher.
                 let global_state_hasher_metrics = Arc::into_inner(hasher)
@@ -2096,13 +2097,8 @@ impl SuiNode {
     async fn check_and_recover_forks(
         checkpoint_store: &CheckpointStore,
         checkpoint_metrics: &CheckpointMetrics,
-        should_check_forks: bool,
         fork_recovery: Option<&ForkRecoveryConfig>,
     ) -> Result<()> {
-        if !should_check_forks {
-            return Ok(());
-        }
-
         // Try to recover from forks if recovery config is provided
         if let Some(recovery) = fork_recovery {
             Self::try_recover_checkpoint_fork(checkpoint_store, recovery)?;
@@ -2668,7 +2664,6 @@ mod tests {
         let r = SuiNode::check_and_recover_forks(
             &checkpoint_store,
             &checkpoint_metrics,
-            true,
             Some(&fork_recovery),
         )
         .await;
@@ -2689,7 +2684,6 @@ mod tests {
         let r = SuiNode::check_and_recover_forks(
             &checkpoint_store,
             &checkpoint_metrics,
-            true,
             Some(&fork_recovery_with_override),
         )
         .await;
@@ -2717,7 +2711,6 @@ mod tests {
         let r = SuiNode::check_and_recover_forks(
             &checkpoint_store,
             &checkpoint_metrics,
-            true,
             Some(&fork_recovery),
         )
         .await;
@@ -2738,7 +2731,6 @@ mod tests {
         let r = SuiNode::check_and_recover_forks(
             &checkpoint_store,
             &checkpoint_metrics,
-            true,
             Some(&fork_recovery_with_override),
         )
         .await;
