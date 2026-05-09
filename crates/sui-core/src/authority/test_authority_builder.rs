@@ -327,7 +327,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .unwrap_or(0),
             0,
             Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
-            false,
+            None,
         )
         .expect("failed to create authority per epoch store");
 

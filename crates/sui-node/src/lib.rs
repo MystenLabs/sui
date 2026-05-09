@@ -494,7 +494,7 @@ impl SuiNode {
             None,
         ));
 
-        let node_role = Self::resolve_node_role(&config, &committee_store)?;
+        let node_role = config.intended_node_role();
 
         let pruner_watermarks = Arc::new(PrunerWatermarks::default());
         let checkpoint_store = CheckpointStore::new(
@@ -520,7 +520,7 @@ impl SuiNode {
             is_validator: node_role.is_validator(),
         };
         let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(
-            &config.store_db_path(),
+            &config.db_store_path(),
             Some(perpetual_tables_options),
             Some(pruner_watermarks.epoch_id.clone()),
         ));
@@ -586,7 +586,7 @@ impl SuiNode {
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
             committee.clone(),
-            &config.store_db_path(),
+            &config.db_store_path(),
             Some(epoch_options.options),
             EpochMetrics::new(&registry_service.default_registry()),
             epoch_start_configuration,
@@ -601,7 +601,7 @@ impl SuiNode {
             Arc::new(SubmittedTransactionCacheMetrics::new(
                 &registry_service.default_registry(),
             )),
-            config.has_observer_config(),
+            config.fullnode_sync_mode,
         )?;
 
         info!("created epoch store");
@@ -1707,15 +1707,6 @@ impl SuiNode {
                 "Creating checkpoint executor for epoch {}",
                 epoch_store.epoch()
             );
-            // Validators use the `verify_locally_built_checkpoint` path which
-            // skips checkpoint data processing for non-end-of-epoch checkpoints,
-            // creating gaps that cause the subscription service to panic.
-            let subscription_sender = if epoch_store.node_role().is_fullnode() {
-                self.subscription_service_checkpoint_sender.clone()
-            } else {
-                None
-            };
-
             let checkpoint_executor = CheckpointExecutor::new(
                 epoch_store.clone(),
                 self.checkpoint_store.clone(),
@@ -1724,7 +1715,7 @@ impl SuiNode {
                 self.backpressure_manager.clone(),
                 self.config.checkpoint_executor_config.clone(),
                 checkpoint_executor_metrics.clone(),
-                subscription_sender,
+                self.subscription_service_checkpoint_sender.clone(),
             );
 
             let run_with_range = self.config.run_with_range;
@@ -2097,36 +2088,6 @@ impl SuiNode {
         } else {
             digest_str
         }
-    }
-
-    /// Resolves the node role by temporarily opening the perpetual tables to
-    /// read the recovery epoch, then looking up the committee. On a fresh
-    /// genesis node the DB is empty, so we fall back to the latest committee
-    /// in the store (which is the genesis committee).
-    fn resolve_node_role(
-        config: &NodeConfig,
-        committee_store: &CommitteeStore,
-    ) -> SuiResult<NodeRole> {
-        let perpetual_tables = AuthorityPerpetualTables::open(&config.store_db_path(), None, None);
-
-        let committee = if perpetual_tables.database_is_empty()? {
-            committee_store.get_latest_committee()?
-        } else {
-            let cur_epoch = perpetual_tables.get_recovery_epoch_at_restart()?;
-            committee_store
-                .get_committee(&cur_epoch)?
-                .expect("Committee of the current epoch must exist")
-                .as_ref()
-                .clone()
-        };
-
-        drop(perpetual_tables);
-
-        Ok(NodeRole::from_committee(
-            &committee,
-            &config.protocol_public_key(),
-            config.has_observer_config(),
-        ))
     }
 
     /// Check for previously detected forks and handle them appropriately.

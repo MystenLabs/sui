@@ -3,9 +3,11 @@
 
 use crate::base_types::AuthorityName;
 use crate::committee::Committee;
+use serde::{Deserialize, Serialize};
 
 /// How a full node syncs data from the network.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum FullNodeSyncMode {
     /// Syncs exclusively via the state-sync protocol.
     StateSyncOnly = 0,
@@ -29,18 +31,17 @@ pub enum NodeRole {
 }
 
 impl NodeRole {
-    /// Determines the node role from committee membership and observer configuration.
-    /// This is the single source of truth for role derivation — used both at startup
-    /// (with the latest committee from CommitteeStore) and per-epoch (in AuthorityPerEpochStore).
+    /// Determines the node role from committee membership and the configured sync mode.
+    /// Used per-epoch in AuthorityPerEpochStore to derive the authoritative role.
     pub fn from_committee(
         committee: &Committee,
         name: &AuthorityName,
-        has_observer_config: bool,
+        fullnode_sync_mode: Option<FullNodeSyncMode>,
     ) -> Self {
         if committee.authority_exists(name) {
             NodeRole::Validator
-        } else if has_observer_config {
-            NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+        } else if let Some(mode) = fullnode_sync_mode {
+            NodeRole::FullNode(mode)
         } else {
             NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
         }
