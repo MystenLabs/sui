@@ -882,7 +882,7 @@ impl SuiNode {
             )
             .await?;
 
-            if node_role.can_propose_transactions() {
+            if node_role.is_validator() {
                 components
                     .consensus_adapter
                     .recover_end_of_publish(&epoch_store);
@@ -1530,7 +1530,7 @@ impl SuiNode {
             epoch_start_timestamp_ms, epoch_duration_ms
         );
 
-        let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.can_propose_transactions() {
+        let checkpoint_output: Box<dyn CheckpointOutput> = if node_role.is_validator() {
             Box::new(SubmitCheckpointToConsensus {
                 sender: consensus_adapter,
                 signer: state.secret.clone(),

@@ -20,11 +20,10 @@ pub enum FullNodeSyncMode {
 /// the committee). FullNodes carry a sync mode that determines whether
 /// they also participate in consensus as an observer.
 ///
-/// Behavior should be gated through capability methods (e.g. `runs_consensus()`,
-/// `can_propose_transactions()`) rather than matching on variants directly.
+/// Behavior should be gated through capability methods (e.g. `runs_consensus()`) rather than matching on variants directly.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NodeRole {
-    /// A validator that participates in consensus and signs checkpoints.
+    /// A validator that participates in consensus, proposes blocks and signs checkpoints.
     Validator,
     /// A full node that serves RPC/indexing and syncs via the configured mode.
     FullNode(FullNodeSyncMode),
@@ -64,11 +63,6 @@ impl NodeRole {
         )
     }
 
-    /// Whether this node can propose transactions and checkpoint signatures to consensus.
-    pub fn can_propose_transactions(&self) -> bool {
-        matches!(self, Self::Validator)
-    }
-
     /// Whether this node should create index stores for JSON-RPC and REST API.
     pub fn should_enable_index_processing(&self) -> bool {
         matches!(self, Self::FullNode(_))
@@ -100,7 +94,6 @@ mod tests {
     fn test_validator_role() {
         let role = NodeRole::Validator;
         assert!(role.runs_consensus());
-        assert!(role.can_propose_transactions());
         assert!(!role.should_enable_index_processing());
         assert!(!role.should_run_rpc_servers());
     }
@@ -109,7 +102,6 @@ mod tests {
     fn test_consensus_observer_role() {
         let role = NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver);
         assert!(role.runs_consensus());
-        assert!(!role.can_propose_transactions());
         assert!(role.should_enable_index_processing());
         assert!(role.should_run_rpc_servers());
     }
@@ -118,7 +110,6 @@ mod tests {
     fn test_fullnode_state_sync_role() {
         let role = NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly);
         assert!(!role.runs_consensus());
-        assert!(!role.can_propose_transactions());
         assert!(role.should_enable_index_processing());
         assert!(role.should_run_rpc_servers());
     }
