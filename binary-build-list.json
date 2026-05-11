@@ -6,6 +6,7 @@
         "sui-faucet",
         "sui-bridge",
         "sui-bridge-cli",
+        "sui-fork",
         "sui-test-validator",
         "move-analyzer"
     ],
