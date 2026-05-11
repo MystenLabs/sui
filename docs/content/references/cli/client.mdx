@@ -391,36 +391,6 @@ $ sui client gas eloquent-amber
 ╰────────────────────────────────────────────────────────────────────┴────────────────────┴──────────────────╯
 ```
 
-### Send funds using send-funds
-
-Use `sui client send-funds` to transfer a specific amount of SUI to a recipient address in a single command. This is a convenience wrapper around the programmable transaction block (PTB) pattern for simple SUI transfers. For more detail on the underlying PTB approach, see [Using Address Balances](/concepts/transactions/prog-txn-blocks).
-
-```sh
-$ sui client send-funds --to eloquent-amber --amount 500000000 --gas-budget 5000000
-```
-
-### Transfer an object using party-transfer
-
-Use `sui client party-transfer` to transfer an object under party ownership. This command is used when an object has been set up with party ownership semantics.
-
-```sh
-$ sui client party-transfer --object-id 0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f --to eloquent-amber --gas-budget 5000000
-```
-
-### Serialize a transaction for offline signing
-
-Use `sui client serialized-tx` to build and serialize a transaction without executing it. This is useful for offline signing workflows where you construct the transaction on one machine and sign it on another.
-
-```sh
-$ sui client serialized-tx --to eloquent-amber --sui-coin-object-id 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amount 500000000 --gas-budget 5000000
-```
-
-Use `sui client serialized-tx-kind` to serialize only the transaction kind (without gas data), which is useful when a sponsor will provide the gas payment separately.
-
-```sh
-$ sui client serialized-tx-kind --to eloquent-amber --sui-coin-object-id 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amount 500000000
-```
-
 ### Test publish and upgrade locally
 
 Use `sui client test-publish` to simulate a package publish without submitting the transaction to the network. This is useful for verifying that a package builds and passes all checks before publishing.
