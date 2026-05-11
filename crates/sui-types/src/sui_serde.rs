@@ -389,4 +389,21 @@ mod test {
         assert!(roaring::RoaringBitmap::deserialize_from(&bytes[..]).is_err());
         assert!(deserialize_sui_bitmap(&bytes[..]).is_err());
     }
+
+    #[test]
+    fn test_sui_bitmap_rejects_cardinality_bomb() {
+        // Roaring's run-container encoding lets a few hundred bytes claim
+        // billions of set bits — iterating such a bitmap into a BTreeSet
+        // would OOM a validator. `deserialize_sui_bitmap`'s cardinality cap
+        // bails out before the iteration loop runs.
+        let mut bomb = roaring::RoaringBitmap::new();
+        bomb.insert_range(0..(MAX_VALIDATOR_COUNT as u32 + 1));
+        let mut bytes = Vec::new();
+        bomb.serialize_into(&mut bytes).unwrap();
+
+        // Sanity-check that the well-formed bomb deserializes at the
+        // library layer — so the wrapper, not roaring, must reject it.
+        assert!(roaring::RoaringBitmap::deserialize_from(&bytes[..]).is_ok());
+        assert!(deserialize_sui_bitmap(&bytes[..]).is_err());
+    }
 }
