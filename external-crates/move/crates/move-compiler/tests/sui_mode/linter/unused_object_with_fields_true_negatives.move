@@ -1,6 +1,6 @@
 // Cases where the lint correctly stays silent.
 
-#[allow(lint(unnecessary_unit))]
+#[allow(lint(unnecessary_unit, abort_without_constant))]
 module a::m {
     use sui::object::{Self, UID};
 
@@ -10,6 +10,7 @@ module a::m {
     struct OwnerCap has key { id: UID, owns: address }
     struct ValueCap has key { id: UID, value: u64 }
     struct BoolCap has key { id: UID, flag: bool }
+    struct ColorObject has key { id: UID, red: u8, green: u8, blue: u8 }
     struct Wrapper has drop { val: u64, other: u64 }
     struct Wrapped has drop { f: bool }
 
@@ -32,6 +33,14 @@ module a::m {
 
     // field written
     public fun field_written(c: &mut OwnerCap) { c.owns = @0; }
+
+    // field read on the RHS of a field write into a `&mut` input — the
+    // value flows out of the function via the mutated input.
+    public fun copy_into(from: &ColorObject, into: &mut ColorObject) {
+        into.red = from.red;
+        into.green = from.green;
+        into.blue = from.blue;
+    }
 
     // entire object passed to another function — including the common
     // `object::id(c)`-style pattern where the whole `&c` is forwarded
@@ -106,6 +115,29 @@ module a::m {
     public fun unpack_ref_then_use_binding(o: &ValueCap) {
         let ValueCap { id: _, value } = o;
         assert!(*value == 10, ERR);
+    }
+
+    // Reading a field counts as a use even if the result is dropped —
+    // touching the field is what we care about.
+    public fun field_discarded(c: &OwnerCap) { let _ = c.owns; }
+    public fun cast_discarded(c: &ValueCap) { let _ = (c.value as u128); }
+    public fun binop_discarded(c: &ValueCap) { let _ = c.value + 1; }
+
+    // Pack of a tracked field whose result is dropped — we still read
+    // the field to put it in the wrapper.
+    public fun pack_other_field(c: &ValueCap) {
+        let w = Wrapper { val: c.value, other: 0 };
+        let _ = w.other;
+    }
+
+    // `abort` of a field-derived value: reading the field still counts.
+    public fun abort_with_field(c: &ValueCap, flag: bool) {
+        if (flag) abort c.value
+    }
+
+    // Vector literal of a field-derived value (returned).
+    public fun vector_returned(c: &ValueCap): vector<u64> {
+        vector[c.value]
     }
 
     fun check(c: &OwnerCap) { assert!(c.owns == @0, ERR); }

@@ -1,9 +1,39 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! This analysis flags objects with fields (key ability, id: UID, at least one other field,
-//! no type parameters) passed as function parameters that are not used in the function body —
-//! not passed to another function, not read, and not written.
+//! Flags objects with fields (key ability, id: UID, at least one other field,
+//! no type parameters) passed as function parameters that never have any
+//! observable use in the function body.
+//!
+//! ## What counts as a use
+//!
+//! - reading the underlying value of a field — `dereference`, `unary`,
+//!   `cast` — even if the result is dropped (`let _ = o.field`);
+//! - the value flows into a function call (anything passed as an argument);
+//! - the value is the field-derived result of `return`;
+//! - the value appears on either side of `mutate` when the LHS itself
+//!   resolves to a tracked target — i.e. the write is into a `&mut` field
+//!   of an input parameter, so the RHS escapes via that input;
+//! - the value is the condition of a branch or variant switch.
+//!
+//! Pure pass-throughs that don't on their own count: `borrow`, `freeze`,
+//! `pack` (carries tracking forward), `binop` (carries tracking forward),
+//! `let _ = e` for an `e` that was never dereferenced, `e;`
+//! (ignore-and-pop), `abort e` for an unread `e`. In particular `borrow`
+//! is needed to access a field but is not on its own a use; the use is
+//! whatever the borrow flows into.
+//!
+//! ## How the analysis tracks "unused"
+//!
+//! The state carries a set `unused` of tracked params that have not yet been
+//! observed as used along any path reaching the program point. The set
+//! starts as every tracked param at function entry and shrinks monotonically:
+//! every "use" event removes the relevant roots, and joins at block
+//! boundaries take the intersection of incoming sets (a param is still
+//! unused at a join only if it was unused on every incoming path). After the
+//! fixed point, intersecting `unused` over every block's post-state yields
+//! the params that remain unused on every reachable terminal path; those are
+//! the ones we flag.
 
 use crate::{
     PreCompiledProgramInfo,
@@ -25,15 +55,12 @@ use crate::{
         TypeName_, UnannotatedExp_, Var,
     },
     naming::ast::StructFields,
-    parser::ast::{Ability_, Field},
+    parser::ast::Ability_,
     shared::program_info::TypingProgramInfo,
     sui_mode::linters::{LINT_WARNING_PREFIX, LinterDiagnosticCategory, LinterDiagnosticCode},
 };
 use move_ir_types::location::*;
-use std::{
-    cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 const UNUSED_OBJ_WITH_FIELDS_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
@@ -51,28 +78,18 @@ pub struct UnusedObjWithFieldsVerifier;
 
 pub struct UnusedObjWithFieldsAI {
     tracked_params: BTreeMap<Var, Loc>,
-    /// Union of `State::used` taken from every command's post-state. This
-    /// harvests path-tracked uses without needing to walk the CFG again in
-    /// `finish` (the framework only hands us pre-states there).
-    used_in_post_states: RefCell<BTreeSet<Var>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum Value {
-    /// One or more tracked roots flow into this value directly.
-    /// Invariant: at least one of `root` or `field` is true, and `roots` is non-empty.
+    /// Carries data of one or more tracked roots.
+    /// `is_field` is true if some incoming path produced a field-derived
+    /// value (i.e. went through a `Borrow`); false means the value is a
+    /// bare unchanged reference to the param itself.
     Tracked {
-        /// Some incoming path produced the root reference unchanged.
-        root: bool,
-        /// Some incoming path produced a value derived from a field.
-        field: bool,
-        /// Tracked parameter vars whose values may flow into this value.
+        is_field: bool,
         roots: BTreeSet<Var>,
     },
-    /// A packed struct or variant. Each entry says "field `f` of this struct
-    /// carries tracking from these roots." Fields not in the map are unrelated
-    /// to any tracked param.
-    Packed(BTreeMap<Field, BTreeSet<Var>>),
     #[default]
     Other,
 }
@@ -84,8 +101,9 @@ pub struct ExecutionContext {
 #[derive(Clone, Debug)]
 pub struct State {
     locals: BTreeMap<Var, LocalState<Value>>,
-    /// Tracked parameter vars marked as used along the paths reaching this state.
-    used: BTreeSet<Var>,
+    /// Tracked params still possibly unused on the path reaching this point.
+    /// Shrinks as uses are observed; never grows.
+    unused: BTreeSet<Var>,
 }
 
 //**************************************************************************************************
@@ -110,7 +128,7 @@ impl SimpleAbsIntConstructor for UnusedObjWithFieldsVerifier {
             return None;
         }
 
-        // Skip functions that always abort — the object is intentionally consumed
+        // Skip functions that always abort — the object is intentionally consumed.
         if always_aborts(cfg) {
             return None;
         }
@@ -121,16 +139,12 @@ impl SimpleAbsIntConstructor for UnusedObjWithFieldsVerifier {
                 continue;
             }
             let locals = init_state.locals_mut();
-            // The framework guarantees parameters are Available at init; if
-            // an unexpected state slips through, skip rather than panic so
-            // the lint can't bring the whole compile down.
             let Some(LocalState::Available(_, val)) = locals.get_mut(v) else {
                 debug_assert!(false, "parameter must be available at init");
                 continue;
             };
             *val = Value::Tracked {
-                root: true,
-                field: false,
+                is_field: false,
                 roots: BTreeSet::from([*v]),
             };
             tracked_params.insert(*v, v.0.loc);
@@ -138,11 +152,9 @@ impl SimpleAbsIntConstructor for UnusedObjWithFieldsVerifier {
         if tracked_params.is_empty() {
             return None;
         }
+        init_state.unused = tracked_params.keys().copied().collect();
 
-        Some(UnusedObjWithFieldsAI {
-            tracked_params,
-            used_in_post_states: RefCell::new(BTreeSet::new()),
-        })
+        Some(UnusedObjWithFieldsAI { tracked_params })
     }
 }
 
@@ -172,7 +184,7 @@ fn is_qualifying_obj(
     st: &SingleType,
 ) -> bool {
     let bt = match &st.value {
-        // Only check reference parameters — by-value consumption is intentional
+        // Only check reference parameters — by-value consumption is intentional.
         SingleType_::Ref(_, b) => b,
         SingleType_::Base(_) => return false,
     };
@@ -189,15 +201,13 @@ fn is_qualifying_obj(
     let Some(sdef) = sdef else {
         return false;
     };
-
     if !sdef.type_parameters.is_empty() {
         return false;
     }
-
     let StructFields::Defined(_, fields) = &sdef.fields else {
         return false;
     };
-    // id: UID (guaranteed by Sui type checker for key objects) plus at least one other field
+    // id: UID (guaranteed by Sui type checker for key objects) plus at least one other field.
     fields.len() >= 2
 }
 
@@ -208,11 +218,20 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     fn finish(
         &mut self,
         _final_states: BTreeMap<Label, State>,
+        final_post_states: BTreeMap<Label, State>,
         mut diags: Diagnostics,
     ) -> Diagnostics {
-        let used = self.used_in_post_states.borrow();
+        // After the fixed point, a param is unused iff it remains in
+        // `unused` at every block's post-state. Because the set shrinks
+        // monotonically along every path, this is equivalent to "unused at
+        // every reachable terminal block". Default-start from every tracked
+        // param so a body with no commands still flags everything.
+        let mut unused: BTreeSet<Var> = self.tracked_params.keys().copied().collect();
+        for state in final_post_states.values() {
+            unused.retain(|v| state.unused.contains(v));
+        }
         for (var, loc) in &self.tracked_params {
-            if !used.contains(var) {
+            if unused.contains(var) {
                 diags.add(diag!(
                     UNUSED_OBJ_WITH_FIELDS_DIAG,
                     (
@@ -232,14 +251,7 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         }
     }
 
-    fn finish_command(&self, context: ExecutionContext, state: &mut State) -> Diagnostics {
-        // Capture this command's post-state contributions. Once a var is in
-        // `state.used`, every successor's pre-state inherits it through the
-        // join; harvesting after every command means no terminal block's
-        // contribution is lost.
-        self.used_in_post_states
-            .borrow_mut()
-            .extend(state.used.iter().copied());
+    fn finish_command(&self, context: ExecutionContext, _state: &mut State) -> Diagnostics {
         let ExecutionContext { diags } = context;
         diags
     }
@@ -252,32 +264,23 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     ) -> bool {
         match &cmd.value {
             C::Mutate(lhs, rhs) => {
-                // RHS is evaluated for its side effects only — reading a
-                // field to assign elsewhere is not on its own a "use".
-                self.exp(context, state, rhs);
+                let rhs_vals = self.exp(context, state, rhs);
                 let lhs_vals = self.exp(context, state, lhs);
                 mark_used(state, &lhs_vals);
+                // The RHS counts only when the write target is itself a
+                // tracked field — i.e. a `&mut` field of an input — so the
+                // RHS value escapes via that input.
+                if lhs_vals.iter().any(|v| matches!(v, Value::Tracked { .. })) {
+                    mark_used(state, &rhs_vals);
+                }
                 true
             }
+            // Returning a field-derived value escapes the function. A bare
+            // root reference is just a pass-through and is not on its own a
+            // use of any field.
             C::Return { exp, .. } => {
                 let vals = self.exp(context, state, exp);
-                for v in &vals {
-                    match v {
-                        // Returning a field-derived value counts as use; a
-                        // bare root reference is just a pass-through.
-                        Value::Tracked {
-                            field: true, roots, ..
-                        } => state.used.extend(roots.iter().copied()),
-                        // Returning a packed struct exposes its tracked
-                        // fields to the caller.
-                        Value::Packed(map) => {
-                            for r in map.values() {
-                                state.used.extend(r.iter().copied());
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+                mark_used_fields(state, &vals);
                 true
             }
             // Inspecting a tracked value to drive control flow counts.
@@ -286,9 +289,9 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
                 mark_used(state, &vals);
                 true
             }
-            // `IgnoreAndPop`, `Abort`, etc. are left to the default handler
-            // so the value is evaluated for sub-expression side effects but
-            // not counted as a use on its own.
+            // `IgnoreAndPop` (`let _ = e;`, `e;`) and `Abort` evaluate the
+            // sub-expression for its side effects but the value itself does
+            // not flow out of the function — fall through.
             _ => false,
         }
     }
@@ -301,49 +304,42 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
     ) -> Option<Vec<Value>> {
         use UnannotatedExp_ as E;
         match &e.exp.value {
-            // `&local` — propagate the local's tracked value through, so
-            // a subsequent field-borrow can recover roots from a packed
-            // local. The framework default returns `Other` here.
+            // `&local` — propagate the local's tracked value.
             E::BorrowLocal(_, var) => match state.locals().get(var) {
                 Some(LocalState::Available(_, value)) => Some(vec![value.clone()]),
                 _ => None,
             },
-            // Field access: tracked-as-root flips to field-derived; for a
-            // packed struct we look up which roots that specific field
-            // carries.
-            E::Borrow(_, inner, field, _) => {
+            // Field borrow: result is a field-derived view of the same roots.
+            // Borrow itself is not a use.
+            E::Borrow(_, inner, _, _) => {
                 let vals = self.exp(context, state, inner);
                 Some(
                     vals.into_iter()
                         .map(|v| match v {
                             Value::Tracked { roots, .. } => Value::Tracked {
-                                root: false,
-                                field: true,
+                                is_field: true,
                                 roots,
-                            },
-                            Value::Packed(mut map) => match map.remove(field) {
-                                Some(roots) => Value::Tracked {
-                                    root: false,
-                                    field: true,
-                                    roots,
-                                },
-                                None => Value::Other,
                             },
                             Value::Other => Value::Other,
                         })
                         .collect(),
                 )
             }
-            // Pure "view" operations — pass tracking through; consumers
-            // downstream are what mark.
-            E::Dereference(inner)
-            | E::Freeze(inner)
-            | E::UnaryExp(_, inner)
-            | E::Cast(inner, _) => Some(self.exp(context, state, inner)),
-            // Binop produces a fresh value derived from its operands; the
-            // result still carries tracking, so a downstream consumer
-            // (return, fn call, JumpIf, …) marks. `c.x + 5;` on its own
-            // flags because the result is dropped.
+            // `freeze(&mut T) -> &T` is a pure type-level coercion — pass
+            // tracking through.
+            E::Freeze(inner) => Some(self.exp(context, state, inner)),
+            // Reading the value (`*x`, `!x`, `x as U`) consumes the field.
+            // The root of a tracked param can't appear directly under any
+            // of these — they only operate on primitives or references to
+            // primitives — so any tracking we see here is field-derived.
+            // Mark and produce an untracked result.
+            E::Dereference(inner) | E::UnaryExp(_, inner) | E::Cast(inner, _) => {
+                let vals = self.exp(context, state, inner);
+                mark_used(state, &vals);
+                Some(vec![Value::Other])
+            }
+            // Binop produces a fresh field-derived value carrying the union
+            // of operand roots; downstream consumers mark.
             E::BinopExp(e1, _, e2) => {
                 let mut roots = BTreeSet::new();
                 for v in self.exp(context, state, e1) {
@@ -352,37 +348,20 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
                 for v in self.exp(context, state, e2) {
                     collect_roots(v, &mut roots);
                 }
-                let v = if roots.is_empty() {
-                    Value::Other
-                } else {
-                    Value::Tracked {
-                        root: false,
-                        field: true,
-                        roots,
-                    }
-                };
-                Some(vec![v])
+                Some(vec![tracked_field_or_other(roots)])
             }
-            // Pack/PackVariant: build a per-field tracking map so a later
-            // borrow of that exact field can recover the roots it came from.
-            // Borrowing an untracked field of the same struct yields `Other`.
+            // Pack collapses every field's tracking into a single Tracked
+            // value. We don't bother distinguishing which packed field came
+            // from which root — any later use of the packed struct treats
+            // every contributing root as used.
             E::Pack(_, _, fields) | E::PackVariant(_, _, _, fields) => {
-                let mut field_map: BTreeMap<Field, BTreeSet<Var>> = BTreeMap::new();
-                for (f, _, e) in fields {
-                    let mut roots = BTreeSet::new();
-                    for v in self.exp(context, state, e) {
+                let mut roots = BTreeSet::new();
+                for (_, _, fe) in fields {
+                    for v in self.exp(context, state, fe) {
                         collect_roots(v, &mut roots);
                     }
-                    if !roots.is_empty() {
-                        field_map.insert(*f, roots);
-                    }
                 }
-                let v = if field_map.is_empty() {
-                    Value::Other
-                } else {
-                    Value::Packed(field_map)
-                };
-                Some(vec![v])
+                Some(vec![tracked_field_or_other(roots)])
             }
             _ => None,
         }
@@ -397,60 +376,58 @@ impl SimpleAbsInt for UnusedObjWithFieldsAI {
         _f: &ModuleCall,
         args: Vec<Value>,
     ) -> Option<Vec<Value>> {
-        // If a tracked ref flows into a function call, mark it as used
+        // A tracked value flowing into a function call has escaped.
         mark_used(state, &args);
         None
     }
 }
 
+//**************************************************************************************************
+// helpers
+//**************************************************************************************************
+
+/// Removes any roots referenced by `values` from `state.unused`.
 fn mark_used(state: &mut State, values: &[Value]) {
     for v in values {
-        match v {
-            Value::Tracked { roots, .. } => state.used.extend(roots.iter().copied()),
-            Value::Packed(map) => {
-                for r in map.values() {
-                    state.used.extend(r.iter().copied());
-                }
+        if let Value::Tracked { roots, .. } = v {
+            for r in roots {
+                state.unused.remove(r);
             }
-            Value::Other => {}
         }
     }
 }
 
-/// Drains the tracked roots out of a value, regardless of whether it's
-/// `Tracked` or `Packed`. Used in places that don't care about the field-level
-/// distinction (e.g. flattening for joins, BinopExp).
+/// Like [`mark_used`], but only marks roots that flow as field-derived
+/// values. A bare root reference (`is_field: false`) is a pass-through and
+/// does not count on its own.
+fn mark_used_fields(state: &mut State, values: &[Value]) {
+    for v in values {
+        if let Value::Tracked {
+            is_field: true,
+            roots,
+        } = v
+        {
+            for r in roots {
+                state.unused.remove(r);
+            }
+        }
+    }
+}
+
 fn collect_roots(v: Value, into: &mut BTreeSet<Var>) {
-    match v {
-        Value::Tracked { roots, .. } => into.extend(roots),
-        Value::Packed(map) => {
-            for (_, r) in map {
-                into.extend(r);
-            }
-        }
-        Value::Other => {}
+    if let Value::Tracked { roots, .. } = v {
+        into.extend(roots);
     }
 }
 
-/// Collapses `Packed(...)` into a flat `Tracked { field: true, roots: union }`,
-/// for joining with a sibling `Tracked` value.
-fn flatten_packed(v: Value) -> Value {
-    if let Value::Packed(map) = v {
-        let mut roots = BTreeSet::new();
-        for (_, r) in map {
-            roots.extend(r);
-        }
-        if roots.is_empty() {
-            Value::Other
-        } else {
-            Value::Tracked {
-                root: false,
-                field: true,
-                roots,
-            }
-        }
+fn tracked_field_or_other(roots: BTreeSet<Var>) -> Value {
+    if roots.is_empty() {
+        Value::Other
     } else {
-        v
+        Value::Tracked {
+            is_field: true,
+            roots,
+        }
     }
 }
 
@@ -460,7 +437,7 @@ impl SimpleDomain for State {
     fn new(_context: &CFGContext, locals: BTreeMap<Var, LocalState<Value>>) -> Self {
         State {
             locals,
-            used: BTreeSet::new(),
+            unused: BTreeSet::new(),
         }
     }
 
@@ -477,44 +454,27 @@ impl SimpleDomain for State {
             (Value::Other, v) | (v, Value::Other) => v.clone(),
             (
                 Value::Tracked {
-                    root: r1,
-                    field: f1,
+                    is_field: f1,
                     roots: rs1,
                 },
                 Value::Tracked {
-                    root: r2,
-                    field: f2,
+                    is_field: f2,
                     roots: rs2,
                 },
             ) => Value::Tracked {
-                root: *r1 || *r2,
-                field: *f1 || *f2,
+                is_field: *f1 || *f2,
                 roots: rs1 | rs2,
             },
-            (Value::Packed(m1), Value::Packed(m2)) => {
-                let mut result = m1.clone();
-                for (k, rs) in m2 {
-                    result.entry(*k).or_default().extend(rs.iter().copied());
-                }
-                Value::Packed(result)
-            }
-            // Mixed Tracked/Packed: collapse the packed side to a flat
-            // Tracked then re-join.
-            (Value::Tracked { .. }, Value::Packed(_)) => {
-                let flat = flatten_packed(v2.clone());
-                Self::join_value(v1, &flat)
-            }
-            (Value::Packed(_), Value::Tracked { .. }) => {
-                let flat = flatten_packed(v1.clone());
-                Self::join_value(&flat, v2)
-            }
         }
     }
 
     fn join_impl(&mut self, other: &Self, result: &mut JoinResult) {
-        let before = self.used.len();
-        self.used.extend(other.used.iter().copied());
-        if self.used.len() != before {
+        // Intersect: a param is still unused at the join only if it was
+        // unused on every incoming path. The set never grows — if it did,
+        // the procedure would not converge to a sound result.
+        let before = self.unused.len();
+        self.unused.retain(|v| other.unused.contains(v));
+        if self.unused.len() != before {
             *result = JoinResult::Changed;
         }
     }
