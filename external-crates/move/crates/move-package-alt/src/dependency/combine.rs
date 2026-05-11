@@ -147,10 +147,23 @@ impl CombinedDependency {
             ));
         }
 
+        // On-chain deps use a fixed environment; reject explicit use-environment
+        let use_environment =
+            if matches!(&dep.dependency_info, ManifestDependencyInfo::OnChainAt(_)) {
+                if replacement.use_environment.is_some() {
+                    return Err(ManifestError::with_file(file)(
+                        ManifestErrorKind::OnChainWithUseEnvironment { name },
+                    ));
+                }
+                crate::on_chain::fetch::ON_CHAIN_ENV_NAME.to_string()
+            } else {
+                replacement.use_environment.unwrap_or(source_env_name)
+            };
+
         Ok(Self {
             context: DependencyContext {
                 name,
-                use_environment: replacement.use_environment.unwrap_or(source_env_name),
+                use_environment,
                 is_override: dep.is_override,
                 addresses: replacement.addresses,
                 containing_file: file,
@@ -184,11 +197,24 @@ impl CombinedDependency {
             ));
         }
 
+        // On-chain deps use a fixed environment; reject explicit use-environment
+        let use_environment =
+            if matches!(&dep.dependency_info, ManifestDependencyInfo::OnChainAt(_)) {
+                if replacement.use_environment.is_some() {
+                    return Err(ManifestError::with_file(file)(
+                        ManifestErrorKind::OnChainWithUseEnvironment { name },
+                    ));
+                }
+                crate::on_chain::fetch::ON_CHAIN_ENV_NAME.to_string()
+            } else {
+                replacement.use_environment.unwrap_or(source_env_name)
+            };
+
         // TODO: possibly additional compatibility checks here?
         Ok(Self {
             context: DependencyContext {
                 name,
-                use_environment: replacement.use_environment.unwrap_or(source_env_name),
+                use_environment,
                 is_override: dep.is_override,
                 addresses: replacement.addresses,
                 containing_file: file,

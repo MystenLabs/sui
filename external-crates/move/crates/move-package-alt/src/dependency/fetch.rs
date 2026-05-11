@@ -43,12 +43,12 @@ pub type FetchResult<T> = Result<T, FetchError>;
 /// transformed into git dependencies.
 pub async fn fetch<F: MoveFlavor>(
     pinned: &Pinned,
-    env: &Environment,
+    _env: &Environment,
     config: &PackageConfig<F>,
 ) -> FetchResult<PackagePath> {
     let path = match &pinned {
         Pinned::OnChain { address } => {
-            crate::on_chain::fetch::fetch_onchain(address, env, config).await?
+            crate::on_chain::fetch::fetch_onchain(address, config).await?
         }
         Pinned::Git(dep) => dep
             .inner
