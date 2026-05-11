@@ -9,7 +9,10 @@ error[E01002]: unexpected token
   ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:7:9
   │
 7 │         let _tmp1 = 42;
-  │         ^^^ Unexpected 'let'. Expected a variable, struct, or pattern (with 'else')
+  │         ^^^
+  │         │
+  │         Unexpected 'let'
+  │         Expected a variable, struct, or pattern with 'else'
 
 error[E01002]: unexpected token
    ┌─ tests/move_2024/ide_mode/seq_item_after_incomplete.move:13:9

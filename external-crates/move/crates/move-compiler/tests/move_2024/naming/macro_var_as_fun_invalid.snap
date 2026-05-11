@@ -9,7 +9,10 @@ error[E01002]: unexpected token
   ┌─ tests/move_2024/naming/macro_var_as_fun_invalid.move:3:13
   │
 3 │         let $var = 0u64;
-  │             ^^^^ Unexpected '$<Identifier>'. Expected a variable, struct, or pattern (with 'else')
+  │             ^^^^
+  │             │
+  │             Unexpected '$var'
+  │             Expected a variable, struct, or pattern with 'else'
 
 error[E03005]: unbound unscoped name
   ┌─ tests/move_2024/naming/macro_var_as_fun_invalid.move:4:9

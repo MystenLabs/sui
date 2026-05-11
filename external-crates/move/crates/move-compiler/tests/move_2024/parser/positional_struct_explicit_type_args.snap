@@ -5,36 +5,6 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
-   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:11:13
-   │
-11 │         let Foo <u64>(_) = Foo(0);
-   │             ^^^ Invalid local name 'Foo'. Local variable names must start with 'a'..'z', '_', or be a valid name quoted with backticks (`name`)
-
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:11:17
-   │
-11 │         let Foo <u64>(_) = Foo(0);
-   │                 ^
-   │                 │
-   │                 Unexpected '<'
-   │                 Expected ';'
-
-error[E02010]: invalid name
-   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:12:13
-   │
-12 │         let Bar <u64>{x: _ } = Bar{ x: 0 };
-   │             ^^^ Invalid local name 'Bar'. Local variable names must start with 'a'..'z', '_', or be a valid name quoted with backticks (`name`)
-
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:12:17
-   │
-12 │         let Bar <u64>{x: _ } = Bar{ x: 0 };
-   │                 ^
-   │                 │
-   │                 Unexpected '<'
-   │                 Expected ';'
-
 error[E03022]: invalid usage position
    ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:16:17
    │
