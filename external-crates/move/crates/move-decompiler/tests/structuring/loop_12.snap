@@ -12,7 +12,7 @@ loop {
         { 5 }
         continue;
     } else {
-        { }
+        break;
     }
-    { 6 }
 }
+{ 6 }

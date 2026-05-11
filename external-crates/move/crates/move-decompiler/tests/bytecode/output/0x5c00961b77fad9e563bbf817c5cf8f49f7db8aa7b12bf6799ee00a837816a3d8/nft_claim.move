@@ -12,7 +12,7 @@ has key, store {
     image_url: 0x1::string::String,
 }
 
-public struct ClaimCap has key, store { id: 0x2::object::UID, claimed: 0x2::vec_set::VecSetaddress }
+public struct ClaimCap has key, store { id: 0x2::object::UID, claimed: 0x2::vec_set::VecSet<address> }
 
 public struct NFT_CLAIM has drop { dummy_field: bool }
 

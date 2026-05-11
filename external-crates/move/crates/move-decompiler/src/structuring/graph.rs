@@ -12,10 +12,7 @@ use petgraph::{
     visit::EdgeRef,
 };
 
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    hash::RandomState,
-};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct Graph {
@@ -108,41 +105,46 @@ impl Graph {
         &self,
         node_start: NodeIndex,
     ) -> (HashSet<NodeIndex>, HashSet<NodeIndex>) {
-        let mut loop_nodes = HashSet::new();
-        let mut succ_nodes = HashSet::new();
+        // Loop-body discovery, following the No More Gotos definition: for each back-edge t -> h
+        // (where the header h dominates the latch t), the loop body is {h} together with every
+        // node that can reach t without going through h. We collect that with one reverse BFS
+        // from the latches, treating the header as a frontier — O(V + E) per call.
+        //
+        // We recompute back-edges from the CFG and dom tree directly: u -> h is a back-edge iff h
+        // dominates u. Both the CFG and the dom tree are immutable across structuring, so this is
+        // stable. Self-loops (a CFG self-edge h -> h) fall out naturally: the latch list contains
+        // h, and the BFS treats h as the frontier on the first pop without expanding the body.
 
-        let latch_nodes = self
-            .back_edges
-            .iter()
-            .filter(|(_, edges)| edges.contains(&node_start))
-            .map(|(node_id, _)| *node_id);
+        let dom_descendants: HashSet<NodeIndex> = self
+            .dom_tree
+            .get(node_start)
+            .all_children()
+            .chain(std::iter::once(node_start))
+            .collect();
 
-        for latch_node in latch_nodes {
-            // Handle true self-loops: when there's an actual edge from node_start to itself
-            // in the CFG, all_simple_paths would hang indefinitely. We detect this by checking
-            // if latch_node == node_start AND there's an actual edge in the CFG.
-            if latch_node == node_start {
-                let has_self_loop_edge = self
-                    .cfg
-                    .neighbors_directed(node_start, petgraph::Direction::Outgoing)
-                    .any(|n| n == node_start);
-                if has_self_loop_edge {
-                    // True self-loop: skip all_simple_paths which would hang, but still
-                    // add the head node to loop_nodes so the loop body isn't empty
-                    loop_nodes.insert(node_start);
-                    continue;
-                }
-                // Fake self-loop from latch updates: let all_simple_paths run normally
+        let latches: Vec<NodeIndex> = self
+            .cfg
+            .neighbors_directed(node_start, petgraph::Direction::Incoming)
+            .filter(|pred| dom_descendants.contains(pred))
+            .collect();
+
+        let mut loop_nodes: HashSet<NodeIndex> = HashSet::from([node_start]);
+        let mut work: Vec<NodeIndex> = latches;
+        while let Some(node) = work.pop() {
+            if node == node_start || !loop_nodes.insert(node) {
+                continue;
             }
-            let paths = petgraph::algo::all_simple_paths::<Vec<_>, _, RandomState>(
-                &self.cfg, node_start, latch_node, 0, None,
-            )
-            .collect::<Vec<_>>();
-            for path in paths {
-                loop_nodes.extend(path);
+            for pred in self
+                .cfg
+                .neighbors_directed(node, petgraph::Direction::Incoming)
+            {
+                if !loop_nodes.contains(&pred) {
+                    work.push(pred);
+                }
             }
         }
 
+        let mut succ_nodes = HashSet::new();
         for node in &loop_nodes {
             for successor in self
                 .cfg
