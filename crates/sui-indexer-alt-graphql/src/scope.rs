@@ -44,8 +44,8 @@ pub(crate) enum ObjectSource {
     Executed {
         execution_objects: ExecutionObjectMap,
     },
-    /// A streamed checkpoint with all per-tx contents and execution objects. The transaction
-    /// the scope is currently resolving for is identified by [`Scope::tx_sequence_number_viewed_at`].
+    /// A streamed checkpoint with all per-tx contents and execution objects. The active
+    /// transaction within this scope is identified by [`Scope::tx_sequence_number_viewed_at`].
     Streamed {
         checkpoint: Arc<ProcessedCheckpoint>,
     },
