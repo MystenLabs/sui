@@ -11,9 +11,13 @@ use path_clean::PathClean;
 use thiserror::Error;
 
 use crate::{
+    flavor::MoveFlavor,
     git::GitError,
-    package::paths::{PackagePath, PackagePathError},
-    schema::{EnvironmentID, LocalDepInfo},
+    package::{
+        package_loader::PackageConfig,
+        paths::{PackagePath, PackagePathError},
+    },
+    schema::{Environment, LocalDepInfo},
 };
 
 use super::Pinned;
@@ -26,8 +30,8 @@ pub enum FetchError {
     #[error("Error while fetching `{1}`: {0}")]
     GitFailure(GitError, String),
 
-    #[error("On-chain dependencies are not yet supported")]
-    OnChainNotSupported,
+    #[error("Error while fetching on-chain package: {0}")]
+    OnChainFailure(#[from] anyhow::Error),
 }
 
 pub type FetchResult<T> = Result<T, FetchError>;
@@ -35,21 +39,22 @@ pub type FetchResult<T> = Result<T, FetchError>;
 /// Ensure that the dependency's files are present on the disk and return a path to them.
 /// Assumes that `pinned` is already normalized - paths of any local dependencies are relative
 /// to the current working directory, and local dependencies of git dependencies have been
-/// transformed into git dependencies. `chain_id` is used to determine the cache location for
-/// on-chain dependencies.
-pub async fn fetch(
+/// transformed into git dependencies.
+pub async fn fetch<F: MoveFlavor>(
     pinned: &Pinned,
-    allow_dirty: bool,
-    chain_id: &EnvironmentID,
+    env: &Environment,
+    config: &PackageConfig<F>,
 ) -> FetchResult<PackagePath> {
     let path = match &pinned {
-        Pinned::OnChain { .. } => return Err(FetchError::OnChainNotSupported),
+        Pinned::OnChain { address } => {
+            crate::on_chain::fetch::fetch_onchain(address, env, config).await?
+        }
         Pinned::Git(dep) => dep
             .inner
-            .checkout_repo(allow_dirty)
+            .checkout_repo(config.allow_dirty)
             .await
             .map_err(FetchError::from_git(pinned))?,
-        _ => pinned.unfetched_path(chain_id),
+        _ => pinned.unfetched_path(&config.chain_id),
     };
 
     PackagePath::new(path).map_err(FetchError::from_package(pinned))

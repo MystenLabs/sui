@@ -287,8 +287,8 @@ mod tests {
         );
     }
 
-    /// on-chain = true + address replacement passes combining and fails during fetch.
-    /// This error should change when on-chain dep fetching is implemented.
+    /// on-chain = true + address replacement passes combining and fails during fetch
+    /// because Vanilla has no on-chain packages registered.
     #[test(tokio::test)]
     async fn on_chain_with_address_replacement_passes_combining() {
         let scenario = TestPackageGraph::new(["root"])
@@ -298,7 +298,7 @@ mod tests {
 
         let err = scenario.root_package_err("root").await;
         assert!(
-            err.contains("On-chain dependencies are not yet supported"),
+            err.contains("on-chain package not found"),
             "expected fetch error, got: {err}"
         );
     }
