@@ -230,6 +230,14 @@ impl MoveFlavor for SuiFlavor {
     fn is_system_address(&self, address: &move_package_alt::schema::OriginalID) -> bool {
         is_system_package(address.0)
     }
+
+    async fn fetch_onchain_package(
+        &self,
+        _address: &move_package_alt::schema::PublishedID,
+    ) -> anyhow::Result<move_package_alt::OnChainPackageData> {
+        // TODO: implement via gRPC get_object → MovePackage
+        anyhow::bail!("on-chain package fetching is not yet implemented for SuiFlavor")
+    }
 }
 
 /// We validate that a modern manifest cannot define the "legacy" system names.

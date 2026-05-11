@@ -13,9 +13,23 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::schema::{
     EnvironmentID, EnvironmentName, LockfileDependencyInfo, OriginalID, PackageName,
-    ParsedManifest, ReplacementDependency, SystemDepName,
+    ParsedManifest, PublishedID, ReplacementDependency, SystemDepName,
 };
 use indexmap::IndexMap;
+
+/// Data returned by [`MoveFlavor::fetch_onchain_package`] representing a package fetched from the
+/// network.
+#[derive(Clone, Debug)]
+pub struct OnChainPackageData {
+    /// Module name → compiled bytecode
+    pub modules: BTreeMap<String, Vec<u8>>,
+    /// Original dependency ID → current linked address
+    pub dependencies: BTreeMap<OriginalID, PublishedID>,
+    /// The original (runtime) ID of this package
+    pub original_id: OriginalID,
+    /// The on-chain version of this package
+    pub version: u64,
+}
 
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move
@@ -66,4 +80,11 @@ pub trait MoveFlavor: Debug + Send + Sync {
     /// addresses are not dropped when substituting ephemeral addresses (they can still be
     /// overridden)
     fn is_system_address(&self, address: &OriginalID) -> bool;
+
+    /// Fetch the on-chain package at `address` from the network. Returns the module bytecode,
+    /// linkage table (as original → linked address), original ID, and version.
+    async fn fetch_onchain_package(
+        &self,
+        address: &PublishedID,
+    ) -> anyhow::Result<OnChainPackageData>;
 }
