@@ -676,15 +676,13 @@ fn evict_invalid_sigs<T: Message + Serialize, const STRENGTH: bool>(
     ensures
         agg.committee == old(agg).committee,
         agg.invariant_holds(),
-        // After eviction every remaining sig is valid.
-        all_sigs_valid::<STRENGTH>(agg),
-        // Eviction only removes — never adds.
-        forall|a: AuthorityName| agg.has_voted(a) ==> #[trigger] old(agg).has_voted(a),
-        // Valid sigs are never evicted.
+        // Set-theoretic spec: the new domain is exactly the filter of the old
+        // domain by cryptographic validity.  An authority survives eviction iff
+        // it was present before AND its stored sig is valid.
         forall|a: AuthorityName|
-            old(agg).has_voted(a)
-            && sig_is_valid(&old(agg).data@[a], &old(agg).committee)
-                ==> #[trigger] agg.has_voted(a),
+            #[trigger] agg.has_voted(a)
+            <==> (old(agg).has_voted(a)
+                  && sig_is_valid(&old(agg).data@[a], &old(agg).committee)),
         // Values of surviving entries are unchanged.
         forall|a: AuthorityName|
             agg.has_voted(a) ==> #[trigger] agg.data@[a] == old(agg).data@[a],
@@ -765,9 +763,18 @@ fn try_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
             // === Batch failed: evict individually-invalid sigs, then re-try ===
             let (bad_votes, bad_authorities) =
                 evict_invalid_sigs::<T, STRENGTH>(agg, &data, message_intent::<T>());
-            // evict_invalid_sigs spec: all_sigs_valid(agg) now holds.
-
+            // Derive all_sigs_valid from the biconditional + value preservation:
+            // agg.has_voted(a) ==> sig_is_valid(old.data@[a]) (biconditional ==> direction)
+            //                  ==> sig_is_valid(agg.data@[a])  (value preservation)
             proof {
+                assert(all_sigs_valid::<STRENGTH>(agg)) by {
+                    assert forall|a: AuthorityName| agg.has_voted(a)
+                        implies sig_is_valid(&agg.data@[a], &agg.committee)
+                    by {
+                        assert(sig_is_valid(&old(agg).data@[a], &agg.committee));
+                        assert(agg.data@[a] == old(agg).data@[a]);
+                    };
+                };
                 lemma_valid_voted_weight_eq_total_under_all_valid::<STRENGTH>(agg);
             }
 
