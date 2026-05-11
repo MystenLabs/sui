@@ -391,30 +391,6 @@ $ sui client gas eloquent-amber
 ╰────────────────────────────────────────────────────────────────────┴────────────────────┴──────────────────╯
 ```
 
-### Test publish and upgrade locally
-
-Use `sui client test-publish` to simulate a package publish without submitting the transaction to the network. This is useful for verifying that a package builds and passes all checks before publishing.
-
-```sh
-$ sui client test-publish
-```
-
-Use `sui client test-upgrade` to simulate a package upgrade without submitting the transaction to the network.
-
-```sh
-$ sui client test-upgrade --upgrade-capability 0xde670ae990c8f20fd53e9f597a0da056bdb634175176602658e9da2c2ec9cb93
-```
-
-For more detail on publishing and upgrading packages, see the [package management guide](/guides/developer/app-examples/publish).
-
-### Execute a combined signed transaction
-
-Use `sui client execute-combined-signed-tx` to submit a transaction that has been signed by multiple parties. This command is useful in multi-party signing workflows where each party signs the serialized transaction bytes offline before submission.
-
-```sh
-$ sui client execute-combined-signed-tx --tx-bytes <BASE64-TX-BYTES> --signatures <SIG1> <SIG2>
-```
-
 ### Replay a transaction
 
 Client commands to replay transactions have been deprecated in favor of the `sui replay` command. Learn about replaying a transaction and how it can be used for debugging or profiling in the [Transaction Replay](/references/cli/replay), [Debugging Transactions](/references/ide/debugger), and [Transaction Trace Analysis](/references/cli/trace-analysis) guides.
