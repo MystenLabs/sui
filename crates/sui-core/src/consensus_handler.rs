@@ -3263,7 +3263,7 @@ impl MysticetiConsensusHandler {
             while let Some(consensus_commit) = commit_receiver.recv().await {
                 let commit_index = consensus_commit.commit_ref.index;
                 if !process_consensus_commits {
-                    info!(
+                    debug!(
                         commit_index,
                         "Observer skipping consensus commit processing"
                     );
