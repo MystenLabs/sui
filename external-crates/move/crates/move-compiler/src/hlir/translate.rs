@@ -2009,17 +2009,12 @@ fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::Se
 }
 
 /// Lowers `let pat = subject else { else_body };` to a two-arm match:
-/// the success arm binds `pat`'s binders and produces unit, and a catch-all
-/// `_ => else_body` arm runs the (divergent) else block. The match is compiled
-/// with `MatchSubjectKind::LetElse` so the synthesized subject temp is named
-/// in a way later passes can recognize for tailored diagnostics.
+/// - the success arm binds `pat`'s binders and produces unit
+/// - a catch-all `_ => else_body` arm runs the (divergent) else block
 ///
-/// The pattern's binders escape this match into the surrounding sequence:
-/// typing already called `declare_local` for each one (see
-/// `typing::translate::sequence`), so the assignments emitted by match
-/// compilation write into function-scope locals that subsequent statements
-/// can reference. The success arm's RHS is unit only because the surrounding
-/// block doesn't consume the match's value; the bindings are the real output.
+/// The pattern's binders escape this match into the surrounding sequence: typing already called
+/// `declare_local` for each one (see `typing::translate::sequence`), so the assignments emitted by
+/// match compilation write into function-scope locals that subsequent statements can reference.
 fn lower_let_else(
     context: &mut Context,
     loc: Loc,

@@ -1,4 +1,4 @@
-// Copyright (c) The Diem Core Contributors
+// thCopyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -1571,13 +1571,12 @@ fn parse_value(context: &mut Context) -> Result<Value, Box<Diagnostic>> {
 fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let item = if match_token(context.tokens, Tok::Let)? {
-        // The `(with 'else')` hint advertises let-else and should only appear
-        // when the feature is enabled for the current package.
+        // The pattern hint advertises let-else and should only appear when the feature is enabled.
         let kind = if context
             .env
             .supports_feature(context.current_package, FeatureGate::LetElse)
         {
-            "a variable, struct, or pattern (with 'else')"
+            "a variable, struct, or pattern with 'else'"
         } else {
             "a variable or struct name"
         };
@@ -2379,10 +2378,13 @@ fn parse_match_pattern(
             {
                 ok_with_loc!(context, {
                     let mut_ = parse_mut_opt(context)?;
-                    let name_access_chain = parse_name_access_chain(
+                    // Match the legacy `let` binding behavior (which used
+                    // `parse_name_access_chain_with_tyarg_whitespace`) so that
+                    // `Foo <T>(...)` etc. with whitespace before the tyargs is
+                    // still accepted as a constructor pattern.
+                    let name_access_chain = parse_name_access_chain_with_tyarg_whitespace(
                         context,
                         /* macros */ false,
-                        /* tyargs */ true,
                         || "a pattern entry",
                     )?;
 
@@ -2442,15 +2444,7 @@ fn parse_match_pattern(
                 if let Some(value) = maybe_parse_value(context)? {
                     Ok(sp(value.loc, MP::Literal(value)))
                 } else {
-                    let msg = format!(
-                        "Unexpected '{}'. Expected {}",
-                        context.tokens.peek(),
-                        error_kind
-                    );
-                    Err(Box::new(diag!(
-                        Syntax::UnexpectedToken,
-                        (context.tokens.current_token_loc(), msg)
-                    )))
+                    Err(unexpected_token_error(context.tokens, error_kind))
                 }
             }
         }

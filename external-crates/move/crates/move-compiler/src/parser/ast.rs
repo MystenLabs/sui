@@ -792,12 +792,7 @@ pub enum MatchPattern_ {
     Or(Box<MatchPattern>, Box<MatchPattern>),
     // x @ pat
     At(Var, Box<MatchPattern>),
-    /// `(pat1, pat2, ..., patn)` — tuple destructuring.
-    ///
-    /// Only valid in `let` bindings (where the parser shares this type with
-    /// `match` patterns); `Tuple` is rejected if it appears as a `match` arm
-    /// pattern. See `expansion::translate::match_pattern` and
-    /// `expansion::translate::match_pattern_to_bind_list` for the routing.
+    /// `(pat1, pat2, ..., patn)` is a tuple destructuring for `let` LHS cases.
     Tuple(Spanned<Vec<MatchPattern>>),
 }
 

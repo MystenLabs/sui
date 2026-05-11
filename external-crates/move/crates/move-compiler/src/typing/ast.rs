@@ -264,10 +264,7 @@ pub enum SequenceItem_ {
     Seq(Box<Exp>),
     Declare(LValueList),
     Bind(LValueList, Vec<Option<Type>>, Box<Exp>),
-    // `let <pat> = e else <divergent>;`. The `Vec<(Var, Type)>` lists the
-    // binders introduced by `<pat>` together with the type variables typed
-    // against them; HLIR lowers this to a two-arm match (success arm + a
-    // wildcard catch-all running the divergent else).
+    // pattern, subsequent binders, rhs, else
     BindElse(Box<MatchPattern>, Vec<(Var, Type)>, Box<Exp>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;

@@ -3800,16 +3800,15 @@ fn match_pattern_to_bind(
             check_valid_local_name(context.reporter(), &v);
             EL::Var(Some(emut), sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
-        MP::Name(pmut, chain) => {
-            let emut = mutability(context, loc, pmut);
-            let access!(name, tys_opt, _) =
-                context.name_access_chain_to_module_access(Access::ApplyNamed, chain)?;
-            let tys_opt = optional_sp_types(context, tys_opt);
-            if tys_opt.is_some() {
-                EL::Unpack(name, tys_opt, E::FieldBindings::Named(Fields::new(), None))
-            } else {
-                EL::Var(Some(emut), name, None)
-            }
+        // A non-bare `Name` pattern in a `let` binding (a multi-part path like
+        // `M::Foo`, or a single name carrying tyargs/macro syntax like `Foo<T>`
+        // or `foo!`) is not a variable binding. To destructure a struct it must
+        // be written with explicit constructor syntax.
+        MP::Name(_, chain) => {
+            let msg = "Invalid 'let' binding. To destructure a struct, use '()' \
+                       for positional fields or '{}' for named fields";
+            context.add_diag(diag!(Syntax::UnexpectedToken, (chain.loc, msg)));
+            return None;
         }
         MP::PositionalConstructor(chain, sp!(_, pats)) => {
             let access!(name, ptys_opt, _) =

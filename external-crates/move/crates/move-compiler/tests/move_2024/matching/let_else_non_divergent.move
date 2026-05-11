@@ -8,7 +8,7 @@ module 0x42::m {
 
     fun non_divergent(): u64 {
         let subject = ABC::C(42u64);
-        let ABC::C(x) = subject else { 0 };
+        let ABC::C(x) = subject else { 0u16 };
         x
     }
 
