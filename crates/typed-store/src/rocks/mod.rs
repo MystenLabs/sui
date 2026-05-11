@@ -272,6 +272,81 @@ impl Database {
         }
     }
 
+    fn contains_cf<K: AsRef<[u8]>>(
+        &self,
+        cf: &ColumnFamily,
+        key: K,
+        readopts: &ReadOptions,
+    ) -> Result<bool, TypedStoreError> {
+        let key = key.as_ref();
+        match (&self.storage, cf) {
+            (Storage::Rocks(db), ColumnFamily::Rocks(_)) => {
+                let rocks_cf = cf.rocks_cf(db);
+                if !db.underlying.key_may_exist_cf_opt(&rocks_cf, key, readopts) {
+                    return Ok(false);
+                }
+                Ok(db
+                    .underlying
+                    .get_pinned_cf_opt(&rocks_cf, key, readopts)
+                    .map_err(typed_store_err_from_rocks_err)?
+                    .is_some())
+            }
+            (Storage::InMemory(db), ColumnFamily::InMemory(cf_name)) => {
+                Ok(db.get(cf_name, key).is_some())
+            }
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
+                .exists(*ks, &transform_th_key(key, prefix))
+                .map_err(typed_store_error_from_th_error),
+            _ => Err(TypedStoreError::RocksDBError(
+                "typed store invariant violation".to_string(),
+            )),
+        }
+    }
+
+    fn multi_contains_cf<I, K>(
+        &self,
+        cf: &ColumnFamily,
+        keys: I,
+        readopts: &ReadOptions,
+    ) -> Vec<Result<bool, TypedStoreError>>
+    where
+        I: IntoIterator<Item = K>,
+        K: AsRef<[u8]>,
+    {
+        match (&self.storage, cf) {
+            (Storage::Rocks(db), ColumnFamily::Rocks(_)) => {
+                let keys_vec: Vec<K> = keys.into_iter().collect();
+                let res = db.underlying.batched_multi_get_cf_opt(
+                    &cf.rocks_cf(db),
+                    keys_vec.iter(),
+                    /* sorted_input */ false,
+                    readopts,
+                );
+                res.into_iter()
+                    .map(|r| {
+                        r.map_err(typed_store_err_from_rocks_err)
+                            .map(|v| v.is_some())
+                    })
+                    .collect()
+            }
+            (Storage::InMemory(db), ColumnFamily::InMemory(cf_name)) => db
+                .multi_get(cf_name, keys)
+                .into_iter()
+                .map(|v| Ok(v.is_some()))
+                .collect(),
+            #[cfg(tidehunter)]
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => keys
+                .into_iter()
+                .map(|k| {
+                    db.exists(*ks, &transform_th_key(k.as_ref(), prefix))
+                        .map_err(typed_store_error_from_th_error)
+                })
+                .collect(),
+            _ => unreachable!("typed store invariant violation"),
+        }
+    }
+
     pub fn drop_cf(&self, name: &str) -> Result<(), rocksdb::Error> {
         match &self.storage {
             Storage::Rocks(db) => db.underlying.drop_cf(name),
@@ -1626,11 +1701,8 @@ where
     fn contains_key(&self, key: &K) -> Result<bool, TypedStoreError> {
         let key_buf = be_fix_int_ser(key);
         let readopts = self.opts.readopts();
-        Ok(self.db.key_may_exist_cf(&self.cf, &key_buf, &readopts)
-            && self
-                .db
-                .get(&self.column_family, &key_buf, &readopts)?
-                .is_some())
+        self.db
+            .contains_cf(&self.column_family, &key_buf, &readopts)
     }
 
     #[instrument(level = "trace", skip_all, err)]
@@ -1641,8 +1713,15 @@ where
     where
         J: Borrow<K>,
     {
-        let values = self.multi_get_pinned(keys)?;
-        Ok(values.into_iter().map(|v| v.is_some()).collect())
+        let readopts = self.opts.readopts();
+        let keys_bytes: Vec<_> = keys
+            .into_iter()
+            .map(|k| be_fix_int_ser(k.borrow()))
+            .collect();
+        self.db
+            .multi_contains_cf(&self.column_family, keys_bytes.iter(), &readopts)
+            .into_iter()
+            .collect()
     }
 
     #[instrument(level = "trace", skip_all, err)]
