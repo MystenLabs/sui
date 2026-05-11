@@ -687,19 +687,21 @@ fn evict_invalid_sigs<T: Message + Serialize, const STRENGTH: bool>(
         forall|a: AuthorityName|
             agg.has_voted(a) ==> #[trigger] agg.data@[a] == old(agg).data@[a],
 {
-    let _ = intent;  // intent captured in spec; loop recreates it each iteration.
-    let mut bad_votes = 0;
-    let mut bad_authorities = vec![];
-    for (name, sig) in &agg.data.inner.clone() {
-        if let Err(err) = sig.verify_secure(data, Intent::sui_app(T::SCOPE), agg.committee()) {
-            warn!(name=?name.concise(), "Bad stake from validator: {:?}", err);
-            agg.data.inner.remove(name);
-            let votes = agg.committee.weight(name);
-            agg.total_votes -= votes;
-            bad_votes += votes;
+    let _ = intent;
+    let committee = agg.committee.clone();  // cheap Arc clone to avoid borrow conflict with retain
+    let mut bad_votes: StakeUnit = 0;
+    let mut bad_authorities: Vec<AuthorityName> = vec![];
+    agg.data.inner.retain(|name, sig| {
+        if sig.verify_secure(data, Intent::sui_app(T::SCOPE), committee.as_ref()).is_ok() {
+            true
+        } else {
+            warn!(name=?name.concise(), "Bad stake from validator");
+            bad_votes += committee.weight(name);
             bad_authorities.push(*name);
+            false
         }
-    }
+    });
+    agg.total_votes -= bad_votes;
     (bad_votes, bad_authorities)
 }
 
