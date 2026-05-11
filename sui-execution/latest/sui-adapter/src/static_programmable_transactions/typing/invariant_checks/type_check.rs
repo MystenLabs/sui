@@ -44,6 +44,7 @@ impl<'txn> Context<'txn> {
     }
 }
 
+/// - All dropped result values have the `drop` ability
 pub fn verify<Mode: ExecutionMode>(
     env: &Env<Mode>,
     txn: &T::Transaction,
