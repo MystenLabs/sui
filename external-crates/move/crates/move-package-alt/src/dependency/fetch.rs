@@ -18,7 +18,7 @@ use crate::{
         package_loader::PackageConfig,
         paths::{PackagePath, PackagePathError},
     },
-    schema::{Environment, LocalDepInfo},
+    schema::LocalDepInfo,
 };
 
 use super::Pinned;
@@ -43,7 +43,6 @@ pub type FetchResult<T> = Result<T, FetchError>;
 /// transformed into git dependencies.
 pub async fn fetch<F: MoveFlavor>(
     pinned: &Pinned,
-    _env: &Environment,
     config: &PackageConfig<F>,
 ) -> FetchResult<PackagePath> {
     let path = match &pinned {

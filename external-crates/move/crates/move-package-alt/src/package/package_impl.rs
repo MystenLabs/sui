@@ -77,7 +77,7 @@ impl<F: MoveFlavor> Package<F> {
     ) -> PackageResult<Self> {
         debug!("loading package {:?}", dep);
         let flavor = &*config.flavor;
-        let path = fetch::fetch(&dep, env, config).await?;
+        let path = fetch::fetch(&dep, config).await?;
 
         // try to load a legacy manifest (with an `[addresses]` section)
         //   - if it fails, load a modern manifest (and return any errors)
