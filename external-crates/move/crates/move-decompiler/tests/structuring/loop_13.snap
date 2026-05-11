@@ -9,13 +9,13 @@ loop {
                 { 4 }
                 continue;
             } else {
-                { }
+                break;
             }
-            { 5 }
-            continue;
         }
+        { 5 }
+        continue;
     } else {
-        { }
+        break;
     }
-    { 3 }
 }
+{ 3 }

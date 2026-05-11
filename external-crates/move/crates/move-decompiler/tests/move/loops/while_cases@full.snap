@@ -30,10 +30,10 @@ public fun while_test_2() {
                 l1 = l1 + 1u64;
                 continue
             } else {
-                
-            };
-            return
-        }
+                break
+            }
+        };
+        return
     }
 }
 
@@ -71,10 +71,10 @@ public fun while_test_4() {
                     continue
                 }
             } else {
-                
-            };
-            return
-        }
+                break
+            }
+        };
+        return
     }
 }
 
@@ -83,23 +83,14 @@ public fun while_test_5() {
         let l0 = 0u64;
         let l1 = 0u64;
         let l2 = 0u64;
-        loop {
-            if (l0 < 10u64) {
-                loop {
-                    if (l1 < 10u64) {
-                        l2 = l2 + l0 * l1 + l1;
-                        l1 = l1 + 1u64;
-                        continue
-                    } else {
-                        
-                    };
-                    l0 = l0 + 1u64;
-                }
-            } else {
-                
+        while (l0 < 10u64) {
+            while (l1 < 10u64) {
+                l2 = l2 + l0 * l1 + l1;
+                l1 = l1 + 1u64;
             };
-            return
-        }
+            l0 = l0 + 1u64;
+        };
+        return
     }
 }
 
@@ -116,9 +107,9 @@ public fun while_test_6() {
                 l1 = l1 + 1u64;
                 continue
             } else {
-                
-            };
-            return
-        }
+                break
+            }
+        };
+        return
     }
 }
