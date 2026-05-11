@@ -58,6 +58,19 @@ const ON_CHAIN_PACKAGE_NAME: &str = "self";
 /// for a second environment adds a new entry without disturbing existing ones. This does
 /// not trigger repinning for other environments because the manifest digest is computed
 /// per-environment from the `CombinedDependency` list.
+///
+/// # Known limitation: system packages
+///
+/// The linkage table entries are currently all turned into on-chain dep-replacements. This
+/// includes entries for system packages (e.g. `0x1`, `0x2` on Sui), which are mutable and
+/// should instead be resolved as system deps. Since almost all on-chain packages depend on
+/// system packages, this means the generated manifest will redundantly fetch system packages
+/// on-chain rather than using the source versions already in the graph.
+///
+/// The general problem is that a package may be reachable both as an on-chain dep (from the
+/// linkage table) and as a source dep (from system deps or the user's manifest). These need
+/// to be deduplicated, likely in a post-processing step after the full graph is built.
+// TODO: filter system packages from the linkage table or deduplicate in the graph builder.
 pub(crate) async fn fetch_onchain<F: MoveFlavor>(
     address: &PublishedID,
     env: &Environment,
