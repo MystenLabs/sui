@@ -389,22 +389,28 @@ Your indexer is now complete. The next steps walk you through running the indexe
 
 Use the `cargo run` command to run your indexer against Testnet. For normal operation, prefer full node gRPC as your primary source and use the remote checkpoint store only as a fallback or for backfill (see [Checkpoint Data Sources](/develop/accessing-data/custom-indexer/indexer-data-integration#checkpoint-data-sources) for details):
 
-**Recommended: gRPC streaming from a full node (with remote checkpoint store fallback):**
+**Recommended: GCS bucket for full-retention backfill (production):**
 
 ```sh
-$ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming-url https://fullnode.testnet.sui.io:443
+$ cargo run -- --remote-store-gcs mysten-testnet-checkpoints-use4
 ```
 
-**Using remote checkpoint storage:**
+**Recommended with gRPC streaming: GCS bucket fallback with full node streaming:**
+
+```sh
+$ cargo run -- --remote-store-gcs mysten-testnet-checkpoints-use4 --streaming-url https://fullnode.testnet.sui.io:443
+```
+
+**Simpler option for recent data only (development or last 30 days):**
 
 ```sh
 $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io
 ```
 
-**Using a GCS checkpoint bucket directly:**
+**HTTPS store with gRPC streaming (recent data only):**
 
 ```sh
-$ cargo run -- --remote-store-gcs mysten-testnet-checkpoints-use4
+$ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming-url https://fullnode.testnet.sui.io:443
 ```
 
 The public HTTPS checkpoint endpoints retain only the most recent 30 days of checkpoints. For full-retention backfills, use `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4` for Testnet or `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4` for Mainnet. These buckets are Requester Pays enabled and should be accessed through the indexing framework's `--remote-store-gcs` option rather than `--remote-store-url`. See [Use Requester Pays](https://cloud.google.com/storage/docs/using-requester-pays) and [Running a Remote Store](/operators/data-management/remote-store-setup).
@@ -441,6 +447,6 @@ $ SELECT * FROM transaction_digests LIMIT 5;
 
 To confirm your data is accurate, copy any transaction digest from your database and verify it on SuiScan: [https://suiscan.xyz/testnet/home](https://suiscan.xyz/testnet/home)
 
-You've built a working custom indexer. 🎉 
+You've built a working custom indexer.
 
 The key concepts covered here apply to any custom indexer: define your data structure, implement the `Processor` and `Handler` traits, and let the framework handle the infrastructure.
