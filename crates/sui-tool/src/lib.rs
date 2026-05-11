@@ -9,6 +9,7 @@ use futures::future::join_all;
 use itertools::Itertools;
 use std::collections::BTreeMap;
 use std::fmt::Write;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -789,6 +790,7 @@ pub async fn download_formal_snapshot(
     network: Chain,
     verify: SnapshotVerifyMode,
     max_retries: usize,
+    metrics_port: u16,
 ) -> Result<(), anyhow::Error> {
     let m = MultiProgress::new();
     let msg = format!(
@@ -804,8 +806,8 @@ pub async fn download_formal_snapshot(
     }
 
     // Start prometheus server so that we can serve metrics during snapshot download
-    let registry_service =
-        mysten_metrics::start_prometheus_server("127.0.0.1:9184".parse().unwrap());
+    let metrics_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), metrics_port);
+    let registry_service = mysten_metrics::start_prometheus_server(metrics_addr);
     let prometheus_registry = registry_service.default_registry();
     DBMetrics::init(registry_service.clone());
     mysten_metrics::init_metrics(&prometheus_registry);
