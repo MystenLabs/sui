@@ -233,10 +233,43 @@ impl MoveFlavor for SuiFlavor {
 
     async fn fetch_onchain_package(
         &self,
-        _address: &move_package_alt::schema::PublishedID,
+        address: &move_package_alt::schema::PublishedID,
     ) -> anyhow::Result<move_package_alt::OnChainPackageData> {
-        // TODO: implement via gRPC get_object → MovePackage
-        anyhow::bail!("on-chain package fetching is not yet implemented for SuiFlavor")
+        let Some(ref client) = self.client else {
+            anyhow::bail!(
+                "cannot fetch on-chain package {address}: no network connection \
+                 (SuiFlavor created in offline mode)"
+            )
+        };
+
+        let object_id = ObjectID::from(address.0);
+        let object = client.clone().get_object(object_id).await?;
+        let package = object
+            .data
+            .try_as_package()
+            .ok_or_else(|| anyhow::anyhow!("object {address} is not a package"))?;
+
+        let modules = package.serialized_module_map().clone();
+        let dependencies = package
+            .linkage_table()
+            .iter()
+            .map(|(original_id, upgrade_info)| {
+                (
+                    move_package_alt::schema::OriginalID((*original_id).into()),
+                    move_package_alt::schema::PublishedID(upgrade_info.upgraded_id.into()),
+                )
+            })
+            .collect();
+        let original_id =
+            move_package_alt::schema::OriginalID(package.original_package_id().into());
+        let version: u64 = package.version().into();
+
+        Ok(move_package_alt::OnChainPackageData {
+            modules,
+            dependencies,
+            original_id,
+            version,
+        })
     }
 }
 
