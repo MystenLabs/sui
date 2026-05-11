@@ -78,6 +78,7 @@ trait Refine {
             E::Return(es) => self.refine_seq(es),
             E::Assign(_, e) => self.refine(e),
             E::LetBind(_, e) => self.refine(e),
+            E::Declare(_) => false,
             E::Call(_, es) => self.refine_seq(es),
             E::Abort(e) => self.refine(e),
             E::Primitive { op: _, args } => self.refine_seq(args),

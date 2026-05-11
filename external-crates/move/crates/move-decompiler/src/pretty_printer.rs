@@ -251,6 +251,18 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                     .concat_space(D::text("="))
                     .concat_space(recur(context, rhs))
             }
+            Exp::Declare(lhs) => {
+                let lhs_doc = match &lhs[..] {
+                    [] => D::text("_"),
+                    [x] => D::text(x),
+                    _ => D::parens(D::intersperse(
+                        lhs.iter().map(D::text),
+                        D::text(",").concat(D::space()),
+                    ))
+                    .group(),
+                };
+                D::text("let").concat_space(lhs_doc)
+            }
             Exp::Call((m, f), args) => {
                 D::text(format!("{m}::{f}")).concat(exp_list(context, args).parens())
             }
@@ -266,7 +278,10 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
             Exp::Variable(s) => D::text(s),
             Exp::Constant(c) => context.get_constant(c),
             Exp::Seq(vs) => {
-                let final_semi = matches!(vs.last(), Some(Exp::LetBind(_, _) | Exp::Assign(_, _)));
+                let final_semi = matches!(
+                    vs.last(),
+                    Some(Exp::LetBind(_, _) | Exp::Assign(_, _) | Exp::Declare(_))
+                );
                 let mut stmts = stmts(context, vs);
                 if final_semi {
                     stmts = stmts.concat(D::text(";"));
@@ -331,7 +346,10 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
         // otherwise, treat the single expression as a statement.
         match e {
             Exp::Seq(vs) => {
-                let final_semi = matches!(vs.last(), Some(Exp::LetBind(_, _) | Exp::Assign(_, _)));
+                let final_semi = matches!(
+                    vs.last(),
+                    Some(Exp::LetBind(_, _) | Exp::Assign(_, _) | Exp::Declare(_))
+                );
                 let mut stmts = stmts(context, vs);
                 if final_semi {
                     stmts = stmts.concat(D::text(";"));
@@ -339,7 +357,10 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                 braces_block(stmts)
             }
             other => {
-                let final_semi = matches!(other, Exp::LetBind(_, _) | Exp::Assign(_, _));
+                let final_semi = matches!(
+                    other,
+                    Exp::LetBind(_, _) | Exp::Assign(_, _) | Exp::Declare(_)
+                );
                 let mut body = recur(context, other);
                 if final_semi {
                     body = body.concat(D::text(";"));

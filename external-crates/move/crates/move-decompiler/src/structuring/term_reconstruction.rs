@@ -7,6 +7,11 @@ use move_stackless_bytecode_2::ast::{DataOp, RValue, RegId, Trivial};
 
 use std::collections::{BTreeMap, HashSet};
 
+/// Reconstruct one basic block's instructions as an `Exp`.
+///
+/// `let_binds` is the per-block "already let-bound in this block" set: the first StoreLoc of a
+/// local emits `let X = e`, subsequent stores `X = e`. Lifting that `let` to a wider scope when
+/// the block sits inside an IfElse/Switch/Loop arm is `hoist_declarations`'s job.
 pub fn exp(
     block: move_stackless_bytecode_2::ast::BasicBlock,
     let_binds: &mut HashSet<RegId>,
@@ -207,7 +212,7 @@ fn trivial(map: &mut BTreeMap<RegId, Out::Exp>, triv: Trivial) -> Out::Exp {
     }
 }
 
-fn local_name(id: usize) -> String {
+pub(crate) fn local_name(id: usize) -> String {
     format!("l{}", id)
 }
 

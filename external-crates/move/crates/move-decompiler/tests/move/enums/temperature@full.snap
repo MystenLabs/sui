@@ -38,15 +38,18 @@ public fun f(): enums::temperature::Temperature {
 }
 
 public fun is_temperature_fahrenheit(l0: &enums::temperature::Temperature): bool {
-    let l2 = l0;
-    match (l2) {
-        Temperature::Fahrenheit => {
-            0x0::temperature::Temperature::Fahrenheit { pos0: reg_3 } = l2;
-            let l1 = true;
-        },
-        Temperature::Celcius => {
-            l1 = false;
-        }
-    };
-    return l1
+    {
+        let l2 = l0;
+        let l1;
+        switch 0x0::temperature::Temperature (l2) {
+            Fahrenheit => {
+                0x0::temperature::Temperature::Fahrenheit { pos0: reg_3 } = l2;
+                l1 = true;
+            },
+            Celcius => {
+                l1 = false;
+            }
+        };
+        return l1
+    }
 }

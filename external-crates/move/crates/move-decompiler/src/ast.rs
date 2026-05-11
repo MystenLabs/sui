@@ -68,6 +68,9 @@ pub enum Exp {
     // non-control expressions
     Assign(Vec<String>, Box<Exp>),
     LetBind(Vec<String>, Box<Exp>),
+    /// `let X;` — declaration with no initializer. Inserted by `hoist_declarations` when an
+    /// arm-scope `let X = e` has to be lifted out to a common enclosing scope.
+    Declare(Vec<String>),
     Call((ModuleId<Symbol>, Symbol), Vec<Exp>),
     Abort(Box<Exp>),
     // Do we need drop?
@@ -119,6 +122,7 @@ impl Exp {
             Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_break()),
             Exp::Assign(_, exp) => exp.contains_break(),
             Exp::LetBind(_, exp) => exp.contains_break(),
+            Exp::Declare(_) => false,
             Exp::Call(_, exps) => exps.iter().any(|e| e.contains_break()),
             Exp::Abort(exp) => exp.contains_break(),
             Exp::Primitive { op: _, args } => args.iter().any(|e| e.contains_break()),
@@ -156,6 +160,7 @@ impl Exp {
             Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_break()),
             Exp::Assign(_, exp) => exp.contains_continue(),
             Exp::LetBind(_, exp) => exp.contains_continue(),
+            Exp::Declare(_) => false,
             Exp::Call(_, exps) => exps.iter().any(|e| e.contains_continue()),
             Exp::Abort(exp) => exp.contains_continue(),
             Exp::Primitive { op: _, args } => args.iter().any(|e| e.contains_continue()),
@@ -307,6 +312,10 @@ impl std::fmt::Display for Exp {
                 Exp::LetBind(items, exp) => {
                     indent(f, level)?;
                     writeln!(f, "let {} = {};", items.join(", "), exp)
+                }
+                Exp::Declare(items) => {
+                    indent(f, level)?;
+                    writeln!(f, "let {};", items.join(", "))
                 }
                 Exp::Call((module_name, fun_name), exps) => {
                     indent(f, level)?;
