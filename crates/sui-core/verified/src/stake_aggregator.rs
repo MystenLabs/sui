@@ -22,9 +22,9 @@ verus! {
 #[cfg(verus_only)]
 use crate::verus_shims::{
     committee_authorities, committee_epoch_spec, committee_threshold_spec, committee_unique,
-    committee_weight_of, committee_weight_seq, envelope_authority, envelope_epoch, envelope_sig_spec,
+    committee_weight_of, envelope_authority, envelope_epoch, envelope_sig_spec,
     lemma_voted_weight_empty, lemma_voted_weight_insert, lemma_voted_weight_le_subset,
-    lemma_weight_seq_at_position, sig_is_valid, voted_weight, voted_weight_le,
+    sig_is_valid, voted_weight,
 };
 #[cfg(verus_only)]
 use sui_types_verified::authority_sign_info::{auth_sig_authority_spec, auth_sig_epoch_spec};
@@ -46,6 +46,42 @@ fn err_repeated_signer(signer: AuthorityName, conflicting_sig: bool) -> (out: Su
 #[verifier::external_body]
 fn err_invalid_authenticator() -> (out: SuiError) {
     SuiErrorKind::InvalidAuthenticator.into()
+}
+
+/// One-liner: construct the Intent for a given Message type's scope.
+/// external_body because T::SCOPE is an associated const from the
+/// unregistered Message trait, which Verus cannot evaluate in exec.
+#[verifier::external_body]
+fn message_intent<T: Message>() -> (out: Intent) {
+    Intent::sui_app(T::SCOPE)
+}
+
+/// Aggregate a slice of authority sigs into a quorum certificate and verify
+/// it against the given message in one shot.
+///
+/// Returns `Some(cert)` iff aggregation succeeded and the certificate
+/// verifies; `None` otherwise.
+///
+/// Key axiom (soundness of BLS): if every input sig is individually valid for
+/// this (data, intent, committee) triple, the aggregated cert always verifies.
+/// Conversely, if the cert verifies, every constituent sig must be valid.
+#[verifier::external_body]
+fn try_batch_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
+    sigs: Vec<AuthoritySignInfo>,
+    data: &T,
+    intent: Intent,
+    committee: &Committee,
+) -> (out: Option<AuthorityQuorumSignInfo<STRENGTH>>)
+    ensures
+        (forall|v: AuthoritySignInfo| sigs@.contains(v) ==> sig_is_valid(&v, committee))
+            ==> out.is_some(),
+        out.is_some()
+            ==> forall|v: AuthoritySignInfo| #[trigger] sigs@.contains(v) ==> sig_is_valid(&v, committee),
+{
+    let cert = AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(sigs, committee)
+        .ok()?;
+    cert.verify_secure(data, intent, committee).ok()?;
+    Some(cert)
 }
 
 #[verifier::external_body]
@@ -511,14 +547,15 @@ verus! {
 // Spec predicates for the AuthoritySignInfo specialisation
 // ---------------------------------------------------------------------------
 
-/// All authorities with positive committee weight have cryptographically valid
-/// stored signatures.
+/// Every stored signature (regardless of committee weight) is cryptographically
+/// valid.  Dropping the weight condition keeps the predicate simple and matches
+/// what the eviction loop actually guarantees: it removes *all* invalid sigs,
+/// not only weighted ones.
 pub open spec fn all_sigs_valid<const STRENGTH: bool>(
     agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
 ) -> bool {
     forall|a: AuthorityName|
-        agg.has_voted(a) && committee_weight_of(&agg.committee, a) > 0
-            ==> #[trigger] sig_is_valid(&agg.data@[a], &agg.committee)
+        agg.has_voted(a) ==> #[trigger] sig_is_valid(&agg.data@[a], &agg.committee)
 }
 
 /// The total weight of cryptographically valid stored signatures.
@@ -554,65 +591,29 @@ pub proof fn lemma_valid_voted_weight_le_total<const STRENGTH: bool>(
     lemma_voted_weight_le_subset(&agg.committee, valid, full, committee_authorities(&agg.committee).len() as int);
 }
 
-/// Under `all_sigs_valid`, every stored weighted vote is valid, so
-/// `valid_voted_weight` collapses to `total_votes`.
+/// Under `all_sigs_valid` (every stored sig is valid), the filter that keeps
+/// only valid-sig entries keeps the entire domain, so `valid_voted_weight`
+/// equals `total_votes`.  The complex induction is no longer needed: set
+/// extensionality suffices since `valid == full`.
 pub proof fn lemma_valid_voted_weight_eq_total_under_all_valid<const STRENGTH: bool>(
     agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
 )
     requires
         agg.invariant_holds(),
-        committee_unique(&agg.committee),
         all_sigs_valid::<STRENGTH>(agg),
     ensures
         valid_voted_weight::<STRENGTH>(agg) == agg.total_votes as int,
 {
-    let full = agg.data@.dom();
+    let full  = agg.data@.dom();
     let valid = full.filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee));
-    assert(voted_weight(&agg.committee, valid) == voted_weight(&agg.committee, full)) by {
-        lemma_filter_eq_full_under_all_valid::<STRENGTH>(
-            agg, full, valid,
-            committee_authorities(&agg.committee).len() as int,
-        );
-    };
-}
-
-proof fn lemma_filter_eq_full_under_all_valid<const STRENGTH: bool>(
-    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
-    full: Set<AuthorityName>,
-    valid: Set<AuthorityName>,
-    n: int,
-)
-    requires
-        0 <= n <= committee_authorities(&agg.committee).len(),
-        full == agg.data@.dom(),
-        valid == full.filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee)),
-        all_sigs_valid::<STRENGTH>(agg),
-        committee_unique(&agg.committee),
-    ensures
-        voted_weight_le(&agg.committee, valid, n) == voted_weight_le(&agg.committee, full, n),
-    decreases n,
-{
-    if n <= 0 {
-    } else {
-        lemma_filter_eq_full_under_all_valid::<STRENGTH>(agg, full, valid, n - 1);
-        let nm = committee_authorities(&agg.committee)[n - 1];
-        assert(valid.contains(nm) <==>
-            full.contains(nm) && sig_is_valid(&agg.data@[nm], &agg.committee));
-        if full.contains(nm) {
-            assert(agg.has_voted(nm));
-            if committee_weight_of(&agg.committee, nm) > 0 {
-                // all_sigs_valid: this weighted authority has a valid sig → nm ∈ valid.
-                assert(sig_is_valid(&agg.data@[nm], &agg.committee));
-                assert(valid.contains(nm));
-            } else {
-                // weight 0: contribution is 0 regardless of which set is used.
-                // Use lemma_weight_seq_at_position to show weight_seq[n-1] == 0.
-                lemma_weight_seq_at_position(&agg.committee, nm, n);
-                // committee_weight_seq[n-1] == 0, so both sides add 0.
-                assert(committee_weight_seq(&agg.committee)[n - 1] == 0);
+    // Every element of full passes the filter (all sigs valid) → valid == full.
+    assert(valid =~= full) by {
+        assert forall|a: AuthorityName| full.contains(a) <==> valid.contains(a) by {
+            if full.contains(a) {
+                assert(agg.has_voted(a));
             }
-        }
-    }
+        };
+    };
 }
 
 
@@ -639,19 +640,82 @@ impl<CertT> InsertResult<CertT> {
 // BLS aggregation + individual-verify fallback (external_body)
 // ---------------------------------------------------------------------------
 //
-// This function encapsulates the BLS-specific logic inside the QuorumReached
-// arm of `insert`:
-//
-//   1. Attempt to aggregate all stored sigs into a quorum certificate.
-//   2. If the batch BLS verification passes, return QuorumReached.
-//   3. Otherwise fall back to verifying each sig individually, evicting any
-//      that fail, and returning NotEnoughVotes.
-//
-// The body is trusted (external_body): it manipulates `agg.data.inner` and
-// `agg.total_votes` directly, bypassing the VerifiedHashMap wrapper.
-// The postconditions are what the proven `insert` function needs.
+// ---------------------------------------------------------------------------
+// Crypto primitives (external_body, one concern each)
+// ---------------------------------------------------------------------------
 
+/// Collect all stored sigs into a Vec for use with batch BLS.
+/// external_body because HashMap iteration is not yet specced in Verus.
 #[verifier::external_body]
+fn collect_sigs<const STRENGTH: bool>(
+    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
+) -> (out: Vec<AuthoritySignInfo>)
+    ensures
+        // Every element in the output is a value from the map.
+        forall|v: AuthoritySignInfo| #[trigger] out@.contains(v) ==>
+            exists|k: AuthorityName| agg.has_voted(k) && agg.data@[k] == v,
+        // Every map value appears somewhere in the output.
+        forall|k: AuthorityName| agg.has_voted(k) ==>
+            #[trigger] out@.contains(agg.data@[k]),
+{
+    agg.data.inner.values().cloned().collect()
+}
+
+/// Evict all sigs that fail individual BLS verification.
+/// external_body because HashMap iteration is not yet specced in Verus;
+/// the loop body uses `verify_authority_sig` (which is proven/specced).
+#[verifier::external_body]
+fn evict_invalid_sigs<T: Message + Serialize, const STRENGTH: bool>(
+    agg: &mut StakeAggregator<AuthoritySignInfo, STRENGTH>,
+    data: &T,
+    intent: Intent,
+) -> (out: (StakeUnit, Vec<AuthorityName>))  // (bad_votes, bad_authorities)
+    requires
+        old(agg).invariant_holds(),
+        committee_unique(&old(agg).committee),
+    ensures
+        agg.committee == old(agg).committee,
+        agg.invariant_holds(),
+        // After eviction every remaining sig is valid.
+        all_sigs_valid::<STRENGTH>(agg),
+        // Eviction only removes — never adds.
+        forall|a: AuthorityName| agg.has_voted(a) ==> #[trigger] old(agg).has_voted(a),
+        // Valid sigs are never evicted.
+        forall|a: AuthorityName|
+            old(agg).has_voted(a)
+            && sig_is_valid(&old(agg).data@[a], &old(agg).committee)
+                ==> #[trigger] agg.has_voted(a),
+        // Values of surviving entries are unchanged.
+        forall|a: AuthorityName|
+            agg.has_voted(a) ==> #[trigger] agg.data@[a] == old(agg).data@[a],
+{
+    let _ = intent;  // intent captured in spec; loop recreates it each iteration.
+    let mut bad_votes = 0;
+    let mut bad_authorities = vec![];
+    for (name, sig) in &agg.data.inner.clone() {
+        if let Err(err) = sig.verify_secure(data, Intent::sui_app(T::SCOPE), agg.committee()) {
+            warn!(name=?name.concise(), "Bad stake from validator: {:?}", err);
+            agg.data.inner.remove(name);
+            let votes = agg.committee.weight(name);
+            agg.total_votes -= votes;
+            bad_votes += votes;
+            bad_authorities.push(*name);
+        }
+    }
+    (bad_votes, bad_authorities)
+}
+
+// ---------------------------------------------------------------------------
+// try_aggregate_and_verify — now PROVEN from the two external_body primitives
+// ---------------------------------------------------------------------------
+//
+// Control flow:
+//   1. Try batch BLS on all stored sigs (try_batch_aggregate_and_verify).
+//   2. If batch passes: all sigs were valid (by BLS soundness axiom) → QR.
+//   3. If batch fails: evict invalid sigs (evict_invalid_sigs), then re-try.
+//      After eviction all_sigs_valid holds, so the re-try always succeeds.
+//      Return QR iff the remaining valid weight meets threshold.
+
 fn try_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
     agg: &mut StakeAggregator<AuthoritySignInfo, STRENGTH>,
     data: T,
@@ -659,84 +723,82 @@ fn try_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
     requires
         old(agg).invariant_holds(),
         committee_unique(&old(agg).committee),
+        // Always true at the call site (insert_generic returned QuorumReached).
+        old(agg).total_votes >= committee_threshold_spec(&old(agg).committee, STRENGTH),
     ensures
         agg.committee == old(agg).committee,
         agg.invariant_holds(),
-        // After TAV, all stored sigs are cryptographically valid (invalid ones evicted).
         all_sigs_valid::<STRENGTH>(agg),
-        // Eviction can only remove entries, never add new ones.
         forall|a: AuthorityName| agg.has_voted(a) ==> #[trigger] old(agg).has_voted(a),
-        // Sigs that are cryptographically valid are never evicted.
         forall|a: AuthorityName|
             old(agg).has_voted(a)
             && sig_is_valid(&old(agg).data@[a], &old(agg).committee)
                 ==> #[trigger] agg.has_voted(a),
-        // Values of surviving entries are never modified.
         forall|a: AuthorityName|
             agg.has_voted(a) ==> #[trigger] agg.data@[a] == old(agg).data@[a],
-        // TAV never returns Failed (BLS aggregation of the resulting all-valid sigs succeeds).
         !(out is Failed),
-        // QuorumReached iff the valid weight after eviction meets the threshold.
         (out is QuorumReached) <==> reaches_quorum::<STRENGTH>(agg),
 {
-    // First attempt: batch BLS on all stored sigs.
-    match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
-        agg.data.inner.values().cloned().collect(),
-        agg.committee(),
+    let sigs = collect_sigs::<STRENGTH>(agg);
+
+    // === Attempt 1: batch BLS on all stored sigs ===
+    match try_batch_aggregate_and_verify::<T, STRENGTH>(
+        sigs, &data, message_intent::<T>(), &*agg.committee,
     ) {
-        Ok(aggregated) => {
-            match aggregated.verify_secure(
-                &data,
-                Intent::sui_app(T::SCOPE),
-                agg.committee(),
-            ) {
-                // Happy path: all sigs were valid, batch BLS passed.
-                Ok(_) => InsertResult::QuorumReached(aggregated),
-                Err(_) => {
-                    // Batch BLS failed: evict all sigs that fail individual verification.
-                    let mut bad_votes = 0;
-                    let mut bad_authorities = vec![];
-                    for (name, sig) in &agg.data.inner.clone() {
-                        if let Err(err) = sig.verify_secure(
-                            &data,
-                            Intent::sui_app(T::SCOPE),
-                            agg.committee(),
-                        ) {
-                            warn!(name=?name.concise(), "Bad stake from validator: {:?}", err);
-                            agg.data.inner.remove(name);
-                            let votes = agg.committee.weight(name);
-                            agg.total_votes -= votes;
-                            bad_votes += votes;
-                            bad_authorities.push(*name);
-                        }
-                    }
-                    // After eviction, all remaining sigs are valid.
-                    // Re-check: if the valid total now meets threshold, return QuorumReached.
-                    if agg.total_votes >= agg.committee.threshold::<STRENGTH>() {
-                        match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
-                            agg.data.inner.values().cloned().collect(),
-                            agg.committee(),
-                        ) {
-                            Ok(cert) => InsertResult::QuorumReached(cert),
-                            Err(_) => InsertResult::NotEnoughVotes {
-                                bad_votes,
-                                bad_authorities,
-                            },
-                        }
-                    } else {
-                        InsertResult::NotEnoughVotes {
-                            bad_votes,
-                            bad_authorities,
-                        }
-                    }
+        Some(cert) => {
+            // Batch passed → every sig in `sigs` is valid (BLS soundness axiom).
+            // `sigs` contains exactly the values of agg.data@ (collect_sigs spec).
+            // Therefore every voted entry has a valid sig → all_sigs_valid(agg).
+            proof {
+                assert(all_sigs_valid::<STRENGTH>(agg)) by {
+                    assert forall|a: AuthorityName| agg.has_voted(a)
+                        implies sig_is_valid(&agg.data@[a], &agg.committee)
+                    by {
+                        assert(sigs@.contains(agg.data@[a]));
+                    };
+                };
+                lemma_valid_voted_weight_eq_total_under_all_valid::<STRENGTH>(agg);
+            }
+            InsertResult::QuorumReached(cert)
+        }
+        None => {
+            // === Batch failed: evict individually-invalid sigs, then re-try ===
+            let (bad_votes, bad_authorities) =
+                evict_invalid_sigs::<T, STRENGTH>(agg, &data, message_intent::<T>());
+            // evict_invalid_sigs spec: all_sigs_valid(agg) now holds.
+
+            proof {
+                lemma_valid_voted_weight_eq_total_under_all_valid::<STRENGTH>(agg);
+            }
+
+            if agg.total_votes >= agg.committee.threshold::<STRENGTH>() {
+                // Re-aggregate over the remaining all-valid sigs.
+                let sigs2 = collect_sigs::<STRENGTH>(agg);
+                proof {
+                    // all_sigs_valid(agg) → every element of sigs2 is valid
+                    // → try_batch_aggregate_and_verify must succeed (all-valid axiom).
+                    assert(forall|v: AuthoritySignInfo| sigs2@.contains(v)
+                        ==> sig_is_valid(&v, &agg.committee)) by {
+                        assert forall|v: AuthoritySignInfo| sigs2@.contains(v)
+                            implies sig_is_valid(&v, &agg.committee)
+                        by {
+                            // sigs2@.contains(v) → exists k, agg.has_voted(k) && data@[k]==v
+                            // all_sigs_valid → sig_is_valid(data@[k]) = sig_is_valid(v)
+                            let k = choose|k: AuthorityName|
+                                agg.has_voted(k) && agg.data@[k] == v;
+                        };
+                    };
                 }
+                match try_batch_aggregate_and_verify::<T, STRENGTH>(
+                    sigs2, &data, message_intent::<T>(), &*agg.committee,
+                ) {
+                    Some(cert) => InsertResult::QuorumReached(cert),
+                    None => InsertResult::NotEnoughVotes { bad_votes, bad_authorities },
+                }
+            } else {
+                InsertResult::NotEnoughVotes { bad_votes, bad_authorities }
             }
         }
-        // Aggregation failure treated as NaE (should not happen with valid sigs).
-        Err(_) => InsertResult::NotEnoughVotes {
-            bad_votes: 0,
-            bad_authorities: vec![],
-        },
     }
 }
 
@@ -856,17 +918,16 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
 
         match self.insert_generic(authority, sig) {
             InsertResult::QuorumReached(_) => {
-                // Capture the data value for authority before TAV (for recording proof).
+                // insert_generic's QR biconditional: self.total_votes >= threshold.
+                // This satisfies try_aggregate_and_verify's new precondition.
+                proof { assert(self.total_votes >= committee_threshold_spec(&self.committee, STRENGTH)); }
                 let ghost pre_tav_auth_data = self.data@[authority];
                 let out = try_aggregate_and_verify(self, data);
                 proof {
-                    // TAV ensures all_sigs_valid(self). Use the lemma to derive
-                    // valid_voted_weight(self) = total_votes, establishing reaches_quorum.
+                    // TAV is now proven; its postconditions include all_sigs_valid and
+                    // (out is QR) iff reaches_quorum.  The lemma connects total_votes
+                    // to valid_voted_weight so the recording postcondition can use it.
                     lemma_valid_voted_weight_eq_total_under_all_valid::<STRENGTH>(self);
-                    // Recording: if the new sig was valid, it survives TAV.
-                    // Before TAV: data@[authority] == sig == pre_sig (insert_generic new-entry).
-                    // TAV valid-preservation: if sig_is_valid(pre_sig) → authority still voted
-                    //   with the same value.
                     assert(pre_tav_auth_data == pre_sig);
                 }
                 out

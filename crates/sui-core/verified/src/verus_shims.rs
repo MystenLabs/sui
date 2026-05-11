@@ -163,6 +163,7 @@ pub fn verify_authority_sig<T: Message + Serialize>(
     sig.verify_secure(data, intent, committee)
 }
 
+
 // ---------------------------------------------------------------------------
 // Envelope spec projectors (TODO — blocked by Verus limitation)
 // ---------------------------------------------------------------------------
