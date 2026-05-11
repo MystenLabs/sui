@@ -3,8 +3,6 @@
 
 //! Error types for on-chain package fetching.
 
-use std::path::PathBuf;
-
 use thiserror::Error;
 
 use crate::{package::package_lock::LockError, schema::PublishedID};
@@ -17,27 +15,6 @@ pub enum OnChainError {
         address: PublishedID,
         #[source]
         source: anyhow::Error,
-    },
-
-    #[error("failed to write on-chain package cache at {path}: {source}")]
-    CacheWrite {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-
-    #[error("failed to parse cached manifest at {path}: {source}")]
-    ManifestParse {
-        path: PathBuf,
-        #[source]
-        source: toml_edit::de::Error,
-    },
-
-    #[error("failed to serialize manifest for on-chain package {address}: {source}")]
-    ManifestSerialize {
-        address: PublishedID,
-        #[source]
-        source: toml_edit::ser::Error,
     },
 
     #[error(transparent)]
