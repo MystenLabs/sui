@@ -204,7 +204,15 @@ struct LocalSlot {
 impl Drop for LocalSlot {
     fn drop(&mut self) {
         if let Some(ctx) = self.ctx.upgrade() {
-            ctx.aggregated.lock().add_from(&self.counters);
+            // Hold `threads` across the Arc drop so the reporter cannot observe `aggregated`
+            // already updated while our `Weak` is still upgradeable. Lock order matches
+            // `to_runtime_telemetry`: threads, then aggregated.
+            let _threads = ctx.threads.lock();
+            // Declaration order is load-bearing: `_counters` drops before `_threads`, so the
+            // strong Arc dies while we still hold `threads`. The reporter's next sweep then
+            // sees our `Weak` fail to upgrade and evicts it.
+            let _counters = std::mem::take(&mut self.counters);
+            ctx.aggregated.lock().add_from(&_counters);
         }
     }
 }
@@ -409,9 +417,11 @@ impl TelemetryContext {
         self: &Arc<Self>,
         package_cache: &MoveCache,
     ) -> MoveRuntimeTelemetry {
-        // Single sweep: lock both `threads` and `aggregated` so any concurrent dying-thread
-        // `Drop` blocks on `aggregated` until we're done — avoids double-counting (it would only
-        // ever lose, not duplicate, but we also avoid the temporary undercount).
+        // Single sweep: lock both `threads` and `aggregated`. `LocalSlot::drop` acquires the
+        // same pair in the same order, so the reporter and any concurrent teardown are mutually
+        // exclusive — each thread's counters are observed either via its still-upgradeable
+        // `Weak` (and not yet in `aggregated`) or via `aggregated` (with its `Weak` already
+        // invalidated), never both.
         let totals = {
             let mut threads = self.threads.lock();
             let agg = self.aggregated.lock();
