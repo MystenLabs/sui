@@ -749,7 +749,7 @@ query ($digest: String!) {
 }
 ```
 
-Look for changes where `outputState.asMoveObject.contents.type.repr` is `0x2::package::Publisher`. The object change `address` is the Publisher object ID.
+Look for changes where `outputState.asMoveObject.contents.type.repr` is `0x0000000000000000000000000000000000000000000000000000000000000002::package::Publisher`, the canonical form of `0x2::package::Publisher`. If your code displays abbreviated type strings, normalize before comparing or compare the `::package::Publisher` suffix. The object change `address` is the Publisher object ID.
 
 ### Filter transactions by a function
 
