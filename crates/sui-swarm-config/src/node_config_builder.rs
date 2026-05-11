@@ -503,6 +503,12 @@ impl FullnodeConfigBuilder {
 
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(&key_path);
 
+        let fullnode_sync_mode = self
+            .observer_config
+            .as_ref()
+            .filter(|c| !c.peers.is_empty())
+            .map(|_| FullNodeSyncMode::ConsensusObserver);
+
         // Create consensus config, if observer config is provided.
         let consensus_config = self.observer_config.map(|observer_config| ConsensusConfig {
             db_path: consensus_db_path,
@@ -522,22 +528,6 @@ impl FullnodeConfigBuilder {
             listen_address: None,
             external_address: None,
         });
-
-        let state_sync_mode = if let Some(config) = consensus_config.as_ref() {
-            if let Some(parameters) = config.parameters.as_ref() {
-                parameters.observer.peers.len() > 0
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        let fullnode_sync_mode = if state_sync_mode {
-            FullNodeSyncMode::ConsensusObserver
-        } else {
-            FullNodeSyncMode::StateSyncOnly
-        };
 
         let p2p_config = {
             let seed_peers = network_config
