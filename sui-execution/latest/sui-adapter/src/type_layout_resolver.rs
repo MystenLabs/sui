@@ -9,11 +9,11 @@ use move_core_types::annotated_value as A;
 use move_core_types::language_storage::StructTag;
 use move_vm_runtime::runtime::MoveRuntime;
 use sui_protocol_config::ProtocolConfig;
+use sui_types::TypeTag;
 use sui_types::base_types::ObjectID;
 use sui_types::error::{ExecutionError, SuiErrorKind, SuiResult};
 use sui_types::execution::TypeLayoutStore;
 use sui_types::storage::{BackingPackageStore, PackageObject};
-use sui_types::TypeTag;
 use sui_types::{error::SuiError, layout_resolver::LayoutResolver};
 
 /// Retrieve a `MoveStructLayout` from a `Type`.
