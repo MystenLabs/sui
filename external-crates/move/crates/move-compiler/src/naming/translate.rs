@@ -4115,14 +4115,21 @@ fn lvalue(
                     stype
                 }
                 Some(ResolvedConstructor::Variant(variant)) => {
-                    context.add_diag(diag!(
+                    let mut diag = diag!(
                         NameResolution::NamePositionMismatch,
                         (tn.loc, format!("Invalid {}. Expected a struct", msg)),
                         (
                             variant.enum_name.loc(),
                             format!("But '{}' is an enum", variant.enum_name)
                         )
-                    ));
+                    );
+                    if matches!(case, C::Bind) {
+                        diag.add_note(
+                            "Variants are refutable. Use 'let <pattern> = <expr> else { /* divergent */ };' \
+                             to handle the case where the pattern does not match.",
+                        );
+                    }
+                    context.add_diag(diag);
                     return None;
                 }
                 None => {

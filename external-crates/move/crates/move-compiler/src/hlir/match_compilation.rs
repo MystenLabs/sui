@@ -19,6 +19,18 @@ use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+/// Distinguishes the syntactic origin of a match being compiled. Used purely
+/// for diagnostic naming of the synthesized subject temporary so later passes
+/// (cfgir's locals/borrows checks) can emit user-facing messages that mention
+/// the right surface form.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum MatchSubjectKind {
+    /// A user-written `match (e) { ... }` expression.
+    Match,
+    /// A `let pat = e else { ... };` binding lowered to a match.
+    LetElse,
+}
+
 //**************************************************************************************************
 // Match Compilation
 //**************************************************************************************************
@@ -60,6 +72,7 @@ pub(super) fn compile_match(
     result_type: &Type,
     subject: T::Exp,
     arms: Spanned<Vec<T::MatchArm>>,
+    subject_kind: MatchSubjectKind,
 ) -> T::Exp {
     let loc = arms.loc;
     match subject.ty.value.inner() {
@@ -79,7 +92,7 @@ pub(super) fn compile_match(
     let (pattern_matrix, arms) = PatternMatrix::from(context, loc, subject.ty.clone(), arms.value);
 
     let (mut initial_binders, init_subject, match_subject) =
-        make_initial_fringe(context, subject, loc);
+        make_initial_fringe(context, subject, loc, subject_kind);
 
     let match_tree = build_match_tree(context, VecDeque::from([match_subject]), pattern_matrix);
     debug_print!(
@@ -109,8 +122,13 @@ fn make_initial_fringe(
     context: &mut Context,
     subject: T::Exp,
     loc: Loc,
+    subject_kind: MatchSubjectKind,
 ) -> (VecDeque<T::SequenceItem>, FringeEntry, FringeEntry) {
-    let subject_var = context.new_match_var("unpack_subject".to_string(), loc);
+    let subject_name = match subject_kind {
+        MatchSubjectKind::Match => MATCH_UNPACK_SUBJECT_NAME,
+        MatchSubjectKind::LetElse => LET_ELSE_SUBJECT_NAME,
+    };
+    let subject_var = context.new_match_var(subject_name.to_string(), loc);
     let subject_loc = subject.exp.loc;
     let match_var = context.new_match_var("match_subject".to_string(), loc);
 

@@ -3633,8 +3633,11 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
         PP::Tuple(_) => {
             context.add_diag(diag!(
                 NameResolution::InvalidPattern,
-                (loc, "Tuple patterns are not allowed in match arms. \
-                       Tuple destructuring is only valid in 'let' bindings")
+                (
+                    loc,
+                    "Tuple patterns are not allowed in match arms. \
+                       Tuple destructuring is only valid in 'let' bindings"
+                )
             ));
             error_pattern!()
         }
@@ -3843,20 +3846,28 @@ fn match_pattern_to_bind(
                 }
             }
             check_ellipsis_usage(context, &ellipsis_locs);
-            let fields =
-                named_fields(context, loc, "deconstruction binding", "binding", vfields);
+            let fields = named_fields(context, loc, "deconstruction binding", "binding", vfields);
             EL::Unpack(
                 name,
                 tys_opt,
                 E::FieldBindings::Named(fields, ellipsis_locs.first().copied()),
             )
         }
-        pat @ (MP::Literal(_) | MP::Or(_, _) | MP::At(_, _) | MP::Tuple(_)) => {
+        // Tuple patterns are unwrapped at the top level by
+        // `match_pattern_to_bind_list`. Reaching here means we have a *nested*
+        // tuple (e.g. `let ((a, b), c) = e;`), which we don't support.
+        MP::Tuple(_) => {
+            let msg = "Invalid 'let' binding. Nested tuple destructuring is \
+                       not supported; only a single top-level tuple pattern \
+                       is allowed";
+            context.add_diag(diag!(Syntax::UnexpectedToken, (loc, msg)));
+            return None;
+        }
+        pat @ (MP::Literal(_) | MP::Or(_, _) | MP::At(_, _)) => {
             let kind = match pat {
                 MP::Literal(_) => "literal",
                 MP::Or(_, _) => "or",
                 MP::At(_, _) => "at",
-                MP::Tuple(_) => "tuple",
                 _ => unreachable!(),
             };
             let msg = format!(

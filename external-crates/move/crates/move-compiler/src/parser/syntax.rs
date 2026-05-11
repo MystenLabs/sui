@@ -1567,11 +1567,21 @@ fn parse_value(context: &mut Context) -> Result<Value, Box<Diagnostic>> {
 // Parse a sequence item:
 //      SequenceItem =
 //          <Exp>
-//          | "let" <BindList> (":" <Type>)? ("=" <Exp>)?
+//          | "let" <MatchPattern> (":" <Type>)? ("=" <Exp> ("else" <Exp>)?)?
 fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let item = if match_token(context.tokens, Tok::Let)? {
-        let pat = parse_match_pattern_with_kind(context, "a variable or struct name")?;
+        // The `(with 'else')` hint advertises let-else and should only appear
+        // when the feature is enabled for the current package.
+        let kind = if context
+            .env
+            .supports_feature(context.current_package, FeatureGate::LetElse)
+        {
+            "a variable, struct, or pattern (with 'else')"
+        } else {
+            "a variable or struct name"
+        };
+        let pat = parse_match_pattern(context, kind)?;
         let ty_opt = if match_token(context.tokens, Tok::Colon)? {
             Some(parse_type(context)?)
         } else {
@@ -1580,9 +1590,18 @@ fn parse_sequence_item(context: &mut Context) -> Result<SequenceItem, Box<Diagno
         if match_token(context.tokens, Tok::Equal)? {
             let e = parse_exp(context)?;
             if context.tokens.peek() == Tok::Else {
+                let else_loc = context.tokens.current_token_loc();
                 context.tokens.advance()?;
+                // Parse the else body unconditionally so a recovery edit doesn't
+                // leave the parser in a bad state in the rest of the sequence.
                 let else_body = parse_exp(context)?;
-                SequenceItem_::BindElse(pat, ty_opt, Box::new(e), Box::new(else_body))
+                if context.check_feature(FeatureGate::LetElse, else_loc) {
+                    SequenceItem_::BindElse(pat, ty_opt, Box::new(e), Box::new(else_body))
+                } else {
+                    // Drop the else branch to keep the AST representable on legacy
+                    // editions; the feature-gate diagnostic above is the user-facing error.
+                    SequenceItem_::Bind(pat, ty_opt, Box::new(e))
+                }
             } else {
                 SequenceItem_::Bind(pat, ty_opt, Box::new(e))
             }
@@ -2253,7 +2272,7 @@ fn parse_match_arms(context: &mut Context) -> Result<Spanned<Vec<MatchArm>>, Box
 //   <MatchArm> = <MatchPat> ( "if" "(" <Exp>")" )? "=>" ("{" <Exp> "}" | <Exp>)
 fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
     ok_with_loc!(context, {
-        let pattern = parse_match_pattern(context)?;
+        let pattern = parse_match_pattern(context, "a pattern")?;
         let guard = match context.tokens.peek() {
             Tok::If => {
                 context.tokens.advance()?;
@@ -2307,18 +2326,10 @@ fn parse_match_arm(context: &mut Context) -> Result<MatchArm, Box<Diagnostic>> {
 //              | <NameAccessChain> <OptionalTypeArgs>
 //   <PatField> = <Field> ( ":" <MatchPat> )?
 
-fn parse_match_pattern(context: &mut Context) -> Result<MatchPattern, Box<Diagnostic>> {
-    parse_match_pattern_impl(context, "a pattern")
-}
-
-fn parse_match_pattern_with_kind(
-    context: &mut Context,
-    error_kind: &'static str,
-) -> Result<MatchPattern, Box<Diagnostic>> {
-    parse_match_pattern_impl(context, error_kind)
-}
-
-fn parse_match_pattern_impl(
+// `error_kind` describes the syntactic position for diagnostics if parsing
+// fails at the leaves (e.g., `"a pattern"` for match arms, `"a variable or
+// struct name"` for the LHS of a `let` binding).
+fn parse_match_pattern(
     context: &mut Context,
     error_kind: &'static str,
 ) -> Result<MatchPattern, Box<Diagnostic>> {
@@ -2341,14 +2352,14 @@ fn parse_match_pattern_impl(
                     let loc = make_loc(context.tokens.file_hash(), start_loc, end_loc);
                     Ok(sp(loc, MP::Tuple(sp(loc, vec![]))))
                 } else {
-                    let pat = parse_match_pattern_impl(context, error_kind)?;
+                    let pat = parse_match_pattern(context, error_kind)?;
                     if context.tokens.peek() == Tok::Comma {
                         let mut pats = vec![pat];
                         while match_token(context.tokens, Tok::Comma)? {
                             if context.tokens.peek() == Tok::RParen {
                                 break;
                             }
-                            pats.push(parse_match_pattern_impl(context, error_kind)?);
+                            pats.push(parse_match_pattern(context, error_kind)?);
                         }
                         consume_token(context.tokens, Tok::RParen)?;
                         let end_loc = context.tokens.previous_end_loc();
@@ -2415,7 +2426,7 @@ fn parse_match_pattern_impl(
                                     context,
                                     Tok::LBrace,
                                     Tok::RBrace,
-                                    &TokenSet::from([Tok::PeriodPeriod, Tok::Mut, Tok::Identifier]),
+                                    &FIELD_BINDING_START_SET,
                                     parse_field_pattern,
                                     "a field pattern",
                                 )
@@ -2452,7 +2463,7 @@ fn parse_match_pattern_impl(
             return Ok(Ellipsis::Ellipsis(loc));
         }
 
-        parse_match_pattern(context).map(Ellipsis::Binder)
+        parse_match_pattern(context, "a pattern").map(Ellipsis::Binder)
     }
 
     fn parse_field_pattern(
@@ -2473,7 +2484,7 @@ fn parse_match_pattern_impl(
                     (loc, INVALID_MUT_ERROR_MSG)
                 )));
             }
-            parse_match_pattern(context)?
+            parse_match_pattern(context, "a pattern")?
         } else {
             sp(
                 field.loc(),
@@ -2511,7 +2522,7 @@ fn parse_match_pattern_impl(
         let lhs = parse_optional_at_pattern(context, error_kind)?;
         if matches!(context.tokens.peek(), Tok::Pipe) {
             context.tokens.advance()?;
-            let rhs = parse_match_pattern_impl(context, error_kind)?;
+            let rhs = parse_match_pattern(context, error_kind)?;
             MP::Or(Box::new(lhs), Box::new(rhs))
         } else {
             lhs.value

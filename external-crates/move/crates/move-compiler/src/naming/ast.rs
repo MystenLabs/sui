@@ -513,6 +513,9 @@ pub enum SequenceItem_ {
     Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
     Bind(LValueList, Box<Exp>),
+    // `let <pat> = e else <divergent>;`. Binders inside `<pat>` are declared
+    // in the enclosing scope at naming time (see `sequence_item`) so they are
+    // available to subsequent items on the success path.
     BindElse(MatchPattern, Box<Exp>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;

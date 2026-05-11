@@ -751,7 +751,11 @@ pub enum SequenceItem_ {
     // let <pat> : t = e;
     // let <pat> = e;
     Bind(MatchPattern, Option<Type>, Box<Exp>),
-    // let <pat> = e else { <divergent> };
+    // let <pat> : t = e else <divergent>;
+    // let <pat> = e else <divergent>;
+    //
+    // The else branch must diverge (return/abort/break/continue); the binders
+    // in <pat> are introduced into the enclosing sequence on the success path.
     BindElse(MatchPattern, Option<Type>, Box<Exp>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
@@ -788,7 +792,12 @@ pub enum MatchPattern_ {
     Or(Box<MatchPattern>, Box<MatchPattern>),
     // x @ pat
     At(Var, Box<MatchPattern>),
-    // (pat1, pat2, ..., patn) -- tuple destructuring
+    /// `(pat1, pat2, ..., patn)` — tuple destructuring.
+    ///
+    /// Only valid in `let` bindings (where the parser shares this type with
+    /// `match` patterns); `Tuple` is rejected if it appears as a `match` arm
+    /// pattern. See `expansion::translate::match_pattern` and
+    /// `expansion::translate::match_pattern_to_bind_list` for the routing.
     Tuple(Spanned<Vec<MatchPattern>>),
 }
 

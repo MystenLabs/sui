@@ -14,7 +14,10 @@ use crate::{
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::{
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    sync::LazyLock,
+};
 
 //**************************************************************************************************
 // Pattern Matrix Definitions for Matching
@@ -1029,12 +1032,31 @@ pub fn order_fields_by_decl<
 
 pub const MATCH_TEMP_PREFIX: &str = "__match_tmp%";
 
+/// Internal name component for the subject temp introduced when lowering a
+/// `let ... else` binding through the match compiler. Used by `display_var` to
+/// emit a let-else-aware diagnostic when the subject can't be dropped.
+pub const LET_ELSE_SUBJECT_NAME: &str = "let_else_subject";
+
+/// Internal name component for an ordinary `match` subject temp.
+pub const MATCH_UNPACK_SUBJECT_NAME: &str = "unpack_subject";
+
 // Expression Creation Helpers
 // NOTE: this _must_ be a string that a user cannot write, as otherwise we could incorrectly shadow
 // macro-expanded names.
 /// Create a new name for match variable usage.
 pub fn new_match_var_name(name: &str, id: usize) -> Symbol {
     format!("{MATCH_TEMP_PREFIX}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}").into()
+}
+
+/// Returns `true` if `s` names the subject temp introduced for a `let ... else`
+/// lowering (see `LET_ELSE_SUBJECT_NAME`). Used by diagnostics to specialize
+/// messages for let-else. Mirrors the structured form produced by
+/// `new_match_var_name`: `<MATCH_TEMP_PREFIX><NEW_NAME_DELIM><LET_ELSE_SUBJECT_NAME><NEW_NAME_DELIM><id>`.
+pub fn is_let_else_subject_name(s: Symbol) -> bool {
+    static LET_ELSE_SUBJECT_PREFIX: LazyLock<String> = LazyLock::new(|| {
+        format!("{MATCH_TEMP_PREFIX}{NEW_NAME_DELIM}{LET_ELSE_SUBJECT_NAME}{NEW_NAME_DELIM}")
+    });
+    s.as_str().starts_with(LET_ELSE_SUBJECT_PREFIX.as_str())
 }
 
 // Since these are guards, we need to borrow the constant

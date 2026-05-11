@@ -5,24 +5,4 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E04004]: expected a single non-reference type
-   ┌─ tests/move_2024/matching/let_else_in_loop.move:16:17
-   │
-16 │             let ABC::C(x) = item else { i = i + 1; continue };
-   │                 ^^^^^^^^^ Invalid type argument
-17 │             sum = sum + *x;
-   │                         -- Expected a single non-reference type, but found: '&u64'
 
-error[E04007]: incompatible types
-   ┌─ tests/move_2024/matching/let_else_in_loop.move:16:17
-   │
-16 │             let ABC::C(x) = item else { i = i + 1; continue };
-   │                 ^^^^^^^^^
-   │                 │
-   │                 Invalid pattern
-   │                 Given: '0x42::m::ABC<_>'
-   │
-   ┌─ /Users/cgswords/sui-3/external-crates/move/crates/move-stdlib/sources/vector.move:38:65
-   │
-38 │ public native fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
-   │                                                                 -------- Expected: '&0x42::m::ABC<u64>'

@@ -1,6 +1,5 @@
-// let-else does not currently support borrow patterns on the LHS.
-// The pattern is parsed as a bind and converted, which produces a value pattern.
-// This test verifies the error message when the subject is a reference.
+// 'let ... else' against a `&T` subject auto-borrows the pattern: binders
+// inside the pattern bind to references into the subject.
 module 0x42::m {
 
     public enum ABC<T> has drop {

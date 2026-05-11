@@ -17,4 +17,4 @@ error[E06001]: unused value without 'drop'
    │         -------------------------------^^^^^^^^--
    │         │                              │
    │         │                              Invalid return
-   │         The match expression takes ownership of this value but does not use it. The value does not have the 'drop' ability and must be consumed before the function returns
+   │         The 'let ... else' binding takes ownership of this value, but the 'else' branch does not consume it. The value does not have the 'drop' ability and must be consumed before the function returns

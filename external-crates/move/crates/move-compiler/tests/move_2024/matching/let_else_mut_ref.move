@@ -1,3 +1,5 @@
+// 'let ... else' against a `&mut T` subject auto-borrows the pattern: binders
+// bind to mutable references into the subject so the result can be mutated.
 module 0x42::m {
 
     public enum ABC<T> has drop {

@@ -1595,7 +1595,7 @@ enum SeqCase {
     },
     BindElse {
         loc: Loc,
-        pat: T::MatchPattern,
+        pat: Box<T::MatchPattern>,
         binders: Vec<(N::Var, Type)>,
         e: Box<T::Exp>,
         else_e: Box<T::Exp>,
@@ -1641,6 +1641,14 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
             }
             NS::BindElse(npat, nr, else_body) => {
                 let e = exp(context, nr);
+                // If the subject is &T or &mut T, thread its mutability into pattern
+                // typing the same way `match` does, so binders in the pattern resolve
+                // to the corresponding reference types instead of by-value.
+                let unfolded_subject_ty = core::unfold_type(&context.subst, &e.ty);
+                let ref_mut = match unfolded_subject_ty.value.inner() {
+                    TI::Ref(mut_, _) => Some(*mut_),
+                    _ => None,
+                };
                 let pat_binders = collect_pattern_binders(&npat);
                 let bind_locs: Vec<Loc> = pat_binders.iter().map(|(_, sp!(loc, _))| *loc).collect();
                 let msg = "Invalid type for pattern";
@@ -1655,7 +1663,7 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
                     })
                     .collect();
                 let ploc = npat.loc;
-                let mut pat = match_pattern(context, npat, &None, &rhs_binders);
+                let mut pat = Box::new(match_pattern(context, npat, &ref_mut, &rhs_binders));
                 if subtype_opt(context, ploc, || "Invalid pattern", &pat.ty, &e.ty).is_none() {
                     pat.ty = context.error_type(ploc);
                     pat.pat.value = T::UnannotatedPat_::ErrorPat;
@@ -1663,7 +1671,7 @@ fn sequence(context: &mut Context, (use_funs, seq): N::Sequence) -> T::Sequence 
                 let else_e = exp(context, else_body);
                 if !core::is_type_divergent(&context.subst, &else_e.ty) {
                     let msg = "'else' block in 'let...else' must diverge \
-                               (e.g., 'return', 'abort', or 'break')";
+                               (e.g., 'return', 'abort', 'break', or 'continue')";
                     context.add_diag(diag!(TypeSafety::InvalidLetElse, (else_e.exp.loc, msg),));
                 }
                 work_queue.push_front(SeqCase::BindElse {

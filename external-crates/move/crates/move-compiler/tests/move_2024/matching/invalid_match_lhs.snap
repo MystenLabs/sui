@@ -17,4 +17,4 @@ error[E01002]: unexpected token
   ┌─ tests/move_2024/matching/invalid_match_lhs.move:9:9
   │
 9 │     let { match (z) { Maybe::Just(n) => n, Maybe::Nothing => abort 0 } } = 5;
-  │         ^ Unexpected '{'. Expected a variable or struct name
+  │         ^ Unexpected '{'. Expected a variable, struct, or pattern (with 'else')

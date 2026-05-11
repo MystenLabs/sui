@@ -444,6 +444,9 @@ pub enum SequenceItem_ {
     Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
     Bind(LValueList, Box<Exp>),
+    // `let <pat> = e else <divergent>;`. The pattern is kept as a `MatchPattern`
+    // (rather than an `LValueList`) because it may be refutable; the else
+    // branch must diverge and is type-checked accordingly in `typing/translate`.
     BindElse(MatchPattern, Box<Exp>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
