@@ -12,36 +12,36 @@ use crate::{package::package_lock::LockError, schema::PublishedID};
 /// Errors that can occur while fetching an on-chain package.
 #[derive(Error, Debug)]
 pub enum OnChainError {
-    #[error("failed to fetch on-chain package at {address}: {source}")]
-    FetchFailed {
+    #[error("{source}")]
+    Fetch {
         address: PublishedID,
         #[source]
         source: anyhow::Error,
     },
 
     #[error("failed to write on-chain package cache at {path}: {source}")]
-    CacheWriteFailed {
+    CacheWrite {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
 
     #[error("failed to parse cached manifest at {path}: {source}")]
-    ManifestParseFailed {
+    ManifestParse {
         path: PathBuf,
         #[source]
         source: toml_edit::de::Error,
     },
 
     #[error("failed to serialize manifest for on-chain package {address}: {source}")]
-    ManifestSerializeFailed {
+    ManifestSerialize {
         address: PublishedID,
         #[source]
         source: toml_edit::ser::Error,
     },
 
     #[error(transparent)]
-    LockFailed(#[from] LockError),
+    Lock(#[from] LockError),
 }
 
 pub type OnChainResult<T> = Result<T, OnChainError>;

@@ -237,8 +237,7 @@ impl MoveFlavor for SuiFlavor {
     ) -> anyhow::Result<move_package_alt::OnChainPackageData> {
         let Some(ref client) = self.client else {
             anyhow::bail!(
-                "cannot fetch on-chain package {address}: no network connection \
-                 (SuiFlavor created in offline mode)"
+                "cannot fetch on-chain package {address}: no network connection"
             )
         };
 

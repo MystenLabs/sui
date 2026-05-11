@@ -302,6 +302,6 @@ mod tests {
             move_command_line_common::env::MOVE_HOME.as_str(),
             "<MOVE_HOME>",
         );
-        assert_snapshot!(err, @"Error while loading dependency <MOVE_HOME>/on-chain/_test_env_id/0x0000000000000000000000000000000000000000000000000000000000000001: failed to fetch on-chain package at 0x0000000000000000000000000000000000000000000000000000000000000001: on-chain package not found: 0x0000000000000000000000000000000000000000000000000000000000000001");
+        assert_snapshot!(err, @"Error while loading dependency <MOVE_HOME>/on-chain/_test_env_id/0x0000000000000000000000000000000000000000000000000000000000000001: on-chain package not found: 0x0000000000000000000000000000000000000000000000000000000000000001");
     }
 }

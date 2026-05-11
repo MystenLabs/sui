@@ -76,7 +76,7 @@ pub(crate) async fn fetch_onchain<F: MoveFlavor>(
             .flavor
             .fetch_onchain_package(address)
             .await
-            .map_err(|source| OnChainError::FetchFailed {
+            .map_err(|source| OnChainError::Fetch {
                 address: address.clone(),
                 source,
             })?;
@@ -101,14 +101,14 @@ fn cache_dir_for(chain_id: &str, address: &PublishedID) -> PathBuf {
 /// Write serialized `CompiledModule` bytecode to `<cache_dir>/bytecode/<name>.mv`.
 fn write_bytecode(cache_dir: &Path, modules: &BTreeMap<String, Vec<u8>>) -> OnChainResult<()> {
     let bytecode_dir = cache_dir.join("bytecode");
-    fs::create_dir_all(&bytecode_dir).map_err(|source| OnChainError::CacheWriteFailed {
+    fs::create_dir_all(&bytecode_dir).map_err(|source| OnChainError::CacheWrite {
         path: bytecode_dir.clone(),
         source,
     })?;
 
     for (name, bytes) in modules {
         let path = bytecode_dir.join(format!("{name}.mv"));
-        fs::write(&path, bytes).map_err(|source| OnChainError::CacheWriteFailed {
+        fs::write(&path, bytes).map_err(|source| OnChainError::CacheWrite {
             path: path.clone(),
             source,
         })?;
@@ -129,18 +129,17 @@ fn update_manifest(
     let manifest_path = cache_dir.join(SourcePackageLayout::Manifest.location_str());
 
     let mut manifest: ParsedManifest = if manifest_path.exists() {
-        let content = fs::read_to_string(&manifest_path).map_err(|source| {
-            OnChainError::CacheWriteFailed {
+        let content =
+            fs::read_to_string(&manifest_path).map_err(|source| OnChainError::CacheWrite {
                 path: manifest_path.clone(),
                 source,
-            }
-        })?;
-        toml_edit::de::from_str(&content).map_err(|source| OnChainError::ManifestParseFailed {
+            })?;
+        toml_edit::de::from_str(&content).map_err(|source| OnChainError::ManifestParse {
             path: manifest_path.clone(),
             source,
         })?
     } else {
-        fs::create_dir_all(cache_dir).map_err(|source| OnChainError::CacheWriteFailed {
+        fs::create_dir_all(cache_dir).map_err(|source| OnChainError::CacheWrite {
             path: cache_dir.to_path_buf(),
             source,
         })?;
@@ -190,16 +189,14 @@ fn update_manifest(
 
     // Serialize and write
     let doc = toml_edit::ser::to_document(&manifest).map_err(|source| {
-        OnChainError::ManifestSerializeFailed {
+        OnChainError::ManifestSerialize {
             address: address.clone(),
             source,
         }
     })?;
-    fs::write(&manifest_path, doc.to_string()).map_err(|source| {
-        OnChainError::CacheWriteFailed {
-            path: manifest_path,
-            source,
-        }
+    fs::write(&manifest_path, doc.to_string()).map_err(|source| OnChainError::CacheWrite {
+        path: manifest_path,
+        source,
     })?;
 
     Ok(())
@@ -235,12 +232,11 @@ fn update_published<F: MoveFlavor>(
     let pub_path = cache_dir.join("Published.toml");
 
     let mut pubfile: ParsedPublishedFile<F> = if pub_path.exists() {
-        let content =
-            fs::read_to_string(&pub_path).map_err(|source| OnChainError::CacheWriteFailed {
-                path: pub_path.clone(),
-                source,
-            })?;
-        toml_edit::de::from_str(&content).map_err(|source| OnChainError::ManifestParseFailed {
+        let content = fs::read_to_string(&pub_path).map_err(|source| OnChainError::CacheWrite {
+            path: pub_path.clone(),
+            source,
+        })?;
+        toml_edit::de::from_str(&content).map_err(|source| OnChainError::ManifestParse {
             path: pub_path.clone(),
             source,
         })?
@@ -272,7 +268,7 @@ fn update_published<F: MoveFlavor>(
     );
 
     let rendered = pubfile.render_as_toml();
-    fs::write(&pub_path, rendered).map_err(|source| OnChainError::CacheWriteFailed {
+    fs::write(&pub_path, rendered).map_err(|source| OnChainError::CacheWrite {
         path: pub_path,
         source,
     })?;
