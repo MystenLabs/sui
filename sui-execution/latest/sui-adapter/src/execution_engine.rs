@@ -333,8 +333,9 @@ mod checked {
                 .check_ownership_invariants(
                     &transaction_signer,
                     &sponsor,
-                    &mut gas_charger,
+                    &gas_charger,
                     &mutable_inputs,
+                    &input_reservations,
                     is_epoch_change,
                 )
                 .unwrap()
