@@ -13,6 +13,7 @@ use thiserror::Error;
 use crate::{
     flavor::MoveFlavor,
     git::GitError,
+    on_chain::OnChainError,
     package::{
         package_loader::PackageConfig,
         paths::{PackagePath, PackagePathError},
@@ -30,8 +31,8 @@ pub enum FetchError {
     #[error("Error while fetching `{1}`: {0}")]
     GitFailure(GitError, String),
 
-    #[error("Error while fetching on-chain package: {0}")]
-    OnChainFailure(#[from] anyhow::Error),
+    #[error(transparent)]
+    OnChainFailure(#[from] OnChainError),
 }
 
 pub type FetchResult<T> = Result<T, FetchError>;

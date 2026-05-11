@@ -10,4 +10,7 @@
 //!
 //! The cache layout is `~/.move/on-chain/<chain_id>/<address>/`.
 
+mod errors;
 pub(crate) mod fetch;
+
+pub(crate) use errors::{OnChainError, OnChainResult};

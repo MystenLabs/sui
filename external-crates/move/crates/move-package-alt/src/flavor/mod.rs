@@ -21,7 +21,7 @@ use indexmap::IndexMap;
 /// network.
 #[derive(Clone, Debug)]
 pub struct OnChainPackageData {
-    /// Module name → compiled bytecode
+    /// Module name → serialized `CompiledModule` bytecode (the `.mv` format)
     pub modules: BTreeMap<String, Vec<u8>>,
     /// Original dependency ID → current linked address
     pub dependencies: BTreeMap<OriginalID, PublishedID>,
