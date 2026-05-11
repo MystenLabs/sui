@@ -6,22 +6,19 @@ module geometry {
         let l4 = l0;
         let l3 = &l4;
         let l1;
-        match(l3: 0x0::geometry::Shape) {
-            0x0::geometry::Shape::Square => {
-                let 0x0::geometry::Shape::Square { side: reg_4 } = &l3;
-                let 0x0::geometry::Shape::Square { side: reg_6 } = l4;
+        l1 =         match(l3: geometry::Shape) {
+            geometry::Shape::Square { side: reg_4 } => {
+                let geometry::Shape::Square { side: reg_6 } = l4;
                 let l7 = reg_6 : u64;
-                l1 = l7 * l7;
-            },
-            0x0::geometry::Shape::Triangle => {
-                let 0x0::geometry::Shape::Triangle { base: reg_11, height: reg_12 } = &l3;
-                let 0x0::geometry::Shape::Triangle { base: reg_14, height: reg_15 } = l4;
+l7 * l7            },
+            geometry::Shape::Triangle { base: reg_11, height: reg_12 } => {
+                let geometry::Shape::Triangle { base: reg_14, height: reg_15 } = l4;
                 let l2 = reg_15 : u64;
                 let l5 = reg_14 : u64;
                 let l6 = l2;
-                l1 = l5 * l6 / 2u64;
-            },
+l5 * l6 / 2u64            },
         }
+;
         return l1
     }
 

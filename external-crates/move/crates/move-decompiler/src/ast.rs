@@ -221,6 +221,98 @@ impl std::fmt::Display for Exp {
             Ok(())
         }
 
+        /// Print `exp` as a value on the right-hand side of an assignment/let-bind: no leading
+        /// indent (the caller already wrote `lhs = `), and no trailing newline (the caller
+        /// writes the closing `;`). For block-like expressions (IfElse, Switch) this keeps
+        /// braces aligned with the assignment's indent level so the result reads like the
+        /// idiomatic Move `let X = if (...) { ... } else { ... };` form.
+        fn fmt_value(
+            f: &mut std::fmt::Formatter<'_>,
+            exp: &Exp,
+            level: usize,
+        ) -> std::fmt::Result {
+            match exp {
+                Exp::IfElse(cond, conseq, alt) => {
+                    writeln!(f, "if ({}) {{", cond)?;
+                    fmt_block_body(f, conseq, level + 1)?;
+                    indent(f, level)?;
+                    if let Some(alt) = &**alt {
+                        writeln!(f, "}} else {{")?;
+                        fmt_block_body(f, alt, level + 1)?;
+                        indent(f, level)?;
+                    }
+                    write!(f, "}}")
+                }
+                Exp::Switch(term, (mid, enum_), cases) => {
+                    writeln!(f, "match({}: {mid}::{enum_}) {{", term)?;
+                    for (variant, case) in cases {
+                        indent(f, level + 1)?;
+                        writeln!(f, "{mid}::{enum_}::{variant} => {{")?;
+                        fmt_block_body(f, case, level + 2)?;
+                        indent(f, level + 1)?;
+                        writeln!(f, "}},")?;
+                    }
+                    indent(f, level)?;
+                    write!(f, "}}")
+                }
+                // Non-block expressions render inline via their normal Display.
+                other => write!(f, "{}", other),
+            }
+        }
+
+        /// Print `exp` as the body of a brace-block at `level`. Recurs into `Seq` so each
+        /// item is positioned at the block's indent. Inline expressions (which `fmt_exp` would
+        /// emit naked, since their normal use is as the RHS of an Assign where the caller
+        /// already wrote the indent) get an explicit indent and trailing newline so they read
+        /// like the trailing value of a block expression: `if (c) { ...; value }`.
+        fn fmt_block_body(
+            f: &mut std::fmt::Formatter<'_>,
+            exp: &Exp,
+            level: usize,
+        ) -> std::fmt::Result {
+            match exp {
+                Exp::Seq(seq) => {
+                    for item in seq {
+                        fmt_block_body(f, item, level)?;
+                    }
+                    Ok(())
+                }
+                e if emits_own_line(e) => fmt_exp(f, e, level),
+                e => {
+                    indent(f, level)?;
+                    writeln!(f, "{}", e)
+                }
+            }
+        }
+
+        /// `true` for `Exp` variants whose `fmt_exp` already starts with `indent(level)` and
+        /// ends with `writeln!`. Everything else is an "inline" expression — `Value`,
+        /// `Variable`, `Primitive`, `Borrow`, etc. — that needs `fmt_block_body` to provide
+        /// indent/newline when it appears at statement position.
+        fn emits_own_line(exp: &Exp) -> bool {
+            matches!(
+                exp,
+                Exp::Break(_)
+                    | Exp::Continue(_)
+                    | Exp::Loop(_, _)
+                    | Exp::While(_, _, _)
+                    | Exp::IfElse(_, _, _)
+                    | Exp::Switch(_, _, _)
+                    | Exp::Return(_)
+                    | Exp::Assign(_, _)
+                    | Exp::LetBind(_, _)
+                    | Exp::Declare(_)
+                    | Exp::Call(_, _)
+                    | Exp::Abort(_)
+                    | Exp::Data { .. }
+                    | Exp::Unpack(_, _, _)
+                    | Exp::UnpackVariant(_, _, _, _)
+                    | Exp::VecUnpack(_, _)
+                    | Exp::Unstructured(_)
+            )
+        }
+
+
         fn fmt_exp(f: &mut std::fmt::Formatter<'_>, exp: &Exp, level: usize) -> std::fmt::Result {
             match exp {
                 Exp::Break(label) => {
@@ -307,11 +399,15 @@ impl std::fmt::Display for Exp {
                 }
                 Exp::Assign(items, exp) => {
                     indent(f, level)?;
-                    writeln!(f, "{} = {};", items.join(", "), exp)
+                    write!(f, "{} = ", items.join(", "))?;
+                    fmt_value(f, exp, level)?;
+                    writeln!(f, ";")
                 }
                 Exp::LetBind(items, exp) => {
                     indent(f, level)?;
-                    writeln!(f, "let {} = {};", items.join(", "), exp)
+                    write!(f, "let {} = ", items.join(", "))?;
+                    fmt_value(f, exp, level)?;
+                    writeln!(f, ";")
                 }
                 Exp::Declare(items) => {
                     indent(f, level)?;

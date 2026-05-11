@@ -13,11 +13,11 @@ module while_cases {
         let l1 = 0u64;
         loop {
             let l0;
-            if (l1 < 10u64) {
-                l0 = true;
+            l0 = if (l1 < 10u64) {
+                true
             } else {
-                l0 = l1 == 7u64;
-            }
+                l1 == 7u64
+            };
             if (l0) {
                 l1 = l1 + 1u64;
                 continue;
@@ -44,11 +44,11 @@ module while_cases {
         let l1 = 0u64;
         loop {
             let l0;
-            if (l1 < 10u64) {
-                l0 = true;
+            l0 = if (l1 < 10u64) {
+                true
             } else {
-                l0 = l1 == 7u64;
-            }
+                l1 == 7u64
+            };
             if (l0) {
                 if (l1 % 2u64 == 0u64) {
                     l1 = l1 + 1u64;
@@ -80,11 +80,11 @@ module while_cases {
         let l1 = 0u64;
         loop {
             let l0;
-            if (l1 < 10u64) {
-                l0 = true;
+            l0 = if (l1 < 10u64) {
+                true
             } else {
-                l0 = l1 == 7u64;
-            }
+                l1 == 7u64
+            };
             if (l0) {
                 l1 = l1 + 1u64;
                 continue;
