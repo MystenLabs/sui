@@ -164,24 +164,24 @@ impl ValidatorConfigBuilder {
         let network_address = validator.network_address;
         let consensus_db_path = config_directory.join(CONSENSUS_DB_NAME).join(key_path);
         let localhost = local_ip_utils::localhost_for_testing();
-        let observer = self
+        let parameters = self
             .observer_config
-            .map(|observer_config| ObserverParameters {
-                server_port: observer_config
-                    .server_port
-                    .or_else(|| Some(local_ip_utils::get_available_port(&localhost))),
-                allowlist: observer_config.allowlist,
-                peers: observer_config.peers,
+            .map(|observer_config| ConsensusParameters {
+                observer: ObserverParameters {
+                    server_port: observer_config
+                        .server_port
+                        .or_else(|| Some(local_ip_utils::get_available_port(&localhost))),
+                    allowlist: observer_config.allowlist,
+                    peers: observer_config.peers,
+                },
+                ..Default::default()
             });
         let consensus_config = ConsensusConfig {
             db_path: consensus_db_path,
             db_retention_epochs: None,
             db_pruner_period_secs: None,
             max_pending_transactions: None,
-            parameters: Some(ConsensusParameters {
-                observer: observer.unwrap_or_default(),
-                ..Default::default()
-            }),
+            parameters,
             listen_address: None,
             external_address: None,
         };
