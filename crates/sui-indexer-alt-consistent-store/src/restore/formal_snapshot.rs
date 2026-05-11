@@ -59,15 +59,17 @@ pub struct FormalSnapshotArgs {
     pub remote_store_url: Url,
 
     /// The epoch to restore from. Restores from the latest epoch if not specified.
-    #[arg(long, conflicts_with = "path")]
+    /// Required when `--path` is set, since the per-prefix layout may not include
+    /// a `MANIFEST` to discover the latest epoch.
+    #[arg(long)]
     pub epoch: Option<u64>,
 
-    /// Path within the storage source pointing directly at an epoch directory
-    /// (e.g. `archive/epoch_600`). When supplied, the tool skips reading the
-    /// root `MANIFEST` and the per-epoch `_SUCCESS` marker — the operator vouches
-    /// for the snapshot being complete. The epoch number is parsed from the
-    /// trailing `epoch_<N>` path component.
-    #[arg(long, conflicts_with = "epoch")]
+    /// Path prefix within the storage source containing per-epoch subdirectories.
+    /// When supplied, the tool looks for `<path>/epoch_<N>/` (with `<N>` from
+    /// `--epoch`) and skips reading the root `MANIFEST` and the per-epoch
+    /// `_SUCCESS` marker — the operator vouches for the snapshot being complete.
+    /// Requires `--epoch`.
+    #[arg(long, requires = "epoch")]
     pub path: Option<String>,
 }
 
@@ -86,10 +88,11 @@ pub(super) struct FormalSnapshot {
 impl FormalSnapshot {
     /// Establish a connection to a formal snapshot for a specific epoch.
     ///
-    /// When `--path` is supplied, the operator names the epoch directory directly.
-    /// Otherwise the source's root `MANIFEST` is consulted to validate the epoch
-    /// and a `_SUCCESS` marker is checked; if no epoch is supplied, the latest in
-    /// the manifest is used.
+    /// When `--path` is supplied, the epoch directory is taken to be
+    /// `<path>/epoch_<epoch>` and the root `MANIFEST` / `_SUCCESS` checks are
+    /// skipped. Otherwise the source's root `MANIFEST` is consulted to validate
+    /// the epoch and a `_SUCCESS` marker is checked; if no epoch is supplied,
+    /// the latest in the manifest is used.
     pub(super) async fn new(
         snapshot_args: FormalSnapshotArgs,
         connection_args: StorageConnectionArgs,
@@ -129,17 +132,10 @@ impl FormalSnapshot {
         };
 
         let (epoch, epoch_dir) = if let Some(path) = snapshot_args.path {
-            let basename = path.rsplit('/').next().unwrap_or(&path);
-            let epoch = basename
-                .strip_prefix("epoch_")
-                .and_then(|s| s.parse::<u64>().ok())
-                .with_context(|| {
-                    format!(
-                        "Failed to parse epoch number from --path: {path:?}. \
-                         Expected the trailing component to be `epoch_<N>`."
-                    )
-                })?;
-            (epoch, path)
+            let epoch = snapshot_args
+                .epoch
+                .expect("clap requires --epoch when --path is set");
+            (epoch, format!("{path}/epoch_{epoch}"))
         } else {
             let root_manifest = RootManifest::read(
                 store
