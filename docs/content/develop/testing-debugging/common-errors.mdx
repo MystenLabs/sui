@@ -12,7 +12,7 @@ Errors in this section relate to Sui addresses.
 
 #### `Failed to build Move modules: Unresolved addresses found.`
 
-You are trying to use a named address, such as `std` or similar, within your code or a dependency, but you have not assigned that address a value in the `Move.toml` file. 
+You are trying to use a named address, such as `std` or similar, within your code or a dependency, but you did not assign that address a value in the `Move.toml` file.
 
 ##### Solution
 
@@ -89,7 +89,7 @@ Check your `Move.toml` and verify each dependency you list has the correct path,
 
 #### `Duplicate module found: 0x0000000000000000000000000000000000000000000000000000000000000002::groth16`
 
-You have defined two or more modules with the same name or address in your project or its dependencies. You must give each module a unique name and address combination. 
+You have defined two or more modules with the same name or address in your project or its dependencies. Give each module a unique name and address combination.
 
 ##### Solution 
 
@@ -143,7 +143,7 @@ Some common reasons for this error include:
 
 #### `Failed to publish the Move module(s), reason: Modules must all have 0x0 as their addresses.`
 
-A module in your package does not have the address `0x0`. In Move, you must set all modules to have their self-address as `0x0` in the source code. When you publish the package, Sui automatically assigns it the correct address. 
+A module in your package does not have the address `0x0`. In Move, you must set all modules to have their self-address as `0x0` in the source code. When you publish the package, Sui assigns it the correct address automatically.
 
 
 ##### Solution 
@@ -158,7 +158,7 @@ Remove any explicit address blocks from your Move source files. Do not wrap your
 
 #### `The signer only expects one signature, not two`
 
-A function you are calling in your Move module expects 1 signer argument, yet you provided 2. On Sui, the number of signer arguments in your function's signature must match the number of signers you provide. 
+A function you are calling in your Move module expects 1 signer argument, yet you provide 2. On Sui, the number of signer arguments in your function's signature must match the number of signers you provide. 
 
 ##### Solution 
 
@@ -314,7 +314,7 @@ In Sui Move packages, you must either transfer every value that does not have th
 
 #### `Error executing transaction: VMVerificationOrDeserializationError in command 0`
 
-Your Move code fails either during bytecode verification or during deserialization. 
+Your Move code might fail either during bytecode verification or during deserialization.
 
 ##### Solution 
 
@@ -342,7 +342,7 @@ Some common reasons for this error include:
 
 #### `Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction. Other transactions locking these objects`
 
-Your transaction is trying to use one or more Sui objects that another transaction already uses. When you use an object in a transaction, the system locks that object to prevent multiple, possibly conflicting modifications to an object. For DeFi objects, this prevents double-spending.
+Your transaction tries to use one or more Sui objects that another transaction already uses. When you use an object in a transaction, the system locks that object to prevent multiple, possibly conflicting modifications to an object. For DeFi objects, this prevents double-spending.
 
 ##### Solution 
 
@@ -358,7 +358,7 @@ Make sure your code does not use multiple objects simultaneously.
 
 #### `Failed to sign transaction by a quorum of validators because one or more of its objects is equivocated until the next epoch.`
 
-An object you are trying to use is in an equivocated state, meaning the network cannot reach consensus about its state due to conflicting transactions. The network freezes the object and you cannot use it until the next epoch.
+An object you try to use is in an equivocated state, meaning the network cannot reach consensus about its state due to conflicting transactions. The network freezes the object and you cannot use it until the next epoch.
 
 ##### Solution 
 
@@ -411,12 +411,12 @@ Verify you have a sufficient gas balance and that your transaction signature is 
 
 #### `Unable to process transaction. No valid gas coins found for the transaction.`
 
-The sender address either has insufficient SUI balance or the gas coin is already used as a transaction input object.
+The sender address either has insufficient SUI balance or the gas coin already serves as a transaction input object.
 
 ##### Solution
 
 - Verify the wallet has enough SUI to cover the gas budget.
-- Do not pass the same coin object as both a gas payment and a transaction input.
+- Pass different coin objects for gas payment and transaction input.
 - If you recently sent a transaction, wait for it to finalize before submitting another one that uses the same coin.
 
 **Resources**
@@ -433,7 +433,7 @@ Errors in this section relate to the TypeScript SDK, RPC responses, and transact
 
 #### `Invalid type: Expected Object but received Object`
 
-You wrapped a value already returned by a transaction command (such as `tx.splitCoins()` or `tx.moveCall()`) inside `tx.object()` again. Values returned by transaction commands are already `TransactionArgument` objects.
+You wrapped a value already returned by a transaction command (such as `tx.splitCoins()` or `tx.moveCall()`) inside `tx.object()` again. Transaction commands already return values as `TransactionArgument` objects.
 
 ##### Solution
 
@@ -453,7 +453,7 @@ tx.transferObjects([coin], recipient); // ✅
 
 #### `Your active environment is not present in Move.toml`
 
-The Sui CLI cannot find the environment alias you are using (such as `devnet` or `testnet`) in the `[environments]` section of your `Move.toml` file.
+The Sui CLI cannot find the environment alias you use (such as `devnet` or `testnet`) in the `[environments]` section of your `Move.toml` file.
 
 ##### Solution
 
@@ -465,7 +465,7 @@ mainnet = { chain-id = "35834a8a" }
 testnet = { chain-id = "4c78adac" }
 ```
 
-Look up the chain ID for your network with `sui client chain-identifier`. For local or ephemeral deployments, use `sui move test-publish` instead.
+Look up the chain ID for your network with `sui client chain-identifier`. For local or ephemeral deployments, use `sui client test-publish` instead.
 
 **Resources**
 
@@ -483,9 +483,9 @@ The Sui RPC layer returns standard error codes. Use the following table to diagn
 | -32601 | Method Not Found            | No        | Typo in the RPC method name.              |
 | -32602 | Invalid Params              | No        | Wrong argument types or missing fields.   |
 | -32603 | Internal Error              | Maybe     | Server-side failure; retry after backoff. |
-| -32604 | Transaction Execution Error | No        | On-chain execution failed (MoveAbort).    |
+| -32002 | Transaction Execution Error | No        | Onchain execution failed (MoveAbort).     |
 | -32050 | Transient Error             | Yes       | Overloaded node; retry with exponential backoff. |
-| -32002 | Server Busy                 | Yes       | Rate limited; slow down request frequency. |
+| -32604 | Timeout Error               | Yes       | Request timed out; retry after backoff.    |
 
 ---
 
@@ -496,7 +496,7 @@ Sui errors fall into two categories:
 | Category          | Examples                              | Where it happens | What to do             |
 |-------------------|---------------------------------------|------------------|------------------------|
 | Transport errors  | HTTP 429/502/504, RPC -32050          | Network layer    | Retry with backoff.    |
-| Execution errors  | `MoveAbort`, `InsufficientGas`        | On-chain VM      | Fix code or parameters.|
+| Execution errors  | `MoveAbort`, `InsufficientGas`        | Onchain VM       | Fix code or parameters.|
 
 Detect the category in TypeScript:
 

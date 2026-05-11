@@ -75,9 +75,9 @@ Define inputs in two ways:
 - For objects: Use the `tx.object(objectId)` function to construct an input that contains an object reference.
 
 - For pure values: Use the `tx.pure(type, value)` function to construct an input for a non-object input.
-  - If value is a `Uint8Array`, the function treats the value as raw bytes and uses it directly: `tx.pure(SomeUint8Array)`.
+  - If value is a `Uint8Array`, the function treats it as raw bytes and uses it directly: `tx.pure(SomeUint8Array)`.
 
-  - Otherwise, the function uses it to generate the BCS serialization layout for the value.
+  - Otherwise, the function generates the BCS serialization layout for the value.
 
   - The new version provides a more intuitive syntax, for example: `tx.pure.u64(100)`, `tx.pure.string('SomeString')`, `tx.pure.address('0xSomeSuiAddress')`, `tx.pure.vector('bool', [true, false])`.
 
@@ -253,14 +253,14 @@ Learn more about [sponsored transactions](/develop/transaction-payment/sponsor-t
 
 ## Rust SDK example
 
-Build a PTB using the Sui Rust SDK:
+You can also build PTBs using the Sui Rust SDK. The following example demonstrates creating a `ProgrammableTransactionBuilder`, adding pure value and shared object inputs, and calling a Move function with type arguments:
 
 ```rust
-use sui_sdk::types::{
+use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use sui_types::{
     base_types::ObjectID,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    transaction::{Argument, CallArg, ObjectArg},
-    Identifier, TypeTag,
+    transaction::{Argument, CallArg, ObjectArg, SharedObjectMutability},
 };
 
 let mut ptb = ProgrammableTransactionBuilder::new();
@@ -272,7 +272,7 @@ let amount = ptb.pure(1000u64)?;
 let shared_obj = ptb.obj(ObjectArg::SharedObject {
     id: ObjectID::from_hex_literal("0x...")?,
     initial_shared_version: 1.into(),
-    mutable: true,
+    mutability: SharedObjectMutability::Mutable,
 })?;
 
 // Call a generic function with type arguments

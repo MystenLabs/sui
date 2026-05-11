@@ -392,15 +392,15 @@ async function getEventsByType(eventType: string, first: number = 10) {
 ```
 </details>
 
-### Combining event filters
+### Filtering events
 
-To combine filter conditions (for example, a specific module and time range), use a GraphQL query with multiple filter fields or nest conditions in an `All` filter when using the Rust SDK:
+Use the GraphQL `EventFilter` to narrow event queries. The available filter fields are `type`, `module`, `sender`, `afterCheckpoint`, `atCheckpoint`, and `beforeCheckpoint`. Note that you cannot combine `module` and `type` in the same filter.
 
 ```graphql
 {
   events(
     filter: {
-      eventType: "0xPACKAGE::swap::SwapEvent"
+      type: "0xPACKAGE::swap::SwapEvent"
     }
     after: null
     first: 50
@@ -420,7 +420,7 @@ To combine filter conditions (for example, a specific module and time range), us
 
 ## Event limits
 
-A single transaction can emit a maximum of 1,000 events. If your Move code exceeds this limit, the transaction aborts.
+A single transaction can emit a maximum of 1,024 events (set by the `max_num_event_emit` protocol config). If your Move code exceeds this limit, the transaction aborts.
 
 ## Pagination
 

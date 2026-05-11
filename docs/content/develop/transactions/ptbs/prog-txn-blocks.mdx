@@ -92,9 +92,9 @@ For the execution of PTBs, the input vector is populated by the input objects or
 
 ### Start of execution
 
-At the beginning of execution, the PTB runtime loads the input objects into the input array. The objects are already verified by the network, checking rules like existence and valid ownership. The pure value bytes are also loaded into the array but not validated until usage.
+At the beginning of execution, the PTB runtime loads the input objects into the input array. The network already verifies the objects, checking rules like existence and valid ownership. The pure value bytes are also loaded into the array but not validated until usage.
 
-The most important consideration at this stage is the effects on the gas coin. At the beginning of execution, the maximum gas budget (in terms of SUI) is withdrawn from the gas coin. The system returns any unused gas to the gas coin at the end of execution, even if the coin has changed owners.
+The most important consideration at this stage is the effects on the gas coin. At the beginning of execution, the system withdraws the maximum gas budget (in terms of SUI) from the gas coin. The system returns any unused gas to the gas coin at the end of execution, even if the coin has changed owners.
 
 ### Object consumption 
 

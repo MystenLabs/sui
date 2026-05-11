@@ -22,7 +22,7 @@ testnet = { chain-id = "4c78adac" }
 mainnet = { chain-id = "35834a8a" }
 ```
 
-Use `sui client chain-identifier` to find the chain ID for your network. For local or ephemeral deployments, use `sui move test-publish` instead.
+Use `sui client chain-identifier` to find the chain ID for your network. For local or ephemeral deployments, use `sui client test-publish` instead.
 
 :::
 
@@ -288,7 +288,7 @@ The `original-id` field should contain the address of the first version of the p
 
 ### Building and testing packages
 
-When you run `sui move build` or `sui move test`, the system ensures you have all dependencies cached in your `~/.move` directory. It first checks whether the lockfile is current, and if it is not, it repins all of the dependencies for your build environment. It then checks whether the packages are cached, and if not it downloads them.
+When you run `sui move build` or `sui move test`, the system ensures you have all dependencies cached in your `~/.move` directory. It first checks whether the lockfile is current, and if the lockfile is not current, it repins all of the dependencies for your build environment. It then checks whether the packages are cached, and if not it downloads them.
 
 The system always fetches after pinning, so you do not need to connect to a network unless a dependency needs repinning because the manifest changed or you ran `update-deps`.
 
@@ -443,11 +443,11 @@ The system identifies entries of an ephemeral publication file by the `source` f
 
 ## Local development workflow
 
-For iterative development on localnet:
+For iterative development on Localnet:
 
 1. Start the local network: `sui start --with-faucet --force-regenesis`
-1. Publish with test-publish (no permanent record): `sui move test-publish`
-1. After each code change, re-run `sui move test-publish` for a fresh deployment.
+1. Publish with test-publish (no permanent record): `sui client test-publish`
+1. After each code change, re-run `sui client test-publish` for a fresh deployment.
 
 Use `test-publish` for Localnet because it avoids polluting `Published.toml` with ephemeral addresses that change on every genesis reset.
 

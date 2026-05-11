@@ -113,8 +113,8 @@ public fun verify_personal_message(
     public_key: vector<u8>,
     message: vector<u8>,
 ) {
-    // The client must sign: SHA-256(intent_prefix || message)
-    // where intent_prefix = [3, 0, 0] for PersonalMessage
+    // The client signs: Blake2b-256(BCS(IntentMessage { intent: Intent::personal_message(), value: PersonalMessage { message } }))
+    // The intent prefix for PersonalMessage is [3, 0, 0]
     assert!(
         ed25519::ed25519_verify(&signature, &public_key, &message),
         0
