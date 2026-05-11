@@ -88,9 +88,14 @@ mod tests {
         )
     }
 
-    fn sender_row_key(sender_idx: u8, bucket_id: u64) -> Vec<u8> {
-        let sender = TestCheckpointBuilder::derive_address(sender_idx);
-        let dimension_key = encode_dimension_key(IndexDimension::Sender, sender.as_ref());
+    /// Row key for the EmitModule dimension at the package level. Every event
+    /// emitted by `event(_)` uses `ObjectID::ZERO` as its package, so this
+    /// helper produces a stable key across the test inputs. (Event extraction
+    /// emits EmitModule and EventType but not Sender — Sender is a tx-level
+    /// dimension, not event-level.)
+    fn emit_module_row_key(bucket_id: u64) -> Vec<u8> {
+        let dimension_key =
+            encode_dimension_key(IndexDimension::EmitModule, ObjectID::ZERO.as_ref());
         event_bitmap_index::encode_row_key(
             event_bitmap_index::SCHEMA_VERSION,
             &dimension_key,
@@ -118,7 +123,7 @@ mod tests {
             .await
             .unwrap();
 
-        let row_key = sender_row_key(1, 0);
+        let row_key = emit_module_row_key(0);
         let value = row(&values, &row_key);
         assert_eq!(value.bucket_id, 0);
         assert_eq!(value.bitmap.len(), 2);
@@ -143,7 +148,7 @@ mod tests {
             .await
             .unwrap();
 
-        let row_key = sender_row_key(1, 0);
+        let row_key = emit_module_row_key(0);
         let value = row(&values, &row_key);
         assert_eq!(value.bucket_id, 0);
         assert_eq!(value.bitmap.len(), 2);
@@ -178,7 +183,7 @@ mod tests {
             .await
             .unwrap();
 
-        let bucket_0_key = sender_row_key(1, 0);
+        let bucket_0_key = emit_module_row_key(0);
         let bucket_0 = row(&values, &bucket_0_key);
         assert_eq!(bucket_0.bucket_id, 0);
         assert_eq!(bucket_0.bitmap.len(), 1);
@@ -188,7 +193,7 @@ mod tests {
                 .contains(event_bitmap_index::event_seq_lo(txs_per_bucket - 1) as u32)
         );
 
-        let bucket_1_key = sender_row_key(1, 1);
+        let bucket_1_key = emit_module_row_key(1);
         let bucket_1 = row(&values, &bucket_1_key);
         assert_eq!(bucket_1.bucket_id, 1);
         assert_eq!(bucket_1.bitmap.len(), 1);
