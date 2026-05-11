@@ -385,12 +385,65 @@ $ sui client gas eloquent-amber
 ```sh
 ╭────────────────────────────────────────────────────────────────────┬────────────────────┬──────────────────╮
 │ gasCoinId                                                          │ mistBalance (MIST) │ suiBalance (SUI) │
-├────────────────────────────────────────────────────────────────────┼────────────────────┼──────────────────┤
+├────────────────────────────────────────────────────────────────────┼────────────────────┼──────────────────╯
 │ 0xa031d3f8fd53b5f9885172e1c6bd8b770b25e42371c9ee215c6d4b21b2b73241 │ 500000000          │ 0.50             │
 │ 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 │ 199496992240       │ 199.49           │
 ╰────────────────────────────────────────────────────────────────────┴────────────────────┴──────────────────╯
 ```
 
+### Send funds using send-funds
+
+Use `sui client send-funds` to transfer a specific amount of SUI to a recipient address in a single command. This is a convenience wrapper around the programmable transaction block (PTB) pattern for simple SUI transfers. For more detail on the underlying PTB approach, see [Using Address Balances](/concepts/transactions/prog-txn-blocks).
+
+```sh
+$ sui client send-funds --to eloquent-amber --amount 500000000 --gas-budget 5000000
+```
+
+### Transfer an object using party-transfer
+
+Use `sui client party-transfer` to transfer an object under party ownership. This command is used when an object has been set up with party ownership semantics.
+
+```sh
+$ sui client party-transfer --object-id 0xfffbb30ccb631f15f6cd36700589fc9c31cb04af28a95f3ed26d62daf3acb57f --to eloquent-amber --gas-budget 5000000
+```
+
+### Serialize a transaction for offline signing
+
+Use `sui client serialized-tx` to build and serialize a transaction without executing it. This is useful for offline signing workflows where you construct the transaction on one machine and sign it on another.
+
+```sh
+$ sui client serialized-tx --to eloquent-amber --sui-coin-object-id 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amount 500000000 --gas-budget 5000000
+```
+
+Use `sui client serialized-tx-kind` to serialize only the transaction kind (without gas data), which is useful when a sponsor will provide the gas payment separately.
+
+```sh
+$ sui client serialized-tx-kind --to eloquent-amber --sui-coin-object-id 0xc9b447fff18f13fa035e028534b8344d5fc8a8760248fad10155e78f44dc3a52 --amount 500000000
+```
+
+### Test publish and upgrade locally
+
+Use `sui client test-publish` to simulate a package publish without submitting the transaction to the network. This is useful for verifying that a package builds and passes all checks before publishing.
+
+```sh
+$ sui client test-publish
+```
+
+Use `sui client test-upgrade` to simulate a package upgrade without submitting the transaction to the network.
+
+```sh
+$ sui client test-upgrade --upgrade-capability 0xde670ae990c8f20fd53e9f597a0da056bdb634175176602658e9da2c2ec9cb93
+```
+
+For more detail on publishing and upgrading packages, see the [package management guide](/guides/developer/app-examples/publish).
+
+### Execute a combined signed transaction
+
+Use `sui client execute-combined-signed-tx` to submit a transaction that has been signed by multiple parties. This command is useful in multi-party signing workflows where each party signs the serialized transaction bytes offline before submission.
+
+```sh
+$ sui client execute-combined-signed-tx --tx-bytes <BASE64-TX-BYTES> --signatures <SIG1> <SIG2>
+```
 
 ### Replay a transaction
 
