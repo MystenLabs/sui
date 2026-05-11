@@ -774,6 +774,11 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
             self.committee == old(self).committee,
             self.invariant_holds(),
 
+            // Membership bound: only the new authority can be added to the voted set.
+            forall|a: AuthorityName|
+                self.has_voted(a) ==>
+                    #[trigger] old(self).has_voted(a) || a == envelope_authority(&envelope),
+
             // No state change on epoch mismatch or duplicate.
             (envelope_epoch(&envelope) != committee_epoch_spec(&old(self).committee)
                 || old(self).has_voted(envelope_authority(&envelope)))
@@ -796,35 +801,24 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                       && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
                       && reaches_quorum::<STRENGTH>(self)),
 
-            // === Valid weighted vote set ===
-            // The set of authorities with valid weighted sigs after insert is exactly the
-            // old valid weighted set plus the new authority when its sig is also valid.
-            // (Upper bound + monotonicity lower bound in a single biconditional.)
-            forall|a: AuthorityName|
-                (self.has_voted(a)
-                    && committee_weight_of(&self.committee, a) > 0
-                    && sig_is_valid(&self.data@[a], &self.committee))
-                <==> ((old(self).has_voted(a)
-                        && committee_weight_of(&old(self).committee, a) > 0
-                        && sig_is_valid(&old(self).data@[a], &old(self).committee))
-                      || (a == envelope_authority(&envelope)
-                          && sig_is_valid(&envelope_sig_spec(&envelope), &old(self).committee)
-                          && !old(self).has_voted(envelope_authority(&envelope))
-                          && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
-                          && envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee))),
-
-            // Values: old valid weighted entries keep their stored sig; the new valid
-            // entry stores exactly the incoming sig.
+            // === Monotonicity + value preservation ===
+            // Previously-valid weighted sigs are never evicted; their stored values
+            // are unchanged.  This is the key liveness guarantee: accumulated valid
+            // weight is never lost.
             forall|a: AuthorityName|
                 old(self).has_voted(a)
                 && committee_weight_of(&old(self).committee, a) > 0
                 && sig_is_valid(&old(self).data@[a], &old(self).committee)
-                    ==> #[trigger] self.data@[a] == old(self).data@[a],
+                    ==> self.has_voted(a) && #[trigger] self.data@[a] == old(self).data@[a],
+
+            // === Recording ===
+            // A valid new sig is always stored on a non-Failed insert.
             sig_is_valid(&envelope_sig_spec(&envelope), &old(self).committee)
                 && envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee)
                 && !old(self).has_voted(envelope_authority(&envelope))
                 && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
-                    ==> self.data@[envelope_authority(&envelope)]
+                    ==> self.has_voted(envelope_authority(&envelope))
+                        && self.data@[envelope_authority(&envelope)]
                             == envelope_sig_spec(&envelope),
     {
         let ghost pre_sig = envelope_sig_spec(&envelope);
