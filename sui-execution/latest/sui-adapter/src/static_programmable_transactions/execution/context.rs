@@ -964,44 +964,38 @@ where
         args: Vec<CtxValue>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<CtxValue>, Mode::Error> {
-        with_vm!(
-            self,
-            &function.linkage,
-            Mode::Error,
-            |vm: &mut MoveVM<'env>| {
-                let ty_args = function
-                    .type_arguments
-                    .iter()
-                    .map(|ty| {
-                        let tag: TypeTag = ty.clone().try_into().map_err(|e| {
-                            Mode::Error::new_with_source(
-                                ExecutionErrorKind::VMInvariantViolation,
-                                e,
-                            )
-                        })?;
-                        vm.load_type(&tag)
-                            .map_err(|e| self.env.convert_linked_vm_error(e, &function.linkage))
-                    })
-                    .collect::<Result<Vec<_>, Mode::Error>>()?;
-                let result = self.execute_function_bypass_visibility_with_vm(
-                    vm,
-                    &function.original_mid,
-                    &function.name,
-                    ty_args,
-                    args,
-                    &function.linkage,
-                    trace_builder_opt,
-                )?;
-                self.take_user_events(
-                    vm,
-                    function.version_mid,
-                    function.definition_index,
-                    function.instruction_length,
-                    &function.linkage,
-                )?;
-                Ok::<Vec<CtxValue>, Mode::Error>(result)
-            }
-        )
+        with_vm!(self, &function.linkage, Mode::Error, |vm: &mut MoveVM<
+            'env,
+        >| {
+            let ty_args = function
+                .type_arguments
+                .iter()
+                .map(|ty| {
+                    let tag: TypeTag = ty.clone().try_into().map_err(|e| {
+                        Mode::Error::new_with_source(ExecutionErrorKind::VMInvariantViolation, e)
+                    })?;
+                    vm.load_type(&tag)
+                        .map_err(|e| self.env.convert_linked_vm_error(e, &function.linkage))
+                })
+                .collect::<Result<Vec<_>, Mode::Error>>()?;
+            let result = self.execute_function_bypass_visibility_with_vm(
+                vm,
+                &function.original_mid,
+                &function.name,
+                ty_args,
+                args,
+                &function.linkage,
+                trace_builder_opt,
+            )?;
+            self.take_user_events(
+                vm,
+                function.version_mid,
+                function.definition_index,
+                function.instruction_length,
+                &function.linkage,
+            )?;
+            Ok::<Vec<CtxValue>, Mode::Error>(result)
+        })
     }
 
     fn execute_function_bypass_visibility_with_vm(
