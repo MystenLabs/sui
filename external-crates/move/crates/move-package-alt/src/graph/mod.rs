@@ -377,7 +377,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
+        graph.make_ephemeral(overrides, &Vanilla::new(), &DEFAULT_ENV_ID.to_string());
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -418,7 +418,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
+        graph.make_ephemeral(overrides, &Vanilla::new(), &DEFAULT_ENV_ID.to_string());
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -461,7 +461,7 @@ mod tests {
             PublishedID::from(4),
         )]);
 
-        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
+        graph.make_ephemeral(overrides, &Vanilla::new(), &DEFAULT_ENV_ID.to_string());
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
@@ -499,7 +499,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
+        graph.make_ephemeral(overrides, &Vanilla::new(), &DEFAULT_ENV_ID.to_string());
         assert!(graph.get_package(&"a".to_string()).published().is_none());
     }
 
@@ -521,7 +521,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
+        graph.make_ephemeral(overrides, &Vanilla::new(), &DEFAULT_ENV_ID.to_string());
         assert!(graph.get_package(&"a".to_string()).published().is_none());
     }
 
@@ -545,7 +545,7 @@ mod tests {
 
         let overrides = BTreeMap::new();
 
-        graph.make_ephemeral(overrides, &Vanilla, &DEFAULT_ENV_ID.to_string());
+        graph.make_ephemeral(overrides, &Vanilla::new(), &DEFAULT_ENV_ID.to_string());
         assert_eq!(
             graph
                 .get_package(&"a".to_string())
