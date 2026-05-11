@@ -6220,6 +6220,16 @@
               "null"
             ]
           },
+          "errorMetadata": {
+            "description": "Structured execution error metadata from executing the transactions",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "events": {
             "description": "Events that likely would be generated if the transaction is actually run.",
             "type": "array",
@@ -6305,6 +6315,16 @@
           },
           "effects": {
             "$ref": "#/components/schemas/TransactionBlockEffects"
+          },
+          "errorMetadata": {
+            "description": "Structured execution error metadata from executing the transaction.",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "events": {
             "type": "array",
@@ -11325,6 +11345,16 @@
                 "type": "null"
               }
             ]
+          },
+          "errorMetadata": {
+            "description": "Structured execution error metadata from executing the transaction.",
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": {
+              "type": "string"
+            }
           },
           "errors": {
             "type": "array",

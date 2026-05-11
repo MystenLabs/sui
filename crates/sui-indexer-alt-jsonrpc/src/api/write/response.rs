@@ -105,6 +105,7 @@ pub(super) async fn dry_run(
         balance_changes: balance_changes(executed_tx)?,
         input: input(ctx, tx_data, vec![]).await?.data,
         execution_error_source: None,
+        error_metadata: None,
         suggested_gas_price,
     })
 }

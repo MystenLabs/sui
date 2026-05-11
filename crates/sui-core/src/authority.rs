@@ -2479,6 +2479,7 @@ impl AuthorityState {
                 object_changes,
                 balance_changes,
                 execution_error_source,
+                error_metadata: None,
             },
             written_with_kind,
             effects,
