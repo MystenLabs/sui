@@ -65,8 +65,11 @@ use sui_types::transaction::VerifiedTransaction;
 use crate::Node;
 use crate::seed::SeedManifest;
 
-/// Directory name appended to config/home fallbacks for the default filesystem store base.
-const DATA_STORE_DIR: &str = ".sui_fork_data";
+/// Environment variable name for an explicit fork data store.
+const FORK_DATA_DIR: &str = "FORK_DATA_STORE";
+/// Directory name appended to XDG_DATA_HOME or $HOME on Unix, or %APPDATA% on Windows, when an
+/// explicit data directory is not provided.
+const DATA_DIR: &str = "sui_fork_data";
 /// Per-chain object storage directory.
 const OBJECTS_DIR: &str = "objects";
 /// Per-chain secondary indices directory.
@@ -178,24 +181,40 @@ impl FilesystemStore {
         Self::base_path_from_env(|key| env::var(key))
     }
 
+    /// Resolve the default base path for on-disk storage, using the provided `get_env` function to
+    /// access environment variables. This indirection allows tests to inject custom environment
+    /// values without modifying the actual process environment.
+    ///
+    /// The resolution logic is as follows:
+    /// 1. If `FORK_DATA_STORE` is set, use its value as the base path.
+    /// 2. Otherwise, find a default data directory.
     fn base_path_from_env(
-        mut get_env: impl FnMut(&str) -> Result<String, env::VarError>,
+        get_env: impl FnOnce(&str) -> Result<String, env::VarError>,
     ) -> Result<PathBuf, Error> {
-        if let Ok(dir) = get_env("FORKING_DATA_STORE") {
+        if let Ok(dir) = get_env(FORK_DATA_DIR) {
             return Ok(PathBuf::from(dir));
         }
 
-        let home_dir = get_env("SUI_CONFIG_DIR")
-            .or_else(|_| get_env("HOME"))
-            .or_else(|_| get_env("USERPROFILE"))
-            .map_err(|_| {
-                anyhow!(
-                    "Cannot determine home directory. Define a FORKING_DATA_STORE environment variable"
-                )
-            })?;
-        Ok(PathBuf::from(home_dir).join(DATA_STORE_DIR))
+        Self::default_data_root()
     }
 
+    #[cfg(unix)]
+    fn default_data_root() -> anyhow::Result<PathBuf> {
+        if let Some(data_dir) = std::env::var_os("XDG_DATA_HOME") {
+            return Ok(PathBuf::from(data_dir).join(DATA_DIR));
+        }
+
+        let home = std::env::var_os("HOME").context("could not find $HOME directory")?;
+        Ok(PathBuf::from(home).join(format!(".{}", DATA_DIR)))
+    }
+
+    #[cfg(windows)]
+    fn default_data_root() -> anyhow::Result<PathBuf> {
+        let app_data = std::env::var_os("APPDATA").context("could not find %APPDATA% directory")?;
+        Ok(PathBuf::from(app_data).join(DATA_DIR))
+    }
+
+    /// Construct the default root directory for a given node and fork checkpoint.
     fn default_root(
         node: &Node,
         forked_at_checkpoint: CheckpointSequenceNumber,
@@ -207,6 +226,7 @@ impl FilesystemStore {
         ))
     }
 
+    /// Construct the path from base path joined with `{network_name}/forked_at_{checkpoint}`.
     fn root_from_base(
         base: PathBuf,
         node: &Node,

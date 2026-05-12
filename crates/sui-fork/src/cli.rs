@@ -51,7 +51,8 @@ enum Command {
         #[arg(long)]
         checkpoint: Option<u64>,
 
-        /// Exact directory for on-disk storage
+        /// Optional directory where to store the fork data. If none is provided, a default
+        /// directory is used based on `XDG_DATA_HOME` or `HOME` env variables (APPData on Windows).
         #[arg(long)]
         data_dir: Option<PathBuf>,
 

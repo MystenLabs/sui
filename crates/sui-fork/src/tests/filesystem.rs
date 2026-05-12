@@ -49,7 +49,7 @@ fn explicit_data_dir_is_used_as_store_root() {
 #[test]
 fn default_root_appends_network_and_checkpoint_to_base_path() {
     let dir = tempfile::tempdir().expect("failed to create tempdir");
-    let base = dir.path().join(DATA_STORE_DIR);
+    let base = dir.path().join(DATA_DIR);
 
     let root = FilesystemStore::root_from_base(base.clone(), &crate::Node::Testnet, 99);
 
@@ -59,27 +59,12 @@ fn default_root_appends_network_and_checkpoint_to_base_path() {
 #[test]
 fn forking_data_store_env_is_used_as_default_base_path_directly() {
     let base = FilesystemStore::base_path_from_env(|key| match key {
-        "FORKING_DATA_STORE" => Ok("/tmp/custom-fork-base".to_owned()),
+        "FORK_DATA_STORE" => Ok("/tmp/custom-fork-base".to_owned()),
         _ => Err(std::env::VarError::NotPresent),
     })
     .unwrap();
 
     assert_eq!(base, std::path::PathBuf::from("/tmp/custom-fork-base"));
-}
-
-#[test]
-fn config_and_home_fallbacks_append_default_store_dir() {
-    let base = FilesystemStore::base_path_from_env(|key| match key {
-        "SUI_CONFIG_DIR" => Ok("/tmp/sui-config".to_owned()),
-        _ => Err(std::env::VarError::NotPresent),
-    })
-    .unwrap();
-
-    assert_eq!(
-        base,
-        std::path::PathBuf::from("/tmp/sui-config").join(".sui_fork_data")
-    );
-    assert_eq!(DATA_STORE_DIR, ".sui_fork_data");
 }
 
 fn make_object(id: ObjectID, version: u64) -> Object {

@@ -97,6 +97,9 @@ pub(crate) fn resolve_start_checkpoint_from_local(
 /// instance from the highest checkpoint already persisted locally. Also builds
 /// the checkpoint subscription broker; the returned handle must be passed to
 /// [`run`] so the gRPC server exposes the streaming RPC.
+///
+/// `data_dir` is the root folder where the fork state is persisted. If `None`, a default path is
+/// used. See the `[FileSystemStore]` docs for details.
 pub async fn initialize(
     node: Node,
     forked_at_checkpoint: CheckpointSequenceNumber,
