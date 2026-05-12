@@ -7,7 +7,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 pub const BUCKET_ID_WIDTH: usize = 10;
 /// Number of tx_sequence_numbers per bitmap bucket. Tied to SCHEMA_VERSION —
 /// changing this requires a version bump and backfill into the new version prefix.
-pub const BUCKET_SIZE: u64 = 65536;
+pub const BUCKET_SIZE: u64 = 1_048_576;
 
 pub mod col {
     pub const BITMAP: &str = "b";

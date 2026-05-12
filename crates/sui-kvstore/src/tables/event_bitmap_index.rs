@@ -30,7 +30,7 @@ pub const NAME: &str = "event_bitmap_index";
 pub const SCHEMA_VERSION: u32 = 1;
 pub const BUCKET_ID_WIDTH: usize = 12;
 /// Number of packed `event_seq`s per bitmap bucket.
-pub const BUCKET_SIZE: u64 = 8_388_608;
+pub const BUCKET_SIZE: u64 = 33_554_432;
 
 /// Number of low bits of `event_seq` reserved for the per-tx event index.
 pub const EVENT_BITS: u32 = 16;
