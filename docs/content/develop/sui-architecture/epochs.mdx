@@ -24,6 +24,6 @@ Reconfiguration is a critical process occurring at the end of each epoch. It inv
 
 ## Object versioning across epochs
 
-Sui's [object versioning](/develop/objects/versioning) ensures that each object update writes a new version. For address-owned fastpath objects, validators sign transactions against a specific object version. For shared and party objects, consensus determines the next version during scheduling.
+Sui's [object versioning](/develop/objects/versioning) ensures that each object update writes a new version. For address-owned and immutable objects, transactions reference a specific object version. For consensus-managed objects, including shared objects and consensus-address-owned party objects, consensus determines the next version during scheduling.
 
 Applications should avoid submitting conflicting transactions that use the same owned object concurrently. Depending on how validator reservations are split, one transaction might be rejected because the object version is already reserved, or competing transactions can equivocate the object until the next epoch. Prefer a single [programmable transaction block](/develop/transactions/ptbs/building-ptb) for related operations, or use SDK/client execution helpers that manage object and gas coin concurrency for you.

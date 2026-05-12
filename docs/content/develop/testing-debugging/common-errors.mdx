@@ -362,7 +362,7 @@ Indicates that competing transactions used the same mutable owned object version
 
 ##### Solution
 
-Wait for the next epoch, then rebuild the transaction using current object references. Avoid submitting multiple concurrent transactions that use the same mutable owned object version. Use independent owned objects for parallel work, combine related operations into one PTB, or use SDK/client helpers that manage gas coins and object dependencies.
+Wait for the next epoch, then rebuild the transaction using current object references. Avoid submitting multiple concurrent transactions that use the same mutable owned object version. Use independent owned objects for parallel work, combine related operations into one PTB, or use SDK and client helpers that manage gas coins and object dependencies.
 
 **Resources**
 
