@@ -6,7 +6,9 @@
 //! lives under `src/tests/` but remains a child of the `filesystem` module
 //! and has full `super::*` access to crate-private items.
 
+use std::ffi::OsString;
 use std::fs;
+use std::path::PathBuf;
 
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -56,15 +58,47 @@ fn default_root_appends_network_and_checkpoint_to_base_path() {
     assert_eq!(root, base.join("testnet").join("forked_at_99"));
 }
 
-#[test]
-fn forking_data_store_env_is_used_as_default_base_path_directly() {
-    let base = FilesystemStore::base_path_from_env(|key| match key {
-        "FORK_DATA_STORE" => Ok("/tmp/custom-fork-base".to_owned()),
-        _ => Err(std::env::VarError::NotPresent),
-    })
-    .unwrap();
+#[cfg(unix)]
+fn env_value(vars: &[(&str, &str)], key: &str) -> Option<OsString> {
+    vars.iter()
+        .find_map(|(name, value)| (*name == key).then(|| OsString::from(*value)))
+}
 
-    assert_eq!(base, std::path::PathBuf::from("/tmp/custom-fork-base"));
+#[cfg(unix)]
+#[test]
+fn fork_data_store_env_takes_precedence_over_xdg_and_home() {
+    let vars = [
+        (FORK_DATA_STORE, "/tmp/custom-fork-base"),
+        ("XDG_DATA_HOME", "/tmp/xdg-data"),
+        ("HOME", "/tmp/home"),
+    ];
+
+    let base = FilesystemStore::base_path_from_env(|key| env_value(&vars, key)).unwrap();
+
+    assert_eq!(base, PathBuf::from("/tmp/custom-fork-base"));
+}
+
+#[cfg(unix)]
+#[test]
+fn xdg_data_home_env_takes_precedence_over_home() {
+    let vars = [("XDG_DATA_HOME", "/tmp/xdg-data"), ("HOME", "/tmp/home")];
+
+    let base = FilesystemStore::base_path_from_env(|key| env_value(&vars, key)).unwrap();
+
+    assert_eq!(base, PathBuf::from("/tmp/xdg-data").join(DATA_DIR));
+}
+
+#[cfg(unix)]
+#[test]
+fn home_env_is_used_when_no_override_or_xdg_data_home() {
+    let vars = [("HOME", "/tmp/home")];
+
+    let base = FilesystemStore::base_path_from_env(|key| env_value(&vars, key)).unwrap();
+
+    assert_eq!(
+        base,
+        PathBuf::from("/tmp/home").join(format!(".{}", DATA_DIR))
+    );
 }
 
 fn make_object(id: ObjectID, version: u64) -> Object {

@@ -31,6 +31,7 @@
 //!     - seed_manifest.json             (JSON fork metadata and optional seed metadata)
 
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::io::ErrorKind;
 use std::io::Write as _;
@@ -66,7 +67,7 @@ use crate::Node;
 use crate::seed::SeedManifest;
 
 /// Environment variable name for an explicit fork data store.
-const FORK_DATA_DIR: &str = "FORK_DATA_STORE";
+const FORK_DATA_STORE: &str = "FORK_DATA_STORE";
 /// Directory name appended to XDG_DATA_HOME or $HOME on Unix, or %APPDATA% on Windows, when an
 /// explicit data directory is not provided.
 const DATA_DIR: &str = "sui_fork_data";
@@ -178,7 +179,7 @@ impl FilesystemStore {
 
     /// Resolve the default base path for on-disk storage.
     pub(crate) fn base_path() -> Result<PathBuf, Error> {
-        Self::base_path_from_env(|key| env::var(key))
+        Self::base_path_from_env(|key| env::var_os(key))
     }
 
     /// Resolve the default base path for on-disk storage, using the provided `get_env` function to
@@ -187,30 +188,35 @@ impl FilesystemStore {
     ///
     /// The resolution logic is as follows:
     /// 1. If `FORK_DATA_STORE` is set, use its value as the base path.
-    /// 2. Otherwise, find a default data directory.
+    /// 2. On Unix, if `XDG_DATA_HOME` is set, append the default data directory name.
+    /// 3. Otherwise, fall back to the platform's home data directory.
     fn base_path_from_env(
-        get_env: impl FnOnce(&str) -> Result<String, env::VarError>,
+        mut get_env: impl FnMut(&str) -> Option<OsString>,
     ) -> Result<PathBuf, Error> {
-        if let Ok(dir) = get_env(FORK_DATA_DIR) {
+        if let Some(dir) = get_env(FORK_DATA_STORE) {
             return Ok(PathBuf::from(dir));
         }
 
-        Self::default_data_root()
+        Self::default_data_root_from_env(get_env)
     }
 
     #[cfg(unix)]
-    fn default_data_root() -> anyhow::Result<PathBuf> {
-        if let Some(data_dir) = std::env::var_os("XDG_DATA_HOME") {
+    fn default_data_root_from_env(
+        mut get_env: impl FnMut(&str) -> Option<OsString>,
+    ) -> anyhow::Result<PathBuf> {
+        if let Some(data_dir) = get_env("XDG_DATA_HOME") {
             return Ok(PathBuf::from(data_dir).join(DATA_DIR));
         }
 
-        let home = std::env::var_os("HOME").context("could not find $HOME directory")?;
+        let home = get_env("HOME").context("could not find $HOME directory")?;
         Ok(PathBuf::from(home).join(format!(".{}", DATA_DIR)))
     }
 
     #[cfg(windows)]
-    fn default_data_root() -> anyhow::Result<PathBuf> {
-        let app_data = std::env::var_os("APPDATA").context("could not find %APPDATA% directory")?;
+    fn default_data_root_from_env(
+        mut get_env: impl FnMut(&str) -> Option<OsString>,
+    ) -> anyhow::Result<PathBuf> {
+        let app_data = get_env("APPDATA").context("could not find %APPDATA% directory")?;
         Ok(PathBuf::from(app_data).join(DATA_DIR))
     }
 
