@@ -45,8 +45,11 @@ const C11: vector<u8> = vector[99u8, 97u8, 116u8];
 // -- functions -- 
 
 public entry fun burn(l0: 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT, l1: &mut 0x2::tx_context::TxContext) {
-    0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT { id: reg_1, name: reg_2, description: reg_3, url: reg_4 } = l0;
-    0x2::object::delete(reg_1 : 0x2::object::UID)
+    {
+        let 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT { id: reg_1, name: reg_2, description: reg_3, url: reg_4 } = l0;
+        0x2::object::delete(reg_1 : 0x2::object::UID);
+        return
+    }
 }
 
 public fun description(l0: &0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT): &0x1::string::String {
