@@ -242,6 +242,27 @@ fn events_table_options(
     options
 }
 
+fn table_options_with_overrides(
+    index_options: IndexStoreOptions,
+) -> typed_store::rocks::DBMapTableConfigMap {
+    // When typed-store receives any per-table override map, tables omitted from that map fall back
+    // to raw `typed_store::rocks::default_db_options()` rather than their `default_options_override_fn`.
+    // Populate every table explicitly so rpc-index defaults, including disabled write throttling,
+    // are preserved when only a few tables need custom options.
+    let mut table_options = IndexStoreTables::describe_tables()
+        .into_iter()
+        .map(|(table_name, _)| (table_name, default_table_options()))
+        .collect::<BTreeMap<_, _>>();
+
+    table_options.insert("balance".to_string(), balance_table_options());
+    table_options.insert(
+        "events_by_stream".to_string(),
+        events_table_options(index_options.events_compaction_filter),
+    );
+
+    DBMapTableConfigMap::new(table_options)
+}
+
 fn balance_delta_merge_operator(
     _key: &[u8],
     existing_val: Option<&[u8]>,
@@ -344,7 +365,10 @@ struct IndexStoreTables {
     ///
     /// Only contains entries for transactions which have yet to be pruned from the main database.
     #[default_options_override_fn = "default_table_options"]
-    #[allow(unused)]
+    #[expect(
+        dead_code,
+        reason = "deprecated table is kept so typed-store can drop the column family"
+    )]
     #[deprecated]
     transactions: DBMap<TransactionDigest, TransactionInfo>,
 
@@ -447,18 +471,11 @@ impl IndexStoreTables {
         path: P,
         index_options: IndexStoreOptions,
     ) -> Self {
-        let mut table_options = std::collections::BTreeMap::new();
-        table_options.insert("balance".to_string(), balance_table_options());
-        table_options.insert(
-            "events_by_stream".to_string(),
-            events_table_options(index_options.events_compaction_filter),
-        );
-
         IndexStoreTables::open_tables_read_write_with_deprecation_option(
             path.into(),
             MetricConf::new("rpc-index"),
             None,
-            Some(DBMapTableConfigMap::new(table_options)),
+            Some(table_options_with_overrides(index_options)),
             true, // remove deprecated tables
         )
     }
@@ -1869,6 +1886,23 @@ mod tests {
     use super::*;
     use std::sync::atomic::AtomicU64;
     use sui_types::base_types::SuiAddress;
+
+    #[test]
+    fn test_table_options_with_overrides_includes_all_tables() {
+        let options = table_options_with_overrides(IndexStoreOptions::default()).to_map();
+        let expected_tables = IndexStoreTables::describe_tables()
+            .into_iter()
+            .map(|(table_name, _)| table_name)
+            .collect::<Vec<_>>();
+
+        for table_name in &expected_tables {
+            assert!(
+                options.contains_key(table_name),
+                "missing rpc-index table options for {table_name}"
+            );
+        }
+        assert_eq!(options.len(), expected_tables.len());
+    }
 
     #[tokio::test]
     async fn test_events_compaction_filter() {
