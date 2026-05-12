@@ -61,11 +61,7 @@ impl GitError {
         }
     }
 
-    pub(crate) fn io_error(
-        cmd: &dyn Debug,
-        cwd: &Option<&PathBuf>,
-        error: std::io::Error,
-    ) -> Self {
+    pub(crate) fn io_error(cmd: &dyn Debug, cwd: &Option<&PathBuf>, error: std::io::Error) -> Self {
         Self::command_error(cmd, cwd, CommandErrorKind::IoError(error))
     }
 

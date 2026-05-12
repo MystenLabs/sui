@@ -400,7 +400,9 @@ pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitR
     debug!("running `{}`", display_std_cmd(&cmd));
     debug!("  in directory `{:?}`", cmd.get_current_dir());
 
-    let output = cmd.output().map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
+    let output = cmd
+        .output()
+        .map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
 
     if !output.stderr.is_empty() {
         user_info!("output from `{}`", display_std_cmd(&cmd));
