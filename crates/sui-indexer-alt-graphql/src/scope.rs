@@ -34,12 +34,13 @@ use crate::task::watermark::Watermarks;
 pub(crate) type ExecutionObjectMap =
     Arc<BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>>;
 
-/// Where object lookups in this scope draw their data from. Encodes the mutually exclusive
-/// modes a [`Scope`] can be in. Indexed mode hits the database/kv_loader (no in-memory payload).
-/// Executed mode is the mutation/simulate path, with a freshly executed transaction's outputs.
-/// Streamed mode is the subscription path, with an in-memory checkpoint payload.
+/// Where in-memory lookups (objects, transaction contents, etc.) in this scope draw their data
+/// from. Encodes the mutually exclusive modes a [`Scope`] can be in. Indexed mode hits the
+/// database/kv_loader (no in-memory payload). Executed mode is the mutation/simulate path, with a
+/// freshly executed transaction's outputs. Streamed mode is the subscription path, with an
+/// in-memory checkpoint payload.
 #[derive(Clone)]
-pub(crate) enum ObjectSource {
+pub(crate) enum DataSource {
     /// Reads go through the indexed-checkpoint path (kv_loader / DB). No in-memory payload.
     Indexed,
     /// A freshly executed transaction's input/output objects.
@@ -95,8 +96,8 @@ pub(crate) struct Scope {
     /// This can be expressed either in terms of a specific object version or a checkpoint.
     root_bound: Option<RootBound>,
 
-    /// Where object lookups in this scope draw their data from. See [`ObjectSource`].
-    object_source: ObjectSource,
+    /// Where in-memory lookups in this scope draw their data from. See [`DataSource`].
+    data_source: DataSource,
 
     /// Access to packages for type resolution.
     package_store: Arc<dyn PackageStore>,
@@ -117,7 +118,7 @@ impl Scope {
             checkpoint_viewed_at: Some(watermark.high_watermark().checkpoint()),
             tx_sequence_number_viewed_at: None,
             root_bound: None,
-            object_source: ObjectSource::Indexed,
+            data_source: DataSource::Indexed,
             package_store: package_store.clone(),
             resolver_limits: limits.package_resolver(),
         })
@@ -134,7 +135,7 @@ impl Scope {
             checkpoint_viewed_at: None,
             tx_sequence_number_viewed_at: None,
             root_bound: None,
-            object_source: ObjectSource::Streamed {
+            data_source: DataSource::Streamed {
                 checkpoint: streamed_checkpoint,
             },
             package_store,
@@ -153,7 +154,7 @@ impl Scope {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             tx_sequence_number_viewed_at: Some(tx_sequence_number_viewed_at),
             root_bound: self.root_bound,
-            object_source: self.object_source.clone(),
+            data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -179,7 +180,7 @@ impl Scope {
             checkpoint_viewed_at: Some(0),
             tx_sequence_number_viewed_at: None,
             root_bound: None,
-            object_source: ObjectSource::Indexed,
+            data_source: DataSource::Indexed,
             package_store: Arc::new(EmptyPackageStore),
             resolver_limits: Limits::default().package_resolver(),
         }
@@ -198,7 +199,7 @@ impl Scope {
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
             tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
             root_bound: self.root_bound,
-            object_source: self.object_source.clone(),
+            data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
@@ -210,7 +211,7 @@ impl Scope {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
             root_bound: Some(RootBound::Version(root_version)),
-            object_source: self.object_source.clone(),
+            data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -222,7 +223,7 @@ impl Scope {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
             root_bound: Some(RootBound::Checkpoint(root_checkpoint)),
-            object_source: self.object_source.clone(),
+            data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -234,7 +235,7 @@ impl Scope {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
             tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
             root_bound: None,
-            object_source: self.object_source.clone(),
+            data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         }
@@ -277,27 +278,27 @@ impl Scope {
     }
 
     /// Lookup a transaction by digest within the streamed checkpoint backing this scope.
-    /// Returns `None` if the scope is not in [`ObjectSource::Streamed`] mode, or if no
+    /// Returns `None` if the scope is not in [`DataSource::Streamed`] mode, or if no
     /// transaction with that digest exists in the checkpoint.
     pub(crate) fn streamed_transaction_by_digest(
         &self,
         digest: TransactionDigest,
     ) -> Option<&ProcessedTransaction> {
-        match &self.object_source {
-            ObjectSource::Streamed { checkpoint } => checkpoint.transaction_by_digest(digest),
-            ObjectSource::Indexed | ObjectSource::Executed { .. } => None,
+        match &self.data_source {
+            DataSource::Streamed { checkpoint } => checkpoint.transaction_by_digest(digest),
+            DataSource::Indexed | DataSource::Executed { .. } => None,
         }
     }
 
     /// The execution objects map active for object lookups in this scope. Resolves through the
-    /// scope's [`ObjectSource`]: in `Streamed` mode, looks up the per-tx map for the transaction
+    /// scope's [`DataSource`]: in `Streamed` mode, looks up the per-tx map for the transaction
     /// identified by `tx_sequence_number_viewed_at`; in `Executed` mode, returns the freshly
     /// extracted map; in `Indexed` mode, returns `None` so callers fall through to the DB.
     fn execution_objects_in_view(&self) -> Option<&ExecutionObjectMap> {
-        match &self.object_source {
-            ObjectSource::Indexed => None,
-            ObjectSource::Executed { execution_objects } => Some(execution_objects),
-            ObjectSource::Streamed { checkpoint } => checkpoint
+        match &self.data_source {
+            DataSource::Indexed => None,
+            DataSource::Executed { execution_objects } => Some(execution_objects),
+            DataSource::Streamed { checkpoint } => checkpoint
                 .transaction(self.tx_sequence_number_viewed_at?)
                 .map(|t| &t.execution_objects),
         }
@@ -339,7 +340,7 @@ impl Scope {
             checkpoint_viewed_at: None,
             tx_sequence_number_viewed_at: None,
             root_bound: self.root_bound,
-            object_source: ObjectSource::Executed { execution_objects },
+            data_source: DataSource::Executed { execution_objects },
             package_store: self.package_store.clone(),
             resolver_limits: self.resolver_limits.clone(),
         })
