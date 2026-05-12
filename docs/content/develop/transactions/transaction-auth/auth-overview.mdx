@@ -1,7 +1,23 @@
 ---
 title: Signing and Sending Transactions
 description: Understanding cryptographic keys, addresses, and signatures on Sui. Sui supports multiple cryptography algorithms and primitives with rapid switching between them.
-keywords: [ authentication, keys, addresses, signatures, Ed25519, ECDSA, multisig, zkLogin, passkey, BIP-32, BIP-44, BIP-39, key derivation, signature requirements ]
+keywords:
+  [
+    authentication,
+    keys,
+    addresses,
+    signatures,
+    Ed25519,
+    ECDSA,
+    multisig,
+    zkLogin,
+    passkey,
+    BIP-32,
+    BIP-44,
+    BIP-39,
+    key derivation,
+    signature requirements,
+  ]
 ---
 
 Transaction authentication on Sui involves three core concepts: cryptographic keys that you control, addresses that identify accounts onchain, and signatures that prove ownership. Sui implements these concepts using widely accepted wallet specifications and multiple signature schemes.
@@ -28,7 +44,7 @@ $$
 
 In this structure, the slashes indicate levels in the hierarchy.
 
-The `purpose` level distinguishes different signing schemes: 
+The `purpose` level distinguishes different signing schemes:
 
 - `44` for Ed25519
 
@@ -47,8 +63,8 @@ Account-based currencies define only the first 3 levels, while UTXO-based curren
 | Scheme          | Path                                         | Comments                                       |
 | --------------- | -------------------------------------------- | ---------------------------------------------- |
 | Ed25519         | `m/44'/784'/{account}'/{change}'/{address}'` | Each level of the derivation path is hardened. |
-| ECDSA Secp256k1 | `m/54'/784'/{account}'/{change}/{address}`   | The first 3 levels are hardened.           |
-| ECDSA Secp256r1 | `m/74'/784'/{account}'/{change}/{address}`   | The first 3 levels are hardened.           |
+| ECDSA Secp256k1 | `m/54'/784'/{account}'/{change}/{address}`   | The first 3 levels are hardened.               |
+| ECDSA Secp256r1 | `m/74'/784'/{account}'/{change}/{address}`   | The first 3 levels are hardened.               |
 
 ### Mnemonics support
 
@@ -76,14 +92,14 @@ A Sui signature consists of three components concatenated together:
 
 The following table lists each signing scheme and its corresponding flag, signature format, and public key format:
 
-| Scheme          | Flag | Signature Format | Public Key Format |
-| --------------- | ---- | ---------------- | ----------------- |
-| Pure Ed25519    | 0x00 | Compressed, 64 bytes | Compressed, 32 bytes |
-| ECDSA Secp256k1 | 0x01 | Non-recoverable, compressed, 64 bytes | Compressed, 33 bytes |
-| ECDSA Secp256r1 | 0x02 | Non-recoverable, compressed, 64 bytes | Compressed, 33 bytes |
-| multisig        | 0x03 | BCS serialized all signatures, size varies | BCS serialized all participating public keys, size varies |
-| zkLogin         | 0x05 | BCS serialized zkLogin inputs, max epoch and ephemeral signature, size varies | Concatenation of iss length, iss bytes, address seed padded to 32-bytes, size varies |
-| passkey         | 0x06 | BCS serialized passkey inputs (`authenticatorData`, `clientDataJson`, `userSignature`), size varies | Compressed, 33 bytes |
+| Scheme          | Flag | Signature Format                                                                                    | Public Key Format                                                                    |
+| --------------- | ---- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Pure Ed25519    | 0x00 | Compressed, 64 bytes                                                                                | Compressed, 32 bytes                                                                 |
+| ECDSA Secp256k1 | 0x01 | Non-recoverable, compressed, 64 bytes                                                               | Compressed, 33 bytes                                                                 |
+| ECDSA Secp256r1 | 0x02 | Non-recoverable, compressed, 64 bytes                                                               | Compressed, 33 bytes                                                                 |
+| multisig        | 0x03 | BCS serialized all signatures, size varies                                                          | BCS serialized all participating public keys, size varies                            |
+| zkLogin         | 0x05 | BCS serialized zkLogin inputs, max epoch and ephemeral signature, size varies                       | Concatenation of iss length, iss bytes, address seed padded to 32-bytes, size varies |
+| passkey         | 0x06 | BCS serialized passkey inputs (`authenticatorData`, `clientDataJson`, `userSignature`), size varies | Compressed, 33 bytes                                                                 |
 
 ### Signature requirements {#signature-requirements}
 
@@ -178,7 +194,7 @@ The following high-level process describes the overall workflow for constructing
 
 1. Construct the transaction data by creating a `Transaction` where multiple commands are chained. See [Building Programmable Transaction Blocks](/develop/transactions/ptbs/building-ptb) for more information.
 
-2. The SDK's built-in gas estimation and coin selection picks the gas coin. 
+2. The SDK's built-in gas estimation and coin selection picks the gas coin.
 
 3. Sign the transaction to generate a [signature](/develop/transactions/transaction-auth/auth-overview).
 
@@ -204,7 +220,7 @@ Using the `SerialTransactionExecutor` prevents `SequenceNumber` errors by handli
 
 ### `ParallelTransactionExecutor`
 
-Use the `ParallelTransactionExecutor` when you want to process transactions with the same sender at the same time. This class creates a pool of gas coins that it manages to ensure parallel transactions don't equivocate those coins. The class tracks objects used across transactions and orders their processing so that the object inputs are also not equivocated.
+Use the `ParallelTransactionExecutor` when you want to process transactions with the same sender at the same time. This class creates and manages a pool of gas coins so parallel transactions do not reuse the same gas coin object version. The class tracks objects used across transactions and orders their processing so object inputs are not reused concurrently.
 
 ## Examples of signing transactions
 
@@ -425,12 +441,15 @@ Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corr
 ```sh
 $ sui client gas
 ```
+
 ```sh
-$ sui client transfer-sui --to $SUI_ADDRESS --sui-coin-object-id $GAS_COIN_ID --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
+$ sui client ptb --transfer-objects "[gas]" @$SUI_ADDRESS --gas-coin @$GAS_COIN_ID --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
 ```
+
 ```sh
 $ sui keytool sign --address $SUI_ADDRESS --data $TX_BYTES
 ```
+
 ```sh
 $ sui client execute-signed-tx --tx-bytes $TX_BYTES --signatures $SERIALIZED_SIGNATURE
 ```

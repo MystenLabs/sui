@@ -1,14 +1,23 @@
 ---
 title: Derived Objects
 description: Derived objects enable deterministic object addresses, Transfer-to-Object capabilities, guaranteed uniqueness, and native parallelization for building scalable composable systems on Sui.
-keywords: [ Derived objects, deterministic addresses, Transfer-to-Object, TTO, parallelization, object composition, scalability ]
+keywords:
+  [
+    Derived objects,
+    deterministic addresses,
+    Transfer-to-Object,
+    TTO,
+    parallelization,
+    object composition,
+    scalability,
+  ]
 ---
 
 Sui objects get a unique ID assigned to them upon creation. However, a derived object has a claimed ID created through the mapping of a parent object to a key. The parent object's unique onchain ID maps to an individual key, ensuring the derived object's claimed ID is both deterministic and unique. You can compute derived object IDs using the parent ID and key, both onchain and offchain, even before creating the object on the network.
 
 Parent objects can be [shared, owned, party, or wrapped](/develop/objects/object-ownership). The parent object might already exist onchain through a published package or transaction, but this is not required. You can create a new parent object in a function and immediately claim a derived object UID from a provided key. However, this workflow would not support offchain determinism because you could not know the parent UID beforehand.
 
-The key can be an address or object ID, but using a unique value is not required. You could use, for example, a finite array of numbers (`[1, 2, 3]`) as your possible keys. Doing so means that more than 1 derived object might attempt to claim an ID using the same digit as their key. 
+The key can be an address or object ID, but using a unique value is not required. You could use, for example, a finite array of numbers (`[1, 2, 3]`) as your possible keys. Doing so means that more than 1 derived object might attempt to claim an ID using the same digit as their key.
 
 Claiming the ID of derived objects requires a parent object, but the derived objects are not children of that parent. This is an important distinction because the lack of a hierarchical relationship means that using a derived object as input to a transaction does not require sequential processing through the parent. The derived object is its own entity; the parent only exists to ensure its uniqueness. This relationship provides parallelization that is not possible with parent-child relationships.
 
@@ -28,7 +37,16 @@ Claiming the ID of derived objects requires a parent object, but the derived obj
 
 - Lean SDK calls: Fewer queries minimizes the SDK codebase and improves performance through reduced network traffic (object lookups can be bundled in `multiGet` queries).
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/dJl1zlP_YR4" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+<iframe
+	width="560"
+	height="315"
+	src="https://www.youtube.com/embed/dJl1zlP_YR4"
+	title="YouTube video player"
+	frameborder="0"
+	allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+	referrerpolicy="strict-origin-when-cross-origin"
+	allowfullscreen
+></iframe>
 
 ## Core capabilities
 
@@ -60,16 +78,16 @@ These capabilities combine to enable entirely new design patterns that were prev
 
 The following matrix highlights some of the differences between using dynamic fields and derived objects. Considering the tradeoffs helps you select the optimal approach for your project.
 
-| Aspect | Derived objects | Dynamic fields |
-| --- | --- | --- |
-| Address predictability | ✅ Yes | ✅ Yes |
-| Parent required? | Only to create | ✅ Yes |
-| Ownership type | Any. Can be wrapped or shared, owned, party, or frozen. | Cannot be independently owned. Owner is always the parent. |
-| Supports receiving objects? | ✅ Yes | ❌ No |
-| Object parallelism | ✅ Yes | Limited. All writes sequenced through parent. |
-| Loading type | Static. Direct access after creation. | Dynamic. They are loaded through the parent. |
-| Supports deletion? | ✅ Yes | ✅ Yes |
-| Supports reclaiming? | ❌ Currently no | ✅ Yes |
+| Aspect                      | Derived objects                                         | Dynamic fields                                             |
+| --------------------------- | ------------------------------------------------------- | ---------------------------------------------------------- |
+| Address predictability      | ✅ Yes                                                  | ✅ Yes                                                     |
+| Parent required?            | Only to create                                          | ✅ Yes                                                     |
+| Ownership type              | Any. Can be wrapped or shared, owned, party, or frozen. | Cannot be independently owned. Owner is always the parent. |
+| Supports receiving objects? | ✅ Yes                                                  | ❌ No                                                      |
+| Object parallelism          | ✅ Yes                                                  | Limited. All writes sequenced through parent.              |
+| Loading type                | Static. Direct access after creation.                   | Dynamic. They are loaded through the parent.               |
+| Supports deletion?          | ✅ Yes                                                  | ✅ Yes                                                     |
+| Supports reclaiming?        | ❌ Currently no                                         | ✅ Yes                                                     |
 
 ## `derived_object`
 
@@ -78,10 +96,11 @@ If you know the parent ID, you can compute the ID of the derived object through 
 To claim an ID using the `derived_object` module, pass the parent object and key. The `derived_object` module prevents duplication in such situations through the use of a `ClaimedStatus` enum, setting its value to `Reserved` when an ID is claimed. If 2 transactions tried to claim an ID, each using the same digit as its key, the second transaction fails because the first transaction already reserved the ID.
 
 <details>
-<summary>
-`derived_object` package source
-</summary>
-<ImportContent source="crates/sui-framework/packages/sui-framework/sources/derived_object.move" mode="code" />
+	<summary>`derived_object` package source</summary>
+	<ImportContent
+		source="crates/sui-framework/packages/sui-framework/sources/derived_object.move"
+		mode="code"
+	/>
 </details>
 
 ## Registries {#registries}
@@ -93,6 +112,8 @@ Registry structures are patterns that work particularly well with derived object
 Perhaps the biggest advantage for classic registries is the straightforward queries. This increased discoverability comes at the cost of parallelization, however, as all operations must go through the parent object.
 
 ```move
+use sui::table::{Self, Table};
+
 const EVaultAlreadyExists: u64 = 0;
 
 public struct VaultRegistry has key {
@@ -106,13 +127,13 @@ public struct Vault has key, store {
 
 // Creating a vault goes through the registry and is stored there.
 public fun new(registry: &mut VaultRegistry, ctx: &mut TxContext) {
-  assert!(!registry.vaults.contains(ctx.sender()), EVaultAlreadyExists);
+  assert!(!table::contains(&registry.vaults, ctx.sender()), EVaultAlreadyExists);
 
   let vault = Vault {
     id: object::new(ctx),
   };
 
-  registry.vaults.add(ctx.sender(), vault);
+  table::add(&mut registry.vaults, ctx.sender(), vault);
 }
 
 // Access vault through parent
@@ -121,7 +142,7 @@ public fun receive_from_vault<T key + store>(
   receiving: Receiving<T>,
   ctx: &mut TxContext,
 ): T {
-  let vault = registry.vaults.borrow_mut(ctx.sender());
+  let vault = table::borrow_mut(&mut registry.vaults, ctx.sender());
 
   let obj = transfer::public_receive(&mut vault.id, receiving);
 
@@ -134,6 +155,8 @@ public fun receive_from_vault<T key + store>(
 If parallelization is an important aspect for your project, you could create a registry that uses a pointer. This approach provides good parallelization, but requires 2 sequential network hops to discover. To find a vault, you first have to find its pointer.
 
 ```move
+use sui::table::{Self, Table};
+
 const EVaultAlreadyExists: u64 = 0;
 
 public struct VaultRegistry has key {
@@ -147,13 +170,13 @@ public struct Vault has key, store {
 
 // Creating a vault goes through the registry but only a pointer to the vault is stored there.
 public fun new(registry: &mut VaultRegistry, ctx: &mut TxContext) {
-  assert!(!registry.vaults.contains(ctx.sender()), EVaultAlreadyExists);
+  assert!(!table::contains(&registry.vaults, ctx.sender()), EVaultAlreadyExists);
 
   let vault = Vault {
     id: object::new(ctx),
   };
 
-  registry.vaults.add(ctx.sender(), vault.id.to_inner());
+  table::add(&mut registry.vaults, ctx.sender(), vault.id.to_inner());
 
   transfer::transfer(vault, ctx.sender());
 }

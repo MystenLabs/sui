@@ -1,7 +1,16 @@
 ---
 title: Sponsored Transactions
 description: Sponsored transactions let you pay gas fees on behalf of another user, reducing onboarding friction for users who don't own SUI.
-keywords: [sponsored transactions, gas station, sponsor a transaction, pay gas for another address, GasData, user onboarding, gas fees]
+keywords:
+  [
+    sponsored transactions,
+    gas station,
+    sponsor a transaction,
+    pay gas for another address,
+    GasData,
+    user onboarding,
+    gas fees,
+  ]
 ---
 
 A transaction on Sui requires a gas payment to execute. The payment is a list of `0x2::coin::Coin<0x2::sui::SUI>` objects.
@@ -58,7 +67,7 @@ A few details of note for the preceding code:
 
 - `tx_signatures` in `SenderSignedTransaction` is a list of signatures. For a sponsored transaction, the list needs to contain both signatures of the user and the sponsor in some order. The signatures are signed over the entire `TransactionData`, including `GasData`.
 
-To construct a correct sponsored transaction, you must first build a `TransactionData` object. If you are neither the user or the sponsor, you pass the transaction to both parties to sign. If you're the sponsor, you sign the transaction and then pass it and the signature to the other party (in the form of `SenderSignedTransaction`) for them to sign. In practice, the latter is the more common scenario. 
+To construct a correct sponsored transaction, you must first build a `TransactionData` object. If you are neither the user or the sponsor, you pass the transaction to both parties to sign. If you're the sponsor, you sign the transaction and then pass it and the signature to the other party (in the form of `SenderSignedTransaction`) for them to sign. In practice, the latter is the more common scenario.
 
 ## Create sponsored transactions using a `GasData` object
 
@@ -80,7 +89,7 @@ A sponsor transaction using a `GasData` object involves the following steps:
 
 `GasLessTransactionData` is `TransactionData` without `GasData`. It is not a `sui-core` data structure; it is only an interface between user and sponsor.
 
-The following example constructs a `GasLessTransactionData`  object:
+The following example constructs a `GasLessTransactionData` object:
 
 ```rust
 pub struct GasLessTransactionData {
@@ -92,7 +101,7 @@ pub struct GasLessTransactionData {
 
 ### User proposed transaction
 
-You examine the transaction to verify it's within your approved applications before providing gas payment. 
+You examine the transaction to verify it's within your approved applications before providing gas payment.
 
 A user-proposed sponsored transaction involves the following steps:
 
@@ -158,25 +167,23 @@ pub fn submit_dual_signed_transaction(dual_signed_data: SenderSignedData) -> Res
 
 Sponsored transactions involve multiple parties, which introduces additional risks.
 
-### Client equivocation
+### Concurrent object use
 
-Client equivocation occurs when multiple valid transactions that share at least one owned object (such as a gas coin) at the same version are submitted to the network simultaneously.
+Sponsored transactions still need valid, current object references for both the user's inputs and the sponsor's gas payment. If another inflight transaction already uses one of those same object versions, the sponsored transaction can be rejected and must be rebuilt or re-signed with updated references.
 
-When a transaction is submitted, validators lock the owned objects at their current versions. Each validator accepts only one transaction per object version and rejects the others. Because validators might receive competing transactions in different orders, they might accept different transactions. If no single transaction receives acceptance from at least two-thirds of validators, the owned objects remain locked until the end of the epoch.
+Both the user and the sponsor can introduce this conflict:
 
-Client equivocation is rare and usually results from buggy client software. However, sponsored transactions introduce counterparty risks:
+- The user can reuse one of the transaction inputs in another inflight transaction.
 
-- A malicious user could lock the gas station's gas coin by submitting a competing transaction that uses an owned object from the gas station's signed transaction.
+- The sponsor can reuse the same gas object in another inflight sponsored transaction.
 
-- A malicious gas station could similarly lock user-owned objects.
+To reduce this risk:
 
-To mitigate these risks:
+- Sponsors should use dedicated gas coin pools and avoid reusing the same gas object in multiple inflight transactions.
 
-- Gas stations should monitor user behavior and flag anomalies.
+- Clients should avoid signing multiple transactions that use the same owned object inputs.
 
-- Both users and sponsors should consider the reputation of their counterparty.
-
-- Both parties must sign the entire `TransactionData`, including `GasData`. This prevents a third party (such as a malicious full node) from intercepting partially signed data and causing equivocation.
+- Both parties must sign the entire `TransactionData`, including `GasData`. This prevents a third party, such as a malicious full node, from intercepting partially signed data and changing the gas payment.
 
 ### Censorship
 

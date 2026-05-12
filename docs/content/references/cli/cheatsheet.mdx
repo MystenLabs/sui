@@ -1,14 +1,16 @@
 ---
 title: Sui CLI Cheat Sheet
 description: Use this cheat sheet to learn common Sui CLI commands.
-keywords: [ sui cli, common sui cli commands, cli cheat sheet, quick reference ]
+keywords: [sui cli, common sui cli commands, cli cheat sheet, quick reference]
 ---
 
 The cheat sheet highlights common Sui CLI commands.
 
 :::tip
 
-<a href="/doc/sui-cli-cheatsheet.pdf" target="_blank" rel="noreferrer">Download sheet as PDF</a>
+<a href="/doc/sui-cli-cheatsheet.pdf" target="_blank" rel="noreferrer">
+	Download sheet as PDF
+</a>
 
 :::
 
@@ -42,17 +44,23 @@ The cheat sheet highlights common Sui CLI commands.
 			<td class="w-2/3">`sui client switch --address ADDRESS`</td>
 			<td class="w-1/3">Make this the active address (accepts also an alias)</td>
 		</tr>
-		<tr> 	
+		<tr>
 			<td class="w-2/3">`sui keytool convert PRIVATE_KEY`</td>
-			<td class="w-1/3">Convert private key in Hex or Base64 to new format (Bech32 encoded 33 byte flag || private key starting with "suiprivkey")</td>
+			<td class="w-1/3">
+				Convert private key in Hex or Base64 to new format (Bech32 encoded 33 byte flag || private
+				key starting with "suiprivkey")
+			</td>
 		</tr>
 		<tr>
 			<td class="w-2/3">`sui keytool generate ed25519`</td>
 			<td class="w-1/3">Generate a new keypair with ED25519 scheme and save it to file</td>
 		</tr>
-		<tr> 	
-      <td class="w-2/3">`sui keytool import INPUT KEY_SCHEME`</td>
-			<td class="w-1/3">Add a new key to Sui CLI Keystore using either the input mnemonic phrase or a Bech32 encoded 33-byte flag || privkey starting with "suiprivkey"</td>
+		<tr>
+			<td class="w-2/3">`sui keytool import INPUT KEY_SCHEME`</td>
+			<td class="w-1/3">
+				Add a new key to Sui CLI Keystore using either the input mnemonic phrase or a Bech32 encoded
+				33-byte flag || privkey starting with "suiprivkey"
+			</td>
 		</tr>
 		<tr>
 			<td class="w-2/3">`sui keytool update-alias OLD_ALIAS NEW_ALIAS`</td>
@@ -167,7 +175,11 @@ The cheat sheet highlights common Sui CLI commands.
 		</tr>
 		<tr>
 			<td class="w-2/3">`sui move test --trace`</td>
-			<td class="w-1/3">Create an execution trace for the Move tests in the current directory. Use with the [Move Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug) extension.</td>
+			<td class="w-1/3">
+				Create an execution trace for the Move tests in the current directory. Use with the [Move
+				Trace Debugger](https://marketplace.visualstudio.com/items?itemName=mysten.move-trace-debug)
+				extension.
+			</td>
 		</tr>
 	</tbody>
 </table>
@@ -183,26 +195,56 @@ The cheat sheet highlights common Sui CLI commands.
 	</thead>
 	<tbody>
 		<tr>
-			<td class="w-2/3">`sui client call \`<br/>&nbsp;&nbsp;`--package PACKAGE \`<br/>&nbsp;&nbsp;`--module MODULE \`<br/>&nbsp;&nbsp;`--function FUNCTION`</td>
+			<td class="w-2/3">
+				`sui client call \`
+				<br />
+				&nbsp;&nbsp;`--package PACKAGE \`
+				<br />
+				&nbsp;&nbsp;`--module MODULE \`
+				<br />
+				&nbsp;&nbsp;`--function FUNCTION`
+			</td>
 			<td class="w-1/3">Call a Move package</td>
 		</tr>
 		<tr>
-			<td class="w-2/3">`sui client merge-coin \`<br/>&nbsp;&nbsp;`--primary-coin COIN_ID \`<br/>&nbsp;&nbsp;`--coin-to-merge COIN_ID`</td>
-			<td class="w-1/3">Merge two coins</td>
+			<td class="w-2/3">
+				`sui client ptb \`
+				<br />
+				&nbsp;&nbsp;`--merge-coins @PRIMARY_COIN_ID \`
+				<br />
+				&nbsp;&nbsp;`"[@COIN_ID]"`
+			</td>
+			<td class="w-1/3">Merge one or more coins into a primary coin</td>
 		</tr>
 		<tr>
-			<td class="w-2/3">`sui client split-coin \`<br/>&nbsp;&nbsp;`--coin-id COIN_ID \`<br/>&nbsp;&nbsp;`--amounts 1000`</td>
+			<td class="w-2/3">
+				`sui client ptb \`
+				<br />
+				&nbsp;&nbsp;`--split-coins @COIN_ID \`
+				<br />
+				&nbsp;&nbsp;`"[1000]"`
+			</td>
 			<td class="w-1/3">Split a coin into two coins: one with 1000 MIST and the rest</td>
 		</tr>
 		<tr>
 			<td class="w-2/3">
-				`sui client pay-sui \`<br/>&nbsp;&nbsp;`--input-coins COIN_ID \`<br/>&nbsp;&nbsp;`--recipients ADDRESS \`<br/>&nbsp;&nbsp;`--amounts 100000000`
+				`sui client ptb \`
+				<br />
+				&nbsp;&nbsp;`--split-coins gas "[100000000]" \`
+				<br />
+				&nbsp;&nbsp;`--assign coin \`
+				<br />
+				&nbsp;&nbsp;`--transfer-objects "[coin]" ADDRESS`
 			</td>
-			<td class="w-1/3">Transfer 0.1 SUI to an address and use the same coin for gas</td>
+			<td class="w-1/3">Transfer 0.1 SUI to an address using the gas coin</td>
 		</tr>
 		<tr>
-			<td class="w-2/3">`sui client transfer-sui \`<br/>&nbsp;&nbsp;`--sui-coin-object-id COIN_ID \`<br/>&nbsp;&nbsp;`--to ADDRESS`</td>
-			<td class="w-1/3">Transfer SUI object to an address and use the same coin for gas</td>
+			<td class="w-2/3">
+				`sui client ptb \`
+				<br />
+				&nbsp;&nbsp;`--transfer-objects "[gas]" ADDRESS`
+			</td>
+			<td class="w-1/3">Transfer the full gas coin balance to an address</td>
 		</tr>
 	</tbody>
 </table>

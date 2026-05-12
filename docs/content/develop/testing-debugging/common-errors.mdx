@@ -1,22 +1,22 @@
 ---
 title: Troubleshooting Common Errors
 description: Find solutions to common issues with addresses, transactions, and Move packages.
-keywords: [ address errors, package errors, system errors, transaction errors, troubleshooting ]
+keywords: [address errors, package errors, system errors, transaction errors, troubleshooting]
 ---
 
 This page provides troubleshooting solutions to common errors.
 
-## Address errors 
+## Address errors
 
 Errors in this section relate to Sui addresses.
 
 #### `Failed to build Move modules: Unresolved addresses found.`
 
-Indicates that you are trying to use a named address, such as `std` or similar, within your code or a dependency, but you have not assigned that address a value in the `Move.toml` file. 
+Indicates that you are trying to use a named address, such as `std` or similar, within your code or a dependency, but you have not assigned that address a value in the `Move.toml` file.
 
 ##### Solution
 
-Add an entry for each unresolved address to the `[addresses]` section of your `Move.toml` file. 
+Add an entry for each unresolved address to the `[addresses]` section of your `Move.toml` file.
 
 ```toml
 [addresses]
@@ -37,7 +37,7 @@ Indicates that the address you provided does not conform to a valid Sui address 
 
 - Start with `0x` and only contain hexadecimal characters (0-9, a-f, A-F).
 
-##### Solution 
+##### Solution
 
 Verify the address you provide starts with `0x`, is 64 hex digits long, and does not contain invalid characters.
 
@@ -47,7 +47,7 @@ Verify the address you provide starts with `0x`, is 64 hex digits long, and does
 
 ---
 
-## Move package errors 
+## Move package errors
 
 Errors in this section relate to Move packages.
 
@@ -55,9 +55,9 @@ Errors in this section relate to Move packages.
 
 This error occurs when the system interprets a URL string as a relative URL (`/path/to/file`), but your code expects an absolute URL (`https://example.com/path/to/file`). This error originates from the `sui::url` module that provides a `Url` struct and functions to interact with URLs. Move does not validate the format of a URL itself.
 
-##### Solution 
+##### Solution
 
-Specify the full URL path, including `http://` or `https://`. 
+Specify the full URL path, including `http://` or `https://`.
 
 **Resources**
 
@@ -75,11 +75,11 @@ Indicates that the system cannot find one or more of the dependencies you list i
 
 - Your manifest file does not exist.
 
-- You have not initialized it properly. 
+- You have not initialized it properly.
 
 ##### Solution
 
-Check your `Move.toml` and verify each dependency you list has the correct path, and each path contains a valid `Move.toml` file. Ensure there are no typos and that you have initialized all dependencies. 
+Check your `Move.toml` and verify each dependency you list has the correct path, and each path contains a valid `Move.toml` file. Ensure there are no typos and that you have initialized all dependencies.
 
 **Resources**
 
@@ -89,11 +89,11 @@ Check your `Move.toml` and verify each dependency you list has the correct path,
 
 #### `Duplicate module found: 0x0000000000000000000000000000000000000000000000000000000000000002::groth16`
 
-Indicates that you have defined two or more modules with the same name or address in your project or its dependencies. You must give each module a unique name and address combination. 
+Indicates that you have defined two or more modules with the same name or address in your project or its dependencies. You must give each module a unique name and address combination.
 
-##### Solution 
+##### Solution
 
-Verify that your source files do not use the same module name or address twice. Check your package's dependencies to see if there is a duplicate name defined. Check if you have a conflicting address assignment in the `Move.toml` file. 
+Verify that your source files do not use the same module name or address twice. Check your package's dependencies to see if there is a duplicate name defined. Check if you have a conflicting address assignment in the `Move.toml` file.
 
 **Resources**
 
@@ -107,9 +107,9 @@ Indicates that your environment or tooling cannot find a Move package at the spe
 
 - You have not published the package to the network.
 
-- Your address is incorrect. 
+- Your address is incorrect.
 
-##### Solution 
+##### Solution
 
 Verify the package exists on the network at the specified address.
 
@@ -117,9 +117,9 @@ Verify the package exists on the network at the specified address.
 
 #### `Failed to build Move modules: Compilation error.`
 
-This is a generic error that indicates that something in your Move code violates the compiler's rules and therefore the compiler cannot compile your package into bytecode. 
+This is a generic error that indicates that something in your Move code violates the compiler's rules and therefore the compiler cannot compile your package into bytecode.
 
-##### Solution 
+##### Solution
 
 Some common reasons for this error include:
 
@@ -143,10 +143,9 @@ Some common reasons for this error include:
 
 #### `Failed to publish the Move module(s), reason: Modules must all have 0x0 as their addresses.`
 
-Indicates that a module in your package does not have the address `0x0`. In Move, you must set all modules to have their self-address as `0x0` in the source code. When you publish the package, Sui automatically assigns it the correct address. 
+Indicates that a module in your package does not have the address `0x0`. In Move, you must set all modules to have their self-address as `0x0` in the source code. When you publish the package, Sui automatically assigns it the correct address.
 
-
-##### Solution 
+##### Solution
 
 Remove any explicit address blocks from your Move source files. Do not wrap your modules in `address ... { ... }` blocks.
 
@@ -158,11 +157,11 @@ Remove any explicit address blocks from your Move source files. Do not wrap your
 
 #### `The signer only expects one signature, not two`
 
-Indicates that a function you are calling in your Move module expects 1 signer argument, yet you provided 2. On Sui, the number of signer arguments in your function's signature must match the number of signers you provide. 
+Indicates that a function you are calling in your Move module expects 1 signer argument, yet you provided 2. On Sui, the number of signer arguments in your function's signature must match the number of signers you provide.
 
-##### Solution 
+##### Solution
 
-Verify if you define your function as `fun main(s: signer)`, then you must provide only 1 signer. 
+Verify if you define your function as `fun main(s: signer)`, then you must provide only 1 signer.
 
 If you want to use 2 signers, define your function as `fun main(s1: signer, s2: signer) { ... }`.
 
@@ -172,12 +171,11 @@ If you want to use 2 signers, define your function as `fun main(s1: signer, s2: 
 
 ---
 
-
 #### `destroy_zero`
 
-Indicates that you are trying to destroy a resource that has a non-zero value. 
+Indicates that you are trying to destroy a resource that has a non-zero value.
 
-##### Solution 
+##### Solution
 
 Ensure the resource's value is zero. For coins or tokens, split or burn the value until it is zero.
 
@@ -187,24 +185,23 @@ Ensure the resource's value is zero. For coins or tokens, split or burn the valu
 
 ---
 
-
 ## System errors
 
 Errors in this section relate to the system.
 
 ##### `"Segmentation fault (core dumped)"`
 
-Indicates a low-level memory crash. This is not a Move error, but rather an error with a portion of the toolchain such as the Move compiler or a dependency. 
+Indicates a low-level memory crash. This is not a Move error, but rather an error with a portion of the toolchain such as the Move compiler or a dependency.
 
-##### Solution 
+##### Solution
 
 In some situations, old or corrupted build files can cause this crash. Clean your build:
 
 ```
-$ sui move clean 
+$ sui move clean
 ```
 
-In other scenarios, outdated or mismatched tooling versions might cause this error. Upgrade your tooling and verify that versions match. 
+In other scenarios, outdated or mismatched tooling versions might cause this error. Upgrade your tooling and verify that versions match.
 
 **Resources**
 
@@ -214,13 +211,14 @@ In other scenarios, outdated or mismatched tooling versions might cause this err
 
 #### `Failed to build Move modules: Permission denied (os error 13).`
 
-This error means that Move cannot access the file or directory due to insufficient permissions. 
+This error means that Move cannot access the file or directory due to insufficient permissions.
 
-##### Solution 
+##### Solution
 
 Ensure your user account has the necessary read, write, or execute permissions for the target file or directory.
 
 On Unix and macOS systems, you can edit permissions with the `chmod` command:
+
 ```
 $ chmod -R u+rw /path/to/project/files
 ```
@@ -233,13 +231,13 @@ This gives you read and write permissions to all files and subdirectories at the
 
 ---
 
-#### `sui move build` command hangs 
+#### `sui move build` command hangs
 
-This behavior often occurs when you run commands on Windows 11 machines. 
+This behavior often occurs when you run commands on Windows 11 machines.
 
-##### Solution 
+##### Solution
 
-Try using [Windows Subsystem for Linux](https://learn.microsoft.com/en-us/windows/wsl/install) on your Windows machine instead of running commands in a Windows-native terminal. 
+Try using [Windows Subsystem for Linux](https://learn.microsoft.com/en-us/windows/wsl/install) on your Windows machine instead of running commands in a Windows-native terminal.
 
 **Resources**
 
@@ -249,18 +247,17 @@ Try using [Windows Subsystem for Linux](https://learn.microsoft.com/en-us/window
 
 ---
 
-
 #### `Fetch failed error (cause: Header Timeout)`
 
 Indicates the network does not receive a response within a certain time period. This error is not specific to Sui.
 
-##### Solution 
+##### Solution
 
-Retry the request or increase the timeout duration if you control the client. 
+Retry the request or increase the timeout duration if you control the client.
 
 ---
 
-## Transaction errors 
+## Transaction errors
 
 Errors in this section relate to transactions.
 
@@ -280,7 +277,7 @@ You see something similar to:
 
 ```
 localnet => http://0.0.0.0:9000
-testnet => https://fullnode.testnet.sui.io:443 
+testnet => https://fullnode.testnet.sui.io:443
 devnet => https://fullnode.devnet.sui.io:443 (active)
 ```
 
@@ -290,7 +287,7 @@ Then, try switching to another network:
 $ sui client switch --env testnet
 ```
 
-If this does not resolve the error, check your internet connection or restart your CLI client. 
+If this does not resolve the error, check your internet connection or restart your CLI client.
 
 **Resources**
 
@@ -300,31 +297,31 @@ If this does not resolve the error, check your internet connection or restart yo
 
 #### `Unable to process transaction. Dry run failed, could not automatically determine a budget: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }`
 
-This error occurs when a Move transaction does not have a `drop` ability, or you do not explicitly drop it. The Sui runtime system enforces resource safety that throws this error when you leave values unused at the end of a transaction. 
+This error occurs when a Move transaction does not have a `drop` ability, or you do not explicitly drop it. The Sui runtime system enforces resource safety that throws this error when you leave values unused at the end of a transaction.
 
-##### Solution 
+##### Solution
 
-In Sui Move packages, you must either transfer every value that does not have the `drop` ability to another address, explicitly destroy it, or use it as input for another function to consume. 
+In Sui Move packages, you must either transfer every value that does not have the `drop` ability to another address, explicitly destroy it, or use it as input for another function to consume.
 
 **Resources**
 
 - Learn more about [resource safety](/getting-started/onboarding/hello-world#resource-safety).
 
---- 
+---
 
 #### `Error executing transaction: VMVerificationOrDeserializationError in command 0`
 
-This is a generic error that indicates that your Move code fails either during bytecode verification or during deserialization. 
+This is a generic error that indicates that your Move code fails either during bytecode verification or during deserialization.
 
-##### Solution 
+##### Solution
 
 Some common reasons for this error include:
 
 - `ZERO_SIZED_STRUCT`: You define a struct that has no fields. Add at least one field to the struct.
 
-- `FIELD_MISSING_TYPE_ABILITY`: Your struct is missing a required ability such as `key` or `store`. Ensure all fields have the necessary abilities. 
+- `FIELD_MISSING_TYPE_ABILITY`: Your struct is missing a required ability such as `key` or `store`. Ensure all fields have the necessary abilities.
 
-- `UNKNOWN_VERSION`: Your module or enum uses a version or feature the system does not recognize. Ensure you are using supported features and the correct Sui toolchain version. 
+- `UNKNOWN_VERSION`: Your module or enum uses a version or feature the system does not recognize. Ensure you are using supported features and the correct Sui toolchain version.
 
 - `CONSTRAINT_NOT_SATISFIED`: Your struct or type parameter does not satisfy the required abilities. Add the required abilities to the struct or type.
 
@@ -342,31 +339,17 @@ Some common reasons for this error include:
 
 #### `Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction. Other transactions locking these objects`
 
-Indicates that your transaction is trying to use one or more Sui objects that another transaction already uses. When you use an object in a transaction, the system locks that object to prevent multiple, possibly conflicting modifications to an object. For DeFi objects, this prevents double-spending.
+Indicates that another inflight transaction is already using an object version your transaction also needs. Modern transaction submission rejects these conflicts instead of leaving objects locked until the next epoch.
 
-##### Solution 
+##### Solution
 
-Wait for other transactions to complete, then retry your transaction. If transactions are stuck or fail, you might need to wait for the next epoch before you can retry the transaction.
-
-Make sure your code does not use multiple objects simultaneously.
+Wait for the first transaction to finish, then rebuild or re-sign the transaction so it uses the latest object references. For related operations, combine them into one [programmable transaction block](/develop/transactions/ptbs/building-ptb). For parallel execution, use SDK/client helpers that manage gas coins and object dependencies.
 
 **Resources**
 
 - [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview)
-
----
-
-#### `Failed to sign transaction by a quorum of validators because one or more of its objects is equivocated until the next epoch.`
-
-Indicates that an object you are trying to use is in an equivocated state, meaning the network cannot reach consensus about its state due to conflicting transactions. The system subsequently freezes the object and you cannot use it until the next epoch.
-
-##### Solution 
-
-Wait for the next epoch.
-
-**Resources**
-
-- [Avoiding Equivocation](/develop/sui-architecture/epochs)
+- [Object Versioning](/develop/objects/versioning)
+- [Building Transactions](/develop/transactions/ptbs/building-ptb)
 
 ---
 
@@ -380,20 +363,19 @@ Indicates the Sui network responds to an RPC or API request with `HTTP 403: Forb
 
 - Has rate limited you by sending too many requests in a given time period.
 
-##### Solution 
+##### Solution
 
-Check for required API authentication and verify you are using a valid authentication method. Review the documentation to ensure you are following all requirements. 
+Check for required API authentication and verify you are using a valid authentication method. Review the documentation to ensure you are following all requirements.
 
-Check for rate limiting and try sending requests over a long period of time. 
+Check for rate limiting and try sending requests over a long period of time.
 
 ---
 
-
 #### `Failed to submit transaction: ErrorObject { code: ServerError(-32002), message: "Transaction validator signing failed due to issues with transaction inputs, please review the errors and try again`
 
-Indicates the Sui network rejects a transaction due to invalid transaction inputs. 
+Indicates the Sui network rejects a transaction due to invalid transaction inputs.
 
-##### Solution 
+##### Solution
 
 Ensure all objects you reference in your transaction:
 
@@ -403,7 +385,7 @@ Ensure all objects you reference in your transaction:
 
 - Are not referenced twice
 
-- Do not exceed a protocol limit of maximum objects. 
+- Do not exceed a protocol limit of maximum objects.
 
 Verify you have a sufficient gas balance and that your transaction signature is valid.
 
@@ -411,9 +393,9 @@ Verify you have a sufficient gas balance and that your transaction signature is 
 
 #### `Unable to process transaction. No valid gas coins found for the transaction.`
 
-Indicates you do not have enough tokens to pay the transaction gas fee. 
+Indicates you do not have enough tokens to pay the transaction gas fee.
 
-##### Solution 
+##### Solution
 
 Obtain tokens.
 

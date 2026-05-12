@@ -1,14 +1,23 @@
 ---
 title: Creating Displays
 description: An Object Display must be explicitly created and then maintained by the package or type owner.
-keywords: [ Object Display, object, display, display properties, object properties, sui::display, Sui utility objects ]
+keywords:
+  [
+    Object Display,
+    object,
+    display,
+    display properties,
+    object properties,
+    sui::display,
+    Sui utility objects,
+  ]
 ---
 
-:::danger
+:::info
 
-Object Display V2 will be available in Sui v1.68. Check the [release schedule](https://www.sui.io/networkinfo) to learn when v1.68 is available on Devnet, Testnet, and Mainnet.
+Object Display V2 is the current Object Display standard. If you manage a display from Move code, use the `sui::display_registry` APIs.
 
-All existing V1 displays will be migrated to V2 in a **system snapshot migration**. You do not need to do anything upfront. After the snapshot, you can claim the capability when you are ready (see [Migrating to V2](#migrating-to-v2)).
+Existing V1 displays were migrated to V2 in a system snapshot migration. If you need to manage a migrated display, claim the capability when you are ready (see [Migrating to V2](#migrating-to-v2)).
 
 :::
 
@@ -34,51 +43,39 @@ In V2, the display for type `T` has a single, deterministic ID derived from the 
 
 In Object Display V1, you could have N displays per type and had to use events to query them. In Object Display V2, there is only 1 per type and you get it by derivation.
 
-|                                | **V1**                                              | **V2**                                                                                                                                                        |
-| ------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Displays per type**          | Multiple `Display<T>` could exist.                  | Exactly one `Display<T>` per type `T`.                                                                                                                        |
-| **How you find `Display<T>`**  | Query events by type; requires historical events.   | Offline derivation. `Display<T>` is a derived object from `(DisplayRegistry UID, DisplayKey<T>)`. ID is computable from registry and type; no events, no scan. |
-| **Identity**                   | Unpredictable (per creation transaction).           | Deterministic. The same registry and same `T` result in the same display ID everywhere.                                                                       |
+|                               | **V1**                                            | **V2**                                                                                                                                                         |
+| ----------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Displays per type**         | Multiple `Display<T>` could exist.                | Exactly one `Display<T>` per type `T`.                                                                                                                         |
+| **How you find `Display<T>`** | Query events by type; requires historical events. | Offline derivation. `Display<T>` is a derived object from `(DisplayRegistry UID, DisplayKey<T>)`. ID is computable from registry and type; no events, no scan. |
+| **Identity**                  | Unpredictable (per creation transaction).         | Deterministic. The same registry and same `T` result in the same display ID everywhere.                                                                        |
 
 ## Example
 
-The `display::new<T>` call creates a `Display`, either in a custom function or module initializer, or as part of a programmable transaction. The following code sample demonstrates how to create a `Display`:
-```move
-module sui::display;
+The `display_registry::new_with_publisher<T>` call creates a V2 `Display<T>` and `DisplayCap<T>` for a type. The display object has a deterministic derived ID, and the capability authorizes future updates.
 
-/// Get a new Display object for the `T`.
-/// Publisher must be the publisher of the T, `from_package`
-/// check is performed.
-public fun new<T>(pub: &Publisher): Display<T> { /* ... */ }
+```move
+module sui::display_registry;
+
+public fun new_with_publisher<T>(
+	registry: &mut DisplayRegistry,
+	publisher: &mut Publisher,
+	ctx: &mut TxContext,
+): (Display<T>, DisplayCap<T>);
 ```
 
-After you create the `Display`, you can modify it. The following code sample demonstrates how to modify a `Display`:
+After you create the `Display<T>`, set its fields with `display_registry::set`, remove fields with `display_registry::unset`, or clear all fields with `display_registry::clear`. Each update requires the matching `DisplayCap<T>`.
+
 ```move
-module sui::display;
+module sui::display_registry;
 
-/// Sets multiple fields at once
-public fun add_multiple(
-    self: &mut Display,
-    keys: vector<String>,
-    values: vector<String>
-) { /* ... */ }
+public fun set<T>(display: &mut Display<T>, cap: &DisplayCap<T>, name: String, value: String);
 
-/// Edit a single field
-public fun edit(self: &mut Display, key: String, value: String) { /* ... */ }
+public fun unset<T>(display: &mut Display<T>, cap: &DisplayCap<T>, name: String);
 
-/// Remove a key from Display
-public fun remove(self: &mut Display, key: String ) { /* ... */ }
+public fun clear<T>(display: &mut Display<T>, cap: &DisplayCap<T>);
 ```
 
-Next, the `update_version` call applies the changes and sets the `Display` for the `T` by emitting an event. Full nodes receive the event and use the data in the event to retrieve a template for the type.
-
-The following code sample demonstrates how to use the `update_version` call:
-```move
-module sui::display;
-
-/// Update the version of Display and emit an event
-public fun update_version(self: &mut Display) { /* ... */ }
-```
+When the display is ready, share it with `display_registry::share(display)`. Unlike V1, V2 does not rely on emitting an event and then scanning historical events to discover the display.
 
 ## Object Display patterns
 
@@ -87,6 +84,7 @@ The following are examples of Object Display patterns. You can explore and inter
 ### Objects with unique static content
 
 This example demonstrates an object with static metadata that is set once during the object's mint event. If the metadata standard evolves and some ecosystem projects add new features for some properties, this object always stays in its original form and might require backward-compatible changes.
+
 ```move
 module sui::devnet_nft;
 
@@ -95,10 +93,10 @@ use std::string::String;
 /// A Collectible with a static data. URL, name, description are
 /// set only once on a mint event
 public struct DevNetNFT has key, store {
-    id: UID,
-    name: String,
-    description: String,
-    url: String,
+	id: UID,
+	name: String,
+	description: String,
+	url: String,
 }
 ```
 
@@ -109,6 +107,7 @@ A common case with in-game items is to have a large number of similar objects gr
 In some cases, users mint in-game items when a game allows them or when they purchase an in-game item. To enable this, some metadata must be created and stored in advance elsewhere, such as on [Walrus](https://docs.wal.app). This requires additional logic that is usually not related to the in-game properties of the item.
 
 The following example demonstrates how to create a `Capy` item:
+
 ```move
 module capy::capy_items;
 
@@ -117,8 +116,8 @@ use std::string::String;
 /// A wearable Capy item. For some items there can be an
 /// unlimited supply. And items with the same name are identical.
 public struct CapyItem has key, store {
-    id: UID,
-    name: String
+	id: UID,
+	name: String,
 }
 ```
 
@@ -129,6 +128,7 @@ In Sui, utility objects enable authorization for capabilities. Almost all module
 With capabilities, it is important to provide a meaningful description of objects to facilitate user interface implementation. This helps avoid accidentally transferring the wrong object when objects are similar. It also provides a user-friendly description of items that users see.
 
 The following example demonstrates how to create a capability called `capy`:
+
 ```move
 module capy::utility;
 
@@ -141,7 +141,7 @@ public struct CapyManagerCap has key, store { id: UID }
 
 :::caution
 
-All existing V1 displays are migrated to V2 in a **system snapshot migration**. You do not need to do anything upfront. After the snapshot, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
+Existing V1 displays were migrated to V2 in a **system snapshot migration**. You do not need to do anything upfront. After the snapshot, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
 
 :::
 
