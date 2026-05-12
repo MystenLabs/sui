@@ -10,19 +10,11 @@ Object Display enables onchain management of offchain representation for a type.
 
 Check out the [interactive preview application](/develop/objects/display/display-preview) to see how you can use Object Display. 
 
-## V1 end of life 
+## Current standard: Display V2
 
-:::caution
+Object Display V2 is the current Object Display standard. It replaces the legacy V1 event-discovery model with a registry-backed model where each type has one deterministic `Display<T>` derived from the global display registry and the type.
 
-Object Display V2 will be available in Sui v1.68. Check the [release schedule](https://www.sui.io/networkinfo) to learn more about when v1.68 is available on Devnet, Testnet, and Mainnet. 
-
-:::
-
-Object Display V1 will be supported by RPCs that already have support for it (JSON-RPC, GraphQL) until the **end of July 2026**. After that, onchain V1 display code will be decommissioned and will start aborting.
-
-Use the `sui::display_registry` APIs when creating display from Move code. For the intermediate phase, use the `migrate_v1_to_v2` function to migrate a legacy display and receive the V2 `Display<T>` and `DisplayCap<T>`.
-
-## What's new in V2
+Use the `sui::display_registry` APIs when creating a display from Move code. For legacy displays, use `migrate_v1_to_v2` only if you are explicitly migrating a V1 display that was not already migrated by the system snapshot.
 
 Display V2 brings a richer templating model, improved rendering pipeline, and better tooling, including:
 
@@ -34,4 +26,4 @@ Display V2 brings a richer templating model, improved rendering pipeline, and be
 
 - **GraphQL**: Rich APIs to use display as a querying tool, not just for rendering.
 
-[Read more about the new templating language and try the visual display builder](/develop/objects/display/display-preview).
+[Read more about the templating language and try the visual display builder](/develop/objects/display/display-preview).

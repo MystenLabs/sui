@@ -204,7 +204,7 @@ Using the `SerialTransactionExecutor` prevents `SequenceNumber` errors by handli
 
 ### `ParallelTransactionExecutor`
 
-Use the `ParallelTransactionExecutor` when you want to process transactions with the same sender at the same time. This class creates a pool of gas coins that it manages to ensure parallel transactions don't equivocate those coins. The class tracks objects used across transactions and orders their processing so that the object inputs are also not equivocated.
+Use the `ParallelTransactionExecutor` when you want to process transactions with the same sender at the same time. This class creates and manages a pool of gas coins so parallel transactions do not reuse the same gas coin object version. The class tracks objects used across transactions and orders their processing so object inputs are not reused concurrently.
 
 ## Examples of signing transactions
 
@@ -426,7 +426,7 @@ Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corr
 $ sui client gas
 ```
 ```sh
-$ sui client transfer-sui --to $SUI_ADDRESS --sui-coin-object-id $GAS_COIN_ID --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
+$ sui client ptb --transfer-objects "[gas]" @$SUI_ADDRESS --gas-coin @$GAS_COIN_ID --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
 ```
 ```sh
 $ sui keytool sign --address $SUI_ADDRESS --data $TX_BYTES
