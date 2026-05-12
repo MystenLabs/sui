@@ -2,10 +2,9 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::PathBuf, process::ExitStatus};
+use std::{fmt::Debug, path::PathBuf, process::ExitStatus};
 
 use thiserror::Error;
-use tokio::process::Command;
 
 use crate::package::package_lock::LockError;
 
@@ -62,23 +61,27 @@ impl GitError {
         }
     }
 
-    pub(crate) fn io_error(cmd: &Command, cwd: &Option<&PathBuf>, error: std::io::Error) -> Self {
+    pub(crate) fn io_error(
+        cmd: &dyn Debug,
+        cwd: &Option<&PathBuf>,
+        error: std::io::Error,
+    ) -> Self {
         Self::command_error(cmd, cwd, CommandErrorKind::IoError(error))
     }
 
     pub(crate) fn nonzero_exit_status(
-        cmd: &Command,
+        cmd: &dyn Debug,
         cwd: &Option<&PathBuf>,
         code: ExitStatus,
     ) -> Self {
         Self::command_error(cmd, cwd, CommandErrorKind::ErrorCode(code))
     }
 
-    pub(crate) fn non_utf_output(cmd: &Command, cwd: &Option<&PathBuf>) -> Self {
+    pub(crate) fn non_utf_output(cmd: &dyn Debug, cwd: &Option<&PathBuf>) -> Self {
         Self::command_error(cmd, cwd, CommandErrorKind::NonUtf8)
     }
 
-    fn command_error(cmd: &Command, cwd: &Option<&PathBuf>, kind: CommandErrorKind) -> Self {
+    fn command_error(cmd: &dyn Debug, cwd: &Option<&PathBuf>, kind: CommandErrorKind) -> Self {
         Self::CommandError {
             cmd: format!("{cmd:?}"),
             cwd_note: match cwd {
