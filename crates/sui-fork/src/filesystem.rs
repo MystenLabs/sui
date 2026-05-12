@@ -66,8 +66,8 @@ use sui_types::transaction::VerifiedTransaction;
 use crate::Node;
 use crate::seed::SeedManifest;
 
-/// Environment variable name for an explicit fork data store.
-const FORK_DATA_STORE: &str = "FORK_DATA_STORE";
+/// Environment variable name for an explicit fork data directory.
+const SUI_FORK_DATA_ENV: &str = "SUI_FORK_DATA";
 /// Directory name appended to XDG_DATA_HOME or $HOME on Unix, or %APPDATA% on Windows, when an
 /// explicit data directory is not provided.
 const DATA_DIR: &str = "sui_fork_data";
@@ -187,13 +187,13 @@ impl FilesystemStore {
     /// values without modifying the actual process environment.
     ///
     /// The resolution logic is as follows:
-    /// 1. If `FORK_DATA_STORE` is set, use its value as the base path.
+    /// 1. If `SUI_FORK_DATA` is set, use its value as the base path.
     /// 2. On Unix, if `XDG_DATA_HOME` is set, append the default data directory name.
     /// 3. Otherwise, fall back to the platform's home data directory.
     fn base_path_from_env(
         mut get_env: impl FnMut(&str) -> Option<OsString>,
     ) -> Result<PathBuf, Error> {
-        if let Some(dir) = get_env(FORK_DATA_STORE) {
+        if let Some(dir) = get_env(SUI_FORK_DATA_ENV) {
             return Ok(PathBuf::from(dir));
         }
 

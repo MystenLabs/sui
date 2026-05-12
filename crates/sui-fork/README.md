@@ -118,7 +118,7 @@ sui-fork start --checkpoint 12345678 --address 0x... --object 0x...
 - Without `--data-dir`, the default root is
   `{base_path}/{network}/forked_at_{checkpoint}`, where the base path is the folder based on XDG_DATA_HOME or 
   HOME on Unix systems, or AppData on Windows, and creates a `sui-fork-data` (or `.sui-fork-data`) directory.
-    `FORK_DATA_STORE` sets `{base_path}` and the rest as above.
+    `SUI_FORK_DATA` sets `{base_path}` and the rest will be as above.
 - `--address` is repeatable and seeds metadata for every object owned by that
   address at the fork checkpoint. Address seeding requires a checkpoint in the
   GraphQL object enumeration range.

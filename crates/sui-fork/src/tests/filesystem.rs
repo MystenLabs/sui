@@ -66,9 +66,9 @@ fn env_value(vars: &[(&str, &str)], key: &str) -> Option<OsString> {
 
 #[cfg(unix)]
 #[test]
-fn fork_data_store_env_takes_precedence_over_xdg_and_home() {
+fn sui_fork_data_env_takes_precedence_over_xdg_and_home() {
     let vars = [
-        (FORK_DATA_STORE, "/tmp/custom-fork-base"),
+        (SUI_FORK_DATA_ENV, "/tmp/custom-fork-base"),
         ("XDG_DATA_HOME", "/tmp/xdg-data"),
         ("HOME", "/tmp/home"),
     ];
