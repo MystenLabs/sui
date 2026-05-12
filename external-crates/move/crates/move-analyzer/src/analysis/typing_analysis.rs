@@ -63,6 +63,9 @@ pub struct TypingAnalysisContext<'a> {
     pub expression_scope: OrdMap<Symbol, LocalDef>,
     /// IDE Annotation Information from the Compiler
     pub compiler_analysis_info: &'a CompilerAnalysisInfo,
+    /// Tracks the root (outermost) macro call location for the current expansion chain.
+    /// Used to disambiguate MacroCallInfo lookups for nested macro calls.
+    pub current_macro_call_loc: Option<Loc>,
 }
 
 /// Definition of a local (or parameter)
@@ -1199,34 +1202,109 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                     };
                     true
                 }
-                TE::Unit { .. }
-                | TE::Builtin(_, _)
-                | TE::Vector(_, _, _, _)
-                | TE::IfElse(_, _, _)
-                | TE::While(_, _, _)
-                | TE::Loop { .. }
-                | TE::NamedBlock(_, _)
-                | TE::Block(_)
-                | TE::Assign(_, _, _)
-                | TE::Mutate(_, _)
-                | TE::Return(_)
-                | TE::Abort(_)
-                | TE::Give(_, _)
-                | TE::Continue(_)
-                | TE::Dereference(_)
-                | TE::UnaryExp(_, _)
-                | TE::BinopExp(_, _, _, _)
-                | TE::ExpList(_)
-                | TE::Value(_)
-                | TE::TempBorrow(_, _)
-                | TE::Cast(_, _)
-                | TE::Annotate(_, _)
-                | TE::UnresolvedError => false,
+                // All remaining expression types are handled here rather than
+                // delegating to the default visit_exp traversal. This is necessary
+                // because the macro and lambda handlers in visit_exp_custom set state
+                // (traverse_only, current_macro_call_loc) that must persist throughout
+                // the entire expression traversal. If visit_exp_inner returns false,
+                // visit_exp_custom also returns false, and the default visit_exp
+                // traversal runs AFTER the state has been restored — defeating the
+                // macro/lambda state management.
+                TE::Block(seq) | TE::NamedBlock(_, seq) => {
+                    visitor.visit_seq(exp.exp.loc, seq);
+                    true
+                }
+                TE::IfElse(e1, e2, e3_opt) => {
+                    visitor.visit_exp(e1);
+                    visitor.visit_exp(e2);
+                    if let Some(e3) = e3_opt {
+                        visitor.visit_exp(e3);
+                    }
+                    true
+                }
+                TE::While(_, e1, e2) | TE::Mutate(e1, e2) => {
+                    visitor.visit_exp(e1);
+                    visitor.visit_exp(e2);
+                    true
+                }
+                TE::Assign(lvalues, ty_ann, e) => {
+                    visitor.visit_exp(e);
+                    for lvalue in lvalues.value.iter() {
+                        visitor.visit_lvalue(&LValueKind::Assign, lvalue);
+                    }
+                    ty_ann
+                        .iter()
+                        .flatten()
+                        .for_each(|ty| visitor.visit_type(Some(exp_loc), ty));
+                    true
+                }
+                TE::Loop { body, .. } => {
+                    visitor.visit_exp(body);
+                    true
+                }
+                TE::Return(e)
+                | TE::Abort(e)
+                | TE::Give(_, e)
+                | TE::Dereference(e)
+                | TE::UnaryExp(_, e)
+                | TE::TempBorrow(_, e) => {
+                    visitor.visit_exp(e);
+                    true
+                }
+                TE::BinopExp(e1, _, ty, e2) => {
+                    visitor.visit_type(Some(exp_loc), ty);
+                    visitor.visit_exp(e1);
+                    visitor.visit_exp(e2);
+                    true
+                }
+                TE::Builtin(bf, e) => {
+                    visitor.visit_exp(e);
+                    use T::BuiltinFunction_ as BF;
+                    match &bf.value {
+                        BF::Freeze(t) => visitor.visit_type(Some(exp_loc), t),
+                        BF::Assert(_) => (),
+                    }
+                    true
+                }
+                TE::Vector(_, _, ty, e) => {
+                    visitor.visit_type(Some(exp_loc), ty);
+                    visitor.visit_exp(e);
+                    true
+                }
+                TE::ExpList(list) => {
+                    for l in list {
+                        match l {
+                            T::ExpListItem::Single(e, ty) => {
+                                visitor.visit_exp(e);
+                                visitor.visit_type(Some(exp_loc), ty);
+                            }
+                            T::ExpListItem::Splat(_, e, tys) => {
+                                visitor.visit_exp(e);
+                                tys.iter()
+                                    .for_each(|ty| visitor.visit_type(Some(exp_loc), ty));
+                            }
+                        }
+                    }
+                    true
+                }
+                TE::Cast(e, ty) | TE::Annotate(e, ty) => {
+                    visitor.visit_exp(e);
+                    visitor.visit_type(Some(exp_loc), ty);
+                    true
+                }
+                TE::Unit { .. } | TE::Value(_) | TE::Continue(_) | TE::UnresolvedError => true,
             }
         }
 
         let expanded_lambda = self.compiler_analysis_info.is_expanded_lambda(&exp.exp.loc);
-        if let Some(macro_call_info) = self.compiler_analysis_info.get_macro_info(&exp.exp.loc) {
+        // Compute the root_call_loc for MacroCallInfo disambiguation:
+        // if we're already inside a macro expansion, use the existing root;
+        // otherwise this is the outermost call, so use exp.exp.loc as root.
+        let root_call_loc = self.current_macro_call_loc.unwrap_or(exp.exp.loc);
+        if let Some(macro_call_info) = self
+            .compiler_analysis_info
+            .get_macro_info(&exp.exp.loc, root_call_loc)
+        {
             debug_assert!(!expanded_lambda, "Compiler info issue");
             let MacroCallInfo {
                 module,
@@ -1234,14 +1312,19 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                 method_name,
                 type_arguments,
                 by_value_args,
+                root_call_loc: info_root,
             } = macro_call_info.clone();
             self.process_module_call(&module, &name, method_name, &type_arguments, None);
             by_value_args.iter().for_each(|a| self.visit_seq_item(a));
             let old_traverse_mode = self.traverse_only;
+            let old_macro_call_loc = self.current_macro_call_loc;
+            // Set root for nested macro lookups
+            self.current_macro_call_loc = Some(info_root);
             // stop adding new use-defs etc.
             self.traverse_only = true;
             let result = visit_exp_inner(self, exp);
             self.traverse_only = old_traverse_mode;
+            self.current_macro_call_loc = old_macro_call_loc;
             result
         } else if expanded_lambda {
             let old_traverse_mode = self.traverse_only;
