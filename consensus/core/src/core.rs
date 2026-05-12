@@ -148,7 +148,15 @@ impl Core {
 
         // Create the ValidatorProposer.
         let leader_waiter = if let Some(schedule) = leader_schedule_v3.as_ref() {
-            ProposalLeaderWaiter::V3(schedule.next_commit_leader_schedule())
+            let next_commit_leader_schedule = schedule.next_commit_leader_schedule();
+            debug!(
+                "Initial v3 commit leaders: index={} min_round={} num={} allowed={:?}",
+                next_commit_leader_schedule.next_commit_index,
+                next_commit_leader_schedule.min_next_leader_round,
+                next_commit_leader_schedule.num_leaders,
+                next_commit_leader_schedule.allowed_leaders,
+            );
+            ProposalLeaderWaiter::V3(next_commit_leader_schedule)
         } else {
             ProposalLeaderWaiter::V2(committer.clone())
         };
@@ -733,25 +741,6 @@ impl Core {
                 committed_block_refs,
                 self.dag_state.read().gc_round(),
             );
-        }
-
-        // Only enabled in v3: use v3 leader schedule to score validators.
-        // This is for metrics only.
-        if let Some(schedule) = self.leader_schedule_v3.as_mut() {
-            for sub_dag in &committed_sub_dags {
-                schedule.add_commit(sub_dag.clone());
-            }
-            let next_commit_leader_schedule = schedule.next_commit_leader_schedule();
-            debug!(
-                "Next v3 commit leaders: index={} min_round={} num={} allowed={:?}",
-                next_commit_leader_schedule.next_commit_index,
-                next_commit_leader_schedule.min_next_leader_round,
-                next_commit_leader_schedule.num_leaders,
-                next_commit_leader_schedule.allowed_leaders,
-            );
-            if let Some(proposer) = self.proposer.as_mut() {
-                proposer.set_next_commit_leader_schedule(next_commit_leader_schedule);
-            }
         }
 
         Ok(committed_sub_dags)

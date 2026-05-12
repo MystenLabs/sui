@@ -56,6 +56,7 @@ pub(crate) trait Proposer: Send + Sync {
     fn set_propagation_scores(&mut self, scores: crate::leader_scoring::ReputationScores);
 
     /// Sets the next v3 commit leader schedule used to wait before proposing.
+    #[allow(dead_code)]
     fn set_next_commit_leader_schedule(&mut self, schedule: NextCommitLeaderSchedule);
 
     /// Notifies transaction consumer about committed own blocks (validators only)
@@ -752,6 +753,7 @@ impl ProposalLeaderWaiter {
         }
     }
 
+    #[allow(dead_code)]
     fn update_v3_schedule(&mut self, schedule: NextCommitLeaderSchedule) {
         if let Self::V3(current) = self {
             *current = schedule;

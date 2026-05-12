@@ -29,6 +29,8 @@ pub struct ConsensusProtocolConfig {
     enable_v3: bool,
     /// Number of recent commits retained for leader schedule sliding-window scoring.
     leader_schedule_window_size: u32,
+    /// Number of commit indices that use the same Mysticeti v3 leader schedule.
+    leader_schedule_update_interval: u32,
 }
 
 impl Default for ConsensusProtocolConfig {
@@ -45,6 +47,7 @@ impl Default for ConsensusProtocolConfig {
             bad_nodes_stake_threshold: 0,
             enable_v3: false,
             leader_schedule_window_size: 300,
+            leader_schedule_update_interval: 12,
         }
     }
 }
@@ -62,6 +65,7 @@ impl ConsensusProtocolConfig {
         bad_nodes_stake_threshold: u64,
         enable_v3: bool,
         leader_schedule_window_size: u32,
+        leader_schedule_update_interval: u32,
     ) -> Self {
         Self {
             protocol_version,
@@ -75,6 +79,7 @@ impl ConsensusProtocolConfig {
             bad_nodes_stake_threshold,
             enable_v3,
             leader_schedule_window_size,
+            leader_schedule_update_interval,
         }
     }
 
@@ -93,6 +98,7 @@ impl ConsensusProtocolConfig {
             bad_nodes_stake_threshold: 30,
             enable_v3: false,
             leader_schedule_window_size: 300,
+            leader_schedule_update_interval: 12,
         }
     }
 
@@ -142,6 +148,10 @@ impl ConsensusProtocolConfig {
         self.leader_schedule_window_size
     }
 
+    pub fn leader_schedule_update_interval(&self) -> u32 {
+        self.leader_schedule_update_interval
+    }
+
     // Test setter methods
 
     pub fn set_gc_depth_for_testing(&mut self, val: u32) {
@@ -178,5 +188,9 @@ impl ConsensusProtocolConfig {
 
     pub fn set_leader_schedule_window_size_for_testing(&mut self, val: u32) {
         self.leader_schedule_window_size = val;
+    }
+
+    pub fn set_leader_schedule_update_interval_for_testing(&mut self, val: u32) {
+        self.leader_schedule_update_interval = val;
     }
 }

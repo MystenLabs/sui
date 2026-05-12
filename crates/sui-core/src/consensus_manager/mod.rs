@@ -135,6 +135,7 @@ fn to_consensus_protocol_config(config: &ProtocolConfig, chain: Chain) -> Consen
         config.consensus_bad_nodes_stake_threshold(),
         /* enable_v3 */ false,
         /* leader_schedule_window_size */ 300,
+        /* leader_schedule_update_interval */ 12,
     )
 }
 
