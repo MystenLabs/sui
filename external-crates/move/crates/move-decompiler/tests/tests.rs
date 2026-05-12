@@ -47,7 +47,7 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     let model = model_builder::build(&mut writer, &root_pkg, &config)?;
 
-    let bytecode = move_stackless_bytecode_2::from_model(&model, /* optimize */ true)?;
+    let bytecode = move_stackless_bytecode_2::from_model(&model, /* optimize */ false)?;
 
     let test_module_names = std::io::BufReader::new(std::fs::File::open(file_path)?)
         .lines()

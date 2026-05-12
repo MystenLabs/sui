@@ -29,7 +29,9 @@ pub fn model_with_config<S: SourceKind>(
     config: &Config,
     model: Model<S>,
 ) -> anyhow::Result<Out::Decompiled<S>> {
-    let stackless = move_stackless_bytecode_2::from_model(&model, /* optimize */ true)?;
+    // Don't optimize the stackless bytecode: we want to faithfully decompile what the
+    // bytecode actually contains.
+    let stackless = move_stackless_bytecode_2::from_model(&model, /* optimize */ false)?;
     let packages = packages(config, &model, stackless);
     Ok(Out::Decompiled { model, packages })
 }
