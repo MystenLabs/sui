@@ -181,16 +181,15 @@ impl OnChainPkgSpec {
         Self {
             original_id: OriginalID(address.0),
             address,
-            modules: BTreeMap::from([("module".into(), vec![0xCA, 0xFE])]),
+            modules: BTreeMap::new(),
             dependencies: BTreeMap::new(),
             version: 1,
         }
     }
 
-    /// Set the bytecode modules (name → bytes).
-    pub fn modules(mut self, modules: BTreeMap<String, Vec<u8>>) -> Self {
-        self.modules = modules;
-        self
+    /// Add a module by loading bytecode from a `.mv` file in `tests/data/`.
+    pub fn module(self, _name: &str, _mv_file: &str) -> Self {
+        todo!("load .mv bytecode from tests/data/")
     }
 
     /// Add a linkage table entry: this on-chain package depends on `linked` at `original`.
