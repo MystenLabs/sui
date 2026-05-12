@@ -1,12 +1,12 @@
 ---
 title: Build a Custom Indexer
-description: Build a custom indexer using the `sui-indexer-alt-framework` module. The example indexer demonstrates a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL.
-keywords: [ indexer, custom indexer, indexer framework, indexer pipeline ]
+description: Build a custom indexer using the `sui-indexer-alt-framework` module. The example indexer demonstrates a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL database, the default example storage backend.
+keywords: [indexer, custom indexer, indexer framework, indexer pipeline]
 ---
 
 This guide provide a practical example for building a custom indexer. Refer to [Custom Indexing Framework](/develop/accessing-data/custom-indexer/custom-indexers) and [Indexer Pipeline Architecture](/develop/accessing-data/custom-indexer/pipeline-architecture) for a conceptual overview of the indexer framework.
 
-To build a complete custom indexer, use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
+To build a complete custom indexer, use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL database. PostgreSQL is the default example backend, not a requirement of the framework. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
 
 :::tip
 
@@ -46,7 +46,7 @@ The following steps show how to create an indexer that:
 - Connects to Sui Testnet: Uses the remote checkpoint store at https://checkpoints.testnet.sui.io as a fallback source for recent checkpoints. The public HTTPS endpoint retains only the most recent 30 days.
 - Processes checkpoints: Streams checkpoint data continuously.
 - Extracts transaction data: Pulls transaction digests from each checkpoint.
-- Stores in local PostgreSQL: Commits data to a local PostgreSQL database.
+- Stores in local PostgreSQL: Commits data to a local PostgreSQL database as the default example storage layer. For other storage systems, implement the framework's `Store` and `Connection` traits.
 - Implements sequential pipeline: Uses in-order processing with batching for optimal consistency and performance.
 
 In the end, you have a working indexer that demonstrates all core framework concepts and can serve as a foundation for more complex custom indexers.
@@ -186,7 +186,10 @@ You should now have a `migrations` folder in your project. There should be a sub
 
 Open `up.sql` and replace its contents with the following code (using the actual folder name):
 
-<ImportContent source="examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/up.sql" mode="code" />
+<ImportContent
+	source="examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/up.sql"
+	mode="code"
+/>
 
 :::tip
 
@@ -200,7 +203,10 @@ For a production environment, however, `BYTEA` is strongly recommended. It offer
 
 Save `up.sql`, then open `down.sql` to edit. Replace the contents of the file with the following code and save it:
 
-<ImportContent source="examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql" mode="code" />
+<ImportContent
+	source="examples/rust/basic-sui-indexer/migrations/YYYY-MM-DD-HHMMSS_transaction_digests/down.sql"
+	mode="code"
+/>
 
 ###substep Apply migration and generate Rust schema
 
@@ -252,7 +258,11 @@ $ touch ./src/handlers.rs
 
 Open the file and define a concrete struct to implement the `Processor` and `Handler` traits:
 
-<ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" struct="TransactionDigestHandler" />
+<ImportContent
+	source="examples/rust/basic-sui-indexer/src/handlers.rs"
+	mode="code"
+	struct="TransactionDigestHandler"
+/>
 
 Save the file but keep it open as the next steps add to its code.
 
@@ -262,11 +272,19 @@ The `Processor` trait defines how to extract and transform data from checkpoints
 
 Add the necessary dependencies at the top of the file.
 
-<ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" tag="processordeps" />
+<ImportContent
+	source="examples/rust/basic-sui-indexer/src/handlers.rs"
+	mode="code"
+	tag="processordeps"
+/>
 
 After the `TransactionDigestHandler` struct, add the `Processor` code:
 
-<ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" tag="processor" />
+<ImportContent
+	source="examples/rust/basic-sui-indexer/src/handlers.rs"
+	mode="code"
+	tag="processor"
+/>
 
 Key concepts:
 
@@ -277,22 +295,24 @@ Key concepts:
 Save the `handlers.rs` file.
 
 <details>
-  
-<summary>
-  
-Processor trait definition
-  
-</summary>
-  
-<ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/processor.rs" mode="code" trait="Processor" />
-  
+  <summary>Processor trait definition</summary>
+
+  <ImportContent
+    source="crates/sui-indexer-alt-framework/src/pipeline/processor.rs"
+    mode="code"
+    trait="Processor"
+  />
 </details>
 
 ##step Implement the `Handler`
 
 The `Handler` trait defines how to commit data to the database. Append the `Handler` dependencies to bottom of the dependency list you created in the previous step.
 
-<ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" tag="handlerdeps" />
+<ImportContent
+	source="examples/rust/basic-sui-indexer/src/handlers.rs"
+	mode="code"
+	tag="handlerdeps"
+/>
 
 Add the logic for `Handler` after the `Processor` code. The complete code is available at the end of this step.
 
@@ -304,7 +324,11 @@ How sequential batching works:
 1. `batch()` accumulates values from multiple checkpoints.
 1. `commit()` writes the batch when framework reaches limits (`H::MAX_BATCH_CHECKPOINTS`).
 
-<ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/collector.rs" mode="code" tag="batch" />
+<ImportContent
+	source="crates/sui-indexer-alt-framework/src/pipeline/sequential/collector.rs"
+	mode="code"
+	tag="batch"
+/>
 
 :::tip
 
@@ -315,27 +339,19 @@ You can override the default batch limits by implementing constants in your `Han
 The `handlers.rs` file is now complete. Save the file.
 
 <details>
-  
-<summary>
-  
-Complete `handler.rs` file
-  
-</summary>
-  
-<ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" />
-  
+  <summary>Complete `handler.rs` file</summary>
+
+  <ImportContent source="examples/rust/basic-sui-indexer/src/handlers.rs" mode="code" />
 </details>
 
 <details>
-  
-<summary>
-  
-Handler trait definition
-  
-</summary>
-  
-<ImportContent source="crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs" mode="code" trait="Handler" />
-  
+  <summary>Handler trait definition</summary>
+
+  <ImportContent
+    source="crates/sui-indexer-alt-framework/src/pipeline/sequential/mod.rs"
+    mode="code"
+    trait="Handler"
+  />
 </details>
 
 ##step Create `.env` file
@@ -343,27 +359,15 @@ Handler trait definition
 The main function you create in the next step needs the value you stored to the shell variable `$PSQL_URL`. To make it available, create a `.env` file with that data.
 
 <Tabs>
-<TabItem label="Bash/zsh" value="bash">
-  
-```sh
-echo "DATABASE_URL=$PSQL_URL" > .env
-```
-  
-</TabItem>
-<TabItem label="fish" value="fish">
-  
-```sh
-echo "DATABASE_URL=$PSQL_URL" > .env
-```
-  
-</TabItem>
-<TabItem label="PowerShell" value="powershell">
-  
-```sh
-"DATABASE_URL=$env:PSQL_URL" | Out-File -Encoding UTF8 .env
-```
-  
-</TabItem>
+	<TabItem label="Bash/zsh" value="bash">
+		```sh echo "DATABASE_URL=$PSQL_URL" > .env ```
+	</TabItem>
+	<TabItem label="fish" value="fish">
+		```sh echo "DATABASE_URL=$PSQL_URL" > .env ```
+	</TabItem>
+	<TabItem label="PowerShell" value="powershell">
+		```sh "DATABASE_URL=$env:PSQL_URL" | Out-File -Encoding UTF8 .env ```
+	</TabItem>
 </Tabs>
 
 After running the command for your environment, make sure the `.env` file exists at your project root with the correct data.
