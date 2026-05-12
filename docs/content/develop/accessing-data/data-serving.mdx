@@ -14,7 +14,7 @@ Primary interfaces to access Sui data include:
 
 - [Archival Store and Service](/develop/accessing-data/archival-store): Provides long-term storage and access to historical network data that might no longer be available on full nodes because of pruning. GraphQL can route supported historical lookups to Archival when the GraphQL operator configures it. Full node gRPC does not implicitly fall back to Archival; gRPC clients must query an Archival Service endpoint directly.
 
-- [Custom indexers](/develop/accessing-data/custom-indexer/custom-indexers): [Build your own pipelines](/develop/accessing-data/custom-indexer/build) for application-specific data with the custom indexing framework. PostgreSQL is the built-in/default storage path, but custom indexers can write to any storage layer by implementing the framework storage traits.
+- [Custom indexers](/develop/accessing-data/custom-indexer/custom-indexers): [Build your own pipelines](/develop/accessing-data/custom-indexer/build) for application-specific data with the custom indexing framework. PostgreSQL is the default storage path, but custom indexers can write to any storage layer by implementing the framework storage traits.
 
 ## Latest data access interfaces
 

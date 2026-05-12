@@ -4,7 +4,7 @@ description: Use GraphQL to make Sui RPC calls.
 keywords: [ graphql, graphql headers, x-sui-rpc-version, x-sui-rpc-show-usage, variables, fragments, pagination, graphql limits, make rpc call, sui rpc calls ]
 ---
 
-GraphQL provides a flexible, generally available way to query the Sui network, submit transactions, and simulate transactions. The GraphQL schema is versioned and generally available; do not treat it as a beta API or expect routine breaking schema changes. This page covers the core concepts for working with GraphQL on Sui RPC, including request headers, query composition with variables and fragments, pagination strategies, query scope, and service limits.
+GraphQL provides a flexible way to query the Sui network, submit transactions, and simulate transactions. This page covers the core concepts for working with GraphQL on Sui RPC, including request headers, query composition with variables and fragments, pagination strategies, query scope, and service limits.
 
 For practical examples, see [Querying Sui RPC with GraphQL](/develop/accessing-data/graphql/query-with-graphql). For comprehensive GraphQL fundamentals, consult the introductory documentation from [GraphQL](https://graphql.org/learn/) and [GitHub](https://docs.github.com/en/graphql/guides/introduction-to-graphql).
 
@@ -14,7 +14,7 @@ For practical examples, see [Querying Sui RPC with GraphQL](/develop/accessing-d
 
 :::
 
-The GraphQL RPC Service reads data from the General-purpose Indexer's Postgres-compatible database, Consistent Store, Archival Store and Service, and a full node. GraphQL RPC is an alternative to the gRPC API and provides a broad query surface for reads, transaction submission, and transaction simulation. The General-purpose Indexer is a scalable implementation of the [custom indexing framework](/develop/accessing-data/custom-indexer/custom-indexers). The framework ingests data using the remote checkpoint store and full node RPCs. It lets you configure it to load different types of Sui network data into Postgres-compatible tables in parallel, improving data ingestion performance. You can also configure pruning for different tables to balance performance and cost.
+The GraphQL RPC Service reads data from the General-purpose Indexer's Postgres-compatible database, Archival Store and Service, and a full node. GraphQL RPC is an alternative to the gRPC API. The General-purpose Indexer is a scalable implementation of the [custom indexing framework](/develop/accessing-data/custom-indexer/custom-indexers). The framework ingests data using the remote checkpoint store and full node RPCs. It lets you configure it to load different types of Sui network data into Postgres tables in parallel, improving data ingestion performance. You can also configure pruning for different tables to balance performance and cost.
 
 #### Release status
 
@@ -107,7 +107,7 @@ Requests to GraphQL are subject to various limits, to ensure resources are share
 
 ## Working with General-purpose Indexer
 
-General-purpose Indexer fetches checkpoints data from either a remote object store, local files, or a full node RPC, and indexes data into multiple database tables through a set of specialized pipelines. PostgreSQL-compatible storage is the default deployment path for the General-purpose GraphQL stack. Custom indexers built on the same framework can write to other storage layers by implementing the framework's storage traits. Each pipeline is responsible for extracting specific data and writing to its target tables.
+General-purpose Indexer fetches checkpoints data from either a remote object store, local files, or a full node RPC, and indexes data into multiple database tables through a set of specialized pipelines. PostgreSQL-compatible storage is the default deployment path for the general-purpose GraphQL stack. Custom indexers built on the same framework can write to other storage layers by implementing the framework's storage traits. Each pipeline is responsible for extracting specific data and writing to its target tables.
 
 <details>
 <summary>

@@ -39,10 +39,9 @@ grpcurl -d '{
 
 ## Using the Archival Service as a fallback
 
-Apps can query the Archival Service when a full node returns retention-related errors. This application-level fallback does not happen inside the full node:
+Apps can query the Archival Service when a full node returns retention-related errors. This application-level fallback does not implicitly happen inside the full node.
 
-1. Send your recent-data query to the full node.
-2. If the full node returns `NOT_FOUND` for data that should exist, retry against an Archival Service endpoint such as `archive.mainnet.sui.io:443` or your provider's archival URL.
+If the full node returns `NOT_FOUND` for data that should exist, retry against an Archival Service endpoint such as `archive.mainnet.sui.io:443`.
 
 ## Running your own instance
 
