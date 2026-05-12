@@ -704,14 +704,6 @@ impl ObjectStore for DataStore {
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: SequenceNumber) -> Option<Object> {
-        if self
-            .inner
-            .local
-            .is_object_currently_removed(object_id)
-            .ok()?
-        {
-            return None;
-        }
         self.get_object_at_version(object_id, version.value())
             .ok()
             .flatten()
