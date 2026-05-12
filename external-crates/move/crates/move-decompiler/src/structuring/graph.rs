@@ -245,41 +245,82 @@ fn find_loop_heads_and_back_edges<N, E>(
 
 fn compute_post_dominators<N, E>(
     config: &Config,
-    graph: &petgraph::Graph<N, E>,
+    cfg: &petgraph::Graph<N, E>,
     input: &BTreeMap<D::Label, D::Input>,
 ) -> (NodeIndex, Dominators<NodeIndex>) {
-    // Make an empty, reversed version of the graph
-    let mut graph = petgraph::graph::DiGraph::<(), ()>::from_edges(
-        graph.edge_references().map(|e| (e.target(), e.source())),
+    // Build a reversed copy of the CFG and add a synthetic `return_` node. Dominators rooted
+    // at `return_` in this graph are post-dominators of the original.
+    let mut rev = petgraph::graph::DiGraph::<(), ()>::from_edges(
+        cfg.edge_references().map(|e| (e.target(), e.source())),
     );
-    let return_: NodeIndex = graph.add_node(());
+    let return_: NodeIndex = rev.add_node(());
     if config.debug_print.control_flow_graph {
         println!("Return node: {return_:?}");
     }
-    for node in graph.node_indices() {
-        // Skip nodes that don't exist in the input
-        if !input.contains_key(&node) {
+
+    // Wire `return_` to each original sink (a node with no outgoing edges in the original CFG,
+    // which is a node with no incoming edges in the reversed graph).
+    for node in rev.node_indices() {
+        if node == return_ || !input.contains_key(&node) {
             continue;
         }
-        // Skip the return node and nodes that have outgoing edges
-        if node != return_
-            && graph
-                .neighbors_directed(node, petgraph::Direction::Incoming)
-                .count()
-                == 0
+        if rev
+            .neighbors_directed(node, petgraph::Direction::Incoming)
+            .count()
+            == 0
         {
-            // If this node has no outgoing edges in the original graph, it should point to the
-            // return node in the reversed graph
-            if !(matches!(input.get(&node), Some(D::Input::Code(_, _, None))))
+            if !matches!(input.get(&node), Some(D::Input::Code(_, _, None)))
                 && config.debug_print.control_flow_graph
             {
                 println!("Node {node:?} with no outs");
             }
-            graph.add_edge(return_, node, ());
+            rev.add_edge(return_, node, ());
         }
     }
+
+    add_infinite_loop_post_dominators(config, &mut rev, return_, cfg, input);
+
     (
         return_,
-        petgraph::algo::dominators::simple_fast(&graph, return_),
+        petgraph::algo::dominators::simple_fast(&rev, return_),
     )
+}
+
+/// Add *impossible edges* (the folk-literature name for synthetic edges introduced to make
+/// post-domination total) from `return_` to one representative of each terminal region of the
+/// original CFG — an infinite loop or abort-cycle that never reaches a real exit. Without
+/// them, `simple_fast` leaves `immediate_dominator` undefined for nodes in those regions and
+/// structuring later crashes on `.unwrap()`.
+///
+/// We identify terminal regions as terminal SCCs of the original CFG: a strongly-connected
+/// component is *terminal* when every outgoing edge from any of its nodes stays inside the
+/// SCC, so execution that enters never leaves. (The singleton-sink case slips through this
+/// check vacuously and gets a redundant impossible edge — already wired up by the sinks pass
+/// — but `simple_fast` handles the duplicate fine.) For each terminal SCC we pick the
+/// highest-indexed input node as the representative; any node in the SCC would suffice to
+/// make the whole SCC post-dominator-defined.
+fn add_infinite_loop_post_dominators<N, E>(
+    config: &Config,
+    rev: &mut DiGraph<(), ()>,
+    return_: NodeIndex,
+    cfg: &petgraph::Graph<N, E>,
+    input: &BTreeMap<D::Label, D::Input>,
+) {
+    for scc in petgraph::algo::tarjan_scc(cfg) {
+        let members: HashSet<NodeIndex> = scc.iter().copied().collect();
+        let stays_in_scc = scc
+            .iter()
+            .flat_map(|&n| cfg.neighbors(n))
+            .all(|m| members.contains(&m));
+        if !stays_in_scc {
+            continue;
+        }
+        let Some(rep) = scc.iter().filter(|n| input.contains_key(n)).max().copied() else {
+            continue;
+        };
+        if config.debug_print.control_flow_graph {
+            println!("Adding impossible edge return_ -> {rep:?}");
+        }
+        rev.add_edge(return_, rep, ());
+    }
 }
