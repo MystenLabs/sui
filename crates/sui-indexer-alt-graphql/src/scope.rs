@@ -47,8 +47,9 @@ pub(crate) enum DataSource {
     Executed {
         execution_objects: ExecutionObjectMap,
     },
-    /// A streamed checkpoint with all per-tx contents and execution objects. The active
-    /// transaction within this scope is identified by [`Scope::tx_sequence_number_viewed_at`].
+    /// A streamed checkpoint with all per-tx contents and a checkpoint-wide execution-objects
+    /// map. If the scope is anchored to a particular transaction in the checkpoint, its digest
+    /// is in [`Scope::active_transaction_digest`].
     Streamed {
         checkpoint: Arc<ProcessedCheckpoint>,
     },
@@ -86,10 +87,15 @@ pub(crate) struct Scope {
     /// None indicates execution context where we're viewing fresh transaction effects not yet indexed.
     checkpoint_viewed_at: Option<u64>,
 
-    /// The transaction we are scoped to, identified by global `tx_sequence_number`. In streaming
-    /// mode, anchors object lookups to that transaction's per-tx `execution_objects` within the
-    /// streamed checkpoint.
-    tx_sequence_number_viewed_at: Option<u64>,
+    /// The specific transaction this scope is anchored to, identified by digest. Set by
+    /// resolvers that render data for a single transaction (e.g. the streaming `transactions`
+    /// and `events` subscriptions) so downstream fields like `Address.asTransactionObject`
+    /// know which transaction's effects to scan. `None` when no specific transaction is in
+    /// scope.
+    ///
+    /// This is *not* a "view bound" up to and including a transaction; it identifies one
+    /// transaction. Object visibility is end-of-checkpoint regardless of this field.
+    active_transaction_digest: Option<TransactionDigest>,
 
     /// Root object bound for dynamic fields.
     ///
@@ -116,7 +122,7 @@ impl Scope {
 
         Ok(Self {
             checkpoint_viewed_at: Some(watermark.high_watermark().checkpoint()),
-            tx_sequence_number_viewed_at: None,
+            active_transaction_digest: None,
             root_bound: None,
             data_source: DataSource::Indexed,
             package_store: package_store.clone(),
@@ -133,7 +139,7 @@ impl Scope {
     ) -> Self {
         Self {
             checkpoint_viewed_at: None,
-            tx_sequence_number_viewed_at: None,
+            active_transaction_digest: None,
             root_bound: None,
             data_source: DataSource::Streamed {
                 checkpoint: streamed_checkpoint,
@@ -143,16 +149,13 @@ impl Scope {
         }
     }
 
-    /// Pin a nested scope to a specific transaction by global `tx_sequence_number`. In streaming
-    /// mode this anchors object lookups to that transaction's per-tx `execution_objects` within
-    /// the streamed checkpoint.
-    pub(crate) fn with_tx_sequence_number_viewed_at(
-        &self,
-        tx_sequence_number_viewed_at: u64,
-    ) -> Self {
+    /// Anchor a nested scope to a specific transaction by digest. Used by resolvers that
+    /// render a single transaction's data so downstream fields can identify which
+    /// transaction's effects to consult. Does not change object visibility.
+    pub(crate) fn with_active_transaction_digest(&self, digest: TransactionDigest) -> Self {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
-            tx_sequence_number_viewed_at: Some(tx_sequence_number_viewed_at),
+            active_transaction_digest: Some(digest),
             root_bound: self.root_bound,
             data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
@@ -178,7 +181,7 @@ impl Scope {
 
         Self {
             checkpoint_viewed_at: Some(0),
-            tx_sequence_number_viewed_at: None,
+            active_transaction_digest: None,
             root_bound: None,
             data_source: DataSource::Indexed,
             package_store: Arc::new(EmptyPackageStore),
@@ -197,7 +200,7 @@ impl Scope {
         let cp_hi_inclusive = watermark.high_watermark().checkpoint();
         (checkpoint_viewed_at <= cp_hi_inclusive).then(|| Self {
             checkpoint_viewed_at: Some(checkpoint_viewed_at),
-            tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
+            active_transaction_digest: self.active_transaction_digest,
             root_bound: self.root_bound,
             data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
@@ -209,7 +212,7 @@ impl Scope {
     pub(crate) fn with_root_version(&self, root_version: u64) -> Self {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
-            tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
+            active_transaction_digest: self.active_transaction_digest,
             root_bound: Some(RootBound::Version(root_version)),
             data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
@@ -221,7 +224,7 @@ impl Scope {
     pub(crate) fn with_root_checkpoint(&self, root_checkpoint: u64) -> Self {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
-            tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
+            active_transaction_digest: self.active_transaction_digest,
             root_bound: Some(RootBound::Checkpoint(root_checkpoint)),
             data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
@@ -233,7 +236,7 @@ impl Scope {
     pub(crate) fn without_root_bound(&self) -> Self {
         Self {
             checkpoint_viewed_at: self.checkpoint_viewed_at,
-            tx_sequence_number_viewed_at: self.tx_sequence_number_viewed_at,
+            active_transaction_digest: self.active_transaction_digest,
             root_bound: None,
             data_source: self.data_source.clone(),
             package_store: self.package_store.clone(),
@@ -291,16 +294,15 @@ impl Scope {
     }
 
     /// The execution objects map active for object lookups in this scope. Resolves through the
-    /// scope's [`DataSource`]: in `Streamed` mode, looks up the per-tx map for the transaction
-    /// identified by `tx_sequence_number_viewed_at`; in `Executed` mode, returns the freshly
-    /// extracted map; in `Indexed` mode, returns `None` so callers fall through to the DB.
+    /// scope's [`DataSource`]: in `Streamed` mode, returns the checkpoint-wide map (object
+    /// visibility is end-of-checkpoint, matching the indexed Query path); in `Executed` mode,
+    /// returns the freshly extracted map; in `Indexed` mode, returns `None` so callers fall
+    /// through to the DB.
     fn execution_objects_in_view(&self) -> Option<&ExecutionObjectMap> {
         match &self.data_source {
             DataSource::Indexed => None,
             DataSource::Executed { execution_objects } => Some(execution_objects),
-            DataSource::Streamed { checkpoint } => checkpoint
-                .transaction(self.tx_sequence_number_viewed_at?)
-                .map(|t| &t.execution_objects),
+            DataSource::Streamed { checkpoint } => Some(&checkpoint.execution_objects),
         }
     }
 
@@ -338,7 +340,7 @@ impl Scope {
 
         Ok(Self {
             checkpoint_viewed_at: None,
-            tx_sequence_number_viewed_at: None,
+            active_transaction_digest: None,
             root_bound: self.root_bound,
             data_source: DataSource::Executed { execution_objects },
             package_store: self.package_store.clone(),
@@ -408,10 +410,7 @@ impl Debug for Scope {
         f.debug_struct("Scope")
             .field("checkpoint_viewed_at", &self.checkpoint_viewed_at)
             .field("root_bound", &self.root_bound)
-            .field(
-                "tx_sequence_number_viewed_at",
-                &self.tx_sequence_number_viewed_at,
-            )
+            .field("active_transaction_digest", &self.active_transaction_digest)
             .field("resolver_limits", &self.resolver_limits)
             .finish()
     }

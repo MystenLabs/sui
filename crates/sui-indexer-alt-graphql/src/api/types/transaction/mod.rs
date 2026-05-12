@@ -253,7 +253,7 @@ impl Transaction {
             filtered,
             |tx| JsonCursor::new(tx.tx_sequence_number),
             |tx| {
-                let tx_scope = scope.with_tx_sequence_number_viewed_at(tx.tx_sequence_number);
+                let tx_scope = scope.with_active_transaction_digest(tx.digest);
                 Ok(Transaction {
                     digest: tx.digest,
                     contents: TransactionContents {

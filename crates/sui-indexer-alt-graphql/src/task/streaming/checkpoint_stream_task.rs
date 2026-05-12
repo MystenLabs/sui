@@ -99,7 +99,6 @@ use tracing::info;
 use tracing::warn;
 
 use crate::config::SubscriptionConfig;
-use crate::scope::ExecutionObjectMap;
 use crate::task::watermark::Watermarks;
 
 use super::StreamingPackageStore;
@@ -401,20 +400,26 @@ pub(super) fn process_checkpoint(
     let cp_sequence_number = sequence_number;
     let tx_lo = summary.network_total_transactions - checkpoint.transactions.len() as u64;
     let checkpoint_objects = deserialize_checkpoint_objects(&checkpoint)?;
-    let transactions = checkpoint
-        .transactions
-        .iter()
-        .enumerate()
-        .map(|(i, proto)| {
-            process_transaction(
-                proto,
-                &checkpoint_objects,
-                timestamp_ms,
-                cp_sequence_number,
-                tx_lo + i as u64,
-            )
-        })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    // Seed the checkpoint-wide execution-objects map with every existing object version
+    // carried by the proto. Tombstones for deleted/wrapped outputs are added below from each
+    // transaction's effects because the proto doesn't carry deleted-object payloads.
+    let mut execution_objects: BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>> =
+        checkpoint_objects
+            .iter()
+            .map(|(k, v)| (*k, Some(v.clone())))
+            .collect();
+
+    let mut transactions = Vec::with_capacity(checkpoint.transactions.len());
+    for (i, proto) in checkpoint.transactions.iter().enumerate() {
+        add_tombstones(&mut execution_objects, proto)?;
+        transactions.push(process_transaction(
+            proto,
+            timestamp_ms,
+            cp_sequence_number,
+            tx_lo + i as u64,
+        )?);
+    }
 
     Ok(ProcessedCheckpoint::new(
         sequence_number,
@@ -422,12 +427,12 @@ pub(super) fn process_checkpoint(
         contents,
         signature,
         transactions,
+        Arc::new(execution_objects),
     ))
 }
 
 fn process_transaction(
     proto: &ProtoExecutedTransaction,
-    checkpoint_objects: &BTreeMap<(ObjectID, SequenceNumber), NativeObject>,
     timestamp_ms: u64,
     cp_sequence_number: u64,
     tx_sequence_number: u64,
@@ -478,8 +483,6 @@ fn process_transaction(
 
     let digest = *effects.transaction_digest();
 
-    let execution_objects = build_execution_objects(checkpoint_objects, proto)?;
-
     let contents = NativeTransactionContents::ExecutedTransaction(
         sui_indexer_alt_reader::kv_loader::ExecutedTransactionData {
             effects: Box::new(effects),
@@ -498,7 +501,6 @@ fn process_transaction(
         tx_sequence_number,
         digest,
         contents,
-        execution_objects,
     })
 }
 
@@ -543,48 +545,36 @@ fn deserialize_checkpoint_objects(
     Ok(map)
 }
 
-/// Build an ExecutionObjectMap for a single transaction by filtering checkpoint-level objects
-/// using the transaction's `changed_objects` from effects.
-///
-/// Includes both input objects (previous version) and output objects (new version) so that
-/// both `inputState` and `outputState` can resolve from streaming.
-/// Objects with `DoesNotExist` output state become tombstones (None).
-fn build_execution_objects(
-    checkpoint_objects: &BTreeMap<(ObjectID, SequenceNumber), NativeObject>,
+/// Add tombstones (`None` entries) to a checkpoint-wide execution-objects map for any
+/// `DoesNotExist` outputs in this transaction's effects. The proto's `objects` field doesn't
+/// carry payloads for deleted/wrapped objects, so tombstones must come from effects; without
+/// them, `execution_output_object_latest` would return the pre-deletion version of an object
+/// that no longer exists at end-of-checkpoint.
+fn add_tombstones(
+    map: &mut BTreeMap<(ObjectID, SequenceNumber), Option<NativeObject>>,
     proto_tx: &ProtoExecutedTransaction,
-) -> anyhow::Result<ExecutionObjectMap> {
-    let mut map = BTreeMap::new();
+) -> anyhow::Result<()> {
+    let Some(effects) = &proto_tx.effects else {
+        return Ok(());
+    };
 
-    if let Some(effects) = &proto_tx.effects {
-        let lamport_version = SequenceNumber::from_u64(
-            effects
-                .lamport_version
-                .context("Effects should have lamport_version")?,
-        );
+    let lamport_version = SequenceNumber::from_u64(
+        effects
+            .lamport_version
+            .context("Effects should have lamport_version")?,
+    );
 
-        for changed_obj in &effects.changed_objects {
-            let object_id: ObjectID = changed_obj
-                .object_id
-                .as_ref()
-                .and_then(|id| id.parse().ok())
-                .context("ChangedObject should have valid object_id")?;
-
-            // Input object (previous version, before the transaction).
-            if let Some(input_version) = changed_obj.input_version {
-                let input_version = SequenceNumber::from_u64(input_version);
-                if let Some(obj) = checkpoint_objects.get(&(object_id, input_version)) {
-                    map.insert((object_id, input_version), Some(obj.clone()));
-                }
-            }
-
-            // Output object (new version, after the transaction).
-            if changed_obj.output_state() == OutputObjectState::DoesNotExist {
-                map.insert((object_id, lamport_version), None);
-            } else if let Some(obj) = checkpoint_objects.get(&(object_id, lamport_version)) {
-                map.insert((object_id, lamport_version), Some(obj.clone()));
-            }
+    for changed_obj in &effects.changed_objects {
+        if changed_obj.output_state() != OutputObjectState::DoesNotExist {
+            continue;
         }
+        let object_id: ObjectID = changed_obj
+            .object_id
+            .as_ref()
+            .and_then(|id| id.parse().ok())
+            .context("ChangedObject should have valid object_id")?;
+        map.insert((object_id, lamport_version), None);
     }
 
-    Ok(Arc::new(map))
+    Ok(())
 }

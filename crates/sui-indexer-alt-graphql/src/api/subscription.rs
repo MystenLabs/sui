@@ -97,7 +97,7 @@ impl Subscription {
                             yield Ok(Transaction {
                                 digest: tx.digest,
                                 contents: TransactionContents {
-                                    scope: scope.with_tx_sequence_number_viewed_at(tx.tx_sequence_number),
+                                    scope: scope.with_active_transaction_digest(tx.digest),
                                     contents: Some(Arc::new(tx.contents.clone())),
                                 },
                             });
@@ -147,7 +147,7 @@ impl Subscription {
                                     continue;
                                 }
                                 yield Ok(Event {
-                                    scope: scope.with_tx_sequence_number_viewed_at(tx.tx_sequence_number),
+                                    scope: scope.with_active_transaction_digest(tx.digest),
                                     native,
                                     transaction_digest: tx.digest,
                                     sequence_number: idx as u64,

@@ -18,10 +18,12 @@ pub(crate) struct ProcessedCheckpoint {
     pub(crate) contents: CheckpointContents,
     pub(crate) signature: AuthorityStrongQuorumSignInfo,
     pub(crate) transactions: Vec<ProcessedTransaction>,
-    /// Index of `transactions` by global `tx_sequence_number` for O(1) lookup that scales
-    /// across many subscribers. Built once at construction.
-    by_tx_sequence_number: HashMap<u64, usize>,
-    /// Index of `transactions` by digest. Same rationale as `by_tx_sequence_number`.
+    /// Checkpoint-wide execution objects (inputs and outputs across all transactions in the
+    /// checkpoint, including tombstones for deleted/wrapped objects). Object visibility in a
+    /// streamed scope is end-of-checkpoint, matching what the indexed Query API exposes.
+    pub(crate) execution_objects: ExecutionObjectMap,
+    /// Index of `transactions` by digest for O(1) lookup that scales across many subscribers.
+    /// Built once at construction.
     by_digest: HashMap<TransactionDigest, usize>,
 }
 
@@ -30,24 +32,18 @@ pub(crate) struct ProcessedTransaction {
     pub(crate) tx_sequence_number: u64,
     pub(crate) digest: TransactionDigest,
     pub(crate) contents: TransactionContents,
-    /// Pre-built execution objects for this transaction, extracted from checkpoint-level objects.
-    pub(crate) execution_objects: ExecutionObjectMap,
 }
 
 impl ProcessedCheckpoint {
-    /// Construct a checkpoint with both lookup indexes pre-built from `transactions`.
+    /// Construct a checkpoint with the digest index pre-built from `transactions`.
     pub(crate) fn new(
         sequence_number: u64,
         summary: CheckpointSummary,
         contents: CheckpointContents,
         signature: AuthorityStrongQuorumSignInfo,
         transactions: Vec<ProcessedTransaction>,
+        execution_objects: ExecutionObjectMap,
     ) -> Self {
-        let by_tx_sequence_number = transactions
-            .iter()
-            .enumerate()
-            .map(|(i, t)| (t.tx_sequence_number, i))
-            .collect();
         let by_digest = transactions
             .iter()
             .enumerate()
@@ -59,15 +55,9 @@ impl ProcessedCheckpoint {
             contents,
             signature,
             transactions,
-            by_tx_sequence_number,
+            execution_objects,
             by_digest,
         }
-    }
-
-    /// Lookup a transaction by its global `tx_sequence_number` within this checkpoint.
-    pub(crate) fn transaction(&self, tx_sequence_number: u64) -> Option<&ProcessedTransaction> {
-        let i = *self.by_tx_sequence_number.get(&tx_sequence_number)?;
-        self.transactions.get(i)
     }
 
     /// Lookup a transaction by digest within this checkpoint.
