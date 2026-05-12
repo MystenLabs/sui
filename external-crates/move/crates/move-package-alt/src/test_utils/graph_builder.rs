@@ -81,6 +81,8 @@ pub struct TestPackageGraph {
     inner: DiGraph<PackageSpec, DepSpec>,
     nodes: BTreeMap<String, NodeIndex>,
     root: Option<PathBuf>,
+    /// On-chain packages to register with Vanilla for testing.
+    on_chain_pkgs: Vec<(PublishedID, crate::flavor::OnChainPackageData)>,
 }
 
 /// Information used to build a node in the package graph
@@ -174,6 +176,9 @@ pub struct PubSpec {
 pub struct Scenario {
     root_path: PathBuf,
     tempdir: Option<TempDir>,
+    vanilla: Vanilla,
+    /// Override for `move_home` in `PackageConfig`, so on-chain caches go to a temp dir.
+    move_home: PathBuf,
 }
 
 impl TestPackageGraph {
@@ -185,6 +190,7 @@ impl TestPackageGraph {
             inner,
             nodes,
             root: None,
+            on_chain_pkgs: Vec::new(),
         };
         result.add_packages(node_names)
     }
@@ -302,6 +308,29 @@ impl TestPackageGraph {
         self
     }
 
+    /// Register an on-chain package with the given `address`, bytecode `modules`, and linkage
+    /// table `dependencies`. The package data will be available via `Vanilla::fetch_onchain_package`
+    /// in tests that use this scenario.
+    pub fn add_on_chain_pkg(
+        mut self,
+        address: PublishedID,
+        modules: BTreeMap<String, Vec<u8>>,
+        dependencies: BTreeMap<OriginalID, PublishedID>,
+        original_id: OriginalID,
+        version: u64,
+    ) -> Self {
+        self.on_chain_pkgs.push((
+            address,
+            crate::flavor::OnChainPackageData {
+                modules,
+                dependencies,
+                original_id,
+                version,
+            },
+        ));
+        self
+    }
+
     pub fn at(mut self, path: impl AsRef<Path>) -> Self {
         self.root = Some(path.as_ref().to_path_buf());
         self
@@ -346,7 +375,20 @@ impl TestPackageGraph {
             }
         }
 
-        Scenario { tempdir, root_path }
+        let mut vanilla = Vanilla::new();
+        for (address, data) in self.on_chain_pkgs {
+            vanilla = vanilla.with_on_chain_package(address, data);
+        }
+
+        let move_home = root_path.join(".move_home");
+        std::fs::create_dir_all(&move_home).unwrap();
+
+        Scenario {
+            tempdir,
+            root_path,
+            vanilla,
+            move_home,
+        }
     }
 
     /// Return the contents of a `Move.toml` file for the package represented by `node`
@@ -831,13 +873,14 @@ impl Scenario {
     ) -> PackageResult<PackageGraph<Vanilla>> {
         let path = PackagePath::new(self.path_for(&package)).unwrap();
 
-        let config = PackageLoader::new(
+        let mut config = PackageLoader::new(
             self.path_for(&package),
             Vanilla::default_environment(),
-            Vanilla::new(),
+            self.vanilla.clone(),
         )
         .config()
         .clone();
+        config.move_home = self.move_home.clone();
 
         let mtx = path.lock().unwrap();
 
@@ -882,13 +925,13 @@ impl Scenario {
         package: impl AsRef<str>,
         config: impl Fn(PackageLoader<Vanilla>) -> PackageLoader<Vanilla>,
     ) -> PackageResult<RootPackage<Vanilla>> {
-        config(PackageLoader::new(
+        let mut loader = PackageLoader::new(
             self.path_for(package),
             Vanilla::default_environment(),
-            Vanilla::new(),
-        ))
-        .load()
-        .await
+            self.vanilla.clone(),
+        );
+        loader.config_mut().move_home = self.move_home.clone();
+        config(loader).load().await
     }
 
     pub fn read_file(&self, file: impl AsRef<Path>) -> String {

@@ -28,7 +28,7 @@ pub const DEFAULT_ENV_ID: &str = "_test_env_id";
 /// flavor-specific resolvers and stores no additional metadata in the lockfile.
 ///
 /// On-chain packages can be pre-populated via [`Vanilla::with_on_chain_package`] for testing.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct Vanilla {
     on_chain_packages: BTreeMap<PublishedID, OnChainPackageData>,

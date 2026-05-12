@@ -32,9 +32,8 @@ use crate::{
         layout::SourcePackageLayout, package_loader::PackageConfig, package_lock::PackageSystemLock,
     },
     schema::{
-        DefaultDependency, ManifestDependencyInfo, OnChainAddress, PackageName, ParsedManifest,
-        ParsedPublishedFile, Publication, PublishAddresses, PublishedID, RenderToml,
-        ReplacementDependency,
+        PackageName, ParsedManifest, ParsedPublishedFile, Publication, PublishAddresses,
+        PublishedID, RenderToml,
     },
 };
 
@@ -81,7 +80,7 @@ pub(crate) async fn fetch_onchain<F: MoveFlavor>(
     address: &PublishedID,
     config: &PackageConfig<F>,
 ) -> OnChainResult<PathBuf> {
-    let cache_dir = cache_dir_for(&config.chain_id, address);
+    let cache_dir = cache_dir_for(&config.move_home, &config.chain_id, address);
     let manifest_path = cache_dir.join(SourcePackageLayout::Manifest.location_str());
 
     let _lock = PackageSystemLock::new_for_onchain(&config.chain_id, address)?;
@@ -108,8 +107,8 @@ pub(crate) async fn fetch_onchain<F: MoveFlavor>(
 }
 
 /// Return the cache directory for an on-chain package.
-fn cache_dir_for(chain_id: &str, address: &PublishedID) -> PathBuf {
-    PathBuf::from(move_command_line_common::env::MOVE_HOME.as_str())
+fn cache_dir_for(move_home: &Path, chain_id: &str, address: &PublishedID) -> PathBuf {
+    move_home
         .join("on-chain")
         .join(chain_id)
         .join(address.to_string())
@@ -136,54 +135,35 @@ fn write_manifest(
     fs::create_dir_all(cache_dir).expect("can create on-chain package cache directory");
 
     let mut manifest = new_manifest();
-
     manifest.environments.insert(
         Spanned::new(0..1, ON_CHAIN_ENV_NAME.to_string()),
         Spanned::new(0..1, chain_id.to_string()),
     );
 
-    let env_replacements = dep_replacements_for(&data.dependencies);
-    if !env_replacements.is_empty() {
-        manifest
-            .dep_replacements
-            .insert(ON_CHAIN_ENV_NAME.to_string(), env_replacements);
+    // Serialize everything except dep-replacements. ManifestDependencyInfo's derived
+    // Serialize doesn't match its custom Deserialize (the serializer produces tagged enum
+    // output like `OnChainAt = { ... }` but the deserializer expects flat keys like
+    // `on-chain = "0x..."`). We can't fix Serialize because the digest computation depends
+    // on the current (incorrect) format. See DVX-2125 for the proper fix.
+    // TODO(DVX-2125): once the digest is decoupled from serialization, use RenderToml.
+    let mut doc = toml_edit::ser::to_document(&manifest).expect("can serialize generated manifest");
+
+    // Build dep-replacements manually via toml_edit
+    if !data.dependencies.is_empty() {
+        let mut env_table = toml_edit::Table::new();
+        for (original_id, linked_address) in &data.dependencies {
+            let dep_name = format!("onchain_{original_id}");
+            let mut dep_table = toml_edit::Table::new();
+            dep_table.insert("on-chain", toml_edit::value(linked_address.to_string()));
+            dep_table.insert("override", toml_edit::value(true));
+            env_table.insert(&dep_name, toml_edit::Item::Table(dep_table));
+        }
+        let mut replacements = toml_edit::Table::new();
+        replacements.insert(ON_CHAIN_ENV_NAME, toml_edit::Item::Table(env_table));
+        doc.insert("dep-replacements", toml_edit::Item::Table(replacements));
     }
 
-    let doc = toml_edit::ser::to_document(&manifest).expect("can serialize generated manifest");
     fs::write(manifest_path, doc.to_string()).expect("can write generated manifest to cache");
-}
-
-/// Build dep-replacement entries from a linkage table.
-fn dep_replacements_for(
-    dependencies: &BTreeMap<crate::schema::OriginalID, PublishedID>,
-) -> BTreeMap<PackageName, Spanned<ReplacementDependency>> {
-    dependencies
-        .iter()
-        .map(|(original_id, linked_address)| {
-            let dep_name =
-                PackageName::new(format!("onchain_{original_id}")).expect("valid identifier");
-            (
-                dep_name,
-                Spanned::new(0..1, on_chain_replacement(linked_address)),
-            )
-        })
-        .collect()
-}
-
-/// Create a `ReplacementDependency` for an on-chain address.
-fn on_chain_replacement(address: &PublishedID) -> ReplacementDependency {
-    ReplacementDependency {
-        dependency: Some(DefaultDependency {
-            dependency_info: ManifestDependencyInfo::OnChainAt(OnChainAddress {
-                on_chain: address.clone(),
-            }),
-            is_override: true,
-            rename_from: None,
-            modes: None,
-        }),
-        addresses: None,
-        use_environment: None,
-    }
 }
 
 /// Create a new empty `ParsedManifest` for an on-chain package.
@@ -231,4 +211,163 @@ fn write_published<F: MoveFlavor>(
 
     let rendered = pubfile.render_as_toml();
     fs::write(&pub_path, rendered).expect("can write Published.toml to cache");
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use insta::assert_snapshot;
+    use tempfile::tempdir;
+    use test_log::test;
+
+    use super::*;
+    use crate::{
+        flavor::Vanilla,
+        schema::{OriginalID, PublishedID},
+    };
+
+    /// Helper to create test on-chain package data.
+    fn test_data(deps: Vec<(u16, u16)>) -> OnChainPackageData {
+        OnChainPackageData {
+            modules: BTreeMap::from([
+                ("my_module".to_string(), vec![0xDE, 0xAD]),
+                ("other_module".to_string(), vec![0xBE, 0xEF]),
+            ]),
+            dependencies: deps
+                .into_iter()
+                .map(|(orig, linked)| (OriginalID::from(orig), PublishedID::from(linked)))
+                .collect(),
+            original_id: OriginalID::from(0xABCD_u16),
+            version: 3,
+        }
+    }
+
+    /// Writing bytecode creates files at `bytecode/<name>.mv`.
+    #[test]
+    fn bytecode_files() {
+        let dir = tempdir().unwrap();
+        let data = test_data(vec![]);
+
+        write_bytecode(dir.path(), &data.modules);
+
+        let my_mod = dir.path().join("bytecode/my_module.mv");
+        let other_mod = dir.path().join("bytecode/other_module.mv");
+        assert_eq!(fs::read(&my_mod).unwrap(), vec![0xDE, 0xAD]);
+        assert_eq!(fs::read(&other_mod).unwrap(), vec![0xBE, 0xEF]);
+    }
+
+    /// Generated Move.toml for a package with no linkage table dependencies.
+    #[test]
+    fn manifest_no_deps() {
+        let dir = tempdir().unwrap();
+        let manifest_path = dir.path().join("Move.toml");
+        let data = test_data(vec![]);
+
+        write_manifest(dir.path(), &manifest_path, "test_chain", &data);
+
+        assert_snapshot!(fs::read_to_string(&manifest_path).unwrap(), @r#"
+        package = { name = "self", implicit-dependencies = false }
+        environments = { _on_chain = "test_chain" }
+        dependencies = {}
+        dep-replacements = {}
+        "#);
+    }
+
+    /// Generated Move.toml includes dep-replacements from the linkage table.
+    #[test]
+    fn manifest_with_deps() {
+        let dir = tempdir().unwrap();
+        let manifest_path = dir.path().join("Move.toml");
+        let data = test_data(vec![(0x2, 0x2), (0x3, 0x33)]);
+
+        write_manifest(dir.path(), &manifest_path, "test_chain", &data);
+
+        assert_snapshot!(fs::read_to_string(&manifest_path).unwrap(), @r#"
+        package = { name = "self", implicit-dependencies = false }
+        environments = { _on_chain = "test_chain" }
+        dependencies = {}
+
+        [dep-replacements]
+
+        [dep-replacements._on_chain]
+
+        [dep-replacements._on_chain.onchain_0x0000000000000000000000000000000000000000000000000000000000000002]
+        on-chain = "0x0000000000000000000000000000000000000000000000000000000000000002"
+        override = true
+
+        [dep-replacements._on_chain.onchain_0x0000000000000000000000000000000000000000000000000000000000000003]
+        on-chain = "0x0000000000000000000000000000000000000000000000000000000000000033"
+        override = true
+        "#);
+    }
+
+    /// Generated Move.toml round-trips through parse.
+    #[test]
+    fn manifest_round_trips() {
+        let dir = tempdir().unwrap();
+        let manifest_path = dir.path().join("Move.toml");
+        let data = test_data(vec![(0x2, 0x2)]);
+
+        write_manifest(dir.path(), &manifest_path, "test_chain", &data);
+
+        let content = fs::read_to_string(&manifest_path).unwrap();
+        let parsed: ParsedManifest = toml_edit::de::from_str(&content).unwrap();
+
+        assert_eq!(parsed.package.name.as_ref().as_str(), ON_CHAIN_PACKAGE_NAME);
+        assert!(!parsed.package.implicit_dependencies);
+        assert!(
+            parsed
+                .environments
+                .keys()
+                .any(|k| k.as_ref() == ON_CHAIN_ENV_NAME)
+        );
+    }
+
+    /// Generated Published.toml has the expected structure.
+    #[test]
+    fn published_toml() {
+        let dir = tempdir().unwrap();
+        let address = PublishedID::from(0x1234_u16);
+        let data = test_data(vec![]);
+
+        write_published::<Vanilla>(dir.path(), &address, "test_chain", &data);
+
+        assert_snapshot!(fs::read_to_string(dir.path().join("Published.toml")).unwrap(), @r#"
+        # Generated by Move
+        # This file contains metadata about published versions of this package in different environments
+        # This file SHOULD be committed to source control
+
+        [published._on_chain]
+        chain-id = "test_chain"
+        published-at = "0x0000000000000000000000000000000000000000000000000000000000001234"
+        original-id = "0x000000000000000000000000000000000000000000000000000000000000abcd"
+        version = 3
+        "#);
+    }
+
+    /// Rename-from check is skipped for on-chain deps.
+    #[test(tokio::test)]
+    async fn rename_from_skipped_for_on_chain() {
+        use crate::flavor::vanilla::DEFAULT_ENV_NAME;
+        use crate::test_utils::graph_builder::TestPackageGraph;
+
+        // "my_dep" won't match the generated package name "self", but the
+        // rename-from check should be skipped for on-chain deps.
+        let scenario = TestPackageGraph::new(["root"])
+            .add_on_chain_dep("root", "my_dep", "true", |d| d)
+            .add_on_chain_dep(
+                "root",
+                "my_dep",
+                "0x0000000000000000000000000000000000000000000000000000000000000001",
+                |d| d.in_env(DEFAULT_ENV_NAME),
+            )
+            .build();
+
+        let err = scenario.root_package_err("root").await;
+        assert!(
+            !err.contains("rename-from"),
+            "should not get rename-from error for on-chain deps, got: {err}"
+        );
+    }
 }

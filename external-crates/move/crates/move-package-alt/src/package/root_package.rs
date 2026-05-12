@@ -617,6 +617,7 @@ pkg_b = { local = "../pkg_b" }"#,
         // WARNING! If you change these digests, make sure you know what you are doing! If the
         // computed digests change, it means that all packages will be repinned! (made this not a
         // snapshot test to avoid accidental updating)
+        // See DVX-2125 for decoupling digest computation from serialization.
         assert_eq!(
             lockfile,
             indoc::indoc!(

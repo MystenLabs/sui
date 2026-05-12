@@ -25,7 +25,10 @@ pub type SystemDepName = String;
 
 // Note: [Manifest] objects should not be mutated or serialized; they are user-defined files so
 // tools that write them should use [toml_edit] to set / preserve the formatting. However, we do
-// implement [Serialize] and provide [render_as_toml], primarily for generating tests
+// implement [Serialize] and provide [render_as_toml], primarily for generating tests.
+// WARNING: the derived Serialize for ManifestDependencyInfo does not match its custom
+// Deserialize — serialized manifests won't round-trip. The digest computation depends on
+// the current format, so don't change it without also fixing DVX-2125.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct ParsedManifest {
