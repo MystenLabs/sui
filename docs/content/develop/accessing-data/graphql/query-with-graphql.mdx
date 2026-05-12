@@ -4,7 +4,7 @@ description: Practical guide to making queries of the Sui RPC using the GraphQL 
 keywords: [ rpc, sui rpc, graphql, query transactions, query blocks, query block info, query dynamic field, execute transaction, graphql examples ]
 ---
 
-This guide provides practical examples for querying the Sui network using GraphQL. For core concepts like headers, variables, fragments, pagination, scope, and limits, see the [corresponding concepts page](/develop/accessing-data/graphql/graphql-rpc).
+This guide provides practical examples for querying the Sui network using GraphQL, including reads, transaction submission, and transaction simulation. For core concepts like headers, variables, fragments, pagination, scope, and limits, see the [corresponding concepts page](/develop/accessing-data/graphql/graphql-rpc).
 
 Access the GraphQL service for Sui RPC through an online IDE that provides a complete toolbox for fetching data and executing transactions on the network:
 
@@ -14,7 +14,7 @@ Access the GraphQL service for Sui RPC through an online IDE that provides a com
 
 :::info
 
-Both Mainnet and Testnet services are rate-limited to keep network throughput optimized. These services are provided as a public good from Sui Foundation and are not meant for production-grade use. Refer to the [list of RPC or data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that have enabled gRPC on their full nodes.
+The public Mainnet and Testnet GraphQL services are rate-limited to keep network throughput optimized. They are useful for development and public-good access, but production apps should use a provider endpoint or operate their own GraphQL stack. Refer to the [list of RPC or data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that support GraphQL RPC or gRPC.
 
 :::
 
@@ -226,7 +226,7 @@ Fields that return a paginated response accept the following optional parameters
 
 They also return a type that conforms to the [GraphQL Cursor Connections Specification](https://relay.dev/graphql/connections.htm), meaning its name ends in `Connection`, and it contains at minimum the following fields:
 
-- `pageInfo` of type <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/page-info">PageInfo</UnsafeLink>, which indicates whether there are more pages before or after the page returned.
+- `pageInfo` of type `PageInfo`, which indicates whether there are more pages before or after the page returned.
 - `nodes`: The content of the paginated response as a list of the type being paginated (`TransactionBlock` in the previous example).
 - `edges`: Similar to `nodes` but associating each node with its [cursor](#cursors).
 
@@ -269,12 +269,13 @@ If a dynamic field's root object has version `v`, its own version, `w` is the la
 
 If a root object bound is not provided, dynamic fields are fetched at the checkpoint being viewed, while if a checkpoint-based root object bound exists, it does not impact the checkpoint being viewed.
 
-Finally, the GraphQL service treats queries nested under executed `Mutation.executeTransaction` and simulated `Query.simulateTransaction` transactions as being in a special scope that exists just after the transaction that was executed or simulated, without having indexed that transaction.
+Finally, the GraphQL service treats queries nested under executed `Mutation.executeTransaction` and simulated `Query.simulateTransaction` transactions as being in a special scope that exists just after the transaction that was executed or simulated, without having indexed that transaction. This means execution-attached or simulation-attached queries can often provide consistent read-after-write results immediately, as long as the requested fields do not require indexed history.
 
 The scope a query is evaluated in impacts which fields are available. In particular:
 
 - Live object set queries are not available under executed transaction scopes or when a root object binding specifies a particular version. These queries rely on data that is indexed at the checkpoint level.
 - Queries that paginate through history are not available under executed transaction scopes. Before indexing occurs, the system cannot determine where in the history the transaction falls.
+- If you only need data returned by transaction execution or simulation effects, prefer selecting it in the same GraphQL request instead of submitting the transaction and then waiting for a separately indexed follow-up query.
 
 ### Setting checkpoint scope
 
@@ -458,7 +459,7 @@ Different queries are subject to their own retention policies. In the vanilla, g
 
 ### Data source retention
 
-GraphQL queries rely on different data sources with different retention ranges:
+GraphQL queries rely on different data sources with different retention ranges. When the GraphQL operator configures Archival Service, supported point lookups can route to Archival. Full node gRPC does not do this implicitly; gRPC clients must query an Archival Service endpoint directly for high-retention data.
 
 | Data source          | Examples                                                  | Typical retention          |
 | -------------------- | --------------------------------------------------------- | -------------------------- |
@@ -888,7 +889,7 @@ query ($before: String) {
 
 ### Execute a transaction
 
-Transaction execution takes 2 arguments, `transactionDataBcs` and `signatures`. `transactionDataBcs` is the serialized unsigned transaction data, which the [Sui Client CLI](/references/cli/client) `client call` command can generate. Pass the `--serialize-unsigned-transaction` flag to the command to call a Move function. The [Sui Keytool CLI](/references/cli/keytool) command `sui keytool sign` can generate the `signatures`.
+GraphQL is not read-only. Transaction execution takes 2 arguments, `transactionDataBcs` and `signatures`. `transactionDataBcs` is the serialized unsigned transaction data, which the [Sui Client CLI](/references/cli/client) `client call` command can generate. Pass the `--serialize-unsigned-transaction` flag to the command to call a Move function. The [Sui Keytool CLI](/references/cli/keytool) command `sui keytool sign` can generate the `signatures`. Select fields from `effects` in the same mutation to read execution results immediately without waiting for a separate indexed query.
 
 ```graphql
 mutation ($tx: String!, $sigs: [String!]!) {
@@ -921,6 +922,35 @@ When using the online IDE, copy the following JSON to the **Variables** window, 
   ]
 }
 ```
+
+### Simulate a transaction
+
+Use `simulateTransaction` to preview transaction effects, estimate gas, or test transaction logic without committing the transaction onchain. Simulation accepts a JSON transaction matching the Sui gRPC transaction schema, or a BCS-encoded transaction with `{"bcs": {"value": "<base64>"}}`.
+
+```graphql
+query ($tx: JSON!) {
+  simulateTransaction(transaction: $tx, checksEnabled: true, doGasSelection: true) {
+    effects {
+      status
+      gasEffects {
+        gasSummary {
+          computationCost
+          storageCost
+        }
+      }
+    }
+    outputs {
+      returnValues {
+        value {
+          json
+        }
+      }
+    }
+  }
+}
+```
+
+Like execution-attached queries, fields selected under simulation are evaluated in a scope immediately after the simulated transaction, without waiting for indexing.
 
 ## Migrating to GraphQL from JSON-RPC
 

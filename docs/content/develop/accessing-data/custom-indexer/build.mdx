@@ -1,12 +1,12 @@
 ---
 title: Build a Custom Indexer
-description: Build a custom indexer using the `sui-indexer-alt-framework` module. The example indexer demonstrates a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL.
+description: Build a custom indexer using the `sui-indexer-alt-framework` module. The example indexer demonstrates a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL database, the default example storage backend.
 keywords: [ indexer, custom indexer, indexer framework, indexer pipeline ]
 ---
 
 This guide provide a practical example for building a custom indexer. Refer to [Custom Indexing Framework](/develop/accessing-data/custom-indexer/custom-indexers) and [Indexer Pipeline Architecture](/develop/accessing-data/custom-indexer/pipeline-architecture) for a conceptual overview of the indexer framework.
 
-To build a complete custom indexer, use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
+To build a complete custom indexer, use the `sui-indexer-alt-framework`. The steps that follow demonstrate how to create a sequential pipeline that extracts transaction digests from Sui checkpoints and stores them in a local PostgreSQL database. PostgreSQL is the default example backend, not a requirement of the framework. You can find the [source code for the framework](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-framework) in the Sui repo on GitHub.
 
 :::tip
 
@@ -46,7 +46,7 @@ The following steps show how to create an indexer that:
 - Connects to Sui Testnet: Uses the remote checkpoint store at https://checkpoints.testnet.sui.io as a fallback source for recent checkpoints. The public HTTPS endpoint retains only the most recent 30 days.
 - Processes checkpoints: Streams checkpoint data continuously.
 - Extracts transaction data: Pulls transaction digests from each checkpoint.
-- Stores in local PostgreSQL: Commits data to a local PostgreSQL database.
+- Stores in local PostgreSQL: Commits data to a local PostgreSQL database as the default example storage layer. For other storage systems, implement the framework's `Store` and `Connection` traits.
 - Implements sequential pipeline: Uses in-order processing with batching for optimal consistency and performance.
 
 In the end, you have a working indexer that demonstrates all core framework concepts and can serve as a foundation for more complex custom indexers.

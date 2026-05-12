@@ -18,18 +18,11 @@ The [gRPC API](/references/fullnode-protocol) replaces JSON-RPC on full nodes. J
 
 - Use streaming or subscription API endpoints to consume real-time streaming data in your application without polling for those records. This support replaces the deprecated WebSocket support in JSON-RPC.
 
-- There is no implicit fallback on the [Sui Foundation-managed Archival Store for historical data](/develop/accessing-data/archival-store). Full node operators, RPC providers, and data indexer operators are encouraged to run their own instance of a similar Archival Store that can be an explicit dependency to fetch historical data.
+- There is no implicit fallback from a full node gRPC endpoint to the [Archival Store for historical data](/develop/accessing-data/archival-store). If your gRPC client needs high-retention data, query an Archival Service endpoint directly. GraphQL can route supported historical lookups to Archival when the GraphQL operator configures it.
 
-## High-level release timeline
+## Release status
 
-The target times indicated below are tentative and subject to updates based on project progress and your feedback.
-
-| Tentative time | Milestone | Description |
-| -------- | ------- | ------- |
-| :heavy_check_mark: April 2025 | Beta release of initial set of polling-based APIs. | You can start validating the initial gRPC integration from your application and share feedback on the improvements you want to see. |
-| :heavy_check_mark: July 2025 | Beta release of streaming APIs and the remaining set of polling-based APIs. | If your use case requires streaming low-latency data, this is an apt time to start validating that integration. Also, the functionality of the API coverage is complete at this point, so you can start migrating your application in non-production environments. |
-| :heavy_check_mark: September-October 2025 | GA release of polling-based and streaming APIs. | Begin migration and cutover of your application in the production environment. **JSON-RPC is deprecated at this point and migration notice period starts.** |
-| July 2026 | End of migration timeline. | **JSON-RPC is fully deactivated at this point.** |
+gRPC polling and streaming APIs are generally available. JSON-RPC is deprecated, and applications should migrate to gRPC or GraphQL RPC by July 2026, when JSON-RPC is planned for deactivation.
 
 :::warning
 The gRPC and GraphQL RPC APIs have replaced JSON-RPC. View the video below to learn more about the migration timeline and which API to use. 
@@ -38,9 +31,9 @@ The gRPC and GraphQL RPC APIs have replaced JSON-RPC. View the video below to le
 
 ## When to use 
 
-With built-in support for code generation, you can scaffold clients in TypeScript, Go, Rust, and more. This makes it ideal for scalable backend systems like indexers, blockchain explorers, and data-intensive decentralized apps.
+With built-in support for code generation, you can scaffold clients in TypeScript, Go, Rust, and more. This makes gRPC a strong fit for scalable backend systems, indexers, exchanges, and typed systems-language clients.
 
-In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. This is especially useful in environments where you need to track events and transactions live. gRPC's binary format is significantly faster and lighter than JSON, saving bandwidth and improving latency.
+In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. Use gRPC when you need subscriptions, generated protobuf clients, low protocol overhead, or low-latency point lookups. For frontends, developer tools, scripts, dynamic-language clients, or flexible filtered historical queries, consider [GraphQL RPC](/develop/accessing-data/graphql/graphql-rpc) first. GraphQL currently supports filtered pagination over historical transactions and events, while gRPC is the interface that currently supports streaming subscriptions.
 
 ## How gRPC fits into the application stack
 
@@ -74,9 +67,9 @@ Streaming APIs are useful for building indexers, dashboards, or bots that need t
 
 ## Handling pruned data
 
-If a full node does not return a specific object, transaction, or event, the data has likely been pruned based on the node's retention configuration. In that case, use a fallback mechanism in your application to query the same data from the [Archival Store and Service](/develop/accessing-data/archival-store). The Archival Store retains historical data for the network.
+If a full node does not return a specific object, transaction, or checkpoint, the data might have been pruned based on the node's retention configuration. Full node gRPC does not automatically fall back to Archival. To access high-retention data, configure your application to query the [Archival Store and Service](/develop/accessing-data/archival-store) directly.
 
-You can reuse the same gRPC `LedgerService` methods for this lookup. Change the endpoint in your client from the full node's address to the Archival Service endpoint. This ensures that your application can access both recent and historical data reliably, regardless of a full node's pruning settings.
+You can reuse the same gRPC `LedgerService` methods for this lookup, but you must point the client at an Archival Service endpoint such as `archive.mainnet.sui.io:443` or your provider's archival URL instead of the full node's URL.
 
 ## Best practices
 

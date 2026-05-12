@@ -252,7 +252,7 @@ The following sections address common issues with this example.
 
 **Cause:** The React Query cache is stale. The `queryKey` for the heroes list does not match the invalidation key, or `waitForTransaction` did not complete before invalidation.
 
-**Fix:** Verify the `queryKey` in both the fetch (`["getObject"]`) and the invalidation match exactly. Ensure `await suiClient.waitForTransaction({ digest })` completes before calling `invalidateQueries`.
+**Fix:** Verify the `queryKey` in both the fetch (`["getObject"]`) and the invalidation match exactly. Ensure `await suiClient.waitForTransaction({ digest })` completes before calling `invalidateQueries` when the next read uses a separately indexed source. If you use GraphQL execution-attached selections, you can often select transaction effects and related execution data in the same request without waiting for a later indexed query.
 
 ### `VITE_PACKAGE_ID` is undefined
 
