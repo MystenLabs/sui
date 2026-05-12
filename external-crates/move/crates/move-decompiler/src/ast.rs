@@ -226,11 +226,7 @@ impl std::fmt::Display for Exp {
         /// writes the closing `;`). For block-like expressions (IfElse, Switch) this keeps
         /// braces aligned with the assignment's indent level so the result reads like the
         /// idiomatic Move `let X = if (...) { ... } else { ... };` form.
-        fn fmt_value(
-            f: &mut std::fmt::Formatter<'_>,
-            exp: &Exp,
-            level: usize,
-        ) -> std::fmt::Result {
+        fn fmt_value(f: &mut std::fmt::Formatter<'_>, exp: &Exp, level: usize) -> std::fmt::Result {
             match exp {
                 Exp::IfElse(cond, conseq, alt) => {
                     writeln!(f, "if ({}) {{", cond)?;
@@ -311,7 +307,6 @@ impl std::fmt::Display for Exp {
                     | Exp::Unstructured(_)
             )
         }
-
 
         fn fmt_exp(f: &mut std::fmt::Formatter<'_>, exp: &Exp, level: usize) -> std::fmt::Result {
             match exp {

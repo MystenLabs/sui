@@ -5,51 +5,57 @@ module colors {
     public fun is_blue () {
         let l3 = l0;
         let l2 = &l3;
-        let l1;
-        l1 =         match(l2: colors::Color) {
-            colors::Color::Red => {
-false            },
-            colors::Color::Green => {
-false            },
-            colors::Color::Blue => {
-                let colors::Color::Blue {} = l3;
-true            },
-        }
-;
+        let l1 = match(l2: 0x0::colors::Color) {
+            0x0::colors::Color::Red => {
+                false
+            },
+            0x0::colors::Color::Green => {
+                false
+            },
+            0x0::colors::Color::Blue => {
+                let 0x0::colors::Color::Blue {} = &l2;
+                let 0x0::colors::Color::Blue {} = l3;
+                true
+            },
+        };
         return l1
     }
 
     public fun is_green () {
         let l3 = l0;
         let l2 = &l3;
-        let l1;
-        l1 =         match(l2: colors::Color) {
-            colors::Color::Red => {
-false            },
-            colors::Color::Green => {
-                let colors::Color::Green {} = l3;
-true            },
-            colors::Color::Blue => {
-false            },
-        }
-;
+        let l1 = match(l2: 0x0::colors::Color) {
+            0x0::colors::Color::Red => {
+                false
+            },
+            0x0::colors::Color::Green => {
+                let 0x0::colors::Color::Green {} = &l2;
+                let 0x0::colors::Color::Green {} = l3;
+                true
+            },
+            0x0::colors::Color::Blue => {
+                false
+            },
+        };
         return l1
     }
 
     public fun is_red () {
         let l3 = l0;
         let l2 = &l3;
-        let l1;
-        l1 =         match(l2: colors::Color) {
-            colors::Color::Red => {
-                let colors::Color::Red {} = l3;
-true            },
-            colors::Color::Green => {
-false            },
-            colors::Color::Blue => {
-false            },
-        }
-;
+        let l1 = match(l2: 0x0::colors::Color) {
+            0x0::colors::Color::Red => {
+                let 0x0::colors::Color::Red {} = &l2;
+                let 0x0::colors::Color::Red {} = l3;
+                true
+            },
+            0x0::colors::Color::Green => {
+                false
+            },
+            0x0::colors::Color::Blue => {
+                false
+            },
+        };
         return l1
     }
 

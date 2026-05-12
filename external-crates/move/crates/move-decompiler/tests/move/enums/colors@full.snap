@@ -16,64 +16,58 @@ public enum Color has copy, drop {
 // -- functions -- 
 
 public fun is_blue(l0: enums::colors::Color): bool {
-    {
-        let l3 = l0;
-        let l2 = &l3;
-        let l1;
-        l1 = match colors::Color (l2) {
-            Red => {
-                false
-            },
-            Green => {
-                false
-            },
-            Blue => {
-                let colors::Color::Blue {} = l3;
-                true
-            }
-        };
-        return l1
-    }
+    let l3 = l0;
+    let l2 = &l3;
+    let l1 = match (l2) {
+        Color::Red => {
+            false
+        },
+        Color::Green => {
+            false
+        },
+        Color::Blue => {
+            0x0::colors::Color::Blue {} = l2;
+            0x0::colors::Color::Blue {} = l3;
+            true
+        }
+    };
+    return l1
 }
 
 public fun is_green(l0: enums::colors::Color): bool {
-    {
-        let l3 = l0;
-        let l2 = &l3;
-        let l1;
-        l1 = match colors::Color (l2) {
-            Red => {
-                false
-            },
-            Green => {
-                let colors::Color::Green {} = l3;
-                true
-            },
-            Blue => {
-                false
-            }
-        };
-        return l1
-    }
+    let l3 = l0;
+    let l2 = &l3;
+    let l1 = match (l2) {
+        Color::Red => {
+            false
+        },
+        Color::Green => {
+            0x0::colors::Color::Green {} = l2;
+            0x0::colors::Color::Green {} = l3;
+            true
+        },
+        Color::Blue => {
+            false
+        }
+    };
+    return l1
 }
 
 public fun is_red(l0: enums::colors::Color): bool {
-    {
-        let l3 = l0;
-        let l2 = &l3;
-        let l1;
-        l1 = match colors::Color (l2) {
-            Red => {
-                let colors::Color::Red {} = l3;
-                true
-            },
-            Green => {
-                false
-            },
-            Blue => {
-                false
-            }
-        };
-        return l1
-    }
+    let l3 = l0;
+    let l2 = &l3;
+    let l1 = match (l2) {
+        Color::Red => {
+            0x0::colors::Color::Red {} = l2;
+            0x0::colors::Color::Red {} = l3;
+            true
+        },
+        Color::Green => {
+            false
+        },
+        Color::Blue => {
+            false
+        }
+    };
+    return l1
 }

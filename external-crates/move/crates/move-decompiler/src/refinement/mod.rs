@@ -4,6 +4,7 @@
 use crate::ast::Exp;
 
 mod flatten_seq;
+mod fuse_let;
 mod hoist_arm_assignments;
 mod introduce_while;
 mod loop_to_seq;
@@ -15,6 +16,7 @@ pub type Refinement = fn(&mut Exp) -> bool;
 
 const REFINEMENTS: &[Refinement] = &[
     flatten_seq::refine,
+    fuse_let::refine,
     hoist_arm_assignments::refine,
     introduce_while::refine,
     loop_to_seq::refine,

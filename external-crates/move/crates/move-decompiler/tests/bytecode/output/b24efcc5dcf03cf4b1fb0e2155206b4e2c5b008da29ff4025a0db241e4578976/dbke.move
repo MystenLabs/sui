@@ -33,26 +33,22 @@ fun cim(l0: u8): bool {
         let l13 = &l14;
         let l7 = l13;
         let l6 = 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::cpsos();
-        let l5;
-        l5 = if (l7 == &l6) {
+        let l5 = if (l7 == &l6) {
             true
         } else {
             let l9 = l13;
             let l8 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::post_only();
-            let l4;
-            l4 = if (l9 == &l8) {
+            let l4 = if (l9 == &l8) {
                 true
             } else {
                 let l11 = l13;
                 let l10 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::immediate_or_cancel();
-                let l3;
-                l3 = if (l11 == &l10) {
+                let l3 = if (l11 == &l10) {
                     false
                 } else {
                     let l1 = l13;
                     let l12 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::fill_or_kill();
-                    let l2;
-                    l2 = if (l1 == &l12) {
+                    let l2 = if (l1 == &l12) {
                         false
                     } else {
                         false
@@ -89,15 +85,13 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
             let l20 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::balance(freeze(l2));
             let l43 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::balance(freeze(l2));
             let l23 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::balance(freeze(l2));
-            let l16;
-            l16 = if (l20 > l7) {
+            let l16 = if (l20 > l7) {
                 l20 - l7
             } else {
                 0u64
             };
             let l21 = l16;
-            let l17;
-            l17 = if (l43 > l8) {
+            let l17 = if (l43 > l8) {
                 l43 - l8
             } else {
                 0u64
@@ -167,10 +161,10 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
                         l28 = l28 + 1u64;
                         continue
                     } else {
-                        let l33 = pool::place_limit_order(l0, l2, &l52, l28, l34, l47, l37, l53, l29, true, l26, l3, freeze(l15));
-                        let l35 = order_info::original_quantity(&l33);
-                        let l25 = order_info::executed_quantity(&l33);
-                        let l36 = order_info::paid_fees(&l33);
+                        let l33 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::place_limit_order(l0, l2, &l52, l28, l34, l47, l37, l53, l29, true, l26, l3, freeze(l15));
+                        let l35 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::order_info::original_quantity(&l33);
+                        let l25 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::order_info::executed_quantity(&l33);
+                        let l36 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::order_info::paid_fees(&l33);
                         l44 = if (l29) {
                             let l41 = l35as u128;
                             let l38 = l37as u128;
@@ -243,8 +237,7 @@ fun vbac<T,T>(l0: &0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d32
         if (l7 % l4 != 0u64) {
             return (0u64, 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_invalid_price())
         } else {
-            let l12;
-            l12 = if (!(l9)) {
+            let l12 = if (!(l9)) {
                 l1 < l6
             } else {
                 false

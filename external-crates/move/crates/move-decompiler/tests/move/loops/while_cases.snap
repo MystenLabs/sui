@@ -12,8 +12,7 @@ module while_cases {
     public fun while_test_2 () {
         let l1 = 0u64;
         loop {
-            let l0;
-            l0 = if (l1 < 10u64) {
+            let l0 = if (l1 < 10u64) {
                 true
             } else {
                 l1 == 7u64
@@ -43,8 +42,7 @@ module while_cases {
     public fun while_test_4 () {
         let l1 = 0u64;
         loop {
-            let l0;
-            l0 = if (l1 < 10u64) {
+            let l0 = if (l1 < 10u64) {
                 true
             } else {
                 l1 == 7u64
@@ -79,8 +77,7 @@ module while_cases {
     public fun while_test_6 () {
         let l1 = 0u64;
         loop {
-            let l0;
-            l0 = if (l1 < 10u64) {
+            let l0 = if (l1 < 10u64) {
                 true
             } else {
                 l1 == 7u64
