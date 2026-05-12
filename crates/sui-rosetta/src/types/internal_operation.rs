@@ -33,7 +33,6 @@ use crate::errors::Error;
 use crate::types::ConstructionMetadata;
 pub use consolidate_to_fungible::ConsolidateAllStakedSuiToFungible;
 pub(crate) use consolidate_to_fungible::consolidate_to_fungible_pt;
-pub(crate) use consolidate_to_fungible::get_validator_pool_id;
 pub use merge_and_redeem::MergeAndRedeemFungibleStakedSui;
 pub(crate) use merge_and_redeem::merge_and_redeem_fss_pt;
 pub use pay_coin::PayCoin;
@@ -74,7 +73,17 @@ pub struct TransactionObjectData {
     pub fss_object_count: Option<u64>,
     /// Pool tokens to redeem. None = redeem all.
     /// Used by MergeAndRedeemFungibleStakedSui.
+    ///
+    /// Forward-compat-only field: surfaced in metadata responses for older
+    /// clients, but new code reads `redeem_plan` exclusively when building
+    /// the payload. See `ConstructionMetadata::redeem_token_amount`.
     pub redeem_token_amount: Option<u64>,
+    /// Mode-aware redeem plan (used by `MergeAndRedeemFungibleStakedSui`).
+    /// `None` for other operations.
+    pub redeem_plan: Option<crate::types::RedeemPlan>,
+    /// Quote-time epoch to bind the transaction to (used by amount-sensitive
+    /// `MergeAndRedeemFungibleStakedSui` modes). `None` for other operations.
+    pub bind_epoch: Option<u64>,
 }
 
 #[async_trait]
@@ -227,8 +236,15 @@ impl InternalOperation {
             }
             InternalOperation::MergeAndRedeemFungibleStakedSui(
                 MergeAndRedeemFungibleStakedSui { sender, .. },
-            ) => merge_and_redeem_fss_pt(sender, metadata.objects, metadata.redeem_token_amount)?,
+            ) => {
+                let plan = metadata.redeem_plan.as_ref().ok_or(anyhow!(
+                    "redeem_plan required for MergeAndRedeemFungibleStakedSui"
+                ))?;
+                merge_and_redeem_fss_pt(sender, metadata.objects, plan)?
+            }
         };
+
+        let bind_epoch = metadata.bind_epoch;
 
         if metadata.gas_coins.is_empty() {
             let chain_id_str = metadata
@@ -242,7 +258,20 @@ impl InternalOperation {
                 .ok_or(anyhow!("epoch required for address-balance gas"))?;
             let nonce = rand::thread_rng().r#gen::<u32>();
 
-            Ok(TransactionData::new_programmable_with_address_balance_gas(
+            // For amount-sensitive plans, verify the metadata epoch matches
+            // the rate-quote epoch — otherwise the rate the off-chain quote
+            // used has rolled over since metadata fetch.
+            if let Some(want) = bind_epoch
+                && want != epoch
+            {
+                return Err(anyhow!(
+                    "redeem plan was quoted for epoch {want} but signing in epoch {epoch}; \
+                     re-fetch /construction/metadata"
+                )
+                .into());
+            }
+
+            let mut data = TransactionData::new_programmable_with_address_balance_gas(
                 metadata.sender,
                 pt,
                 metadata.budget,
@@ -250,15 +279,50 @@ impl InternalOperation {
                 chain_id,
                 epoch,
                 nonce,
-            ))
+            );
+
+            // The default `new_programmable_with_address_balance_gas` sets
+            // `ValidDuring { min_epoch: epoch, max_epoch: epoch + 1 }`, so the
+            // tx can still execute in `epoch + 1` against a different exchange
+            // rate. Tighten to `min == max == bind_epoch` for amount-sensitive
+            // plans. This stays replay-protected (a one-epoch range satisfies
+            // `TransactionExpiration::is_replay_protected`, see
+            // `sui-types/src/transaction.rs::is_replay_protected`).
+            if let Some(want) = bind_epoch {
+                use sui_types::transaction::{TransactionDataAPI, TransactionExpiration};
+                if let TransactionExpiration::ValidDuring {
+                    chain,
+                    nonce,
+                    min_timestamp,
+                    max_timestamp,
+                    ..
+                } = *data.expiration()
+                {
+                    *data.expiration_mut() = TransactionExpiration::ValidDuring {
+                        min_epoch: Some(want),
+                        max_epoch: Some(want),
+                        min_timestamp,
+                        max_timestamp,
+                        chain,
+                        nonce,
+                    };
+                }
+            }
+
+            Ok(data)
         } else {
-            Ok(TransactionData::new_programmable(
+            let mut data = TransactionData::new_programmable(
                 metadata.sender,
                 metadata.gas_coins,
                 pt,
                 metadata.budget,
                 metadata.gas_price,
-            ))
+            );
+            if let Some(epoch) = bind_epoch {
+                use sui_types::transaction::{TransactionDataAPI, TransactionExpiration};
+                *data.expiration_mut() = TransactionExpiration::Epoch(epoch);
+            }
+            Ok(data)
         }
     }
 }
