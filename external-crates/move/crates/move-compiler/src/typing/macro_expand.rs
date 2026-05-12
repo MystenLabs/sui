@@ -380,6 +380,33 @@ mod recolor_struct {
             }
         }
 
+        // Register every binder introduced by a `MatchPattern`. Used by
+        // `let ... else` recoloring so the pattern's binders (which carry no
+        // pre-computed `binders` list, unlike match arms) end up in `ctx.vars`
+        // before `recolor_pat` rewrites their colors.
+        pub fn add_pat(&mut self, sp!(_, p_): &N::MatchPattern) {
+            use N::MatchPattern_ as MP;
+            match p_ {
+                MP::Constant(_, _) | MP::Literal(_) | MP::Wildcard | MP::ErrorPat => (),
+                MP::Variant(_, _, _, _, fields) | MP::Struct(_, _, _, fields) => {
+                    for (_, _, (_, p)) in fields {
+                        self.add_pat(p)
+                    }
+                }
+                MP::Binder(_, var, _) => {
+                    self.vars.insert(*var);
+                }
+                MP::Or(lhs, rhs) => {
+                    self.add_pat(lhs);
+                    self.add_pat(rhs);
+                }
+                MP::At(var, _, inner) => {
+                    self.vars.insert(*var);
+                    self.add_pat(inner);
+                }
+            }
+        }
+
         pub fn add_var(&mut self, var: &Var) {
             self.vars.insert(*var);
         }
@@ -504,6 +531,7 @@ fn recolor_seq(ctx: &mut Recolor, (use_funs, seq): &mut N::Sequence) {
                 recolor_exp(ctx, e)
             }
             N::SequenceItem_::BindElse(pat, e, else_e) => {
+                ctx.add_pat(pat);
                 recolor_pat(ctx, pat);
                 recolor_exp(ctx, e);
                 recolor_exp(ctx, else_e)
