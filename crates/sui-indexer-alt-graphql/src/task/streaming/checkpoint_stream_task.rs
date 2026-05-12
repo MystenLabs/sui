@@ -500,7 +500,7 @@ fn process_transaction(
     Ok(ProcessedTransaction {
         tx_sequence_number,
         digest,
-        contents,
+        contents: Arc::new(contents),
     })
 }
 

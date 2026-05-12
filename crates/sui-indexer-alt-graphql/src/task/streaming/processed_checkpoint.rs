@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use sui_indexer_alt_reader::kv_loader::TransactionContents;
 use sui_types::crypto::AuthorityStrongQuorumSignInfo;
@@ -31,7 +32,9 @@ pub(crate) struct ProcessedCheckpoint {
 pub(crate) struct ProcessedTransaction {
     pub(crate) tx_sequence_number: u64,
     pub(crate) digest: TransactionDigest,
-    pub(crate) contents: TransactionContents,
+    /// Wrapped in `Arc` so that subscribers (and resolvers within them) share a single deep
+    /// copy of the per-tx contents instead of each cloning the whole `TransactionContents`.
+    pub(crate) contents: Arc<TransactionContents>,
 }
 
 impl ProcessedCheckpoint {

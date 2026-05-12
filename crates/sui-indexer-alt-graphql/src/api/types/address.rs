@@ -43,7 +43,7 @@ use crate::api::types::transaction::Transaction;
 use crate::api::types::transaction::filter::TransactionFilter;
 use crate::api::types::transaction::filter::TransactionFilterValidator as TFValidator;
 use crate::api::types::transaction_effects::EffectsContents;
-use crate::api::types::transaction_object_ref::TransactionObjectRef;
+use crate::api::types::transaction_object::TransactionObject;
 use crate::api::types::unchanged_consensus_object::UnchangedConsensusObject;
 use crate::error::RpcError;
 use crate::error::bad_user_input;
@@ -221,19 +221,17 @@ impl Address {
     }
 
     /// How this address (interpreted as an object ID) was referenced by a specific transaction.
-    /// Returns `null` if the address was not referenced, or was present only as a non-object
-    /// marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
     ///
-    /// In an `events` subscription, the `transactionDigest` argument may be omitted; the field
-    /// then resolves against the transaction that emitted the parent event.
+    /// Returns `null` if the address was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
     ///
-    /// Passing an explicit `transactionDigest` other than the parent event's transaction in subscription
-    /// context is not supported; for arbitrary transaction lookups, use the indexed Query API.
+    /// In an `events` subscription, the `transactionDigest` argument may be omitted; the field then resolves against the transaction that emitted the parent event.
+    ///
+    /// Passing an explicit `transactionDigest` other than the parent event's transaction in subscription context is not supported; for arbitrary transaction lookups, use the indexed Query API.
     pub(crate) async fn as_transaction_object(
         &self,
         ctx: &Context<'_>,
         transaction_digest: Option<Digest>,
-    ) -> Option<Result<TransactionObjectRef, RpcError>> {
+    ) -> Option<Result<TransactionObject, RpcError>> {
         async {
             let Some(digest) = transaction_digest
                 .map(Into::into)
@@ -255,7 +253,7 @@ impl Address {
 
             for change in effects.object_changes() {
                 if change.id == address {
-                    return Ok(Some(TransactionObjectRef::Changed(ObjectChange {
+                    return Ok(Some(TransactionObject::Changed(ObjectChange {
                         scope: self.scope.clone(),
                         native: change,
                     })));
@@ -268,7 +266,7 @@ impl Address {
                     let cons_obj =
                         UnchangedConsensusObject::from_native(self.scope.clone(), unchanged, epoch);
                     if let UnchangedConsensusObject::Read(read) = cons_obj {
-                        return Ok(Some(TransactionObjectRef::ConsensusRead(read)));
+                        return Ok(Some(TransactionObject::ConsensusRead(read)));
                     }
                     // Address matched as a non-object marker variant; treat as not referenced.
                     return Ok(None);

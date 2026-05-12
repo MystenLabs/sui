@@ -98,7 +98,7 @@ impl Subscription {
                                 digest: tx.digest,
                                 contents: TransactionContents {
                                     scope: scope.with_active_transaction_digest(tx.digest),
-                                    contents: Some(Arc::new(tx.contents.clone())),
+                                    contents: Some(tx.contents.clone()),
                                 },
                             });
                         }

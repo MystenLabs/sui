@@ -563,7 +563,7 @@ impl EffectsContents {
         if let Some(tx) = self.scope.streamed_transaction_by_digest(digest) {
             return Ok(Self {
                 scope: self.scope.clone(),
-                contents: Some(Arc::new(tx.contents.clone())),
+                contents: Some(tx.contents.clone()),
             });
         }
 
