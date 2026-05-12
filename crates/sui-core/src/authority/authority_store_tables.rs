@@ -15,7 +15,7 @@ use sui_types::global_state_hash::GlobalStateHash;
 use sui_types::storage::MarkerValue;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::{
-    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, default_db_options,
+    DBBatch, DBMap, DBMapTableConfigMap, DBOptions, MetricConf, SafeRawIter, default_db_options,
     read_size_from_env,
 };
 use typed_store::traits::Map;
@@ -696,12 +696,7 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
-        LiveSetIter {
-            iter: Box::new(self.objects.safe_iter()),
-            tables: self,
-            prev: None,
-            include_wrapped_object,
-        }
+        self.new_live_set_iter(None, None, include_wrapped_object)
     }
 
     pub fn range_iter_live_object_set(
@@ -710,13 +705,36 @@ impl AuthorityPerpetualTables {
         upper_bound: Option<ObjectID>,
         include_wrapped_object: bool,
     ) -> LiveSetIter<'_> {
-        let lower_bound = lower_bound.as_ref().map(ObjectKey::min_for_id);
-        let upper_bound = upper_bound.as_ref().map(ObjectKey::max_for_id);
+        self.new_live_set_iter(lower_bound, upper_bound, include_wrapped_object)
+    }
 
+    fn new_live_set_iter(
+        &self,
+        lower_bound: Option<ObjectID>,
+        upper_bound: Option<ObjectID>,
+        include_wrapped_object: bool,
+    ) -> LiveSetIter<'_> {
+        let lower_key = lower_bound.as_ref().map(ObjectKey::min_for_id);
+        let upper_key = upper_bound.as_ref().map(ObjectKey::max_for_id);
+        // Prefer the raw-iterator fast path on RocksDB, which avoids decoding
+        // non-latest versions of each object. Other backends (InMemory,
+        // TideHunter) fall back to the linear-scan lookahead implementation.
+        let state = match self
+            .objects
+            .safe_raw_iter_with_bounds(lower_key, upper_key)
+        {
+            Some(raw_iter) => LiveSetIterState::Raw {
+                iter: raw_iter,
+                initialized: false,
+            },
+            None => LiveSetIterState::Fallback {
+                iter: Box::new(self.objects.safe_iter_with_bounds(lower_key, upper_key)),
+                prev: None,
+            },
+        };
         LiveSetIter {
-            iter: Box::new(self.objects.safe_iter_with_bounds(lower_bound, upper_bound)),
+            state,
             tables: self,
-            prev: None,
             include_wrapped_object,
         }
     }
@@ -799,11 +817,25 @@ impl ObjectStore for AuthorityPerpetualTables {
 }
 
 pub struct LiveSetIter<'a> {
-    iter: DbIterator<'a, (ObjectKey, StoreObjectWrapper)>,
+    state: LiveSetIterState<'a>,
     tables: &'a AuthorityPerpetualTables,
-    prev: Option<(ObjectKey, StoreObjectWrapper)>,
     /// Whether a wrapped object is considered as a live object.
     include_wrapped_object: bool,
+}
+
+enum LiveSetIterState<'a> {
+    /// RocksDB fast path: drive a raw iterator directly so we only decode the
+    /// latest version of each object.
+    Raw {
+        iter: SafeRawIter<'a, ObjectKey>,
+        initialized: bool,
+    },
+    /// Fallback path for non-RocksDB backends: scan every row and emit the
+    /// previous one on each `ObjectID` boundary.
+    Fallback {
+        iter: DbIterator<'a, (ObjectKey, StoreObjectWrapper)>,
+        prev: Option<(ObjectKey, StoreObjectWrapper)>,
+    },
 }
 
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -866,6 +898,83 @@ impl LiveSetIter<'_> {
             StoreObject::Deleted => None,
         }
     }
+
+    /// Raw-iterator fast path: walk forward through versions of the current
+    /// object reading only keys, tracking the largest one. Once we leave the
+    /// object (or run out of rows), seek back to that key and decode just
+    /// its value. Intermediate-version values are never decoded.
+    fn fetch_next_raw(&mut self) -> Option<(ObjectKey, StoreObjectWrapper)> {
+        let LiveSetIterState::Raw { iter, initialized } = &mut self.state else {
+            unreachable!("fetch_next_raw called on non-raw state");
+        };
+        if !*initialized {
+            iter.seek_to_first();
+            *initialized = true;
+        }
+        if !iter.valid() {
+            return None;
+        }
+        let mut latest_key = match iter.key()? {
+            Ok(key) => key,
+            Err(_) => return None,
+        };
+        let cur_id = latest_key.0;
+        // Advance reading only keys until we leave `cur_id` or hit the end /
+        // upper bound. We can't rely on `prev()` once the iterator goes
+        // invalid, so we track the largest in-id key seen and seek back to it.
+        loop {
+            iter.next();
+            if !iter.valid() {
+                break;
+            }
+            let k = match iter.key()? {
+                Ok(key) => key,
+                Err(_) => return None,
+            };
+            if k.0 != cur_id {
+                break;
+            }
+            latest_key = k;
+        }
+        // Reposition on the latest-version row of `cur_id`.
+        iter.seek(&latest_key);
+        debug_assert!(iter.valid(), "seek must land on a known existing key");
+        let value_bytes = iter.value()?;
+        let wrapper: StoreObjectWrapper = bcs::from_bytes(value_bytes).unwrap_or_else(|e| {
+            panic!(
+                "Failed to deserialize StoreObjectWrapper for {:?}: {e}",
+                latest_key
+            )
+        });
+        // Advance past the latest version to the first row of the next object.
+        iter.next();
+        Some((latest_key, wrapper))
+    }
+
+    /// Legacy lookahead helper for non-RocksDB backends. Returns the next
+    /// row that the original linear-scan algorithm would have emitted.
+    fn fetch_next_fallback(&mut self) -> Option<(ObjectKey, StoreObjectWrapper)> {
+        let LiveSetIterState::Fallback { iter, prev } = &mut self.state else {
+            unreachable!("fetch_next_fallback called on non-fallback state");
+        };
+        loop {
+            match iter.next() {
+                Some(Ok((next_key, next_value))) => {
+                    let prev_entry = prev.take();
+                    *prev = Some((next_key, next_value));
+                    if let Some((prev_key, prev_value)) = prev_entry
+                        && prev_key.0 != next_key.0
+                    {
+                        return Some((prev_key, prev_value));
+                    }
+                    continue;
+                }
+                // Treat decode errors as end-of-iteration (matches the previous
+                // implementation, which silently dropped them).
+                Some(Err(_)) | None => return prev.take(),
+            }
+        }
+    }
 }
 
 impl Iterator for LiveSetIter<'_> {
@@ -873,28 +982,13 @@ impl Iterator for LiveSetIter<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(Ok((next_key, next_value))) = self.iter.next() {
-                let prev = self.prev.take();
-                self.prev = Some((next_key, next_value));
-
-                if let Some((prev_key, prev_value)) = prev
-                    && prev_key.0 != next_key.0
-                {
-                    let live_object =
-                        self.store_object_wrapper_to_live_object(prev_key, prev_value);
-                    if live_object.is_some() {
-                        return live_object;
-                    }
-                }
-                continue;
+            let (key, wrapper) = match &self.state {
+                LiveSetIterState::Raw { .. } => self.fetch_next_raw()?,
+                LiveSetIterState::Fallback { .. } => self.fetch_next_fallback()?,
+            };
+            if let Some(live) = self.store_object_wrapper_to_live_object(key, wrapper) {
+                return Some(live);
             }
-            if let Some((key, value)) = self.prev.take() {
-                let live_object = self.store_object_wrapper_to_live_object(key, value);
-                if live_object.is_some() {
-                    return live_object;
-                }
-            }
-            return None;
         }
     }
 }
@@ -931,4 +1025,333 @@ fn effects_table_config(db_options: DBOptions) -> DBOptions {
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
+}
+
+#[cfg(test)]
+#[cfg(not(tidehunter))]
+mod live_object_iter_tests {
+    use super::*;
+    use crate::authority::authority_store_types::StoreObject;
+    use std::collections::HashSet;
+    use sui_types::base_types::ObjectID;
+    use sui_types::object::Object;
+
+    fn open_db() -> Arc<AuthorityPerpetualTables> {
+        let path = tempfile::tempdir().unwrap().keep();
+        Arc::new(AuthorityPerpetualTables::open(&path, None, None))
+    }
+
+    fn write_row(db: &AuthorityPerpetualTables, key: ObjectKey, wrapper: StoreObjectWrapper) {
+        let mut batch = db.objects.batch();
+        batch
+            .insert_batch(&db.objects, [(key, wrapper)])
+            .expect("schedule insert");
+        batch.write().expect("write batch");
+    }
+
+    fn insert_value(db: &AuthorityPerpetualTables, id: ObjectID, version: u64) {
+        write_row(
+            db,
+            ObjectKey(id, SequenceNumber::from_u64(version)),
+            get_store_object(Object::immutable_with_id_for_testing(id)),
+        );
+    }
+
+    fn insert_deleted(db: &AuthorityPerpetualTables, id: ObjectID, version: u64) {
+        write_row(
+            db,
+            ObjectKey(id, SequenceNumber::from_u64(version)),
+            StoreObjectWrapper::V1(StoreObject::Deleted),
+        );
+    }
+
+    fn insert_wrapped(db: &AuthorityPerpetualTables, id: ObjectID, version: u64) {
+        write_row(
+            db,
+            ObjectKey(id, SequenceNumber::from_u64(version)),
+            StoreObjectWrapper::V1(StoreObject::Wrapped),
+        );
+    }
+
+    fn id_with_first_byte(b: u8) -> ObjectID {
+        let mut bytes = [0u8; ObjectID::LENGTH];
+        bytes[0] = b;
+        ObjectID::new(bytes)
+    }
+
+    fn ids_and_versions(
+        db: &AuthorityPerpetualTables,
+        include_wrapped: bool,
+    ) -> Vec<(ObjectID, SequenceNumber)> {
+        db.iter_live_object_set(include_wrapped)
+            .map(|live| (live.object_id(), live.version()))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn empty_db_yields_nothing() {
+        let db = open_db();
+        assert!(ids_and_versions(&db, false).is_empty());
+        assert!(ids_and_versions(&db, true).is_empty());
+    }
+
+    #[tokio::test]
+    async fn single_object_single_version() {
+        let db = open_db();
+        let id = ObjectID::random();
+        insert_value(&db, id, 1);
+        assert_eq!(
+            ids_and_versions(&db, false),
+            vec![(id, SequenceNumber::from_u64(1))]
+        );
+    }
+
+    #[tokio::test]
+    async fn emits_only_latest_version() {
+        let db = open_db();
+        let id = ObjectID::random();
+        for v in [1u64, 2, 7, 11, 42] {
+            insert_value(&db, id, v);
+        }
+        assert_eq!(
+            ids_and_versions(&db, false),
+            vec![(id, SequenceNumber::from_u64(42))]
+        );
+    }
+
+    #[tokio::test]
+    async fn deleted_tombstone_excludes_object() {
+        let db = open_db();
+        let id = ObjectID::random();
+        insert_value(&db, id, 1);
+        insert_value(&db, id, 2);
+        insert_deleted(&db, id, 3);
+        assert!(ids_and_versions(&db, false).is_empty());
+        assert!(ids_and_versions(&db, true).is_empty());
+    }
+
+    #[tokio::test]
+    async fn wrapped_tombstone_respects_include_flag() {
+        let db = open_db();
+        let id = ObjectID::random();
+        insert_value(&db, id, 1);
+        insert_wrapped(&db, id, 2);
+
+        assert!(ids_and_versions(&db, false).is_empty());
+        assert_eq!(
+            ids_and_versions(&db, true),
+            vec![(id, SequenceNumber::from_u64(2))]
+        );
+
+        // Wrapped objects are surfaced via `LiveObject::Wrapped`, not `Normal`.
+        let live: Vec<_> = db.iter_live_object_set(true).collect();
+        assert!(matches!(live[..], [LiveObject::Wrapped(_)]));
+    }
+
+    #[tokio::test]
+    async fn emits_objects_in_id_order() {
+        let db = open_db();
+        let mut ids: Vec<ObjectID> = (0..20).map(|_| ObjectID::random()).collect();
+        for id in &ids {
+            insert_value(&db, *id, 1);
+            insert_value(&db, *id, 2);
+            insert_value(&db, *id, 3);
+        }
+        ids.sort();
+        let expected: Vec<_> = ids
+            .into_iter()
+            .map(|id| (id, SequenceNumber::from_u64(3)))
+            .collect();
+        assert_eq!(ids_and_versions(&db, false), expected);
+    }
+
+    #[tokio::test]
+    async fn mixed_states_filter_correctly() {
+        let db = open_db();
+        let alive: Vec<_> = (0..7).map(|_| ObjectID::random()).collect();
+        let wrapped: Vec<_> = (0..5).map(|_| ObjectID::random()).collect();
+        let deleted: Vec<_> = (0..5).map(|_| ObjectID::random()).collect();
+
+        for id in &alive {
+            insert_value(&db, *id, 1);
+            insert_value(&db, *id, 2);
+        }
+        for id in &wrapped {
+            insert_value(&db, *id, 1);
+            insert_wrapped(&db, *id, 2);
+        }
+        for id in &deleted {
+            insert_value(&db, *id, 1);
+            insert_deleted(&db, *id, 2);
+        }
+
+        let got_alive: HashSet<_> = db
+            .iter_live_object_set(false)
+            .map(|lo| lo.object_id())
+            .collect();
+        assert_eq!(got_alive, alive.iter().copied().collect::<HashSet<_>>());
+
+        let got_all_live: HashSet<_> = db
+            .iter_live_object_set(true)
+            .map(|lo| lo.object_id())
+            .collect();
+        let mut expected_all = alive.iter().copied().collect::<HashSet<_>>();
+        expected_all.extend(wrapped.iter().copied());
+        assert_eq!(got_all_live, expected_all);
+    }
+
+    #[tokio::test]
+    async fn range_iter_includes_only_objects_in_range() {
+        let db = open_db();
+        // 16 evenly spread ids across the address space's first byte.
+        let ids: Vec<ObjectID> = (0u8..16).map(|i| id_with_first_byte(i * 16)).collect();
+        for id in &ids {
+            insert_value(&db, *id, 1);
+            insert_value(&db, *id, 2);
+        }
+        let lower = ids[4];
+        let upper = ids[12];
+        let got: Vec<(ObjectID, SequenceNumber)> = db
+            .range_iter_live_object_set(Some(lower), Some(upper), false)
+            .map(|lo| (lo.object_id(), lo.version()))
+            .collect();
+        let expected: Vec<_> = ids[4..=12]
+            .iter()
+            .map(|id| (*id, SequenceNumber::from_u64(2)))
+            .collect();
+        assert_eq!(got, expected);
+    }
+
+    #[tokio::test]
+    async fn range_iter_upper_bound_matches_object_id() {
+        // Boundary: the requested upper-bound ObjectID is one that exists in
+        // the table. `range_iter_live_object_set` converts that to
+        // `max_for_id(upper)`, which is the exclusive `iterate_upper_bound`
+        // passed to RocksDB. All rows of `upper_id` (which all have versions
+        // < u64::MAX) should still be visible, and the iterator should emit
+        // `upper_id`'s latest version.
+        let db = open_db();
+        let ids: Vec<ObjectID> = (0u8..4).map(|i| id_with_first_byte(i * 64)).collect();
+        for id in &ids {
+            for v in [1u64, 2, 3] {
+                insert_value(&db, *id, v);
+            }
+        }
+        let got: Vec<_> = db
+            .range_iter_live_object_set(Some(ids[0]), Some(ids[2]), false)
+            .map(|lo| (lo.object_id(), lo.version()))
+            .collect();
+        let expected: Vec<_> = ids[0..=2]
+            .iter()
+            .map(|id| (*id, SequenceNumber::from_u64(3)))
+            .collect();
+        assert_eq!(got, expected);
+    }
+
+    #[tokio::test]
+    async fn range_iter_handles_objects_with_many_versions() {
+        // Stress the version-skipping logic by inserting many versions and
+        // verifying that only the latest is yielded.
+        let db = open_db();
+        let id = ObjectID::random();
+        for v in 0..200u64 {
+            insert_value(&db, id, v);
+        }
+        assert_eq!(
+            ids_and_versions(&db, false),
+            vec![(id, SequenceNumber::from_u64(199))]
+        );
+    }
+
+    #[tokio::test]
+    async fn range_iter_empty_range_returns_nothing() {
+        let db = open_db();
+        for i in 0u8..8 {
+            insert_value(&db, id_with_first_byte(i * 16), 1);
+        }
+        // A range that contains no inserted ids.
+        let lower = id_with_first_byte(200);
+        let upper = id_with_first_byte(220);
+        assert!(
+            db.range_iter_live_object_set(Some(lower), Some(upper), false)
+                .next()
+                .is_none()
+        );
+    }
+
+    /// Reimplements the partitioning used by `par_index_live_object_set` so the
+    /// test does not need an `AuthorityStore`. The test verifies:
+    ///   * partition ranges are disjoint at the ObjectID level,
+    ///   * each partition only yields ids inside its `[start_id, end_id]`,
+    ///   * the union of all partitions equals the full live object set.
+    fn par_iter_partitions(db: &AuthorityPerpetualTables) -> HashSet<(ObjectID, SequenceNumber)> {
+        const BITS: u8 = 5;
+        std::thread::scope(|scope| {
+            let mut handles = Vec::new();
+            for task in 0u8..(1 << BITS) {
+                handles.push(scope.spawn(move || {
+                    let mut start_bytes = [0u8; ObjectID::LENGTH];
+                    start_bytes[0] = task << (8 - BITS);
+                    let start = ObjectID::new(start_bytes);
+                    let mut end_bytes = start_bytes;
+                    end_bytes[0] |= (1 << (8 - BITS)) - 1;
+                    for b in end_bytes.iter_mut().skip(1) {
+                        *b = u8::MAX;
+                    }
+                    let end = ObjectID::new(end_bytes);
+                    let part: Vec<(ObjectID, SequenceNumber)> = db
+                        .range_iter_live_object_set(Some(start), Some(end), false)
+                        .map(|lo| (lo.object_id(), lo.version()))
+                        .collect();
+                    (start, end, part)
+                }));
+            }
+            let mut seen_ids: HashSet<ObjectID> = HashSet::new();
+            let mut combined: HashSet<(ObjectID, SequenceNumber)> = HashSet::new();
+            for handle in handles {
+                let (start, end, part) = handle.join().expect("partition thread");
+                for (id, _) in &part {
+                    assert!(
+                        *id >= start && *id <= end,
+                        "id {id:?} outside partition [{start:?}, {end:?}]"
+                    );
+                    assert!(
+                        seen_ids.insert(*id),
+                        "id {id:?} appeared in more than one partition"
+                    );
+                }
+                combined.extend(part);
+            }
+            combined
+        })
+    }
+
+    #[tokio::test]
+    async fn partitioned_iter_matches_full_iter() {
+        let db = open_db();
+        let alive: Vec<_> = (0..500).map(|_| ObjectID::random()).collect();
+        let deleted: Vec<_> = (0..100).map(|_| ObjectID::random()).collect();
+        let wrapped: Vec<_> = (0..100).map(|_| ObjectID::random()).collect();
+
+        for id in &alive {
+            for v in [1u64, 2, 3] {
+                insert_value(&db, *id, v);
+            }
+        }
+        for id in &deleted {
+            insert_value(&db, *id, 1);
+            insert_deleted(&db, *id, 2);
+        }
+        for id in &wrapped {
+            insert_value(&db, *id, 1);
+            insert_wrapped(&db, *id, 2);
+        }
+
+        let full: HashSet<(ObjectID, SequenceNumber)> = db
+            .iter_live_object_set(false)
+            .map(|lo| (lo.object_id(), lo.version()))
+            .collect();
+        let parts = par_iter_partitions(&db);
+        assert_eq!(parts, full);
+    }
 }
