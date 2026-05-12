@@ -469,4 +469,41 @@ pub proof fn lemma_weight_seq_at_position(c: &Committee, nm: AuthorityName, n: i
     lemma_weight_of_aux_drops_above(c, nm, n, committee_authorities(c).len() as int);
 }
 
+/// In a HashMap iteration sequence, no two positions share the same key.
+///
+/// Proof: no_duplicates says seq[j1] ≠ seq[j2] for j1 ≠ j2 (as tuples).
+/// If seq[j1].0 == seq[j2].0 then from kv_pairs() membership, both carry the
+/// same map value, so seq[j1] == seq[j2] — contradiction.
+pub proof fn lemma_kv_pairs_key_distinct<K, V>(
+    kv_pairs: Seq<(K, V)>,
+    m: Map<K, V>,
+    j1: int,
+    j2: int,
+)
+    requires
+        kv_pairs.no_duplicates(),
+        kv_pairs.to_set() =~= m.kv_pairs(),
+        0 <= j1 < kv_pairs.len(),
+        0 <= j2 < kv_pairs.len(),
+        j1 != j2,
+    ensures
+        kv_pairs[j1].0 != kv_pairs[j2].0,
+{
+    let pair1 = kv_pairs[j1];
+    let pair2 = kv_pairs[j2];
+    // no_duplicates: distinct positions → distinct tuples
+    assert(pair1 != pair2);
+    // coverage: both tuples are in m.kv_pairs()
+    assert(m.kv_pairs().contains(pair1));
+    assert(m.kv_pairs().contains(pair2));
+    // kv_pairs() def: m[pair.0] == pair.1 for each pair
+    assert(m[pair1.0] == pair1.1);
+    assert(m[pair2.0] == pair2.1);
+    // If same key: same value → same tuple, contradicting no_duplicates.
+    if pair1.0 == pair2.0 {
+        assert(pair1.1 == pair2.1);
+        assert(pair1 == pair2);
+    }
+}
+
 } // verus!

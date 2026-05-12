@@ -19,15 +19,24 @@ use vstd::prelude::*;
 
 verus! {
 
+// verify_authority_sig is an exec wrapper used inside proven loops — must be
+// available in both verus mode and stable Rust.
+use crate::verus_shims::verify_authority_sig;
 #[cfg(verus_only)]
 use crate::verus_shims::{
     committee_authorities, committee_epoch_spec, committee_threshold_spec, committee_unique,
     committee_weight_of, envelope_authority, envelope_epoch, envelope_sig_spec,
-    lemma_voted_weight_empty, lemma_voted_weight_insert, lemma_voted_weight_le_subset,
-    sig_is_valid, voted_weight,
+    lemma_kv_pairs_key_distinct, lemma_voted_weight_empty, lemma_voted_weight_insert,
+    lemma_voted_weight_le_subset, sig_is_valid, voted_weight,
 };
 #[cfg(verus_only)]
 use sui_types_verified::authority_sign_info::{auth_sig_authority_spec, auth_sig_epoch_spec};
+#[cfg(verus_only)]
+use sui_types_verified::authority_name::axiom_authority_name_key_model;
+#[cfg(verus_only)]
+use vstd::std_specs::hash::{
+    axiom_random_state_builds_valid_hashers, builds_valid_hashers, obeys_key_model,
+};
 
 // Verus cannot construct opaque external types directly. These wrappers
 // build the SuiErrors used by `insert_generic`'s error branches. Bodies
@@ -46,6 +55,22 @@ fn err_repeated_signer(signer: AuthorityName, conflicting_sig: bool) -> (out: Su
 #[verifier::external_body]
 fn err_invalid_authenticator() -> (out: SuiError) {
     SuiErrorKind::InvalidAuthenticator.into()
+}
+
+/// Clone an AuthoritySignInfo — needed because clone() is defined outside
+/// verus!{} and can't be called in proven exec code directly.
+#[verifier::external_body]
+fn clone_sig(sig: &AuthoritySignInfo) -> (out: AuthoritySignInfo)
+    ensures out == *sig,
+{
+    sig.clone()
+}
+
+/// Log a bad-stake warning.  extern_body because tracing macros can't appear
+/// inside proven Verus code.
+#[verifier::external_body]
+fn warn_bad_stake(name: &AuthorityName) {
+    warn!(name=?name.concise(), "Bad stake from validator");
 }
 
 /// One-liner: construct the Intent for a given Message type's scope.
@@ -662,46 +687,197 @@ fn collect_sigs<const STRENGTH: bool>(
 }
 
 /// Evict all sigs that fail individual BLS verification.
-/// external_body because HashMap iteration is not yet specced in Verus;
-/// the loop body uses `verify_authority_sig` (which is proven/specced).
-#[verifier::external_body]
+///
+/// Uses HashMap::iter() (fully specced in vstd via MapIterGhostIterator) with a
+/// construction approach: build a fresh map containing only valid entries, then
+/// assign it back.  This avoids both the closure-spec problem (no closure — the
+/// predicate is a plain specced exec function call) and the
+/// iterator-while-mutating borrow conflict.
+///
+/// Loop invariants use `VERUS_ghost_iter.kv_pairs` directly (the exec iterator's
+/// full sequence, connected via exec_invariant).  Coverage and distinctness
+/// come from `assume_specification[HashMap::iter]` at loop initialization.
 fn evict_invalid_sigs<T: Message + Serialize, const STRENGTH: bool>(
     agg: &mut StakeAggregator<AuthoritySignInfo, STRENGTH>,
     data: &T,
     intent: Intent,
-) -> (out: (StakeUnit, Vec<AuthorityName>))  // (bad_votes, bad_authorities)
+) -> (out: (StakeUnit, Vec<AuthorityName>))
     requires
         old(agg).invariant_holds(),
         committee_unique(&old(agg).committee),
     ensures
         agg.committee == old(agg).committee,
         agg.invariant_holds(),
-        // Set-theoretic spec: the new domain is exactly the filter of the old
-        // domain by cryptographic validity.  An authority survives eviction iff
-        // it was present before AND its stored sig is valid.
         forall|a: AuthorityName|
             #[trigger] agg.has_voted(a)
             <==> (old(agg).has_voted(a)
                   && sig_is_valid(&old(agg).data@[a], &old(agg).committee)),
-        // Values of surviving entries are unchanged.
         forall|a: AuthorityName|
             agg.has_voted(a) ==> #[trigger] agg.data@[a] == old(agg).data@[a],
 {
     let _ = intent;
-    let committee = agg.committee.clone();  // cheap Arc clone to avoid borrow conflict with retain
+    // group_hash_axioms activates HashMap spec axioms (kv_pairs, coverage, distinctness).
+    // lemma_voted_weight_empty proves voted_weight(committee, ∅) == 0 (needed for base case).
+    broadcast use axiom_authority_name_key_model, axiom_random_state_builds_valid_hashers,
+        vstd::std_specs::hash::group_hash_axioms, lemma_voted_weight_empty;
+    let ghost init_data = agg.data@;
+
+    // Build a fresh map: iterate over all entries, keep only the valid ones.
+    let mut new_data: VerifiedHashMap<AuthorityName, AuthoritySignInfo> = VerifiedHashMap::new();
+    let mut new_total: StakeUnit = 0;
     let mut bad_votes: StakeUnit = 0;
-    let mut bad_authorities: Vec<AuthorityName> = vec![];
-    agg.data.inner.retain(|name, sig| {
-        if sig.verify_secure(data, Intent::sui_app(T::SCOPE), committee.as_ref()).is_ok() {
-            true
-        } else {
-            warn!(name=?name.concise(), "Bad stake from validator");
-            bad_votes += committee.weight(name);
-            bad_authorities.push(*name);
-            false
+    let mut bad_authorities: Vec<AuthorityName> = Vec::new();
+
+    // processed_dom: ghost set of all keys visited so far (valid and invalid).
+    let ghost mut processed_dom: Set<AuthorityName> = Set::empty();
+
+    let map_iter = agg.data.inner.iter();
+
+    // Establish key-coverage fact about map_iter@.1 before the loop.
+    // (map_iter@.1 == VERUS_ghost_iter.kv_pairs via exec_invariant, so this carries
+    //  over into the invariant's base case.)
+    proof {
+        assert forall|a: AuthorityName| init_data.dom().contains(a) implies
+            exists|j: int| 0 <= j < map_iter@.1.len() && map_iter@.1[j].0 == a
+        by {
+            let pair = (a, init_data[a]);
+            assert(init_data.kv_pairs().contains(pair));
+            assert(map_iter@.1.to_set().contains(pair));
+            assert(map_iter@.1.contains(pair));
+            let j = choose|j: int| 0 <= j < map_iter@.1.len() && map_iter@.1[j] == pair;
+            assert(0 <= j < map_iter@.1.len() && map_iter@.1[j].0 == a);
+        };
+    }
+
+    for (k, v) in map_iter
+        invariant
+            agg.committee == old(agg).committee,
+            committee_unique(&agg.committee),
+            new_data@.dom().finite(),
+
+            // Coverage and distinctness — stated using map_iter@.1 directly so that
+            // the pre-loop proof (also about map_iter@.1) applies at the base case.
+            // exec_invariant connects VERUS_ghost_iter.kv_pairs == map_iter@.1 internally.
+            map_iter@.1.to_set() =~= init_data.kv_pairs(),
+            map_iter@.1.no_duplicates(),
+
+            // processed_dom ⊆ init_data.dom() (all seen keys are from init_data).
+            processed_dom.subset_of(init_data.dom()),
+
+            // processed_dom tracks the keys visited so far (positions < pos).
+            // Trigger uses map_iter@.1 to match pre-loop proof.
+            forall|a: AuthorityName|
+                processed_dom.contains(a) <==>
+                exists|j: int| 0 <= j < VERUS_ghost_iter.pos
+                    && #[trigger] map_iter@.1[j].0 == a,
+
+            // "Remaining" invariant: every init_data key not yet in processed_dom is
+            // still to come.  After loop (pos == map_iter@.1.len()), the range
+            // [pos, len) is empty, so every key must be in processed_dom.
+            // The pre-loop proof establishes the base case (pos == 0).
+            forall|a: AuthorityName|
+                init_data.dom().contains(a) && !processed_dom.contains(a)
+                ==> exists|j: int|
+                    VERUS_ghost_iter.pos <= j < map_iter@.1.len()
+                    && #[trigger] map_iter@.1[j].0 == a,
+
+            // Membership: new_data = { a ∈ processed_dom | sig_is_valid(init_data[a]) }
+            forall|a: AuthorityName|
+                #[trigger] new_data@.contains_key(a)
+                <==> (processed_dom.contains(a) && sig_is_valid(&init_data[a], &agg.committee)),
+
+            // Value correctness: inserted values match init_data.
+            forall|a: AuthorityName|
+                new_data@.contains_key(a) ==> #[trigger] new_data@[a] == init_data[a],
+
+            // new_total tracks the sum of valid-entry weights.
+            new_total as int == voted_weight(&agg.committee, new_data@.dom()),
+
+            // new_total + bad_votes == total weight of all processed entries.
+            new_total as int + bad_votes as int
+                == voted_weight(&agg.committee, processed_dom),
+
+            // The full domain weight equals old.total_votes (from invariant_holds).
+            voted_weight(&agg.committee, init_data.dom()) == old(agg).total_votes as int,
+    {
+        proof {
+            // Current element is kv_pairs[pos] (exec_invariant / ghost_peek_next).
+            assert((*k, *v) == VERUS_ghost_iter.kv_pairs[VERUS_ghost_iter.pos]);
+            // exec_invariant: kv_pairs == map_iter@.1, so map_iter@.1[pos] == (*k, *v).
+            assert(map_iter@.1[VERUS_ghost_iter.pos] == (*k, *v));
+            // Coverage: map_iter@.1[pos] ∈ init_data.kv_pairs() → init_data[*k] == *v.
+            assert(init_data.contains_key(*k) && init_data[*k] == *v) by {
+                let pair = (*k, *v);
+                assert(map_iter@.1.to_set().contains(pair));
+                assert(init_data.kv_pairs().contains(pair));
+            };
+            // Key-distinctness: *k not already in processed_dom.
+            assert(!processed_dom.contains(*k)) by {
+                assert forall|j: int| 0 <= j < VERUS_ghost_iter.pos implies
+                    map_iter@.1[j].0 != *k by {
+                    lemma_kv_pairs_key_distinct(map_iter@.1, init_data, j, VERUS_ghost_iter.pos);
+                };
+            };
+            // Capture old processed_dom before extending it.
+            let ghost old_pd = processed_dom;
+            // Extend processed_dom.
+            processed_dom = processed_dom.insert(*k);
+            // voted_weight(committee, processed_dom) == (new_total + bad_votes) + weight(*k).
+            // Use old_pd to avoid reasoning about processed_dom.remove(*k).
+            lemma_voted_weight_insert(&agg.committee, old_pd, *k);
+            assert(old_pd =~= processed_dom.remove(*k));
+            assert(voted_weight(&agg.committee, processed_dom)
+                == new_total as int + bad_votes as int + committee_weight_of(&agg.committee, *k));
+            lemma_voted_weight_le_subset(&agg.committee, processed_dom,
+                init_data.dom(), committee_authorities(&agg.committee).len() as int);
+            // Common overflow bound (used by both branches below).
+            assert(new_total as int + bad_votes as int + committee_weight_of(&agg.committee, *k)
+                <= old(agg).total_votes as int);
         }
-    });
-    agg.total_votes -= bad_votes;
+        if verify_authority_sig(v, data, message_intent::<T>(), &*agg.committee).is_ok() {
+            proof {
+                // *k is new to new_data.
+                assert(!new_data@.contains_key(*k));
+                assert(!new_data@.dom().contains(*k));
+                lemma_voted_weight_insert(&agg.committee, new_data@.dom(), *k);
+                lemma_voted_weight_le_subset(&agg.committee, new_data@.dom().insert(*k),
+                    init_data.dom(), committee_authorities(&agg.committee).len() as int);
+                // Explicit overflow bound: new_total + votes ≤ old.total_votes.
+                assert(new_total as int + committee_weight_of(&agg.committee, *k)
+                    <= old(agg).total_votes as int);
+            }
+            let votes = agg.committee.weight(k);
+            new_data.insert_new(*k, clone_sig(v));
+            new_total = new_total + votes;
+        } else {
+            warn_bad_stake(k);
+            proof {
+                // Explicit overflow bound: bad_votes + weight(*k) ≤ old.total_votes.
+                assert(bad_votes as int + committee_weight_of(&agg.committee, *k)
+                    <= old(agg).total_votes as int);
+            }
+            bad_votes = bad_votes + agg.committee.weight(k);
+            bad_authorities.push(*k);
+        }
+    }
+    // After loop: ghost_ensures — VERUS_ghost_iter.pos == map_iter@.1.len().
+    // "Remaining" invariant with pos == len: for each a ∈ init_data.dom() - processed_dom,
+    // exists j ∈ [len, len) — impossible.  So processed_dom == init_data.dom().
+    proof {
+        // SMT derives processed_dom == init_data.dom() from "remaining" + ghost_ensures.
+        assert(processed_dom =~= init_data.dom());
+        // Derive postcondition biconditional from membership + processed_dom == init_data.dom().
+        assert forall|a: AuthorityName|
+            new_data@.contains_key(a)
+            <==> (old(agg).has_voted(a) && sig_is_valid(&old(agg).data@[a], &agg.committee))
+        by {
+            // new_data.contains_key(a) iff (a ∈ processed_dom && sig_is_valid(init_data[a]))
+            //                          iff (a ∈ init_data.dom() && sig_is_valid(init_data[a]))
+            //                          iff (old.has_voted(a) && sig_is_valid(old.data@[a]))
+        };
+    }
+    agg.data = new_data;
+    agg.total_votes = new_total;
     (bad_votes, bad_authorities)
 }
 
