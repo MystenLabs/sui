@@ -15,6 +15,7 @@ use sui_rpc::proto::sui::rpc::v2 as grpc;
 use sui_types::balance_change::BalanceChange as NativeBalanceChange;
 use sui_types::base_types::ObjectID;
 use sui_types::crypto::AuthorityQuorumSignInfo;
+use sui_types::digests::CheckpointDigest;
 use sui_types::digests::TransactionDigest;
 use sui_types::digests::TransactionEffectsDigest;
 use sui_types::effects::TransactionEffects;
@@ -31,6 +32,7 @@ use tonic::transport::Uri;
 
 use crate::bigtable_reader::BigtableArgs;
 use crate::bigtable_reader::BigtableReader;
+use crate::checkpoints::CheckpointDigestKey;
 use crate::checkpoints::CheckpointKey;
 use crate::error::Error;
 use crate::events::StoredTransactionEvents;
@@ -295,6 +297,21 @@ impl KvLoader {
                     Ok((summary, contents, signature))
                 })
                 .transpose(),
+            Self::LedgerGrpc(loader) => loader.load_one(key).await,
+        }
+    }
+
+    /// Resolve a checkpoint digest to its sequence number. Returns `None` if the digest is not
+    /// found in the configured reader. Used by `Query.checkpoint(digest:)` to translate a
+    /// caller-supplied digest into the sequence number that downstream resolvers consume.
+    pub async fn load_one_checkpoint_seq_by_digest(
+        &self,
+        digest: CheckpointDigest,
+    ) -> Result<Option<u64>, Error> {
+        let key = CheckpointDigestKey(digest);
+        match self {
+            Self::Bigtable(loader) => loader.load_one(key).await,
+            Self::Pg(loader) => loader.load_one(key).await,
             Self::LedgerGrpc(loader) => loader.load_one(key).await,
         }
     }
