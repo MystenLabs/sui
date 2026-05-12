@@ -701,10 +701,7 @@ impl AuthorityPerpetualTables {
         // Prefer the raw-iterator fast path on RocksDB, which avoids decoding
         // non-latest versions of each object. Other backends (InMemory,
         // TideHunter) fall back to the linear-scan lookahead implementation.
-        let state = match self
-            .objects
-            .safe_raw_iter_with_bounds(lower_key, upper_key)
-        {
+        let state = match self.objects.safe_raw_iter_with_bounds(lower_key, upper_key) {
             Some(raw_iter) => LiveSetIterState::Raw {
                 iter: raw_iter,
                 initialized: false,
