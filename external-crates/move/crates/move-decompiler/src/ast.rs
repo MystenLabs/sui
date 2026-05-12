@@ -45,13 +45,18 @@ pub enum UnpackKind {
     MutRef,
 }
 
+/// A loop label. `None` is the unlabeled form; `Some(L)` prints as `'loop_L:` / `break 'loop_L;`
+/// / `continue 'loop_L;`. Structuring always emits `Some`; `strip_loop_labels` demotes labels
+/// whose only uses sit directly in the labeled loop's body (no nested loops in between).
+pub type Label = u64;
+
 #[derive(Debug, Clone)]
 pub enum Exp {
-    Break,
-    Continue,
-    Loop(Box<Exp>),
+    Break(Option<Label>),
+    Continue(Option<Label>),
+    Loop(Option<Label>, Box<Exp>),
     Seq(Vec<Exp>),
-    While(Box<Exp>, Box<Exp>),
+    While(Option<Label>, Box<Exp>, Box<Exp>),
     IfElse(Box<Exp>, Box<Exp>, Box<Option<Exp>>),
     Switch(
         Box<Exp>,
@@ -99,9 +104,9 @@ pub enum Exp {
 impl Exp {
     pub fn contains_break(&self) -> bool {
         match self {
-            Exp::Continue => false,
-            Exp::Break => true,
-            Exp::Loop(_) | Exp::While(_, _) => false,
+            Exp::Continue(_) => false,
+            Exp::Break(_) => true,
+            Exp::Loop(_, _) | Exp::While(_, _, _) => false,
             Exp::Seq(seq) => seq.iter().any(|e| e.contains_break()),
             Exp::IfElse(_, conseq, alt) => {
                 conseq.contains_break()
@@ -134,10 +139,10 @@ impl Exp {
 
     pub fn contains_continue(&self) -> bool {
         match self {
-            Exp::Continue => true,
-            Exp::Break => false,
+            Exp::Continue(_) => true,
+            Exp::Break(_) => false,
             // Ignore nested loops and whiles
-            Exp::Loop(_) | Exp::While(_, _) => false,
+            Exp::Loop(_, _) | Exp::While(_, _, _) => false,
             // Check sub-expressions
             Exp::Seq(seq) => seq.iter().any(|e| e.contains_continue()),
             Exp::IfElse(_, conseq, alt) => {
@@ -173,7 +178,7 @@ impl Exp {
     where
         F: FnOnce(Exp) -> Exp,
     {
-        *self = f(std::mem::replace(self, Exp::Break));
+        *self = f(std::mem::replace(self, Exp::Break(None)));
     }
 }
 
@@ -213,17 +218,26 @@ impl std::fmt::Display for Exp {
 
         fn fmt_exp(f: &mut std::fmt::Formatter<'_>, exp: &Exp, level: usize) -> std::fmt::Result {
             match exp {
-                Exp::Break => {
+                Exp::Break(label) => {
                     indent(f, level)?;
-                    writeln!(f, "break;")
+                    match label {
+                        Some(l) => writeln!(f, "break 'loop_{};", l),
+                        None => writeln!(f, "break;"),
+                    }
                 }
-                Exp::Continue => {
+                Exp::Continue(label) => {
                     indent(f, level)?;
-                    writeln!(f, "continue;")
+                    match label {
+                        Some(l) => writeln!(f, "continue 'loop_{};", l),
+                        None => writeln!(f, "continue;"),
+                    }
                 }
-                Exp::Loop(body) => {
+                Exp::Loop(label, body) => {
                     indent(f, level)?;
-                    writeln!(f, "loop {{")?;
+                    match label {
+                        Some(l) => writeln!(f, "'loop_{}: loop {{", l)?,
+                        None => writeln!(f, "loop {{")?,
+                    }
                     fmt_exp(f, body, level + 1)?;
                     indent(f, level)?;
                     writeln!(f, "}}")
@@ -238,9 +252,12 @@ impl std::fmt::Display for Exp {
                     }
                     Ok(())
                 }
-                Exp::While(cond, body) => {
+                Exp::While(label, cond, body) => {
                     indent(f, level)?;
-                    writeln!(f, "while({}) {{", cond)?;
+                    match label {
+                        Some(l) => writeln!(f, "'loop_{}: while({}) {{", l, cond)?,
+                        None => writeln!(f, "while({}) {{", cond)?,
+                    }
                     fmt_exp(f, body, level + 1)?;
                     indent(f, level)?;
                     writeln!(f, "}}")
@@ -461,8 +478,6 @@ fn write_primitive_op(
 // -------------------------------------------------------------------------------------------------
 // Unstructured Control Flow Types
 // -------------------------------------------------------------------------------------------------
-
-pub type Label = u64;
 
 #[derive(Debug, Clone)]
 pub enum UnstructuredNode {

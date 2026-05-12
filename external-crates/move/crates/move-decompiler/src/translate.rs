@@ -229,10 +229,13 @@ fn extract_input(block: &SB::BasicBlock, next_block_label: Option<SB::Label>) ->
 
 fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Structured) -> Exp {
     match structured {
-        D::Structured::Break => Out::Exp::Break,
-        D::Structured::Continue => Out::Exp::Continue,
+        D::Structured::Break(label) => Out::Exp::Break(Some(label.index() as u64)),
+        D::Structured::Continue(label) => Out::Exp::Continue(Some(label.index() as u64)),
         D::Structured::Block(lbl) => terms.remove(&(lbl as u32).into()).unwrap(),
-        D::Structured::Loop(body) => Out::Exp::Loop(Box::new(generate_output(terms, *body))),
+        D::Structured::Loop(label, body) => Out::Exp::Loop(
+            Some(label.index() as u64),
+            Box::new(generate_output(terms, *body)),
+        ),
         D::Structured::Seq(seq) => {
             let seq = seq
                 .into_iter()

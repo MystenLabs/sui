@@ -6,16 +6,16 @@ source: crates/move-decompiler/tests/tests.rs
     if (1) {
         'loop_2: loop {
             if (2) {
-                { 4 }
+                { 3 }
                 continue 'loop_2;
             } else {
                 break 'loop_2;
             }
         }
-        { 5 }
+        { 4 }
         continue 'loop_1;
     } else {
         break 'loop_1;
     }
 }
-{ 3 }
+{ 6 }

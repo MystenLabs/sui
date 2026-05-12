@@ -18,7 +18,7 @@ struct IntroduceWhile0;
 
 impl Refine for IntroduceWhile0 {
     fn refine_custom(&mut self, exp: &mut Exp) -> bool {
-        let Exp::Loop(body) = exp else {
+        let Exp::Loop(loop_label, body) = exp else {
             return false;
         };
 
@@ -28,27 +28,34 @@ impl Refine for IntroduceWhile0 {
         let Some(alt) = &**alt else {
             return false;
         };
-        if !matches!(&**conseq, Exp::Break) && !matches!(alt, Exp::Break) {
+        // Only fire when the Break(label) matches this loop's label (so the break really exits
+        // *this* Loop and not a labeled outer one).
+        let target = *loop_label;
+        if !is_break_of(conseq, target) && !is_break_of(alt, target) {
             return false;
         }
 
         exp.map_mut(|e| {
-            let Exp::Loop(body) = e else { unreachable!() };
+            let Exp::Loop(loop_label, body) = e else {
+                unreachable!()
+            };
             let Exp::IfElse(mut test, conseq, alt) = *body else {
                 unreachable!()
             };
             let alt = alt.unwrap();
-            match (&*conseq, &alt) {
-                (Exp::Break, _) => {
-                    negate(&mut test);
-                    Exp::While(test, Box::new(alt))
-                }
-                (_, Exp::Break) => Exp::While(test, conseq),
-                _ => unreachable!(),
+            if is_break_of(&conseq, loop_label) {
+                negate(&mut test);
+                Exp::While(loop_label, test, Box::new(alt))
+            } else {
+                Exp::While(loop_label, test, conseq)
             }
         });
         true
     }
+}
+
+fn is_break_of(exp: &Exp, loop_label: Option<crate::ast::Label>) -> bool {
+    matches!(exp, Exp::Break(l) if *l == loop_label)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -58,18 +65,19 @@ struct IntroduceWhile1;
 
 impl Refine for IntroduceWhile1 {
     fn refine_custom(&mut self, exp: &mut Exp) -> bool {
-        let Exp::Loop(loop_body) = exp else {
+        let Exp::Loop(loop_label, loop_body) = exp else {
             return false;
         };
+        let loop_label = *loop_label;
 
         match &mut **loop_body {
             Exp::Seq(seq) if !seq.is_empty() => {
                 let Exp::IfElse(_, conseq, alt) = &seq[0] else {
                     return false;
                 };
-                let Exp::Break = conseq.as_ref() else {
+                if !is_break_of(conseq, loop_label) {
                     return false;
-                };
+                }
                 let None = alt.as_ref() else {
                     return false;
                 };
@@ -77,7 +85,7 @@ impl Refine for IntroduceWhile1 {
                     return false;
                 };
                 negate(&mut test);
-                *exp = Exp::While(test, Box::new(Exp::Seq(std::mem::take(seq))));
+                *exp = Exp::While(loop_label, test, Box::new(Exp::Seq(std::mem::take(seq))));
                 true
             }
             _ => false,

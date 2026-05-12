@@ -8,6 +8,7 @@ mod introduce_while;
 mod loop_to_seq;
 mod remove_trailing_continue;
 mod remove_trailing_return;
+mod strip_loop_labels;
 
 pub type Refinement = fn(&mut Exp) -> bool;
 
@@ -17,6 +18,7 @@ const REFINEMENTS: &[Refinement] = &[
     loop_to_seq::refine,
     remove_trailing_continue::refine,
     remove_trailing_return::refine,
+    strip_loop_labels::refine,
 ];
 
 // -------------------------------------------------------------------------------------------------
@@ -54,9 +56,9 @@ trait Refine {
             return true;
         }
         match exp {
-            E::Loop(e) => self.refine(e),
+            E::Loop(_, e) => self.refine(e),
             E::Seq(es) => self.refine_seq(es),
-            E::While(e0, e1) => {
+            E::While(_, e0, e1) => {
                 or!(self.refine(e0), self.refine(e1))
             }
             E::IfElse(e0, e1, e2) => {
@@ -81,8 +83,8 @@ trait Refine {
             E::Primitive { op: _, args } => self.refine_seq(args),
             E::Data { op: _, args } => self.refine_seq(args),
             E::Borrow(_, e) => self.refine(e),
-            E::Break => false,
-            E::Continue => false,
+            E::Break(_) => false,
+            E::Continue(_) => false,
             E::Value(_) => false,
             E::Variable(_) => false,
             E::Constant(_) => false,

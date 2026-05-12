@@ -209,8 +209,14 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
 
     fn recur(context: &Context, e: &Exp) -> Doc {
         match e {
-            Exp::Break => D::text("break"),
-            Exp::Continue => D::text("continue"),
+            Exp::Break(label) => match label {
+                Some(l) => D::text(format!("break 'loop_{}", l)),
+                None => D::text("break"),
+            },
+            Exp::Continue(label) => match label {
+                Some(l) => D::text(format!("continue 'loop_{}", l)),
+                None => D::text("continue"),
+            },
             Exp::Return(es) => match &es[..] {
                 [] => D::text("return"),
                 [x] => D::text("return").concat_space(recur(context, x)),
@@ -267,8 +273,14 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
                 }
                 braces_block(stmts)
             }
-            Exp::Loop(b) => D::text("loop").concat_space(e_block(context, b)),
-            Exp::While(c, b) => while_doc(context, c, b),
+            Exp::Loop(label, b) => {
+                let header = match label {
+                    Some(l) => D::text(format!("'loop_{}: loop", l)),
+                    None => D::text("loop"),
+                };
+                header.concat_space(e_block(context, b))
+            }
+            Exp::While(label, c, b) => while_doc(context, *label, c, b),
             Exp::IfElse(c, t, e) => if_doc(context, c, t, e),
             Exp::Switch(subject, (_mid, enum_), arms) => {
                 let arms_doc = Doc::intersperse(
@@ -355,8 +367,12 @@ fn exp(context: &Context, exp: &Exp) -> Doc {
         }
     }
 
-    fn while_doc(context: &Context, cond: &Exp, body: &Exp) -> Doc {
-        D::text("while")
+    fn while_doc(context: &Context, label: Option<ast::Label>, cond: &Exp, body: &Exp) -> Doc {
+        let header = match label {
+            Some(l) => D::text(format!("'loop_{}: while", l)),
+            None => D::text("while"),
+        };
+        header
             .concat_space(recur(context, cond).parens())
             .concat_space(e_block(context, body))
     }

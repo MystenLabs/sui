@@ -122,14 +122,14 @@ fn structure_loop(
         let Some(node) = structured_blocks.remove(&node) else {
             continue;
         };
-        let result = insert_breaks(&loop_nodes, loop_head, succ_node, node, graph);
+        let result = insert_breaks(&loop_nodes, loop_head, succ_node, node);
         loop_body.push(result);
     }
 
     let loop_body = loop_body.into_iter().rev().collect::<Vec<_>>();
     let seq = D::Structured::Seq(loop_body);
     graph.update_loop_info(loop_head);
-    let mut result = D::Structured::Loop(Box::new(seq));
+    let mut result = D::Structured::Loop(loop_head, Box::new(seq));
     if let Some(succ_node) = succ_node
         && graph
             .dom_tree
@@ -151,15 +151,17 @@ fn insert_breaks(
     loop_head: NodeIndex,
     succ_node: Option<NodeIndex>,
     node: D::Structured,
-    graph: &Graph,
 ) -> D::Structured {
     use D::Structured as DS;
 
+    // Classification of a Jump/JumpIf target relative to *this* loop only. Anything that targets
+    // an enclosing loop will be a raw `DS::Jump(target)` at this layer and gets reclassified
+    // when the next-outer `structure_loop` runs `insert_breaks` and recurs into our `Loop`
+    // body — `Latch` is the fall-through that keeps the jump intact for that later pass.
     enum LatchKind {
         Continue,
         Break,
         InLoop,
-        OtherLoop,
         Latch,
     }
 
@@ -168,14 +170,11 @@ fn insert_breaks(
         loop_head: NodeIndex,
         succ_node: Option<NodeIndex>,
         node_ndx: NodeIndex,
-        graph: &Graph,
     ) -> LatchKind {
         if node_ndx == loop_head {
             LatchKind::Continue
         } else if Some(node_ndx) == succ_node {
             LatchKind::Break
-        } else if graph.loop_heads.contains(&node_ndx) {
-            LatchKind::OtherLoop
         } else if loop_nodes.contains(&node_ndx) {
             LatchKind::InLoop
         } else {
@@ -183,22 +182,21 @@ fn insert_breaks(
         }
     }
 
-    fn lower_conseq(latch: LatchKind, next: NodeIndex) -> Box<DS> {
+    fn lower_conseq(latch: LatchKind, loop_head: NodeIndex, next: NodeIndex) -> Box<DS> {
         let conseq = match latch {
-            LatchKind::Continue => DS::Continue,
-            LatchKind::Break => DS::Break,
+            LatchKind::Continue => DS::Continue(loop_head),
+            LatchKind::Break => DS::Break(loop_head),
             LatchKind::InLoop => DS::Seq(vec![]),
             LatchKind::Latch => DS::Jump(next),
-            LatchKind::OtherLoop => todo!(),
         };
         Box::new(conseq)
     }
 
-    fn lower_alt(latch: LatchKind, next: NodeIndex) -> Box<Option<DS>> {
+    fn lower_alt(latch: LatchKind, loop_head: NodeIndex, next: NodeIndex) -> Box<Option<DS>> {
         if matches!(latch, LatchKind::InLoop) {
             Box::new(None)
         } else {
-            Box::new(Some(*lower_conseq(latch, next)))
+            Box::new(Some(*lower_conseq(latch, loop_head, next)))
         }
     }
 
@@ -207,68 +205,52 @@ fn insert_breaks(
         DS::Seq(nodes) => DS::Seq(
             nodes
                 .into_iter()
-                .map(|node| insert_breaks(loop_nodes, loop_head, succ_node, node, graph))
+                .map(|node| insert_breaks(loop_nodes, loop_head, succ_node, node))
                 .collect::<Vec<_>>(),
         ),
-        DS::Break => node,
+        // Already-labeled Break/Continue (emitted by a nested loop's earlier insert_breaks)
+        // target some inner loop, not this one — pass through unchanged.
+        DS::Break(_) | DS::Continue(_) => node,
         DS::IfElse(code, conseq, alt) => DS::IfElse(
             code,
-            Box::new(insert_breaks(
-                loop_nodes, loop_head, succ_node, *conseq, graph,
-            )),
-            Box::new(alt.map(|alt| insert_breaks(loop_nodes, loop_head, succ_node, alt, graph))),
+            Box::new(insert_breaks(loop_nodes, loop_head, succ_node, *conseq)),
+            Box::new(alt.map(|alt| insert_breaks(loop_nodes, loop_head, succ_node, alt))),
         ),
-        DS::Jump(next) => match find_latch_kind(loop_nodes, loop_head, succ_node, next, graph) {
-            LatchKind::Continue => DS::Continue,
-            LatchKind::Break => DS::Break,
+        DS::Jump(next) => match find_latch_kind(loop_nodes, loop_head, succ_node, next) {
+            LatchKind::Continue => DS::Continue(loop_head),
+            LatchKind::Break => DS::Break(loop_head),
             // TODO check if jump target is the next node
             LatchKind::InLoop => D::Structured::Seq(vec![]),
-            LatchKind::OtherLoop => DS::Jump(next),
+            // Targets neither this loop nor anything dominated by it; leave the raw Jump for
+            // an enclosing loop's pass (or for `generate_output` to lower to Unstructured).
             LatchKind::Latch => node,
         },
         DS::JumpIf(code, next, other) => {
-            let next_latch = find_latch_kind(loop_nodes, loop_head, succ_node, next, graph);
-            let other_latch = find_latch_kind(loop_nodes, loop_head, succ_node, other, graph);
-            if matches!(
-                (&next_latch, &other_latch),
-                (LatchKind::Continue, LatchKind::Continue) | (LatchKind::Break, LatchKind::Break)
-            ) {
-                return *lower_conseq(next_latch, next);
-            }
-
-            match (
-                find_latch_kind(loop_nodes, loop_head, succ_node, next, graph),
-                find_latch_kind(loop_nodes, loop_head, succ_node, other, graph),
-            ) {
-                (LatchKind::Continue, LatchKind::Continue) => DS::Continue,
-                (LatchKind::Break, LatchKind::Break) => DS::Break,
+            let next_latch = find_latch_kind(loop_nodes, loop_head, succ_node, next);
+            let other_latch = find_latch_kind(loop_nodes, loop_head, succ_node, other);
+            match (next_latch, other_latch) {
+                (LatchKind::Continue, LatchKind::Continue) => DS::Continue(loop_head),
+                (LatchKind::Break, LatchKind::Break) => DS::Break(loop_head),
                 (LatchKind::Latch, LatchKind::Latch) => DS::JumpIf(code, next, other),
                 (LatchKind::InLoop, LatchKind::InLoop) => unreachable!(),
-                // TODO handle otherloop cases
-                (LatchKind::OtherLoop, _) | (_, LatchKind::OtherLoop) => todo!(),
-                // Mixed cases
                 (conseq_lk, alt_lk) => {
-                    let conseq = lower_conseq(conseq_lk, next);
-                    let alt = lower_alt(alt_lk, other);
+                    let conseq = lower_conseq(conseq_lk, loop_head, next);
+                    let alt = lower_alt(alt_lk, loop_head, other);
                     DS::IfElse(code, conseq, alt)
                 }
             }
         }
-        DS::Continue => DS::Continue,
-        DS::Loop(structured) => DS::Loop(Box::new(insert_breaks(
-            loop_nodes,
-            loop_head,
-            succ_node,
-            *structured,
-            graph,
-        ))),
+        DS::Loop(label, structured) => DS::Loop(
+            label,
+            Box::new(insert_breaks(loop_nodes, loop_head, succ_node, *structured)),
+        ),
         DS::Switch(code, enum_, structureds) => {
             let result = structureds
                 .into_iter()
                 .map(|(v, structured)| {
                     (
                         v,
-                        insert_breaks(loop_nodes, loop_head, succ_node, structured, graph),
+                        insert_breaks(loop_nodes, loop_head, succ_node, structured),
                     )
                 })
                 .collect::<Vec<_>>();
@@ -487,11 +469,11 @@ fn flatten_sequence(seq: D::Structured) -> D::Structured {
                 }
             }
             DS::Block(_)
-            | DS::Break
-            | DS::Loop(_)
+            | DS::Break(_)
+            | DS::Loop(_, _)
             | DS::IfElse(_, _, _)
             | DS::Switch(_, _, _)
-            | DS::Continue
+            | DS::Continue(_)
             | DS::Jump(_)
             | DS::JumpIf(_, _, _) => result.push(entry),
         }

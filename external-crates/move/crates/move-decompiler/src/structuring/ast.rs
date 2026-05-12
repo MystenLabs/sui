@@ -32,10 +32,16 @@ pub enum Input {
 
 #[derive(Debug, Clone)]
 pub enum Structured {
-    Break,
-    Continue,
+    /// `break 'label;` — targets the labeled enclosing Loop. Structuring always knows which
+    /// loop a break targets (the loop being processed), so this is unconditional `Label`. The
+    /// `Option`al/unlabeled form lives in `crate::ast::Exp` after `strip_loop_labels` runs.
+    Break(Label),
+    /// `continue 'label;` — see `Break`.
+    Continue(Label),
     Block(Code),
-    Loop(Box<Structured>),
+    /// `'label: loop { ... }`. The label is the loop_head NodeIndex; it disambiguates
+    /// labeled `Break`/`Continue` from inner loops that target this one.
+    Loop(Label, Box<Structured>),
     Seq(Vec<Structured>),
     IfElse(Code, Box<Structured>, Box<Option<Structured>>),
     Switch(
@@ -102,9 +108,9 @@ impl std::fmt::Display for Structured {
                     indent(f, level)?;
                     writeln!(f, "{{ {:?} }}", code)
                 }
-                Structured::Loop(body) => {
+                Structured::Loop(label, body) => {
                     indent(f, level)?;
-                    writeln!(f, "loop {{")?;
+                    writeln!(f, "'loop_{}: loop {{", label.index())?;
                     fmt_structured(body, f, level + 1)?;
                     indent(f, level)?;
                     writeln!(f, "}}")
@@ -143,13 +149,13 @@ impl std::fmt::Display for Structured {
                     indent(f, level)?;
                     writeln!(f, "}}")
                 }
-                Structured::Break => {
+                Structured::Break(label) => {
                     indent(f, level)?;
-                    writeln!(f, "break;")
+                    writeln!(f, "break 'loop_{};", label.index())
                 }
-                Structured::Continue => {
+                Structured::Continue(label) => {
                     indent(f, level)?;
-                    writeln!(f, "continue;")
+                    writeln!(f, "continue 'loop_{};", label.index())
                 }
                 Structured::Jump(node_index) => {
                     indent(f, level)?;
