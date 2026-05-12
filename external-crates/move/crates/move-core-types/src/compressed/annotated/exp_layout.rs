@@ -178,8 +178,8 @@ pub struct ExpMoveTypePool {
 /// Top-level layout: shared pool + root reference.
 #[derive(Debug, Clone)]
 pub struct ExpMoveTypeLayout {
-    pool: Arc<ExpMoveTypePool>,
-    root: ExpLayoutRef,
+    pub(crate) pool: Arc<ExpMoveTypePool>,
+    pub(crate) root: ExpLayoutRef,
 }
 
 impl PartialEq for ExpMoveTypeLayout {

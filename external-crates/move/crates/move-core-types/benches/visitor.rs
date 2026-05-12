@@ -20,6 +20,8 @@
 //! |--------------|---------------------------------------------------------------------------|------------------------------------------------------|
 //! | `owned`      | `MoveValue::visit_deserialize` over an owned [`MoveTypeLayout`]           | Production-style owned visitor                       |
 //! | `ref`        | `annotated_visitor_ref::visit_value` over a borrowed `MoveTypeLayoutRef`  | Same trait shape, borrowed layout                    |
+//! | `unpacked`   | `annotated_visitor_unpacked::visit_deserialize` over a compressed layout  | Driver owns the pool `Arc`; descent by `LayoutRef`   |
+//! | `exp`        | `annotated_visitor_exp::visit_deserialize` over the experimental Exp layout | Unpacked-style visitor against the alternative pool   |
 //! | `ref_walk`   | Hand-rolled recursive byte walker over the ref layout (no Visitor trait)  | Isolates layout-machinery cost from trait dispatch   |
 //! | `exp_walk`   | Hand-rolled recursive byte walker over the experimental Exp layout         | Same workload against the alternative pool design    |
 //!
@@ -46,6 +48,14 @@ use move_core_types::{
     annotated_visitor::NullTraversal as AnnotatedOwnedNullTraversal,
     annotated_visitor_ref::{
         NullTraversal as AnnotatedRefNullTraversal, visit_value as annotated_ref_visit_value,
+    },
+    annotated_visitor_exp::{
+        NullTraversal as AnnotatedExpNullTraversal,
+        visit_deserialize as annotated_exp_visit_deserialize,
+    },
+    annotated_visitor_unpacked::{
+        NullTraversal as AnnotatedUnpackedNullTraversal,
+        visit_deserialize as annotated_unpacked_visit_deserialize,
     },
     compressed::annotated::{
         ExpMoveTypeLayout, ExpMoveTypeLayoutRef, MoveLayoutViewRef, MoveTypeLayout,
@@ -218,6 +228,15 @@ fn run_annotated_ref(bytes: &[u8], layout: &MoveTypeLayout) {
     .unwrap();
 }
 
+fn run_annotated_unpacked(bytes: &[u8], layout: &MoveTypeLayout) {
+    annotated_unpacked_visit_deserialize(bytes, layout, &mut AnnotatedUnpackedNullTraversal)
+        .unwrap()
+}
+
+fn run_annotated_exp(bytes: &[u8], layout: &ExpMoveTypeLayout) {
+    annotated_exp_visit_deserialize(bytes, layout, &mut AnnotatedExpNullTraversal).unwrap()
+}
+
 fn run_runtime_owned(bytes: &[u8], layout: &RtMoveTypeLayout) {
     RuntimeMoveValue::visit_deserialize(bytes, layout.clone(), &mut RuntimeOwnedNullTraversal)
         .unwrap()
@@ -383,6 +402,8 @@ fn bench_annotated(c: &mut Criterion) {
         // walk the buffer without panicking.
         run_annotated_owned(&bytes, &layout);
         run_annotated_ref(&bytes, &layout);
+        run_annotated_unpacked(&bytes, &layout);
+        run_annotated_exp(&bytes, &exp);
         run_annotated_walk(&bytes, &layout);
         run_exp_walk(&bytes, &exp);
 
@@ -391,6 +412,12 @@ fn bench_annotated(c: &mut Criterion) {
         });
         group.bench_function(format!("{name}/ref"), |b| {
             b.iter(|| run_annotated_ref(black_box(&bytes), black_box(&layout)))
+        });
+        group.bench_function(format!("{name}/unpacked"), |b| {
+            b.iter(|| run_annotated_unpacked(black_box(&bytes), black_box(&layout)))
+        });
+        group.bench_function(format!("{name}/exp"), |b| {
+            b.iter(|| run_annotated_exp(black_box(&bytes), black_box(&exp)))
         });
         group.bench_function(format!("{name}/ref_walk"), |b| {
             b.iter(|| run_annotated_walk(black_box(&bytes), black_box(&layout)))

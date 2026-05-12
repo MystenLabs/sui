@@ -11,6 +11,8 @@ pub mod annotated_extractor;
 pub mod annotated_value;
 pub mod annotated_visitor;
 pub mod annotated_visitor_ref;
+pub mod annotated_visitor_exp;
+pub mod annotated_visitor_unpacked;
 pub mod compressed;
 pub mod gas_algebra;
 pub mod identifier;
