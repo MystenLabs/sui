@@ -30,7 +30,10 @@ use sui_types::object::ObjectInner;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::storage::RpcIndexes;
-use sui_types::transaction::{GasData, Transaction, TransactionData, TransactionKind};
+use sui_types::transaction::GasData;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionKind;
 
 use super::*;
 

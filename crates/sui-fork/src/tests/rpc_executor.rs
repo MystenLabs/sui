@@ -12,9 +12,9 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
-use move_core_types::identifier::Identifier;
 use rand::rngs::OsRng;
 
+use move_core_types::identifier::Identifier;
 use simulacrum::Simulacrum;
 use simulacrum::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
@@ -22,20 +22,30 @@ use sui_protocol_config::Chain;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::{AccountKeyPair, KeypairTraits, get_key_pair};
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::get_key_pair;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiErrorKind;
 use sui_types::execution_status::ExecutionErrorKind;
 use sui_types::full_checkpoint_content::Checkpoint;
-use sui_types::gas_coin::{GAS, GasCoin};
-use sui_types::object::{Object, Owner};
+use sui_types::gas_coin::GAS;
+use sui_types::gas_coin::GasCoin;
+use sui_types::object::Object;
+use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, GasData, Transaction, TransactionData, TransactionKind};
-use sui_types::transaction_driver_types::{
-    EffectsFinalityInfo, ExecuteTransactionRequestV3, TransactionSubmissionError,
-};
-use sui_types::transaction_executor::{TransactionChecks, TransactionExecutor};
+use sui_types::transaction::Argument;
+use sui_types::transaction::GasData;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionKind;
+use sui_types::transaction_driver_types::EffectsFinalityInfo;
+use sui_types::transaction_driver_types::ExecuteTransactionRequestV3;
+use sui_types::transaction_driver_types::TransactionSubmissionError;
+use sui_types::transaction_executor::TransactionChecks;
+use sui_types::transaction_executor::TransactionExecutor;
 
 use crate::context::Context;
 use crate::rpc::executor::ForkedTransactionExecutor;
