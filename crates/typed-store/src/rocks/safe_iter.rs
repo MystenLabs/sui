@@ -167,7 +167,7 @@ impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for SafeRevIter<'_, K, V
 
 /// A raw, position-controlled iterator over a column family.
 ///
-/// Unlike [`SafeIter`], this iterator never deserializes the stored value: the
+/// Unlike `SafeIter`, this iterator never deserializes the stored value: the
 /// caller drives the cursor via [`Self::seek_to_first`], [`Self::seek`],
 /// [`Self::seek_for_prev`], and [`Self::next`], and reads the current row with
 /// [`Self::key`] / [`Self::value`]. The value is returned as a borrowed slice
