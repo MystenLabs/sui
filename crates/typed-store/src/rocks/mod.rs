@@ -11,6 +11,7 @@ use crate::rocks::errors::typed_store_err_from_rocks_err;
 pub use crate::rocks::options::{
     DBMapTableConfigMap, DBOptions, ReadWriteOptions, default_db_options, read_size_from_env,
 };
+pub use crate::rocks::safe_iter::SafeRawIter;
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 #[cfg(tidehunter)]
 use crate::tidehunter_util::{
@@ -681,6 +682,46 @@ impl<K, V> DBMap<K, V> {
 
     pub fn flush(&self) -> Result<(), TypedStoreError> {
         self.db.flush()
+    }
+
+    /// Build a [`SafeRawIter`] over this column family, with optional inclusive
+    /// lower / exclusive upper bounds. Returns `None` for non-RocksDB backends;
+    /// callers should fall back to [`Map::safe_iter_with_bounds`] in that case.
+    ///
+    /// The raw iterator hands back borrowed value bytes and lets the caller
+    /// drive the cursor (`seek`, `seek_for_prev`, `next`), so it can avoid
+    /// deserializing values for rows that are scanned but not consumed.
+    pub fn safe_raw_iter_with_bounds(
+        &self,
+        lower_bound: Option<K>,
+        upper_bound: Option<K>,
+    ) -> Option<SafeRawIter<'_, K>>
+    where
+        K: Serialize,
+    {
+        match &self.db.storage {
+            Storage::Rocks(db) => {
+                let (lower_bound, upper_bound) = iterator_bounds(lower_bound, upper_bound);
+                let readopts =
+                    rocks_util::apply_range_bounds(self.opts.readopts(), lower_bound, upper_bound);
+                let db_iter = db
+                    .underlying
+                    .raw_iterator_cf_opt(&rocks_cf(db, &self.cf), readopts);
+                let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+                Some(SafeRawIter::new(
+                    self.cf.clone(),
+                    db_iter,
+                    _timer,
+                    _perf_ctx,
+                    bytes_scanned,
+                    keys_scanned,
+                    Some(self.db_metrics.clone()),
+                ))
+            }
+            Storage::InMemory(_) => None,
+            #[cfg(tidehunter)]
+            Storage::TideHunter(_) => None,
+        }
     }
 
     pub fn compact_range<J: Serialize>(&self, start: &J, end: &J) -> Result<(), TypedStoreError> {
