@@ -187,22 +187,22 @@ The cheat sheet highlights common Sui CLI commands.
 			<td class="w-1/3">Call a Move package</td>
 		</tr>
 		<tr>
-			<td class="w-2/3">`sui client merge-coin \`<br/>&nbsp;&nbsp;`--primary-coin COIN_ID \`<br/>&nbsp;&nbsp;`--coin-to-merge COIN_ID`</td>
-			<td class="w-1/3">Merge two coins</td>
+			<td class="w-2/3">`sui client ptb \`<br/>&nbsp;&nbsp;`--merge-coins @PRIMARY_COIN_ID \`<br/>&nbsp;&nbsp;`"[@COIN_ID]"`</td>
+			<td class="w-1/3">Merge one or more coins into a primary coin</td>
 		</tr>
 		<tr>
-			<td class="w-2/3">`sui client split-coin \`<br/>&nbsp;&nbsp;`--coin-id COIN_ID \`<br/>&nbsp;&nbsp;`--amounts 1000`</td>
+			<td class="w-2/3">`sui client ptb \`<br/>&nbsp;&nbsp;`--split-coins @COIN_ID \`<br/>&nbsp;&nbsp;`"[1000]"`</td>
 			<td class="w-1/3">Split a coin into two coins: one with 1000 MIST and the rest</td>
 		</tr>
 		<tr>
 			<td class="w-2/3">
-				`sui client pay-sui \`<br/>&nbsp;&nbsp;`--input-coins COIN_ID \`<br/>&nbsp;&nbsp;`--recipients ADDRESS \`<br/>&nbsp;&nbsp;`--amounts 100000000`
+				`sui client ptb \`<br/>&nbsp;&nbsp;`--split-coins gas "[100000000]" \`<br/>&nbsp;&nbsp;`--assign coin \`<br/>&nbsp;&nbsp;`--transfer-objects "[coin]" ADDRESS`
 			</td>
-			<td class="w-1/3">Transfer 0.1 SUI to an address and use the same coin for gas</td>
+			<td class="w-1/3">Transfer 0.1 SUI to an address using the gas coin</td>
 		</tr>
 		<tr>
-			<td class="w-2/3">`sui client transfer-sui \`<br/>&nbsp;&nbsp;`--sui-coin-object-id COIN_ID \`<br/>&nbsp;&nbsp;`--to ADDRESS`</td>
-			<td class="w-1/3">Transfer SUI object to an address and use the same coin for gas</td>
+			<td class="w-2/3">`sui client ptb \`<br/>&nbsp;&nbsp;`--transfer-objects "[gas]" ADDRESS`</td>
+			<td class="w-1/3">Transfer the full gas coin balance to an address</td>
 		</tr>
 	</tbody>
 </table>

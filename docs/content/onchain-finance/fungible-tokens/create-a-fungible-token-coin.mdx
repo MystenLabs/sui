@@ -118,7 +118,7 @@ Address balances significantly reduce concurrency challenges for most use cases.
 
 ### When concurrency still matters
 
-If your transactions use coin objects (or any other owned objects) as inputs, the original concurrency constraints apply. Each owned object has a version, and the system locks it when you sign a transaction. This lock prevents using the same object in another transaction until the first one executes. Attempting to sign multiple transactions with the same owned object can result in equivocation, which makes the object unusable until the end of the epoch.
+If your transactions use coin objects (or any other owned objects) as inputs, the original concurrency constraints apply. Each owned object has a version, and concurrent transactions cannot use the same mutable owned object version. Wait for the first transaction to finish, use independent owned objects, or combine related operations into one PTB.
 
 When you require heavy concurrency with coin objects, split a coin into as many coins as the number of transactions you plan to execute concurrently. Alternatively, provide different coins (through gas smashing) to each transaction. The set of coins used across concurrent transactions must have no overlap.
 
