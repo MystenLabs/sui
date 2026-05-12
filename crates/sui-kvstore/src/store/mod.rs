@@ -401,19 +401,23 @@ impl Connection for BigTableConnection<'_> {
         pipeline_task: &str,
         checkpoint_hi_inclusive: Option<u64>,
     ) -> Result<Option<InitWatermark>> {
+        tracing::info!(pipeline = %pipeline_task, "[hang-probe] init_watermark enter");
         // Re-entry for the same `pipeline_task` returns the previously computed
         // answer without a BigTable round-trip. Also lets callers with a legitimate
         // need for bitmap fields pre-seed via an explicit bootstrap call.
         if let Some(existing) = self.init_results.lock().unwrap().get(pipeline_task) {
+            tracing::info!(pipeline = %pipeline_task, "[hang-probe] init_watermark cache hit");
             return Ok(existing.init);
         }
 
+        tracing::info!(pipeline = %pipeline_task, "[hang-probe] init_watermark before get_pipeline_watermark_rows");
         // This initial read is to determine if we need to migrate from v0 to v1 and to pick
         // up the bitmap `b` cell (if any) so bitmap pipelines resume at their bucket start.
         let row = self
             .client
             .get_pipeline_watermark_rows(pipeline_task)
             .await?;
+        tracing::info!(pipeline = %pipeline_task, cells = row.len(), "[hang-probe] init_watermark after get_pipeline_watermark_rows");
         let existing_v1 = decode_v1(&row)?;
         let existing_v0 = decode_v0(&row)?;
 
@@ -470,10 +474,12 @@ impl Connection for BigTableConnection<'_> {
             }
         };
 
+        tracing::info!(pipeline = %pipeline_task, "[hang-probe] init_watermark before create_pipeline_watermark_if_absent");
         let write_happened = self
             .client
             .create_pipeline_watermark_if_absent(pipeline_task, &initial)
             .await?;
+        tracing::info!(pipeline = %pipeline_task, write_happened, "[hang-probe] init_watermark after create_pipeline_watermark_if_absent");
 
         let final_wm = if write_happened {
             initial
@@ -513,7 +519,10 @@ impl Connection for BigTableConnection<'_> {
     }
 
     async fn accepts_chain_id(&mut self, pipeline_task: &str, chain_id: [u8; 32]) -> Result<bool> {
-        self.client.accepts_chain_id(pipeline_task, chain_id).await
+        tracing::info!(pipeline = %pipeline_task, "[hang-probe] accepts_chain_id enter");
+        let result = self.client.accepts_chain_id(pipeline_task, chain_id).await;
+        tracing::info!(pipeline = %pipeline_task, ok = result.is_ok(), "[hang-probe] accepts_chain_id exit");
+        result
     }
 
     async fn committer_watermark(

@@ -398,6 +398,7 @@ impl BigTableIndexer {
         alpha_pipelines: &[&str],
         registry: &Registry,
     ) -> Result<Self> {
+        tracing::info!("[hang-probe] before Indexer::new");
         let mut indexer = Indexer::new(
             store.clone(),
             indexer_args,
@@ -407,6 +408,7 @@ impl BigTableIndexer {
             registry,
         )
         .await?;
+        tracing::info!("[hang-probe] after Indexer::new");
 
         let global = config.total_max_rows_per_second.map(RateLimiter::new);
         let base_rps = config.max_rows_per_second;
@@ -460,6 +462,7 @@ impl BigTableIndexer {
                 )
                 .await?;
         }
+        tracing::info!("[hang-probe] registering kvstore_checkpoints");
         indexer
             .concurrent_pipeline(
                 BigTableHandler::new(
@@ -470,6 +473,7 @@ impl BigTableIndexer {
                 pipeline.checkpoints.finish(base.clone()),
             )
             .await?;
+        tracing::info!("[hang-probe] registered kvstore_checkpoints");
         indexer
             .concurrent_pipeline(
                 BigTableHandler::new(
