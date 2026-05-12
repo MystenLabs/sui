@@ -5,15 +5,15 @@ module action {
     public fun destroy_action () {
         let l2 = l0;
         let l1 = &l2;
-        match(l1: 0x0::action::Action) {
-            0x0::action::Action::Stop => {
-                let 0x0::action::Action::Stop {} = l2;
+        match(l1: Action) {
+            Action::Stop => {
+                let Action::Stop {} = l2;
             },
-            0x0::action::Action::MoveTo { x: reg_6, y: reg_7 } => {
-                let 0x0::action::Action::MoveTo { x: reg_9, y: reg_10 } = l2;
+            Action::MoveTo { x: reg_6, y: reg_7 } => {
+                let Action::MoveTo { x: reg_9, y: reg_10 } = l2;
             },
-            0x0::action::Action::ChangeSpeed { pos0: reg_12 } => {
-                let 0x0::action::Action::ChangeSpeed { pos0: reg_14 } = l2;
+            Action::ChangeSpeed { pos0: reg_12 } => {
+                let Action::ChangeSpeed { pos0: reg_14 } = l2;
             },
         }
     }
@@ -21,15 +21,15 @@ module action {
     public fun increase_speed () {
         let l3 = l0;
         let l2 =         l3;
-        match(l2: 0x0::action::Action) {
-            0x0::action::Action::Stop => {
+        match(l2: Action) {
+            Action::Stop => {
                 abort 0u64;
             },
-            0x0::action::Action::MoveTo { x: reg_9, y: reg_10 } => {
+            Action::MoveTo { x: reg_9, y: reg_10 } => {
                 abort 0u64;
             },
-            0x0::action::Action::ChangeSpeed { pos0: reg_13 } => {
-                let 0x0::action::Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
+            Action::ChangeSpeed { pos0: reg_13 } => {
+                let Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
                 let l4 = reg_15 : &mut u64;
                 *l4 = l1
                 return 
@@ -41,16 +41,16 @@ module action {
         let l3 = l0;
         let l2 = l3;
         let l1;
-        match(l2: 0x0::action::Action) {
-            0x0::action::Action::Stop => {
+        match(l2: Action) {
+            Action::Stop => {
                 abort 0u64;
             },
-            0x0::action::Action::MoveTo { x: reg_7, y: reg_8 } => {
-                let 0x0::action::Action::MoveTo { x: reg_10, y: reg_11 } = &l3;
+            Action::MoveTo { x: reg_7, y: reg_8 } => {
+                let Action::MoveTo { x: reg_10, y: reg_11 } = &l3;
                 l1 =         *reg_10 : &u64;
             },
-            0x0::action::Action::ChangeSpeed { pos0: reg_14 } => {
-                let 0x0::action::Action::ChangeSpeed { pos0: reg_16 } = &l3;
+            Action::ChangeSpeed { pos0: reg_14 } => {
+                let Action::ChangeSpeed { pos0: reg_16 } = &l3;
                 l1 =         *reg_16 : &u64;
             },
         }

@@ -2,6 +2,20 @@
 
 module 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::dbke;
 
+// -- uses -- 
+
+use 0x1::u64;
+use 0x2::clock;
+use 0x2::event;
+use 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager;
+use 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants;
+use 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::order_info;
+use 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool;
+use 0x7e5c9a5a5e505816e99df9ab6a076e8a3f23ddf0c3dab7c3666bbdc66a60e2d8::sq;
+use 0xa3e3162fb175b3068eee9c18a91c72aba52d1a2b69b68fcda1d34c629da6376a::bm;
+use 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct;
+use 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::dbke;
+
 // -- structs -- 
 
 public struct EE has copy, drop { e: u64, l: u64 }
@@ -9,40 +23,40 @@ public struct EE has copy, drop { e: u64, l: u64 }
 // -- functions -- 
 
 public fun cao_s<T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::Pool<T0, T1>, l1: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::BalanceManager, l2: &0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::TradeProof, l3: &0x2::clock::Clock, l4: &mut 0x7e5c9a5a5e505816e99df9ab6a076e8a3f23ddf0c3dab7c3666bbdc66a60e2d8::sq::SQR, l5: u64, l6: &0x2::tx_context::TxContext): u64 {
-    let l7 = 0x7e5c9a5a5e505816e99df9ab6a076e8a3f23ddf0c3dab7c3666bbdc66a60e2d8::sq::css(l4, l5, true, false, l6);
-    if (l7 != 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_no_error()) {
+    let l7 = sq::css(l4, l5, true, false, l6);
+    if (l7 != ct::e_no_error()) {
         return l7
     } else {
-        0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::cancel_all_orders(l0, l1, l2, l3, l6);
+        pool::cancel_all_orders(l0, l1, l2, l3, l6);
         return 0u64
     }
 }
 
 public fun caw<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::Pool<T0, T1>, l1: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::BalanceManager, l2: &0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::TradeProof, l3: &0x2::clock::Clock, l4: u64, l5: &mut 0x2::tx_context::TxContext): 0x2::coin::Coin<T2> {
-    0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::cancel_all_orders(l0, l1, l2, l3, freeze(l5));
-    return 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::withdraw(l1, l4, l5)
+    pool::cancel_all_orders(l0, l1, l2, l3, freeze(l5));
+    return balance_manager::withdraw(l1, l4, l5)
 }
 
 fun cim(l0: u8): bool {
     let l14 = l0;
     let l13 = &l14;
     let l7 = l13;
-    let l6 = 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::cpsos();
+    let l6 = ct::cpsos();
     let l5 = if (l7 == &l6) {
         true
     } else {
         let l9 = l13;
-        let l8 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::post_only();
+        let l8 = constants::post_only();
         let l4 = if (l9 == &l8) {
             true
         } else {
             let l11 = l13;
-            let l10 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::immediate_or_cancel();
+            let l10 = constants::immediate_or_cancel();
             let l3 = if (l11 == &l10) {
                 false
             } else {
                 let l1 = l13;
-                let l12 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::fill_or_kill();
+                let l12 = constants::fill_or_kill();
                 let l2 = if (l1 == &l12) {
                     false
                 } else {
@@ -58,25 +72,25 @@ fun cim(l0: u8): bool {
 }
 
 public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::Pool<T0, T1>, l1: &mut 0xa3e3162fb175b3068eee9c18a91c72aba52d1a2b69b68fcda1d34c629da6376a::bm::CBM, l2: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::BalanceManager, l3: &0x2::clock::Clock, l4: &mut 0x7e5c9a5a5e505816e99df9ab6a076e8a3f23ddf0c3dab7c3666bbdc66a60e2d8::sq::SQR, l5: u64, l6: bool, l7: u64, l8: u64, l9: vector<u8>, l10: vector<u8>, l11: vector<u64>, l12: vector<u64>, l13: vector<bool>, l14: vector<u64>, l15: &mut 0x2::tx_context::TxContext) {
-    let l48 = 0x7e5c9a5a5e505816e99df9ab6a076e8a3f23ddf0c3dab7c3666bbdc66a60e2d8::sq::css(l4, l5, true, false, freeze(l15));
-    if (l48 != 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_no_error()) {
-        0x2::event::emit(EE { e: l48, l: 324u64 })
+    let l48 = sq::css(l4, l5, true, false, freeze(l15));
+    if (l48 != ct::e_no_error()) {
+        event::emit(EE { e: l48, l: 324u64 })
     } else {
-        let l52 = 0xa3e3162fb175b3068eee9c18a91c72aba52d1a2b69b68fcda1d34c629da6376a::bm::gdtp(l1, l2, l15);
+        let l52 = bm::gdtp(l1, l2, l15);
         if (l6) {
-            0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::cancel_all_orders(l0, l2, &l52, l3, freeze(l15))
+            pool::cancel_all_orders(l0, l2, &l52, l3, freeze(l15))
         } else {
             unstructured {
                 goto 'label_41;
             }
         };
-        let (reg_31, reg_32, reg_33) = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::pool_book_params(freeze(l0));
+        let (reg_31, reg_32, reg_33) = pool::pool_book_params(freeze(l0));
         let l32 = reg_33;
         let l31 = reg_32;
         let l51 = reg_31;
-        let l20 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::balance(freeze(l2));
-        let l43 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::balance(freeze(l2));
-        let l23 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::balance_manager::balance(freeze(l2));
+        let l20 = balance_manager::balance(freeze(l2));
+        let l43 = balance_manager::balance(freeze(l2));
+        let l23 = balance_manager::balance(freeze(l2));
         let l16 = if (l20 > l7) {
             l20 - l7
         } else {
@@ -97,8 +111,8 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
             let (l26, l27, l29, l34, l40, l47);
             if (l28 < &l11.len()) {
                 l26 = *(&(&l14)[l28]);
-                if (l26 < 0x2::clock::timestamp_ms(l3)) {
-                    0x2::event::emit(EE { e: 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_order_expired(), l: 348u64 });
+                if (l26 < clock::timestamp_ms(l3)) {
+                    event::emit(EE { e: ct::e_order_expired(), l: 348u64 });
                     l28 = l28 + 1u64;
                     continue
                 } else {
@@ -109,13 +123,13 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
                     l29 = *(&(&l13)[l28]);
                     if (l29) {
                         if (l44 <= l8) {
-                            0x2::event::emit(EE { e: 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_insufficient_quote_balance(), l: 363u64 });
+                            event::emit(EE { e: ct::e_insufficient_quote_balance(), l: 363u64 });
                             l28 = l28 + 1u64;
                             continue
                         }
                     } else {
-                        if (l21 < 0x1::u64::max(l32, l7)) {
-                            0x2::event::emit(EE { e: 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_insufficient_base_balance(), l: 354u64 });
+                        if (l21 < u64::max(l32, l7)) {
+                            event::emit(EE { e: ct::e_insufficient_base_balance(), l: 354u64 });
                             l28 = l28 + 1u64;
                             continue
                         }
@@ -124,12 +138,12 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
             } else {
                 break
             };
-            let l30 = 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::dbke::cim(l34);
+            let l30 = dbke::cim(l34);
             let l37 = l27;
-            if (l34 == 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::cpsos()) {
+            if (l34 == ct::cpsos()) {
                 if (!(l50)) {
                     let (reg_134, reg_136);
-                    (reg_134, reg_135, reg_136, reg_137) = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::get_level2_ticks_from_mid(freeze(l0), 1u64, l3);
+                    (reg_134, reg_135, reg_136, reg_137) = pool::get_level2_ticks_from_mid(freeze(l0), 1u64, l3);
                     let l18 = reg_136;
                     l22 = reg_134;
                     l19 = l18;
@@ -137,38 +151,38 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
                 } else {
                     
                 };
-                let l49 = 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::dbke::sp(&l22, &l19, l51, l27, l29);
+                let l49 = dbke::sp(&l22, &l19, l51, l27, l29);
                 if (l49 == 0u64) {
-                    0x2::event::emit(EE { e: 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_invalid_price(), l: 379u64 });
+                    event::emit(EE { e: ct::e_invalid_price(), l: 379u64 });
                     l28 = l28 + 1u64;
                     continue
                 } else {
                     l37 = l49;
-                    l34 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::post_only();
+                    l34 = constants::post_only();
                 }
             } else {
-                let (reg_170, reg_171) = 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::dbke::vbac(freeze(l0), l21, l44, l23, l51, l31, l32, l37, l40, l29, l30, true);
+                let (reg_170, reg_171) = dbke::vbac(freeze(l0), l21, l44, l23, l51, l31, l32, l37, l40, l29, l30, true);
                 let l24 = reg_171;
                 let l53 = reg_170;
-                if (l24 != 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_no_error()) {
-                    0x2::event::emit(EE { e: l24, l: 404u64 });
+                if (l24 != ct::e_no_error()) {
+                    event::emit(EE { e: l24, l: 404u64 });
                     l28 = l28 + 1u64;
                     continue
                 } else {
-                    let l33 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::place_limit_order(l0, l2, &l52, l28, l34, l47, l37, l53, l29, true, l26, l3, freeze(l15));
-                    let l35 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::order_info::original_quantity(&l33);
-                    let l25 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::order_info::executed_quantity(&l33);
-                    let l36 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::order_info::paid_fees(&l33);
+                    let l33 = pool::place_limit_order(l0, l2, &l52, l28, l34, l47, l37, l53, l29, true, l26, l3, freeze(l15));
+                    let l35 = order_info::original_quantity(&l33);
+                    let l25 = order_info::executed_quantity(&l33);
+                    let l36 = order_info::paid_fees(&l33);
                     l44 = if (l29) {
                         let l41 = l35as u128;
                         let l38 = l37as u128;
-                        let l46 = l41 * l38 / 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::float_scaling_u128() + 1u128;
+                        let l46 = l41 * l38 / constants::float_scaling_u128() + 1u128;
                         l21 = l21 + l25;
                         l44 - l46as u64
                     } else {
                         let l42 = l25as u128;
                         let l39 = l37as u128;
-                        let l45 = l42 * l39 / 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::float_scaling_u128();
+                        let l45 = l42 * l39 / constants::float_scaling_u128();
                         l21 = l21 - l35;
                         l44 + l45as u64
                     };
@@ -212,7 +226,7 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
                     return l3
                 } else {
                     let l10 = l7 + l2;
-                    if (l10 > 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::max_u64() - l2) {
+                    if (l10 > constants::max_u64() - l2) {
                         return 0u64
                     } else {
                         l5 = l10;
@@ -225,10 +239,10 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
 
 fun vbac<T,T>(l0: &0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64, l7: u64, l8: u64, l9: bool, l10: bool, l11: bool): ( u64, u64) {
     if (l7 == 0u64) {
-        return (0u64, 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_invalid_price())
+        return (0u64, ct::e_invalid_price())
     } else {
         if (l7 % l4 != 0u64) {
-            return (0u64, 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_invalid_price())
+            return (0u64, ct::e_invalid_price())
         } else {
             let l12 = if (!(l9)) {
                 l1 < l6
@@ -236,29 +250,29 @@ fun vbac<T,T>(l0: &0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d32
                 false
             };
             if (l12) {
-                return (0u64, 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_insufficient_base_balance())
+                return (0u64, ct::e_insufficient_base_balance())
             } else {
                 if (l8 < l6) {
-                    return (0u64, 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_insufficient_quantity())
+                    return (0u64, ct::e_insufficient_quantity())
                 } else {
                     let l16 = l9;
                     let l15;
                     if (*(&l16)) {
-                        let l25 = l2as u128 * 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::float_scaling_u128() / l7as u128as u64;
+                        let l25 = l2as u128 * constants::float_scaling_u128() / l7as u128as u64;
                         let l21 = l25 % l5 + l5;
                         if (l25 < l21) {
-                            return (0u64, 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_insufficient_quote_balance())
+                            return (0u64, ct::e_insufficient_quote_balance())
                         } else {
                             let l22 = l25 - l21;
                             if (l22 < l6) {
-                                return (0u64, 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_insufficient_quote_balance())
+                                return (0u64, ct::e_insufficient_quote_balance())
                             } else {
-                                let l19 = 0x1::u64::max(l6, 0x1::u64::min(l8, l22as u64));
+                                let l19 = u64::max(l6, u64::min(l8, l22as u64));
                                 l15 = l19 - l19 % l5;
                             }
                         }
                     } else {
-                        let l20 = 0x1::u64::max(l6, 0x1::u64::min(l8, l1));
+                        let l20 = u64::max(l6, u64::min(l8, l1));
                         l15 = l20 - l20 % l5;
                     }
                 }

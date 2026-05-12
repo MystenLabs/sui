@@ -70,10 +70,10 @@ impl Refine for ReconstructMatch {
 /// whose variant tag is `arm_variant`.
 fn has_leading_unpack(body: &Exp, arm_variant: Symbol) -> bool {
     match body {
-        Exp::UnpackVariant(_, (_, _, v), _, _) => *v == arm_variant,
+        Exp::UnpackVariant(_, (_, v), _, _) => *v == arm_variant,
         Exp::Seq(items) => matches!(
             items.first(),
-            Some(Exp::UnpackVariant(_, (_, _, v), _, _)) if *v == arm_variant
+            Some(Exp::UnpackVariant(_, (_, v), _, _)) if *v == arm_variant
         ),
         _ => false,
     }
@@ -84,14 +84,14 @@ fn has_leading_unpack(body: &Exp, arm_variant: Symbol) -> bool {
 /// or loses just its leading statement (when the unpack sat at the head of a `Seq`).
 fn take_leading_unpack(body: &mut Exp, arm_variant: Symbol) -> Option<Vec<(Symbol, String)>> {
     match body {
-        Exp::UnpackVariant(_, (_, _, v), _, _) if *v == arm_variant => {
+        Exp::UnpackVariant(_, (_, v), _, _) if *v == arm_variant => {
             let Exp::UnpackVariant(_, _, fields, _) = std::mem::replace(body, Exp::Seq(vec![]))
             else {
                 unreachable!()
             };
             Some(fields)
         }
-        Exp::Seq(items) if matches!(items.first(), Some(Exp::UnpackVariant(_, (_, _, v), _, _)) if *v == arm_variant) =>
+        Exp::Seq(items) if matches!(items.first(), Some(Exp::UnpackVariant(_, (_, v), _, _)) if *v == arm_variant) =>
         {
             let Exp::UnpackVariant(_, _, fields, _) = items.remove(0) else {
                 unreachable!()

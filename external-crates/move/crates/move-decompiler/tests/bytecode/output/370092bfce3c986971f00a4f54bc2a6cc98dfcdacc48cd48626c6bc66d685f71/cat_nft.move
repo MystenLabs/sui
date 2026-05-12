@@ -2,6 +2,18 @@
 
 module 370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft;
 
+// -- uses -- 
+
+use 0x1::string;
+use 0x2::display;
+use 0x2::event;
+use 0x2::object;
+use 0x2::package;
+use 0x2::transfer;
+use 0x2::tx_context;
+use 0x2::url;
+use 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft;
+
 // -- structs -- 
 
 public struct CatNFT
@@ -46,8 +58,8 @@ const C11: vector<u8> = vector[99u8, 97u8, 116u8];
 
 public entry fun burn(l0: 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT, l1: &mut 0x2::tx_context::TxContext) {
     {
-        let 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT { id: reg_1, name: reg_2, description: reg_3, url: reg_4 } = l0;
-        0x2::object::delete(reg_1 : 0x2::object::UID);
+        let cat_nft::CatNFT { id: reg_1, name: reg_2, description: reg_3, url: reg_4 } = l0;
+        object::delete(reg_1 : 0x2::object::UID);
         return
     }
 }
@@ -57,24 +69,32 @@ public fun description(l0: &0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd4862
 }
 
 fun init(l0: 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CAT_NFT, l1: &mut 0x2::tx_context::TxContext) {
-    let l3 = vector[0x1::string::utf8(C2), 0x1::string::utf8(C3), 0x1::string::utf8(C4), 0x1::string::utf8(C5), 0x1::string::utf8(C6)];
-    let l5 = vector[0x1::string::utf8(C7), 0x1::string::utf8(C8), 0x1::string::utf8(C9), 0x1::string::utf8(C10), 0x1::string::utf8(C11)];
-    let l4 = 0x2::package::claim(l0, l1);
-    let l2 = 0x2::display::new_with_fields(&l4, l3, l5, l1);
-    0x2::display::update_version(&mut l2);
-    0x2::transfer::public_transfer(l4, 0x2::tx_context::sender(freeze(l1)));
-    0x2::transfer::public_transfer(l2, 0x2::tx_context::sender(freeze(l1)))
+    {
+        let l3 = vec![string::utf8(C2), string::utf8(C3), string::utf8(C4), string::utf8(C5), string::utf8(C6)];
+        let l5 = vec![string::utf8(C7), string::utf8(C8), string::utf8(C9), string::utf8(C10), string::utf8(C11)];
+        let l4 = package::claim(l0, l1);
+        let l2 = display::new_with_fields(&l4, l3, l5, l1);
+        display::update_version(&mut l2);
+        transfer::public_transfer(l4, tx_context::sender(freeze(l1)));
+        transfer::public_transfer(l2, tx_context::sender(freeze(l1)));
+        return
+    }
 }
 
 public fun mint(l0: vector<u8>, l1: vector<u8>, l2: vector<u8>, l3: &mut 0x2::tx_context::TxContext): 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT {
-    let l5 = 0x2::tx_context::sender(freeze(l3));
-    let l4 = CatNFT { id: 0x2::object::new(l3), name: 0x1::string::utf8(l0), description: 0x1::string::utf8(l1), url: 0x2::url::new_unsafe_from_bytes(l2) };
-    0x2::event::emit(NFTMinted { object_id: 0x2::object::id(&l4), creator: l5, name: *(&(&l4).name) });
-    return l4
+    {
+        let l5 = tx_context::sender(freeze(l3));
+        let l4 = CatNFT { id: object::new(l3), name: string::utf8(l0), description: string::utf8(l1), url: url::new_unsafe_from_bytes(l2) };
+        event::emit(NFTMinted { object_id: object::id(&l4), creator: l5, name: *(&(&l4).name) });
+        return l4
+    }
 }
 
 public entry fun mint_to_cat(l0: vector<u8>, l1: vector<u8>, l2: vector<u8>, l3: address, l4: &mut 0x2::tx_context::TxContext) {
-    0x2::transfer::public_transfer(0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::mint(l0, l1, l2, l4), l3)
+    {
+        transfer::public_transfer(cat_nft::mint(l0, l1, l2, l4), l3);
+        return
+    }
 }
 
 public fun name(l0: &0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT): &0x1::string::String {
@@ -82,11 +102,17 @@ public fun name(l0: &0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66
 }
 
 public entry fun transfer(l0: 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT, l1: address, l2: &mut 0x2::tx_context::TxContext) {
-    0x2::transfer::public_transfer(l0, l1)
+    {
+        transfer::public_transfer(l0, l1);
+        return
+    }
 }
 
 public entry fun update_description(l0: &mut 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT, l1: vector<u8>, l2: &mut 0x2::tx_context::TxContext) {
-    *(&mut l0.description) = 0x1::string::utf8(l1)
+    {
+        *(&mut l0.description) = string::utf8(l1);
+        return
+    }
 }
 
 public fun url(l0: &0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT): &0x2::url::Url {

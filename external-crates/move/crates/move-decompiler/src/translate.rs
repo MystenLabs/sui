@@ -17,7 +17,7 @@ use move_model_2::{
 };
 use move_stackless_bytecode_2::ast as SB;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 // -------------------------------------------------------------------------------------------------
 // Entry
@@ -92,7 +92,47 @@ pub fn module<S: SourceKind>(
         .map(|(name, fun)| (name, function(config, resolved, fun)))
         .collect();
 
-    Out::Module { name, functions }
+    let mut module = Out::Module {
+        name,
+        functions,
+        uses: BTreeMap::new(),
+        type_uses: BTreeMap::new(),
+    };
+
+    let current_mid = resolved.id();
+    let used = build_used(&module, &resolved);
+    crate::refinement::collect_uses(&mut module, current_mid, &used);
+    module
+}
+
+/// Names that no module alias may use: every function, struct, enum, variant, and field
+/// name declared in this module, plus every local introduced or referenced in any function
+/// body. Aliases shadowing these would produce ambiguous or wrong decompiled source.
+fn build_used<S: SourceKind>(module: &Out::Module, resolved: &MModule<'_, S>) -> BTreeSet<Symbol> {
+    let mut out = crate::refinement::collect_local_names(module);
+
+    // Function names in this module.
+    for name in module.functions.keys() {
+        out.insert(*name);
+    }
+
+    // Struct, enum, variant, and field names declared in this module.
+    for s in resolved.structs() {
+        out.insert(s.name());
+        for field in s.compiled().fields.0.keys() {
+            out.insert(*field);
+        }
+    }
+    for e in resolved.enums() {
+        out.insert(e.name());
+        for v in e.variants() {
+            out.insert(v.name());
+            for field in v.compiled().fields.0.keys() {
+                out.insert(*field);
+            }
+        }
+    }
+    out
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -311,7 +351,11 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                 .into_iter()
                 .map(|(v, c)| (v, generate_output(terms.clone(), c)))
                 .collect();
-            exps.push(Out::Exp::Switch(Box::new(cond), enum_, cases));
+            exps.push(Out::Exp::Switch(
+                Box::new(cond),
+                Out::TypeRef::Qualified(Out::ModuleRef::Qualified(enum_.0), enum_.1),
+                cases,
+            ));
             Out::Exp::Seq(exps)
         }
         D::Structured::Jump(target) => {

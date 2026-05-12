@@ -31,7 +31,7 @@ pub fn exp(
                 rhs: RValue::Call { target, args },
             } => {
                 let args = trivials(&mut map, args);
-                let call = Out::Exp::Call(target, args);
+                let call = Out::Exp::Call((Out::ModuleRef::Qualified(target.0), target.1), args);
                 match &lhs[..] {
                     [] => {
                         seq.push(call);
@@ -69,7 +69,11 @@ pub fn exp(
                     let module_id = ty.struct_.defining_module;
                     let name = ty.struct_.name;
                     let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
-                    seq.push(Out::Exp::Unpack((module_id, name), unpack_fields, rhs));
+                    seq.push(Out::Exp::Unpack(
+                        Out::TypeRef::Qualified(Out::ModuleRef::Qualified(module_id), name),
+                        unpack_fields,
+                        rhs,
+                    ));
                 }
                 DataOp::UnpackVariant(_)
                 | DataOp::UnpackVariantImmRef(_)
@@ -94,7 +98,10 @@ pub fn exp(
                     let rhs = Box::new(trivials(&mut map, args.clone()).remove(0));
                     seq.push(Out::Exp::UnpackVariant(
                         unpack_kind,
-                        (module_id, enum_, variant),
+                        (
+                            Out::TypeRef::Qualified(Out::ModuleRef::Qualified(module_id), enum_),
+                            variant,
+                        ),
                         unpack_fields,
                         rhs,
                     ));

@@ -5,15 +5,15 @@ module colors {
     public fun is_blue () {
         let l3 = l0;
         let l2 = &l3;
-        let l1 = match(l2: 0x0::colors::Color) {
-            0x0::colors::Color::Red => {
+        let l1 = match(l2: Color) {
+            Color::Red => {
                 false
             },
-            0x0::colors::Color::Green => {
+            Color::Green => {
                 false
             },
-            0x0::colors::Color::Blue => {
-                let 0x0::colors::Color::Blue {} = l3;
+            Color::Blue => {
+                let Color::Blue {} = l3;
                 true
             },
         };
@@ -23,15 +23,15 @@ module colors {
     public fun is_green () {
         let l3 = l0;
         let l2 = &l3;
-        let l1 = match(l2: 0x0::colors::Color) {
-            0x0::colors::Color::Red => {
+        let l1 = match(l2: Color) {
+            Color::Red => {
                 false
             },
-            0x0::colors::Color::Green => {
-                let 0x0::colors::Color::Green {} = l3;
+            Color::Green => {
+                let Color::Green {} = l3;
                 true
             },
-            0x0::colors::Color::Blue => {
+            Color::Blue => {
                 false
             },
         };
@@ -41,15 +41,15 @@ module colors {
     public fun is_red () {
         let l3 = l0;
         let l2 = &l3;
-        let l1 = match(l2: 0x0::colors::Color) {
-            0x0::colors::Color::Red => {
-                let 0x0::colors::Color::Red {} = l3;
+        let l1 = match(l2: Color) {
+            Color::Red => {
+                let Color::Red {} = l3;
                 true
             },
-            0x0::colors::Color::Green => {
+            Color::Green => {
                 false
             },
-            0x0::colors::Color::Blue => {
+            Color::Blue => {
                 false
             },
         };

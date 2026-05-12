@@ -3,6 +3,7 @@
 
 use crate::ast::Exp;
 
+mod collect_uses;
 mod flatten_seq;
 mod fuse_let;
 mod hoist_arm_assignments;
@@ -12,6 +13,8 @@ mod reconstruct_match;
 mod remove_trailing_continue;
 mod remove_trailing_return;
 mod strip_loop_labels;
+
+pub use collect_uses::{collect_local_names, collect_uses};
 
 pub type Refinement = fn(&mut Exp) -> bool;
 

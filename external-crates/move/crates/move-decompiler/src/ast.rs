@@ -29,6 +29,15 @@ pub struct Package {
 pub struct Module {
     pub name: Symbol,
     pub functions: BTreeMap<Symbol, Function>,
+    /// `use 0xADDR::name;` declarations. Populated by the `collect_uses` refinement after a
+    /// scan of every function body; arms of every `ModuleRef::Aliased(name)` in the bodies
+    /// correspond to a key here. Initially empty; if `collect_uses` hasn't run (or no module
+    /// is aliasable) it stays empty and bodies hold `ModuleRef::Qualified(...)` everywhere.
+    pub uses: BTreeMap<ModuleId<Symbol>, Symbol>,
+    /// `use 0xADDR::module::Type;` declarations. Populated by the `collect_uses` refinement
+    /// alongside `uses`. Each entry maps a `(module, type_name)` pair to its alias; bodies
+    /// hold `TypeRef::Aliased(alias)` wherever the alias applies.
+    pub type_uses: BTreeMap<(ModuleId<Symbol>, Symbol), Symbol>,
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +45,42 @@ pub struct Function {
     pub name: Symbol,
     pub code: Exp,
     // TODO add function args?
+}
+
+/// A reference to a module from inside an expression. Lowering emits `Qualified(mid)` everywhere;
+/// the `collect_uses` refinement rewrites `Qualified(mid)` to `Aliased(name)` when `mid` is in the
+/// containing `Module.uses` map.
+#[derive(Debug, Clone, Copy)]
+pub enum ModuleRef {
+    Qualified(ModuleId<Symbol>),
+    Aliased(Symbol),
+}
+
+impl std::fmt::Display for ModuleRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleRef::Qualified(mid) => write!(f, "{mid}"),
+            ModuleRef::Aliased(name) => write!(f, "{name}"),
+        }
+    }
+}
+
+/// A reference to a struct or enum from inside an expression. Lowering emits
+/// `Qualified(module, name)` everywhere; the `collect_uses` refinement rewrites it to
+/// `Aliased(name)` when `(module_id, name)` is in the containing `Module.type_uses` map.
+#[derive(Debug, Clone, Copy)]
+pub enum TypeRef {
+    Qualified(ModuleRef, Symbol),
+    Aliased(Symbol),
+}
+
+impl std::fmt::Display for TypeRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TypeRef::Qualified(mr, name) => write!(f, "{mr}::{name}"),
+            TypeRef::Aliased(name) => write!(f, "{name}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -64,7 +109,7 @@ pub enum Exp {
     /// starts with an `UnpackVariant` whose fields can be lifted into a pattern.
     Switch(
         Box<Exp>,
-        /* enum */ (ModuleId<Symbol>, Symbol),
+        /* enum */ TypeRef,
         /* variant x rhs */ Vec<(Symbol, Exp)>,
     ),
     /// A Move `match` expression with patterns. Created exclusively by `reconstruct_match`
@@ -72,7 +117,7 @@ pub enum Exp {
     /// pattern's field bindings (possibly empty for fieldless variants in the same match).
     Match(
         Box<Exp>,
-        /* enum */ (ModuleId<Symbol>, Symbol),
+        /* enum */ TypeRef,
         /* variant x pattern-fields x rhs */ Vec<(Symbol, Vec<(Symbol, String)>, Exp)>,
     ),
     Return(Vec<Exp>),
@@ -83,7 +128,7 @@ pub enum Exp {
     /// `let X;` — declaration with no initializer. Inserted by `hoist_declarations` when an
     /// arm-scope `let X = e` has to be lifted out to a common enclosing scope.
     Declare(Vec<String>),
-    Call((ModuleId<Symbol>, Symbol), Vec<Exp>),
+    Call((ModuleRef, Symbol), Vec<Exp>),
     Abort(Box<Exp>),
     // Do we need drop?
     Primitive {
@@ -94,10 +139,10 @@ pub enum Exp {
         op: DataOp,
         args: Vec<Exp>,
     },
-    Unpack((ModuleId<Symbol>, Symbol), Vec<(Symbol, String)>, Box<Exp>),
+    Unpack(TypeRef, Vec<(Symbol, String)>, Box<Exp>),
     UnpackVariant(
         UnpackKind,
-        (ModuleId<Symbol>, Symbol, Symbol),
+        (TypeRef, /* variant */ Symbol),
         Vec<(Symbol, String)>,
         Box<Exp>,
     ),
@@ -346,11 +391,11 @@ impl std::fmt::Display for Exp {
                     }
                     write!(f, "}}")
                 }
-                Exp::Switch(term, (mid, enum_), cases) => {
-                    writeln!(f, "match({}: {mid}::{enum_}) {{", term)?;
+                Exp::Switch(term, enum_ty, cases) => {
+                    writeln!(f, "match({}: {enum_ty}) {{", term)?;
                     for (variant, case) in cases {
                         indent(f, level + 1)?;
-                        writeln!(f, "{mid}::{enum_}::{variant} => {{")?;
+                        writeln!(f, "{enum_ty}::{variant} => {{")?;
                         fmt_block_body(f, case, level + 2)?;
                         indent(f, level + 1)?;
                         writeln!(f, "}},")?;
@@ -358,11 +403,11 @@ impl std::fmt::Display for Exp {
                     indent(f, level)?;
                     write!(f, "}}")
                 }
-                Exp::Match(term, (mid, enum_), cases) => {
-                    writeln!(f, "match({}: {mid}::{enum_}) {{", term)?;
+                Exp::Match(term, enum_ty, cases) => {
+                    writeln!(f, "match({}: {enum_ty}) {{", term)?;
                     for (variant, fields, case) in cases {
                         indent(f, level + 1)?;
-                        write_match_pattern(f, mid, enum_, variant, fields)?;
+                        write_match_pattern(f, enum_ty, variant, fields)?;
                         writeln!(f, " => {{")?;
                         fmt_block_body(f, case, level + 2)?;
                         indent(f, level + 1)?;
@@ -487,12 +532,12 @@ impl std::fmt::Display for Exp {
                     }
                     writeln!(f, "}}")
                 }
-                Exp::Switch(term, (mid, enum_), cases) => {
+                Exp::Switch(term, enum_ty, cases) => {
                     indent(f, level)?;
-                    writeln!(f, "match({}: {mid}::{enum_}) {{", term)?;
+                    writeln!(f, "match({}: {enum_ty}) {{", term)?;
                     for (variant, case) in cases {
                         indent(f, level + 1)?;
-                        writeln!(f, "{mid}::{enum_}::{variant} => {{")?;
+                        writeln!(f, "{enum_ty}::{variant} => {{")?;
                         fmt_exp(f, case, level + 2)?;
                         indent(f, level + 1)?;
                         writeln!(f, "}},")?;
@@ -500,12 +545,12 @@ impl std::fmt::Display for Exp {
                     indent(f, level)?;
                     writeln!(f, "}}")
                 }
-                Exp::Match(term, (mid, enum_), cases) => {
+                Exp::Match(term, enum_ty, cases) => {
                     indent(f, level)?;
-                    writeln!(f, "match({}: {mid}::{enum_}) {{", term)?;
+                    writeln!(f, "match({}: {enum_ty}) {{", term)?;
                     for (variant, fields, case) in cases {
                         indent(f, level + 1)?;
-                        write_match_pattern(f, mid, enum_, variant, fields)?;
+                        write_match_pattern(f, enum_ty, variant, fields)?;
                         writeln!(f, " => {{")?;
                         fmt_exp(f, case, level + 2)?;
                         indent(f, level + 1)?;
@@ -559,9 +604,9 @@ impl std::fmt::Display for Exp {
                 Exp::Value(value) => write!(f, "{}", value),
                 Exp::Variable(name) => write!(f, "{}", name),
                 Exp::Constant(constant) => write!(f, "{:?}", constant),
-                Exp::Unpack((module, struct_), items, exp) => {
+                Exp::Unpack(struct_ty, items, exp) => {
                     indent(f, level)?;
-                    write!(f, "let {module}::{struct_} {{")?;
+                    write!(f, "let {struct_ty} {{")?;
                     if !items.is_empty() {
                         write!(f, " ")?;
                     }
@@ -576,9 +621,9 @@ impl std::fmt::Display for Exp {
                     }
                     writeln!(f, "}} = {};", exp)
                 }
-                Exp::UnpackVariant(unpack_kind, (module, enum_, variant), items, exp) => {
+                Exp::UnpackVariant(unpack_kind, (enum_ty, variant), items, exp) => {
                     indent(f, level)?;
-                    write!(f, "let {module}::{enum_}::{variant} {{")?;
+                    write!(f, "let {enum_ty}::{variant} {{")?;
                     if !items.is_empty() {
                         write!(f, " ")?;
                     }
@@ -643,12 +688,11 @@ impl std::fmt::Display for Exp {
 /// `UnpackVariant` up into the pattern.
 fn write_match_pattern(
     f: &mut std::fmt::Formatter<'_>,
-    mid: &ModuleId<Symbol>,
-    enum_: &Symbol,
+    enum_ty: &TypeRef,
     variant: &Symbol,
     fields: &[(Symbol, String)],
 ) -> std::fmt::Result {
-    write!(f, "{mid}::{enum_}::{variant}")?;
+    write!(f, "{enum_ty}::{variant}")?;
     if fields.is_empty() {
         return Ok(());
     }

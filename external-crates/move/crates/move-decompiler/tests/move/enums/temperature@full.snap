@@ -23,10 +23,10 @@ public fun dtor(l0: enums::temperature::Temperature) {
     let l1 = &l2;
     match (l1) {
         Fahrenheit { pos0: reg_4 } => {
-            let 0x0::temperature::Temperature::Fahrenheit { pos0: reg_6 } = l2
+            let Temperature::Fahrenheit { pos0: reg_6 } = l2
         },
         Celcius { pos0: reg_8 } => {
-            let 0x0::temperature::Temperature::Celcius { pos0: reg_10 } = l2
+            let Temperature::Celcius { pos0: reg_10 } = l2
         }
     }
 }
