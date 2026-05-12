@@ -899,10 +899,10 @@ impl LiveSetIter<'_> {
         }
     }
 
-    /// Raw-iterator fast path: walk forward through versions of the current
-    /// object reading only keys, tracking the largest one. Once we leave the
-    /// object (or run out of rows), seek back to that key and decode just
-    /// its value. Intermediate-version values are never decoded.
+    /// Raw-iterator fast path: jump directly to the latest version of the
+    /// current object via `seek_for_prev(max_for_id(id))`, decode just that
+    /// row's value, then advance past it. Intermediate versions are never
+    /// read.
     fn fetch_next_raw(&mut self) -> Option<(ObjectKey, StoreObjectWrapper)> {
         let LiveSetIterState::Raw { iter, initialized } = &mut self.state else {
             unreachable!("fetch_next_raw called on non-raw state");
@@ -914,31 +914,23 @@ impl LiveSetIter<'_> {
         if !iter.valid() {
             return None;
         }
-        let mut latest_key = match iter.key()? {
+        let cur_id = match iter.key()? {
+            Ok(key) => key.0,
+            Err(_) => return None,
+        };
+        iter.seek_for_prev(&ObjectKey::max_for_id(&cur_id));
+        debug_assert!(
+            iter.valid(),
+            "seek_for_prev must land on a row of {cur_id:?}"
+        );
+        let latest_key = match iter.key()? {
             Ok(key) => key,
             Err(_) => return None,
         };
-        let cur_id = latest_key.0;
-        // Advance reading only keys until we leave `cur_id` or hit the end /
-        // upper bound. We can't rely on `prev()` once the iterator goes
-        // invalid, so we track the largest in-id key seen and seek back to it.
-        loop {
-            iter.next();
-            if !iter.valid() {
-                break;
-            }
-            let k = match iter.key()? {
-                Ok(key) => key,
-                Err(_) => return None,
-            };
-            if k.0 != cur_id {
-                break;
-            }
-            latest_key = k;
-        }
-        // Reposition on the latest-version row of `cur_id`.
-        iter.seek(&latest_key);
-        debug_assert!(iter.valid(), "seek must land on a known existing key");
+        debug_assert_eq!(
+            latest_key.0, cur_id,
+            "seek_for_prev landed outside {cur_id:?}"
+        );
         let value_bytes = iter.value()?;
         let wrapper: StoreObjectWrapper = bcs::from_bytes(value_bytes).unwrap_or_else(|e| {
             panic!(
