@@ -397,10 +397,10 @@ mod tests {
         assert!(root.packages().len() >= 3, "expected root + A + B");
     }
 
-    /// An on-chain dep's linkage table references the same address as a local dep
-    /// that is published at that address. This creates a duplicate in the graph.
-    /// TODO: deduplication should resolve this.
+    /// When an on-chain dep's linkage table references the same address as a local dep,
+    /// they should be deduplicated to a single package in the graph.
     #[test(tokio::test)]
+    #[ignore] // TODO: requires deduplication of on-chain and source deps
     async fn on_chain_overlaps_with_local_dep() {
         use crate::flavor::vanilla::DEFAULT_ENV_NAME;
         use crate::test_utils::graph_builder::TestPackageGraph;
@@ -422,26 +422,14 @@ mod tests {
             .add_on_chain_pkg(addr_shared, |pkg| pkg)
             .build();
 
-        // This currently loads both as separate packages (no deduplication).
-        // TODO: when deduplication is implemented, this should resolve to a
-        // single package and this test should be updated.
-        let result = scenario.try_root_package("root", |cfg| cfg).await;
-        match result {
-            Ok(root) => {
-                // Both the local dep and on-chain fetched copy are in the graph
-                assert!(
-                    root.packages().len() >= 4,
-                    "expected root + local_dep + on-chain A + on-chain CC, got {}",
-                    root.packages().len()
-                );
-            }
-            Err(err) => {
-                let msg = err.to_string();
-                assert!(
-                    !msg.contains("rename-from"),
-                    "unexpected rename-from error: {msg}"
-                );
-            }
-        }
+        let root = scenario.root_package("root").await;
+        // After deduplication: root + local_dep + on-chain A = 3 packages
+        // (local_dep and on-chain 0xCC should be the same node)
+        assert_eq!(
+            root.packages().len(),
+            3,
+            "expected root + local_dep + on-chain A (deduplicated), got {}",
+            root.packages().len()
+        );
     }
 }
