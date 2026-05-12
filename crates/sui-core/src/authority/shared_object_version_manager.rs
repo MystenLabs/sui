@@ -40,13 +40,10 @@ pub struct AssignedVersions {
     /// that this transaction belongs to. It is used to determine the deterministic
     /// balance state of the accounts involved in funds withdrawals.
     ///
-    /// `None` when no accumulator version applies to this transaction, e.g.:
-    /// - accumulators are not enabled at the protocol level for this epoch
-    ///   (`assign_versions_for_certificate` returns `None`);
+    /// `None` when no accumulator version applies to this transaction:
+    /// - accumulators are not enabled at the protocol level for this epoch, or
     /// - the transaction is an end-of-epoch / change-epoch tx, which does not
-    ///   read or write the accumulator root;
-    /// - the checkpoint being replayed by the checkpoint executor has no
-    ///   accumulator versions in its effects (whole checkpoint is `None`).
+    ///   read or write the accumulator root.
     pub accumulator_version: Option<SequenceNumber>,
 }
 
