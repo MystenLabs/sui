@@ -15095,10 +15095,8 @@ name = "sui-indexer-alt-e2e-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-stream",
  "async-trait",
  "bcs",
- "bytes",
  "coset",
  "datatest-stable",
  "diesel",
@@ -15153,6 +15151,7 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tokio-stream",
+ "tokio-tungstenite 0.26.2",
  "tonic 0.14.5",
  "tracing",
  "url",
