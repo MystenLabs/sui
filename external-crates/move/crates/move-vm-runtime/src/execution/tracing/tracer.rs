@@ -63,6 +63,13 @@ pub(crate) enum GlobalValue {
     // `usize`. This is used when moving from a local to a stack value. We should always reify back
     // to a value or or in local state.
     AtStackOffset(usize),
+    // The reference was registered for a frame whose tracer asked to omit both the value
+    // snapshot and effect emission (`wants_frame_snapshot = false` and `wants_effects = false`).
+    // The id exists so the operand-stack / type-stack invariant holds and so
+    // `record_global_store` can re-root the entry to `InLocal`; no value was ever captured.
+    // Direct resolution returns `None` (silent drop) -- callers that need a value should not
+    // have set both gates off.
+    OmittedValue,
 }
 
 /// Information about a frame that we keep during trace building
@@ -417,8 +424,12 @@ impl VMTracer<'_> {
             // local higher up, so we don't update the root -- it's rooted in a local, and we should keep it
             // there and that's where we should look for state updates.
             GlobalValue::InLocal(_, _) => (),
-            // If it's not a root then set the location to be a local root
-            GlobalValue::Value(_) | GlobalValue::AtStackOffset(_) => *global = location,
+            // If it's not a root then set the location to be a local root. `OmittedValue`
+            // entries (minted for refs in fully-gated frames) re-root the same as `Value`: once
+            // the ref lives in a local, future loads find it via the InLocal chain.
+            GlobalValue::Value(_) | GlobalValue::AtStackOffset(_) | GlobalValue::OmittedValue => {
+                *global = location
+            }
         }
 
         Some(())
@@ -491,6 +502,9 @@ impl VMTracer<'_> {
                 GlobalValue::AtStackOffset(idx) => {
                     self.resolve_location(vtables, machine, &RuntimeLocation::Stack(*idx))
                 }
+                // OmittedValue: no value was captured. Silent drop -- the caller's `?` chain
+                // short-circuits, matching the existing behavior for a missing entry.
+                GlobalValue::OmittedValue => None,
             },
         }
     }
@@ -562,6 +576,8 @@ impl VMTracer<'_> {
                 GlobalValue::AtStackOffset(idx) => {
                     self.root_location_snapshot(vtables, machine, &RuntimeLocation::Stack(*idx))?
                 }
+                // OmittedValue: see `resolve_location` for rationale -- silent drop.
+                GlobalValue::OmittedValue => return None,
             },
         })
     }
@@ -662,7 +678,12 @@ impl VMTracer<'_> {
         // wanted (the walk feeds `Effect::DataLoad` and `loaded_data` registration).
         let build_values = wants_frame_snapshot || self.wants_effects;
 
-        let call_args: Vec<(_, _)> = if build_values {
+        // call_args carries two pieces per arg:
+        //  - an optional `TraceValue` (Some only when `build_values`, fed to `OpenFrame.parameters`)
+        //  - an optional data-load id (Some for refs; required so the locals_types loop below can
+        //    mark ref locals as `Filled { location: Global(id) }`, preserving the
+        //    operand_stack/type_stack invariant downstream).
+        let call_args: Vec<(Option<TraceValue>, Option<TraceIndex>)> = if build_values {
             args.iter()
                 .zip(function_type_info.local_types.iter().cloned())
                 .map(|(value, tag_with_layout_info_opt)| {
@@ -674,14 +695,29 @@ impl VMTracer<'_> {
                             let (id, trace_value) = self.emit_data_load(move_value, &ref_type)?;
                             self.loaded_data
                                 .insert(id, GlobalValue::Value(trace_value.clone()));
-                            Some((trace_value, Some(id)))
+                            Some((Some(trace_value), Some(id)))
                         }
-                        None => Some((TraceValue::RuntimeValue { value: move_value }, None)),
+                        None => Some((Some(TraceValue::RuntimeValue { value: move_value }), None)),
                     }
                 })
                 .collect::<Option<_>>()?
         } else {
-            Vec::new()
+            // Fully gated: skip the deep walk and `Effect::DataLoad` emission, but still mint a
+            // data-load id per ref-typed arg and stash a `GlobalValue::OmittedValue` placeholder. The
+            // id flows into the locals_types loop so refs remain `Filled`; the placeholder lets
+            // `record_global_store` (called from that loop) re-root the entry to `InLocal`.
+            args.iter()
+                .zip(function_type_info.local_types.iter().cloned())
+                .map(|(_, tag_with_layout_info_opt)| {
+                    let (_, ref_type) = tag_with_layout_info_opt.layout;
+                    let id = ref_type.map(|_| {
+                        let id = self.trace.current_trace_offset();
+                        self.loaded_data.insert(id, GlobalValue::OmittedValue);
+                        id
+                    });
+                    (None, id)
+                })
+                .collect()
         };
 
         let current_trace_offset = self.trace.current_trace_offset();
@@ -731,9 +767,11 @@ impl VMTracer<'_> {
             function.module_id(&self.interner).clone(),
             version_id,
             if wants_frame_snapshot {
+                // `build_values` is true whenever `wants_frame_snapshot` is true, so every
+                // `(Some(tv), _)` slot is populated here.
                 call_args
                     .into_iter()
-                    .map(|(trace_value, _)| trace_value)
+                    .filter_map(|(trace_value, _)| trace_value)
                     .collect()
             } else {
                 vec![]
