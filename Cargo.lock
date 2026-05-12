@@ -8407,7 +8407,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=f7e5ab73209035fa1695777defc1a11368425d2d#f7e5ab73209035fa1695777defc1a11368425d2d"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=48f0621dc08b3992dbd168631f36b88b003f4a2c#48f0621dc08b3992dbd168631f36b88b003f4a2c"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -17893,7 +17893,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=f7e5ab73209035fa1695777defc1a11368425d2d#f7e5ab73209035fa1695777defc1a11368425d2d"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=48f0621dc08b3992dbd168631f36b88b003f4a2c#48f0621dc08b3992dbd168631f36b88b003f4a2c"
 dependencies = [
  "arc-swap",
  "bincode 1.3.3",
