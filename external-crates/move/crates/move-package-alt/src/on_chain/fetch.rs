@@ -381,41 +381,15 @@ mod tests {
         let addr_a = PublishedID::from(0xA_u16);
         let addr_b = PublishedID::from(0xB_u16);
 
-        // Package A depends on package B (via linkage table)
-        let data_a = OnChainPackageData {
-            modules: BTreeMap::from([("mod_a".into(), vec![1])]),
-            dependencies: BTreeMap::from([(OriginalID::from(0xB_u16), addr_b.clone())]),
-            original_id: OriginalID::from(0xA_u16),
-            version: 1,
-        };
-
-        // Package B has no dependencies
-        let data_b = OnChainPackageData {
-            modules: BTreeMap::from([("mod_b".into(), vec![2])]),
-            dependencies: BTreeMap::new(),
-            original_id: OriginalID::from(0xB_u16),
-            version: 1,
-        };
-
         let scenario = TestPackageGraph::new(["root"])
             .add_on_chain_dep("root", "dep_a", "true", |d| d)
             .add_on_chain_dep("root", "dep_a", &addr_a.to_string(), |d| {
                 d.in_env(DEFAULT_ENV_NAME)
             })
-            .add_on_chain_pkg(
-                addr_a,
-                data_a.modules.clone(),
-                data_a.dependencies.clone(),
-                data_a.original_id.clone(),
-                data_a.version,
-            )
-            .add_on_chain_pkg(
-                addr_b,
-                data_b.modules.clone(),
-                data_b.dependencies.clone(),
-                data_b.original_id.clone(),
-                data_b.version,
-            )
+            .add_on_chain_pkg(addr_a, |pkg| {
+                pkg.dep(OriginalID::from(0xB_u16), addr_b.clone())
+            })
+            .add_on_chain_pkg(addr_b, |pkg| pkg)
             .build();
 
         // Should succeed — both packages fetched and loaded
@@ -423,64 +397,45 @@ mod tests {
         assert!(root.packages().len() >= 3, "expected root + A + B");
     }
 
-    /// An on-chain dep's linkage table references the same address as a local dep.
+    /// An on-chain dep's linkage table references the same address as a local dep
+    /// that is published at that address. This creates a duplicate in the graph.
+    /// TODO: deduplication should resolve this.
     #[test(tokio::test)]
     async fn on_chain_overlaps_with_local_dep() {
         use crate::flavor::vanilla::DEFAULT_ENV_NAME;
         use crate::test_utils::graph_builder::TestPackageGraph;
 
         let addr_a = PublishedID::from(0xA_u16);
-        let addr_local = PublishedID::from(0xCC_u16);
+        let addr_shared = PublishedID::from(0xCC_u16);
 
-        // Package A's linkage table references 0xCC, which is also a local dep
-        let data_a = OnChainPackageData {
-            modules: BTreeMap::from([("mod_a".into(), vec![1])]),
-            dependencies: BTreeMap::from([(OriginalID::from(0xCC_u16), addr_local.clone())]),
-            original_id: OriginalID::from(0xA_u16),
-            version: 1,
-        };
-
-        // 0xCC is available both as on-chain (from A's linkage) and as local dep "local_dep"
-        let data_cc = OnChainPackageData {
-            modules: BTreeMap::from([("mod_cc".into(), vec![3])]),
-            dependencies: BTreeMap::new(),
-            original_id: OriginalID::from(0xCC_u16),
-            version: 1,
-        };
-
-        let scenario = TestPackageGraph::new(["root", "local_dep"])
+        // local_dep is published at 0xCC — same address as A's linkage entry
+        let scenario = TestPackageGraph::new(["root"])
+            .add_published("local_dep", OriginalID::from(0xCC_u16), addr_shared.clone())
             .add_deps([("root", "local_dep")])
             .add_on_chain_dep("root", "dep_a", "true", |d| d)
             .add_on_chain_dep("root", "dep_a", &addr_a.to_string(), |d| {
                 d.in_env(DEFAULT_ENV_NAME)
             })
-            .add_on_chain_pkg(
-                addr_a,
-                data_a.modules.clone(),
-                data_a.dependencies.clone(),
-                data_a.original_id.clone(),
-                data_a.version,
-            )
-            .add_on_chain_pkg(
-                addr_local,
-                data_cc.modules.clone(),
-                data_cc.dependencies.clone(),
-                data_cc.original_id.clone(),
-                data_cc.version,
-            )
+            .add_on_chain_pkg(addr_a, |pkg| {
+                pkg.dep(OriginalID::from(0xCC_u16), addr_shared.clone())
+            })
+            .add_on_chain_pkg(addr_shared, |pkg| pkg)
             .build();
 
-        // Currently both will be loaded as separate packages in the graph
-        // (deduplication is a known TODO). Just verify it doesn't crash.
+        // This currently loads both as separate packages (no deduplication).
+        // TODO: when deduplication is implemented, this should resolve to a
+        // single package and this test should be updated.
         let result = scenario.try_root_package("root", |cfg| cfg).await;
-        // Document the current behavior — success or a specific error
         match result {
             Ok(root) => {
-                // Both the local dep and on-chain dep are in the graph
-                assert!(root.packages().len() >= 3);
+                // Both the local dep and on-chain fetched copy are in the graph
+                assert!(
+                    root.packages().len() >= 4,
+                    "expected root + local_dep + on-chain A + on-chain CC, got {}",
+                    root.packages().len()
+                );
             }
             Err(err) => {
-                // If it fails, it shouldn't be a rename-from error
                 let msg = err.to_string();
                 assert!(
                     !msg.contains("rename-from"),

@@ -166,6 +166,52 @@ pub struct DepSpec {
     modes: Option<Vec<ModeName>>,
 }
 
+/// Builder for on-chain package test data registered via
+/// [`TestPackageGraph::add_on_chain_pkg`].
+pub struct OnChainPkgSpec {
+    address: PublishedID,
+    modules: BTreeMap<String, Vec<u8>>,
+    dependencies: BTreeMap<OriginalID, PublishedID>,
+    original_id: OriginalID,
+    version: u64,
+}
+
+impl OnChainPkgSpec {
+    fn new(address: PublishedID) -> Self {
+        Self {
+            original_id: OriginalID(address.0),
+            address,
+            modules: BTreeMap::from([("module".into(), vec![0xCA, 0xFE])]),
+            dependencies: BTreeMap::new(),
+            version: 1,
+        }
+    }
+
+    /// Set the bytecode modules (name → bytes).
+    pub fn modules(mut self, modules: BTreeMap<String, Vec<u8>>) -> Self {
+        self.modules = modules;
+        self
+    }
+
+    /// Add a linkage table entry: this on-chain package depends on `linked` at `original`.
+    pub fn dep(mut self, original: OriginalID, linked: PublishedID) -> Self {
+        self.dependencies.insert(original, linked);
+        self
+    }
+
+    /// Set the original (runtime) ID if it differs from the address.
+    pub fn original_id(mut self, id: OriginalID) -> Self {
+        self.original_id = id;
+        self
+    }
+
+    /// Set the on-chain version.
+    pub fn version(mut self, version: u64) -> Self {
+        self.version = version;
+        self
+    }
+}
+
 /// Information about a publication
 pub struct PubSpec {
     chain_id: EnvironmentID,
@@ -308,24 +354,21 @@ impl TestPackageGraph {
         self
     }
 
-    /// Register an on-chain package with the given `address`, bytecode `modules`, and linkage
-    /// table `dependencies`. The package data will be available via `Vanilla::fetch_onchain_package`
-    /// in tests that use this scenario.
+    /// Register an on-chain package at `address`. The `build` closure configures the
+    /// package's bytecode, linkage table, and version via [`OnChainPkgSpec`].
     pub fn add_on_chain_pkg(
         mut self,
         address: PublishedID,
-        modules: BTreeMap<String, Vec<u8>>,
-        dependencies: BTreeMap<OriginalID, PublishedID>,
-        original_id: OriginalID,
-        version: u64,
+        build: impl FnOnce(OnChainPkgSpec) -> OnChainPkgSpec,
     ) -> Self {
+        let spec = build(OnChainPkgSpec::new(address.clone()));
         self.on_chain_pkgs.push((
             address,
             crate::flavor::OnChainPackageData {
-                modules,
-                dependencies,
-                original_id,
-                version,
+                modules: spec.modules,
+                dependencies: spec.dependencies,
+                original_id: spec.original_id,
+                version: spec.version,
             },
         ));
         self
