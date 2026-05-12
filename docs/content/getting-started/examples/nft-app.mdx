@@ -16,7 +16,7 @@ concepts:
   - equip_mechanics
 ---
 
-In this example, the Move package defines `Hero` and `Weapon` NFTs with equip and unequip mechanics and a shared `HeroRegistry` that tracks minted NFTs in the heroes collection. The React frontend connects a wallet, builds a multi-step [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) that mints a hero, creates a weapon, and equips it in a single transaction, then queries the registry to display all heroes.
+In this example, the Move package defines `Hero` and `Weapon` NFTs with equip and unequip mechanics and a shared `HeroRegistry` that tracks minted NFTs in the heroes collection. The React frontend connects a wallet, builds a multi-step [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) that mints a hero, creates a weapon, and equips it in a single transaction, then queries the registry to display all heroes. 
 
 ## When to use this pattern
 
@@ -91,15 +91,15 @@ The following steps walk through the flow:
 
 - [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
 
-  - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
+    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
 
-  - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
+    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
 
-  - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
+    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
 
-  - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
-
-    Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
+    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
+    
+        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
 
 - [x] [Download and install Git](https://git-scm.com/downloads).
 
@@ -146,14 +146,14 @@ Record the package ID and the `HeroRegistry` object ID from the publish output.
 │  │ Sender: 0x9ac241b2b3cb87ecd2a58724d4d182b5cd897ad307df62be2ae84beddc9d9803                          │
 │  │ Owner: Shared( 847518322 )                                                                          │
 │  │ ObjectType: 0xb59b97827a00e7a137f07e7a3478d06f423e0d6bc836a566605c37947fcf37a4::hero::HeroRegistry  │
-│  │ Version: 847518322
+│  │ Version: 847518322   
 ...
 │ Published Objects:                                                                                     │
 │  ┌──                                                                                                   │
 │  │ PackageID: 0xb59b97827a00e7a137f07e7a3478d06f423e0d6bc836a566605c37947fcf37a4       <--- Package ID                │
 │  │ Version: 1                                                                                          │
 │  │ Digest: DwE9Hu3GBbmtt7GmGU5U87N2bFkcPvtVH4z5eA8hHd8n                                                │
-│  │ Modules: hero
+│  │ Modules: hero 
 ```
 
 ##### Step 4: Configure the frontend
@@ -189,14 +189,7 @@ The following snippets are the parts of the code worth reading carefully.
 
 The `Hero` struct stores an optional `Weapon` object. Equipping fills the option, unequipping extracts it.
 
-<ImportContent
-	source="F1/move/hero/sources/hero.move"
-	mode="code"
-	org="MystenLabs"
-	repo="sui-move-bootcamp"
-	branch="solution"
-	struct="Hero"
-/>
+<ImportContent source="F1/move/hero/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" struct="Hero" />
 
 The `weapon: Option<Weapon>` field starts as `option::none()` when the hero is created. The `equip_weapon` function fills it with a `Weapon` object, and `unequip_weapon` extracts and returns the weapon. Both functions assert the option is in the expected state.
 
@@ -204,14 +197,7 @@ The `weapon: Option<Weapon>` field starts as `option::none()` when the hero is c
 
 The `equip_weapon` function fills the hero's weapon slot, aborting if a weapon is already equipped.
 
-<ImportContent
-	source="F1/move/hero/sources/hero.move"
-	mode="code"
-	org="MystenLabs"
-	repo="sui-move-bootcamp"
-	branch="solution"
-	fun="equip_weapon"
-/>
+<ImportContent source="F1/move/hero/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="equip_weapon" />
 
 The function asserts `hero.weapon.is_none()` before filling. If the hero already has a weapon, the transaction aborts with `EAlreadyEquippedWeapon`. The `option::fill` call moves the weapon into the hero's option field, transferring ownership.
 
@@ -219,14 +205,7 @@ The function asserts `hero.weapon.is_none()` before filling. If the hero already
 
 The `new_hero` function creates a hero and registers its ID in the shared `HeroRegistry`.
 
-<ImportContent
-	source="F1/move/hero/sources/hero.move"
-	mode="code"
-	org="MystenLabs"
-	repo="sui-move-bootcamp"
-	branch="solution"
-	fun="new_hero"
-/>
+<ImportContent source="F1/move/hero/sources/hero.move" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="new_hero" />
 
 The function creates the hero, pushes its ID into the registry's `ids` vector, increments the counter, and returns the hero. Because the registry is a shared object, any client can read it to discover all hero IDs without an indexer.
 
@@ -234,14 +213,7 @@ The function creates the hero, pushes its ID into the registry's `ids` vector, i
 
 The `CreateHeroForm` component builds a PTB that creates a hero, creates a weapon, equips the weapon, and transfers the hero in a single transaction.
 
-<ImportContent
-	source="F1/app/my-first-sui-dapp/src/components/ui/CreateHeroForm.tsx"
-	mode="code"
-	org="MystenLabs"
-	repo="sui-move-bootcamp"
-	branch="solution"
-	fun="CreateHeroForm"
-/>
+<ImportContent source="F1/app/my-first-sui-dapp/src/components/ui/CreateHeroForm.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="CreateHeroForm" />
 
 The PTB chains 3 `moveCall` results: `hero` from `new_hero`, `weapon` from `new_weapon`, then both passed to `equip_weapon`. The `transferObjects` call at the end moves the hero to the user's address. After execution, the component invalidates the React Query cache so the heroes list refetches.
 
@@ -249,14 +221,7 @@ The PTB chains 3 `moveCall` results: `hero` from `new_hero`, `weapon` from `new_
 
 The `HeroesList` component fetches the `HeroRegistry` shared object and displays its `ids` array.
 
-<ImportContent
-	source="F1/app/my-first-sui-dapp/src/components/ui/HeroesList.tsx"
-	mode="code"
-	org="MystenLabs"
-	repo="sui-move-bootcamp"
-	branch="solution"
-	fun="HeroesList"
-/>
+<ImportContent source="F1/app/my-first-sui-dapp/src/components/ui/HeroesList.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="HeroesList" />
 
 The component uses the gRPC client to call `getObject` with `include: { json: true }`, extracts the `ids` field from the JSON content, and maps each ID to a Testnet explorer link. React Query handles caching and refetching.
 
@@ -273,7 +238,6 @@ The component uses the gRPC client to call `getObject` with `include: { json: tr
 ## Troubleshooting
 
 The following sections address common issues with this example.
-
 ### `EAlreadyEquippedWeapon` when equipping
 
 **Symptom:** The `equip_weapon` call aborts with error code `0`.
@@ -288,7 +252,7 @@ The following sections address common issues with this example.
 
 **Cause:** The React Query cache is stale. The `queryKey` for the heroes list does not match the invalidation key, or `waitForTransaction` did not complete before invalidation.
 
-**Fix:** Verify the `queryKey` in both the fetch (`["getObject"]`) and the invalidation match exactly. Ensure `await suiClient.waitForTransaction({ digest })` completes before calling `invalidateQueries` when the next read uses a separately indexed source. If you use GraphQL execution-attached selections, you can often select transaction effects and related execution data in the same request without waiting for a later indexed query.
+**Fix:** Verify the `queryKey` in both the fetch (`["getObject"]`) and the invalidation match exactly. Ensure `await suiClient.waitForTransaction({ digest })` completes before calling `invalidateQueries`.
 
 ### `VITE_PACKAGE_ID` is undefined
 

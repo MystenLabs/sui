@@ -1,21 +1,10 @@
 ---
 title: Querying Data with GraphQL RPC
 description: Practical guide to making queries of the Sui RPC using the GraphQL service, with examples for common tasks.
-keywords:
-  [
-    rpc,
-    sui rpc,
-    graphql,
-    query transactions,
-    query blocks,
-    query block info,
-    query dynamic field,
-    execute transaction,
-    graphql examples,
-  ]
+keywords: [ rpc, sui rpc, graphql, query transactions, query blocks, query block info, query dynamic field, execute transaction, graphql examples ]
 ---
 
-This guide provides practical examples for querying the Sui network using GraphQL, including reads, transaction submission, and transaction simulation. For core concepts like headers, variables, fragments, pagination, scope, and limits, see the [corresponding concepts page](/develop/accessing-data/graphql/graphql-rpc).
+This guide provides practical examples for querying the Sui network using GraphQL. For core concepts like headers, variables, fragments, pagination, scope, and limits, see the [corresponding concepts page](/develop/accessing-data/graphql/graphql-rpc).
 
 Access the GraphQL service for Sui RPC through an online IDE that provides a complete toolbox for fetching data and executing transactions on the network:
 
@@ -25,11 +14,11 @@ Access the GraphQL service for Sui RPC through an online IDE that provides a com
 
 :::info
 
-The public Mainnet and Testnet GraphQL services are rate-limited to keep network throughput optimized. They are useful for development and public-good access, but production apps should use a provider endpoint or operate their own GraphQL stack. Refer to the [list of RPC or data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that support GraphQL RPC or gRPC.
+Both Mainnet and Testnet services are rate-limited to keep network throughput optimized. These services are provided as a public good from Sui Foundation and are not meant for production-grade use. Refer to the [list of RPC or data providers](https://www.notion.so/mystenlabs/RPC-providers-offering-future-Sui-data-primitives-2466d9dcb4e980a99a36e9aafd8c17e0?source=copy_link) that have enabled gRPC on their full nodes.
 
 :::
 
-The online IDE provides features such as auto-completion (use <kbd>Ctrl</kbd>+<kbd>Space</kbd> or just start typing), built-in documentation (Book icon, top-left), multi-tabs, and more. You can try the example queries on this page directly in the IDE.
+The online IDE provides features such as auto-completion (use <kbd>Ctrl</kbd>+<kbd>Space</kbd> or just start typing), built-in documentation (Book icon, top-left), multi-tabs, and more. You can try the example queries on this page directly in the IDE. 
 
 ## Supported schema
 
@@ -109,17 +98,16 @@ In the following example, a variable supplies the ID of the epoch being queried:
 
 ```graphql
 query ($epochID: Int) {
-	epoch(id: $epochID) {
-		referenceGasPrice
-	}
+  epoch(id: $epochID) {
+    referenceGasPrice
+  }
 }
 ```
 
 **Variables**:
-
 ```json
 {
-	"epochID": 100
+   "epochID": 100
 }
 ```
 
@@ -146,43 +134,48 @@ Fragments are reusable units that you can include in queries as needed. To learn
 
 ```graphql
 query DynamicField {
-	object(address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac") {
-		dynamicField(
-			name: { type: "0x2::kiosk::Lock", bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw=" }
-		) {
-			...DynamicFieldSelect
-		}
-	}
+  object(
+    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+  ) {
+    dynamicField(
+      name: {
+        type: "0x2::kiosk::Lock",
+        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw=",
+      }
+    ) {
+      ...DynamicFieldSelect
+    }
+  }
 }
 
 fragment DynamicFieldSelect on DynamicField {
-	name {
-		...MoveValueFields
-	}
-	value {
-		...DynamicFieldValueSelection
-	}
+  name {
+    ...MoveValueFields
+  }
+  value {
+    ...DynamicFieldValueSelection
+  }
 }
 
 fragment DynamicFieldValueSelection on DynamicFieldValue {
-	__typename
-	... on MoveValue {
-		...MoveValueFields
-	}
-	... on MoveObject {
-		hasPublicTransfer
-		contents {
-			...MoveValueFields
-		}
-	}
+  __typename
+  ... on MoveValue {
+    ...MoveValueFields
+  }
+  ... on MoveObject {
+    hasPublicTransfer
+    contents {
+      ...MoveValueFields
+    }
+  }
 }
 
 fragment MoveValueFields on MoveValue {
-	type {
-		repr
-	}
-	json
-	bcs
+  type {
+    repr
+  }
+  json
+  bcs
 }
 ```
 
@@ -192,31 +185,31 @@ GraphQL supports queries that fetch multiple kinds of potentially nested data. F
 
 ```graphql
 query {
-	epoch(epochId: 97) {
-		transactions(first: 10) {
-			pageInfo {
-				hasNextPage
-				endCursor
-			}
-			nodes {
-				digest
-				sender {
-					address
-				}
-				effects {
-					gasEffects {
-						gasObject {
-							address
-						}
-					}
-				}
-				gasInput {
-					gasPrice
-					gasBudget
-				}
-			}
-		}
-	}
+  epoch(epochId: 97) {
+    transactions(first: 10) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        digest
+        sender {
+          address
+        }
+        effects {
+          gasEffects {
+            gasObject {
+              address
+            }
+          }
+        }
+        gasInput {
+          gasPrice
+          gasBudget
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -233,7 +226,7 @@ Fields that return a paginated response accept the following optional parameters
 
 They also return a type that conforms to the [GraphQL Cursor Connections Specification](https://relay.dev/graphql/connections.htm), meaning its name ends in `Connection`, and it contains at minimum the following fields:
 
-- `pageInfo` of type `PageInfo`, which indicates whether there are more pages before or after the page returned.
+- `pageInfo` of type <UnsafeLink href="/references/sui-api/sui-graphql/beta/reference/types/objects/page-info">PageInfo</UnsafeLink>, which indicates whether there are more pages before or after the page returned.
 - `nodes`: The content of the paginated response as a list of the type being paginated (`TransactionBlock` in the previous example).
 - `edges`: Similar to `nodes` but associating each node with its [cursor](#cursors).
 
@@ -276,13 +269,12 @@ If a dynamic field's root object has version `v`, its own version, `w` is the la
 
 If a root object bound is not provided, dynamic fields are fetched at the checkpoint being viewed, while if a checkpoint-based root object bound exists, it does not impact the checkpoint being viewed.
 
-Finally, the GraphQL service treats queries nested under executed `Mutation.executeTransaction` and simulated `Query.simulateTransaction` transactions as being in a special scope that exists just after the transaction that was executed or simulated, without having indexed that transaction. This means execution-attached or simulation-attached queries can often provide consistent read-after-write results immediately, as long as the requested fields do not require indexed history.
+Finally, the GraphQL service treats queries nested under executed `Mutation.executeTransaction` and simulated `Query.simulateTransaction` transactions as being in a special scope that exists just after the transaction that was executed or simulated, without having indexed that transaction.
 
 The scope a query is evaluated in impacts which fields are available. In particular:
 
 - Live object set queries are not available under executed transaction scopes or when a root object binding specifies a particular version. These queries rely on data that is indexed at the checkpoint level.
 - Queries that paginate through history are not available under executed transaction scopes. Before indexing occurs, the system cannot determine where in the history the transaction falls.
-- If you only need data returned by transaction execution or simulation effects, prefer selecting it in the same GraphQL request instead of submitting the transaction and then waiting for a separately indexed follow-up query.
 
 ### Setting checkpoint scope
 
@@ -290,30 +282,30 @@ You can run queries against a historical checkpoint using `Checkpoint.query`. Fo
 
 ```graphql
 query AtCheckpoint($cp: UInt53!) {
-	checkpoint(sequenceNumber: $cp) {
-		query {
-			transactions(last: 5) {
-				nodes {
-					digest
-				}
-			}
-		}
-	}
+  checkpoint(sequenceNumber: $cp) {
+    query {
+      transactions(last: 5) {
+        nodes {
+          digest
+        }
+      }
+    }
+  }
 }
 
 query NextBalancesPage($address: SuiAddress!, $after: String!) {
-	address(address: $address) {
-		balances(after: $after, first: 10) {
-			pageInfo {
-				hasNextPage
-				endCursor
-			}
-			nodes {
-				objectId
-				balance
-			}
-		}
-	}
+  address(address: $address) {
+    balances(after: $after, first: 10) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        objectId
+        balance
+      }
+    }
+  }
 }
 ```
 
@@ -321,22 +313,22 @@ query NextBalancesPage($address: SuiAddress!, $after: String!) {
 
 ```graphql
 query FirstBalancesPageAtCheckpoint($address: SuiAddress!, $cp: UInt53) {
-	checkpoint(sequenceNumber: $cp) {
-		query {
-			address(address: $address) {
-				balances(first: 10) {
-					pageInfo {
-						hasNextPage
-						endCursor
-					}
-					nodes {
-						objectId
-						balance
-					}
-				}
-			}
-		}
-	}
+  checkpoint(sequenceNumber: $cp) {
+    query {
+      address(address: $address) {
+        balances(first: 10) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            objectId
+            balance
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -348,15 +340,15 @@ Queries nested under the fetch of an object at a specific version are scoped by 
 
 ```graphql
 query ObjectsDynamicFields($id: SuiAddress!, $v: UInt53!) {
-	object(address: $id, version: $v) {
-		dynamicField(name: { literal: "42u64" }) {
-			value {
-				... on MoveValue {
-					json
-				}
-			}
-		}
-	}
+  object(address: $id, version: $v) {
+    dynamicField(name: { literal: "42u64" }) {
+      value {
+        ... on MoveValue {
+          json
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -368,19 +360,19 @@ In the following query, `$id` is the address of a dynamic field fetched as it ex
 
 ```graphql
 query NestedDynamicFields($id: SuiAddress!, $r: UInt53!) {
-	object(address: $id, rootVersion: $v) {
-		asMoveObject {
-			asDynamicField {
-				value {
-					... on MoveValue {
-						extract(path: "foo->[42u64]") {
-							json
-						}
-					}
-				}
-			}
-		}
-	}
+  object(address: $id, rootVersion: $v) {
+    asMoveObject {
+      asDynamicField {
+        value {
+          ... on MoveValue {
+            extract(path: "foo->[42u64]") {
+              json
+            }
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -388,15 +380,15 @@ Queries that return an `Address` can be used to make nested dynamic field querie
 
 ```graphql
 query WrappedDynamicField($id: SuiAddress!, $r: UInt53!) {
-	address(address: $id, rootVersion: $r) {
-		dynamicField(name: { literal: "42u64" }) {
-			value {
-				... on MoveValue {
-					json
-				}
-			}
-		}
-	}
+  address(address: $id, rootVersion: $r) {
+    dynamicField(name: { literal: "42u64" }) {
+      value {
+        ... on MoveValue {
+          json
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -404,11 +396,11 @@ While nested within a scope that has a root object bound, you can reset or overr
 
 ```graphql
 query LatestDynamicField($id: SuiAddress!, $v: UInt53!) {
-	object(address: $id, version: $v) {
-		objectAt {
-			version
-		}
-	}
+  object(address: $id, version: $v) {
+    objectAt {
+      version
+    }
+  }
 }
 ```
 
@@ -426,19 +418,19 @@ In addition to rate limits, queries are also validated against a number of rules
 
 ```graphql
 {
-	serviceConfig {
-		maxQueryDepth
-		maxQueryNodes
-		maxOutputNodes
-		defaultPageSize(type: "Query", field: "transactions")
-		maxPageSize(type: "Query", field: "objects")
-		queryTimeoutMs
-		maxQueryPayloadSize
-		maxTypeArgumentDepth
-		maxTypeArgumentWidth
-		maxTypeNodes
-		maxMoveValueDepth
-	}
+  serviceConfig {
+    maxQueryDepth
+    maxQueryNodes
+    maxOutputNodes
+    defaultPageSize(type: "Query", field: "transactions")
+    maxPageSize(type: "Query", field: "objects")
+    queryTimeoutMs
+    maxQueryPayloadSize
+    maxTypeArgumentDepth
+    maxTypeArgumentWidth
+    maxTypeNodes
+    maxMoveValueDepth
+  }
 }
 ```
 
@@ -448,9 +440,9 @@ Rich queries require a dedicated request to a backing store. There is a limit on
 
 ```graphql
 {
-	serviceConfig {
-		maxRichQueries
-	}
+  serviceConfig {
+    maxRichQueries
+  }
 }
 ```
 
@@ -466,13 +458,13 @@ Different queries are subject to their own retention policies. In the vanilla, g
 
 ### Data source retention
 
-GraphQL queries rely on different data sources with different retention ranges. When the GraphQL operator configures Archival Service, supported point lookups can route to Archival. Full node gRPC does not do this implicitly; gRPC clients must query an Archival Service endpoint directly for high-retention data.
+GraphQL queries rely on different data sources with different retention ranges:
 
-| Data source          | Examples                                                        | Typical retention          |
-| -------------------- | --------------------------------------------------------------- | -------------------------- |
-| **Consistent store** | `Query.objects`, `Address.balance`, objects by owner or type    | ~1 hour                    |
-| **Database store**   | `Query.transactions`, `Query.events`, `Query.checkpoints`       | ~(30-90) days              |
-| **Archival service** | Point lookups (transaction by digest, object by ID and version) | Indefinite (if configured) |
+| Data source          | Examples                                                  | Typical retention          |
+| -------------------- | --------------------------------------------------------- | -------------------------- |
+| **Consistent store** | `Query.objects`, `Address.balance`, objects by owner or type | ~1 hour                    |
+| **Database store**   | `Query.transactions`, `Query.events`, `Query.checkpoints` | ~(30-90) days              |
+| **Archival service** | Point lookups (transaction by digest, object by ID and version)        | Indefinite (if configured) |
 
 :::tip Operators
 
@@ -577,9 +569,9 @@ The following queries show some common tasks you can perform with GraphQL.
 
 ```graphql
 query {
-	epoch {
-		referenceGasPrice
-	}
+  epoch {
+    referenceGasPrice
+  }
 }
 ```
 
@@ -589,18 +581,19 @@ Find the total stake rewards, the reference gas price, the number of checkpoints
 
 ```graphql
 query {
-	epoch(epochId: 100) {
-		epochId
-		totalStakeRewards
-		referenceGasPrice
-		totalCheckpoints
-		totalGasFees
-		totalStakeSubsidies
-		storageFund {
-			totalObjectStorageRebates
-			nonRefundableBalance
-		}
-	}
+  epoch(epochId: 100)
+  {
+    epochId
+    totalStakeRewards
+    referenceGasPrice
+    totalCheckpoints
+    totalGasFees
+    totalStakeSubsidies
+    storageFund {
+      totalObjectStorageRebates
+      nonRefundableBalance
+    }
+  }
 }
 ```
 
@@ -610,26 +603,26 @@ Get a transaction by its digest and show information such as the gas sponsor add
 
 ```graphql
 query {
-	transaction(digest: "FdK...qK2") {
-		gasInput {
-			gasSponsor {
-				address
-			}
-			gasPrice
-			gasBudget
-		}
-		effects {
-			status
-			timestamp
-			checkpoint {
-				sequenceNumber
-			}
-			epoch {
-				epochId
-				referenceGasPrice
-			}
-		}
-	}
+  transaction(digest: "FdK...qK2") {
+    gasInput {
+      gasSponsor {
+        address
+      }
+      gasPrice
+      gasBudget
+    }
+    effects {
+      status
+      timestamp
+      checkpoint {
+        sequenceNumber
+      }
+      epoch {
+        epochId
+        referenceGasPrice
+      }
+    }
+  }
 }
 ```
 
@@ -637,14 +630,14 @@ query {
 
 ```graphql
 query {
-	transactions(last: 10, filter: { kind: PROGRAMMABLE_TX }) {
-		nodes {
-			digest
-			kind {
-				__typename
-			}
-		}
-	}
+  transactions(last: 10, filter: {kind: PROGRAMMABLE_TX}) {
+    nodes {
+      digest
+      kind {
+        __typename
+      }
+    }
+  }
 }
 ```
 
@@ -660,21 +653,21 @@ This example uses GraphQL [variables](#variables) and [pagination](#pagination).
 
 ```graphql
 query ($objectID: SuiAddress!) {
-	transactions(filter: { affectedObject: $objectID }) {
-		nodes {
-			sender {
-				address
-			}
-			digest
-			effects {
-				objectChanges {
-					nodes {
-						address
-					}
-				}
-			}
-		}
-	}
+  transactions(filter: {affectedObject: $objectID}) {
+    nodes {
+      sender {
+        address
+      }
+      digest
+      effects {
+        objectChanges {
+          nodes {
+            address
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -684,7 +677,7 @@ When using the online IDE, copy the following JSON to the **Variables** window, 
 
 ```json
 {
-	"objectID": "0x11c6ae8432156527fc2e12e05ac7db79f2e972510a823a4ef2e670f27ad7b52f"
+  "objectID": "0x11c6ae8432156527fc2e12e05ac7db79f2e972510a823a4ef2e670f27ad7b52f"
 }
 ```
 
@@ -700,11 +693,14 @@ This example makes use of the `last` filter. In this case, it returns only the l
 
 ```graphql
 {
-	transactions(last: 10, filter: { function: "0x2::transfer::public_transfer" }) {
-		nodes {
-			digest
-		}
-	}
+  transactions(
+    last: 10,
+      filter: {
+        function: "0x2::transfer::public_transfer"
+      }
+  ) {
+    nodes { digest }
+  }
 }
 ```
 
@@ -714,21 +710,24 @@ Find the balance changes of all the transactions where a given address called a 
 
 ```graphql
 query ($address: SuiAddress!) {
-	transactions(filter: { function: "0x3::sui_system::request_add_stake", sentAddress: $address }) {
-		nodes {
-			digest
-			effects {
-				balanceChanges {
-					nodes {
-						owner {
-							address
-						}
-						amount
-					}
-				}
-			}
-		}
-	}
+  transactions(filter: {
+    function: "0x3::sui_system::request_add_stake"
+    sentAddress: $address
+  }) {
+    nodes {
+      digest
+      effects {
+        balanceChanges {
+          nodes {
+            owner {
+              address
+            }
+            amount
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -738,7 +737,7 @@ When using the online IDE, copy the following JSON to the **Variables** window, 
 
 ```json
 {
-	"address": "0xa9ad44383140a07cc9ea62d185c12c4d9ef9c6a8fd2f47e16316229815862d23"
+  "address": "0xa9ad44383140a07cc9ea62d185c12c4d9ef9c6a8fd2f47e16316229815862d23"
 }
 ```
 
@@ -752,43 +751,48 @@ This example uses aliases and [fragments](#fragments).
 
 ```graphql
 query DynamicField {
-	object(address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac") {
-		dynamicField(
-			name: { type: "0x2::kiosk::Lock", bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw=" }
-		) {
-			...DynamicFieldSelect
-		}
-	}
+  object(
+    address: "0xb57fba584a700a5bcb40991e1b2e6bf68b0f3896d767a0da92e69de73de226ac"
+  ) {
+    dynamicField(
+      name: {
+        type: "0x2::kiosk::Lock",
+        bcs: "NLArx1UJguOUYmXgNG8Pv8KbKXLjWtCi6i0Yeq1Vhfw=",
+      }
+    ) {
+      ...DynamicFieldSelect
+    }
+  }
 }
 
 fragment DynamicFieldSelect on DynamicField {
-	name {
-		...MoveValueFields
-	}
-	value {
-		...DynamicFieldValueSelection
-	}
+  name {
+    ...MoveValueFields
+  }
+  value {
+    ...DynamicFieldValueSelection
+  }
 }
 
 fragment DynamicFieldValueSelection on DynamicFieldValue {
-	__typename
-	... on MoveValue {
-		...MoveValueFields
-	}
-	... on MoveObject {
-		hasPublicTransfer
-		contents {
-			...MoveValueFields
-		}
-	}
+  __typename
+  ... on MoveValue {
+    ...MoveValueFields
+  }
+  ... on MoveObject {
+    hasPublicTransfer
+    contents {
+      ...MoveValueFields
+    }
+  }
 }
 
 fragment MoveValueFields on MoveValue {
-	type {
-		repr
-	}
-	json
-	bcs
+  type {
+    repr
+  }
+  json
+  bcs
 }
 ```
 
@@ -804,37 +808,35 @@ This example uses [fragments](#fragments) and [variables](#variables).
 
 ```graphql
 query ($id: SuiAddress!) {
-	address(address: $id) {
-		dynamicFields {
-			nodes {
-				name {
-					...Value
-				}
-				value {
-					__typename
-					... on MoveValue {
-						...Value
-					}
-					... on MoveObject {
-						contents {
-							...Value
-						}
-					}
-				}
-			}
-		}
-	}
+  address(address: $id) {
+    dynamicFields {
+      nodes {
+        name { ...Value }
+        value {
+          __typename
+          ... on MoveValue {
+            ...Value
+          }
+          ... on MoveObject {
+            contents {
+              ...Value
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 fragment Value on MoveValue {
-	type {
-		repr
-	}
-	json
+  type {
+    repr
+  }
+  json
 }
 ```
 
-### Paginate checkpoints forward
+### Paginate checkpoints forward 
 
 Set up a paginated query starting at the genesis checkpoint, reading 5 checkpoints at a time in increasing order of sequence number. The value of `pageInfo.hasNextPage` determines whether there is another page to read. The value of `pageInfo.endCursor` is used as the cursor to read `$after`.
 
@@ -846,16 +848,16 @@ This example uses GraphQL [variables](#variables) and [pagination](#pagination).
 
 ```graphql
 query ($after: String) {
-	checkpoints(first: 5, after: $after) {
-		pageInfo {
-			hasNextPage
-			endCursor
-		}
-		nodes {
-			digest
-			timestamp
-		}
-	}
+  checkpoints(first: 5, after: $after) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    nodes {
+      digest
+      timestamp
+    }
+  }
 }
 ```
 
@@ -871,39 +873,39 @@ This example uses GraphQL [variables](#variables) and [pagination](#pagination).
 
 ```graphql
 query ($before: String) {
-	checkpoints(last: 5, before: $before) {
-		pageInfo {
-			hasPreviousPage
-			startCursor
-		}
-		nodes {
-			digest
-			timestamp
-		}
-	}
+  checkpoints(last: 5, before: $before) {
+    pageInfo {
+      hasPreviousPage
+      startCursor
+    }
+    nodes {
+      digest
+      timestamp
+    }
+  }
 }
 ```
 
 ### Execute a transaction
 
-GraphQL is not read-only. Transaction execution takes 2 arguments, `transactionDataBcs` and `signatures`. `transactionDataBcs` is the serialized unsigned transaction data, which the [Sui Client CLI](/references/cli/client) `client call` command can generate. Pass the `--serialize-unsigned-transaction` flag to the command to call a Move function. The [Sui Keytool CLI](/references/cli/keytool) command `sui keytool sign` can generate the `signatures`. Select fields from `effects` in the same mutation to read execution results immediately without waiting for a separate indexed query.
+Transaction execution takes 2 arguments, `transactionDataBcs` and `signatures`. `transactionDataBcs` is the serialized unsigned transaction data, which the [Sui Client CLI](/references/cli/client) `client call` command can generate. Pass the `--serialize-unsigned-transaction` flag to the command to call a Move function. The [Sui Keytool CLI](/references/cli/keytool) command `sui keytool sign` can generate the `signatures`.
 
 ```graphql
 mutation ($tx: String!, $sigs: [String!]!) {
-	executeTransaction(transactionDataBcs: $tx, signatures: $sigs) {
-		errors
-		effects {
-			status
-			epoch {
-				startTimestamp
-			}
-			gasEffects {
-				gasSummary {
-					computationCost
-				}
-			}
-		}
-	}
+  executeTransaction(transactionDataBcs: $tx, signatures: $sigs) {
+    errors
+    effects {
+      status
+      epoch {
+        startTimestamp
+      }
+      gasEffects {
+        gasSummary {
+          computationCost
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -913,41 +915,12 @@ When using the online IDE, copy the following JSON to the **Variables** window, 
 
 ```json
 {
-	"tx": "AAACACAZXApmrHgzTs3FGDyXWka+wmMCy2IwOdKLmTWHb5PnFQEASlCnLAw4qfzLF3unH9or5/L7YpOlReaSEWfoEwhTqpavSxAAAAAAACCUFUCOn8ljIxcG9O+CA1bzqjunqr4DLDSzSoNCkUvu2AEBAQEBAAEAALNQHmLi4jgC5MuwwmiMvZEeV5kuyh+waCS60voE7fpzAa3v/tOFuqDvQ+bjBpKTfjyL+6yIg+5eC3dKReVwghH/rksQAAAAAAAgxtZtKhXTr1zeFAo1JzEqVKn9J1H74ddbCJNVZGo2I1izUB5i4uI4AuTLsMJojL2RHleZLsofsGgkutL6BO36c+gDAAAAAAAAQEIPAAAAAAAA",
-	"sigs": [
-		"AB4ZihXxUMSs9Ju5Cstuuf/hvbTvvycuRk2TMuagLYNJgQuAeXmKyJF9DAXUtL8spIsHrDQgemn4NmojcNl8HQ3JFqhnaTC8gMX4fy/rGgqgL6CDcbikawUUjC4zlkflwg=="
-	]
+  "tx": "AAACACAZXApmrHgzTs3FGDyXWka+wmMCy2IwOdKLmTWHb5PnFQEASlCnLAw4qfzLF3unH9or5/L7YpOlReaSEWfoEwhTqpavSxAAAAAAACCUFUCOn8ljIxcG9O+CA1bzqjunqr4DLDSzSoNCkUvu2AEBAQEBAAEAALNQHmLi4jgC5MuwwmiMvZEeV5kuyh+waCS60voE7fpzAa3v/tOFuqDvQ+bjBpKTfjyL+6yIg+5eC3dKReVwghH/rksQAAAAAAAgxtZtKhXTr1zeFAo1JzEqVKn9J1H74ddbCJNVZGo2I1izUB5i4uI4AuTLsMJojL2RHleZLsofsGgkutL6BO36c+gDAAAAAAAAQEIPAAAAAAAA",
+  "sigs": [
+    "AB4ZihXxUMSs9Ju5Cstuuf/hvbTvvycuRk2TMuagLYNJgQuAeXmKyJF9DAXUtL8spIsHrDQgemn4NmojcNl8HQ3JFqhnaTC8gMX4fy/rGgqgL6CDcbikawUUjC4zlkflwg=="
+  ]
 }
 ```
-
-### Simulate a transaction
-
-Use `simulateTransaction` to preview transaction effects, estimate gas, or test transaction logic without committing the transaction onchain. Simulation accepts a JSON transaction matching the Sui gRPC transaction schema, or a BCS-encoded transaction with `{"bcs": {"value": "<base64>"}}`.
-
-```graphql
-query ($tx: JSON!) {
-	simulateTransaction(transaction: $tx, checksEnabled: true, doGasSelection: true) {
-		effects {
-			status
-			gasEffects {
-				gasSummary {
-					computationCost
-					storageCost
-				}
-			}
-		}
-		outputs {
-			returnValues {
-				value {
-					json
-				}
-			}
-		}
-	}
-}
-```
-
-Like execution-attached queries, fields selected under simulation are evaluated in a scope immediately after the simulated transaction, without waiting for indexing.
 
 ## Migrating to GraphQL from JSON-RPC
 
@@ -963,10 +936,10 @@ Get the total number of transactions in the network.
 
 ```json
 {
-	"jsonrpc": "2.0",
-	"id": 1,
-	"method": "sui_getTotalTransactionBlocks",
-	"params": []
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTotalTransactionBlocks",
+  "params": []
 }
 ```
 
@@ -975,9 +948,9 @@ Get the total number of transactions in the network.
 
 ```graphql
 query {
-	checkpoint {
-		networkTotalTransactions
-	}
+  checkpoint {
+    networkTotalTransactions
+  }
 }
 ```
 
@@ -994,20 +967,20 @@ Get the transaction by its digest.
 
 ```json
 {
-	"jsonrpc": "2.0",
-	"id": 1,
-	"method": "sui_getTransactionBlock",
-	"params": [
-		"Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF",
-		{
-			"showInput": true,
-			"showRawInput": false,
-			"showEffects": true,
-			"showEvents": true,
-			"showObjectChanges": false,
-			"showBalanceChanges": false
-		}
-	]
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "sui_getTransactionBlock",
+  "params": [
+    "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF",
+    {
+      "showInput": true,
+      "showRawInput": false,
+      "showEffects": true,
+      "showEvents": true,
+      "showObjectChanges": false,
+      "showBalanceChanges": false
+    }
+  ]
 }
 ```
 
@@ -1016,29 +989,28 @@ Get the transaction by its digest.
 
 ```graphql
 query {
-	transaction(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
-		gasInput {
-			gasSponsor {
-				address
-			}
-			gasPrice
-			gasBudget
-		}
-		effects {
-			status
-			timestamp
-			checkpoint {
-				sequenceNumber
-			}
-			epoch {
-				epochId
-				referenceGasPrice
-			}
-		}
-	}
+  transaction(digest: "Hay2tj3GcDYcE3AMHrej5WDsHGPVAYsegcubixLUvXUF") {
+    gasInput {
+      gasSponsor {
+        address
+      }
+      gasPrice
+      gasBudget
+    }
+    effects {
+      status
+      timestamp
+      checkpoint {
+        sequenceNumber
+      }
+      epoch {
+        epochId
+        referenceGasPrice
+      }
+    }
+  }
 }
 ```
-
 </TabItem>
 </Tabs>
 
@@ -1069,17 +1041,17 @@ query {
 
 ```graphql
 query {
-	address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
-		objects(
-			first: 3
-			after: "vBIzCwAAAADMAQBQlGUkKZV2Gebvp5pASmcU0RJuY/VR9LbH+3ZED4EYyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAARjb2luAAAAAAAAAARDb2luAAAAAAAAAAEAAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAA3N1aQAAAAAAAAADU1VJAAAAAAAAAAAB/////XBZUf9feyhb9cW+AOBraL10O9t0D9JAr+tIq2wXDJdl5/zP5w=="
-			filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }
-		) {
-			nodes {
-				address
-			}
-		}
-	}
+  address(address: "0x5094652429957619e6efa79a404a6714d1126e63f551f4b6c7fb76440f8118c9") {
+    objects(
+      first: 3,
+      after: "vBIzCwAAAADMAQBQlGUkKZV2Gebvp5pASmcU0RJuY/VR9LbH+3ZED4EYyQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAARjb2luAAAAAAAAAARDb2luAAAAAAAAAAEAAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAA3N1aQAAAAAAAAADU1VJAAAAAAAAAAAB/////XBZUf9feyhb9cW+AOBraL10O9t0D9JAr+tIq2wXDJdl5/zP5w==",
+      filter: { type: "0x2::coin::Coin<0x2::sui::SUI>" }
+    ) {
+      nodes {
+        address
+      }
+    }
+  }
 }
 ```
 
@@ -1092,7 +1064,7 @@ The cursor is now passed in the `after` (or `before`) fields on the connection, 
 </TabItem>
 </Tabs>
 
-There is functionality available to GraphQL that can't be replicated with JSON-RPC, such as:
+There is functionality available to GraphQL that can't be replicated with JSON-RPC, such as: 
 
 - Time travel queries with checkpoint `{ query { ... } }`.
 
@@ -1110,17 +1082,15 @@ Fetch the latest versions of objects of type `0x2::package::Publisher` that are 
 
 ```graphql
 query {
-	objects(filter: { type: "0x2::package::Publisher" }) {
-		nodes {
-			address
-			digest
-			asMoveObject {
-				contents {
-					json
-				}
-			}
-		}
-	}
+  objects(filter: { type: "0x2::package::Publisher" }) {
+    nodes {
+      address
+      digest
+      asMoveObject {
+        contents { json }
+      }
+    }
+  }
 }
 ```
 
@@ -1130,15 +1100,15 @@ Find all versions of the Sui framework and list their modules:
 
 ```graphql
 query {
-	packageVersions(address: "0x2") {
-		nodes {
-			version
-			modules {
-				nodes {
-					name
-				}
-			}
-		}
-	}
+  packageVersions(address: "0x2") {
+    nodes {
+      version
+      modules {
+        nodes {
+          name
+        }
+      }
+    }
+  } 
 }
 ```

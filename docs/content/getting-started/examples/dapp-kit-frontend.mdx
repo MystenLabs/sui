@@ -100,15 +100,15 @@ The following steps walk through the flow:
 
 - [x] Download and install an IDE. The following are recommended, as they offer Move extensions:
 
-  - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
+    - [VSCode](https://code.visualstudio.com/), corresponding [Move extension](https://marketplace.visualstudio.com/items?itemName=mysten.move)
 
-  - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
+    - [Emacs](https://www.gnu.org/software/emacs/), corresponding [Move extension](https://github.com/amnn/move-mode)
 
-  - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
+    - [Vim](https://www.vim.org/download.php), corresponding [Move extension](https://github.com/yanganto/move.vim)
 
-  - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
-
-    Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
+    - [Zed](https://zed.dev/), corresponding [Move extension](https://github.com/Tzal3x/move-zed-extension)
+    
+        Alternatively, you can use the [Move web IDE](https://www.playmove.dev/), which does not require a download. It does not support all functions necessary for this guide, however.
 
 - [x] [Download and install Git](https://git-scm.com/downloads).
 
@@ -156,13 +156,7 @@ The following snippets are the parts of the code worth reading carefully.
 
 The `dapp-kit.ts` file configures multi-network gRPC clients for Devnet, Testnet, and Mainnet.
 
-<ImportContent
-	source="E2/my-first-sui-dapp/src/dapp-kit.ts"
-	mode="code"
-	org="MystenLabs"
-	repo="sui-move-bootcamp"
-	branch="solution"
-/>
+<ImportContent source="E2/my-first-sui-dapp/src/dapp-kit.ts" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" />
 
 The `createDAppKit` factory takes an array of network configs, each with a `chain` identifier and a `createClient` factory. The `SuiGrpcClient` uses binary protocol for faster communication than JSON-RPC. The module declaration augments dApp Kit's types so TypeScript knows about the configured networks.
 
@@ -170,14 +164,7 @@ The `createDAppKit` factory takes an array of network configs, each with a `chai
 
 The `MintNFTForm` component builds a transaction, signs it with the wallet, and invalidates the cache after confirmation.
 
-<ImportContent
-	source="E2/my-first-sui-dapp/src/components/ui/MintNFTForm.tsx"
-	mode="code"
-	org="MystenLabs"
-	repo="sui-move-bootcamp"
-	branch="solution"
-	fun="MintNFTForm"
-/>
+<ImportContent source="E2/my-first-sui-dapp/src/components/ui/MintNFTForm.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="MintNFTForm" />
 
 The `handleMint` function builds a `Transaction` with `moveCall` targeting the deployed `mint_hero` function, then `transferObjects` to send the hero to the user's address. After `signAndExecuteTransaction` returns the digest, it waits for confirmation and invalidates the `["ownedObjects", address]` query key so the heroes list refetches.
 
@@ -185,14 +172,7 @@ The `handleMint` function builds a `Transaction` with `moveCall` targeting the d
 
 The `OwnedObjects` component uses `listOwnedObjects` with a `StructType` filter to show only Hero NFTs.
 
-<ImportContent
-	source="E2/my-first-sui-dapp/src/OwnedObjects.tsx"
-	mode="code"
-	org="MystenLabs"
-	repo="sui-move-bootcamp"
-	branch="solution"
-	fun="OwnedObjects"
-/>
+<ImportContent source="E2/my-first-sui-dapp/src/OwnedObjects.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" fun="OwnedObjects" />
 
 The `useQuery` hook fetches owned objects only when a wallet is connected (`enabled: !!account`). The `StructType` filter limits results to the Hero type. The query key includes the address so the cache is per-wallet. React Query handles loading, error, and empty states.
 
@@ -200,13 +180,7 @@ The `useQuery` hook fetches owned objects only when a wallet is connected (`enab
 
 The `main.tsx` entry point wraps the app in the required providers.
 
-<ImportContent
-	source="E2/my-first-sui-dapp/src/main.tsx"
-	mode="code"
-	org="MystenLabs"
-	repo="sui-move-bootcamp"
-	branch="solution"
-/>
+<ImportContent source="E2/my-first-sui-dapp/src/main.tsx" mode="code" org="MystenLabs" repo="sui-move-bootcamp" branch="solution" />
 
 The provider order matters: `QueryClientProvider` must wrap `DAppKitProvider` because dApp Kit hooks use React Query internally. The `initialChain` prop sets Testnet as the default network.
 
@@ -225,7 +199,6 @@ The provider order matters: `QueryClientProvider` must wrap `DAppKitProvider` be
 ## Troubleshooting
 
 The following sections address common issues with this example.
-
 ### Wallet does not appear in connect modal
 
 **Symptom:** Clicking **Connect** opens the modal but no wallet is listed.
@@ -240,7 +213,7 @@ The following sections address common issues with this example.
 
 **Cause:** The `StructType` filter in `OwnedObjects.tsx` does not match the deployed contract's full type path, or the component did not invalidate the React Query cache.
 
-**Fix:** Verify the `StructType` matches `PACKAGE_ID::hero::Hero` exactly. Confirm `invalidateQueries` uses the same query key as the `useQuery` call. If you are reading through a separately indexed API after execution, wait for indexing before invalidating. GraphQL execution-attached selections can often return transaction effects and related execution data in the same request without waiting for a follow-up indexed query.
+**Fix:** Verify the `StructType` matches `PACKAGE_ID::hero::Hero` exactly. Confirm `invalidateQueries` uses the same query key as the `useQuery` call.
 
 ### `signAndExecuteTransaction` fails silently
 
