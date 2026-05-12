@@ -342,7 +342,7 @@ Some common reasons for this error include:
 
 #### `Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction. Other transactions locking these objects`
 
-Indicates that another inflight transaction is already using an object version your transaction also needs. Modern transaction submission rejects these conflicts instead of leaving objects locked until the next epoch.
+Indicates that another inflight transaction is already using an object version your transaction also needs. If enough validators have already reserved that object version for a different transaction, your transaction cannot also reserve it.
 
 ##### Solution 
 
@@ -351,6 +351,21 @@ Wait for the first transaction to finish, then rebuild or re-sign the transactio
 **Resources**
 
 - [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview)
+- [Object Versioning](/develop/objects/versioning)
+- [Building Transactions](/develop/transactions/ptbs/building-ptb)
+
+---
+
+#### `Failed to sign transaction by a quorum of validators because one or more of its objects is equivocated until the next epoch.`
+
+Indicates that competing transactions used the same mutable owned object version and validator reservations were split so that no transaction could obtain quorum. The affected object version is unavailable until the next epoch.
+
+##### Solution
+
+Wait for the next epoch, then rebuild the transaction using current object references. Avoid submitting multiple concurrent transactions that use the same mutable owned object version. Use independent owned objects for parallel work, combine related operations into one PTB, or use SDK/client helpers that manage gas coins and object dependencies.
+
+**Resources**
+
 - [Object Versioning](/develop/objects/versioning)
 - [Building Transactions](/develop/transactions/ptbs/building-ptb)
 

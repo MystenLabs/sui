@@ -3,7 +3,7 @@ title: Party Objects
 description: Party objects are owned by a specified party at the time of transfer and versioned by consensus. Learn how to create and access these objects.
 ---
 
-A party object is a consensus-address-owned object: it is owned by a single address, but it is sequenced and versioned through consensus. In APIs this ownership appears as `ConsensusAddressOwner { owner, start_version }`. Like shared objects, party objects use consensus sequencing. Unlike shared objects, they retain single-address ownership and can be transferred to and from other ownership types and wrapped.
+A party object is a consensus-address-owned object: it is owned by a single address, but it is sequenced and versioned through consensus. APIs expose this ownership with a `ConsensusAddressOwner` owner variant. Like shared objects, party objects use consensus sequencing. Unlike shared objects, they retain single-address ownership and can be transferred to and from other ownership types and wrapped.
 
 Party objects are transferred using the [`sui::transfer::party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_party_transfer) or [`sui::transfer::public_party_transfer`](/references/framework/sui_sui/transfer#sui_transfer_public_party_transfer) function. It is accessible to the `Party` to which it is transferred.
 

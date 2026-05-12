@@ -160,7 +160,7 @@ Sponsored transactions involve multiple parties, which introduces additional ris
 
 ### Concurrent object use
 
-Sponsored transactions still need valid, current object references for both the user's inputs and the sponsor's gas payment. If another inflight transaction already uses one of those same object versions, the sponsored transaction can be rejected and must be rebuilt or re-signed with updated references.
+Sponsored transactions still need valid, current object references for both the user's inputs and the sponsor's gas payment. If another inflight transaction already uses one of those same object versions, the sponsored transaction can be rejected and must be rebuilt or re-signed with updated references. If competing transactions split validator reservations, the object can be equivocated until the next epoch.
 
 Both the user and the sponsor can introduce this conflict:
 
