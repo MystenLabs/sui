@@ -121,13 +121,12 @@ impl ObjectFundsChecker {
             return true;
         }
         let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version else {
-            // Fastpath transactions that perform object funds withdraws
-            // must wait for consensus to assign the accumulator version.
-            // We cannot optimize the scheduling by processing fastpath object withdraws
-            // sooner because these may get reverted, and we don't want them
-            // pollute the scheduler tracking state.
-            // TODO: We could however optimize execution by caching
-            // the execution state to avoid re-execution.
+            // Without an assigned accumulator version we cannot determine the
+            // deterministic balance state for the withdraws, so refuse to commit
+            // the effects. Callers that don't (or can't) assign a version up front
+            // (e.g. checkpoint executor paths that pass `None`, tests calling
+            // `try_execute_immediately` with a bare `ExecutionEnv`) fall into this
+            // branch.
             return false;
         };
         match self.check_object_funds(object_withdraws, accumulator_version, funds_read.as_ref()) {
