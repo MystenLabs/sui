@@ -10,18 +10,8 @@
     clippy::unreachable
 )]
 
-use crate::{
-    cache::identifier_interner::IdentifierInterner,
-    execution::{
-        dispatch_tables::VMDispatchTables,
-        interpreter::{
-            helpers::{instantiate_enum_type, instantiate_single_type, instantiate_struct_type},
-            state::MachineState,
-        },
-        values::Value as RuntimeValue,
-    },
-    jit::execution::ast::{ArenaType, Function, Type, TypeSubst},
-};
+use std::{collections::BTreeMap, sync::Arc};
+
 use move_binary_format::errors::{PartialVMError, PartialVMResult, VMError, VMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -35,9 +25,20 @@ use move_trace_format::{
     },
     value::SerializableMoveValue,
 };
-
 use smallvec::SmallVec;
-use std::{collections::BTreeMap, sync::Arc};
+
+use crate::{
+    cache::identifier_interner::IdentifierInterner,
+    execution::{
+        dispatch_tables::VMDispatchTables,
+        interpreter::{
+            helpers::{instantiate_enum_type, instantiate_single_type, instantiate_struct_type},
+            state::MachineState,
+        },
+        values::Value as RuntimeValue,
+    },
+    jit::execution::ast::{ArenaType, Function, Type, TypeSubst},
+};
 
 /// Internal state for the tracer. This is where the actual tracing logic is implemented.
 pub(crate) struct VMTracer<'a> {
@@ -71,6 +72,10 @@ struct FrameInfo {
     is_native: bool,
     locals_types: Vec<LocalType>,
     return_types: Vec<TagWithLayoutInfoOpt>,
+    /// The value of `Tracer::wants_frame_snapshot(module)` captured when the frame was opened.
+    /// The corresponding `CloseFrame` reads this so open/close stay consistent even if the
+    /// tracer's predicate is non-deterministic.
+    wants_frame_snapshot: bool,
 }
 
 /// A type tag, and the move type layout and reference information for that type if it is
@@ -650,24 +655,34 @@ impl VMTracer<'_> {
 
         assert!(function_type_info.local_types.len() == function.local_count());
 
-        let call_args: Vec<(_, _)> = args
-            .iter()
-            .zip(function_type_info.local_types.iter().cloned())
-            .map(|(value, tag_with_layout_info_opt)| {
-                let (layout, ref_type) = tag_with_layout_info_opt.layout;
-                let layout = layout?;
-                let move_value = into_annotated_move_value(value, &layout)?;
-                match ref_type {
-                    Some(ref_type) => {
-                        let (id, trace_value) = self.emit_data_load(move_value, &ref_type)?;
-                        self.loaded_data
-                            .insert(id, GlobalValue::Value(trace_value.clone()));
-                        Some((trace_value, Some(id)))
+        let wants_frame_snapshot = self
+            .trace
+            .wants_frame_snapshot(&function.module_id(&self.interner));
+        // The value walk is needed if we're emitting it as the frame snapshot, or if effects are
+        // wanted (the walk feeds `Effect::DataLoad` and `loaded_data` registration).
+        let build_values = wants_frame_snapshot || self.wants_effects;
+
+        let call_args: Vec<(_, _)> = if build_values {
+            args.iter()
+                .zip(function_type_info.local_types.iter().cloned())
+                .map(|(value, tag_with_layout_info_opt)| {
+                    let (layout, ref_type) = tag_with_layout_info_opt.layout;
+                    let layout = layout?;
+                    let move_value = into_annotated_move_value(value, &layout)?;
+                    match ref_type {
+                        Some(ref_type) => {
+                            let (id, trace_value) = self.emit_data_load(move_value, &ref_type)?;
+                            self.loaded_data
+                                .insert(id, GlobalValue::Value(trace_value.clone()));
+                            Some((trace_value, Some(id)))
+                        }
+                        None => Some((TraceValue::RuntimeValue { value: move_value }, None)),
                     }
-                    None => Some((TraceValue::RuntimeValue { value: move_value }, None)),
-                }
-            })
-            .collect::<Option<_>>()?;
+                })
+                .collect::<Option<_>>()?
+        } else {
+            Vec::new()
+        };
 
         let current_trace_offset = self.trace.current_trace_offset();
         let locals_types = function_type_info
@@ -700,6 +715,7 @@ impl VMTracer<'_> {
                 is_native: function.is_native(),
                 locals_types,
                 return_types: function_type_info.return_types.clone(),
+                wants_frame_snapshot,
             },
         );
 
@@ -714,10 +730,14 @@ impl VMTracer<'_> {
             function.name(&self.interner).to_string(),
             function.module_id(&self.interner).clone(),
             version_id,
-            call_args
-                .into_iter()
-                .map(|(trace_value, _)| trace_value)
-                .collect(),
+            if wants_frame_snapshot {
+                call_args
+                    .into_iter()
+                    .map(|(trace_value, _)| trace_value)
+                    .collect()
+            } else {
+                vec![]
+            },
             function_type_info.ty_args,
             function_type_info
                 .return_types
@@ -740,28 +760,41 @@ impl VMTracer<'_> {
         return_values: &[RuntimeValue],
         remaining_gas: &u64,
     ) -> Option<()> {
-        let current_frame_return_tys = self.current_frame()?.return_types.clone();
-        let return_values: Vec<_> = return_values
-            .iter()
-            .zip(current_frame_return_tys.into_iter())
-            .map(|(value, tag_with_layout_info_opt)| {
-                let (layout, ref_type) = tag_with_layout_info_opt.layout;
-                let layout = layout?;
-                let move_value = into_annotated_move_value(value, &layout)?;
-                match ref_type {
-                    Some(ref_type) => {
-                        let (id, trace_value) = self.emit_data_load(move_value, &ref_type)?;
-                        self.loaded_data
-                            .insert(id, GlobalValue::Value(trace_value.clone()));
-                        Some(trace_value)
+        let current_frame = self.current_frame()?;
+        let wants_frame_snapshot = current_frame.wants_frame_snapshot;
+        let current_frame_return_tys = current_frame.return_types.clone();
+        let build_values = wants_frame_snapshot || self.wants_effects;
+
+        let return_values: Vec<_> = if build_values {
+            return_values
+                .iter()
+                .zip(current_frame_return_tys.into_iter())
+                .map(|(value, tag_with_layout_info_opt)| {
+                    let (layout, ref_type) = tag_with_layout_info_opt.layout;
+                    let layout = layout?;
+                    let move_value = into_annotated_move_value(value, &layout)?;
+                    match ref_type {
+                        Some(ref_type) => {
+                            let (id, trace_value) = self.emit_data_load(move_value, &ref_type)?;
+                            self.loaded_data
+                                .insert(id, GlobalValue::Value(trace_value.clone()));
+                            Some(trace_value)
+                        }
+                        None => Some(TraceValue::RuntimeValue { value: move_value }),
                     }
-                    None => Some(TraceValue::RuntimeValue { value: move_value }),
-                }
-            })
-            .collect::<Option<_>>()?;
+                })
+                .collect::<Option<_>>()?
+        } else {
+            Vec::new()
+        };
+
         self.trace.close_frame(
             self.current_frame_identifier()?,
-            return_values,
+            if wants_frame_snapshot {
+                return_values
+            } else {
+                vec![]
+            },
             *remaining_gas,
         );
         let last_frame_opt = self.active_frames.pop_last();
@@ -779,17 +812,31 @@ impl VMTracer<'_> {
     ) -> Option<()> {
         let new_frame_idx = self.trace.current_trace_offset();
 
-        let call_args = (0..function.arg_count())
-            .rev()
-            .enumerate()
-            .map(|(local_idx, stack_idx)| {
-                let val = self.resolve_stack_value(vtables, machine, stack_idx)?;
-                // NB: it is important for us to resolve the value _before_ we register that any
-                // global is stored there.
+        let wants_frame_snapshot = self
+            .trace
+            .wants_frame_snapshot(&function.module_id(&self.interner));
+
+        // `resolve_stack_value` here only feeds `OpenFrame.parameters` -- it has no effect-emission
+        // side effects, so the gate is independent of `wants_effects`. `store_global` is bookkeeping
+        // and must always run.
+        let call_args: Vec<TraceValue> = if wants_frame_snapshot {
+            (0..function.arg_count())
+                .rev()
+                .enumerate()
+                .map(|(local_idx, stack_idx)| {
+                    let val = self.resolve_stack_value(vtables, machine, stack_idx)?;
+                    // NB: it is important for us to resolve the value _before_ we register that
+                    // any global is stored there.
+                    self.store_global(machine, new_frame_idx, stack_idx, local_idx)?;
+                    Some(val)
+                })
+                .collect::<Option<Vec<_>>>()?
+        } else {
+            for (local_idx, stack_idx) in (0..function.arg_count()).rev().enumerate() {
                 self.store_global(machine, new_frame_idx, stack_idx, local_idx)?;
-                Some(val)
-            })
-            .collect::<Option<Vec<_>>>()?;
+            }
+            vec![]
+        };
 
         let call_args_types = self
             .type_stack
@@ -831,6 +878,7 @@ impl VMTracer<'_> {
                 is_native: function.is_native(),
                 locals_types,
                 return_types: function_type_info.return_types.clone(),
+                wants_frame_snapshot,
             },
         );
 
@@ -878,14 +926,23 @@ impl VMTracer<'_> {
             );
         }
 
-        let return_values = (0..function.return_type_count())
-            .rev()
-            .map(|i| self.resolve_stack_value(vtables, machine, i))
-            .collect::<Option<Vec<_>>>()?;
+        let wants_frame_snapshot = self.current_frame()?.wants_frame_snapshot;
+        // The value walk is needed if we're emitting it as the frame snapshot, or if effects are
+        // wanted (native-return Push effects below consume the same values).
+        let build_values = wants_frame_snapshot || self.wants_effects;
+
+        let return_values: Vec<TraceValue> = if build_values {
+            (0..function.return_type_count())
+                .rev()
+                .map(|i| self.resolve_stack_value(vtables, machine, i))
+                .collect::<Option<Vec<_>>>()?
+        } else {
+            Vec::new()
+        };
 
         // Note that when a native function frame closes the values returned by the native function
         // are all pushed on the operand stack.
-        if function.is_native() {
+        if function.is_native() && build_values {
             for val in &return_values {
                 self.trace.effect(EF::Push(val.clone()));
             }
@@ -893,7 +950,11 @@ impl VMTracer<'_> {
 
         self.trace.close_frame(
             self.current_frame_identifier()?,
-            return_values,
+            if wants_frame_snapshot {
+                return_values
+            } else {
+                vec![]
+            },
             *remaining_gas,
         );
         let last_frame_opt = self.active_frames.pop_last();

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::format::{MoveTrace, TraceEvent, TraceVersion};
+use move_core_types::language_storage::ModuleId;
 use serde::Serialize;
 
 /// This is meant to be an internal tracing interface for the VM, and should only be implemented
@@ -17,6 +18,15 @@ pub trait Tracer {
     /// Whether this tracer wants effect events (Push, Pop, Read, Write, DataLoad). If false, the
     /// VM tracer can skip the expensive value conversion work needed to build effects.
     fn wants_effects(&self) -> bool;
+
+    /// Predicate consulted by the VM tracer before building the `parameters` / `return_` snapshot
+    /// for `OpenFrame` / `CloseFrame` events on a frame whose function lives in `module`.
+    ///
+    /// Returning `false` causes the VM to emit those two fields as `vec![]`. All other frame
+    /// fields and the effect stream are unaffected. Default returns `true` -- current behavior.
+    fn wants_frame_snapshot(&self, _module: &ModuleId) -> bool {
+        true
+    }
 }
 
 impl<T: Tracer> Tracer for &mut T {
@@ -26,6 +36,10 @@ impl<T: Tracer> Tracer for &mut T {
 
     fn wants_effects(&self) -> bool {
         <T as Tracer>::wants_effects(self)
+    }
+
+    fn wants_frame_snapshot(&self, module: &ModuleId) -> bool {
+        <T as Tracer>::wants_frame_snapshot(self, module)
     }
 }
 

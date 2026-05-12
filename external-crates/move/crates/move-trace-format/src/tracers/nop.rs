@@ -3,6 +3,7 @@
 
 use crate::format::TraceEvent;
 use crate::interface::{Tracer, Writer};
+use move_core_types::language_storage::ModuleId;
 
 pub struct NopTracer;
 impl Tracer for NopTracer {
@@ -12,6 +13,10 @@ impl Tracer for NopTracer {
     }
 
     fn wants_effects(&self) -> bool {
+        true
+    }
+
+    fn wants_frame_snapshot(&self, _module: &ModuleId) -> bool {
         true
     }
 }

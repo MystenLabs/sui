@@ -3,9 +3,12 @@
 
 // IDEA: Post trace analysis -- report when values are dropped.
 
-use crate::interface::{Tracer, Writer};
-use crate::tracers::nop::NopTracer;
-use crate::value::SerializableMoveValue;
+use std::{
+    fmt::Display,
+    io::{BufRead, BufReader},
+    sync::mpsc::Receiver,
+};
+
 use move_binary_format::{
     file_format::FunctionDefinitionIndex as BinaryFunctionDefinitionIndex,
     file_format_common::Opcodes,
@@ -15,8 +18,12 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
 };
 use serde::{Deserialize, Serialize};
-use std::io::{BufRead, BufReader};
-use std::{fmt::Display, sync::mpsc::Receiver};
+
+use crate::{
+    interface::{Tracer, Writer},
+    tracers::nop::NopTracer,
+    value::SerializableMoveValue,
+};
 
 /// An index into the trace. This should be used when referring to locations in the trace.
 /// Otherwise, a `usize` should be used when referring to indices that are not in the trace.
@@ -331,6 +338,13 @@ impl MoveTraceBuilder {
     /// value conversion work needed to build effects.
     pub fn wants_effects(&self) -> bool {
         self.tracer.wants_effects()
+    }
+
+    /// Whether the tracer wants a populated frame value snapshot for a frame whose function lives
+    /// in `module`. If false, the VM tracer emits empty `OpenFrame.parameters` /
+    /// `CloseFrame.return_` for that frame.
+    pub fn wants_frame_snapshot(&self, module: &ModuleId) -> bool {
+        self.tracer.wants_frame_snapshot(module)
     }
 
     /// Consume the `MoveTraceBuilder` and return the `MoveTrace` that has been built by it.
