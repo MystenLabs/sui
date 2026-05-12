@@ -25,12 +25,36 @@
 //! namespace at `EVENT_BITS = 16`, while leaving bucket-relative bit positions
 //! well within RoaringBitmap's `u32` limit.
 
+use std::sync::LazyLock;
+
 pub const NAME: &str = "event_bitmap_index";
 
 pub const SCHEMA_VERSION: u32 = 1;
 pub const BUCKET_ID_WIDTH: usize = 12;
+
+/// Default bucket size used when `SUI_KVSTORE_EVENT_BITMAP_BUCKET_SIZE` is unset.
+pub const DEFAULT_BUCKET_SIZE: u64 = 33_554_432;
+
 /// Number of packed `event_seq`s per bitmap bucket.
-pub const BUCKET_SIZE: u64 = 33_554_432;
+///
+/// Overridable at startup via the `SUI_KVSTORE_EVENT_BITMAP_BUCKET_SIZE` env
+/// var for temporary tuning before the real backfill. Must be in
+/// `(0, u32::MAX]`.
+pub static BUCKET_SIZE: LazyLock<u64> = LazyLock::new(|| {
+    let v = std::env::var("SUI_KVSTORE_EVENT_BITMAP_BUCKET_SIZE")
+        .ok()
+        .map(|s| {
+            s.parse::<u64>()
+                .expect("SUI_KVSTORE_EVENT_BITMAP_BUCKET_SIZE must be a u64")
+        })
+        .unwrap_or(DEFAULT_BUCKET_SIZE);
+    assert!(
+        v > 0 && v <= u32::MAX as u64,
+        "SUI_KVSTORE_EVENT_BITMAP_BUCKET_SIZE must be in (0, u32::MAX]: got {v}"
+    );
+    tracing::info!(target: "sui_kvstore::tables", "event_bitmap_index BUCKET_SIZE = {v}");
+    v
+});
 
 /// Number of low bits of `event_seq` reserved for the per-tx event index.
 pub const EVENT_BITS: u32 = 16;
@@ -136,6 +160,6 @@ mod tests {
 
     #[test]
     fn test_bucket_size_fits_u32() {
-        assert!(BUCKET_SIZE <= u32::MAX as u64);
+        assert!(*BUCKET_SIZE <= u32::MAX as u64);
     }
 }

@@ -15,9 +15,6 @@ use crate::tables::transaction_bitmap_index;
 
 use crate::handlers::bitmap::BitmapIndexProcessor;
 
-// Compile-time check that BUCKET_SIZE fits in u32 (required for RoaringBitmap bit positions).
-const _: () = assert!(transaction_bitmap_index::BUCKET_SIZE <= u32::MAX as u64);
-
 pub struct TransactionBitmapProcessor;
 
 impl BitmapIndexProcessor for TransactionBitmapProcessor {
@@ -36,10 +33,11 @@ impl BitmapIndexProcessor for TransactionBitmapProcessor {
         // so tx_lo is the first tx_seq in this checkpoint.
         let tx_lo = cp.network_total_transactions - checkpoint.transactions.len() as u64;
 
+        let bucket_size = *transaction_bitmap_index::BUCKET_SIZE;
         for (i, tx) in checkpoint.transactions.iter().enumerate() {
             let tx_seq = tx_lo + i as u64;
-            let bucket_id = tx_seq / transaction_bitmap_index::BUCKET_SIZE;
-            let bit_position = (tx_seq % transaction_bitmap_index::BUCKET_SIZE) as u32;
+            let bucket_id = tx_seq / bucket_size;
+            let bit_position = (tx_seq % bucket_size) as u32;
 
             for_each_transaction_dimension(tx, &checkpoint.object_set, |dim, value| {
                 emit(bucket_id, bit_position, dim, value);
@@ -48,7 +46,7 @@ impl BitmapIndexProcessor for TransactionBitmapProcessor {
     }
 
     fn is_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
-        watermark.tx_hi >= (bucket_id + 1) * transaction_bitmap_index::BUCKET_SIZE
+        watermark.tx_hi >= (bucket_id + 1) * *transaction_bitmap_index::BUCKET_SIZE
     }
 }
 
@@ -166,7 +164,7 @@ mod tests {
     #[tokio::test]
     async fn transactions_crossing_bucket_boundary_emit_distinct_bucket_rows() {
         let checkpoint = TestCheckpointBuilder::new(0)
-            .with_network_total_transactions(transaction_bitmap_index::BUCKET_SIZE - 1)
+            .with_network_total_transactions(*transaction_bitmap_index::BUCKET_SIZE - 1)
             .start_transaction(1)
             .finish_transaction()
             .start_transaction(1)
@@ -185,7 +183,7 @@ mod tests {
         assert!(
             bucket_0
                 .bitmap
-                .contains((transaction_bitmap_index::BUCKET_SIZE - 1) as u32)
+                .contains((*transaction_bitmap_index::BUCKET_SIZE - 1) as u32)
         );
 
         let bucket_1_key = sender_row_key(1, 1);

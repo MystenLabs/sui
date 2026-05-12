@@ -38,7 +38,9 @@ const PIPELINE: &str = "test_bitmap";
 const TABLE: &str = transaction_bitmap_index::NAME;
 const FAMILY: &str = tables::FAMILY;
 const COL: &str = transaction_bitmap_index::col::BITMAP;
-const BUCKET_SIZE: u64 = transaction_bitmap_index::BUCKET_SIZE;
+fn bucket_size() -> u64 {
+    *transaction_bitmap_index::BUCKET_SIZE
+}
 
 struct TestProcessor;
 
@@ -56,7 +58,7 @@ impl BitmapIndexProcessor for TestProcessor {
     }
 
     fn is_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
-        watermark.tx_hi >= (bucket_id + 1) * BUCKET_SIZE
+        watermark.tx_hi >= (bucket_id + 1) * bucket_size()
     }
 }
 
@@ -76,7 +78,7 @@ impl BitmapIndexProcessor for EventSealProcessor {
     }
 
     fn is_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
-        let seal_tx_hi = ((bucket_id + 1) * event_bitmap_index::BUCKET_SIZE)
+        let seal_tx_hi = ((bucket_id + 1) * *event_bitmap_index::BUCKET_SIZE)
             .div_ceil(event_bitmap_index::MAX_EVENTS_PER_TX as u64);
         watermark.tx_hi >= seal_tx_hi
     }
@@ -897,7 +899,7 @@ async fn bucket_start_cp_written_on_transition() {
 
     let row2 = b"v1#dim#0000000002";
     let batch2 = make_batch(vec![value(row2, 1, &[0], 2, 2000)]);
-    let w2 = watermark(2, BUCKET_SIZE + 5, 2000);
+    let w2 = watermark(2, bucket_size() + 5, 2000);
     let h = handler.clone();
     store
         .transaction(move |conn| {
@@ -927,7 +929,7 @@ async fn stale_watermark_retry_cannot_clobber_bucket_start_cp() {
     conn.init_watermark(PIPELINE, None).await.unwrap();
 
     conn.client()
-        .set_committer_watermark_cells(PIPELINE, &watermark(2, BUCKET_SIZE + 5, 2_000), Some(2))
+        .set_committer_watermark_cells(PIPELINE, &watermark(2, bucket_size() + 5, 2_000), Some(2))
         .await
         .unwrap();
     conn.client()
@@ -973,7 +975,7 @@ async fn empty_batch_commit_records_bucket_start_cp_on_transition() {
 
     // Second commit: empty batch, but tx_hi crosses into bucket 1.
     let empty = make_batch(vec![]);
-    let w2 = watermark(2, BUCKET_SIZE + 5, 2000);
+    let w2 = watermark(2, bucket_size() + 5, 2000);
     let h = handler.clone();
     store
         .transaction(move |conn| {
@@ -1006,7 +1008,7 @@ async fn commit_jumps_multiple_buckets_in_one_watermark() {
     // tx_hi lands well inside bucket 3 — three boundaries crossed in this
     // commit. The active bucket after promotion must be bucket 3.
     let target_bucket = 3u64;
-    let target_tx_hi = target_bucket * BUCKET_SIZE + 7;
+    let target_tx_hi = target_bucket * bucket_size() + 7;
     let row = b"v1#dim#0000000003";
     let batch = make_batch(vec![value(row, target_bucket, &[0], 1, 1000)]);
     let w = watermark(1, target_tx_hi, 1000);
@@ -1045,7 +1047,7 @@ async fn bucket_start_cp_seeded_from_column_on_restart() {
     // Pre-persist a mid-bucket watermark + a known bucket_start_cp so
     // init_watermark exposes them. The generation task reads that store
     // init state when the first commit arrives.
-    let pre_tx_hi = BUCKET_SIZE / 2;
+    let pre_tx_hi = bucket_size() / 2;
     let pre_cp = 10u64;
     let pre_bucket_start_cp = 7u64;
     let w_seed = watermark(pre_cp, pre_tx_hi, 500);
@@ -1095,7 +1097,7 @@ async fn bucket_start_cp_seeded_from_column_on_restart() {
 async fn mid_bucket_restart_without_replay_loses_pre_restart_bits() {
     let (mock, store, _client) = setup_without_init_watermark().await;
 
-    let pre_tx_hi = BUCKET_SIZE / 2;
+    let pre_tx_hi = bucket_size() / 2;
     let pre_cp = 5u64;
     let bucket_start_cp = 1u64;
     let pre_bit = 0u32;
@@ -1162,7 +1164,7 @@ async fn mid_bucket_restart_without_replay_loses_pre_restart_bits() {
 async fn mid_bucket_restart_with_replay_preserves_pre_restart_bits() {
     let (mock, store, _client) = setup_without_init_watermark().await;
 
-    let pre_tx_hi = BUCKET_SIZE / 2;
+    let pre_tx_hi = bucket_size() / 2;
     let pre_cp = 5u64;
     let bucket_start_cp = 1u64;
     let pre_bit = 0u32;
@@ -1233,7 +1235,7 @@ async fn mid_bucket_restart_with_replay_preserves_pre_restart_bits() {
 async fn restart_replay_skips_buckets_sealed_before_startup() {
     let (mock, store, _client) = setup_without_init_watermark().await;
 
-    let startup_tx_hi = BUCKET_SIZE + 10;
+    let startup_tx_hi = bucket_size() + 10;
     let startup_cp = 7u64;
     let bucket_start_cp = 4u64;
     let sealed_row = b"v1#dim#0000000000".to_vec();
@@ -1304,7 +1306,7 @@ async fn restart_replay_skips_buckets_sealed_before_startup() {
 #[test]
 fn event_bitmap_seal_handles_exact_boundaries() {
     let txs_per_event_bucket =
-        event_bitmap_index::BUCKET_SIZE / event_bitmap_index::MAX_EVENTS_PER_TX as u64;
+        *event_bitmap_index::BUCKET_SIZE / event_bitmap_index::MAX_EVENTS_PER_TX as u64;
     let wm = |tx_hi: u64| CommitterWatermark {
         tx_hi,
         ..Default::default()
@@ -1345,7 +1347,7 @@ impl BitmapIndexProcessor for UnregisteredProcessor {
     }
 
     fn is_sealed(bucket_id: u64, watermark: CommitterWatermark) -> bool {
-        watermark.tx_hi >= (bucket_id + 1) * BUCKET_SIZE
+        watermark.tx_hi >= (bucket_id + 1) * bucket_size()
     }
 }
 

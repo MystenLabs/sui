@@ -1,13 +1,36 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::LazyLock;
+
 pub const NAME: &str = "transaction_bitmap_index";
 
 pub const SCHEMA_VERSION: u32 = 1;
 pub const BUCKET_ID_WIDTH: usize = 10;
+
+/// Default bucket size used when `SUI_KVSTORE_TX_BITMAP_BUCKET_SIZE` is unset.
+pub const DEFAULT_BUCKET_SIZE: u64 = 1_048_576;
+
 /// Number of tx_sequence_numbers per bitmap bucket. Tied to SCHEMA_VERSION —
 /// changing this requires a version bump and backfill into the new version prefix.
-pub const BUCKET_SIZE: u64 = 1_048_576;
+///
+/// Overridable at startup via the `SUI_KVSTORE_TX_BITMAP_BUCKET_SIZE` env var
+/// for temporary tuning before the real backfill. Must be in `(0, u32::MAX]`.
+pub static BUCKET_SIZE: LazyLock<u64> = LazyLock::new(|| {
+    let v = std::env::var("SUI_KVSTORE_TX_BITMAP_BUCKET_SIZE")
+        .ok()
+        .map(|s| {
+            s.parse::<u64>()
+                .expect("SUI_KVSTORE_TX_BITMAP_BUCKET_SIZE must be a u64")
+        })
+        .unwrap_or(DEFAULT_BUCKET_SIZE);
+    assert!(
+        v > 0 && v <= u32::MAX as u64,
+        "SUI_KVSTORE_TX_BITMAP_BUCKET_SIZE must be in (0, u32::MAX]: got {v}"
+    );
+    tracing::info!(target: "sui_kvstore::tables", "transaction_bitmap_index BUCKET_SIZE = {v}");
+    v
+});
 
 pub mod col {
     pub const BITMAP: &str = "b";

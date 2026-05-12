@@ -32,21 +32,21 @@ pub struct BitmapIndexSpec {
 }
 
 impl BitmapIndexSpec {
-    pub const fn tx() -> Self {
+    pub fn tx() -> Self {
         Self {
             table_name: transaction_bitmap_index::NAME,
             schema_version: transaction_bitmap_index::SCHEMA_VERSION,
-            bucket_size: transaction_bitmap_index::BUCKET_SIZE,
+            bucket_size: *transaction_bitmap_index::BUCKET_SIZE,
             bucket_id_width: 10,
             bitmap_column: transaction_bitmap_index::col::BITMAP,
         }
     }
 
-    pub const fn event() -> Self {
+    pub fn event() -> Self {
         Self {
             table_name: event_bitmap_index::NAME,
             schema_version: event_bitmap_index::SCHEMA_VERSION,
-            bucket_size: event_bitmap_index::BUCKET_SIZE,
+            bucket_size: *event_bitmap_index::BUCKET_SIZE,
             bucket_id_width: 12,
             bitmap_column: event_bitmap_index::col::BITMAP,
         }
