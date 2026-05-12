@@ -341,3 +341,6 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
         }
     }
 }
+
+
+// -------------------------------------------------------------------------------------------------

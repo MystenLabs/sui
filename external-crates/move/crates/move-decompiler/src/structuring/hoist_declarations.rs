@@ -114,6 +114,7 @@ fn summarize_exp(e: &Exp) -> Summary {
             let entries = union_entries(&subs);
             Summary { entries, subs }
         }
+        Exp::Match(..) => unreachable!("`reconstruct_match` runs after `hoist_declarations`"),
         Exp::Return(items) | Exp::Call(_, items) => {
             let subs: Vec<Summary> = items.iter().map(summarize_exp).collect();
             let entries = union_entries(&subs);
@@ -272,6 +273,7 @@ fn exp(e: Exp, summary: Summary, already_bound: &HashSet<String>) -> Exp {
                 .collect();
             make_decls(decl, Exp::Switch(cond, enum_, new_cases))
         }
+        Exp::Match(..) => unreachable!("`reconstruct_match` runs after `hoist_declarations`"),
         Exp::Loop(label, body) => {
             // Loop has one sub; "≥2 children" can never fire — no decl_here at this level.
             let body_sum = expect_one(subs);

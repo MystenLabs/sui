@@ -13,7 +13,6 @@ module colors {
                 false
             },
             0x0::colors::Color::Blue => {
-                let 0x0::colors::Color::Blue {} = &l2;
                 let 0x0::colors::Color::Blue {} = l3;
                 true
             },
@@ -29,7 +28,6 @@ module colors {
                 false
             },
             0x0::colors::Color::Green => {
-                let 0x0::colors::Color::Green {} = &l2;
                 let 0x0::colors::Color::Green {} = l3;
                 true
             },
@@ -45,7 +43,6 @@ module colors {
         let l2 = &l3;
         let l1 = match(l2: 0x0::colors::Color) {
             0x0::colors::Color::Red => {
-                let 0x0::colors::Color::Red {} = &l2;
                 let 0x0::colors::Color::Red {} = l3;
                 true
             },

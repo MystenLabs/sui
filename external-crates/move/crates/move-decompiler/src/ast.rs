@@ -58,10 +58,22 @@ pub enum Exp {
     Seq(Vec<Exp>),
     While(Option<Label>, Box<Exp>, Box<Exp>),
     IfElse(Box<Exp>, Box<Exp>, Box<Option<Exp>>),
+    /// A tagged dispatch on an enum's variant — the shape structuring emits before pattern
+    /// recovery runs. Each arm is `(variant, body)` with no pattern bindings. The
+    /// `reconstruct_match` refinement promotes a `Switch` to `Match` when each arm's body
+    /// starts with an `UnpackVariant` whose fields can be lifted into a pattern.
     Switch(
         Box<Exp>,
         /* enum */ (ModuleId<Symbol>, Symbol),
         /* variant x rhs */ Vec<(Symbol, Exp)>,
+    ),
+    /// A Move `match` expression with patterns. Created exclusively by `reconstruct_match`
+    /// from a `Switch` whose arms had liftable leading `UnpackVariant`s; each arm carries the
+    /// pattern's field bindings (possibly empty for fieldless variants in the same match).
+    Match(
+        Box<Exp>,
+        /* enum */ (ModuleId<Symbol>, Symbol),
+        /* variant x pattern-fields x rhs */ Vec<(Symbol, Vec<(Symbol, String)>, Exp)>,
     ),
     Return(Vec<Exp>),
     // --------------------------------
@@ -120,6 +132,7 @@ impl Exp {
                     }
             }
             Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_break()),
+            Exp::Match(_, _, cases) => cases.iter().any(|(_, _, e)| e.contains_break()),
             Exp::Assign(_, exp) => exp.contains_break(),
             Exp::LetBind(_, exp) => exp.contains_break(),
             Exp::Declare(_) => false,
@@ -157,7 +170,8 @@ impl Exp {
                         false
                     }
             }
-            Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_break()),
+            Exp::Switch(_, _, cases) => cases.iter().any(|(_, e)| e.contains_continue()),
+            Exp::Match(_, _, cases) => cases.iter().any(|(_, _, e)| e.contains_continue()),
             Exp::Assign(_, exp) => exp.contains_continue(),
             Exp::LetBind(_, exp) => exp.contains_continue(),
             Exp::Declare(_) => false,
@@ -253,6 +267,12 @@ impl Exp {
                     body.collect_referenced_names(out);
                 }
             }
+            Exp::Match(cond, _, cases) => {
+                cond.collect_referenced_names(out);
+                for (_, _, body) in cases {
+                    body.collect_referenced_names(out);
+                }
+            }
             Exp::Loop(_, body) => body.collect_referenced_names(out),
             Exp::While(_, cond, body) => {
                 cond.collect_referenced_names(out);
@@ -338,6 +358,19 @@ impl std::fmt::Display for Exp {
                     indent(f, level)?;
                     write!(f, "}}")
                 }
+                Exp::Match(term, (mid, enum_), cases) => {
+                    writeln!(f, "match({}: {mid}::{enum_}) {{", term)?;
+                    for (variant, fields, case) in cases {
+                        indent(f, level + 1)?;
+                        write_match_pattern(f, mid, enum_, variant, fields)?;
+                        writeln!(f, " => {{")?;
+                        fmt_block_body(f, case, level + 2)?;
+                        indent(f, level + 1)?;
+                        writeln!(f, "}},")?;
+                    }
+                    indent(f, level)?;
+                    write!(f, "}}")
+                }
                 // Non-block expressions render inline via their normal Display.
                 other => write!(f, "{}", other),
             }
@@ -381,6 +414,7 @@ impl std::fmt::Display for Exp {
                     | Exp::While(_, _, _)
                     | Exp::IfElse(_, _, _)
                     | Exp::Switch(_, _, _)
+                    | Exp::Match(_, _, _)
                     | Exp::Return(_)
                     | Exp::Assign(_, _)
                     | Exp::LetBind(_, _)
@@ -458,8 +492,21 @@ impl std::fmt::Display for Exp {
                     writeln!(f, "match({}: {mid}::{enum_}) {{", term)?;
                     for (variant, case) in cases {
                         indent(f, level + 1)?;
-                        // TODO fix variant name
                         writeln!(f, "{mid}::{enum_}::{variant} => {{")?;
+                        fmt_exp(f, case, level + 2)?;
+                        indent(f, level + 1)?;
+                        writeln!(f, "}},")?;
+                    }
+                    indent(f, level)?;
+                    writeln!(f, "}}")
+                }
+                Exp::Match(term, (mid, enum_), cases) => {
+                    indent(f, level)?;
+                    writeln!(f, "match({}: {mid}::{enum_}) {{", term)?;
+                    for (variant, fields, case) in cases {
+                        indent(f, level + 1)?;
+                        write_match_pattern(f, mid, enum_, variant, fields)?;
+                        writeln!(f, " => {{")?;
                         fmt_exp(f, case, level + 2)?;
                         indent(f, level + 1)?;
                         writeln!(f, "}},")?;
@@ -589,6 +636,30 @@ impl std::fmt::Display for Exp {
 
         fmt_exp(f, self, 2)
     }
+}
+
+/// Print a match-arm pattern: `mid::enum::variant` for a tag-only arm, or
+/// `mid::enum::variant { field: binder, ... }` when the refinement has hoisted an
+/// `UnpackVariant` up into the pattern.
+fn write_match_pattern(
+    f: &mut std::fmt::Formatter<'_>,
+    mid: &ModuleId<Symbol>,
+    enum_: &Symbol,
+    variant: &Symbol,
+    fields: &[(Symbol, String)],
+) -> std::fmt::Result {
+    write!(f, "{mid}::{enum_}::{variant}")?;
+    if fields.is_empty() {
+        return Ok(());
+    }
+    write!(f, " {{ ")?;
+    for (i, (sym, name)) in fields.iter().enumerate() {
+        if i > 0 {
+            write!(f, ", ")?;
+        }
+        write!(f, "{sym}: {name}")?;
+    }
+    write!(f, " }}")
 }
 
 fn write_data_op(

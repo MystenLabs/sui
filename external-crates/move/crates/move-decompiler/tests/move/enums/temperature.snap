@@ -10,12 +10,10 @@ module temperature {
         let l2 = l0;
         let l1 = &l2;
         match(l1: 0x0::temperature::Temperature) {
-            0x0::temperature::Temperature::Fahrenheit => {
-                let 0x0::temperature::Temperature::Fahrenheit { pos0: reg_4 } = &l1;
+            0x0::temperature::Temperature::Fahrenheit { pos0: reg_4 } => {
                 let 0x0::temperature::Temperature::Fahrenheit { pos0: reg_6 } = l2;
             },
-            0x0::temperature::Temperature::Celcius => {
-                let 0x0::temperature::Temperature::Celcius { pos0: reg_8 } = &l1;
+            0x0::temperature::Temperature::Celcius { pos0: reg_8 } => {
                 let 0x0::temperature::Temperature::Celcius { pos0: reg_10 } = l2;
             },
         }
@@ -28,8 +26,7 @@ module temperature {
     public fun is_temperature_fahrenheit () {
         let l2 = l0;
         let l1 = match(l2: 0x0::temperature::Temperature) {
-            0x0::temperature::Temperature::Fahrenheit => {
-                let 0x0::temperature::Temperature::Fahrenheit { pos0: reg_3 } = &l2;
+            0x0::temperature::Temperature::Fahrenheit { pos0: reg_3 } => {
                 true
             },
             0x0::temperature::Temperature::Celcius => {

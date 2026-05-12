@@ -8,6 +8,7 @@ mod fuse_let;
 mod hoist_arm_assignments;
 mod introduce_while;
 mod loop_to_seq;
+mod reconstruct_match;
 mod remove_trailing_continue;
 mod remove_trailing_return;
 mod strip_loop_labels;
@@ -20,6 +21,7 @@ const REFINEMENTS: &[Refinement] = &[
     hoist_arm_assignments::refine,
     introduce_while::refine,
     loop_to_seq::refine,
+    reconstruct_match::refine,
     remove_trailing_continue::refine,
     remove_trailing_return::refine,
     strip_loop_labels::refine,
@@ -75,6 +77,13 @@ trait Refine {
             E::Switch(e, _, es) => {
                 let mut changed = self.refine(e);
                 for (_, e) in es.iter_mut() {
+                    changed |= self.refine(e);
+                }
+                changed
+            }
+            E::Match(e, _, es) => {
+                let mut changed = self.refine(e);
+                for (_, _, e) in es.iter_mut() {
                     changed |= self.refine(e);
                 }
                 changed

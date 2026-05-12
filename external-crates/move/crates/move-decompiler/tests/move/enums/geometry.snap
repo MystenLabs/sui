@@ -6,14 +6,12 @@ module geometry {
         let l4 = l0;
         let l3 = &l4;
         let l1 = match(l3: 0x0::geometry::Shape) {
-            0x0::geometry::Shape::Square => {
-                let 0x0::geometry::Shape::Square { side: reg_4 } = &l3;
+            0x0::geometry::Shape::Square { side: reg_4 } => {
                 let 0x0::geometry::Shape::Square { side: reg_6 } = l4;
                 let l7 = reg_6 : u64;
                 l7 * l7
             },
-            0x0::geometry::Shape::Triangle => {
-                let 0x0::geometry::Shape::Triangle { base: reg_11, height: reg_12 } = &l3;
+            0x0::geometry::Shape::Triangle { base: reg_11, height: reg_12 } => {
                 let 0x0::geometry::Shape::Triangle { base: reg_14, height: reg_15 } = l4;
                 let l2 = reg_15 : u64;
                 let l5 = reg_14 : u64;
@@ -28,8 +26,7 @@ module geometry {
         let l2 = l0;
         let l1 = l2;
         match(l1: 0x0::geometry::Shape) {
-            0x0::geometry::Shape::Square => {
-                let 0x0::geometry::Shape::Square { side: reg_7 } = &l1;
+            0x0::geometry::Shape::Square { side: reg_7 } => {
                 let 0x0::geometry::Shape::Square { side: reg_9 } = &l2;
                 return                 *reg_9 : &u64
             },
@@ -46,8 +43,7 @@ module geometry {
             0x0::geometry::Shape::Square => {
                 abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] };
             },
-            0x0::geometry::Shape::Triangle => {
-                let 0x0::geometry::Shape::Triangle { base: reg_7, height: reg_8 } = &l2;
+            0x0::geometry::Shape::Triangle { base: reg_7, height: reg_8 } => {
                 let 0x0::geometry::Shape::Triangle { base: reg_10, height: reg_11 } = &l3;
                 let l1 = reg_11 : &u64;
                 let l4 = reg_10 : &u64;
@@ -61,11 +57,11 @@ module geometry {
         let l3 = l0;
         let l2 =         l3;
         match(l2: 0x0::geometry::Shape) {
-            0x0::geometry::Shape::Square => {
-                let 0x0::geometry::Shape::Square { side: reg_8 } = &l2;
+            0x0::geometry::Shape::Square { side: reg_8 } => {
                 let 0x0::geometry::Shape::Square { side: reg_10 } = &mut l3;
                 let l4 = reg_10 : &mut u64;
                 *l4 = l1
+                return 
             },
             0x0::geometry::Shape::Triangle => {
                 abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] };
@@ -80,14 +76,14 @@ module geometry {
             0x0::geometry::Shape::Square => {
                 abort Constant { type_: U64, data: [1, 0, 0, 0, 0, 0, 0, 0] };
             },
-            0x0::geometry::Shape::Triangle => {
-                let 0x0::geometry::Shape::Triangle { base: reg_8, height: reg_9 } = &l4;
+            0x0::geometry::Shape::Triangle { base: reg_8, height: reg_9 } => {
                 let 0x0::geometry::Shape::Triangle { base: reg_11, height: reg_12 } = &mut l5;
                 let l3 = reg_12 : &mut u64;
                 let l6 = reg_11 : &mut u64;
                 let l7 = l3;
                 *l6 = l1
                 *l7 = l2
+                return 
             },
         }
     }
