@@ -18,9 +18,10 @@ COPY sui-execution sui-execution
 COPY consensus consensus
 COPY crates crates
 
-# GIT_REVISION declared late so SHA changes don't invalidate the COPYs above.
-ARG GIT_REVISION
-ENV GIT_REVISION=$GIT_REVISION
+# bridge-indexer doesn't use GIT_REVISION at compile time, so we deliberately
+# don't declare ARG/ENV GIT_REVISION in the builder — keeps the cargo-build
+# layer cache key stable across commits with identical source. The runtime
+# stage below still takes GIT_REVISION as a build arg for the LABEL.
 RUN cargo build --locked --profile ${PROFILE} --bin bridge-indexer
 
 # Production Image

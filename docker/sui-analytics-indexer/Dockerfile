@@ -14,9 +14,9 @@ COPY sui-execution sui-execution
 COPY consensus consensus
 COPY crates crates
 
-# GIT_REVISION declared late so SHA changes don't invalidate the COPYs above.
-ARG GIT_REVISION
-ENV GIT_REVISION=$GIT_REVISION
+# sui-analytics-indexer doesn't use GIT_REVISION at compile time, so we
+# deliberately don't declare ARG/ENV GIT_REVISION in the builder — keeps the
+# cargo-build layer cache key stable across commits with identical source.
 RUN cargo build --locked --profile ${PROFILE} --bin sui-analytics-indexer
 
 FROM debian:12-slim AS deploy

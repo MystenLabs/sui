@@ -15,7 +15,12 @@ COPY consensus consensus
 COPY crates crates
 
 # GIT_REVISION declared late so SHA changes don't invalidate the COPYs above.
+# Required: `bin_version::bin_version!()` previously fell back to `git describe`
+# from `.git/`, which we dropped for cache hygiene. Fail loudly if the build
+# arg is missing rather than embedding an empty revision string in the binary.
 ARG GIT_REVISION
+RUN test -n "$GIT_REVISION" || \
+    (echo "GIT_REVISION build arg is required (e.g. --build-arg GIT_REVISION=\$(git rev-parse HEAD))" >&2 && exit 1)
 ENV GIT_REVISION=$GIT_REVISION
 RUN cargo build --locked --profile ${PROFILE} --bin sui-proxy
 
