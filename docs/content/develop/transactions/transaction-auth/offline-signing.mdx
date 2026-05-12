@@ -1,28 +1,16 @@
 ---
 title: Offline Signing
 description: Offline signing can be used to sign a Sui transaction when a device is not connected to a Sui network, or if the signing wallet uses a different programming language than that of the transaction being signed.
-keywords:
-  [
-    offline signing,
-    sign offline,
-    sign transaction offline,
-    offline transaction,
-    serialize data,
-    sign data,
-    sign serialized data,
-    sign with Sui Keystore,
-    Sui Keystore,
-    Keystore,
-  ]
+keywords: [ offline signing, sign offline, sign transaction offline, offline transaction, serialize data, sign data, sign serialized data, sign with Sui Keystore, Sui Keystore, Keystore ]
 ---
 
 Offline signing is the process of signing transactions using a device that is not connected to a Sui network or using a wallet implemented in a different programming language that doesn't rely on Sui Keystore. To implement offline signing:
 
 1. Serialize the data for signing.
 
-1. Place the serialized data in a location, such as the wallet of your choice, or tools in other programming languages, and produce a signature with the corresponding public key.
+1. Place the serialized data in a location, such as the wallet of your choice, or tools in other programming languages, and produce a signature with the corresponding public key. 
 
-1. Sign the data.
+1. Sign the data. 
 
 1. Execute the signed transaction.
 
@@ -35,10 +23,11 @@ The following example demonstrates how to serialize data for a transfer using th
 <ImportContent source="info-gas-budget" mode="snippet" />
 
 ```sh
-$ sui client ptb --transfer-objects "[gas]" @<SUI-ADDRESS> --gas-coin @<COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-unsigned-transaction
+$ sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-unsigned-transaction
 ```
 
 The console responds with the resulting `<TX_BYTES>` value.
+
 
 :::tip
 
@@ -71,7 +60,7 @@ To verify a signature against the cryptography library backing Sui when debuggin
 
 ## Execute the signed transaction {#execute}
 
-After you obtain the serialized signature, you can submit it using the execution transaction command. This command takes `--tx-bytes` as the raw transaction bytes to execute (see output of the previous `sui client ptb` command) and the serialized signature (Base64 encoded `flag || sig || pk`, see output of `sui keytool sign`). This executes the signed transaction and returns the certificate and transaction effects if successful.
+After you obtain the serialized signature, you can submit it using the execution transaction command. This command takes `--tx-bytes` as the raw transaction bytes to execute (see output of the previous `sui client transfer` command) and the serialized signature (Base64 encoded `flag || sig || pk`, see output of `sui keytool sign`). This executes the signed transaction and returns the certificate and transaction effects if successful.
 
 ```sh
 $ sui client execute-signed-tx --tx-bytes <TX_BYTES> --signatures <SERIALIZED-SIGNATURE>
@@ -96,15 +85,15 @@ Mutated Objects:
 
 ## Alternative: Sign with Sui Keystore and execute transaction
 
-Alternatively, you can use the active key in Sui Keystore to sign and output a Base64-encoded sender signed data with flag `--serialize-signed-transaction`.
+Alternatively, you can use the active key in Sui Keystore to sign and output a Base64-encoded sender signed data with flag `--serialize-signed-transaction`. 
 
 ```sh
-$ sui client ptb --transfer-objects "[gas]" @<SUI-ADDRESS> --gas-coin @<COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-signed-transaction
+$ sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-signed-transaction
 ```
 
 The console responds with the resulting `<SIGNED-TX-BYTES>` value.
 
-After you obtain the signed transaction bytes, you can submit it using the `execute-combined-signed-tx` command. This command takes `--signed-tx-bytes` as the signed transaction bytes to execute (see output of the previous `sui client ptb` command). This executes the signed transaction and returns the certificate and transaction effects if successful.
+After you obtain the signed transaction bytes, you can submit it using the `execute-combined-signed-tx` command. This command takes `--signed-tx-bytes` as the signed transaction bytes to execute (see output of the previous `sui client transfer-sui` command). This executes the signed transaction and returns the certificate and transaction effects if successful.
 
 ```sh
 $ sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED-TX-BYTES>
