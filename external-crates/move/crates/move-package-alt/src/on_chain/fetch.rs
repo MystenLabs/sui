@@ -223,8 +223,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        flavor::Vanilla,
+        flavor::{Vanilla, vanilla::DEFAULT_ENV_NAME},
         schema::{OriginalID, PublishedID},
+        test_utils::graph_builder::TestPackageGraph,
     };
 
     /// Helper to create test on-chain package data.
@@ -349,9 +350,6 @@ mod tests {
     /// Rename-from check is skipped for on-chain deps.
     #[test(tokio::test)]
     async fn rename_from_skipped_for_on_chain() {
-        use crate::flavor::vanilla::DEFAULT_ENV_NAME;
-        use crate::test_utils::graph_builder::TestPackageGraph;
-
         // "my_dep" won't match the generated package name "self", but the
         // rename-from check should be skipped for on-chain deps.
         let scenario = TestPackageGraph::new(["root"])
@@ -359,7 +357,7 @@ mod tests {
             .add_on_chain_dep(
                 "root",
                 "my_dep",
-                "0x0000000000000000000000000000000000000000000000000000000000000001",
+                &PublishedID::from(1_u16).to_string(),
                 |d| d.in_env(DEFAULT_ENV_NAME),
             )
             .build();
@@ -375,24 +373,20 @@ mod tests {
     /// Both should be fetched and loaded.
     #[test(tokio::test)]
     async fn transitive_on_chain_dep() {
-        use crate::flavor::vanilla::DEFAULT_ENV_NAME;
-        use crate::test_utils::graph_builder::TestPackageGraph;
-
-        let addr_a = PublishedID::from(0xA_u16);
-        let addr_b = PublishedID::from(0xB_u16);
-
         let scenario = TestPackageGraph::new(["root"])
             .add_on_chain_dep("root", "dep_a", "true", |d| d)
-            .add_on_chain_dep("root", "dep_a", &addr_a.to_string(), |d| {
-                d.in_env(DEFAULT_ENV_NAME)
+            .add_on_chain_dep(
+                "root",
+                "dep_a",
+                &PublishedID::from(0xA_u16).to_string(),
+                |d| d.in_env(DEFAULT_ENV_NAME),
+            )
+            .add_on_chain_pkg(PublishedID::from(0xA_u16), |pkg| {
+                pkg.dep(OriginalID::from(0xB_u16), PublishedID::from(0xB_u16))
             })
-            .add_on_chain_pkg(addr_a, |pkg| {
-                pkg.dep(OriginalID::from(0xB_u16), addr_b.clone())
-            })
-            .add_on_chain_pkg(addr_b, |pkg| pkg)
+            .add_on_chain_pkg(PublishedID::from(0xB_u16), |pkg| pkg)
             .build();
 
-        // Should succeed — both packages fetched and loaded
         let root = scenario.root_package("root").await;
         assert!(root.packages().len() >= 3, "expected root + A + B");
     }
@@ -402,29 +396,27 @@ mod tests {
     #[test(tokio::test)]
     #[ignore] // TODO: requires deduplication of on-chain and source deps
     async fn on_chain_overlaps_with_local_dep() {
-        use crate::flavor::vanilla::DEFAULT_ENV_NAME;
-        use crate::test_utils::graph_builder::TestPackageGraph;
-
-        let addr_a = PublishedID::from(0xA_u16);
-        let addr_shared = PublishedID::from(0xCC_u16);
-
-        // local_dep is published at 0xCC — same address as A's linkage entry
         let scenario = TestPackageGraph::new(["root"])
-            .add_published("local_dep", OriginalID::from(0xCC_u16), addr_shared.clone())
+            .add_published(
+                "local_dep",
+                OriginalID::from(0xCC_u16),
+                PublishedID::from(0xCC_u16),
+            )
             .add_deps([("root", "local_dep")])
             .add_on_chain_dep("root", "dep_a", "true", |d| d)
-            .add_on_chain_dep("root", "dep_a", &addr_a.to_string(), |d| {
-                d.in_env(DEFAULT_ENV_NAME)
+            .add_on_chain_dep(
+                "root",
+                "dep_a",
+                &PublishedID::from(0xA_u16).to_string(),
+                |d| d.in_env(DEFAULT_ENV_NAME),
+            )
+            .add_on_chain_pkg(PublishedID::from(0xA_u16), |pkg| {
+                pkg.dep(OriginalID::from(0xCC_u16), PublishedID::from(0xCC_u16))
             })
-            .add_on_chain_pkg(addr_a, |pkg| {
-                pkg.dep(OriginalID::from(0xCC_u16), addr_shared.clone())
-            })
-            .add_on_chain_pkg(addr_shared, |pkg| pkg)
+            .add_on_chain_pkg(PublishedID::from(0xCC_u16), |pkg| pkg)
             .build();
 
         let root = scenario.root_package("root").await;
-        // After deduplication: root + local_dep + on-chain A = 3 packages
-        // (local_dep and on-chain 0xCC should be the same node)
         assert_eq!(
             root.packages().len(),
             3,
