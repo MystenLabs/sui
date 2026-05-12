@@ -38,89 +38,15 @@ use vstd::std_specs::hash::{
     axiom_random_state_builds_valid_hashers, builds_valid_hashers, obeys_key_model,
 };
 
-// Verus cannot construct opaque external types directly. These wrappers
-// build the SuiErrors used by `insert_generic`'s error branches. Bodies
-// are unverified — error construction is exec-only metadata that does
-// not affect the sum invariant.
-
-#[verifier::external_body]
-fn err_repeated_signer(signer: AuthorityName, conflicting_sig: bool) -> (out: SuiError) {
-    SuiErrorKind::StakeAggregatorRepeatedSigner {
-        signer,
-        conflicting_sig,
-    }
-    .into()
-}
-
-#[verifier::external_body]
-fn err_invalid_authenticator() -> (out: SuiError) {
-    SuiErrorKind::InvalidAuthenticator.into()
-}
-
-/// Clone an AuthoritySignInfo — needed because clone() is defined outside
-/// verus!{} and can't be called in proven exec code directly.
-#[verifier::external_body]
-fn clone_sig(sig: &AuthoritySignInfo) -> (out: AuthoritySignInfo)
-    ensures out == *sig,
-{
-    sig.clone()
-}
-
-/// Log a bad-stake warning.  extern_body because tracing macros can't appear
-/// inside proven Verus code.
-#[verifier::external_body]
-fn warn_bad_stake(name: &AuthorityName) {
-    warn!(name=?name.concise(), "Bad stake from validator");
-}
-
-/// One-liner: construct the Intent for a given Message type's scope.
-/// external_body because T::SCOPE is an associated const from the
-/// unregistered Message trait, which Verus cannot evaluate in exec.
-#[verifier::external_body]
-fn message_intent<T: Message>() -> (out: Intent) {
-    Intent::sui_app(T::SCOPE)
-}
-
-/// Aggregate a slice of authority sigs into a quorum certificate and verify
-/// it against the given message in one shot.
-///
-/// Returns `Some(cert)` iff aggregation succeeded and the certificate
-/// verifies; `None` otherwise.
-///
-/// Key axiom (soundness of BLS): if every input sig is individually valid for
-/// this (data, intent, committee) triple, the aggregated cert always verifies.
-/// Conversely, if the cert verifies, every constituent sig must be valid.
-#[verifier::external_body]
-fn try_batch_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
-    sigs: Vec<AuthoritySignInfo>,
-    data: &T,
-    intent: Intent,
-    committee: &Committee,
-) -> (out: Option<AuthorityQuorumSignInfo<STRENGTH>>)
-    ensures
-        (forall|v: AuthoritySignInfo| sigs@.contains(v) ==> sig_is_valid(&v, committee))
-            ==> out.is_some(),
-        out.is_some()
-            ==> forall|v: AuthoritySignInfo| #[trigger] sigs@.contains(v) ==> sig_is_valid(&v, committee),
-{
-    let cert = AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(sigs, committee)
-        .ok()?;
-    cert.verify_secure(data, intent, committee).ok()?;
-    Some(cert)
-}
-
-#[verifier::external_body]
-fn err_wrong_epoch(expected: u64, actual: u64) -> (out: SuiError) {
-    SuiErrorKind::WrongEpoch {
-        expected_epoch: expected,
-        actual_epoch: actual,
-    }
-    .into()
-}
-
 } // verus!
 
 verus! {
+
+// ================================================================================================
+// § 1  PUBLIC API
+// ================================================================================================
+// Types, public exec methods with their full specs, and the spec predicates that appear in
+// their ensures clauses.
 
 /// StakeAggregator allows us to keep track of the total stake of a set of validators.
 /// STRENGTH indicates whether we want a strong quorum (2f+1) or a weak quorum (f+1).
@@ -129,6 +55,25 @@ pub struct StakeAggregator<S, const STRENGTH: bool> {
     pub data: VerifiedHashMap<AuthorityName, S>,
     pub total_votes: StakeUnit,
     pub committee: Arc<Committee>,
+}
+
+pub enum InsertResult<CertT> {
+    QuorumReached(CertT),
+    Failed {
+        error: SuiError,
+    },
+    NotEnoughVotes {
+        bad_votes: u64,
+        bad_authorities: Vec<AuthorityName>,
+    },
+}
+
+impl<CertT> InsertResult<CertT> {
+    pub fn is_quorum_reached(&self) -> (b: bool)
+        ensures b == matches!(self, Self::QuorumReached(..)),
+    {
+        matches!(self, Self::QuorumReached(..))
+    }
 }
 
 /// StakeAggregator is a utility data structure that allows us to aggregate a list of validator
@@ -356,218 +301,6 @@ impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
     }
 }
 
-/// If an authority has already voted, inserting again must return `Failed`.
-///
-/// `QuorumReached` and `NotEnoughVotes` both require `!old.has_voted(authority)`.
-/// If `old.has_voted(authority)` is true those branches are impossible, so by
-/// exhaustion of the three exclusive variants only `Failed` can be returned.
-///
-/// Usage: call this after any prior `insert_generic` — the postcondition
-/// guarantees `post.has_voted(authority)`. Supplying that fact here, together
-/// with the postconditions of a *second* call, proves the second result is `Failed`.
-pub proof fn lemma_voted_authority_insert_fails(
-    pre_has_voted: bool,
-    result_is_quorum: bool,
-    result_is_not_enough: bool,
-    result_is_failed: bool,
-)
-    requires
-        pre_has_voted,
-        // Exactly one variant is active.
-        result_is_quorum || result_is_not_enough || result_is_failed,
-        !(result_is_quorum && result_is_not_enough),
-        !(result_is_quorum && result_is_failed),
-        !(result_is_not_enough && result_is_failed),
-        // Postconditions from insert_generic: both success variants require the
-        // authority to have been absent before the call.
-        result_is_quorum ==> !pre_has_voted,
-        result_is_not_enough ==> !pre_has_voted,
-    ensures
-        result_is_failed
-{
-    // Both quorum and not_enough contradict pre_has_voted; Failed is the only
-    // remaining possibility.
-}
-
-/// Inserting two distinct authorities produces the same voted set regardless
-/// of order.
-///
-/// This is a direct corollary of the state-transition biconditional in
-/// `insert_generic`:
-///
-///   after a then b: has_voted(c) ⟺ agg.voted(c) ∨ c=a ∨ c=b
-///   after b then a: has_voted(c) ⟺ agg.voted(c) ∨ c=b ∨ c=a
-///
-/// These expressions are equal because ∨ is commutative. No reasoning about
-/// the implementation is required — the spec alone implies commutativity.
-///
-/// The lemma takes the relevant postconditions as hypotheses rather than
-/// reasoning about mutable-reference calls directly.
-pub proof fn lemma_insert_generic_commutes(
-    agg_voted: Set<AuthorityName>,
-    auth_a: AuthorityName,
-    auth_b: AuthorityName,
-    // State after inserting a, then b
-    after_a:  Set<AuthorityName>,
-    after_ab: Set<AuthorityName>,
-    // State after inserting b, then a
-    after_b:  Set<AuthorityName>,
-    after_ba: Set<AuthorityName>,
-)
-    requires
-        auth_a != auth_b,
-        // State-transition postconditions of the first pair of insertions
-        forall|c: AuthorityName| after_a.contains(c)
-            <==> (#[trigger] agg_voted.contains(c) || c == auth_a),
-        forall|c: AuthorityName| after_ab.contains(c)
-            <==> (#[trigger] after_a.contains(c) || c == auth_b),
-        // State-transition postconditions of the second pair (reversed order)
-        forall|c: AuthorityName| after_b.contains(c)
-            <==> (#[trigger] agg_voted.contains(c) || c == auth_b),
-        forall|c: AuthorityName| after_ba.contains(c)
-            <==> (#[trigger] after_b.contains(c) || c == auth_a),
-    ensures
-        // The voted sets are identical — insertion order doesn't matter.
-        forall|c: AuthorityName|
-            #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
-{
-    // Both reduce to: agg_voted.contains(c) || c == auth_a || c == auth_b.
-    // ∨ is commutative, so the order of auth_a and auth_b doesn't matter.
-    // Help Verus instantiate the forall triggers for each c.
-    assert forall|c: AuthorityName|
-        #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
-    by {
-        // Expand after_ab: substitute the a-insertion into the b-insertion.
-        assert(after_ab.contains(c) <==> (agg_voted.contains(c) || c == auth_a || c == auth_b));
-        // Expand after_ba: substitute the b-insertion into the a-insertion.
-        assert(after_ba.contains(c) <==> (agg_voted.contains(c) || c == auth_b || c == auth_a));
-    }
-}
-
-/// Inserting two distinct valid-sig authorities via `insert` commutes: the
-/// resulting `has_voted` set is the same regardless of insertion order.
-///
-/// The proof is identical to `lemma_insert_generic_commutes` — commutativity
-/// of set union — because `insert` satisfies the same biconditional state
-/// transition as `insert_generic` when both sigs are cryptographically valid
-/// (valid sigs are never evicted by the BLS fallback path).
-///
-/// The biconditional is taken as a hypothesis rather than derived inline,
-/// so the caller is responsible for establishing it holds (e.g. by applying
-/// the monotonicity postcondition of `insert` under the valid-sig conditions).
-pub proof fn lemma_insert_commutes(
-    agg_voted: Set<AuthorityName>,
-    auth_a: AuthorityName,
-    auth_b: AuthorityName,
-    // has_voted sets along each ordering
-    after_a:  Set<AuthorityName>,
-    after_ab: Set<AuthorityName>,
-    after_b:  Set<AuthorityName>,
-    after_ba: Set<AuthorityName>,
-)
-    requires
-        auth_a != auth_b,
-        // Biconditional state-transition for insert(a) then insert(b):
-        // holds when sig_a and sig_b are both sig_is_valid.
-        forall|c: AuthorityName| after_a.contains(c)
-            <==> (#[trigger] agg_voted.contains(c) || c == auth_a),
-        forall|c: AuthorityName| after_ab.contains(c)
-            <==> (#[trigger] after_a.contains(c) || c == auth_b),
-        // Biconditional for the reversed order:
-        forall|c: AuthorityName| after_b.contains(c)
-            <==> (#[trigger] agg_voted.contains(c) || c == auth_b),
-        forall|c: AuthorityName| after_ba.contains(c)
-            <==> (#[trigger] after_b.contains(c) || c == auth_a),
-    ensures
-        forall|c: AuthorityName|
-            #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
-{
-    assert forall|c: AuthorityName|
-        #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
-    by {
-        assert(after_ab.contains(c) <==> (agg_voted.contains(c) || c == auth_a || c == auth_b));
-        assert(after_ba.contains(c) <==> (agg_voted.contains(c) || c == auth_b || c == auth_a));
-    }
-}
-
-/// Challenge theorems: exercise the `<==` directions of the variant biconditionals.
-///
-/// The three biconditionals are mutually exclusive and exhaustive, so any one
-/// `<==` direction is implied by the other two via elimination.  A challenge
-/// theorem that takes all three biconditionals as hypotheses therefore always
-/// proves by elimination — it never actually needs the specific `<==` direction.
-///
-/// To make these theorems genuine tests of the `<==` directions, each one is
-/// given ONLY the biconditional for the variant it concludes, plus the concrete
-/// conditions.  The proof must use the `<==` direction directly; it cannot go
-/// through elimination because the other variants' biconditionals are absent.
-///
-/// Note: these theorems take the biconditionals as abstract hypotheses (standard
-/// Verus pattern when the function is exec and cannot be called from proof). They
-/// serve as correctness documentation and as checks that the biconditionals are
-/// internally consistent.
-
-/// The `<==` direction of QuorumReached: when conditions hold, QuorumReached is forced.
-/// Hypothesis: the QuorumReached biconditional only (no other variant biconditionals).
-pub proof fn challenge_quorum_reached_forced<S: Clone + Eq, const STRENGTH: bool>(
-    authority: AuthorityName,
-    pre_has_voted_authority: bool,
-    pre_total: u64,
-    pre_threshold: u64,
-    pre_weight: int,
-    out_is_quorum: bool,
-)
-    requires
-        !pre_has_voted_authority,
-        pre_weight > 0,
-        pre_total as int + pre_weight >= pre_threshold as int,
-        // The QuorumReached biconditional for this call (full <=>).
-        out_is_quorum
-            <==> (!pre_has_voted_authority
-                  && pre_weight > 0
-                  && pre_total as int + pre_weight >= pre_threshold as int),
-    ensures
-        out_is_quorum,
-{
-    // Proof uses ONLY the <== direction of the QuorumReached biconditional.
-    // No other variant biconditionals provided — elimination is not possible.
-}
-
-/// The `<==` direction of Failed: weight-zero forces Failed.
-pub proof fn challenge_weight_zero_forces_failed(
-    pre_has_voted: bool,
-    pre_weight: int,
-    out_is_failed: bool,
-)
-    requires
-        !pre_has_voted,
-        pre_weight == 0,
-        out_is_failed <==> (pre_has_voted || pre_weight == 0),
-    ensures
-        out_is_failed,
-{
-    // Proof uses the <== direction: !has_voted && weight == 0 satisfies the rhs.
-}
-
-} // verus!
-
-impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
-    pub fn keys(&self) -> impl Iterator<Item = &AuthorityName> {
-        self.data.inner.keys()
-    }
-
-    pub fn committee(&self) -> &Committee {
-        &self.committee
-    }
-
-    #[cfg(test)]
-    pub fn validator_sig_count(&self) -> usize {
-        self.data.inner.len()
-    }
-}
-
-verus! {
-
 // ---------------------------------------------------------------------------
 // Spec predicates for the AuthoritySignInfo specialisation
 // ---------------------------------------------------------------------------
@@ -602,72 +335,279 @@ pub open spec fn reaches_quorum<const STRENGTH: bool>(
     valid_voted_weight::<STRENGTH>(agg) >= committee_threshold_spec(&agg.committee, STRENGTH) as int
 }
 
-/// `valid_voted_weight` counts only a subset of stored votes, so it never
-/// exceeds `total_votes`.
-pub proof fn lemma_valid_voted_weight_le_total<const STRENGTH: bool>(
-    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
-)
-    requires agg.invariant_holds(), committee_unique(&agg.committee),
-    ensures valid_voted_weight::<STRENGTH>(agg) <= agg.total_votes as int,
-{
-    let full  = agg.data@.dom();
-    let valid = full.filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee));
-    assert(forall|a: AuthorityName| #[trigger] valid.contains(a) ==> full.contains(a));
-    lemma_voted_weight_le_subset(&agg.committee, valid, full, committee_authorities(&agg.committee).len() as int);
-}
+impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
+    /// Insert an authority signature carried in a signed envelope.
+    ///
+    /// # Algebraic model
+    ///
+    /// The aggregator accumulates (authority, sig) pairs. Sigs are verified in bulk
+    /// when the running total first reaches threshold. The fallback path evicts all
+    /// individually-invalid sigs, then re-checks whether the remaining valid weight
+    /// still meets threshold.
+    ///
+    ///   Failed ⟺  epoch mismatch | duplicate authority | weight = 0
+    ///   QuorumReached ⟺  structurally valid ∧ valid_voted_weight(self) ≥ threshold
+    ///   NotEnoughVotes ⟺  structurally valid ∧ valid_voted_weight(self) < threshold
+    ///
+    /// Monotonicity: a sig that was valid before is never evicted (and its stored
+    /// value is unchanged).  Valid new sigs are always recorded.
+    pub fn insert<T: Message + Serialize>(
+        &mut self,
+        envelope: Envelope<T, AuthoritySignInfo>,
+    ) -> (out: InsertResult<AuthorityQuorumSignInfo<STRENGTH>>)
+        requires
+            old(self).invariant_holds(),
+            committee_unique(&old(self).committee),
+            old(self).total_votes as int
+                + committee_weight_of(&old(self).committee, envelope_authority(&envelope))
+                <= u64::MAX as int,
+        ensures
+            self.committee == old(self).committee,
+            self.invariant_holds(),
 
-/// Under `all_sigs_valid` (every stored sig is valid), the filter that keeps
-/// only valid-sig entries keeps the entire domain, so `valid_voted_weight`
-/// equals `total_votes`.  The complex induction is no longer needed: set
-/// extensionality suffices since `valid == full`.
-pub proof fn lemma_valid_voted_weight_eq_total_under_all_valid<const STRENGTH: bool>(
-    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
-)
-    requires
-        agg.invariant_holds(),
-        all_sigs_valid::<STRENGTH>(agg),
-    ensures
-        valid_voted_weight::<STRENGTH>(agg) == agg.total_votes as int,
-{
-    let full  = agg.data@.dom();
-    let valid = full.filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee));
-    // Every element of full passes the filter (all sigs valid) → valid == full.
-    assert(valid =~= full) by {
-        assert forall|a: AuthorityName| full.contains(a) <==> valid.contains(a) by {
-            if full.contains(a) {
-                assert(agg.has_voted(a));
-            }
-        };
-    };
-}
+            // Membership bound: only the new authority can be added to the voted set.
+            forall|a: AuthorityName|
+                self.has_voted(a) ==>
+                    #[trigger] old(self).has_voted(a) || a == envelope_authority(&envelope),
 
+            // No state change on epoch mismatch or duplicate.
+            (envelope_epoch(&envelope) != committee_epoch_spec(&old(self).committee)
+                || old(self).has_voted(envelope_authority(&envelope)))
+                    ==> self.data@ == old(self).data@ && self.total_votes == old(self).total_votes,
 
-pub enum InsertResult<CertT> {
-    QuorumReached(CertT),
-    Failed {
-        error: SuiError,
-    },
-    NotEnoughVotes {
-        bad_votes: u64,
-        bad_authorities: Vec<AuthorityName>,
-    },
-}
+            // === Return value: fully biconditional ===
+            // Failed iff structurally invalid (TAV never returns Failed with the
+            // strengthened implementation that treats aggregation errors as NaE).
+            (out is Failed)
+                <==> (envelope_epoch(&envelope) != committee_epoch_spec(&old(self).committee)
+                      || old(self).has_voted(envelope_authority(&envelope))
+                      || committee_weight_of(&old(self).committee, envelope_authority(&envelope)) == 0),
 
-impl<CertT> InsertResult<CertT> {
-    pub fn is_quorum_reached(&self) -> (b: bool)
-        ensures b == matches!(self, Self::QuorumReached(..)),
+            // QuorumReached iff structurally valid and valid-sig weight meets threshold.
+            // valid_voted_weight counts only sigs that pass sig_is_valid; invalid sigs
+            // are evicted by TAV so they never inflate this count in the QR path.
+            (out is QuorumReached)
+                <==> (envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee)
+                      && !old(self).has_voted(envelope_authority(&envelope))
+                      && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
+                      && reaches_quorum::<STRENGTH>(self)),
+
+            // === Monotonicity + value preservation ===
+            // Previously-valid weighted sigs are never evicted; their stored values
+            // are unchanged.  This is the key liveness guarantee: accumulated valid
+            // weight is never lost.
+            forall|a: AuthorityName|
+                old(self).has_voted(a)
+                && committee_weight_of(&old(self).committee, a) > 0
+                && sig_is_valid(&old(self).data@[a], &old(self).committee)
+                    ==> self.has_voted(a) && #[trigger] self.data@[a] == old(self).data@[a],
+
+            // === Recording ===
+            // A valid new sig is always stored on a non-Failed insert.
+            sig_is_valid(&envelope_sig_spec(&envelope), &old(self).committee)
+                && envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee)
+                && !old(self).has_voted(envelope_authority(&envelope))
+                && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
+                    ==> self.has_voted(envelope_authority(&envelope))
+                        && self.data@[envelope_authority(&envelope)]
+                            == envelope_sig_spec(&envelope),
     {
-        matches!(self, Self::QuorumReached(..))
+        let ghost pre_sig = envelope_sig_spec(&envelope);
+        let ghost new_sig_valid = sig_is_valid(&pre_sig, &self.committee);
+
+        let (data, sig) = envelope.into_data_and_sig();
+        // sig == pre_sig  (from assume_specification of into_data_and_sig)
+
+        let comm_epoch = self.committee.epoch();
+        let sig_epoch = sig.get_epoch();
+
+        proof {
+            // Bridge exec epoch values to spec projectors so the ensures clause
+            // can be discharged.
+            assert(sig_epoch == auth_sig_epoch_spec(&pre_sig));
+            assert(comm_epoch == committee_epoch_spec(&self.committee));
+            // envelope_epoch unfolds to auth_sig_epoch_spec(envelope_sig_spec(&envelope))
+            // = auth_sig_epoch_spec(pre_sig) = sig_epoch.
+            assert(sig_epoch == envelope_epoch(&envelope));
+        }
+
+        if comm_epoch != sig_epoch {
+            return InsertResult::Failed {
+                error: err_wrong_epoch(comm_epoch, sig_epoch),
+            };
+        }
+
+        // Epochs match; extract the authority and delegate to insert_generic.
+        let authority = sig.get_authority();
+
+        proof {
+            assert(authority == auth_sig_authority_spec(&pre_sig));
+            assert(authority == envelope_authority(&envelope));
+        }
+
+        match self.insert_generic(authority, sig) {
+            InsertResult::QuorumReached(_) => {
+                // insert_generic's QR biconditional: self.total_votes >= threshold.
+                // This satisfies try_aggregate_and_verify's new precondition.
+                proof { assert(self.total_votes >= committee_threshold_spec(&self.committee, STRENGTH)); }
+                let ghost pre_tav_auth_data = self.data@[authority];
+                let out = try_aggregate_and_verify(self, data);
+                proof {
+                    // TAV is now proven; its postconditions include all_sigs_valid and
+                    // (out is QR) iff reaches_quorum.  The lemma connects total_votes
+                    // to valid_voted_weight so the recording postcondition can use it.
+                    lemma_valid_voted_weight_eq_total_under_all_valid::<STRENGTH>(self);
+                    assert(pre_tav_auth_data == pre_sig);
+                }
+                out
+            },
+            InsertResult::Failed { error } => {
+                proof {
+                    // In the duplicate case (old.has_voted), insert_generic returned
+                    // without modifying data.  Derive self.data@ == old.data@ so the
+                    // "no state change on duplicate" postcondition holds.
+                    if old(self).has_voted(envelope_authority(&envelope)) {
+                        // Same domain: biconditional gives has_voted(a) == old.has_voted(a).
+                        assert forall|a: AuthorityName|
+                            self.data@.dom().contains(a) <==>
+                                old(self).data@.dom().contains(a)
+                        by { assert(self.has_voted(a) == old(self).has_voted(a)); };
+                        // Same values for all shared keys.
+                        assert forall|a: AuthorityName|
+                            #[trigger] self.data@.dom().contains(a) ==>
+                                self.data@[a] == old(self).data@[a]
+                        by {
+                            // self.dom.contains(a) == old.dom.contains(a) (from above)
+                            // old.has_voted(a) → value preserved (insert_generic postcondition)
+                            assert(self.has_voted(a) == old(self).has_voted(a));
+                        };
+                        assert(self.data@ =~= old(self).data@);
+                    }
+                }
+                InsertResult::Failed { error }
+            },
+            InsertResult::NotEnoughVotes {
+                bad_votes,
+                bad_authorities,
+            } => {
+                proof {
+                    // total_votes < threshold (insert_generic returned NaE).
+                    // valid_voted_weight ≤ total_votes < threshold → !reaches_quorum.
+                    lemma_valid_voted_weight_le_total::<STRENGTH>(self);
+                }
+                InsertResult::NotEnoughVotes { bad_votes, bad_authorities }
+            },
+        }
     }
 }
 
-// ---------------------------------------------------------------------------
-// BLS aggregation + individual-verify fallback (external_body)
-// ---------------------------------------------------------------------------
-//
-// ---------------------------------------------------------------------------
-// Crypto primitives (external_body, one concern each)
-// ---------------------------------------------------------------------------
+} // verus!
+
+// Unverified convenience methods (outside verus! — these use unspecced stdlib APIs)
+impl<S: Clone + Eq, const STRENGTH: bool> StakeAggregator<S, STRENGTH> {
+    pub fn keys(&self) -> impl Iterator<Item = &AuthorityName> {
+        self.data.inner.keys()
+    }
+
+    pub fn committee(&self) -> &Committee {
+        &self.committee
+    }
+
+    #[cfg(test)]
+    pub fn validator_sig_count(&self) -> usize {
+        self.data.inner.len()
+    }
+}
+
+verus! {
+
+// ================================================================================================
+// § 2  AXIOMS
+// ================================================================================================
+// external_body functions: the trusted boundary between proven and unproven code.
+// Each one is either a crypto primitive whose correctness is assumed (BLS soundness),
+// or a thin exec wrapper for an operation Verus cannot evaluate (error construction,
+// logging, associated-const lookup, HashMap iteration).
+
+// Verus cannot construct opaque external types directly. These wrappers
+// build the SuiErrors used by `insert_generic`'s error branches. Bodies
+// are unverified — error construction is exec-only metadata that does
+// not affect the sum invariant.
+
+#[verifier::external_body]
+fn err_repeated_signer(signer: AuthorityName, conflicting_sig: bool) -> (out: SuiError) {
+    SuiErrorKind::StakeAggregatorRepeatedSigner {
+        signer,
+        conflicting_sig,
+    }
+    .into()
+}
+
+#[verifier::external_body]
+fn err_invalid_authenticator() -> (out: SuiError) {
+    SuiErrorKind::InvalidAuthenticator.into()
+}
+
+#[verifier::external_body]
+fn err_wrong_epoch(expected: u64, actual: u64) -> (out: SuiError) {
+    SuiErrorKind::WrongEpoch {
+        expected_epoch: expected,
+        actual_epoch: actual,
+    }
+    .into()
+}
+
+/// Clone an AuthoritySignInfo — needed because clone() is defined outside
+/// verus!{} and can't be called in proven exec code directly.
+#[verifier::external_body]
+fn clone_sig(sig: &AuthoritySignInfo) -> (out: AuthoritySignInfo)
+    ensures out == *sig,
+{
+    sig.clone()
+}
+
+/// Log a bad-stake warning.  extern_body because tracing macros can't appear
+/// inside proven Verus code.
+#[verifier::external_body]
+fn warn_bad_stake(name: &AuthorityName) {
+    warn!(name=?name.concise(), "Bad stake from validator");
+}
+
+/// One-liner: construct the Intent for a given Message type's scope.
+/// external_body because T::SCOPE is an associated const from the
+/// unregistered Message trait, which Verus cannot evaluate in exec.
+#[verifier::external_body]
+fn message_intent<T: Message>() -> (out: Intent) {
+    Intent::sui_app(T::SCOPE)
+}
+
+/// Aggregate a slice of authority sigs into a quorum certificate and verify
+/// it against the given message in one shot.
+///
+/// Returns `Some(cert)` iff aggregation succeeded and the certificate
+/// verifies; `None` otherwise.
+///
+/// Key axiom (soundness of BLS): if every input sig is individually valid for
+/// this (data, intent, committee) triple, the aggregated cert always verifies.
+/// Conversely, if the cert verifies, every constituent sig must be valid.
+#[verifier::external_body]
+fn try_batch_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
+    sigs: Vec<AuthoritySignInfo>,
+    data: &T,
+    intent: Intent,
+    committee: &Committee,
+) -> (out: Option<AuthorityQuorumSignInfo<STRENGTH>>)
+    ensures
+        (forall|v: AuthoritySignInfo| sigs@.contains(v) ==> sig_is_valid(&v, committee))
+            ==> out.is_some(),
+        out.is_some()
+            ==> forall|v: AuthoritySignInfo| #[trigger] sigs@.contains(v) ==> sig_is_valid(&v, committee),
+{
+    let cert = AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(sigs, committee)
+        .ok()?;
+    cert.verify_secure(data, intent, committee).ok()?;
+    Some(cert)
+}
 
 /// Collect all stored sigs into a Vec for use with batch BLS.
 /// external_body because HashMap iteration is not yet specced in Verus.
@@ -685,6 +625,16 @@ fn collect_sigs<const STRENGTH: bool>(
 {
     agg.data.inner.values().cloned().collect()
 }
+
+} // verus!
+
+verus! {
+
+// ================================================================================================
+// § 3  PRIVATE EXEC FUNCTIONS
+// ================================================================================================
+// Internal implementation details.  Not part of the public contract; callable only from
+// within this module.
 
 /// Evict all sigs that fail individual BLS verification.
 ///
@@ -987,174 +937,186 @@ fn try_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
     }
 }
 
-// ---------------------------------------------------------------------------
-// StakeAggregator<AuthoritySignInfo, STRENGTH>::insert — proven correct
-// ---------------------------------------------------------------------------
+} // verus!
 
-impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
-    /// Insert an authority signature carried in a signed envelope.
-    ///
-    /// # Algebraic model
-    ///
-    /// The aggregator accumulates (authority, sig) pairs. Sigs are verified in bulk
-    /// when the running total first reaches threshold. The fallback path evicts all
-    /// individually-invalid sigs, then re-checks whether the remaining valid weight
-    /// still meets threshold.
-    ///
-    ///   Failed ⟺  epoch mismatch | duplicate authority | weight = 0
-    ///   QuorumReached ⟺  structurally valid ∧ valid_voted_weight(self) ≥ threshold
-    ///   NotEnoughVotes ⟺  structurally valid ∧ valid_voted_weight(self) < threshold
-    ///
-    /// Monotonicity: a sig that was valid before is never evicted (and its stored
-    /// value is unchanged).  Valid new sigs are always recorded.
-    pub fn insert<T: Message + Serialize>(
-        &mut self,
-        envelope: Envelope<T, AuthoritySignInfo>,
-    ) -> (out: InsertResult<AuthorityQuorumSignInfo<STRENGTH>>)
-        requires
-            old(self).invariant_holds(),
-            committee_unique(&old(self).committee),
-            old(self).total_votes as int
-                + committee_weight_of(&old(self).committee, envelope_authority(&envelope))
-                <= u64::MAX as int,
-        ensures
-            self.committee == old(self).committee,
-            self.invariant_holds(),
+verus! {
 
-            // Membership bound: only the new authority can be added to the voted set.
-            forall|a: AuthorityName|
-                self.has_voted(a) ==>
-                    #[trigger] old(self).has_voted(a) || a == envelope_authority(&envelope),
+// ================================================================================================
+// § 4  SPEC FUNCTIONS AND SUPPORT LEMMAS
+// ================================================================================================
+// Mathematical foundations: spec helper lemmas and the liveness machinery.
 
-            // No state change on epoch mismatch or duplicate.
-            (envelope_epoch(&envelope) != committee_epoch_spec(&old(self).committee)
-                || old(self).has_voted(envelope_authority(&envelope)))
-                    ==> self.data@ == old(self).data@ && self.total_votes == old(self).total_votes,
+/// If an authority has already voted, inserting again must return `Failed`.
+///
+/// `QuorumReached` and `NotEnoughVotes` both require `!old.has_voted(authority)`.
+/// If `old.has_voted(authority)` is true those branches are impossible, so by
+/// exhaustion of the three exclusive variants only `Failed` can be returned.
+///
+/// Usage: call this after any prior `insert_generic` — the postcondition
+/// guarantees `post.has_voted(authority)`. Supplying that fact here, together
+/// with the postconditions of a *second* call, proves the second result is `Failed`.
+pub proof fn lemma_voted_authority_insert_fails(
+    pre_has_voted: bool,
+    result_is_quorum: bool,
+    result_is_not_enough: bool,
+    result_is_failed: bool,
+)
+    requires
+        pre_has_voted,
+        // Exactly one variant is active.
+        result_is_quorum || result_is_not_enough || result_is_failed,
+        !(result_is_quorum && result_is_not_enough),
+        !(result_is_quorum && result_is_failed),
+        !(result_is_not_enough && result_is_failed),
+        // Postconditions from insert_generic: both success variants require the
+        // authority to have been absent before the call.
+        result_is_quorum ==> !pre_has_voted,
+        result_is_not_enough ==> !pre_has_voted,
+    ensures
+        result_is_failed
+{
+    // Both quorum and not_enough contradict pre_has_voted; Failed is the only
+    // remaining possibility.
+}
 
-            // === Return value: fully biconditional ===
-            // Failed iff structurally invalid (TAV never returns Failed with the
-            // strengthened implementation that treats aggregation errors as NaE).
-            (out is Failed)
-                <==> (envelope_epoch(&envelope) != committee_epoch_spec(&old(self).committee)
-                      || old(self).has_voted(envelope_authority(&envelope))
-                      || committee_weight_of(&old(self).committee, envelope_authority(&envelope)) == 0),
-
-            // QuorumReached iff structurally valid and valid-sig weight meets threshold.
-            // valid_voted_weight counts only sigs that pass sig_is_valid; invalid sigs
-            // are evicted by TAV so they never inflate this count in the QR path.
-            (out is QuorumReached)
-                <==> (envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee)
-                      && !old(self).has_voted(envelope_authority(&envelope))
-                      && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
-                      && reaches_quorum::<STRENGTH>(self)),
-
-            // === Monotonicity + value preservation ===
-            // Previously-valid weighted sigs are never evicted; their stored values
-            // are unchanged.  This is the key liveness guarantee: accumulated valid
-            // weight is never lost.
-            forall|a: AuthorityName|
-                old(self).has_voted(a)
-                && committee_weight_of(&old(self).committee, a) > 0
-                && sig_is_valid(&old(self).data@[a], &old(self).committee)
-                    ==> self.has_voted(a) && #[trigger] self.data@[a] == old(self).data@[a],
-
-            // === Recording ===
-            // A valid new sig is always stored on a non-Failed insert.
-            sig_is_valid(&envelope_sig_spec(&envelope), &old(self).committee)
-                && envelope_epoch(&envelope) == committee_epoch_spec(&old(self).committee)
-                && !old(self).has_voted(envelope_authority(&envelope))
-                && committee_weight_of(&old(self).committee, envelope_authority(&envelope)) > 0
-                    ==> self.has_voted(envelope_authority(&envelope))
-                        && self.data@[envelope_authority(&envelope)]
-                            == envelope_sig_spec(&envelope),
-    {
-        let ghost pre_sig = envelope_sig_spec(&envelope);
-        let ghost new_sig_valid = sig_is_valid(&pre_sig, &self.committee);
-
-        let (data, sig) = envelope.into_data_and_sig();
-        // sig == pre_sig  (from assume_specification of into_data_and_sig)
-
-        let comm_epoch = self.committee.epoch();
-        let sig_epoch = sig.get_epoch();
-
-        proof {
-            // Bridge exec epoch values to spec projectors so the ensures clause
-            // can be discharged.
-            assert(sig_epoch == auth_sig_epoch_spec(&pre_sig));
-            assert(comm_epoch == committee_epoch_spec(&self.committee));
-            // envelope_epoch unfolds to auth_sig_epoch_spec(envelope_sig_spec(&envelope))
-            // = auth_sig_epoch_spec(pre_sig) = sig_epoch.
-            assert(sig_epoch == envelope_epoch(&envelope));
-        }
-
-        if comm_epoch != sig_epoch {
-            return InsertResult::Failed {
-                error: err_wrong_epoch(comm_epoch, sig_epoch),
-            };
-        }
-
-        // Epochs match; extract the authority and delegate to insert_generic.
-        let authority = sig.get_authority();
-
-        proof {
-            assert(authority == auth_sig_authority_spec(&pre_sig));
-            assert(authority == envelope_authority(&envelope));
-        }
-
-        match self.insert_generic(authority, sig) {
-            InsertResult::QuorumReached(_) => {
-                // insert_generic's QR biconditional: self.total_votes >= threshold.
-                // This satisfies try_aggregate_and_verify's new precondition.
-                proof { assert(self.total_votes >= committee_threshold_spec(&self.committee, STRENGTH)); }
-                let ghost pre_tav_auth_data = self.data@[authority];
-                let out = try_aggregate_and_verify(self, data);
-                proof {
-                    // TAV is now proven; its postconditions include all_sigs_valid and
-                    // (out is QR) iff reaches_quorum.  The lemma connects total_votes
-                    // to valid_voted_weight so the recording postcondition can use it.
-                    lemma_valid_voted_weight_eq_total_under_all_valid::<STRENGTH>(self);
-                    assert(pre_tav_auth_data == pre_sig);
-                }
-                out
-            },
-            InsertResult::Failed { error } => {
-                proof {
-                    // In the duplicate case (old.has_voted), insert_generic returned
-                    // without modifying data.  Derive self.data@ == old.data@ so the
-                    // "no state change on duplicate" postcondition holds.
-                    if old(self).has_voted(envelope_authority(&envelope)) {
-                        // Same domain: biconditional gives has_voted(a) == old.has_voted(a).
-                        assert forall|a: AuthorityName|
-                            self.data@.dom().contains(a) <==>
-                                old(self).data@.dom().contains(a)
-                        by { assert(self.has_voted(a) == old(self).has_voted(a)); };
-                        // Same values for all shared keys.
-                        assert forall|a: AuthorityName|
-                            #[trigger] self.data@.dom().contains(a) ==>
-                                self.data@[a] == old(self).data@[a]
-                        by {
-                            // self.dom.contains(a) == old.dom.contains(a) (from above)
-                            // old.has_voted(a) → value preserved (insert_generic postcondition)
-                            assert(self.has_voted(a) == old(self).has_voted(a));
-                        };
-                        assert(self.data@ =~= old(self).data@);
-                    }
-                }
-                InsertResult::Failed { error }
-            },
-            InsertResult::NotEnoughVotes {
-                bad_votes,
-                bad_authorities,
-            } => {
-                proof {
-                    // total_votes < threshold (insert_generic returned NaE).
-                    // valid_voted_weight ≤ total_votes < threshold → !reaches_quorum.
-                    lemma_valid_voted_weight_le_total::<STRENGTH>(self);
-                }
-                InsertResult::NotEnoughVotes { bad_votes, bad_authorities }
-            },
-        }
+/// Inserting two distinct authorities produces the same voted set regardless
+/// of order.
+///
+/// This is a direct corollary of the state-transition biconditional in
+/// `insert_generic`:
+///
+///   after a then b: has_voted(c) ⟺ agg.voted(c) ∨ c=a ∨ c=b
+///   after b then a: has_voted(c) ⟺ agg.voted(c) ∨ c=b ∨ c=a
+///
+/// These expressions are equal because ∨ is commutative. No reasoning about
+/// the implementation is required — the spec alone implies commutativity.
+///
+/// The lemma takes the relevant postconditions as hypotheses rather than
+/// reasoning about mutable-reference calls directly.
+pub proof fn lemma_insert_generic_commutes(
+    agg_voted: Set<AuthorityName>,
+    auth_a: AuthorityName,
+    auth_b: AuthorityName,
+    // State after inserting a, then b
+    after_a:  Set<AuthorityName>,
+    after_ab: Set<AuthorityName>,
+    // State after inserting b, then a
+    after_b:  Set<AuthorityName>,
+    after_ba: Set<AuthorityName>,
+)
+    requires
+        auth_a != auth_b,
+        // State-transition postconditions of the first pair of insertions
+        forall|c: AuthorityName| after_a.contains(c)
+            <==> (#[trigger] agg_voted.contains(c) || c == auth_a),
+        forall|c: AuthorityName| after_ab.contains(c)
+            <==> (#[trigger] after_a.contains(c) || c == auth_b),
+        // State-transition postconditions of the second pair (reversed order)
+        forall|c: AuthorityName| after_b.contains(c)
+            <==> (#[trigger] agg_voted.contains(c) || c == auth_b),
+        forall|c: AuthorityName| after_ba.contains(c)
+            <==> (#[trigger] after_b.contains(c) || c == auth_a),
+    ensures
+        // The voted sets are identical — insertion order doesn't matter.
+        forall|c: AuthorityName|
+            #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
+{
+    // Both reduce to: agg_voted.contains(c) || c == auth_a || c == auth_b.
+    // ∨ is commutative, so the order of auth_a and auth_b doesn't matter.
+    // Help Verus instantiate the forall triggers for each c.
+    assert forall|c: AuthorityName|
+        #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
+    by {
+        // Expand after_ab: substitute the a-insertion into the b-insertion.
+        assert(after_ab.contains(c) <==> (agg_voted.contains(c) || c == auth_a || c == auth_b));
+        // Expand after_ba: substitute the b-insertion into the a-insertion.
+        assert(after_ba.contains(c) <==> (agg_voted.contains(c) || c == auth_b || c == auth_a));
     }
+}
+
+/// Inserting two distinct valid-sig authorities via `insert` commutes: the
+/// resulting `has_voted` set is the same regardless of insertion order.
+///
+/// The proof is identical to `lemma_insert_generic_commutes` — commutativity
+/// of set union — because `insert` satisfies the same biconditional state
+/// transition as `insert_generic` when both sigs are cryptographically valid
+/// (valid sigs are never evicted by the BLS fallback path).
+///
+/// The biconditional is taken as a hypothesis rather than derived inline,
+/// so the caller is responsible for establishing it holds (e.g. by applying
+/// the monotonicity postcondition of `insert` under the valid-sig conditions).
+pub proof fn lemma_insert_commutes(
+    agg_voted: Set<AuthorityName>,
+    auth_a: AuthorityName,
+    auth_b: AuthorityName,
+    // has_voted sets along each ordering
+    after_a:  Set<AuthorityName>,
+    after_ab: Set<AuthorityName>,
+    after_b:  Set<AuthorityName>,
+    after_ba: Set<AuthorityName>,
+)
+    requires
+        auth_a != auth_b,
+        // Biconditional state-transition for insert(a) then insert(b):
+        // holds when sig_a and sig_b are both sig_is_valid.
+        forall|c: AuthorityName| after_a.contains(c)
+            <==> (#[trigger] agg_voted.contains(c) || c == auth_a),
+        forall|c: AuthorityName| after_ab.contains(c)
+            <==> (#[trigger] after_a.contains(c) || c == auth_b),
+        // Biconditional for the reversed order:
+        forall|c: AuthorityName| after_b.contains(c)
+            <==> (#[trigger] agg_voted.contains(c) || c == auth_b),
+        forall|c: AuthorityName| after_ba.contains(c)
+            <==> (#[trigger] after_b.contains(c) || c == auth_a),
+    ensures
+        forall|c: AuthorityName|
+            #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
+{
+    assert forall|c: AuthorityName|
+        #[trigger] after_ab.contains(c) <==> after_ba.contains(c)
+    by {
+        assert(after_ab.contains(c) <==> (agg_voted.contains(c) || c == auth_a || c == auth_b));
+        assert(after_ba.contains(c) <==> (agg_voted.contains(c) || c == auth_b || c == auth_a));
+    }
+}
+
+/// `valid_voted_weight` counts only a subset of stored votes, so it never
+/// exceeds `total_votes`.
+pub proof fn lemma_valid_voted_weight_le_total<const STRENGTH: bool>(
+    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
+)
+    requires agg.invariant_holds(), committee_unique(&agg.committee),
+    ensures valid_voted_weight::<STRENGTH>(agg) <= agg.total_votes as int,
+{
+    let full  = agg.data@.dom();
+    let valid = full.filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee));
+    assert(forall|a: AuthorityName| #[trigger] valid.contains(a) ==> full.contains(a));
+    lemma_voted_weight_le_subset(&agg.committee, valid, full, committee_authorities(&agg.committee).len() as int);
+}
+
+/// Under `all_sigs_valid` (every stored sig is valid), the filter that keeps
+/// only valid-sig entries keeps the entire domain, so `valid_voted_weight`
+/// equals `total_votes`.  The complex induction is no longer needed: set
+/// extensionality suffices since `valid == full`.
+pub proof fn lemma_valid_voted_weight_eq_total_under_all_valid<const STRENGTH: bool>(
+    agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
+)
+    requires
+        agg.invariant_holds(),
+        all_sigs_valid::<STRENGTH>(agg),
+    ensures
+        valid_voted_weight::<STRENGTH>(agg) == agg.total_votes as int,
+{
+    let full  = agg.data@.dom();
+    let valid = full.filter(|a: AuthorityName| sig_is_valid(&agg.data@[a], &agg.committee));
+    // Every element of full passes the filter (all sigs valid) → valid == full.
+    assert(valid =~= full) by {
+        assert forall|a: AuthorityName| full.contains(a) <==> valid.contains(a) by {
+            if full.contains(a) {
+                assert(agg.has_voted(a));
+            }
+        };
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -1210,6 +1172,75 @@ pub proof fn lemma_crossing_point_exists(weights: Seq<u64>, n: int, threshold: i
         // k also satisfies 1 <= k <= n.
         assert(1 <= k <= n);
     }
+}
+
+} // verus!
+
+verus! {
+
+// ================================================================================================
+// § 5  CHALLENGE PROOFS
+// ================================================================================================
+// Spec stress tests: exercise the <== directions of the variant biconditionals and prove
+// key liveness properties.  These are correctness documentation as much as proofs.
+
+/// Challenge theorems: exercise the `<==` directions of the variant biconditionals.
+///
+/// The three biconditionals are mutually exclusive and exhaustive, so any one
+/// `<==` direction is implied by the other two via elimination.  A challenge
+/// theorem that takes all three biconditionals as hypotheses therefore always
+/// proves by elimination — it never actually needs the specific `<==` direction.
+///
+/// To make these theorems genuine tests of the `<==` directions, each one is
+/// given ONLY the biconditional for the variant it concludes, plus the concrete
+/// conditions.  The proof must use the `<==` direction directly; it cannot go
+/// through elimination because the other variants' biconditionals are absent.
+///
+/// Note: these theorems take the biconditionals as abstract hypotheses (standard
+/// Verus pattern when the function is exec and cannot be called from proof). They
+/// serve as correctness documentation and as checks that the biconditionals are
+/// internally consistent.
+
+/// The `<==` direction of QuorumReached: when conditions hold, QuorumReached is forced.
+/// Hypothesis: the QuorumReached biconditional only (no other variant biconditionals).
+pub proof fn challenge_quorum_reached_forced<S: Clone + Eq, const STRENGTH: bool>(
+    authority: AuthorityName,
+    pre_has_voted_authority: bool,
+    pre_total: u64,
+    pre_threshold: u64,
+    pre_weight: int,
+    out_is_quorum: bool,
+)
+    requires
+        !pre_has_voted_authority,
+        pre_weight > 0,
+        pre_total as int + pre_weight >= pre_threshold as int,
+        // The QuorumReached biconditional for this call (full <=>).
+        out_is_quorum
+            <==> (!pre_has_voted_authority
+                  && pre_weight > 0
+                  && pre_total as int + pre_weight >= pre_threshold as int),
+    ensures
+        out_is_quorum,
+{
+    // Proof uses ONLY the <== direction of the QuorumReached biconditional.
+    // No other variant biconditionals provided — elimination is not possible.
+}
+
+/// The `<==` direction of Failed: weight-zero forces Failed.
+pub proof fn challenge_weight_zero_forces_failed(
+    pre_has_voted: bool,
+    pre_weight: int,
+    out_is_failed: bool,
+)
+    requires
+        !pre_has_voted,
+        pre_weight == 0,
+        out_is_failed <==> (pre_has_voted || pre_weight == 0),
+    ensures
+        out_is_failed,
+{
+    // Proof uses the <== direction: !has_voted && weight == 0 satisfies the rhs.
 }
 
 /// Liveness challenge: inserting enough valid sigs eventually reaches quorum.
