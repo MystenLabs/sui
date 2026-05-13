@@ -10,5 +10,5 @@ if "%~1"=="--version" (
   exit /b 0
 )
 
-echo ERROR: stub npm should not have been invoked with: %* 1>&2
+>&2 echo ERROR: stub npm should not have been invoked with: %*
 exit /b 99

@@ -10,6 +10,7 @@ if "%~1"=="--version" (
   exit /b 0
 )
 
-echo [warn] sources/foo.move 1>&2
-echo Code style issues found in 1 file. 1>&2
+:: Redirect before `echo` so the trailing space isn't part of the output.
+>&2 echo [warn] sources/foo.move
+>&2 echo Code style issues found in 1 file.
 exit /b 1
