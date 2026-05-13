@@ -32,8 +32,9 @@ use crate::{
         layout::SourcePackageLayout, package_loader::PackageConfig, package_lock::PackageSystemLock,
     },
     schema::{
-        PackageName, ParsedManifest, ParsedPublishedFile, Publication, PublishAddresses,
-        PublishedID, RenderToml,
+        DefaultDependency, ManifestDependencyInfo, OnChainAddress, PackageName, ParsedManifest,
+        ParsedPublishedFile, Publication, PublishAddresses, PublishedID, RenderToml,
+        ReplacementDependency,
     },
 };
 
@@ -147,34 +148,36 @@ fn write_manifest(
         Spanned::new(0..1, chain_id.to_string()),
     );
 
-    // Serialize everything except dep-replacements. ManifestDependencyInfo's derived
-    // Serialize doesn't match its custom Deserialize (the serializer produces tagged enum
-    // output like `OnChainAt = { ... }` but the deserializer expects flat keys like
-    // `on-chain = "0x..."`). We can't fix Serialize because the digest computation depends
-    // on the current (incorrect) format. See DVX-2125 for the proper fix.
-    // TODO(DVX-2125): once the digest is decoupled from serialization, use RenderToml.
-    let mut doc = toml_edit::ser::to_document(&manifest).expect("can serialize generated manifest");
-
-    // Build dep-replacements manually via toml_edit, using inline tables for each dep
-    // (e.g. `onchain_0x02 = { on-chain = "0x02", override = true }`)
+    // Add dep-replacements from linkage table
     if !data.dependencies.is_empty() {
-        let mut env_table = toml_edit::Table::new();
-        for (original_id, linked_address) in &data.dependencies {
-            let dep_name = format!("onchain_{original_id}");
-            let mut dep = toml_edit::InlineTable::new();
-            dep.insert("on-chain", linked_address.to_string().into());
-            dep.insert("override", true.into());
-            env_table.insert(
-                &dep_name,
-                toml_edit::Item::Value(toml_edit::Value::InlineTable(dep)),
-            );
-        }
-        let mut replacements = toml_edit::Table::new();
-        replacements.insert(ON_CHAIN_ENV_NAME, toml_edit::Item::Table(env_table));
-        doc.insert("dep-replacements", toml_edit::Item::Table(replacements));
+        let env_replacements = data
+            .dependencies
+            .iter()
+            .map(|(original_id, linked_address)| {
+                let dep_name =
+                    PackageName::new(format!("onchain_{original_id}")).expect("valid identifier");
+                let replacement = ReplacementDependency {
+                    dependency: Some(DefaultDependency {
+                        dependency_info: ManifestDependencyInfo::OnChainAt(OnChainAddress {
+                            on_chain: linked_address.clone(),
+                        }),
+                        is_override: true,
+                        rename_from: None,
+                        modes: None,
+                    }),
+                    addresses: None,
+                    use_environment: None,
+                };
+                (dep_name, Spanned::new(0..1, replacement))
+            })
+            .collect();
+        manifest
+            .dep_replacements
+            .insert(ON_CHAIN_ENV_NAME.to_string(), env_replacements);
     }
 
-    fs::write(manifest_path, doc.to_string()).expect("can write generated manifest to cache");
+    fs::write(manifest_path, manifest.render_as_toml())
+        .expect("can write generated manifest to cache");
 }
 
 /// Create a new empty `ParsedManifest` for an on-chain package.

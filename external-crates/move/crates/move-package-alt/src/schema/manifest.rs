@@ -10,7 +10,7 @@ use crate::compatibility::legacy::LegacyData;
 
 use super::{
     EnvironmentName, LocalDepInfo, OnChainAddress, OnChainPlaceholder, PackageName,
-    PublishAddresses, ResolverName,
+    PublishAddresses, RenderToml, ResolverName,
 };
 
 /// The on-chain identifier for an environment (such as a chain ID); these are bound to environment
@@ -174,6 +174,83 @@ impl ReplacementDependency {
             use_environment: None,
         }
     }
+}
+
+impl RenderToml for ParsedManifest {
+    /// Render as TOML suitable for parsing back. Uses `toml_edit::ser` for most fields,
+    /// but renders dep-replacements manually because `ManifestDependencyInfo`'s derived
+    /// `Serialize` doesn't match its custom `Deserialize` (see DVX-2125).
+    fn render_as_toml(&self) -> String {
+        // Serialize with empty dep-replacements to avoid the broken serializer
+        let without_deps = ParsedManifest {
+            dep_replacements: BTreeMap::new(),
+            ..self.clone()
+        };
+        let mut doc = toml_edit::ser::to_document(&without_deps).expect("can serialize manifest");
+
+        // Render dep-replacements manually with correct format
+        if !self.dep_replacements.is_empty() {
+            let mut all_replacements = toml_edit::Table::new();
+            for (env_name, deps) in &self.dep_replacements {
+                let mut env_table = toml_edit::Table::new();
+                for (dep_name, replacement) in deps {
+                    let inline = render_replacement(replacement.as_ref());
+                    env_table.insert(
+                        dep_name.as_str(),
+                        toml_edit::Item::Value(toml_edit::Value::InlineTable(inline)),
+                    );
+                }
+                all_replacements.insert(env_name, toml_edit::Item::Table(env_table));
+            }
+            doc.insert("dep-replacements", toml_edit::Item::Table(all_replacements));
+        }
+
+        doc.to_string()
+    }
+}
+
+/// Render a single dep-replacement entry as an inline table.
+fn render_replacement(dep: &ReplacementDependency) -> toml_edit::InlineTable {
+    let mut table = toml_edit::InlineTable::new();
+
+    if let Some(ref d) = dep.dependency {
+        match &d.dependency_info {
+            ManifestDependencyInfo::OnChain(addr) => {
+                table.insert("on-chain", addr.on_chain.to_string().into());
+            }
+            ManifestDependencyInfo::OnChainPlaceholder(placeholder) => {
+                let val: bool = placeholder.on_chain.clone().into();
+                table.insert("on-chain", val.into());
+            }
+            ManifestDependencyInfo::Local(loc) => {
+                table.insert("local", loc.local.to_string_lossy().to_string().into());
+            }
+            ManifestDependencyInfo::Git(git) => {
+                table.insert("git", git.repo.clone().into());
+                if let Some(ref rev) = git.rev {
+                    table.insert("rev", rev.clone().into());
+                }
+            }
+            ManifestDependencyInfo::System(sys) => {
+                table.insert("system", sys.system.clone().into());
+            }
+            ManifestDependencyInfo::External(_) => {
+                // External deps have complex serialization; skip for now
+            }
+        }
+        if d.is_override {
+            table.insert("override", true.into());
+        }
+        if let Some(ref rename) = d.rename_from {
+            table.insert("rename-from", rename.as_str().into());
+        }
+    }
+
+    if let Some(ref env) = dep.use_environment {
+        table.insert("use-environment", env.clone().into());
+    }
+
+    table
 }
 
 impl<'de> Deserialize<'de> for ManifestDependencyInfo {
