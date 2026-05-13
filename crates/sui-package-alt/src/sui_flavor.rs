@@ -236,9 +236,7 @@ impl MoveFlavor for SuiFlavor {
         address: &move_package_alt::schema::PublishedID,
     ) -> anyhow::Result<move_package_alt::OnChainPackageData> {
         let Some(ref client) = self.client else {
-            anyhow::bail!(
-                "cannot fetch on-chain package {address}: no network connection"
-            )
+            anyhow::bail!("cannot fetch on-chain package {address}: no network connection")
         };
 
         let object_id = ObjectID::from(address.0);

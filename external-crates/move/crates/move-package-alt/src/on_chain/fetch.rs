@@ -155,15 +155,19 @@ fn write_manifest(
     // TODO(DVX-2125): once the digest is decoupled from serialization, use RenderToml.
     let mut doc = toml_edit::ser::to_document(&manifest).expect("can serialize generated manifest");
 
-    // Build dep-replacements manually via toml_edit
+    // Build dep-replacements manually via toml_edit, using inline tables for each dep
+    // (e.g. `onchain_0x02 = { on-chain = "0x02", override = true }`)
     if !data.dependencies.is_empty() {
         let mut env_table = toml_edit::Table::new();
         for (original_id, linked_address) in &data.dependencies {
             let dep_name = format!("onchain_{original_id}");
-            let mut dep_table = toml_edit::Table::new();
-            dep_table.insert("on-chain", toml_edit::value(linked_address.to_string()));
-            dep_table.insert("override", toml_edit::value(true));
-            env_table.insert(&dep_name, toml_edit::Item::Table(dep_table));
+            let mut dep = toml_edit::InlineTable::new();
+            dep.insert("on-chain", linked_address.to_string().into());
+            dep.insert("override", true.into());
+            env_table.insert(
+                &dep_name,
+                toml_edit::Item::Value(toml_edit::Value::InlineTable(dep)),
+            );
         }
         let mut replacements = toml_edit::Table::new();
         replacements.insert(ON_CHAIN_ENV_NAME, toml_edit::Item::Table(env_table));
@@ -299,14 +303,8 @@ mod tests {
         [dep-replacements]
 
         [dep-replacements._on_chain]
-
-        [dep-replacements._on_chain.onchain_0x0000000000000000000000000000000000000000000000000000000000000002]
-        on-chain = "0x0000000000000000000000000000000000000000000000000000000000000002"
-        override = true
-
-        [dep-replacements._on_chain.onchain_0x0000000000000000000000000000000000000000000000000000000000000003]
-        on-chain = "0x0000000000000000000000000000000000000000000000000000000000000033"
-        override = true
+        onchain_0x0000000000000000000000000000000000000000000000000000000000000002 = { on-chain = "0x0000000000000000000000000000000000000000000000000000000000000002", override = true }
+        onchain_0x0000000000000000000000000000000000000000000000000000000000000003 = { on-chain = "0x0000000000000000000000000000000000000000000000000000000000000033", override = true }
         "#);
     }
 
