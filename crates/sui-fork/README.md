@@ -45,9 +45,9 @@ That means that you have full control over the advancement of checkpoints, time,
     `sui-fork start` with no flags forks from mainnet at the latest checkpoint.
     The fork serves Sui gRPC on `127.0.0.1:9000` by default.
 
-    Local resume state is stored under
-    `{data-dir}/{network}/forked_at_{checkpoint}`. When you restart the same
-    fork, reuse the same `--data-dir`, `--network`, and `--checkpoint`.
+    In this example, local resume state is stored directly under
+    `/tmp/sui-fork-demo`. When you restart the same fork, reuse the same fork
+    data directory and omit seed flags.
 
 3. In terminal 2, confirm the fork is reachable:
 
@@ -112,13 +112,15 @@ Owned-object enumeration can be seeded when starting the fork:
 sui-fork start --checkpoint 12345678 --address 0x... --object 0x...
 ```
 
-- `--data-dir` is the exact filesystem root for local fork data. Objects,
-  checkpoints, transactions, indices, and `seed_manifest.json` are written
-  directly under that directory.
+- `--data-dir <path>` is the exact filesystem root for local fork data.
+  Objects, checkpoints, transactions, indices, and `seed_manifest.json` are
+  written directly under that directory.
 - Without `--data-dir`, the default root is
-  `{base_path}/{network}/forked_at_{checkpoint}`, where the base path is the folder based on XDG_DATA_HOME or 
-  HOME on Unix systems, or AppData on Windows, and creates a `sui-fork-data` (or `.sui-fork-data`) directory.
-    `SUI_FORK_DATA` sets `{base_path}` and the rest will be as above.
+  `{base_path}/{network}/forked_at_{checkpoint}`.
+- `SUI_FORK_DATA` sets `{base_path}` directly.
+- On Unix, the default `{base_path}` is `$XDG_DATA_HOME/sui_fork_data` when
+  `XDG_DATA_HOME` is set, otherwise `$HOME/.sui_fork_data`.
+- On Windows, the default `{base_path}` is `%APPDATA%/sui_fork_data`.
 - `--address` is repeatable and seeds metadata for every object owned by that
   address at the fork checkpoint. Address seeding requires a checkpoint in the
   GraphQL object enumeration range.
