@@ -134,6 +134,6 @@ prost-build.workspace = true
 protox.workspace = true
 
 [[bench]]
-name = "verified_cert_cache_bench"
+name = "verified_digest_cache_bench"
 harness = false
 

@@ -2,39 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::signature_verifier::*;
-use crate::test_utils::{make_cert_with_large_committee, make_dummy_tx};
 use fastcrypto::traits::KeyPair;
 use itertools::Itertools as _;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::committee::Committee;
-use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, get_key_pair};
+use sui_types::crypto::AuthorityKeyPair;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
 };
-use sui_types::transaction::CertifiedTransaction;
-
-fn gen_certs(
-    committee: &Committee,
-    key_pairs: &[AuthorityKeyPair],
-    count: usize,
-) -> Vec<CertifiedTransaction> {
-    let (receiver, _): (_, AccountKeyPair) = get_key_pair();
-
-    let senders: Vec<_> = (0..count)
-        .map(|_| get_key_pair::<AccountKeyPair>())
-        .collect();
-
-    let txns: Vec<_> = senders
-        .iter()
-        .map(|(sender, sender_sec)| make_dummy_tx(receiver, *sender, sender_sec))
-        .collect();
-
-    txns.iter()
-        .map(|t| make_cert_with_large_committee(committee, key_pairs, t))
-        .collect()
-}
 
 fn gen_ckpts(
     committee: &Committee,
@@ -71,42 +48,13 @@ fn gen_ckpts(
 }
 
 #[sim_test]
-async fn test_batch_verify() {
+async fn test_batch_verify_checkpoints() {
     let (committee, key_pairs) = Committee::new_simple_test_committee();
 
-    let certs = gen_certs(&committee, &key_pairs, 16);
     let ckpts = gen_ckpts(&committee, &key_pairs, 16);
+    batch_verify_checkpoints(&committee, &ckpts.iter().collect_vec()).unwrap();
 
-    batch_verify_all_certificates_and_checkpoints(
-        &committee,
-        &certs.iter().collect_vec(),
-        &ckpts.iter().collect_vec(),
-    )
-    .unwrap();
-
-    {
-        let mut ckpts = gen_ckpts(&committee, &key_pairs, 16);
-        *ckpts[0].auth_sig_mut_for_testing() = ckpts[1].auth_sig().clone();
-        batch_verify_all_certificates_and_checkpoints(
-            &committee,
-            &certs.iter().collect_vec(),
-            &ckpts.iter().collect_vec(),
-        )
-        .unwrap_err();
-    }
-
-    let (other_sender, other_sender_sec): (_, AccountKeyPair) = get_key_pair();
-    for i in 0..16 {
-        let (receiver, _): (_, AccountKeyPair) = get_key_pair();
-        let mut certs = certs.clone();
-        let other_tx = make_dummy_tx(receiver, other_sender, &other_sender_sec);
-        let other_cert = make_cert_with_large_committee(&committee, &key_pairs, &other_tx);
-        *certs[i].auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
-        batch_verify_all_certificates_and_checkpoints(
-            &committee,
-            &certs.iter().collect_vec(),
-            &ckpts.iter().collect_vec(),
-        )
-        .unwrap_err();
-    }
+    let mut ckpts = gen_ckpts(&committee, &key_pairs, 16);
+    *ckpts[0].auth_sig_mut_for_testing() = ckpts[1].auth_sig().clone();
+    batch_verify_checkpoints(&committee, &ckpts.iter().collect_vec()).unwrap_err();
 }

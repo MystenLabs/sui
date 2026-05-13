@@ -24,22 +24,19 @@ use sui_types::transaction::{SenderSignedData, TransactionDataAPI};
 use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
-    digests::CertificateDigest,
     error::{SuiErrorKind, SuiResult},
     message_envelope::Message,
     messages_checkpoint::SignedCheckpointSummary,
     signature::VerifyParams,
-    transaction::CertifiedTransaction,
 };
 use tracing::debug;
 
 /// Verifies signatures in ways that are faster than verifying each signature individually.
-/// - BLS signatures - caching and batch verification.
+/// - BLS signatures (checkpoints) - batch verification.
 /// - User signed data - caching.
 pub struct SignatureVerifier {
     committee: Arc<Committee>,
     object_store: Arc<dyn ObjectStore + Send + Sync>,
-    certificate_cache: VerifiedDigestCache<CertificateDigest>,
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest, Vec<u8>>,
     zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
 
@@ -98,11 +95,6 @@ impl SignatureVerifier {
         Self {
             committee,
             object_store,
-            certificate_cache: VerifiedDigestCache::new(
-                metrics.certificate_signatures_cache_hits.clone(),
-                metrics.certificate_signatures_cache_misses.clone(),
-                metrics.certificate_signatures_cache_evictions.clone(),
-            ),
             signed_data_cache: VerifiedDigestCache::new(
                 metrics.signed_data_cache_hits.clone(),
                 metrics.signed_data_cache_misses.clone(),
@@ -127,29 +119,6 @@ impl SignatureVerifier {
                 validate_zklogin_public_identifier,
             },
         }
-    }
-
-    /// Verifies all certs, returns Ok only if all are valid.
-    pub fn verify_certs_and_checkpoints(
-        &self,
-        certs: Vec<&CertifiedTransaction>,
-        checkpoints: Vec<&SignedCheckpointSummary>,
-    ) -> SuiResult {
-        let certs: Vec<_> = certs
-            .into_iter()
-            .filter(|cert| !self.certificate_cache.is_cached(&cert.certificate_digest()))
-            .collect();
-
-        // Verify only the user sigs of certificates that were not cached already, since whenever we
-        // insert a certificate into the cache, it is already verified.
-        // Aliases are only allowed via MFP, so CertifiedTransaction must have no aliases.
-        for cert in &certs {
-            self.verify_tx_require_no_aliases(cert.data())?;
-        }
-        batch_verify_all_certificates_and_checkpoints(&self.committee, &certs, &checkpoints)?;
-        self.certificate_cache
-            .cache_digests(certs.into_iter().map(|c| c.certificate_digest()).collect());
-        Ok(())
     }
 
     /// Insert a JWK into the verifier state. Pre-existing entries for a given JwkId will not be
@@ -276,16 +245,12 @@ impl SignatureVerifier {
     }
 
     pub fn clear_signature_cache(&self) {
-        self.certificate_cache.clear();
         self.signed_data_cache.clear();
         self.zklogin_inputs_cache.clear();
     }
 }
 
 pub struct SignatureVerifierMetrics {
-    pub certificate_signatures_cache_hits: IntCounter,
-    pub certificate_signatures_cache_misses: IntCounter,
-    pub certificate_signatures_cache_evictions: IntCounter,
     pub signed_data_cache_hits: IntCounter,
     pub signed_data_cache_misses: IntCounter,
     pub signed_data_cache_evictions: IntCounter,
@@ -297,24 +262,6 @@ pub struct SignatureVerifierMetrics {
 impl SignatureVerifierMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
-            certificate_signatures_cache_hits: register_int_counter_with_registry!(
-                "certificate_signatures_cache_hits",
-                "Number of certificates which were known to be verified because of signature cache.",
-                registry
-            )
-            .unwrap(),
-            certificate_signatures_cache_misses: register_int_counter_with_registry!(
-                "certificate_signatures_cache_misses",
-                "Number of certificates which missed the signature cache",
-                registry
-            )
-            .unwrap(),
-            certificate_signatures_cache_evictions: register_int_counter_with_registry!(
-                "certificate_signatures_cache_evictions",
-                "Number of times we evict a pre-existing key were known to be verified because of signature cache.",
-                registry
-            )
-            .unwrap(),
             signed_data_cache_hits: register_int_counter_with_registry!(
                 "signed_data_cache_hits",
                 "Number of signed data which were known to be verified because of signature cache.",
@@ -355,33 +302,16 @@ impl SignatureVerifierMetrics {
     }
 }
 
-/// Verifies all certificates - if any fail return error.
-pub(crate) fn batch_verify_all_certificates_and_checkpoints(
+/// Batch-verifies checkpoint signatures - if any fail return error.
+pub(crate) fn batch_verify_checkpoints(
     committee: &Committee,
-    certs: &[&CertifiedTransaction],
     checkpoints: &[&SignedCheckpointSummary],
 ) -> SuiResult {
-    // certs.data() is assumed to be verified already by the caller.
-
     for ckpt in checkpoints {
         ckpt.data().verify_epoch(committee.epoch())?;
     }
 
-    batch_verify(committee, certs, checkpoints)
-}
-
-fn batch_verify(
-    committee: &Committee,
-    certs: &[&CertifiedTransaction],
-    checkpoints: &[&SignedCheckpointSummary],
-) -> SuiResult {
     let mut obligation = VerificationObligation::default();
-
-    for cert in certs {
-        let idx = obligation.add_message(cert.data(), cert.epoch(), Intent::sui_app(cert.scope()));
-        cert.auth_sig()
-            .add_to_verification_obligation(committee, &mut obligation, idx)?;
-    }
 
     for ckpt in checkpoints {
         let idx = obligation.add_message(ckpt.data(), ckpt.epoch(), Intent::sui_app(ckpt.scope()));

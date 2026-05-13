@@ -514,7 +514,9 @@ pub struct AuthorityEpochTables {
     /// to disk.
     signed_effects_digests: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
-    /// Signatures of transaction certificates that are executed locally.
+    /// No longer used.
+    #[allow(dead_code)]
+    #[deprecated(note = "column family retained only for backward DB compatibility")]
     transaction_cert_signatures: DBMap<TransactionDigest, AuthorityStrongQuorumSignInfo>,
 
     /// Next available shared object versions for each shared object.
@@ -1910,18 +1912,6 @@ impl AuthorityPerEpochStore {
             .map(|t| t.into()))
     }
 
-    #[instrument(level = "trace", skip_all)]
-    pub fn insert_tx_cert_sig(
-        &self,
-        tx_digest: &TransactionDigest,
-        cert_sig: &AuthorityStrongQuorumSignInfo,
-    ) -> SuiResult {
-        let tables = self.tables()?;
-        Ok(tables
-            .transaction_cert_signatures
-            .insert(tx_digest, cert_sig)?)
-    }
-
     /// Record that a transaction has been executed in the current epoch.
     /// Used by checkpoint builder to cull dependencies from previous epochs.
     #[instrument(level = "trace", skip_all)]
@@ -2122,13 +2112,6 @@ impl AuthorityPerEpochStore {
             }
         }
         Ok(cached)
-    }
-
-    pub fn get_transaction_cert_sig(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<AuthorityStrongQuorumSignInfo>> {
-        Ok(self.tables()?.transaction_cert_signatures.get(tx_digest)?)
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.

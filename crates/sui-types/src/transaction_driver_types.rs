@@ -8,24 +8,14 @@ use std::time::Duration;
 use crate::base_types::{AuthorityName, EpochId, ObjectRef, TransactionDigest};
 use crate::committee::StakeUnit;
 use crate::crypto::{AuthorityStrongQuorumSignInfo, ConciseAuthorityPublicKeyBytes};
-use crate::effects::{
-    CertifiedTransactionEffects, TransactionEffects, TransactionEvents,
-    VerifiedCertifiedTransactionEffects,
-};
+use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::error::{ErrorCategory, SuiError};
 use crate::messages_checkpoint::CheckpointSequenceNumber;
 use crate::object::Object;
-use crate::transaction::{Transaction, VerifiedTransaction};
+use crate::transaction::Transaction;
 use serde::{Deserialize, Serialize};
 use strum::AsRefStr;
 use thiserror::Error;
-
-pub type TransactionDriverResult = Result<TransactionDriverResponse, TransactionSubmissionError>;
-
-pub type TransactionDriverEffectsQueueResult = Result<
-    (Transaction, TransactionDriverResponse),
-    (TransactionDigest, TransactionSubmissionError),
->;
 
 pub const NON_RECOVERABLE_ERROR_MSG: &str =
     "Transaction has non recoverable errors from at least 1/3 of validators";
@@ -111,12 +101,6 @@ pub enum ExecuteTransactionRequestType {
     WaitForLocalExecution,
 }
 
-#[derive(Debug)]
-pub enum TransactionType {
-    SingleWriter, // Txes that only use owned objects and/or immutable objects
-    SharedObject, // Txes that use at least one shared object
-}
-
 /// Proof of finality of transaction effects.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum EffectsFinalityInfo {
@@ -145,22 +129,6 @@ pub enum ExecuteTransactionResponse {
             IsTransactionExecutedLocally,
         )>,
     ),
-}
-
-#[derive(Clone, Debug)]
-pub struct TransactionDriverRequest {
-    pub transaction: VerifiedTransaction,
-}
-
-#[derive(Debug, Clone)]
-pub struct TransactionDriverResponse {
-    pub effects_cert: VerifiedCertifiedTransactionEffects,
-    pub events: Option<TransactionEvents>,
-    // Input objects will only be populated in the happy path
-    pub input_objects: Option<Vec<Object>>,
-    // Output objects will only be populated in the happy path
-    pub output_objects: Option<Vec<Object>>,
-    pub auxiliary_data: Option<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -204,14 +172,6 @@ pub struct FinalizedEffects {
 }
 
 impl FinalizedEffects {
-    pub fn new_from_effects_cert(effects_cert: CertifiedTransactionEffects) -> Self {
-        let (data, sig) = effects_cert.into_data_and_sig();
-        Self {
-            effects: data,
-            finality_info: EffectsFinalityInfo::Certified(sig),
-        }
-    }
-
     pub fn epoch(&self) -> EpochId {
         match &self.finality_info {
             EffectsFinalityInfo::Certified(cert) => cert.epoch,
