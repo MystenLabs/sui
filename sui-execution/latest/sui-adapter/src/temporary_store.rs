@@ -811,7 +811,8 @@ impl TemporaryStore<'_> {
                 "Sender cannot be an object"
             );
             assert!(
-                sponsor.is_none_or(|sponsor| !objects_authenticated_for_mutation.capacity(sponsor)),
+                sponsor
+                    .is_none_or(|sponsor| !objects_authenticated_for_mutation.contains(&sponsor)),
                 "Sponsor cannot be an object"
             );
             let mut s = objects_authenticated_for_mutation.clone();
