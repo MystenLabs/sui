@@ -90,12 +90,8 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         std::fs::read_to_string(path)?,
         output.status.success(),
         output.status.code().unwrap_or(!0),
-        String::from_utf8_lossy(&output.stdout)
-            .replace(r"\\", "/")
-            .replace(r"\", "/"),
-        String::from_utf8_lossy(&output.stderr)
-            .replace(r"\\", "/")
-            .replace(r"\", "/"),
+        normalize_output(&String::from_utf8_lossy(&output.stdout)),
+        normalize_output(&String::from_utf8_lossy(&output.stderr)),
     );
 
     let result = result
@@ -114,6 +110,13 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         contents: result,
     }
     Ok(())
+}
+
+fn normalize_output(output: &str) -> String {
+    output
+        .replace("\r\n", "\n")
+        .replace(r"\\", "/")
+        .replace(r"\", "/")
 }
 
 /// Create a config directory containing a single environment called "testnet" with no cached
