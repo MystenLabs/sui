@@ -20,7 +20,7 @@ use tokio::task::JoinSet;
 
 use crate::bigtable_client::BigTableClient;
 
-pub(crate) type ObjectMap = Arc<HashMap<ObjectKey, Arc<Object>>>;
+pub(crate) type ObjectMap = Arc<HashMap<ObjectKey, Object>>;
 
 // Slot futures are shared, so their output must be cheaply cloneable.
 type CachedError = Arc<tonic::Status>;
