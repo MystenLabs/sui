@@ -16,8 +16,10 @@ Every `external_body` is a gap in the proof. The goal is to minimize those gaps 
 ## What to axiomatize with `external_body`
 
 - **Cryptographic operations**: BLS signature verification, hash functions, key recovery. These are correct-by-construction in the library; re-proving them in Verus adds no safety.
-- **Complex loops with external side effects**: eviction loops that walk a HashMap, log messages, call external libraries.
 - **Opaque library behavior**: aggregation of BLS sigs, serialization, network I/O.
+- **Thin wrappers around unspecced operations**: logging macros (`warn!`), associated-const lookup (`T::SCOPE`), `Clone` impls on external types. These are one-liners whose bodies cannot be opened in proven code, but their specs are trivial (`out == *sig`).
+
+**HashMap iteration is NOT an `external_body` candidate.** `HashMap::iter()` is fully specced in vstd via `MapIterGhostIterator` and supports two proven patterns (see `/verus-proof`): collect-all with a direct index invariant, and filtered construction with a ghost set + remaining invariant. Use `external_body` only when the body is genuinely opaque (crypto, I/O), not merely unfamiliar.
 
 The test: *can you state what the function does without opening its body?* If yes, `external_body` with strong postconditions. If no, you need to understand and prove the body.
 

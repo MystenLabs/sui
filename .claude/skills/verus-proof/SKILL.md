@@ -72,6 +72,181 @@ pub proof fn lemma_insert_commutes(
         // ... etc
 ```
 
+## Proved HashMap iteration
+
+`HashMap::iter()` is fully specced in vstd via `MapIterGhostIterator` and can be used in
+proven exec code. Two patterns have been established.
+
+### Setup: activate the HashMap axioms
+
+All proven iteration requires these broadcasts at the top of the function:
+
+```rust
+broadcast use axiom_authority_name_key_model, axiom_random_state_builds_valid_hashers,
+    vstd::std_specs::hash::group_hash_axioms;
+```
+
+The `group_hash_axioms` broadcast unlocks `assume_specification[HashMap::iter]`, which gives:
+- `map_iter@.1.to_set() == m@.kv_pairs()` — every (key,value) pair is covered
+- `map_iter@.1.no_duplicates()` — no position appears twice
+
+**`HashMap::values()` is weaker** — it only gives `to_set() == m@.values()` (no key identity,
+no `no_duplicates`). Prefer `iter()` for any proven loop.
+
+### Key scoping rule: use `map_iter@.1`, not `VERUS_ghost_iter.kv_pairs`
+
+`VERUS_ghost_iter` is **out of Rust scope after the for loop** and cannot be referenced in
+post-loop proof blocks. `map_iter@.1` (the ghost view of the exec iterator, held in a `let`
+before the loop) is accessible throughout and after the loop, and equals
+`VERUS_ghost_iter.kv_pairs` via exec_invariant.
+
+Always anchor loop invariants that need post-loop reasoning to `map_iter@.1`:
+
+```rust
+let map_iter = m.inner.iter();
+for (k, v) in map_iter
+    invariant
+        map_iter@.1.to_set() =~= m@.kv_pairs(),   // not VERUS_ghost_iter.kv_pairs
+        ...
+```
+
+### Pattern 1: collect-all (direct index invariant)
+
+When every entry is collected unconditionally, use a positional index invariant:
+
+```rust
+let map_iter = agg.data.inner.iter();
+for (k, v) in map_iter
+    invariant
+        map_iter@.1.to_set() =~= agg.data@.kv_pairs(),
+        result@.len() == VERUS_ghost_iter.pos,
+        forall|i: int| 0 <= i < VERUS_ghost_iter.pos ==>
+            #[trigger] result@[i] == map_iter@.1[i].1,
+{
+    proof { assert(map_iter@.1[VERUS_ghost_iter.pos] == (*k, *v)); }
+    result.push(clone_sig(v));
+}
+// After loop — map_iter@.1 is still accessible:
+proof {
+    assert(result@.len() == map_iter@.1.len() as int);
+    // Part 1: every output element came from the map
+    // Part 2: every map value is in the output
+    //   → find j with map_iter@.1[j] == (k, agg.data@[k]) from coverage,
+    //     then result@[j] == agg.data@[k] from index invariant
+}
+```
+
+Post-loop, the index invariant fires via `result@[j]` as trigger, giving
+`result@[j] == map_iter@.1[j].1` for all `j < map_iter@.1.len()`.
+
+### Pattern 2: filtered construction (ghost set + remaining invariant)
+
+When only entries satisfying a predicate are kept, use a ghost `processed_dom` set and a
+"remaining" invariant. The remaining invariant uses `map_iter@.1` as the trigger (not
+`VERUS_ghost_iter.kv_pairs`) so the pre-loop coverage proof applies at the base case.
+
+**Pre-loop: establish coverage explicitly**
+
+```rust
+let map_iter = agg.data.inner.iter();
+proof {
+    // Establish that every key appears at some position in map_iter@.1.
+    // This fact carries into the loop invariant's base case via exec_invariant.
+    assert forall|k: AuthorityName| init_data.dom().contains(k) implies
+        exists|j: int| 0 <= j < map_iter@.1.len() && map_iter@.1[j].0 == k
+    by {
+        let pair = (k, init_data[k]);
+        assert(init_data.kv_pairs().contains(pair));
+        assert(map_iter@.1.to_set().contains(pair));
+        let j = choose|j: int| 0 <= j < map_iter@.1.len() && map_iter@.1[j] == pair;
+    };
+}
+```
+
+**Loop invariants**
+
+```rust
+let ghost mut processed_dom: Set<AuthorityName> = Set::empty();
+for (k, v) in map_iter
+    invariant
+        map_iter@.1.to_set() =~= init_data.kv_pairs(),
+        map_iter@.1.no_duplicates(),
+        processed_dom.subset_of(init_data.dom()),
+        // tracked set: processed_dom == {map_iter@.1[j].0 | j < pos}
+        forall|a: AuthorityName|
+            processed_dom.contains(a) <==>
+            exists|j: int| 0 <= j < VERUS_ghost_iter.pos && #[trigger] map_iter@.1[j].0 == a,
+        // remaining invariant: every unprocessed init_data key is still to come.
+        // After loop (pos == len): no such j exists → processed_dom == init_data.dom().
+        forall|a: AuthorityName|
+            init_data.dom().contains(a) && !processed_dom.contains(a)
+            ==> exists|j: int|
+                VERUS_ghost_iter.pos <= j < map_iter@.1.len()
+                && #[trigger] map_iter@.1[j].0 == a,
+        // ... membership and sum invariants ...
+```
+
+**Key-distinctness lemma** — derive that `map_iter@.1[j1].0 != map_iter@.1[j2].0` for
+`j1 != j2` from `no_duplicates` + coverage. Two entries with the same key would have the same
+map value (from coverage's `kv_pairs()` definition), giving the same tuple — contradicting
+`no_duplicates`:
+
+```rust
+pub proof fn lemma_kv_pairs_key_distinct<K, V>(
+    kv_pairs: Seq<(K, V)>, m: Map<K, V>, j1: int, j2: int,
+)
+    requires
+        kv_pairs.no_duplicates(),
+        kv_pairs.to_set() =~= m.kv_pairs(),
+        0 <= j1 < kv_pairs.len(), 0 <= j2 < kv_pairs.len(), j1 != j2,
+    ensures kv_pairs[j1].0 != kv_pairs[j2].0,
+{ ... }
+```
+
+**Ghost set update: capture old value before inserting**
+
+```rust
+let ghost old_pd = processed_dom;
+processed_dom = processed_dom.insert(*k);
+// Now use old_pd directly in lemma calls — avoids processed_dom.remove(*k) reasoning.
+lemma_voted_weight_insert(&committee, old_pd, *k);
+assert(old_pd =~= processed_dom.remove(*k));
+```
+
+**Post-loop proof**
+
+After the loop, the SMT solver uses the remaining invariant + ghost_ensures internally
+(without user-accessible `VERUS_ghost_iter`) to derive `processed_dom == init_data.dom()`:
+
+```rust
+proof {
+    // Z3 derives: "remaining" invariant with pos==len → no valid j → processed_dom ⊇ dom
+    assert(processed_dom =~= init_data.dom());
+    // membership biconditional + processed_dom == dom → postcondition
+}
+```
+
+### Sum invariants and overflow bounds
+
+When tracking a running sum, add to the loop invariant:
+
+```rust
+new_total as int + bad_votes as int == voted_weight(&committee, processed_dom),
+voted_weight(&committee, init_data.dom()) == old(agg).total_votes as int,
+committee_unique(&agg.committee),  // required by lemma_voted_weight_insert
+```
+
+The last two are constant-valued invariants: trivially maintained, but needed to give
+`lemma_voted_weight_insert` and `lemma_voted_weight_le_subset` what they need.
+
+Before each arithmetic assignment, assert the explicit integer bound so Verus can discharge
+the overflow check:
+
+```rust
+assert(new_total as int + committee_weight_of(&agg.committee, *k) <= old(agg).total_votes as int);
+new_total = new_total + votes;
+```
+
 ## Common errors and fixes
 
 | Error | Fix |
@@ -82,6 +257,11 @@ pub proof fn lemma_insert_commutes(
 | Forall not instantiated | Add `#[trigger]` to a term that appears in the goal |
 | `assertion failed` in a proof block | The intermediate fact is not derivable from what Verus knows; add a lemma call or more specific assertion |
 | `decreases` check fails | Use a numeric bound that provably decreases, or restructure the recursion |
+| `invariant not satisfied before loop` | The base case fails; check coverage — often the pre-loop proof block is missing or the trigger doesn't match |
+| `invariant not satisfied at end of loop body` | Step case fails; often a ghost variable update order issue or missing explicit sum equality assertion |
+| Arithmetic overflow in proven loop | Add explicit `assert(a as int + b as int <= MAX)` before the assignment; derive the bound from `lemma_voted_weight_le_subset` + sum invariant |
+| `VERUS_ghost_iter` not found after loop | It's out of scope — anchor the invariant to `map_iter@.1` instead and use it in the post-loop proof |
+| `exists` postcondition not closed | Provide an explicit witness: `assert(agg.has_voted(k) && agg.data@[k] == v)` with the concrete `k` already in scope |
 
 ## Iteration loop
 
