@@ -375,7 +375,7 @@ pub enum ToolCommand {
     },
 
     /// Interactive Rhai shell for inspecting a TideHunter database.
-    #[cfg(feature = "tideconsole")]
+    #[cfg(all(feature = "tideconsole", not(windows)))]
     #[command(name = "tideconsole")]
     TideConsole {
         /// Path to a TideHunter database directory to open on startup (bound to variable 'db').
@@ -978,7 +978,7 @@ impl ToolCommand {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
                     .await?;
             }
-            #[cfg(feature = "tideconsole")]
+            #[cfg(all(feature = "tideconsole", not(windows)))]
             ToolCommand::TideConsole { db, exec, script } => {
                 tokio::task::spawn_blocking(move || crate::tideconsole_cmd::run(db, exec, script))
                     .await??;
