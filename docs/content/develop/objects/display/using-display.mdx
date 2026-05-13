@@ -8,7 +8,7 @@ keywords: [ Object Display, object, display, display properties, object properti
 
 Object Display V2 is the current Object Display standard. If you manage a display from Move code, use the `sui::display_registry` APIs.
 
-Existing V1 displays were migrated to V2 in a system snapshot migration. If you need to manage a migrated display, claim the capability when you are ready (see [Migrating to V2](#migrating-to-v2)).
+A system snapshot migration migrated existing V1 displays to V2. If you need to manage a migrated display, claim the capability when you are ready (see [Migrating to V2](#migrating-to-v2)).
 
 :::
 
@@ -132,7 +132,7 @@ public struct CapyManagerCap has key, store { id: UID }
 
 :::caution
 
-Existing V1 displays were migrated to V2 in a **system snapshot migration**. You do not need to do anything upfront. After the snapshot, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
+A **system snapshot migration** migrated existing V1 displays to V2. You do not need to do anything upfront. After the snapshot, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
 
 :::
 
