@@ -806,6 +806,14 @@ impl TemporaryStore<'_> {
 
         // Add sender and sponsor (if present) to authenticated set
         let mut authenticated_for_mutation = {
+            assert!(
+                !objects_authenticated_for_mutation.contains(sender),
+                "Sender cannot be an object"
+            );
+            assert!(
+                sponsor.is_none_or(|sponsor| !objects_authenticated_for_mutation.capacity(sponsor)),
+                "Sponsor cannot be an object"
+            );
             let mut s = objects_authenticated_for_mutation.clone();
             s.insert(*sender);
             if let Some(sponsor) = sponsor {
@@ -905,6 +913,10 @@ impl TemporaryStore<'_> {
             let amount = match event.write.value {
                 AccumulatorValue::Integer(a) => a as i128,
                 AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+                    assert!(
+                        !sui_types::balance::Balance::is_balance_type(&event.write.address.ty),
+                        "Non-integer accumulator changes should not be balances"
+                    );
                     continue;
                 }
             };
@@ -918,14 +930,20 @@ impl TemporaryStore<'_> {
             *funds_net_changes.entry(key.clone()).or_insert(0) += signed;
             // Authorized if it is:
             // - A merge/deposit (anyone can deposit)
-            // - A withdrawal with a corresponding input reservation
-            // - A withdrawal from an object authenticated for mutation
-            // - A withdrawal for the gas payment (potentially from a GasCoin send_funds transfer)
-            let authorized = matches!(event.write.operation, AccumulatorOperation::Merge)
-                || input_reservations.contains_key(&key)
-                || objects_authenticated_for_mutation.contains(&address)
-                || (*type_tag == sui_balance_type
-                    && gas_payment_address_balance.is_some_and(|gas_addr| gas_addr == address));
+            // - A withdrawal
+            //   - with a corresponding input reservation
+            //   - from an object authenticated for mutation
+            //   - for the gas payment (potentially from a GasCoin send_funds transfer)
+            let authorized = match event.write.operation {
+                AccumulatorOperation::Merge => true,
+                AccumulatorOperation::Split => {
+                    input_reservations.contains_key(&key)
+                        || objects_authenticated_for_mutation.contains(&address)
+                        || (*type_tag == sui_balance_type
+                            && gas_payment_address_balance
+                                .is_some_and(|gas_addr| gas_addr == address))
+                }
+            };
             assert!(
                 authorized,
                 "Unauthenticated funds-accumulator Split at address {address} for type \
@@ -1264,6 +1282,10 @@ impl TemporaryStore<'_> {
             let amount = match event.write.value {
                 AccumulatorValue::Integer(amount) => amount as i128,
                 AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+                    assert_invariant!(
+                        !sui_types::balance::Balance::is_balance_type(&event.write.address.ty),
+                        "Non-integer accumulator changes should not be balances"
+                    );
                     continue;
                 }
             };
