@@ -730,6 +730,193 @@ fn test_sponsored_transaction_message() {
     assert_eq!(tx.gas_owner(), sponsor,);
 }
 
+/// Exercises the `fix_aliased_signer_signatures` rules directly against
+/// `verify_sender_signed_data_message_signatures`, where we can pass in an
+/// alias map without standing up the alias state object.
+#[test]
+fn test_aliased_signer_signature_verification() {
+    use crate::signature_verification::{
+        VerifiedDigestCache, verify_sender_signed_data_message_signatures,
+    };
+    use nonempty::NonEmpty;
+
+    let epoch = 0;
+    let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let sender: SuiAddress = (&sender_kp.public()).into();
+    let sponsor_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let sponsor: SuiAddress = (&sponsor_kp.public()).into();
+    let alias_a_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let alias_a: SuiAddress = (&alias_a_kp.public()).into();
+    let alias_b_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let alias_b: SuiAddress = (&alias_b_kp.public()).into();
+
+    let intent = Intent::sui_transaction();
+    let gas_price = 10;
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .transfer_object(
+                dbg_addr(1),
+                FullObjectRef::from_fastpath_ref(random_object_ref()),
+            )
+            .unwrap();
+        builder.finish()
+    };
+
+    // Sponsored transaction: required signers are [sender, sponsor].
+    let sponsored_tx = TransactionData::new_with_gas_data(
+        TransactionKind::programmable(pt.clone()),
+        sender,
+        GasData {
+            payment: vec![random_object_ref()],
+            owner: sponsor,
+            price: gas_price,
+            budget: gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        },
+    );
+    let sign = |kp: &SuiKeyPair| -> GenericSignature {
+        signature_from_signer(sponsored_tx.clone(), intent.clone(), kp).into()
+    };
+    let sender_sig = sign(&sender_kp);
+    let sponsor_sig = sign(&sponsor_kp);
+    let alias_a_sig = sign(&alias_a_kp);
+    let alias_b_sig = sign(&alias_b_kp);
+
+    let verify = |sigs: Vec<GenericSignature>,
+                  aliases: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
+                  fix: bool| {
+        verify_sender_signed_data_message_signatures(
+            Transaction::from_generic_sig_data(sponsored_tx.clone(), sigs).data(),
+            epoch,
+            &Default::default(),
+            Arc::new(VerifiedDigestCache::new_empty()),
+            aliases,
+            fix,
+        )
+    };
+
+    // The returned `Vec<u8>` (the per-signer signature index) is committed to
+    // consensus, so the success cases below assert its exact contents, not just
+    // that verification succeeded. `tx_signatures[i]` has index `i`.
+
+    // Genuine two-party sponsored transaction, no aliases: one signature per signer.
+    assert_eq!(
+        verify(vec![sender_sig.clone(), sponsor_sig.clone()], vec![], true)
+            .expect("two distinct signatures, one per required signer"),
+        vec![0, 1],
+    );
+
+    // Each required signer is satisfied through a (distinct) alias.
+    let aliases = vec![
+        (sender, NonEmpty::new(alias_a)),
+        (sponsor, NonEmpty::new(alias_b)),
+    ];
+    assert_eq!(
+        verify(
+            vec![alias_a_sig.clone(), alias_b_sig.clone()],
+            aliases,
+            true
+        )
+        .expect("one-to-one matching through aliases"),
+        vec![0, 1],
+    );
+
+    // Non-trivial matching: sender accepts only alias_a, sponsor accepts alias_a
+    // or alias_b. A naive greedy assignment could hand alias_a's signature to
+    // both; the matching must route sponsor to alias_b instead.
+    let mut sponsor_aliases = NonEmpty::new(alias_a);
+    sponsor_aliases.push(alias_b);
+    let overlapping = vec![(sender, NonEmpty::new(alias_a)), (sponsor, sponsor_aliases)];
+    let matching = verify(
+        vec![alias_a_sig.clone(), alias_b_sig.clone()],
+        overlapping.clone(),
+        true,
+    )
+    .expect("augmenting matching routes around the shared candidate");
+    assert_eq!(matching, vec![0, 1]);
+
+    // The matching is a deterministic function of the transaction and alias
+    // state: recomputing it yields the exact same signature indices.
+    let recomputed = verify(
+        vec![alias_a_sig.clone(), alias_b_sig.clone()],
+        overlapping,
+        true,
+    )
+    .expect("augmenting matching routes around the shared candidate");
+    assert_eq!(recomputed, matching);
+
+    // Padding: sponsor aliases to sender, so the second signature (from a key
+    // bound to no required signer) leaves the sponsor slot unmatched.
+    let sponsor_aliases_sender = vec![(sponsor, NonEmpty::new(sender))];
+    let err = verify(
+        vec![sender_sig.clone(), alias_a_sig.clone()],
+        sponsor_aliases_sender.clone(),
+        true,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        err.into_inner(),
+        SuiErrorKind::SignerSignatureAbsent { .. }
+    ));
+
+    // The same transaction is accepted on the legacy path, which does not
+    // enforce a one-to-one matching: both required signers bind to sender's
+    // signature (index 0) and the unbound second signature is ignored.
+    assert_eq!(
+        verify(
+            vec![sender_sig.clone(), alias_a_sig.clone()],
+            sponsor_aliases_sender,
+            false,
+        )
+        .expect("legacy path does not require a one-to-one matching"),
+        vec![0, 0],
+    );
+
+    // Too few signatures: the count check rejects this regardless of aliases,
+    // on both the new and legacy paths.
+    for fix in [true, false] {
+        let err = verify(vec![sender_sig.clone()], vec![], fix).unwrap_err();
+        assert!(matches!(
+            err.into_inner(),
+            SuiErrorKind::SignerSignatureNumberMismatch { .. }
+        ));
+    }
+
+    // Duplicate signatures collapse to a single recovered address, so no
+    // one-to-one matching can cover both required signers.
+    let err = verify(vec![sender_sig.clone(), sender_sig.clone()], vec![], true).unwrap_err();
+    assert!(matches!(
+        err.into_inner(),
+        SuiErrorKind::SignerSignatureAbsent { .. }
+    ));
+
+    // Non-sponsored transaction: a single required signer satisfied through its alias.
+    let solo_tx = TransactionData::new_with_gas_data(
+        TransactionKind::programmable(pt),
+        sender,
+        GasData {
+            payment: vec![random_object_ref()],
+            owner: sender,
+            price: gas_price,
+            budget: gas_price * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        },
+    );
+    let solo_alias_sig: GenericSignature =
+        signature_from_signer(solo_tx.clone(), intent.clone(), &alias_a_kp).into();
+    assert_eq!(
+        verify_sender_signed_data_message_signatures(
+            Transaction::from_generic_sig_data(solo_tx, vec![solo_alias_sig]).data(),
+            epoch,
+            &Default::default(),
+            Arc::new(VerifiedDigestCache::new_empty()),
+            vec![(sender, NonEmpty::new(alias_a))],
+            true,
+        )
+        .expect("single required signer satisfied through its alias"),
+        vec![0],
+    );
+}
+
 #[test]
 fn test_sponsored_transaction_validity_check() {
     let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);

@@ -4244,6 +4244,7 @@ impl Transaction {
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
             vec![],
+            true,
         )?;
         Ok(())
     }
@@ -4270,6 +4271,7 @@ impl SignedTransaction {
             verify_params,
             Arc::new(VerifiedDigestCache::new_empty()),
             vec![],
+            true,
         )?;
 
         self.auth_sig().verify_secure(

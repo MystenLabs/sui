@@ -53,6 +53,10 @@ pub struct SignatureVerifier {
     /// If true, uses address aliases during signature verification.
     enable_address_aliases: bool,
 
+    /// If true, applies the corrected aliased-signer signature rules
+    /// (see `ProtocolConfig::fix_aliased_signer_signatures`).
+    fix_aliased_signer_signatures: bool,
+
     pub metrics: Arc<SignatureVerifierMetrics>,
 }
 
@@ -91,6 +95,7 @@ impl SignatureVerifier {
         additional_multisig_checks: bool,
         validate_zklogin_public_identifier: bool,
         enable_address_aliases: bool,
+        fix_aliased_signer_signatures: bool,
     ) -> Self {
         Self {
             committee,
@@ -107,6 +112,7 @@ impl SignatureVerifier {
             )),
             jwks: Default::default(),
             enable_address_aliases,
+            fix_aliased_signer_signatures,
             metrics,
             zk_login_params: ZkLoginParams {
                 supported_providers,
@@ -237,6 +243,7 @@ impl SignatureVerifier {
             &verify_params,
             self.zklogin_inputs_cache.clone(),
             aliased_addresses,
+            self.fix_aliased_signer_signatures,
         )?;
 
         self.signed_data_cache

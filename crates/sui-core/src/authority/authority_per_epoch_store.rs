@@ -1162,6 +1162,7 @@ impl AuthorityPerEpochStore {
             protocol_config.additional_multisig_checks(),
             protocol_config.validate_zklogin_public_identifier(),
             protocol_config.address_aliases(),
+            protocol_config.fix_aliased_signer_signatures(),
         );
 
         let authenticator_state_exists = epoch_start_configuration
