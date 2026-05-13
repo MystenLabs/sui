@@ -609,9 +609,26 @@ fn try_batch_aggregate_and_verify<T: Message + Serialize, const STRENGTH: bool>(
     Some(cert)
 }
 
+} // verus!
+
+verus! {
+
+// ================================================================================================
+// § 3  PRIVATE EXEC FUNCTIONS
+// ================================================================================================
+// Internal implementation details.  Not part of the public contract; callable only from
+// within this module.
+
 /// Collect all stored sigs into a Vec for use with batch BLS.
-/// external_body because HashMap iteration is not yet specced in Verus.
-#[verifier::external_body]
+///
+/// Uses HashMap::iter() (specced in vstd via MapIterGhostIterator) and a direct
+/// index invariant: `result@[i] == map_iter@.1[i].1` for all `i < pos`.  This is
+/// simpler than the evict loop because there is no filtering — every entry is
+/// collected unconditionally.
+///
+/// `values()` (the obvious stdlib choice) only provides `to_set() == m@.values()`,
+/// losing key identity.  `iter()` provides full `(key, value)` coverage so each
+/// output element can be tied back to its key.
 fn collect_sigs<const STRENGTH: bool>(
     agg: &StakeAggregator<AuthoritySignInfo, STRENGTH>,
 ) -> (out: Vec<AuthoritySignInfo>)
@@ -623,18 +640,86 @@ fn collect_sigs<const STRENGTH: bool>(
         forall|k: AuthorityName| agg.has_voted(k) ==>
             #[trigger] out@.contains(agg.data@[k]),
 {
-    agg.data.inner.values().cloned().collect()
+    broadcast use axiom_authority_name_key_model, axiom_random_state_builds_valid_hashers,
+        vstd::std_specs::hash::group_hash_axioms;
+
+    let mut result: Vec<AuthoritySignInfo> = Vec::new();
+    let map_iter = agg.data.inner.iter();
+
+    // Establish coverage: every key in agg.data@ appears at some position in map_iter@.1.
+    // This carries into the loop invariant's base case via exec_invariant
+    // (VERUS_ghost_iter.kv_pairs == map_iter@.1).
+    proof {
+        assert forall|k: AuthorityName| agg.data@.dom().contains(k) implies
+            exists|j: int| 0 <= j < map_iter@.1.len() && map_iter@.1[j].0 == k
+        by {
+            let pair = (k, agg.data@[k]);
+            assert(agg.data@.kv_pairs().contains(pair));
+            assert(map_iter@.1.to_set().contains(pair));
+            assert(map_iter@.1.contains(pair));
+            let j = choose|j: int| 0 <= j < map_iter@.1.len() && map_iter@.1[j] == pair;
+            assert(map_iter@.1[j].0 == k);
+        };
+    }
+
+    for (k, v) in map_iter
+        invariant
+            // Coverage: every (key, val) pair of agg.data@ is in the iteration sequence.
+            map_iter@.1.to_set() =~= agg.data@.kv_pairs(),
+
+            // Index invariant: result[i] is exactly the value at position i.
+            result@.len() == VERUS_ghost_iter.pos,
+            forall|i: int|
+                0 <= i < VERUS_ghost_iter.pos ==>
+                #[trigger] result@[i] == map_iter@.1[i].1,
+    {
+        proof {
+            // Current element is map_iter@.1[pos] (exec_invariant / ghost_peek_next).
+            assert(map_iter@.1[VERUS_ghost_iter.pos] == (*k, *v));
+        }
+        result.push(clone_sig(v));
+        // After push (step case):
+        // - result@.len() = pos + 1 = new pos  ✓
+        // - result@[i] = map_iter@.1[i].1 for i < pos  (preserved)
+        // - result@[pos] = clone_sig(v) == *v = map_iter@.1[pos].1  ✓
+    }
+
+    // After loop: ghost_ensures — pos == map_iter@.1.len(), so result@.len() == map_iter@.1.len().
+    proof {
+        assert(result@.len() == map_iter@.1.len() as int);
+
+        // Part 1: every output element traces back to a key in agg.data@.
+        assert forall|v: AuthoritySignInfo| result@.contains(v) implies
+            exists|k: AuthorityName| agg.has_voted(k) && agg.data@[k] == v
+        by {
+            let i = choose|i: int| 0 <= i < result@.len() && result@[i] == v;
+            let kv = map_iter@.1[i];
+            assert(result@[i] == kv.1);                       // index invariant
+            assert(v == kv.1);                                // transitivity
+            assert(map_iter@.1.to_set().contains(kv));        // i < len
+            assert(agg.data@.kv_pairs().contains(kv));        // coverage
+            // kv_pairs() = Set::new(|p| dom.contains(p.0) && map[p.0] == p.1)
+            assert(agg.data@.dom().contains(kv.0));
+            assert(agg.data@[kv.0] == kv.1);
+            // Provide the witness explicitly so Z3 can close the existential.
+            assert(agg.has_voted(kv.0) && agg.data@[kv.0] == v);
+        };
+
+        // Part 2: every map value is in the output.
+        assert forall|k: AuthorityName| agg.has_voted(k) implies result@.contains(agg.data@[k]) by {
+            // find the position where this key lives
+            let pair = (k, agg.data@[k]);
+            assert(agg.data@.kv_pairs().contains(pair));
+            assert(map_iter@.1.to_set().contains(pair));
+            let j = choose|j: int|
+                0 <= j < map_iter@.1.len() && map_iter@.1[j] == pair;
+            assert(result@[j] == agg.data@[k]);               // index invariant + pair.1
+            // j < result@.len(), result@[j] == agg.data@[k] → contains
+        };
+    }
+
+    result
 }
-
-} // verus!
-
-verus! {
-
-// ================================================================================================
-// § 3  PRIVATE EXEC FUNCTIONS
-// ================================================================================================
-// Internal implementation details.  Not part of the public contract; callable only from
-// within this module.
 
 /// Evict all sigs that fail individual BLS verification.
 ///
