@@ -60,7 +60,7 @@ transfers.forEach((transfer, index) => {
 });
 ```
 
-After you have the transaction defined, you can directly execute it with a Sui client and `KeyPair` using `client.signAndExecuteTransaction`.
+After you define the transaction, directly execute it with a Sui client and `KeyPair` using `client.signAndExecuteTransaction`.
 
 ```ts
 client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
@@ -86,16 +86,16 @@ Use `--preview` to inspect the PTB commands without executing them, `--dry-run` 
 
 Inputs are how you provide external values to PTBs, for example, an amount of SUI to transfer, an object to pass into a Move call, or a shared object.
 
-There are 2 ways to define inputs:
+Define inputs in two ways:
 
-- For objects: The `tx.object(objectId)` function is used to construct an input that contains an object reference.
+- For objects: Use the `tx.object(objectId)` function to construct an input that contains an object reference.
 
-- For pure values: The `tx.pure(type, value)` function is used to construct an input for a non-object input.
-  - If value is a `Uint8Array`, then the value is assumed to be raw bytes and is used directly: `tx.pure(SomeUint8Array)`.
+- For pure values: Use the `tx.pure(type, value)` function to construct an input for a non-object input.
+  - If value is a `Uint8Array`, the function treats it as raw bytes and uses it directly: `tx.pure(SomeUint8Array)`.
 
-  - Otherwise, it's used to generate the BCS serialization layout for the value.
+  - Otherwise, the function generates the BCS serialization layout for the value.
 
-  - In the new version, a more intuitive way of writing is provided, for example: `tx.pure.u64(100)`, `tx.pure.string('SomeString')`, `tx.pure.address('0xSomeSuiAddress')`, `tx.pure.vector('bool', [true, false])`...
+  - The new version provides a more intuitive syntax, for example: `tx.pure.u64(100)`, `tx.pure.string('SomeString')`, `tx.pure.address('0xSomeSuiAddress')`, `tx.pure.vector('bool', [true, false])`.
 
 Learn more about [inputs](/develop/transactions/ptbs/inputs-and-results).
 
@@ -266,3 +266,69 @@ sponsoredTx.setGasPayment(sponsorCoins);
 ```
 
 Learn more about [sponsored transactions](/develop/transaction-payment/sponsor-txn).
+
+## Rust SDK example
+
+You can also build PTBs using the Sui Rust SDK. The following example demonstrates creating a `ProgrammableTransactionBuilder`, adding pure value and shared object inputs, and calling a Move function with type arguments:
+
+```rust
+use move_core_types::{identifier::Identifier, language_storage::TypeTag};
+use sui_types::{
+    base_types::ObjectID,
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    transaction::{Argument, CallArg, ObjectArg, SharedObjectMutability},
+};
+
+let mut ptb = ProgrammableTransactionBuilder::new();
+
+// Pass a pure value
+let amount = ptb.pure(1000u64)?;
+
+// Pass a shared object
+let shared_obj = ptb.obj(ObjectArg::SharedObject {
+    id: ObjectID::from_hex_literal("0x...")?,
+    initial_shared_version: 1.into(),
+    mutability: SharedObjectMutability::Mutable,
+})?;
+
+// Call a generic function with type arguments
+ptb.programmable_move_call(
+    ObjectID::from_hex_literal("0xPACKAGE")?,
+    Identifier::new("module")?,
+    Identifier::new("function")?,
+    vec![TypeTag::U64],          // type arguments (generics)
+    vec![shared_obj, amount],    // runtime arguments
+);
+```
+
+### Passing type arguments
+
+Generic Move functions require type parameters. Specify them as a `Vec<TypeTag>` in Rust or as string type tags in TypeScript:
+
+```typescript
+tx.moveCall({
+  target: '0xPACKAGE::module::generic_function',
+  typeArguments: ['0x2::coin::Coin<0x2::sui::SUI>'],
+  arguments: [tx.object('0x...')],
+});
+```
+
+## Troubleshooting PTB errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| HTTP 504 (Gateway Timeout) | RPC node overloaded or unresponsive. | Retry with a different RPC endpoint or after a delay. |
+| `MoveAbort` in effects | Onchain logic failed (assertion, type mismatch). | Check the abort code against the Move module source. |
+| `InsufficientGas` | Gas budget too low for the computation. | Increase `setGasBudget()` or use dry-run to estimate. |
+
+### `waitForTransaction`
+
+After you submit a transaction, use `waitForTransaction` to confirm the transaction is indexed before you query its effects. This prevents race conditions where querying immediately after submission returns no results.
+
+```typescript
+await client.waitForTransaction({ digest: result.digest });
+const txn = await client.getTransaction({
+  digest: result.digest,
+  include: { effects: true },
+});
+```

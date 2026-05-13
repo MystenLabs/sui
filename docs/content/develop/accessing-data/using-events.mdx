@@ -4,9 +4,9 @@ description: Use events to notify onchain assets of activity your smart contract
 keywords: [ using events, notify events, notify assets, notify onchain assets, activity events, events for activities, move events, events in move, query events, sui RPC, graphql, move, filter events, rust, typescript ]
 ---
 
-Move code can interact with objects stored on Sui. Some applications might want to track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates. 
+Move code can interact with objects stored on Sui. Some applications track an object's activity and trigger certain workflows within the application based on that activity, such as application updates based on how many times an NFT is minted or the amount of SUI a smart contract generates. 
 
-Move supports activity monitoring through emitting events. Emitting events consists of 3 steps:
+Move supports activity monitoring through emitting events. Emitting events consists of three steps:
 
 1. Defining an event struct in your Move module that captures the data you want to track.
 
@@ -391,3 +391,96 @@ async function getEventsByType(eventType: string, first: number = 10) {
 }
 ```
 </details>
+
+### Filtering events
+
+Use the GraphQL `EventFilter` to narrow event queries. The available filter fields are `type`, `module`, `sender`, `afterCheckpoint`, `atCheckpoint`, and `beforeCheckpoint`. Note that you cannot combine `module` and `type` in the same filter.
+
+```graphql
+{
+  events(
+    filter: {
+      type: "0xPACKAGE::swap::SwapEvent"
+    }
+    after: null
+    first: 50
+  ) {
+    nodes {
+      contents { json }
+      timestamp
+      sender { address }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
+```
+
+## Event limits
+
+A single transaction can emit a maximum of 1,024 events (set by the `max_num_event_emit` protocol config). If your Move code exceeds this limit, the transaction aborts.
+
+## Pagination
+
+Event queries return paginated results. In GraphQL, use the `after` parameter with the `endCursor` value from the previous response. The `first` field sets the page size (maximum items per response):
+
+```typescript
+import { SuiGraphQLClient } from '@mysten/sui/graphql';
+import { graphql } from '@mysten/sui/graphql/schema';
+
+const gqlClient = new SuiGraphQLClient({
+  url: 'https://graphql.mainnet.sui.io/graphql',
+  network: 'mainnet',
+});
+
+const eventsQuery = graphql(`
+  query PaginatedEvents($eventType: String!, $first: Int, $after: String) {
+    events(filter: { eventType: $eventType }, first: $first, after: $after) {
+      nodes {
+        contents { json }
+        timestamp
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`);
+
+let cursor = null;
+let allEvents = [];
+
+do {
+  const result = await gqlClient.query({
+    query: eventsQuery,
+    variables: { eventType: '0x...::module::EventType', first: 50, after: cursor },
+  });
+  const page = result.data?.events;
+  allEvents.push(...(page?.nodes ?? []));
+  cursor = page?.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+} while (cursor);
+```
+
+## Troubleshooting
+
+### Events emitted but not returned by query
+
+- **Wrong package ID:** Verify you query the correct package address (not the upgrade cap or transaction digest).
+- **Indexer lag:** The indexer might not have processed the transaction yet. Add a short delay or use `waitForTransaction` before querying.
+- **Filter mismatch:** Event type strings are case-sensitive and must match exactly, including the full `package::module::EventStruct` format.
+
+## RPC endpoints
+
+Query events from the following public RPC URLs:
+
+| Network | URL                                    |
+|---------|----------------------------------------|
+| Mainnet | `https://fullnode.mainnet.sui.io:443`  |
+| Testnet | `https://fullnode.testnet.sui.io:443`  |
+| Devnet  | `https://fullnode.devnet.sui.io:443`   |
+
+For archival data beyond the recent window, see [Archival Store and Service](/develop/accessing-data/archival-store).
+

@@ -6,9 +6,7 @@
 ARG PROFILE=release-unwind
 FROM rust:1.92-bullseye AS builder
 ARG PROFILE
-ARG GIT_REVISION
 ARG FEATURES=""
-ENV GIT_REVISION=$GIT_REVISION
 WORKDIR "$WORKDIR/sui"
 
 # sui-indexer need ca-certificates
@@ -16,16 +14,22 @@ RUN apt update && apt install -y ca-certificates postgresql
 
 RUN apt-get update && apt-get install -y cmake clang
 
+# COPYs ordered least- to most-frequently-changing for deeper layer cache hits.
+COPY rust-toolchain.toml ./
+COPY .cargo .cargo
 COPY Cargo.toml Cargo.lock ./
+COPY external-crates external-crates
+COPY sui-execution sui-execution
 COPY consensus consensus
 COPY crates crates
-COPY sui-execution sui-execution
-COPY external-crates external-crates
 
+# GIT_REVISION declared late so SHA changes don't invalidate the COPYs above.
+ARG GIT_REVISION
+ENV GIT_REVISION=$GIT_REVISION
 RUN if [ -n "$FEATURES" ]; then \
-        cargo build --profile ${PROFILE} --bin sui-indexer-alt-graphql --features "$FEATURES"; \
+        cargo build --locked --profile ${PROFILE} --bin sui-indexer-alt-graphql --features "$FEATURES"; \
     else \
-        cargo build --profile ${PROFILE} --bin sui-indexer-alt-graphql; \
+        cargo build --locked --profile ${PROFILE} --bin sui-indexer-alt-graphql; \
     fi
 
 # Production Image

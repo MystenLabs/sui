@@ -83,7 +83,7 @@ Mutated Objects:
  - ID: <OBJECT_ID> , Owner: Account Address ( <SUI-ADDRESS> )
 ```
 
-## Alternative: Sign with Sui Keystore and execute transaction
+## Alternative: sign with Sui Keystore and execute transaction
 
 Alternatively, you can use the active key in Sui Keystore to sign and output a Base64-encoded sender signed data with flag `--serialize-signed-transaction`. 
 
@@ -98,3 +98,35 @@ After you obtain the signed transaction bytes, you can submit it using the `exec
 ```sh
 $ sui client execute-combined-signed-tx --signed-tx-bytes <SIGNED-TX-BYTES>
 ```
+
+## Manual signing (TEE/HSM)
+
+If you sign transactions in a TEE, HSM, or any environment without the Sui SDK, implement the following pipeline manually:
+
+1. **Serialize** the `TransactionData` to BCS bytes.
+1. **Prepend** the 3-byte intent prefix: `[0, 0, 0]` for transactions.
+1. **Hash** the prefixed bytes with Blake2b-256 (producing 32 bytes).
+1. **Sign** the hash with your Ed25519 private key (producing a 64-byte signature).
+1. **Encode** the signature as `flag_byte || signature_bytes || public_key_bytes`, then Base64 encode the result.
+
+The flag byte indicates the signature scheme: `0x00` for Ed25519, `0x01` for Secp256k1, `0x02` for Secp256r1.
+
+### Pseudocode
+
+```text
+intent_prefix = bytes([0, 0, 0])
+message = intent_prefix + bcs_serialize(transaction_data)
+digest = blake2b256(message)
+signature = ed25519_sign(private_key, digest)
+encoded = base64(bytes([0x00]) + signature + public_key)
+```
+
+### Intent prefix reference
+
+| Intent scope       | Prefix bytes | Used by                    |
+|--------------------|--------------|----------------------------|
+| Transaction        | `[0, 0, 0]` | User transaction signing.  |
+| Personal message   | `[3, 0, 0]` | `signPersonalMessage` API. |
+| Proof of possession| `[5, 0, 0]` | Validator registration.    |
+
+The prefix exists for domain separation: it prevents a signature over a personal message from being reused as a transaction signature.

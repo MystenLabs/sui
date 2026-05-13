@@ -467,9 +467,10 @@ impl SuiNode {
 
         let run_with_range = config.run_with_range;
         let prometheus_registry = registry_service.default_registry();
+        let node_role = config.intended_node_role();
 
         info!(node =? config.protocol_public_key(),
-            "Initializing sui-node listening on {}", config.network_address
+            "Initializing sui-node listening on {} with role {:?}", config.network_address, node_role
         );
 
         // Initialize metrics to track db usage before creating any stores
@@ -493,8 +494,6 @@ impl SuiNode {
             &genesis_committee,
             None,
         ));
-
-        let node_role = config.intended_node_role();
 
         let pruner_watermarks = Arc::new(PrunerWatermarks::default());
         let checkpoint_store = CheckpointStore::new(

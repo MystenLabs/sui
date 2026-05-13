@@ -474,9 +474,10 @@ reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls",
 ] }
-roaring = "0.10.6"
+roaring = "0.11.3"
 ron = "0.8.0"
 rstest = "0.16.0"
+rustc-hash = "2"
 rustls = { version = "0.23", default-features = false, features = [
   "std",
   "tls12",
@@ -580,6 +581,7 @@ webpki = { version = "0.103.10", package = "rustls-webpki", features = [
   "std",
   "ring",
 ] }
+which = "8.0.2"
 winnow = "0.7"
 wiremock = "0.5"
 x509-parser = { version = "0.17.0", features = ["verify"] }

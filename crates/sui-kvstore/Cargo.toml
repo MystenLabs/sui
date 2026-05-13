@@ -11,6 +11,7 @@ anyhow.workspace = true
 arc-swap.workspace = true
 bytes.workspace = true
 async-trait.workspace = true
+backoff.workspace = true
 base64.workspace = true
 bcs.workspace = true
 clap.workspace = true
@@ -18,14 +19,21 @@ futures.workspace = true
 governor.workspace = true
 http.workspace = true
 gcp_auth.workspace = true
+mysten-common.workspace = true
+num_cpus.workspace = true
 prometheus.workspace = true
 rand.workspace = true
 prost.workspace = true
 prost-types.workspace = true
+roaring.workspace = true
+rustc-hash.workspace = true
 rustls.workspace = true
+scoped-futures.workspace = true
 serde.workspace = true
 toml.workspace = true
 sui-default-config.workspace = true
+sui-futures.workspace = true
+sui-inverted-index.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-metrics.workspace = true
@@ -38,7 +46,7 @@ tonic-prost.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-mysten-common.workspace = true
+move-core-types.workspace = true
 sui-indexer-alt-framework = { workspace = true, features = ["cluster"] }
 sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
 sui-keys.workspace = true

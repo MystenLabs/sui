@@ -8,10 +8,15 @@ use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::pipeline;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::pipeline::concurrent::ConcurrentConfig;
+use sui_indexer_alt_framework::pipeline::sequential::SequentialConfig;
 use sui_indexer_alt_framework::{self as framework};
 use tracing::warn;
 
 use crate::bigtable::client::PoolConfig;
+
+/// Default maximum rows per BigTable write batch. Matches the official Google
+/// Java client default.
+pub(crate) const DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH: usize = 100;
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
@@ -149,6 +154,10 @@ pub struct PipelineIngestionLayer {
 }
 
 impl ConcurrentLayer {
+    pub(crate) fn max_rows_or_default(&self) -> usize {
+        self.max_rows.unwrap_or(DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH)
+    }
+
     pub fn finish(self, base: ConcurrentConfig) -> ConcurrentConfig {
         ConcurrentConfig {
             committer: if let Some(c) = self.committer {
@@ -185,6 +194,67 @@ impl PipelineIngestionLayer {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
+pub struct SequentialLayer {
+    // Framework sequential surface — mirrors the fields actually read by
+    // `sui_indexer_alt_framework::pipeline::sequential`.
+    pub committer: Option<CommitterLayer>,
+    pub ingestion: Option<PipelineIngestionLayer>,
+    pub fanout: Option<ConcurrencyConfig>,
+    pub min_eager_rows: Option<usize>,
+    pub max_pending_rows: Option<usize>,
+    pub max_batch_checkpoints: Option<usize>,
+    pub processor_channel_size: Option<usize>,
+    pub pipeline_depth: Option<usize>,
+
+    // sui-kvstore-specific config extensions
+
+    // Controls the concurrency of the bitmap flushes. The framework doesn't
+    // perform commits for sequential pipelines concurrently, but our store
+    // implementation doesn't actually write to the database on commit for
+    // the bitmap pipelines. The store buffers the bitmaps for the current
+    // working "bucket" ranges internally, merges in rows from each framework
+    // batch on commit (parallelized on background tasks), then finally flushes
+    // the updated bitmaps to bigtable concurrently. Same semantic as
+    // `ConcurrentLayer::write_concurrency`.
+    pub write_concurrency: Option<usize>,
+    /// Maximum rows per in-handler BigTable write RPC. Same semantic as
+    /// `ConcurrentLayer::max_rows`.
+    pub max_rows: Option<usize>,
+    /// Per-pipeline rate limit (rows per second). Overrides the default
+    /// `IndexerConfig::max_rows_per_second` when set.
+    pub max_rows_per_second: Option<u64>,
+}
+
+impl SequentialLayer {
+    pub(crate) fn max_rows_or_default(&self) -> usize {
+        self.max_rows.unwrap_or(DEFAULT_MAX_ROWS_PER_BIGTABLE_BATCH)
+    }
+
+    pub fn finish(self, base: ConcurrentConfig) -> SequentialConfig {
+        let committer = if let Some(c) = self.committer {
+            c.finish(base.committer)
+        } else {
+            base.committer
+        };
+        SequentialConfig {
+            committer,
+            ingestion: if let Some(i) = self.ingestion {
+                i.finish(base.ingestion)
+            } else {
+                base.ingestion
+            },
+            fanout: self.fanout.or(base.fanout),
+            min_eager_rows: self.min_eager_rows.or(base.min_eager_rows),
+            max_pending_rows: self.max_pending_rows.or(base.max_pending_rows),
+            max_batch_checkpoints: self.max_batch_checkpoints,
+            processor_channel_size: self.processor_channel_size.or(base.processor_channel_size),
+            pipeline_depth: self.pipeline_depth,
+        }
+    }
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
 pub struct PipelineLayer {
     pub checkpoints: ConcurrentLayer,
     pub checkpoints_by_digest: ConcurrentLayer,
@@ -198,6 +268,9 @@ pub struct PipelineLayer {
     pub packages_by_checkpoint: ConcurrentLayer,
     pub system_packages: ConcurrentLayer,
     pub tx_seq_digest: ConcurrentLayer,
+    pub transaction_bitmap_index: SequentialLayer,
+    pub event_bitmap_index: SequentialLayer,
+    pub checkpoint_bitmap_index: SequentialLayer,
 }
 
 /// This type is identical to [`framework::ingestion::IngestionConfig`], but is set-up to be

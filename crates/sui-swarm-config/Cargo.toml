@@ -13,6 +13,7 @@ workspace = true
 anemo.workspace = true
 anyhow.workspace = true
 bcs.workspace = true
+consensus-config.workspace = true
 fastcrypto.workspace = true
 rand.workspace = true
 serde.workspace = true

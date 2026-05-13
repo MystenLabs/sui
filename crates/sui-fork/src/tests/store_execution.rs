@@ -30,7 +30,10 @@ use sui_types::object::ObjectInner;
 use sui_types::object::Owner;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::storage::RpcIndexes;
-use sui_types::transaction::{GasData, Transaction, TransactionData, TransactionKind};
+use sui_types::transaction::GasData;
+use sui_types::transaction::Transaction;
+use sui_types::transaction::TransactionData;
+use sui_types::transaction::TransactionKind;
 
 use super::*;
 
@@ -317,7 +320,7 @@ fn test_seeded_owned_object_metadata_lists_without_bcs_until_deleted() {
 }
 
 #[test]
-fn test_local_deletion_removes_owned_object_and_blocks_remote_resurrection() {
+fn test_local_deletion_removes_current_object_but_preserves_historical_lookup() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -346,19 +349,19 @@ fn test_local_deletion_removes_owned_object_and_blocks_remote_resurrection() {
             .unwrap(),
         object,
     );
-    assert!(
+    assert_eq!(
         sui_types::storage::ObjectStore::get_object_by_key(
             &store,
             &object_id,
             SequenceNumber::from_u64(1),
         )
-        .is_none(),
-        "execution-facing exact-version lookup must reject locally deleted objects",
+        .expect("execution-facing exact-version lookup should read local history"),
+        object,
     );
 }
 
 #[test]
-fn test_local_wrap_removes_owned_object_and_blocks_direct_current_reads() {
+fn test_local_wrap_removes_current_object_but_preserves_historical_lookup() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
@@ -390,14 +393,14 @@ fn test_local_wrap_removes_owned_object_and_blocks_direct_current_reads() {
             .unwrap(),
         object,
     );
-    assert!(
+    assert_eq!(
         sui_types::storage::ObjectStore::get_object_by_key(
             &store,
             &object_id,
             SequenceNumber::from_u64(1),
         )
-        .is_none(),
-        "execution-facing exact-version lookup must reject locally wrapped objects",
+        .expect("execution-facing exact-version lookup should read local history"),
+        object,
     );
 }
 

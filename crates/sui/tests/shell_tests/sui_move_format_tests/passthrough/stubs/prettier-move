@@ -1,0 +1,13 @@
+#!/bin/bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Stub `prettier-move` used by sui_move_format_tests/passthrough.
+
+if [ "$1" = "--version" ]; then
+    echo "stub-prettier-move 0.0.0"
+    exit 0
+fi
+
+echo "prettier-move called with: $*"
+exit 0

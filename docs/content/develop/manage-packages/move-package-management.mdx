@@ -12,9 +12,23 @@ Version 1.63 introduced major changes to the Move package system. This document 
 
 :::
 
+:::warning Active environment not found
+
+If the CLI displays `Your active environment is not present in Move.toml`, add an `[environments]` section:
+
+```toml
+[environments]
+testnet = { chain-id = "4c78adac" }
+mainnet = { chain-id = "35834a8a" }
+```
+
+Use `sui client chain-identifier` to find the chain ID for your network. For local or ephemeral deployments, use `sui client test-publish` instead.
+
+:::
+
 ## Package-related files
 
-Package authors configure their packages by providing a manifest file (`Move.toml`) in the root of the package directory. This file contains metadata about the package and its list of dependencies.
+Configure your package by providing a manifest file (`Move.toml`) in the root of the package directory. This file contains metadata about the package and its list of dependencies.
 
 When you build a Move package for the first time, the package management system uses the information in the manifest file to find the source code for the package's dependencies. The system stores the exact versions of the dependencies in a lockfile (`Move.lock`). The system calls this process pinning.
 
@@ -217,7 +231,7 @@ The right-hand side of the entry is the chain identifier for the network. You ca
 
 :::caution
 
-You should only include an environment in your manifest if you expect other packages to link against your package on that network. You usually do not want to include local networks in your manifest, because they are typically short-lived and private. Instead, you should consider using the [`test-publish`](#test-publish) command to publish your package and its dependencies on a local network. The `test-publish` command gives you much more flexibility to manage your deployment.
+Only include an environment in your manifest if you expect other packages to link against your package on that network. You usually do not want to include local networks in your manifest, because they are typically short-lived and private. Instead, you should consider using the [`test-publish`](#test-publish) command to publish your package and its dependencies on a local network. The `test-publish` command gives you much more flexibility to manage your deployment.
 
 :::
 
@@ -274,13 +288,13 @@ The `original-id` field should contain the address of the first version of the p
 
 ### Building and testing packages
 
-Whenever you run `sui move build` or `sui move test`, the system ensures that you have all dependencies cached in your `~/.move` directory. It first checks whether the lockfile is current, and if it is not, it repins all of the dependencies for your build environment. It then checks whether the packages are cached, and if not it downloads them.
+When you run `sui move build` or `sui move test`, the system ensures you have all dependencies cached in your `~/.move` directory. It first checks whether the lockfile is current, and if the lockfile is not current, it repins all of the dependencies for your build environment. It then checks whether the packages are cached, and if not it downloads them.
 
-Because the system always fetches after pinning, you do not need to connect to a network unless a dependency needs to be repinned because the manifest changed or you ran `update-deps`.
+The system always fetches after pinning, so you do not need to connect to a network unless a dependency needs repinning because the manifest changed or you ran `update-deps`.
 
 ### Updating dependencies
 
-Run `sui move update-deps` to repin all of your dependencies. This does not change your manifest file, it only redownloads the latest versions that are compatible with what you have written.
+Run `sui move update-deps` to repin all of your dependencies. This redownloads the latest compatible versions without changing your manifest file.
 
 ### Publishing and upgrading
 
@@ -327,7 +341,7 @@ The old package management system does not support ephemeral publication.
 
 :::
 
-By design, the `Published.toml` file should only record publications to persistent environments like Mainnet and Testnet. Addresses for ephemeral publications on local networks or Devnet should not usually be committed to source control.
+By design, the `Published.toml` file should only record publications to persistent environments like Mainnet and Testnet. Do not commit addresses for ephemeral publications on local networks or Devnet to source control.
 
 Instead, the package manager supports ephemeral publication of a package and its dependencies for testing. The `sui client test-publish` command works like a normal publish, except that the system reads the publication addresses for packages and writes them to a separate file.
 
@@ -388,7 +402,7 @@ Although publication files and ephemeral publication files are similar, they hol
 
 ### The build environment
 
-Because packages can have different dependencies in different environments, it is important to have a real environment present when building a package for ephemeral publication; the real environment is referred to as the build environment, and is specified by the `--build-env <env>` flag.
+Packages can have different dependencies in different environments. Specify a real environment when building a package for ephemeral publication using the `--build-env <env>` flag. This real environment is the build environment.
 
 If `--build-env <env>` is omitted, it defaults to the `build-env` name of the file at `<file>`. If that is missing, the system errors. The build environment determines how the system resolves dependencies for the package.
 
@@ -426,6 +440,61 @@ This creates a fresh publication of each of `a`'s dependencies, then publishes `
 
 The system identifies entries of an ephemeral publication file by the `source` field. These fields are pinned dependencies, so they might be different from the dependencies written in your manifest file, however they should match the `source` fields in the lockfile.
 
+
+## Local development workflow
+
+For iterative development on Localnet:
+
+1. Start the local network: `sui start --with-faucet --force-regenesis`
+1. Publish with test-publish (no permanent record): `sui client test-publish`
+1. After each code change, re-run `sui client test-publish` for a fresh deployment.
+
+Use `test-publish` for Localnet because it avoids polluting `Published.toml` with ephemeral addresses that change on every genesis reset.
+
+## Publishing from TypeScript
+
+To publish a package from TypeScript, first build it with the CLI, then submit the compiled modules in a transaction:
+
+```typescript
+import { execSync } from 'child_process';
+import { Transaction } from '@mysten/sui/transactions';
+
+// Build and get compiled modules + dependencies
+const { modules, dependencies } = JSON.parse(
+  execSync('sui move build --dump-bytecode-as-base64 --path ./your_package', {
+    encoding: 'utf-8',
+  }),
+);
+
+const tx = new Transaction();
+const [upgradeCap] = tx.publish({ modules, dependencies });
+tx.transferObjects([upgradeCap], tx.pure.address(senderAddress));
+```
+
+## Reading publish output
+
+After running `sui client publish --json`, the response includes:
+
+| Field              | Description                                  |
+|--------------------|----------------------------------------------|
+| `digest`           | Transaction hash.                            |
+| `effects.created`  | Array of objects created, including the package object. |
+| `objectChanges`    | Detailed list of created objects with types.  |
+| `events`           | Publication events (BCS-encoded in CLI output). |
+
+To get human-readable event data, query the transaction through the RPC with `showEvents: true`, which returns `parsedJson` instead of raw BCS.
+
+To capture only the JSON output (without build logs), redirect stderr:
+
+```sh
+$ sui client publish --json 2>/dev/null | jq '.objectChanges[] | select(.type == "published")'
+```
+
+:::info Automatic framework dependencies
+
+The `Sui` and `MoveStdlib` packages are automatically included as dependencies. You do not need to list them in `[dependencies]`.
+
+:::
 
 ## Register your package on `mvr`
 

@@ -8407,7 +8407,7 @@ dependencies = [
 [[package]]
 name = "minibytes"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=f7e5ab73209035fa1695777defc1a11368425d2d#f7e5ab73209035fa1695777defc1a11368425d2d"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=48f0621dc08b3992dbd168631f36b88b003f4a2c#48f0621dc08b3992dbd168631f36b88b003f4a2c"
 dependencies = [
  "bytes",
  "memmap2 0.7.1",
@@ -11564,7 +11564,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.5.6",
+ "socket2 0.6.3",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -12225,19 +12225,9 @@ dependencies = [
 
 [[package]]
 name = "roaring"
-version = "0.10.9"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41589aba99537475bf697f2118357cad1c31590c5a1b9f6d9fc4ad6d07503661"
-dependencies = [
- "bytemuck",
- "byteorder",
-]
-
-[[package]]
-name = "roaring"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f08d6a905edb32d74a5d5737a0c9d7e950c312f3c46cb0ca0a2ca09ea11878a0"
+checksum = "1dedc5658c6ecb3bdb5ef5f3295bb9253f42dcf3fd1402c03f6b1f7659c3c4a9"
 dependencies = [
  "bytemuck",
  "byteorder",
@@ -14123,6 +14113,7 @@ dependencies = [
  "bcs",
  "clap",
  "comfy-table",
+ "consensus-config",
  "derive_more 1.0.0",
  "duration-str",
  "futures",
@@ -14481,7 +14472,7 @@ dependencies = [
  "rand 0.8.5",
  "rayon",
  "reqwest",
- "roaring 0.10.9",
+ "roaring",
  "rstest",
  "scopeguard",
  "serde",
@@ -14848,7 +14839,7 @@ dependencies = [
  "prost 0.14.1",
  "rand 0.8.5",
  "reqwest",
- "roaring 0.10.9",
+ "roaring",
  "serde",
  "serde_json",
  "simulacrum",
@@ -15095,8 +15086,10 @@ name = "sui-indexer-alt-e2e-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "bcs",
+ "bytes",
  "coset",
  "datatest-stable",
  "diesel",
@@ -15151,7 +15144,6 @@ dependencies = [
  "test-cluster",
  "tokio",
  "tokio-stream",
- "tokio-tungstenite 0.26.2",
  "tonic 0.14.5",
  "tracing",
  "url",
@@ -15673,6 +15665,7 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "async-trait",
+ "backoff",
  "base64 0.21.7",
  "bcs",
  "bytes",
@@ -15681,17 +15674,24 @@ dependencies = [
  "gcp_auth",
  "governor",
  "http 1.3.1",
+ "move-core-types",
  "mysten-common",
+ "num_cpus",
  "prometheus",
  "prost 0.14.1",
  "prost-types 0.14.1",
  "rand 0.8.5",
+ "roaring",
+ "rustc-hash 2.1.1",
  "rustls",
+ "scoped-futures",
  "serde",
  "sui-default-config",
+ "sui-futures",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
+ "sui-inverted-index",
  "sui-keys",
  "sui-protocol-config",
  "sui-rpc",
@@ -15729,7 +15729,7 @@ dependencies = [
  "object_store 0.13.0",
  "prost-types 0.14.1",
  "reqwest",
- "roaring 0.10.9",
+ "roaring",
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
@@ -15839,6 +15839,7 @@ dependencies = [
  "toml 0.7.4",
  "tracing",
  "walkdir",
+ "which",
 ]
 
 [[package]]
@@ -16679,7 +16680,7 @@ dependencies = [
  "bytes",
  "bytestring",
  "itertools 0.14.0",
- "roaring 0.11.2",
+ "roaring",
  "serde",
  "serde_derive",
  "serde_json",
@@ -16962,6 +16963,7 @@ dependencies = [
  "anemo",
  "anyhow",
  "bcs",
+ "consensus-config",
  "fastcrypto",
  "insta",
  "mysten-common",
@@ -17234,7 +17236,7 @@ dependencies = [
  "prost 0.14.1",
  "prost-types 0.14.1",
  "rand 0.8.5",
- "roaring 0.10.9",
+ "roaring",
  "rustls-pki-types",
  "schemars 0.8.21",
  "serde",
@@ -17891,7 +17893,7 @@ dependencies = [
 [[package]]
 name = "tidehunter"
 version = "0.1.0"
-source = "git+https://github.com/mystenlabs/tidehunter.git?rev=f7e5ab73209035fa1695777defc1a11368425d2d#f7e5ab73209035fa1695777defc1a11368425d2d"
+source = "git+https://github.com/mystenlabs/tidehunter.git?rev=48f0621dc08b3992dbd168631f36b88b003f4a2c#48f0621dc08b3992dbd168631f36b88b003f4a2c"
 dependencies = [
  "arc-swap",
  "bincode 1.3.3",
@@ -18830,7 +18832,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -19618,6 +19620,15 @@ dependencies = [
  "lazy_static",
  "serde",
  "wezterm-dynamic",
+]
+
+[[package]]
+name = "which"
+version = "8.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81995fafaaaf6ae47a7d0cc83c67caf92aeb7e5331650ae6ff856f7c0c60c459"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

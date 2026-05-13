@@ -1,19 +1,26 @@
-FROM rust:1.92-bullseye as build
-
+FROM rust:1.92-bullseye AS builder
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends cmake clang \
+ && rm -rf /var/lib/apt/lists/*
 ARG PROFILE=release
 WORKDIR /work
 
-RUN apt-get update && apt-get install -y cmake clang
-
-COPY .git/ .git/
+# COPYs ordered least- to most-frequently-changing for deeper layer cache hits.
+COPY rust-toolchain.toml ./
+COPY .cargo .cargo
 COPY Cargo.toml Cargo.lock ./
+COPY external-crates external-crates
+COPY sui-execution sui-execution
 COPY consensus consensus
 COPY crates crates
-COPY sui-execution sui-execution
-COPY external-crates external-crates
 
-RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
+# sui-analytics-indexer doesn't use GIT_REVISION at compile time, so we
+# deliberately don't declare ARG/ENV GIT_REVISION in the builder — keeps the
+# cargo-build layer cache key stable across commits with identical source.
+RUN cargo build --locked --profile ${PROFILE} --bin sui-analytics-indexer
 
-FROM debian:12-slim as deploy
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libjemalloc-dev
-COPY --from=build --chmod=755 /work/target/release/sui-analytics-indexer /opt/sui/bin/sui-analytics-indexer
+FROM debian:12-slim AS deploy
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates libjemalloc-dev \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=builder --chmod=755 /work/target/release/sui-analytics-indexer /opt/sui/bin/sui-analytics-indexer

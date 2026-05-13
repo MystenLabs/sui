@@ -23,13 +23,13 @@ use sui_indexer_alt_framework::ingestion::streaming_client::StreamingClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_keys::keystore::AccountKeystore;
 use sui_kvstore::ALL_PIPELINE_NAMES;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
 use sui_kvstore::IndexerConfig;
 use sui_kvstore::KeyValueStoreReader;
 use sui_kvstore::PipelineLayer;
-use sui_kvstore::TX_SEQ_DIGEST_PIPELINE;
 use sui_kvstore::tables::{checkpoints, epochs, transactions};
 use sui_kvstore::testing::BigTableEmulator;
 use sui_kvstore::testing::INSTANCE_ID;
@@ -176,14 +176,13 @@ impl TestHarness {
             IndexerConfig::default(),
             PipelineLayer::default(),
             Chain::Unknown,
-            &[TX_SEQ_DIGEST_PIPELINE],
+            &ALPHA_PIPELINE_NAMES,
             &registry,
         )
         .await
         .context("Failed to create BigTableIndexer")?;
 
         let mut service = bigtable_indexer
-            .indexer
             .run()
             .await
             .context("Failed to run indexer")?;

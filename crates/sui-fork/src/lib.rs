@@ -18,12 +18,15 @@ pub mod store;
 
 pub use gql::GraphQLClient;
 pub use node::Node;
+pub use proto::forking::AdvanceCheckpointRequest;
+pub use proto::forking::AdvanceClockRequest;
+pub use proto::forking::GetStatusRequest;
 pub use proto::forking::forking_service_client::ForkingServiceClient;
-pub use proto::forking::{AdvanceCheckpointRequest, AdvanceClockRequest, GetStatusRequest};
 pub use seed::SeedInput;
 pub use store::DataStore;
 
-use anyhow::{Error, Result};
+use anyhow::Error;
+use anyhow::Result;
 
 use sui_types::base_types::ObjectID;
 use sui_types::effects::TransactionEffects;

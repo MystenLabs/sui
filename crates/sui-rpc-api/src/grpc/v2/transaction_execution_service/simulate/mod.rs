@@ -28,6 +28,7 @@ use sui_types::transaction::InputObjectKind;
 use sui_types::transaction::InputObjects;
 use sui_types::transaction::ObjectReadResult;
 use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::TransactionExpiration;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction_executor::SimulateTransactionResult;
 use sui_types::transaction_executor::TransactionChecks;
@@ -113,6 +114,8 @@ pub fn simulate_transaction(
                 let mut gasless_tx = transaction.clone();
                 gasless_tx.gas_data_mut().price = 0;
                 gasless_tx.gas_data_mut().budget = 0;
+                // All gassless txns have to have a correct `ValidDuring` TransactionExpiration.
+                set_valid_during_transaction_expiration(service, &mut gasless_tx)?;
 
                 let simulation_result = executor
                     .simulate_transaction(gasless_tx.clone(), checks, false)
@@ -449,6 +452,31 @@ fn mock_gas_storage_cost(
         .unwrap_or(0)
 }
 
+/// Populate a `ValidDuring` expiration covering the current epoch and the next one.
+fn set_valid_during_transaction_expiration(
+    service: &RpcService,
+    transaction: &mut sui_types::transaction::TransactionData,
+) -> Result<()> {
+    // Early return if the TransactionExpiration is already set to `ValidDuring`
+    if matches!(
+        transaction.expiration(),
+        TransactionExpiration::ValidDuring { .. }
+    ) {
+        return Ok(());
+    }
+
+    let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
+    *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
+        min_epoch: Some(current_epoch),
+        max_epoch: Some(current_epoch.saturating_add(1)),
+        min_timestamp: None,
+        max_timestamp: None,
+        chain: service.chain_id,
+        nonce: rand::random(),
+    };
+    Ok(())
+}
+
 fn select_gas(
     service: &RpcService,
     transaction: &mut sui_types::transaction::TransactionData,
@@ -465,7 +493,6 @@ fn select_gas(
     use sui_types::gas_coin::GasCoin;
     use sui_types::transaction::Command;
     use sui_types::transaction::TransactionDataAPI;
-    use sui_types::transaction::TransactionExpiration;
 
     let reader = &service.reader;
 
@@ -509,17 +536,8 @@ fn select_gas(
         // Address balance
         transaction.gas_data_mut().payment.clear();
 
-        let current_epoch = service.reader.inner().get_latest_checkpoint()?.epoch();
-
         if matches!(transaction.expiration(), TransactionExpiration::None) {
-            *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
-                min_epoch: Some(current_epoch),
-                max_epoch: Some(current_epoch.saturating_add(1)),
-                min_timestamp: None,
-                max_timestamp: None,
-                chain: service.chain_id,
-                nonce: rand::random(),
-            };
+            set_valid_during_transaction_expiration(service, transaction)?;
         }
 
         budget
@@ -592,16 +610,8 @@ fn select_gas(
             selected_gas.insert(0, coin_reservation);
             selected_gas_value += ab_value;
 
-            // Set expiration for address balance usage if not already set
             if matches!(transaction.expiration(), TransactionExpiration::None) {
-                *transaction.expiration_mut() = TransactionExpiration::ValidDuring {
-                    min_epoch: Some(current_epoch),
-                    max_epoch: Some(current_epoch.saturating_add(1)),
-                    min_timestamp: None,
-                    max_timestamp: None,
-                    chain: service.chain_id,
-                    nonce: rand::random(),
-                };
+                set_valid_during_transaction_expiration(service, transaction)?;
             }
         }
 

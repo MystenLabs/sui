@@ -1,11 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub(crate) use bitmap::BitmapBatch;
+pub use bitmap::BitmapIndexHandler;
+pub use bitmap::BitmapIndexProcessor;
+pub(crate) use bitmap::BitmapIndexValue;
+pub use bitmap::CheckpointBitmapProcessor;
+pub use bitmap::EventBitmapProcessor;
+pub use bitmap::TransactionBitmapProcessor;
 pub use checkpoints::CheckpointsPipeline;
 pub use checkpoints_by_digest::CheckpointsByDigestPipeline;
 pub use epochs_end::EpochEndPipeline;
 pub use epochs_start::EpochStartPipeline;
-pub use handler::{BigTableHandler, BigTableProcessor};
+pub use handler::BigTableHandler;
+pub use handler::BigTableProcessor;
 pub use objects::ObjectsPipeline;
 pub use packages::PackagesPipeline;
 pub use packages_by_checkpoint::PackagesByCheckpointPipeline;
@@ -15,6 +23,7 @@ pub use system_packages::SystemPackagesPipeline;
 pub use transactions::TransactionsPipeline;
 pub use tx_seq_digest::TxSeqDigestPipeline;
 
+mod bitmap;
 mod checkpoints;
 mod checkpoints_by_digest;
 mod epochs_end;

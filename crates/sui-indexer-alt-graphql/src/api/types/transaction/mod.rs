@@ -253,7 +253,7 @@ impl Transaction {
             filtered,
             |tx| JsonCursor::new(tx.tx_sequence_number),
             |tx| {
-                let tx_scope = scope.with_tx_sequence_number_viewed_at(tx.tx_sequence_number);
+                let tx_scope = scope.with_active_transaction_digest(tx.digest);
                 Ok(Transaction {
                     digest: tx.digest,
                     contents: TransactionContents {
@@ -360,6 +360,16 @@ impl TransactionContents {
         if self.contents.is_some() {
             return Ok(self.clone());
         }
+
+        // Streaming fast path: if the scope is backed by a streamed checkpoint containing this
+        // transaction, hydrate from the in-memory payload instead of hitting the DB.
+        if let Some(tx) = self.scope.streamed_transaction_by_digest(digest) {
+            return Ok(Self {
+                scope: self.scope.clone(),
+                contents: Some(Arc::new(tx.contents.clone())),
+            });
+        }
+
         let Some(checkpoint_viewed_at) = self.scope.checkpoint_viewed_at() else {
             return Ok(self.clone());
         };

@@ -16,7 +16,7 @@ Gasless stablecoin transfers on Sui enable peer-to-peer payments of qualified st
 
 ## Eligible stablecoins
 
-Stablecoins qualified for gasless stablecoin transfers can be found [here](https://github.com/MystenLabs/sui/pull/26417).
+The stablecoins eligible for gasless stablecoin transfers are governed by the protocol configuration (`get_gasless_allowed_token_types` in `sui-types`) and can change across protocol versions. To query the current allowlist programmatically, call `get_gasless_allowed_token_types` from the protocol config.
 
 ## What gasless stablecoin transfers don't cover
 

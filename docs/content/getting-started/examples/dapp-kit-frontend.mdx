@@ -213,7 +213,7 @@ The following sections address common issues with this example.
 
 **Cause:** The `StructType` filter in `OwnedObjects.tsx` does not match the deployed contract's full type path, or the component did not invalidate the React Query cache.
 
-**Fix:** Verify the `StructType` matches `PACKAGE_ID::hero::Hero` exactly. Confirm `invalidateQueries` uses the same query key as the `useQuery` call.
+**Fix:** Verify the `StructType` matches `PACKAGE_ID::hero::Hero` exactly. Confirm `invalidateQueries` uses the same query key as the `useQuery` call. If you are reading through a separately indexed API after execution, wait for indexing before invalidating. GraphQL execution-attached selections can often return transaction effects and related execution data in the same request without waiting for a follow-up indexed query.
 
 ### `signAndExecuteTransaction` fails silently
 

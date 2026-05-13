@@ -856,7 +856,6 @@ async fn start_archival(
     .context("Failed to create BigTable indexer")?;
 
     let bt_indexer_service = bt_indexer
-        .indexer
         .run()
         .await
         .context("Failed to start BigTable indexer")?;

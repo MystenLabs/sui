@@ -5,13 +5,19 @@
 //! path and the remote-fallback pre-fork guard. Wired in from `store.rs` via a
 //! `#[path]` module so it has `super::*` access to `pub(crate)` items.
 
-use fastcrypto::encoding::{Base64 as FastCryptoBase64, Encoding};
+use fastcrypto::encoding::Base64 as FastCryptoBase64;
+use fastcrypto::encoding::Encoding;
 use serde_json::json;
 use sui_types::full_checkpoint_content::ExecutedTransaction;
 use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
-use sui_types::transaction::{Transaction as SuiTransaction, VerifiedTransaction};
-use wiremock::matchers::{body_partial_json, method, path};
-use wiremock::{Mock, MockServer, ResponseTemplate};
+use sui_types::transaction::Transaction as SuiTransaction;
+use sui_types::transaction::VerifiedTransaction;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
+use wiremock::matchers::body_partial_json;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
 
 use super::*;
 

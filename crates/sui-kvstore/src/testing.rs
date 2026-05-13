@@ -24,6 +24,9 @@ pub const INSTANCE_ID: &str = "bigtable_test_instance";
 /// New tables must be added here when introduced. The indexer will fail to write to missing
 /// tables, so test failures will signal when this list needs updating.
 pub const TABLES: &[&str] = &[
+    crate::tables::transaction_bitmap_index::NAME,
+    crate::tables::event_bitmap_index::NAME,
+    crate::tables::checkpoint_bitmap_index::NAME,
     crate::tables::objects::NAME,
     crate::tables::transactions::NAME,
     crate::tables::checkpoints::NAME,

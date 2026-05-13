@@ -7,7 +7,7 @@ keywords: [sui custom indexer, checkpoint data sources, custom storage backend, 
 
 Building a custom indexer on Sui lets you take full control of data ingestion, storage, and processing. You can choose from multiple [checkpoint data sources](#checkpoint-data-sources) such as remote store, local files, or direct RPC API access, depending on whether you're indexing Mainnet data, testing against known checkpoints, or working on a local network.
 
-For storage, you can either use the built-in `IndexerCluster` with PostgreSQL or implement your own [`Store` and `Connection` traits](#byos) to integrate a different database or storage backend. After connected, you can wire up a manual indexer, add your custom pipelines, and handle watermark coordination to keep data in sync.
+For storage, PostgreSQL is the default path through `IndexerCluster`, but it is not required. You can implement your own [`Store` and `Connection` traits](#byos) to integrate a different database or storage backend. After you connect it, you can wire up a manual indexer, add your custom pipelines, and handle watermark coordination to keep data in sync.
 
 Finally, you need to [deserialize Move events](#deserialize) from raw BCS bytes into Rust structs, using `bcs` and `serde`, so that your pipelines can work with strongly-typed data. This gives you a reproducible, end-to-end setup that you can tune for performance, reliability, and custom analytics.
 
@@ -21,7 +21,7 @@ Push-based sources deliver real-time checkpoint data as it becomes available, of
 
 #### Recommended: gRPC streaming
 
-gRPC streaming from a full node should be the default choice for production indexers. It delivers real-time checkpoint data pushed from full nodes for the latest checkpoints. Because it only streams latest data, you must configure a polling-based fallback source (remote store, local path, or full node RPC) to retrieve historical checkpoints and ensure reliability:
+gRPC streaming from a full node should be the default choice for production indexers and backend pipelines that need low-latency checkpoint ingestion. This recommendation is specific to indexer data ingestion, not general application RPC selection. Streaming delivers real-time checkpoint data pushed from full nodes for the latest checkpoints. Because it only streams latest data, you must configure a polling-based fallback source (remote store, local path, or full node RPC) to retrieve historical checkpoints and ensure reliability:
 
 ```sh
 $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming-url https://fullnode.testnet.sui.io:443
@@ -41,7 +41,7 @@ $ cargo run -- --remote-store-url https://checkpoints.testnet.sui.io --streaming
 
 :::info
 
-- Use full node gRPC as your primary source by default.
+- Use full node gRPC as your primary source by default for production indexer ingestion.
 - Always configure a polling-based fallback source to ensure reliability and access to historical data.
 - Use `https://checkpoints.<network>.sui.io` only as a fallback, not as your default steady-state source.
 - `https://checkpoints.mainnet.sui.io` and `https://checkpoints.testnet.sui.io` retain only the most recent 30 days of checkpoints. For full retention, use `gs://mysten-mainnet-checkpoints-use4` or `gs://mysten-testnet-checkpoints-use4` with Requester Pays enabled.

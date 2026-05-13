@@ -82,6 +82,83 @@ async fn test_event_subscription_sender_filter() {
     });
 }
 
+/// Verifies that `event.transaction.<field>` resolves fully in streaming mode rather
+/// than returning a digest-only stub. Exercises `TransactionContents::fetch`'s streaming
+/// fast path.
+#[tokio::test]
+async fn test_event_subscription_transaction_fields() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($pkg: SuiAddress!) {
+                events(filter: { type: $pkg }) {
+                    transaction {
+                        digest
+                        sender { address }
+                        kind { __typename }
+                        gasInput { gasBudget gasPrice }
+                    }
+                    contents { type { repr } }
+                }
+            }"#,
+            Some(json!({ "pkg": package_id.to_string() })),
+        )
+        .await;
+
+    let _digest = emit_event_harness::emit(&mut cluster.validator, package_id).await;
+    let item = stream.next().await.expect("Stream ended");
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("event_subscription_transaction_fields", item);
+    });
+}
+
+/// Verifies that `event.transaction.effects.objectChanges` resolves with non-empty
+/// object data in streaming mode. Exercises `EffectsContents::fetch`'s streaming fast
+/// path plus the per-tx execution-objects anchor that `Scope::with_tx_sequence_number_viewed_at`
+/// sets up.
+#[tokio::test]
+async fn test_event_subscription_object_changes() {
+    let mut cluster = SubscriptionTestCluster::new().await;
+    let package_id = emit_event_harness::publish(&mut cluster.validator).await;
+
+    let mut stream = cluster
+        .subscribe_with_variables(
+            r#"subscription($pkg: SuiAddress!) {
+                events(filter: { type: $pkg }) {
+                    transaction {
+                        effects {
+                            status
+                            objectChanges {
+                                nodes {
+                                    outputState {
+                                        address
+                                        version
+                                        digest
+                                        asMoveObject {
+                                            contents { type { repr } }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }"#,
+            Some(json!({ "pkg": package_id.to_string() })),
+        )
+        .await;
+
+    let _digest = emit_event_harness::emit_and_create(&mut cluster.validator, package_id, 7).await;
+    let item = stream.next().await.expect("Stream ended");
+
+    graphql_redactions().bind(|| {
+        insta::assert_json_snapshot!("event_subscription_object_changes", item);
+    });
+}
+
 #[tokio::test]
 async fn test_event_subscription_module_filter() {
     let mut cluster = SubscriptionTestCluster::new().await;

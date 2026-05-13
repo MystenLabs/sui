@@ -13,7 +13,8 @@ use simulacrum::store::SimulatorStore;
 use simulacrum::store::in_mem_store::KeyStore;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::ObjectID;
-use sui_types::messages_checkpoint::{CheckpointContents, VerifiedCheckpoint};
+use sui_types::messages_checkpoint::CheckpointContents;
+use sui_types::messages_checkpoint::VerifiedCheckpoint;
 use sui_types::object::Object;
 use sui_types::test_checkpoint_data_builder::TestCheckpointBuilder;
 
