@@ -4,8 +4,8 @@
 use anyhow::Result;
 use parking_lot::Mutex;
 use rhai::{Dynamic, Engine, Scope};
+use rustyline::DefaultEditor;
 use rustyline::error::ReadlineError;
-use rustyline::{Config, DefaultEditor};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tideconsole::engine::{ConsoleContext, create_engine, init_scope_with_db, is_complete};
@@ -45,20 +45,7 @@ pub fn run(db: Option<PathBuf>, exec: Option<String>, script: Option<PathBuf>) -
 }
 
 fn repl(engine: &Engine, scope: &mut Scope<'_>) -> Result<()> {
-    let rl_config = Config::builder()
-        .history_ignore_space(true)
-        .max_history_size(1000)
-        .unwrap()
-        .build();
-    let mut rl = DefaultEditor::with_config(rl_config)?;
-
-    let history_path = std::env::var("HOME")
-        .ok()
-        .map(|h| PathBuf::from(h).join(".tideconsole_history"));
-
-    if let Some(ref p) = history_path {
-        let _ = rl.load_history(p);
-    }
+    let mut rl = DefaultEditor::new()?;
 
     println!("TideConsole — TideHunter Interactive Shell");
     println!("Type help() for available methods, Ctrl+D to exit.");
@@ -71,10 +58,6 @@ fn repl(engine: &Engine, scope: &mut Scope<'_>) -> Result<()> {
 
         match rl.readline(prompt) {
             Ok(line) => {
-                if buf.is_empty() && !line.trim().is_empty() {
-                    let _ = rl.add_history_entry(line.as_str());
-                }
-
                 if !buf.is_empty() {
                     buf.push('\n');
                 }
@@ -112,10 +95,6 @@ fn repl(engine: &Engine, scope: &mut Scope<'_>) -> Result<()> {
                 break;
             }
         }
-    }
-
-    if let Some(ref p) = history_path {
-        let _ = rl.save_history(p);
     }
 
     Ok(())

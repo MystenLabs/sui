@@ -980,10 +980,8 @@ impl ToolCommand {
             }
             #[cfg(feature = "tideconsole")]
             ToolCommand::TideConsole { db, exec, script } => {
-                tokio::task::spawn_blocking(move || {
-                    crate::tideconsole_cmd::run(db, exec, script)
-                })
-                .await??;
+                tokio::task::spawn_blocking(move || crate::tideconsole_cmd::run(db, exec, script))
+                    .await??;
             }
         };
         Ok(())
