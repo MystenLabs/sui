@@ -360,7 +360,7 @@ derive-syn-parse = "0.1.5"
 derive_more = "1.0.0"
 diesel = "2.3"
 diesel_migrations = "2.3"
-diesel-async = "0.8"
+diesel-async = "0.9"
 dirs = "4.0.0"
 duration-str = "0.5.0"
 ed25519 = { version = "2", features = ["pkcs8", "alloc", "zeroize"] }
