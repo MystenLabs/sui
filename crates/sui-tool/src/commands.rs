@@ -373,6 +373,21 @@ pub enum ToolCommand {
         #[command(subcommand)]
         cmd: ReplayToolCommand,
     },
+
+    /// Interactive Rhai shell for inspecting a TideHunter database.
+    #[cfg(feature = "tideconsole")]
+    #[command(name = "tideconsole")]
+    TideConsole {
+        /// Path to a TideHunter database directory to open on startup (bound to variable 'db').
+        #[arg(short, long)]
+        db: Option<PathBuf>,
+        /// Rhai snippet to evaluate non-interactively, then exit.
+        #[arg(short, long)]
+        exec: Option<String>,
+        /// Path to a Rhai script file to evaluate non-interactively, then exit.
+        #[arg(short, long)]
+        script: Option<PathBuf>,
+    },
 }
 
 async fn check_locked_object(
@@ -962,6 +977,13 @@ impl ToolCommand {
             } => {
                 execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
                     .await?;
+            }
+            #[cfg(feature = "tideconsole")]
+            ToolCommand::TideConsole { db, exec, script } => {
+                tokio::task::spawn_blocking(move || {
+                    crate::tideconsole_cmd::run(db, exec, script)
+                })
+                .await??;
             }
         };
         Ok(())
