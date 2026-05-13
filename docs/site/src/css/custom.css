@@ -596,7 +596,7 @@ td .theme-code-block {
 }
 
 .modal-result mark {
-  @apply bg-sui-steel-dark;
+  @apply bg-sui-blue-bright/30 text-inherit rounded-sm;
 }
 
 .ais-Pagination-list {
