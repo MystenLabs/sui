@@ -48,10 +48,6 @@ pub struct PackageConfig<F: MoveFlavor> {
 
     /// The flavor instance for flavor-specific operations (system deps, on-chain fetching, etc.)
     pub flavor: Arc<F>,
-
-    /// Root directory for caching fetched dependencies (git checkouts, on-chain packages).
-    /// Defaults to `~/.move` (the value of the `MOVE_HOME` environment variable).
-    pub move_home: PathBuf,
 }
 
 #[derive(Clone, Debug)]
@@ -107,7 +103,6 @@ impl<F: MoveFlavor> PackageLoader<F> {
             ignore_digests: false,
             allow_dirty: false,
             flavor: flavor.into(),
-            move_home: PathBuf::from(move_command_line_common::env::MOVE_HOME.as_str()),
         };
         Self { config }
     }
@@ -164,10 +159,6 @@ impl<F: MoveFlavor> PackageLoader<F> {
     pub(crate) fn config(&self) -> &PackageConfig<F> {
         &self.config
     }
-
-    pub(crate) fn config_mut(&mut self) -> &mut PackageConfig<F> {
-        &mut self.config
-    }
 }
 
 impl<F: MoveFlavor> PackageConfig<F> {
@@ -187,7 +178,6 @@ impl<F: MoveFlavor> PackageConfig<F> {
             ignore_digests: false,
             allow_dirty: false,
             flavor,
-            move_home: PathBuf::from(move_command_line_common::env::MOVE_HOME.as_str()),
         }
     }
 }

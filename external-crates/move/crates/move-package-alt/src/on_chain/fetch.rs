@@ -80,7 +80,7 @@ pub(crate) async fn fetch_onchain<F: MoveFlavor>(
     address: &PublishedID,
     config: &PackageConfig<F>,
 ) -> OnChainResult<PathBuf> {
-    let cache_dir = cache_dir_for(&config.move_home, &config.chain_id, address);
+    let cache_dir = cache_dir_for(&config.chain_id, address);
     let manifest_path = cache_dir.join(SourcePackageLayout::Manifest.location_str());
 
     let _lock = PackageSystemLock::new_for_onchain(&config.chain_id, address)?;
@@ -108,8 +108,9 @@ pub(crate) async fn fetch_onchain<F: MoveFlavor>(
 }
 
 /// Return the cache directory for an on-chain package.
-fn cache_dir_for(move_home: &Path, chain_id: &str, address: &PublishedID) -> PathBuf {
-    move_home
+// TODO(DVX-2127): use config.move_home instead of hardcoded MOVE_HOME
+fn cache_dir_for(chain_id: &str, address: &PublishedID) -> PathBuf {
+    PathBuf::from(move_command_line_common::env::MOVE_HOME.as_str())
         .join("on-chain")
         .join(chain_id)
         .join(address.to_string())
@@ -353,6 +354,10 @@ mod tests {
         "#);
     }
 
+    // NOTE: each test must use unique on-chain addresses to avoid cache collisions
+    // when tests run in parallel, since the cache is shared at ~/.move/on-chain/.
+    // TODO(DVX-2127): thread move_home through the cache to enable per-test isolation.
+
     /// Rename-from check is skipped for on-chain deps.
     #[test(tokio::test)]
     async fn rename_from_skipped_for_on_chain() {
@@ -363,7 +368,7 @@ mod tests {
             .add_on_chain_dep(
                 "root",
                 "my_dep",
-                &PublishedID::from(1_u16).to_string(),
+                &PublishedID::from(0x1001_u16).to_string(),
                 |d| d.in_env(DEFAULT_ENV_NAME),
             )
             .build();
@@ -384,13 +389,13 @@ mod tests {
             .add_on_chain_dep(
                 "root",
                 "dep_a",
-                &PublishedID::from(0xA_u16).to_string(),
+                &PublishedID::from(0x2001_u16).to_string(),
                 |d| d.in_env(DEFAULT_ENV_NAME),
             )
-            .add_on_chain_pkg(PublishedID::from(0xA_u16), |pkg| {
-                pkg.dep(OriginalID::from(0xB_u16), PublishedID::from(0xB_u16))
+            .add_on_chain_pkg(PublishedID::from(0x2001_u16), |pkg| {
+                pkg.dep(OriginalID::from(0x2002_u16), PublishedID::from(0x2002_u16))
             })
-            .add_on_chain_pkg(PublishedID::from(0xB_u16), |pkg| pkg)
+            .add_on_chain_pkg(PublishedID::from(0x2002_u16), |pkg| pkg)
             .build();
 
         let root = scenario.root_package("root").await;
@@ -405,26 +410,26 @@ mod tests {
         let scenario = TestPackageGraph::new(["root"])
             .add_published(
                 "local_dep",
-                OriginalID::from(0xCC_u16),
-                PublishedID::from(0xCC_u16),
+                OriginalID::from(0x3002_u16),
+                PublishedID::from(0x3002_u16),
             )
             .add_deps([("root", "local_dep")])
             .add_on_chain_dep("root", "dep_a", "true", |d| d)
             .add_on_chain_dep(
                 "root",
                 "dep_a",
-                &PublishedID::from(0xA_u16).to_string(),
+                &PublishedID::from(0x3001_u16).to_string(),
                 |d| d.in_env(DEFAULT_ENV_NAME),
             )
-            .add_on_chain_pkg(PublishedID::from(0xA_u16), |pkg| {
-                pkg.dep(OriginalID::from(0xCC_u16), PublishedID::from(0xCC_u16))
+            .add_on_chain_pkg(PublishedID::from(0x3001_u16), |pkg| {
+                pkg.dep(OriginalID::from(0x3002_u16), PublishedID::from(0x3002_u16))
             })
-            .add_on_chain_pkg(PublishedID::from(0xCC_u16), |pkg| pkg)
+            .add_on_chain_pkg(PublishedID::from(0x3002_u16), |pkg| pkg)
             .build();
 
         let root = scenario.root_package("root").await;
         // After deduplication: root + local_dep + on-chain A = 3 packages
-        // (local_dep and on-chain 0xCC should be the same node)
+        // (local_dep and on-chain 0x3002 should be the same node)
         assert_eq!(
             root.packages().len(),
             3,

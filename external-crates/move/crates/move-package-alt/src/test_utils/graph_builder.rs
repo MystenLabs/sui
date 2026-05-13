@@ -222,8 +222,6 @@ pub struct Scenario {
     root_path: PathBuf,
     tempdir: Option<TempDir>,
     vanilla: Vanilla,
-    /// Override for `move_home` in `PackageConfig`, so on-chain caches go to a temp dir.
-    move_home: PathBuf,
 }
 
 impl TestPackageGraph {
@@ -422,14 +420,10 @@ impl TestPackageGraph {
             vanilla = vanilla.with_on_chain_package(address, data);
         }
 
-        let move_home = root_path.join(".move_home");
-        std::fs::create_dir_all(&move_home).unwrap();
-
         Scenario {
             tempdir,
             root_path,
             vanilla,
-            move_home,
         }
     }
 
@@ -922,7 +916,6 @@ impl Scenario {
         )
         .config()
         .clone();
-        config.move_home = self.move_home.clone();
 
         let mtx = path.lock().unwrap();
 
@@ -967,13 +960,13 @@ impl Scenario {
         package: impl AsRef<str>,
         config: impl Fn(PackageLoader<Vanilla>) -> PackageLoader<Vanilla>,
     ) -> PackageResult<RootPackage<Vanilla>> {
-        let mut loader = PackageLoader::new(
+        config(PackageLoader::new(
             self.path_for(package),
             Vanilla::default_environment(),
             self.vanilla.clone(),
-        );
-        loader.config_mut().move_home = self.move_home.clone();
-        config(loader).load().await
+        ))
+        .load()
+        .await
     }
 
     pub fn read_file(&self, file: impl AsRef<Path>) -> String {
