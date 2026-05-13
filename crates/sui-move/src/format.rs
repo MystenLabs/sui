@@ -35,8 +35,9 @@ impl Format {
             Ok(p) => p,
             Err(_) => {
                 bootstrap_prettier_move()?;
-                which::which("prettier-move")
-                    .context("`prettier-move` was just installed but could not be located on PATH")?
+                which::which("prettier-move").context(
+                    "`prettier-move` was just installed but could not be located on PATH",
+                )?
             }
         };
 
