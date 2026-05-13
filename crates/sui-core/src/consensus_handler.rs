@@ -3252,7 +3252,7 @@ impl MysticetiConsensusHandler {
         mut consensus_handler: ConsensusHandler<CheckpointService>,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
-        _node_role: NodeRole,
+        node_role: NodeRole,
     ) -> Self {
         debug!(
             last_processed_commit_at_startup,
@@ -3263,7 +3263,7 @@ impl MysticetiConsensusHandler {
             // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
             while let Some(consensus_commit) = commit_receiver.recv().await {
                 let commit_index = consensus_commit.commit_ref.index;
-                if !process_consensus_commits {
+                if !node_role.should_process_consensus_commits() {
                     debug!(
                         commit_index,
                         "Observer skipping consensus commit processing"

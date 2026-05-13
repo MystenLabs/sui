@@ -404,17 +404,19 @@ impl RandomnessManager {
             );
         }
 
-        // Resume randomness generation from where we left off (validators only).
+        // Resume randomness round tracking from where we left off.
+        rm.next_randomness_round = tables
+            .randomness_next_round
+            .get(&SINGLETON_KEY)
+            .expect("typed_store should not fail")
+            .unwrap_or(RandomnessRound(0));
+        info!(
+            "random beacon: starting from next_randomness_round={}",
+            rm.next_randomness_round.0
+        );
+
+        // Re-send partial signatures for incomplete rounds (validators only).
         if rm.party.is_some() {
-            rm.next_randomness_round = tables
-                .randomness_next_round
-                .get(&SINGLETON_KEY)
-                .expect("typed_store should not fail")
-                .unwrap_or(RandomnessRound(0));
-            info!(
-                "random beacon: starting from next_randomness_round={}",
-                rm.next_randomness_round.0
-            );
             let first_incomplete_round = highest_completed_round
                 .map(|r| r + 1)
                 .unwrap_or(RandomnessRound(0));
@@ -616,7 +618,7 @@ impl RandomnessManager {
                     .map(|c| c.unwrap_v1().clone())
                     .collect();
                 observer
-                    .complete::<rand::rngs::ThreadRng>(&raw_messages, &confirmations)
+                    .complete(&raw_messages, &confirmations)
                     .map(|obs_output| Output {
                         nodes: obs_output.nodes,
                         vss_pk: obs_output.vss_pk,
