@@ -75,7 +75,7 @@ pub(crate) const ON_CHAIN_ENV_NAME: &str = "_on_chain";
 /// The general problem is that a package may be reachable both as an on-chain dep (from the
 /// linkage table) and as a source dep (from system deps or the user's manifest). These need
 /// to be deduplicated, likely in a post-processing step after the full graph is built.
-// TODO: filter system packages from the linkage table or deduplicate in the graph builder.
+// TODO(DVX-2126): filter system packages from the linkage table or deduplicate in the graph builder.
 pub(crate) async fn fetch_onchain<F: MoveFlavor>(
     address: &PublishedID,
     config: &PackageConfig<F>,
@@ -397,10 +397,10 @@ mod tests {
         assert!(root.packages().len() >= 3, "expected root + A + B");
     }
 
-    /// An on-chain dep's linkage table references the same address as a local dep.
-    /// Currently both are loaded as separate packages (no deduplication).
-    /// TODO: when deduplication is implemented, update this test to assert 3 packages.
+    /// When an on-chain dep's linkage table references the same address as a local dep,
+    /// they should be deduplicated to a single package in the graph.
     #[test(tokio::test)]
+    #[ignore] // TODO(DVX-2126): requires deduplication of on-chain and source deps
     async fn on_chain_overlaps_with_local_dep() {
         let scenario = TestPackageGraph::new(["root"])
             .add_published(
@@ -422,13 +422,14 @@ mod tests {
             .add_on_chain_pkg(PublishedID::from(0xCC_u16), |pkg| pkg)
             .build();
 
-        // Currently this fails to load because of duplicate packages.
-        // TODO: after deduplication is implemented, this should succeed with 3 packages.
-        let result = scenario.try_root_package("root", |cfg| cfg).await;
-        assert!(
-            result.is_err(),
-            "expected error due to duplicate packages, but got {} packages",
-            result.map(|r| r.packages().len()).unwrap_or(0)
+        let root = scenario.root_package("root").await;
+        // After deduplication: root + local_dep + on-chain A = 3 packages
+        // (local_dep and on-chain 0xCC should be the same node)
+        assert_eq!(
+            root.packages().len(),
+            3,
+            "expected root + local_dep + on-chain A (deduplicated), got {}",
+            root.packages().len()
         );
     }
 }
