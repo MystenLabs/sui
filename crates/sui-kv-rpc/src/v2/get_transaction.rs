@@ -132,7 +132,7 @@ pub async fn batch_get_transactions(
 pub(crate) async fn transaction_to_response(
     source: TransactionData,
     mask: &FieldMaskTree,
-    objects: &HashMap<ObjectKey, std::sync::Arc<Object>>,
+    objects: &HashMap<ObjectKey, Object>,
     resolver: &PackageResolver,
 ) -> Result<ExecutedTransaction, RpcError> {
     let mut message = ExecutedTransaction::default();
@@ -186,7 +186,7 @@ pub(crate) async fn transaction_to_response(
                 .input_version_opt()
                 .unwrap_or_else(|| changed_object.output_version());
             if let Some(object) = objects.get(&ObjectKey(object_id, version.into())) {
-                changed_object.set_object_type(object_type_to_string(object.as_ref().into()));
+                changed_object.set_object_type(object_type_to_string(object.into()));
             }
         }
 
@@ -199,7 +199,7 @@ pub(crate) async fn transaction_to_response(
                 continue;
             };
             if let Some(object) = objects.get(&ObjectKey(object_id, unchanged.version().into())) {
-                unchanged.set_object_type(object_type_to_string(object.as_ref().into()));
+                unchanged.set_object_type(object_type_to_string(object.into()));
             }
         }
 
@@ -304,7 +304,7 @@ pub(crate) fn compute_object_keys(source: &TransactionData) -> BTreeSet<ObjectKe
 pub(crate) async fn fetch_object_map<'a>(
     client: &mut BigTableClient,
     transactions: impl Iterator<Item = &'a TransactionData>,
-) -> Result<HashMap<ObjectKey, std::sync::Arc<Object>>, RpcError> {
+) -> Result<HashMap<ObjectKey, Object>, RpcError> {
     let keys: Vec<_> = transactions
         .flat_map(compute_object_keys)
         .collect::<BTreeSet<_>>()
@@ -314,7 +314,7 @@ pub(crate) async fn fetch_object_map<'a>(
         .get_objects(&keys)
         .await?
         .into_iter()
-        .map(|o| (ObjectKey(o.id(), o.version()), std::sync::Arc::new(o)))
+        .map(|o| (ObjectKey(o.id(), o.version()), o))
         .collect())
 }
 

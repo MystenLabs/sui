@@ -37,8 +37,8 @@ fn rpc_error(err: CachedError) -> RpcError {
     RpcError::new(err.code(), err.message())
 }
 
-type Slot = Shared<BoxFuture<'static, Result<Option<Arc<Object>>, CachedError>>>;
-type SenderMap = HashMap<ObjectKey, oneshot::Sender<Result<Option<Arc<Object>>, CachedError>>>;
+type Slot = Shared<BoxFuture<'static, Result<Option<Object>, CachedError>>>;
+type SenderMap = HashMap<ObjectKey, oneshot::Sender<Result<Option<Object>, CachedError>>>;
 
 struct ReservedSlots {
     placeholders: Vec<(ObjectKey, Slot)>,
@@ -109,7 +109,7 @@ impl ObjectCache {
     pub(crate) async fn get_many(
         &self,
         keys: Vec<ObjectKey>,
-    ) -> Result<HashMap<ObjectKey, Arc<Object>>, RpcError> {
+    ) -> Result<HashMap<ObjectKey, Object>, RpcError> {
         let ReservedSlots {
             placeholders,
             new_keys,
@@ -224,7 +224,7 @@ impl ObjectCacheInner {
                 Ok(obj) => {
                     let key = ObjectKey(obj.id(), obj.version());
                     if let Some(tx) = senders.remove(&key) {
-                        let _ = tx.send(Ok(Some(Arc::new(obj))));
+                        let _ = tx.send(Ok(Some(obj)));
                     }
                 }
                 Err(e) => return drain_with(senders, cached_error(e)),

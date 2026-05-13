@@ -136,7 +136,9 @@ pub(crate) async fn list_transactions(
                 let cursor = options.cursor_for_item(row.checkpoint_number, row.tx_sequence_number);
                 emitted += 1;
                 last_cursor = Some(cursor.clone());
+                let yield_started = Instant::now();
                 yield transaction_response_from_tx_seq_digest(row, &read_mask, cursor);
+                ctx.observe_stream_item_yield_wait(yield_started.elapsed());
             }
             let (reason, cursor) = query_end(emitted, limit_items, last_cursor, end_reason, end_cursor);
             yield end_response(reason, cursor);
@@ -208,10 +210,14 @@ pub(crate) async fn list_transactions(
         let mut last_cursor = None;
         while let Some((tx_seq, tx_data, objects)) = txn_with_objects_stream.try_next().await? {
             let cursor = options.cursor_for_item(tx_data.checkpoint_number, tx_seq);
+            let render_started = Instant::now();
             let executed = transaction_to_response(tx_data, &read_mask, &objects, &resolver).await?;
+            ctx.observe_response_render(render_started.elapsed());
             emitted += 1;
             last_cursor = Some(cursor.clone());
+            let yield_started = Instant::now();
             yield transaction_item_response(cursor, executed);
+            ctx.observe_stream_item_yield_wait(yield_started.elapsed());
         }
         let (reason, cursor) = query_end(emitted, limit_items, last_cursor, end_reason, end_cursor);
         yield end_response(reason, cursor);

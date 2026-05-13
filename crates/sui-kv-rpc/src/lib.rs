@@ -5,7 +5,9 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use anyhow::ensure;
+use prometheus::HistogramVec;
 use prometheus::Registry;
+use prometheus::register_histogram_vec_with_registry;
 use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::CHECKPOINTS_BY_DIGEST_PIPELINE;
@@ -62,15 +64,45 @@ pub const EXPERIMENTAL_QUERY_SERVICE_INFO_WATERMARK_PIPELINES: [&str; 3] = ALPHA
 pub type PackageResolver = Arc<Resolver<Arc<dyn PackageStore>>>;
 
 #[derive(Clone)]
-struct KvRpcMetrics {
+pub(crate) struct KvRpcMetrics {
     bigtable_limiter: Arc<BigTableLimiterMetrics>,
+    response_render_latency_ms: HistogramVec,
+    stream_item_yield_wait_ms: HistogramVec,
 }
 
 impl KvRpcMetrics {
     fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             bigtable_limiter: BigTableLimiterMetrics::new(registry),
+            response_render_latency_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_response_render_latency_ms",
+                "Wall time spent rendering one v2alpha response item.",
+                &["method"],
+                prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
+                registry,
+            )
+            .unwrap(),
+            stream_item_yield_wait_ms: register_histogram_vec_with_registry!(
+                "kv_rpc_stream_item_yield_wait_ms",
+                "Wall time from yielding one v2alpha response item until the stream is polled again.",
+                &["method"],
+                prometheus::exponential_buckets(0.01, 2.0, 18).unwrap(),
+                registry,
+            )
+            .unwrap(),
         })
+    }
+
+    fn observe_response_render(&self, method: &'static str, elapsed: std::time::Duration) {
+        self.response_render_latency_ms
+            .with_label_values(&[method])
+            .observe(elapsed.as_secs_f64() * 1000.0);
+    }
+
+    fn observe_stream_item_yield_wait(&self, method: &'static str, elapsed: std::time::Duration) {
+        self.stream_item_yield_wait_ms
+            .with_label_values(&[method])
+            .observe(elapsed.as_secs_f64() * 1000.0);
     }
 }
 

@@ -28,7 +28,6 @@ use sui_types::full_checkpoint_content::Checkpoint as FullCheckpoint;
 use sui_types::full_checkpoint_content::ExecutedTransaction as FullExecutedTransaction;
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::messages_checkpoint::CertifiedCheckpointSummary;
-use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::Instrument;
 use tracing::debug_span;
@@ -507,7 +506,7 @@ fn render_full_checkpoint(
 
     let mut object_set = ObjectSet::default();
     for (_, obj) in objects.iter() {
-        object_set.insert(Object::clone(obj.as_ref()));
+        object_set.insert(obj.clone());
     }
 
     let full_checkpoint = FullCheckpoint {

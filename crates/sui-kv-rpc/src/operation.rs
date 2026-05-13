@@ -12,6 +12,7 @@ use sui_inverted_index::BitmapQuery;
 use sui_rpc_api::RpcError;
 use tokio::time::Instant;
 
+use crate::KvRpcMetrics;
 use crate::KvRpcServer;
 use crate::PackageResolver;
 use crate::bigtable_client::BigTableClient;
@@ -52,6 +53,8 @@ impl From<ConcurrencyConfig> for ReadLimits {
 pub(crate) struct QueryContext {
     client: BigTableClient,
     package_resolver: PackageResolver,
+    metrics: std::sync::Arc<KvRpcMetrics>,
+    method: &'static str,
     checkpoint_hi_exclusive: u64,
     limits: ReadLimits,
 }
@@ -60,12 +63,16 @@ impl QueryContext {
     pub(crate) fn new(
         client: BigTableClient,
         package_resolver: PackageResolver,
+        metrics: std::sync::Arc<KvRpcMetrics>,
+        method: &'static str,
         checkpoint_hi_exclusive: u64,
         limits: ReadLimits,
     ) -> Self {
         Self {
             client,
             package_resolver,
+            metrics,
+            method,
             checkpoint_hi_exclusive,
             limits,
         }
@@ -85,6 +92,15 @@ impl QueryContext {
 
     pub(crate) fn request_bigtable_concurrency(&self) -> usize {
         self.limits.request_bigtable_concurrency
+    }
+
+    pub(crate) fn observe_response_render(&self, elapsed: std::time::Duration) {
+        self.metrics.observe_response_render(self.method, elapsed);
+    }
+
+    pub(crate) fn observe_stream_item_yield_wait(&self, elapsed: std::time::Duration) {
+        self.metrics
+            .observe_stream_item_yield_wait(self.method, elapsed);
     }
 
     pub(crate) fn transaction_filter_query(
@@ -176,6 +192,8 @@ impl KvRpcServer {
         Ok(QueryContext::new(
             self.limited_client(operation),
             self.package_resolver.clone(),
+            self.metrics.clone(),
+            operation,
             self.cached_checkpoint_hi_exclusive().await?,
             ReadLimits::from(self.concurrency),
         ))
