@@ -46,7 +46,7 @@ impl Subscription {
                             processed.clone(),
                         );
                         yield Ok(Checkpoint {
-                            sequence_number: processed.sequence_number,
+                            sequence_number: processed.summary.sequence_number,
                             scope,
                             streamed_data: Some(processed),
                         });

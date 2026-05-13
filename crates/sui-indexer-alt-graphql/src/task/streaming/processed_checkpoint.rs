@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "staging")]
 use std::collections::HashMap;
 
 use sui_indexer_alt_reader::kv_loader::TransactionContents;
@@ -9,11 +10,11 @@ use sui_types::digests::TransactionDigest;
 use sui_types::messages_checkpoint::CheckpointContents;
 use sui_types::messages_checkpoint::CheckpointSummary;
 
+#[cfg(feature = "staging")]
 use crate::scope::ExecutionObjectMap;
 
 /// A checkpoint received from gRPC with pre-deserialized data for subscriber consumption.
 pub(crate) struct ProcessedCheckpoint {
-    pub(crate) sequence_number: u64,
     pub(crate) summary: CheckpointSummary,
     pub(crate) contents: CheckpointContents,
     pub(crate) signature: AuthorityStrongQuorumSignInfo,
@@ -21,9 +22,11 @@ pub(crate) struct ProcessedCheckpoint {
     /// Checkpoint-wide execution objects (inputs and outputs across all transactions in the
     /// checkpoint, including tombstones for deleted/wrapped objects). Object visibility in a
     /// streamed scope is end-of-checkpoint, matching what the indexed Query API exposes.
+    #[cfg(feature = "staging")]
     pub(crate) execution_objects: ExecutionObjectMap,
     /// Index of `transactions` by digest for O(1) lookup that scales across many subscribers.
     /// Built once at construction.
+    #[cfg(feature = "staging")]
     by_digest: HashMap<TransactionDigest, usize>,
 }
 
@@ -37,30 +40,33 @@ pub(crate) struct ProcessedTransaction {
 impl ProcessedCheckpoint {
     /// Construct a checkpoint with the digest index pre-built from `transactions`.
     pub(crate) fn new(
-        sequence_number: u64,
         summary: CheckpointSummary,
         contents: CheckpointContents,
         signature: AuthorityStrongQuorumSignInfo,
         transactions: Vec<ProcessedTransaction>,
-        execution_objects: ExecutionObjectMap,
+        #[cfg(feature = "staging")] execution_objects: ExecutionObjectMap,
     ) -> Self {
+        #[cfg(feature = "staging")]
         let by_digest = transactions
             .iter()
             .enumerate()
             .map(|(i, t)| (t.digest, i))
             .collect();
+
         Self {
-            sequence_number,
             summary,
             contents,
             signature,
             transactions,
+            #[cfg(feature = "staging")]
             execution_objects,
+            #[cfg(feature = "staging")]
             by_digest,
         }
     }
 
     /// Lookup a transaction by digest within this checkpoint.
+    #[cfg(feature = "staging")]
     pub(crate) fn transaction_by_digest(
         &self,
         digest: TransactionDigest,

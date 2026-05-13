@@ -24,8 +24,11 @@ use sui_types::object::Object as NativeObject;
 
 use crate::config::Limits;
 use crate::error::RpcError;
+#[cfg(feature = "staging")]
 use crate::task::streaming::ProcessedCheckpoint;
+#[cfg(feature = "staging")]
 use crate::task::streaming::ProcessedTransaction;
+#[cfg(feature = "staging")]
 use crate::task::streaming::StreamingPackageStore;
 use crate::task::watermark::Watermarks;
 
@@ -50,6 +53,7 @@ pub(crate) enum DataSource {
     /// A streamed checkpoint with all per-tx contents and a checkpoint-wide execution-objects
     /// map. If the scope is anchored to a particular transaction in the checkpoint, its digest
     /// is in [`Scope::active_transaction_digest`].
+    #[cfg(feature = "staging")]
     Streamed {
         checkpoint: Arc<ProcessedCheckpoint>,
     },
@@ -132,6 +136,7 @@ impl Scope {
 
     /// Create a scope for streamed checkpoint data. Sets `checkpoint_viewed_at` to `None`
     /// because streamed data is resolved from memory, not bounded by an indexed checkpoint.
+    #[cfg(feature = "staging")]
     pub(crate) fn for_streamed_checkpoint(
         package_store: Arc<StreamingPackageStore>,
         resolver_limits: sui_package_resolver::Limits,
@@ -283,11 +288,13 @@ impl Scope {
     /// Lookup a transaction by digest within the streamed checkpoint backing this scope.
     /// Returns `None` if the scope is not in [`DataSource::Streamed`] mode, or if no
     /// transaction with that digest exists in the checkpoint.
+    #[cfg(feature = "staging")]
     pub(crate) fn streamed_transaction_by_digest(
         &self,
         digest: TransactionDigest,
     ) -> Option<&ProcessedTransaction> {
         match &self.data_source {
+            #[cfg(feature = "staging")]
             DataSource::Streamed { checkpoint } => checkpoint.transaction_by_digest(digest),
             DataSource::Indexed | DataSource::Executed { .. } => None,
         }
@@ -302,6 +309,7 @@ impl Scope {
         match &self.data_source {
             DataSource::Indexed => None,
             DataSource::Executed { execution_objects } => Some(execution_objects),
+            #[cfg(feature = "staging")]
             DataSource::Streamed { checkpoint } => Some(&checkpoint.execution_objects),
         }
     }

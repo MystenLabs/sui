@@ -560,6 +560,7 @@ impl EffectsContents {
 
         // Streaming fast path: if the scope is backed by a streamed checkpoint containing this
         // transaction, hydrate from the in-memory payload instead of hitting the DB.
+        #[cfg(feature = "staging")]
         if let Some(tx) = self.scope.streamed_transaction_by_digest(digest) {
             return Ok(Self {
                 scope: self.scope.clone(),
