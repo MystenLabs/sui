@@ -6392,6 +6392,7 @@ dependencies = [
 [[package]]
 name = "halo2"
 version = "1.0.0"
+source = "git+https://github.com/zkmove/halo2-verifier.move#b0a4234701ceb9029e7cdb43066b918da15f095b"
 dependencies = [
  "halo2_backend",
  "halo2_proofs",
@@ -6402,6 +6403,7 @@ dependencies = [
 [[package]]
 name = "halo2-verifier"
 version = "1.0.0"
+source = "git+https://github.com/zkmove/halo2-verifier.move#b0a4234701ceb9029e7cdb43066b918da15f095b"
 dependencies = [
  "anyhow",
  "ark-bn254",
@@ -19338,6 +19340,7 @@ checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
 [[package]]
 name = "vk-gen-examples"
 version = "1.0.0"
+source = "git+https://github.com/zkmove/halo2-verifier.move#b0a4234701ceb9029e7cdb43066b918da15f095b"
 dependencies = [
  "anyhow",
  "halo2",

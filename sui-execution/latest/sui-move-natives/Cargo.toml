@@ -20,7 +20,7 @@ rand = { workspace = true, features = ["small_rng"] }
 fastcrypto-zkp.workspace = true
 fastcrypto-vdf.workspace = true
 fastcrypto.workspace = true
-halo2-verifier = { path = "../../../../halo2-verifier.move/crates/halo2-verifier" }
+halo2-verifier = { git = "https://github.com/zkmove/halo2-verifier.move", package = "halo2-verifier" }
 move-binary-format.workspace = true
 move-core-types.workspace = true
 
