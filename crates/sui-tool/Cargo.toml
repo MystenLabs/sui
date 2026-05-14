@@ -50,3 +50,12 @@ sui-types.workspace = true
 sui-package-dump.workspace = true
 sui-tls.workspace = true
 bin-version.workspace = true
+
+[target.'cfg(not(windows))'.dependencies]
+tideconsole = {git = "https://github.com/mystenlabs/tidehunter.git", rev = "9a0472f81e71e821e1f4f71e308c2580f16f9e05", package = "tideconsole", optional = true}
+rhai = { version = "1", optional = true }
+rustyline = { version = "14", optional = true }
+parking_lot = { workspace = true, optional = true }
+
+[features]
+tideconsole = ["dep:tideconsole", "dep:rhai", "dep:rustyline", "dep:parking_lot"]

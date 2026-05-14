@@ -20,7 +20,7 @@ use sui_types::{
     balance::RESOLVED_BALANCE_STRUCT,
     base_types::{ObjectRef, TxContextKind},
     coin::{COIN_MODULE_NAME, REDEEM_FUNDS_FUNC_NAME, RESOLVED_COIN_STRUCT},
-    error::{ExecutionError, SafeIndex, command_argument_error},
+    error::{ExecutionError, ExecutionErrorTrait, SafeIndex, command_argument_error},
     execution_status::{CommandArgumentError, ExecutionErrorKind},
     funds_accumulator::RESOLVED_WITHDRAWAL_STRUCT,
 };
@@ -195,11 +195,11 @@ impl Context {
         self.commands.get(i as usize).map(|c| &c.value.result_type)
     }
 
-    fn fixed_location_type(
+    fn fixed_location_type<Mode: ExecutionMode>(
         &mut self,
-        env: &Env,
+        env: &Env<Mode>,
         location: T::Location,
-    ) -> Result<Option<Type>, ExecutionError> {
+    ) -> Result<Option<Type>, Mode::Error> {
         Ok(Some(match location {
             T::Location::TxContext => env.tx_context_type()?,
             T::Location::GasCoin => env.gas_coin_type()?,
@@ -226,11 +226,11 @@ impl Context {
     }
 
     // Get the fixed type of a location. Returns `None` for Pure and Receiving inputs,
-    fn fixed_type(
+    fn fixed_type<Mode: ExecutionMode>(
         &mut self,
-        env: &Env,
+        env: &Env<Mode>,
         splat_location: SplatLocation,
-    ) -> Result<Option<(T::Location, Type)>, ExecutionError> {
+    ) -> Result<Option<(T::Location, Type)>, Mode::Error> {
         let location = match splat_location {
             SplatLocation::GasCoin => T::Location::GasCoin,
             SplatLocation::Result(i, j) => T::Location::Result(i, j),
@@ -256,13 +256,13 @@ impl Context {
         Ok(Some((location, ty)))
     }
 
-    fn resolve_location(
+    fn resolve_location<Mode: ExecutionMode>(
         &mut self,
-        env: &Env,
+        env: &Env<Mode>,
         splat_location: SplatLocation,
         expected_ty: &Type,
         bytes_constraint: BytesConstraint,
-    ) -> Result<(T::Location, Type), ExecutionError> {
+    ) -> Result<(T::Location, Type), Mode::Error> {
         let location = match splat_location {
             SplatLocation::GasCoin => T::Location::GasCoin,
             SplatLocation::Result(i, j) => T::Location::Result(i, j),
@@ -334,9 +334,9 @@ impl Context {
 }
 
 pub fn transaction<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<Mode>,
     lt: L::Transaction,
-) -> Result<T::Transaction, ExecutionError> {
+) -> Result<T::Transaction, Mode::Error> {
     let L::Transaction {
         gas_payment,
         mut inputs,
@@ -378,10 +378,10 @@ pub fn transaction<Mode: ExecutionMode>(
 }
 
 fn command<Mode: ExecutionMode>(
-    env: &Env,
+    env: &Env<Mode>,
     context: &mut Context,
     command: L::Command,
-) -> Result<(T::Command__, T::ResultType), ExecutionError> {
+) -> Result<(T::Command__, T::ResultType), Mode::Error> {
     Ok(match command {
         L::Command::MoveCall(lmc) => {
             let L::MoveCall {
@@ -519,8 +519,8 @@ fn command<Mode: ExecutionMode>(
     })
 }
 
-fn move_call_parameters<'a>(
-    _env: &Env,
+fn move_call_parameters<'a, Mode: ExecutionMode>(
+    _env: &Env<Mode>,
     function: &'a L::LoadedFunction,
 ) -> Vec<(&'a Type, TxContextKind)> {
     function
@@ -531,12 +531,12 @@ fn move_call_parameters<'a>(
         .collect()
 }
 
-fn move_call_arguments(
-    env: &Env,
+fn move_call_arguments<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     function: &L::LoadedFunction,
     args: Vec<SplatLocation>,
-) -> Result<Vec<T::Argument>, ExecutionError> {
+) -> Result<Vec<T::Argument>, Mode::Error> {
     let params = move_call_parameters(env, function);
     assert_invariant!(
         params.len() == function.signature.parameters.len(),
@@ -553,7 +553,7 @@ fn move_call_arguments(
     };
     let num_parameters = params.len();
     if num_args != num_parameters {
-        return Err(ExecutionError::new_with_source(
+        return Err(Mode::Error::new_with_source(
             ExecutionErrorKind::ArityMismatch,
             format!(
                 "Expected {} argument{} calling function '{}::{}', but found {}",
@@ -593,7 +593,7 @@ fn move_call_arguments(
                 }
             })
         })
-        .collect::<Result<Vec<_>, ExecutionError>>()?;
+        .collect::<Result<Vec<_>, Mode::Error>>()?;
 
     assert_invariant!(
         args.next().is_none(),
@@ -602,34 +602,35 @@ fn move_call_arguments(
     Ok(res)
 }
 
-fn one_location(
+fn one_location<E: ExecutionErrorTrait>(
     context: &mut Context,
     command_arg_idx: usize,
     arg: L::Argument,
-) -> Result<SplatLocation, ExecutionError> {
+) -> Result<SplatLocation, E> {
     let locs = locations(context, command_arg_idx, vec![arg])?;
     let Ok([loc]): Result<[SplatLocation; 1], _> = locs.try_into() else {
         return Err(command_argument_error(
             CommandArgumentError::InvalidArgumentArity,
             command_arg_idx,
-        ));
+        )
+        .into());
     };
     Ok(loc)
 }
 
-fn locations<Items: IntoIterator<Item = L::Argument>>(
+fn locations<E: ExecutionErrorTrait, Items: IntoIterator<Item = L::Argument>>(
     context: &mut Context,
     start_idx: usize,
     args: Items,
-) -> Result<Vec<SplatLocation>, ExecutionError>
+) -> Result<Vec<SplatLocation>, E>
 where
     Items::IntoIter: ExactSizeIterator,
 {
-    fn splat_arg(
+    fn splat_arg<E: ExecutionErrorTrait>(
         context: &mut Context,
         res: &mut Vec<SplatLocation>,
         arg: L::Argument,
-    ) -> Result<(), EitherError> {
+    ) -> Result<(), EitherError<E>> {
         match arg {
             L::Argument::GasCoin => res.push(SplatLocation::GasCoin),
             L::Argument::Input(i) => {
@@ -672,9 +673,10 @@ where
     let _args_len = args.len();
     let mut res = vec![];
     for (arg_idx, arg) in args.enumerate() {
-        splat_arg(context, &mut res, arg).map_err(|e| {
+        splat_arg::<E>(context, &mut res, arg).map_err(|e| {
             let Some(idx) = start_idx.checked_add(arg_idx) else {
-                return make_invariant_violation!("usize overflow when calculating argument index");
+                return make_invariant_violation!("usize overflow when calculating argument index")
+                    .into();
             };
             e.into_execution_error(idx)
         })?
@@ -683,13 +685,13 @@ where
     Ok(res)
 }
 
-fn arguments(
-    env: &Env,
+fn arguments<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     start_idx: usize,
     locations: Vec<SplatLocation>,
     expected_tys: impl IntoIterator<Item = Type>,
-) -> Result<Vec<T::Argument>, ExecutionError> {
+) -> Result<Vec<T::Argument>, Mode::Error> {
     #[allow(clippy::disallowed_methods)]
     locations
         .into_iter()
@@ -706,33 +708,34 @@ fn arguments(
         .collect()
 }
 
-fn argument(
-    env: &Env,
+fn argument<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
     expected_ty: Type,
-) -> Result<T::Argument, ExecutionError> {
+) -> Result<T::Argument, Mode::Error> {
     let arg__ = argument_(env, context, command_arg_idx, location, &expected_ty)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
     let arg_ = (arg__, expected_ty);
     Ok(sp(checked_as!(command_arg_idx, u16)?, arg_))
 }
 
-fn argument_(
-    env: &Env,
+fn argument_<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
     expected_ty: &Type,
-) -> Result<T::Argument__, EitherError> {
+) -> Result<T::Argument__, EitherError<Mode::Error>> {
     let current_command = context.current_command;
     let bytes_constraint = BytesConstraint {
         command: current_command,
         argument: checked_as!(command_arg_idx, u16)?,
     };
-    let (location, actual_ty) =
-        context.resolve_location(env, location, expected_ty, bytes_constraint)?;
+    let (location, actual_ty) = context
+        .resolve_location(env, location, expected_ty, bytes_constraint)
+        .map_err(EitherError::Execution)?;
     Ok(match (actual_ty, expected_ty) {
         // Reference location types
         (Type::Reference(a_is_mut, a), Type::Reference(b_is_mut, b)) => {
@@ -786,14 +789,14 @@ fn check_type(actual_ty: &Type, expected_ty: &Type) -> Result<(), CommandArgumen
     }
 }
 
-fn constrained_arguments(
-    env: &Env,
+fn constrained_arguments<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     start_idx: usize,
     locations: Vec<SplatLocation>,
     constraint: AbilitySet,
     err_case: CommandArgumentError,
-) -> Result<Vec<T::Argument>, ExecutionError> {
+) -> Result<Vec<T::Argument>, Mode::Error> {
     locations
         .into_iter()
         .enumerate()
@@ -806,14 +809,14 @@ fn constrained_arguments(
         .collect()
 }
 
-fn constrained_argument(
-    env: &Env,
+fn constrained_argument<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
     constraint: AbilitySet,
     err_case: CommandArgumentError,
-) -> Result<T::Argument, ExecutionError> {
+) -> Result<T::Argument, Mode::Error> {
     let arg_ = constrained_argument_(
         env,
         context,
@@ -826,16 +829,17 @@ fn constrained_argument(
     Ok(sp(checked_as!(command_arg_idx, u16)?, arg_))
 }
 
-fn constrained_argument_(
-    env: &Env,
+fn constrained_argument_<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
     constraint: AbilitySet,
     err_case: CommandArgumentError,
-) -> Result<T::Argument_, EitherError> {
+) -> Result<T::Argument_, EitherError<Mode::Error>> {
     if let Some((location, ty)) =
-        constrained_type(env, context, command_arg_idx, location, constraint)?
+        constrained_type(env, context, command_arg_idx, location, constraint)
+            .map_err(EitherError::Execution)?
     {
         if ty.abilities().has_copy() {
             Ok((T::Argument__::new_copy(location), ty))
@@ -847,13 +851,13 @@ fn constrained_argument_(
     }
 }
 
-fn constrained_type<'a>(
-    env: &'a Env,
+fn constrained_type<'a, Mode: ExecutionMode>(
+    env: &'a Env<Mode>,
     context: &'a mut Context,
     _command_arg_idx: usize,
     location: SplatLocation,
     constraint: AbilitySet,
-) -> Result<Option<(T::Location, Type)>, ExecutionError> {
+) -> Result<Option<(T::Location, Type)>, Mode::Error> {
     let Some((location, ty)) = context.fixed_type(env, location)? else {
         return Ok(None);
     };
@@ -864,24 +868,27 @@ fn constrained_type<'a>(
     })
 }
 
-fn coin_mut_ref_argument(
-    env: &Env,
+fn coin_mut_ref_argument<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     command_arg_idx: usize,
     location: SplatLocation,
-) -> Result<T::Argument, ExecutionError> {
+) -> Result<T::Argument, Mode::Error> {
     let arg_ = coin_mut_ref_argument_(env, context, command_arg_idx, location)
         .map_err(|e| e.into_execution_error(command_arg_idx))?;
     Ok(sp(checked_as!(command_arg_idx, u16)?, arg_))
 }
 
-fn coin_mut_ref_argument_(
-    env: &Env,
+fn coin_mut_ref_argument_<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     _command_arg_idx: usize,
     location: SplatLocation,
-) -> Result<T::Argument_, EitherError> {
-    let Some((location, actual_ty)) = context.fixed_type(env, location)? else {
+) -> Result<T::Argument_, EitherError<Mode::Error>> {
+    let Some((location, actual_ty)) = context
+        .fixed_type(env, location)
+        .map_err(EitherError::Execution)?
+    else {
         // TODO we do not currently bytes in any mode as that would require additional type
         // inference not currently supported
         return Err(CommandArgumentError::TypeMismatch.into());
@@ -904,7 +911,7 @@ fn coin_mut_ref_argument_(
     })
 }
 
-fn check_coin_type(ty: &Type) -> Result<(), EitherError> {
+fn check_coin_type<E: ExecutionErrorTrait>(ty: &Type) -> Result<(), EitherError<E>> {
     if coin_inner_type(ty).is_some() {
         Ok(())
     } else {
@@ -918,10 +925,10 @@ fn check_coin_type(ty: &Type) -> Result<(), EitherError> {
 
 /// Determines which withdrawal inputs need to be converted for compatibility, and appends the
 /// owner address of each such withdrawal as a new pure input.
-fn determine_withdrawal_compatibility_inputs(
-    _env: &Env,
+fn determine_withdrawal_compatibility_inputs<Mode: ExecutionMode>(
+    _env: &Env<Mode>,
     inputs: &mut L::Inputs,
-) -> Result<IndexMap</* input withdrawal */ u16, /* owner address input */ u16>, ExecutionError> {
+) -> Result<IndexMap</* input withdrawal */ u16, /* owner address input */ u16>, Mode::Error> {
     let withdrawal_compatibility_owners: IndexMap<u16, AccountAddress> = inputs
         .iter()
         .enumerate()
@@ -935,7 +942,7 @@ fn determine_withdrawal_compatibility_inputs(
             }
         })
         .map(|(i, owner)| Ok((checked_as!(i, u16)?, owner)))
-        .collect::<Result<_, ExecutionError>>()?;
+        .collect::<Result<_, Mode::Error>>()?;
     withdrawal_compatibility_owners
         .into_iter()
         .map(|(i, owner)| {
@@ -961,15 +968,15 @@ struct WithdrawalCompatibilityRemap {
 /// For each withdrawal input that needs conversion, insert a conversion command to a
 /// `sui::coin::Coin<T>` and swaps references to that input to the conversion result.
 /// Adjusts result indices in subsequent commands accordingly.
-fn withdrawal_compatibility_conversion(
-    env: &Env,
+fn withdrawal_compatibility_conversion<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     withdrawal_compatability_inputs: IndexMap<
         /* input withdrawal */ u16,
         /* owner address input */ u16,
     >,
     commands: &mut [L::Command],
-) -> Result<(), ExecutionError> {
+) -> Result<(), Mode::Error> {
     let mut compatibility_remap = WithdrawalCompatibilityRemap {
         remap: IndexMap::new(),
         lift: 0,
@@ -979,15 +986,16 @@ fn withdrawal_compatibility_conversion(
         compatibility_remap.remap.insert(input, result_idx);
     }
     compatibility_remap.lift = checked_as!(context.commands.len(), u16)?;
-    lift_result_indices(&compatibility_remap, commands)
+    lift_result_indices(&compatibility_remap, commands)?;
+    Ok(())
 }
 
-fn convert_withdrawal_to_coin(
-    env: &Env,
+fn convert_withdrawal_to_coin<Mode: ExecutionMode>(
+    env: &Env<Mode>,
     context: &mut Context,
     withdrawal_input: u16,
     owner_input: u16,
-) -> Result</* Result index */ u16, ExecutionError> {
+) -> Result</* Result index */ u16, Mode::Error> {
     assert_invariant!(
         env.protocol_config
             .convert_withdrawal_compatibility_ptb_arguments(),

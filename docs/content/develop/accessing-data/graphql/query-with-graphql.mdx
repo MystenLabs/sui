@@ -682,6 +682,76 @@ When using the online IDE, copy the following JSON to the **Variables** window, 
 }
 ```
 
+### Fetch typed object changes from a transaction
+
+Use `effects.objectChanges` to inspect the before and after state for objects changed by a transaction. The `inputState` field represents the object before the transaction, while `outputState` represents the object after the transaction. To read the typed Move object contents, select `asMoveObject { contents { json } }` from either state.
+
+```graphql
+query ($digest: String!) {
+  transaction(digest: $digest) {
+    effects {
+      objectChanges {
+        nodes {
+          address
+          idCreated
+          idDeleted
+          inputState {
+            asMoveObject {
+              contents { json }
+            }
+          }
+          outputState {
+            asMoveObject {
+              contents { json }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+#### Variables
+
+```json
+{
+  "digest": "<TRANSACTION_DIGEST>"
+}
+```
+
+`inputState` is `null` for newly created objects, and `outputState` is `null` for deleted or wrapped objects. `asMoveObject` is `null` when the changed object is not a Move object, such as a package.
+
+### Find Publisher objects created by a publish transaction
+
+A package publish transaction often creates a `0x2::package::Publisher` object. Filter `objectChanges` for output objects with that Move type to find the Publisher object ID and its typed contents.
+
+```graphql
+query ($digest: String!) {
+  transaction(digest: $digest) {
+    effects {
+      objectChanges {
+        nodes {
+          address
+          outputState {
+            asMoveObject {
+              contents {
+                type {
+                  repr
+                }
+                json
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Look for changes where `outputState.asMoveObject.contents.type.repr` is `0x0000000000000000000000000000000000000000000000000000000000000002::package::Publisher`, the canonical form of `0x2::package::Publisher`. If your code displays abbreviated type strings, normalize before comparing or compare the `::package::Publisher` suffix. The object change `address` is the Publisher object ID.
+
 ### Filter transactions by a function
 
 Find the last 10 transactions that called the `public_transfer` function as a Move call transaction command.

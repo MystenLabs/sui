@@ -1,0 +1,22 @@
+// Reproduces a macro metadata collision between generic and non-generic
+// expansions of the same macro.
+//
+// Before the fix, macro metadata was keyed only by the expanded expression's
+// location, which comes from the macro definition. If the compiler expands a
+// non-generic invocation first and then generic invocations of the same macro,
+// generic metadata can overwrite the non-generic metadata.
+//
+// The analyzer can then process the non-generic expanded code using metadata
+// from the generic invocation. That metadata references the generic type
+// but the non-generic function does not have this type in scope.
+{
+  "UseDef": {
+    "project": "tests/generic-macro-type-param",
+    "file_tests": {
+      "find_index.move": [
+        { "use_line": 6, "use_ndx": 0 },
+        { "use_line": 8, "use_ndx": 0 }
+      ]
+    }
+  }
+}

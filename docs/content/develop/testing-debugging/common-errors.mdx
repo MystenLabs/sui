@@ -342,31 +342,32 @@ Some common reasons for this error include:
 
 #### `Failed to sign transaction by a quorum of validators because one or more of its objects is reserved for another transaction. Other transactions locking these objects`
 
-Your transaction tries to use one or more Sui objects that another transaction already uses. When you use an object in a transaction, the system locks that object to prevent multiple, possibly conflicting modifications to an object. For DeFi objects, this prevents double-spending.
+Indicates that another inflight transaction is already using an object version your transaction also needs. If enough validators have already reserved that object version for a different transaction, your transaction cannot also reserve it.
 
 ##### Solution 
 
-Wait for other transactions to complete, then retry your transaction. If transactions are stuck or fail, you might need to wait for the next epoch before you can retry the transaction.
-
-Make sure your code does not use multiple objects simultaneously.
+Wait for the first transaction to finish, then rebuild or re-sign the transaction so it uses the latest object references. For related operations, combine them into one [programmable transaction block](/develop/transactions/ptbs/building-ptb). For parallel execution, use SDK/client helpers that manage gas coins and object dependencies.
 
 **Resources**
 
 - [Signing and Sending Transactions](/develop/transactions/transaction-auth/auth-overview)
+- [Object Versioning](/develop/objects/versioning)
+- [Building Transactions](/develop/transactions/ptbs/building-ptb)
 
 ---
 
 #### `Failed to sign transaction by a quorum of validators because one or more of its objects is equivocated until the next epoch.`
 
-An object you try to use is in an equivocated state, meaning the network cannot reach consensus about its state due to conflicting transactions. The network freezes the object and you cannot use it until the next epoch.
+Indicates that competing transactions used the same mutable owned object version and validator reservations were split so that no transaction could obtain quorum. The affected object version is unavailable until the next epoch.
 
-##### Solution 
+##### Solution
 
-Wait for the next epoch.
+Wait for the next epoch, then rebuild the transaction using current object references. Avoid submitting multiple concurrent transactions that use the same mutable owned object version. Use independent owned objects for parallel work, combine related operations into one PTB, or use SDK and client helpers that manage gas coins and object dependencies.
 
 **Resources**
 
-- [Avoiding Equivocation](/develop/sui-architecture/epochs)
+- [Object Versioning](/develop/objects/versioning)
+- [Building Transactions](/develop/transactions/ptbs/building-ptb)
 
 ---
 

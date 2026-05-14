@@ -65,6 +65,13 @@ pub struct MacroCallInfo {
     pub type_arguments: Vec<N::Type>,
     /// By-value args (at this point there should only be one, representing receiver arg)
     pub by_value_args: Vec<T::SequenceItem>,
+    /// Location of the outermost (root) macro call in the expansion chain.
+    /// For the outermost call itself, this equals call_loc. For nested macro calls
+    /// (e.g., do! inside find_index!), this is the location of the outermost
+    /// find_index! call site. Used to disambiguate MacroCallInfo entries that share
+    /// the same inner call Loc (from the macro body) but belong to different
+    /// expansion contexts.
+    pub root_call_loc: Loc,
 }
 
 #[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
@@ -284,6 +291,7 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
                     method_name,
                     type_arguments,
                     by_value_args,
+                    root_call_loc: _,
                 } = *info;
                 let mut diag = diag!(IDE::MacroCallInfo, (loc, "macro call info"));
                 diag.add_note(format!("Called {module}::{name}"));

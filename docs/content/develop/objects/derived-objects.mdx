@@ -93,6 +93,8 @@ Registry structures are patterns that work particularly well with derived object
 Perhaps the biggest advantage for classic registries is the straightforward queries. This increased discoverability comes at the cost of parallelization, however, as all operations must go through the parent object.
 
 ```move
+use sui::table::{Self, Table};
+
 const EVaultAlreadyExists: u64 = 0;
 
 public struct VaultRegistry has key {
@@ -106,13 +108,13 @@ public struct Vault has key, store {
 
 // Creating a vault goes through the registry and is stored there.
 public fun new(registry: &mut VaultRegistry, ctx: &mut TxContext) {
-  assert!(!registry.vaults.contains(ctx.sender()), EVaultAlreadyExists);
+  assert!(!table::contains(&registry.vaults, ctx.sender()), EVaultAlreadyExists);
 
   let vault = Vault {
     id: object::new(ctx),
   };
 
-  registry.vaults.add(ctx.sender(), vault);
+  table::add(&mut registry.vaults, ctx.sender(), vault);
 }
 
 // Access vault through parent
@@ -121,7 +123,7 @@ public fun receive_from_vault<T key + store>(
   receiving: Receiving<T>,
   ctx: &mut TxContext,
 ): T {
-  let vault = registry.vaults.borrow_mut(ctx.sender());
+  let vault = table::borrow_mut(&mut registry.vaults, ctx.sender());
 
   let obj = transfer::public_receive(&mut vault.id, receiving);
 
@@ -134,6 +136,8 @@ public fun receive_from_vault<T key + store>(
 If parallelization is an important aspect for your project, you could create a registry that uses a pointer. This approach provides good parallelization, but requires 2 sequential network hops to discover. To find a vault, you first have to find its pointer.
 
 ```move
+use sui::table::{Self, Table};
+
 const EVaultAlreadyExists: u64 = 0;
 
 public struct VaultRegistry has key {
@@ -147,13 +151,13 @@ public struct Vault has key, store {
 
 // Creating a vault goes through the registry but only a pointer to the vault is stored there.
 public fun new(registry: &mut VaultRegistry, ctx: &mut TxContext) {
-  assert!(!registry.vaults.contains(ctx.sender()), EVaultAlreadyExists);
+  assert!(!table::contains(&registry.vaults, ctx.sender()), EVaultAlreadyExists);
 
   let vault = Vault {
     id: object::new(ctx),
   };
 
-  registry.vaults.add(ctx.sender(), vault.id.to_inner());
+  table::add(&mut registry.vaults, ctx.sender(), vault.id.to_inner());
 
   transfer::transfer(vault, ctx.sender());
 }
