@@ -1048,12 +1048,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.86"
+version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3d1d046238990b9cf5bcde22a3fb3584ee5cf65fb2765f454ed428c7a0063da"
-dependencies = [
- "backtrace",
-]
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "append-only-vec"
@@ -6390,6 +6387,133 @@ dependencies = [
  "cfg-if",
  "crunchy",
  "num-traits",
+]
+
+[[package]]
+name = "halo2"
+version = "1.0.0"
+dependencies = [
+ "halo2_backend",
+ "halo2_proofs",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "halo2-verifier"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "ark-bn254",
+ "ark-ec",
+ "ark-ff 0.4.2",
+ "ark-serialize 0.4.2",
+ "bcs",
+ "blake2b_simd",
+ "byteorder",
+ "group 0.13.0",
+ "halo2",
+ "halo2_backend",
+ "halo2_frontend",
+ "halo2_middleware",
+ "halo2_proofs",
+ "halo2curves",
+ "hex",
+ "hex-literal 0.4.1",
+ "rand 0.8.5",
+ "vk-gen-examples",
+]
+
+[[package]]
+name = "halo2_backend"
+version = "0.4.0"
+source = "git+https://github.com/zkmove/halo2.git?branch=zkmove#87c09bf5c160127b3bcf2a53df66db3cf6e309d6"
+dependencies = [
+ "blake2b_simd",
+ "ff 0.13.0",
+ "group 0.13.0",
+ "halo2_middleware",
+ "halo2curves",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
+ "rayon",
+ "sha3 0.9.1",
+ "tracing",
+]
+
+[[package]]
+name = "halo2_frontend"
+version = "0.4.0"
+source = "git+https://github.com/zkmove/halo2.git?branch=zkmove#87c09bf5c160127b3bcf2a53df66db3cf6e309d6"
+dependencies = [
+ "blake2b_simd",
+ "ff 0.13.0",
+ "group 0.13.0",
+ "halo2_middleware",
+ "halo2curves",
+ "tracing",
+]
+
+[[package]]
+name = "halo2_middleware"
+version = "0.4.0"
+source = "git+https://github.com/zkmove/halo2.git?branch=zkmove#87c09bf5c160127b3bcf2a53df66db3cf6e309d6"
+dependencies = [
+ "ff 0.13.0",
+ "halo2curves",
+ "rayon",
+]
+
+[[package]]
+name = "halo2_proofs"
+version = "0.4.0"
+source = "git+https://github.com/zkmove/halo2.git?branch=zkmove#87c09bf5c160127b3bcf2a53df66db3cf6e309d6"
+dependencies = [
+ "group 0.13.0",
+ "halo2_backend",
+ "halo2_frontend",
+ "halo2_middleware",
+ "halo2curves",
+ "rand_core 0.6.4",
+]
+
+[[package]]
+name = "halo2curves"
+version = "0.7.0"
+source = "git+https://github.com/zkmove/halo2curves?branch=zkmove#002fbf4a402ed2ee368b47cc942cf35c9352a7d0"
+dependencies = [
+ "blake2",
+ "digest 0.10.7",
+ "ff 0.13.0",
+ "group 0.13.0",
+ "halo2derive",
+ "lazy_static",
+ "num-bigint 0.4.6",
+ "num-integer",
+ "num-traits",
+ "pairing",
+ "pasta_curves",
+ "paste",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "rayon",
+ "sha2 0.10.9",
+ "static_assertions",
+ "subtle",
+ "unroll",
+]
+
+[[package]]
+name = "halo2derive"
+version = "0.1.0"
+source = "git+https://github.com/zkmove/halo2curves?branch=zkmove#002fbf4a402ed2ee368b47cc942cf35c9352a7d0"
+dependencies = [
+ "num-bigint 0.4.6",
+ "num-integer",
+ "num-traits",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.107",
 ]
 
 [[package]]
@@ -15863,6 +15987,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-vdf",
  "fastcrypto-zkp",
+ "halo2-verifier",
  "indexmap 2.8.0",
  "move-binary-format",
  "move-core-types",
@@ -18791,7 +18916,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
@@ -19038,6 +19163,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "unroll"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ad948c1cb799b1a70f836077721a92a35ac177d4daddf4c20a633786d4cf618"
+dependencies = [
+ "quote",
+ "syn 1.0.107",
+]
+
+[[package]]
 name = "unsafe-libyaml"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19199,6 +19334,21 @@ name = "virtue"
 version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "051eb1abcf10076295e815102942cc58f9d5e3b4560e46e53c21e8ff6f3af7b1"
+
+[[package]]
+name = "vk-gen-examples"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "halo2",
+ "halo2_backend",
+ "halo2_proofs",
+ "hex",
+ "rand 0.8.5",
+ "rand_core 0.6.4",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "vsimd"

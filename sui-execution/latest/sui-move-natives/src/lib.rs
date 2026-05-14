@@ -4,7 +4,7 @@
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
     config::ConfigReadSettingImplCostParams,
-    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
+    crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, halo2_kzg, hash, hmac},
     crypto::{
         bls12381::{Bls12381Bls12381MinPkVerifyCostParams, Bls12381Bls12381MinSigVerifyCostParams},
         ecdsa_k1::{
@@ -1043,6 +1043,11 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
             "groth16",
             "prepare_verifying_key_internal",
             make_native!(groth16::prepare_verifying_key_internal),
+        ),
+        (
+            "halo2_kzg",
+            "verify_proof_internal",
+            make_native!(halo2_kzg::verify_proof_internal),
         ),
         ("hmac", "hmac_sha3_256", make_native!(hmac::hmac_sha3_256)),
         ("hash", "keccak256", make_native!(hash::keccak256)),

@@ -3082,6 +3082,21 @@ verify_groth16_proof
 verify_groth16_proof_internal
 	fun
 	0x2::groth16
+abi_version
+	public fun
+	0x2::halo2_kzg
+kzg_gwc
+	public fun
+	0x2::halo2_kzg
+kzg_shplonk
+	public fun
+	0x2::halo2_kzg
+verify_proof
+	public fun
+	0x2::halo2_kzg
+verify_proof_internal
+	fun
+	0x2::halo2_kzg
 SUI
 	public struct
 	0x2::sui
