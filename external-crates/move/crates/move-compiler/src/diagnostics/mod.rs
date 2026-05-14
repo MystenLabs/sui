@@ -406,6 +406,18 @@ impl<'env> DiagnosticReporter<'env> {
         }
     }
 
+    /// Creates a reporter for IDE macro-body typing that shares IDE information with the
+    /// original reporter but sends diagnostics to a fresh sink that will be discarded.
+    pub fn clone_for_ide_macro_body_typing(&self) -> Self {
+        Self {
+            flags: self.flags,
+            known_filter_names: self.known_filter_names,
+            diags: Arc::new(RwLock::new(Diagnostics::new())),
+            ide_information: self.ide_information.clone(),
+            filter_stack: self.filter_stack.clone(),
+        }
+    }
+
     pub fn push_warning_filter_scope(&mut self, scope: FilterScope) {
         self.filter_stack.push(scope)
     }

@@ -72,6 +72,13 @@ enum TestSuite {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum TestSuites {
+    Single(TestSuite),
+    Many(Vec<TestSuite>),
+}
+
+#[derive(Serialize, Deserialize)]
 struct UseDefTest {
     use_line: u32,
     use_ndx: usize,
@@ -1107,9 +1114,9 @@ fn rename_test_suite<F: MoveFlavor + Default>(
 fn move_ide_testsuite<F: MoveFlavor + Default>(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
-    let suite: TestSuite = serde_json::from_reader(stripped)?;
+    let suites: TestSuites = serde_json::from_reader(stripped)?;
 
-    let output = match suite {
+    let run_suite = |suite| match suite {
         TestSuite::UseDef {
             project,
             file_tests,
@@ -1142,7 +1149,18 @@ fn move_ide_testsuite<F: MoveFlavor + Default>(test_path: &Path) -> datatest_sta
             project,
             file_tests,
         } => rename_test_suite::<F>(project, file_tests),
-    }?;
+    };
+
+    let output = match suites {
+        TestSuites::Single(suite) => run_suite(suite)?,
+        TestSuites::Many(suites) => {
+            let mut output = String::new();
+            for suite in suites {
+                output.push_str(&run_suite(suite)?);
+            }
+            output
+        }
+    };
 
     insta_assert! {
         input_path: test_path,

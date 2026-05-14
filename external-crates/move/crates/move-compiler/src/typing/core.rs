@@ -47,6 +47,7 @@ use std::{
 // Context
 //**************************************************************************************************
 
+#[derive(Clone)]
 pub struct UseFunsScope<'env, 'outer> {
     color: Option<Color>,
     count: usize,
@@ -55,6 +56,7 @@ pub struct UseFunsScope<'env, 'outer> {
 
 pub type UsedMethods = BTreeSet<(TypeName, Name)>;
 
+#[derive(Clone)]
 pub enum UseFunsScope_<'env, 'outer> {
     Global(&'env ResolvedUseFuns),
     Outer(&'outer ResolvedUseFuns, UsedMethods),
@@ -108,6 +110,7 @@ pub(super) struct TypingDebugFlags {
     pub(super) type_elaboration: bool,
 }
 
+#[derive(Clone)]
 pub struct TVarCounter {
     next: u64,
 }
@@ -156,6 +159,9 @@ pub struct Context<'env, 'outer> {
     use_funs: Vec<UseFunsScope<'env, 'outer>>,
     pub current_function: Option<FunctionName>,
     pub in_macro_function: bool,
+    /// True only while typing an isolated IDE macro-body fork whose diagnostics do not reach
+    /// the compilation environment.
+    pub ide_typing_macro_body: bool,
     max_variable_color: RefCell<u16>,
     pub return_type: Option<Type>,
     locals: UniqueMap<Var, Type>,
@@ -546,6 +552,7 @@ impl<'env> ModuleContext<'env> {
             use_funs,
             current_function: None,
             in_macro_function: false,
+            ide_typing_macro_body: false,
             max_variable_color: RefCell::new(0),
             return_type: None,
             locals: UniqueMap::new(),
@@ -756,7 +763,41 @@ impl<'env, 'outer> Context<'env, 'outer> {
     }
 
     pub fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
-        self.outer.check_feature(package, feature, loc)
+        self.env()
+            .check_feature(&self.reporter, package, feature, loc)
+    }
+
+    /// Returns true for regular compiler errors, or while typing an IDE macro-body fork,
+    /// where diagnostics emitted by that fork are not recorded in `CompilationEnv`.
+    pub fn has_errors_or_ide_typing_macro_body(&self) -> bool {
+        self.env().has_errors() || self.ide_typing_macro_body
+    }
+
+    /// Creates an isolated context for IDE macro-body typing. It is seeded with function
+    /// signature state needed to type the body, but semantic side effects such as used members,
+    /// friends, type substitutions, and local declarations are discarded with the fork.
+    pub fn fork_for_ide_macro_body_typing(&self) -> Context<'env, 'outer> {
+        Context {
+            outer: self.outer,
+            reporter: self.reporter.clone_for_ide_macro_body_typing(),
+            new_friends: BTreeSet::new(),
+            used_module_members: BTreeMap::new(),
+            next_match_var_id: self.next_match_var_id,
+            use_funs: self.use_funs.clone(),
+            current_function: self.current_function,
+            in_macro_function: self.in_macro_function,
+            ide_typing_macro_body: true,
+            max_variable_color: RefCell::new(*self.max_variable_color.borrow()),
+            return_type: self.return_type.clone(),
+            locals: self.locals.clone(),
+            tvar_counter: self.tvar_counter.clone(),
+            subst: self.subst.clone(),
+            constraints: Constraints::new(),
+            named_block_map: BTreeMap::new(),
+            macro_expansion: vec![],
+            lambda_expansion: vec![],
+            ide_info: IDEInfo::new(),
+        }
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
