@@ -41,9 +41,15 @@ impl BitmapIndexProcessor for TransactionBitmapProcessor {
             let bucket_id = tx_seq / transaction_bitmap_index::BUCKET_SIZE;
             let bit_position = (tx_seq % transaction_bitmap_index::BUCKET_SIZE) as u32;
 
-            for_each_transaction_dimension(tx, &checkpoint.object_set, |dim, value| {
-                emit(bucket_id, bit_position, dim, value);
-            });
+            for_each_transaction_dimension(
+                &tx.transaction,
+                &tx.effects,
+                tx.events.as_ref(),
+                &checkpoint.object_set,
+                |dim, value| {
+                    emit(bucket_id, bit_position, dim, value);
+                },
+            );
         }
     }
 

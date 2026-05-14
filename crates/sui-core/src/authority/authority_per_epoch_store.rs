@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use dashmap::DashMap;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -2574,7 +2574,7 @@ impl AuthorityPerEpochStore {
         // is_consensus_message_processed
         #[cfg(debug_assertions)]
         {
-            let mut seen = HashSet::new();
+            let mut seen = std::collections::HashSet::new();
             for deferred_txn_batch in &txns {
                 for txn in &deferred_txn_batch.1 {
                     assert!(seen.insert(txn.tx().digest()));
