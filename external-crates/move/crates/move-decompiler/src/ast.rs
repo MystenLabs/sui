@@ -8,7 +8,7 @@ use move_model_2::{model::Model, source_kind::SourceKind};
 use move_stackless_bytecode_2::ast::{DataOp, PrimitiveOp};
 use move_symbol_pool::Symbol;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 // -------------------------------------------------------------------------------------------------
 // Types
@@ -184,6 +184,93 @@ impl Exp {
         F: FnOnce(Exp) -> Exp,
     {
         *self = f(std::mem::replace(self, Exp::Break(None)));
+    }
+
+    /// Every local name mentioned anywhere in `self` — reads (`Variable`), writes
+    /// (`Assign`/`LetBind`/`VecUnpack`/`Unpack` targets), and declarations (`Declare`,
+    /// `LetBind`) — collected recursively through children. Sub-expression values of `Unpack`
+    /// etc. are recursed into, but the unpacked struct/enum/variant identifiers are not
+    /// included (those are types, not locals).
+    ///
+    /// This intentionally unifies reads and writes: callers that want "did this subtree
+    /// touch X in any way" can ask once. Use this when you need an over-approximation of
+    /// the locals an expression can read or modify, e.g. to decide whether moving a
+    /// declaration across it would change behavior.
+    pub fn referenced_names(&self) -> BTreeSet<String> {
+        let mut out = BTreeSet::new();
+        self.collect_referenced_names(&mut out);
+        out
+    }
+
+    fn collect_referenced_names(&self, out: &mut BTreeSet<String>) {
+        match self {
+            Exp::Variable(n) => {
+                out.insert(n.clone());
+            }
+            Exp::Declare(names) => {
+                for n in names {
+                    out.insert(n.clone());
+                }
+            }
+            Exp::LetBind(names, value) | Exp::Assign(names, value) => {
+                for n in names {
+                    out.insert(n.clone());
+                }
+                value.collect_referenced_names(out);
+            }
+            Exp::VecUnpack(names, value) => {
+                for n in names {
+                    out.insert(n.clone());
+                }
+                value.collect_referenced_names(out);
+            }
+            Exp::Unpack(_, fields, value) | Exp::UnpackVariant(_, _, fields, value) => {
+                for (_, name) in fields {
+                    out.insert(name.clone());
+                }
+                value.collect_referenced_names(out);
+            }
+            Exp::Seq(items) | Exp::Return(items) | Exp::Call(_, items) => {
+                for it in items {
+                    it.collect_referenced_names(out);
+                }
+            }
+            Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
+                for a in args {
+                    a.collect_referenced_names(out);
+                }
+            }
+            Exp::IfElse(cond, conseq, alt) => {
+                cond.collect_referenced_names(out);
+                conseq.collect_referenced_names(out);
+                if let Some(a) = alt.as_ref() {
+                    a.collect_referenced_names(out);
+                }
+            }
+            Exp::Switch(cond, _, cases) => {
+                cond.collect_referenced_names(out);
+                for (_, body) in cases {
+                    body.collect_referenced_names(out);
+                }
+            }
+            Exp::Loop(_, body) => body.collect_referenced_names(out),
+            Exp::While(_, cond, body) => {
+                cond.collect_referenced_names(out);
+                body.collect_referenced_names(out);
+            }
+            Exp::Abort(value) | Exp::Borrow(_, value) => value.collect_referenced_names(out),
+            Exp::Unstructured(nodes) => {
+                for node in nodes {
+                    match node {
+                        UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) => {
+                            body.collect_referenced_names(out);
+                        }
+                        UnstructuredNode::Goto(_) => {}
+                    }
+                }
+            }
+            Exp::Value(_) | Exp::Constant(_) | Exp::Break(_) | Exp::Continue(_) => {}
+        }
     }
 }
 

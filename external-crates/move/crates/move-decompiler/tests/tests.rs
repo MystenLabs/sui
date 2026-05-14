@@ -61,11 +61,13 @@ fn run_move_test(file_path: &Path) -> datatest_stable::Result<()> {
 
     for pkg in &bytecode.packages {
         // let pkg_name = pkg.name;
+        let resolved_pkg = model.package(&pkg.address);
         for (module_name, m) in &pkg.modules {
             if test_module_names.contains(module_name) {
                 // FIXME pkg name not coherent, address name returned instead
                 let name = format!("{}", module_name);
-                let module = move_decompiler::translate::module(&config, m.clone());
+                let resolved = resolved_pkg.module(*module_name);
+                let module = move_decompiler::translate::module(&config, resolved, m.clone());
                 let decompiled = format!("{}", module);
                 insta_assert! {
                     input_path: file_path,

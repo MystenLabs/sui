@@ -54,7 +54,7 @@ module loop_cases {
         let l1 = 0u64;
         while(l0 > 10u64) {
             l1 = l1 + 1u64;
-            let l0 = l0 - 1u64;
+            l0 = l0 - 1u64;
         }
     }
 

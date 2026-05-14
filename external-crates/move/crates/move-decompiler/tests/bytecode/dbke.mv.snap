@@ -73,7 +73,7 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
                 goto 'label_41;
             }
         };
-        (reg_31, reg_32, reg_33) = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::pool_book_params(freeze(l0));
+        let (reg_31, reg_32, reg_33) = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::pool_book_params(freeze(l0));
         let l32 = reg_33;
         let l31 = reg_32;
         let l51 = reg_31;
@@ -97,18 +97,19 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
         let l19 = vector[];
         let l28 = 0u64;
         loop {
+            let (l26, l27, l29, l34, l40, l47);
             if (l28 < &l11.len()) {
-                let l26 = *(&(&l14)[l28]);
+                l26 = *(&(&l14)[l28]);
                 if (l26 < 0x2::clock::timestamp_ms(l3)) {
                     0x2::event::emit(EE { e: 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_order_expired(), l: 348u64 });
                     l28 = l28 + 1u64;
                     continue
                 } else {
-                    let l34 = *(&(&l9)[l28]);
-                    let l47 = *(&(&l10)[l28]);
-                    let l27 = *(&(&l11)[l28]);
-                    let l40 = *(&(&l12)[l28]);
-                    let l29 = *(&(&l13)[l28]);
+                    l34 = *(&(&l9)[l28]);
+                    l47 = *(&(&l10)[l28]);
+                    l27 = *(&(&l11)[l28]);
+                    l40 = *(&(&l12)[l28]);
+                    l29 = *(&(&l13)[l28]);
                     if (l29) {
                         if (l44 <= l8) {
                             0x2::event::emit(EE { e: 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_insufficient_quote_balance(), l: 363u64 });
@@ -130,6 +131,7 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
             let l37 = l27;
             if (l34 == 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::cpsos()) {
                 if (!(l50)) {
+                    let (reg_134, reg_136);
                     (reg_134, reg_135, reg_136, reg_137) = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::pool::get_level2_ticks_from_mid(freeze(l0), 1u64, l3);
                     let l18 = reg_136;
                     l22 = reg_134;
@@ -145,10 +147,10 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
                     continue
                 } else {
                     l37 = l49;
-                    let l34 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::post_only();
+                    l34 = 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::post_only();
                 }
             } else {
-                (reg_170, reg_171) = 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::dbke::vbac(freeze(l0), l21, l44, l23, l51, l31, l32, l37, l40, l29, l30, true);
+                let (reg_170, reg_171) = 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::dbke::vbac(freeze(l0), l21, l44, l23, l51, l31, l32, l37, l40, l29, l30, true);
                 let l24 = reg_171;
                 let l53 = reg_170;
                 if (l24 != 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_no_error()) {
@@ -187,6 +189,7 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
         return 0u64
     } else {
         let l6 = l4;
+        let l5;
         if (*(&l6)) {
             if (l1.len() == 0u64) {
                 return l3
@@ -199,7 +202,7 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
                     if (l9 < l2) {
                         return 0u64
                     } else {
-                        let l5 = l9;
+                        l5 = l9;
                     }
                 }
             }
@@ -215,7 +218,7 @@ fun sp(l0: &vector<u64>, l1: &vector<u64>, l2: u64, l3: u64, l4: bool): u64 {
                     if (l10 > 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::max_u64() - l2) {
                         return 0u64
                     } else {
-                        let l5 = l10;
+                        l5 = l10;
                     }
                 }
             }
@@ -242,6 +245,7 @@ fun vbac<T,T>(l0: &0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d32
                     return (0u64, 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_insufficient_quantity())
                 } else {
                     let l16 = l9;
+                    let l15;
                     if (*(&l16)) {
                         let l25 = l2as u128 * 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d3204809::constants::float_scaling_u128() / l7as u128as u64;
                         let l21 = l25 % l5 + l5;
@@ -253,12 +257,12 @@ fun vbac<T,T>(l0: &0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963357661df5d32
                                 return (0u64, 0xb24efcc5dcf03cf4b1fb0e2155206b4e2c5b008da29ff4025a0db241e4578976::ct::e_insufficient_quote_balance())
                             } else {
                                 let l19 = 0x1::u64::max(l6, 0x1::u64::min(l8, l22as u64));
-                                let l15 = l19 - l19 % l5;
+                                l15 = l19 - l19 % l5;
                             }
                         }
                     } else {
                         let l20 = 0x1::u64::max(l6, 0x1::u64::min(l8, l1));
-                        let l15 = l20 - l20 % l5;
+                        l15 = l20 - l20 % l5;
                     }
                 }
             }

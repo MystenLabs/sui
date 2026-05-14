@@ -7,8 +7,6 @@ pub(crate) mod graph;
 pub(crate) mod hoist_declarations;
 pub(crate) mod term_reconstruction;
 
-pub use hoist_declarations::hoist_declarations;
-
 use crate::{
     config::{self, print_heading},
     structuring::{ast as D, graph::Graph},
