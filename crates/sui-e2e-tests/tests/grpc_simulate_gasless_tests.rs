@@ -15,10 +15,11 @@ use sui_rpc::proto::sui::rpc::v2::Transaction;
 use sui_rpc::proto::sui::rpc::v2::transaction_execution_service_client::TransactionExecutionServiceClient;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::base_types::{ObjectRef, SuiAddress};
+use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{
-    self, GasData, ObjectArg, TransactionData, TransactionDataV1, TransactionExpiration,
-    TransactionKind,
+    self, FundsWithdrawalArg, GasData, ObjectArg, TransactionData, TransactionDataV1,
+    TransactionExpiration, TransactionKind,
 };
 use test_cluster::addr_balance_test_env::{TestEnv, TestEnvBuilder};
 
@@ -86,6 +87,41 @@ fn build_coin_send_funds_tx(
         Identifier::new("send_funds").unwrap(),
         vec![coin_type],
         vec![coin_arg, recipient_arg],
+    );
+    wrap_tx(
+        sender,
+        TransactionKind::ProgrammableTransaction(builder.finish()),
+    )
+}
+
+/// Build a gasless-eligible PTB that withdraws `amount` of `coin_type` from the sender's
+/// address balance and forwards it to `recipient` via `balance::send_funds`. The PTB has *no*
+/// `Coin<T>` object inputs — its only `CallArg`s are a `FundsWithdrawal` and a `Pure` recipient
+/// — so replay protection cannot come from address-owned object inputs and must be supplied by
+/// the transaction's `expiration`.
+fn build_balance_withdrawal_send_funds_tx(
+    sender: SuiAddress,
+    coin_type: TypeTag,
+    amount: u64,
+    recipient: SuiAddress,
+) -> TransactionData {
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let withdraw_arg = FundsWithdrawalArg::balance_from_sender(amount, coin_type.clone());
+    let withdraw_arg = builder.funds_withdrawal(withdraw_arg).unwrap();
+    let balance = builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("redeem_funds").unwrap(),
+        vec![coin_type.clone()],
+        vec![withdraw_arg],
+    );
+    let recipient_arg = builder.pure(recipient).unwrap();
+    builder.programmable_move_call(
+        SUI_FRAMEWORK_PACKAGE_ID,
+        Identifier::new("balance").unwrap(),
+        Identifier::new("send_funds").unwrap(),
+        vec![coin_type],
+        vec![balance, recipient_arg],
     );
     wrap_tx(
         sender,
@@ -257,5 +293,44 @@ async fn simulate_falls_back_to_priced_when_gasless_post_exec_fails() {
         !gas_payment.objects.is_empty(),
         "fallback priced flow must have run gas selection",
     );
+    assert!(returned.effects().status().success());
+}
+
+/// A gasless-eligible PTB whose only `CallArg`s are a `FundsWithdrawal` (withdrawing from the
+/// sender's address balance) and a `Pure` recipient — i.e. it has zero address-owned object
+/// inputs — must still be simulatable. Replay protection in this case can only come from the
+/// transaction's `expiration`, which the caller never sets when going through the unresolved
+/// proto path. The simulate flow therefore needs to fill in a `ValidDuring` expiration before
+/// invoking the executor; otherwise `check_replay_protection` rejects the tx with
+/// "Transactions must either have address-owned inputs, or a ValidDuring expiration".
+#[sim_test]
+async fn simulate_gasless_with_no_address_owned_inputs_succeeds() {
+    let mut test_env = setup_gasless_env().await;
+    let sender = test_env.get_sender(1);
+    let recipient = test_env.get_sender(2);
+
+    let sui_type = GAS::type_tag();
+    transaction::add_gasless_token_for_testing(sui_type.to_canonical_string(true), 0);
+    // Seed sender's SUI address balance. `fund_one_address_balance` updates the gas ref from
+    // the tx effects (rather than the lagging RPC indexer), keeping the env's view in sync.
+    test_env.fund_one_address_balance(sender, 5_000).await;
+
+    let tx = build_balance_withdrawal_send_funds_tx(sender, sui_type, 1_000, recipient);
+
+    let response = connect(&test_env)
+        .await
+        .simulate_transaction(
+            SimulateTransactionRequest::new(to_unresolved_proto(tx, None))
+                .with_do_gas_selection(true),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    let returned = response.transaction();
+    let gas_payment = returned.transaction().gas_payment();
+    assert_eq!(gas_payment.price, Some(0));
+    assert_eq!(gas_payment.budget, Some(0));
+    assert!(gas_payment.objects.is_empty());
     assert!(returned.effects().status().success());
 }
