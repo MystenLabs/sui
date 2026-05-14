@@ -2243,20 +2243,6 @@ impl AuthorityState {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn dry_exec_transaction_for_benchmark(
-        &self,
-        transaction: TransactionData,
-    ) -> SuiResult<(
-        DryRunTransactionBlockResponse,
-        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
-        TransactionEffects,
-        Option<ObjectID>,
-    )> {
-        let epoch_store = self.load_epoch_store_one_call_per_task();
-        self.dry_exec_transaction_impl(&epoch_store, transaction)
-    }
-
-    #[allow(clippy::type_complexity)]
     fn dry_exec_transaction_impl(
         &self,
         epoch_store: &AuthorityPerEpochStore,
