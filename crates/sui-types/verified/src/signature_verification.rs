@@ -97,23 +97,22 @@ pub open spec fn spec_any_addr_derivation_fails<S>(sigs: &[S]) -> bool {
     exists|i: int| 0 <= i < sigs@.len() && spec_addr_derivation_fails(sigs, i)
 }
 
-/// Whether the signature at position `i` is valid given an alias set:
-///   - there exists an address A in both addresses(sigs[i]) and `aliases`, AND
-///   - sigs[i] is cryptographically valid for A at `epoch`.
+/// Whether a single signature is valid given an alias set:
+///   - there exists an address A in both addresses(sig) and `aliases`, AND
+///   - sig is cryptographically valid for A at `epoch`.
 ///
 /// Verification runs against the matching address A directly.
 /// The canonical sender address is not involved in the crypto check.
 pub open spec fn spec_is_valid_for<S, Addr>(
-    sigs: &[S],
-    i: int,
+    sig: &S,
     aliases: Set<Addr>,
     epoch: u64,
 ) -> bool {
     exists|a: Addr|
-        #![trigger spec_addresses::<S, Addr>(sigs, i).contains(a)]
-        spec_addresses::<S, Addr>(sigs, i).contains(a)
+        #![trigger spec_sig_addresses::<S, Addr>(sig).contains(a)]
+        spec_sig_addresses::<S, Addr>(sig).contains(a)
         && aliases.contains(a)
-        && spec_sig_crypto_valid(&sigs@[i], a, epoch)
+        && spec_sig_crypto_valid(sig, a, epoch)
 }
 
 /// The greedy assignment.
@@ -185,7 +184,7 @@ pub open spec fn spec_first_valid_unused_from<S, Addr>(
 {
     if start >= sigs@.len() {
         None
-    } else if !used.contains(start) && spec_is_valid_for(sigs, start, aliases, epoch) {
+    } else if !used.contains(start) && spec_is_valid_for(&sigs@[start], aliases, epoch) {
         Some(start)
     } else {
         spec_first_valid_unused_from(sigs, aliases, epoch, used, start + 1)
@@ -215,7 +214,7 @@ proof fn lemma_first_valid_from_bounds<S, Addr>(
     decreases sigs@.len() - start
 {
     if start >= sigs@.len() {
-    } else if !used.contains(start) && spec_is_valid_for(sigs, start, aliases, epoch) {
+    } else if !used.contains(start) && spec_is_valid_for(&sigs@[start], aliases, epoch) {
     } else {
         lemma_first_valid_from_bounds(sigs, aliases, epoch, used, start + 1);
     }
@@ -237,7 +236,7 @@ proof fn lemma_first_valid_from_not_in_used<S, Addr>(
     decreases sigs@.len() - start
 {
     if start >= sigs@.len() {
-    } else if !used.contains(start) && spec_is_valid_for(sigs, start, aliases, epoch) {
+    } else if !used.contains(start) && spec_is_valid_for(&sigs@[start], aliases, epoch) {
     } else {
         lemma_first_valid_from_not_in_used(sigs, aliases, epoch, used, start + 1);
     }
@@ -254,15 +253,14 @@ proof fn lemma_first_valid_from_is_valid<S, Addr>(
     ensures
         spec_first_valid_unused_from(sigs, aliases, epoch, used, start) matches Some(_)
             ==> spec_is_valid_for(
-                    sigs,
-                    spec_first_valid_unused_from(sigs, aliases, epoch, used, start)->Some_0,
+                    &sigs@[spec_first_valid_unused_from(sigs, aliases, epoch, used, start)->Some_0],
                     aliases,
                     epoch,
                 )
     decreases sigs@.len() - start
 {
     if start >= sigs@.len() {
-    } else if !used.contains(start) && spec_is_valid_for(sigs, start, aliases, epoch) {
+    } else if !used.contains(start) && spec_is_valid_for(&sigs@[start], aliases, epoch) {
     } else {
         lemma_first_valid_from_is_valid(sigs, aliases, epoch, used, start + 1);
     }
@@ -395,8 +393,9 @@ proof fn lemma_greedy_valid<S, Addr>(
                     #![trigger spec_greedy_helper(sigs, signers, epoch, used)->Some_0[k]]
                     0 <= k < spec_greedy_helper(sigs, signers, epoch, used)->Some_0.len()
                         ==> spec_is_valid_for(
-                                sigs,
-                                spec_greedy_helper(sigs, signers, epoch, used)->Some_0[k] as int,
+                                &sigs@[
+                                    spec_greedy_helper(sigs, signers, epoch, used)->Some_0[k] as int
+                                ],
                                 signers[k].1@.to_set(),
                                 epoch,
                             )
@@ -420,7 +419,7 @@ proof fn lemma_greedy_valid<S, Addr>(
             assume(forall|k: int|
                 0 <= k < indices.len()
                     ==> #[trigger] spec_is_valid_for(
-                            sigs, indices[k] as int, signers[k].1@.to_set(), epoch,
+                            &sigs@[indices[k] as int], signers[k].1@.to_set(), epoch,
                         ));
         }
     }
@@ -506,8 +505,7 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
         result matches Ok(_) ==>
             forall|k: int| 0 <= k < ok_indices(&result).len()
                 ==> #[trigger] spec_is_valid_for(
-                        tx_signatures,
-                        ok_indices(&result)[k] as int,
+                        &tx_signatures@[ok_indices(&result)[k] as int],
                         required_signers@[k].1@.to_set(),
                         epoch,
                     ),
