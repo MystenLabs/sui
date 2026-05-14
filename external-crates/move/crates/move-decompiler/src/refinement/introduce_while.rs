@@ -31,7 +31,7 @@ impl Refine for IntroduceWhile0 {
         // Only fire when the Break(label) matches this loop's label (so the break really exits
         // *this* Loop and not a labeled outer one).
         let target = *loop_label;
-        if !is_break_of(conseq, target) && !is_break_of(alt, target) {
+        if !is_break_to(conseq, target) && !is_break_to(alt, target) {
             return false;
         }
 
@@ -43,7 +43,7 @@ impl Refine for IntroduceWhile0 {
                 unreachable!()
             };
             let alt = alt.unwrap();
-            if is_break_of(&conseq, loop_label) {
+            if is_break_to(&conseq, loop_label) {
                 negate(&mut test);
                 Exp::While(loop_label, test, Box::new(alt))
             } else {
@@ -54,7 +54,7 @@ impl Refine for IntroduceWhile0 {
     }
 }
 
-fn is_break_of(exp: &Exp, loop_label: Option<crate::ast::Label>) -> bool {
+fn is_break_to(exp: &Exp, loop_label: Option<crate::ast::Label>) -> bool {
     matches!(exp, Exp::Break(l) if *l == loop_label)
 }
 
@@ -75,7 +75,7 @@ impl Refine for IntroduceWhile1 {
                 let Exp::IfElse(_, conseq, alt) = &seq[0] else {
                     return false;
                 };
-                if !is_break_of(conseq, loop_label) {
+                if !is_break_to(conseq, loop_label) {
                     return false;
                 }
                 let None = alt.as_ref() else {
