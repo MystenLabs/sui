@@ -3,12 +3,15 @@
 
 use sui_types::accumulator_root::stream_id_from_accumulator_event;
 use sui_types::balance::Balance;
+use sui_types::base_types::SuiAddress;
 use sui_types::effects::AccumulatorValue;
+use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::full_checkpoint_content::ExecutedTransaction;
+use sui_types::effects::TransactionEvents;
 use sui_types::full_checkpoint_content::ObjectSet;
 use sui_types::object::Owner;
 use sui_types::storage::ObjectKey;
+use sui_types::transaction::TransactionData;
 use sui_types::transaction::TransactionDataAPI;
 
 /// A queryable dimension for the checkpoint inverted index.
@@ -85,8 +88,9 @@ const EVENT_EXTANT_VALUE: &[u8] = &[];
 /// Visit all tx-space dimensions for a transaction.
 ///
 /// `object_set` is used to resolve owners for the input and output states
-/// referenced by `tx.effects.object_changes()`. Callers typically pass
-/// `&checkpoint.object_set`.
+/// referenced by `effects.object_changes()`. Callers typically pass either
+/// `&checkpoint.object_set` (archival) or an `ObjectSet` built from the
+/// transaction's input + output objects (fullnode).
 ///
 /// The callback is invoked once per logical tx-space dimension candidate as
 /// `f(dimension, key)`, where `key` is the encoded value bytes for that
@@ -98,15 +102,18 @@ const EVENT_EXTANT_VALUE: &[u8] = &[];
 /// extractor can reuse one scratch buffer for all compound keys emitted from a
 /// transaction instead of allocating one `Vec<u8>` per dimension.
 pub fn for_each_transaction_dimension(
-    tx: &ExecutedTransaction,
+    tx_data: &TransactionData,
+    effects: &TransactionEffects,
+    events: Option<&TransactionEvents>,
     object_set: &ObjectSet,
     mut f: impl FnMut(IndexDimension, &[u8]),
 ) {
     let mut scratch = Vec::new();
+    let sender = tx_data.sender();
 
-    f(IndexDimension::Sender, tx.transaction.sender().as_ref());
+    f(IndexDimension::Sender, sender.as_ref());
 
-    for change in tx.effects.object_changes() {
+    for change in effects.object_changes() {
         for version in [change.input_version, change.output_version]
             .into_iter()
             .flatten()
@@ -122,7 +129,7 @@ pub fn for_each_transaction_dimension(
         f(IndexDimension::AffectedObject, change.id.as_ref());
     }
 
-    for (_, package_id, module, function) in tx.transaction.move_calls() {
+    for (_, package_id, module, function) in tx_data.move_calls() {
         let pkg = package_id.as_ref();
 
         scratch.clear();
@@ -140,13 +147,13 @@ pub fn for_each_transaction_dimension(
     // Event attributes are also indexed in tx-space so callers can find the
     // transactions that emitted a given event. The EventExtant existence marker
     // is event-space only (it backs event negation), so don't forward it here.
-    for_each_event_dimension(tx, |_idx, dim, key| {
+    for_each_event_dimension(sender, effects, events, |_idx, dim, key| {
         if dim != IndexDimension::EventExtant {
             f(dim, key);
         }
     });
 
-    for acc in tx.effects.accumulator_events() {
+    for acc in effects.accumulator_events() {
         if Balance::is_balance_type(&acc.write.address.ty)
             && matches!(&acc.write.value, AccumulatorValue::Integer(_))
         {
@@ -172,14 +179,15 @@ pub fn for_each_transaction_dimension(
 /// Every real event also yields one [`IndexDimension::EventExtant`] candidate
 /// (an empty-keyed existence marker) at its own `event_idx`.
 pub fn for_each_event_dimension(
-    tx: &ExecutedTransaction,
+    sender: SuiAddress,
+    effects: &TransactionEffects,
+    events: Option<&TransactionEvents>,
     mut f: impl FnMut(u32, IndexDimension, &[u8]),
 ) {
     let mut scratch = Vec::new();
-    let sender = tx.transaction.sender();
-    let event_count = tx.events.as_ref().map(|e| e.data.len()).unwrap_or(0);
+    let event_count = events.map(|e| e.data.len()).unwrap_or(0);
 
-    for (idx, ev) in tx.events.iter().flat_map(|evs| evs.data.iter()).enumerate() {
+    for (idx, ev) in events.iter().flat_map(|evs| evs.data.iter()).enumerate() {
         let event_idx = u32::try_from(idx).expect("event index exceeds u32::MAX");
 
         // Existence marker: one bit per real event, independent of its
@@ -222,7 +230,7 @@ pub fn for_each_event_dimension(
         }
     }
 
-    for acc in tx.effects.accumulator_events() {
+    for acc in effects.accumulator_events() {
         let AccumulatorValue::EventDigest(event_digests) = &acc.write.value else {
             continue;
         };
@@ -396,9 +404,15 @@ mod tests {
         let tx = &checkpoint.transactions[0];
 
         let mut keys = HashSet::new();
-        for_each_transaction_dimension(tx, &checkpoint.object_set, |dim, value| {
-            keys.insert(encode_dimension_key(dim, value));
-        });
+        for_each_transaction_dimension(
+            &tx.transaction,
+            &tx.effects,
+            tx.events.as_ref(),
+            &checkpoint.object_set,
+            |dim, value| {
+                keys.insert(encode_dimension_key(dim, value));
+            },
+        );
 
         assert!(keys.contains(&encode_dimension_key(
             IndexDimension::Sender,
@@ -453,9 +467,14 @@ mod tests {
         let tx = &checkpoint.transactions[0];
 
         let mut keys = HashSet::new();
-        for_each_event_dimension(tx, |event_idx, dim, value| {
-            keys.insert((event_idx, encode_dimension_key(dim, value)));
-        });
+        for_each_event_dimension(
+            tx.transaction.sender(),
+            &tx.effects,
+            tx.events.as_ref(),
+            |event_idx, dim, value| {
+                keys.insert((event_idx, encode_dimension_key(dim, value)));
+            },
+        );
 
         for expected in [
             encode_dimension_key(IndexDimension::Sender, sender.as_ref()),
@@ -575,9 +594,15 @@ mod tests {
         let transfer_tx = &checkpoint.transactions[1];
 
         let mut keys = HashSet::new();
-        for_each_transaction_dimension(transfer_tx, &checkpoint.object_set, |dim, value| {
-            keys.insert(encode_dimension_key(dim, value));
-        });
+        for_each_transaction_dimension(
+            &transfer_tx.transaction,
+            &transfer_tx.effects,
+            transfer_tx.events.as_ref(),
+            &checkpoint.object_set,
+            |dim, value| {
+                keys.insert(encode_dimension_key(dim, value));
+            },
+        );
 
         assert!(
             keys.contains(&encode_dimension_key(
@@ -616,9 +641,15 @@ mod tests {
         let tx = &checkpoint.transactions[0];
 
         let mut keys = HashSet::new();
-        for_each_transaction_dimension(tx, &checkpoint.object_set, |dim, value| {
-            keys.insert(encode_dimension_key(dim, value));
-        });
+        for_each_transaction_dimension(
+            &tx.transaction,
+            &tx.effects,
+            tx.events.as_ref(),
+            &checkpoint.object_set,
+            |dim, value| {
+                keys.insert(encode_dimension_key(dim, value));
+            },
+        );
 
         assert!(keys.contains(&encode_dimension_key(
             IndexDimension::AffectedAddress,
