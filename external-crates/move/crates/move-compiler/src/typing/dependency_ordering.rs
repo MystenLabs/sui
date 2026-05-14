@@ -359,6 +359,14 @@ fn sequence(context: &mut Context, (_, sequence): &T::Sequence) {
                 }
                 exp(context, e)
             }
+            SI::BindElse(pattern, binders, e, else_e) => {
+                pat(context, pattern);
+                for (_, ty) in binders {
+                    type_(context, ty);
+                }
+                exp(context, e);
+                exp(context, else_e)
+            }
         }
     }
 }

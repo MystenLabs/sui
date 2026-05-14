@@ -20,7 +20,7 @@ error[E01002]: unexpected token
   │             ^^
   │             │
   │             Unexpected '..'
-  │             Expected a variable or struct name
+  │             Expected a variable, struct, or pattern with 'else'
 
 error[E03009]: unbound variable
    ┌─ tests/move_2024/parser/struct_ellipsis_invalid.move:10:9

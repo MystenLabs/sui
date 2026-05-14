@@ -281,7 +281,9 @@ mod last_usage {
                 if !*unused_assignment && !context.next_live.contains(v) {
                     match display_var(v.value()) {
                         DisplayVar::Tmp => (),
-                        DisplayVar::Orig(vstr) | DisplayVar::MatchTmp(vstr) => {
+                        DisplayVar::Orig(vstr)
+                        | DisplayVar::MatchTmp(vstr)
+                        | DisplayVar::LetElseSubject(vstr) => {
                             if !v.starts_with_underscore() {
                                 let msg = format!(
                                     "Unused assignment for variable '{vstr}'. Consider \

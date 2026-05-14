@@ -19,7 +19,7 @@ use crate::{
         VariantName,
     },
     shared::{
-        matching::{MATCH_TEMP_PREFIX, MatchContext, new_match_var_name},
+        matching::{MATCH_TEMP_PREFIX, MatchContext, is_let_else_subject_name, new_match_var_name},
         program_info::TypingProgramInfo,
         string_utils::debug_print,
         unique_map::UniqueMap,
@@ -98,11 +98,17 @@ pub enum DisplayVar {
     Orig(String),
     Tmp,
     MatchTmp(String),
+    /// The subject temporary introduced when lowering a `let ... else` to a
+    /// match. Diagnostics use this to phrase messages in terms of the surface
+    /// `let ... else` form rather than the synthesized `match`.
+    LetElseSubject(String),
 }
 
 pub fn display_var(s: Symbol) -> DisplayVar {
     if is_temp_name(s) {
         DisplayVar::Tmp
+    } else if is_let_else_subject_name(s) {
+        DisplayVar::LetElseSubject(s.to_string())
     } else if is_match_temp_name(s) {
         DisplayVar::MatchTmp(s.to_string())
     } else {
@@ -886,7 +892,13 @@ fn tail(
                 ("type" => in_type),
                 (lines "arms" => &arms.value)
             );
-            let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
+            let compiled = match_compilation::compile_match(
+                context,
+                in_type,
+                *subject,
+                arms,
+                match_compilation::MatchSubjectKind::Match,
+            );
             debug_print!(context.debug.match_translation, ("compiled" => compiled; verbose));
             let result = tail(context, block, expected_type, compiled);
             debug_print!(context.debug.match_variant_translation,
@@ -1219,7 +1231,13 @@ fn value(
                 ("type" => in_type),
                 (lines "arms" => &arms.value)
             );
-            let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
+            let compiled = match_compilation::compile_match(
+                context,
+                in_type,
+                *subject,
+                arms,
+                match_compilation::MatchSubjectKind::Match,
+            );
             debug_print!(context.debug.match_translation, ("compiled" => compiled; verbose));
             let result = value(context, block, None, compiled);
             debug_print!(context.debug.match_variant_translation, ("result" => &result));
@@ -1812,7 +1830,13 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 (lines "arms" => &arms.value)
             );
             let subject_type = subject.ty.clone();
-            let compiled = match_compilation::compile_match(context, &subject_type, *subject, arms);
+            let compiled = match_compilation::compile_match(
+                context,
+                &subject_type,
+                *subject,
+                arms,
+                match_compilation::MatchSubjectKind::Match,
+            );
             debug_print!(context.debug.match_translation, ("compiled" => compiled; verbose));
             statement(context, block, compiled);
             debug_print!(context.debug.match_variant_translation, (lines "block" => block));
@@ -1981,8 +2005,74 @@ fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::Se
                 declare_bind_list(context, &bindings);
                 make_assignments(context, block, sloc, H::AssignCase::Let, bindings, rhs_exp);
             }
+            S::BindElse(pattern, binders, expr, else_expr) => {
+                let compiled = lower_let_else(context, sloc, *pattern, binders, *expr, *else_expr);
+                statement(context, block, compiled);
+            }
         }
     }
+}
+
+/// Lowers `let pat = subject else { else_body };` to a two-arm match:
+/// - the success arm binds `pat`'s binders and produces unit
+/// - a catch-all `_ => else_body` arm runs the (divergent) else block
+///
+/// The pattern's binders escape this match into the surrounding sequence: typing already called
+/// `declare_local` for each one (see `typing::translate::sequence`), so the assignments emitted by
+/// match compilation write into function-scope locals that subsequent statements can reference.
+fn lower_let_else(
+    context: &mut Context,
+    loc: Loc,
+    pattern: T::MatchPattern,
+    all_binders: Vec<(N::Var, N::Type)>,
+    subject: T::Exp,
+    else_body: T::Exp,
+) -> T::Exp {
+    let subject_ty = subject.ty.clone();
+    let rhs_binders: BTreeSet<N::Var> = all_binders.iter().map(|(v, _)| *v).collect();
+
+    let unit_ty = sp(loc, N::UNIT_TYPE.clone());
+    let unit_exp = T::exp(
+        unit_ty.clone(),
+        sp(loc, T::UnannotatedExp_::Unit { trailing: false }),
+    );
+
+    let success_arm = sp(
+        loc,
+        T::MatchArm_ {
+            pattern,
+            binders: all_binders,
+            guard: None,
+            guard_binders: UniqueMap::new(),
+            rhs_binders,
+            rhs: Box::new(unit_exp),
+        },
+    );
+
+    let wildcard_pattern = T::MatchPattern {
+        ty: subject_ty,
+        pat: sp(loc, T::UnannotatedPat_::Wildcard),
+    };
+    let else_arm = sp(
+        loc,
+        T::MatchArm_ {
+            pattern: wildcard_pattern,
+            binders: vec![],
+            guard: None,
+            guard_binders: UniqueMap::new(),
+            rhs_binders: BTreeSet::new(),
+            rhs: Box::new(else_body),
+        },
+    );
+
+    let arms = sp(loc, vec![success_arm, else_arm]);
+    match_compilation::compile_match(
+        context,
+        &unit_ty,
+        subject,
+        arms,
+        match_compilation::MatchSubjectKind::LetElse,
+    )
 }
 
 // Treat something like a value, and add a final `ignore_and_pop` at the end to consume that value.

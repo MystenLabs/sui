@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04040]: 'let...else' block must diverge
+   ┌─ tests/move_2024/matching/let_else_non_divergent.move:11:38
+   │
+11 │         let ABC::C(x) = subject else { 0u16 };
+   │                                      ^^^^^^^^ 'else' block in 'let...else' must diverge (e.g., 'return', 'abort', 'break', or 'continue')

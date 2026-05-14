@@ -196,7 +196,7 @@ fn unused_let_muts<T>(
         if !v.starts_with_underscore() {
             let vstr = match display_var(v.value()) {
                 DisplayVar::Tmp => panic!("ICE invalid unused mut tmp local {}", v.value()),
-                DisplayVar::MatchTmp(s) => s,
+                DisplayVar::MatchTmp(s) | DisplayVar::LetElseSubject(s) => s,
                 DisplayVar::Orig(s) => s,
             };
             let decl_loc = *locals.get_loc(&v).unwrap();
@@ -254,6 +254,11 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
                                 DisplayVar::MatchTmp(_name) => {
                                     "The match expression takes ownership of this value \
                                     but does not use it"
+                                        .to_string()
+                                }
+                                DisplayVar::LetElseSubject(_name) => {
+                                    "The 'let ... else' binding takes ownership of this value, \
+                                    but the 'else' branch does not consume it"
                                         .to_string()
                                 }
                                 DisplayVar::Orig(l) => {
@@ -321,7 +326,9 @@ fn lvalue(context: &mut Context, case: AssignCase, sp!(loc, l_): &LValue) {
                         };
                         let available = *available;
                         match display_var(v.value()) {
-                            DisplayVar::Tmp | DisplayVar::MatchTmp(_) => {
+                            DisplayVar::Tmp
+                            | DisplayVar::MatchTmp(_)
+                            | DisplayVar::LetElseSubject(_) => {
                                 let msg = format!(
                                     "This expression without the '{}' ability must be used",
                                     Ability_::Drop,
@@ -428,7 +435,7 @@ fn use_local(context: &mut Context, loc: &Loc, local: &Var) {
             let unavailable = *unavailable;
             let vstr = match display_var(local.value()) {
                 DisplayVar::Tmp => panic!("ICE invalid use tmp local {}", local.value()),
-                DisplayVar::MatchTmp(s) => s,
+                DisplayVar::MatchTmp(s) | DisplayVar::LetElseSubject(s) => s,
                 DisplayVar::Orig(s) => s,
             };
             match unavailable_reason {
@@ -493,7 +500,7 @@ fn check_mutability(
     if mut_ == Mutability::Imm {
         let vstr = match display_var(v.value()) {
             DisplayVar::Tmp => panic!("ICE invalid mutation tmp local {}", v.value()),
-            DisplayVar::MatchTmp(s) => s,
+            DisplayVar::MatchTmp(s) | DisplayVar::LetElseSubject(s) => s,
             DisplayVar::Orig(s) => s,
         };
         let decl_loc = *context.local_types.get_loc(v).unwrap();

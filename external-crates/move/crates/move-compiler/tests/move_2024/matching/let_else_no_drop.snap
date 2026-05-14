@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E06001]: unused value without 'drop'
+   ┌─ tests/move_2024/matching/let_else_no_drop.move:11:40
+   │
+ 3 │     public enum ABC<T> {
+   │                 --- To satisfy the constraint, the 'drop' ability would need to be added here
+   ·
+10 │         let subject = ABC::C(42u64);
+   │                       ------------- The type '0x42::m::ABC<u64>' does not have the ability 'drop'
+11 │         let ABC::C(x) = subject else { return 0 };
+   │         -------------------------------^^^^^^^^--
+   │         │                              │
+   │         │                              Invalid return
+   │         The 'let ... else' binding takes ownership of this value, but the 'else' branch does not consume it. The value does not have the 'drop' ability and must be consumed before the function returns

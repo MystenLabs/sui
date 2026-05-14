@@ -415,6 +415,9 @@ impl BorrowState {
             move || match display_var(local.value()) {
                 DisplayVar::Tmp => format!("Invalid {} of temporary variable", verb),
                 DisplayVar::MatchTmp(_s) => format!("Invalid {} of temporary match variable", verb),
+                DisplayVar::LetElseSubject(_s) => {
+                    format!("Invalid {} of 'let ... else' subject", verb)
+                }
                 DisplayVar::Orig(s) => format!("Invalid {} of variable '{}'", verb, s),
             },
         )
@@ -516,8 +519,9 @@ impl BorrowState {
                     || {
                         let case = match display_var(local.value()) {
                             DisplayVar::Orig(v) => format!("Local variable '{v}'"),
-                            DisplayVar::MatchTmp(_) => "Local value".to_string(),
-                            DisplayVar::Tmp => "Local value".to_string(),
+                            DisplayVar::MatchTmp(_)
+                            | DisplayVar::LetElseSubject(_)
+                            | DisplayVar::Tmp => "Local value".to_string(),
                         };
                         format!("Invalid return. {case} is still being borrowed.")
                     },
@@ -587,7 +591,9 @@ impl BorrowState {
                     || {
                         let vstr = match display_var(local.value()) {
                             DisplayVar::Orig(s) => s,
-                            DisplayVar::MatchTmp(_) | DisplayVar::Tmp => unreachable!(),
+                            DisplayVar::MatchTmp(_)
+                            | DisplayVar::LetElseSubject(_)
+                            | DisplayVar::Tmp => unreachable!(),
                         };
                         format!("Ambiguous usage of variable '{}'", vstr)
                     },
@@ -596,7 +602,9 @@ impl BorrowState {
                 if let Some(diag) = &mut diag_opt {
                     let v = match display_var(local.value()) {
                         DisplayVar::Orig(s) => s,
-                        DisplayVar::MatchTmp(_) | DisplayVar::Tmp => unreachable!(),
+                        DisplayVar::MatchTmp(_)
+                        | DisplayVar::LetElseSubject(_)
+                        | DisplayVar::Tmp => unreachable!(),
                     };
                     let tip = format!("Try an explicit annotation, e.g. 'move {v}' or 'copy {v}'");
                     const EXPLANATION: &str = "Ambiguous inference of 'move' or 'copy' for a \

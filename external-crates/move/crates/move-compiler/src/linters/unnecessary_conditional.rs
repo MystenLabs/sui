@@ -89,7 +89,9 @@ fn extract_value(block: &T::Exp) -> Option<&Value> {
 #[growing_stack]
 fn extract_value_seq_item(sp!(_, item_): &T::SequenceItem) -> Option<&Value> {
     match &item_ {
-        SequenceItem_::Declare(_) | SequenceItem_::Bind(_, _, _) => None,
+        SequenceItem_::Declare(_)
+        | SequenceItem_::Bind(_, _, _)
+        | SequenceItem_::BindElse(_, _, _, _) => None,
         SequenceItem_::Seq(e) => extract_value(e),
     }
 }

@@ -895,6 +895,12 @@ fn statement_block(
                     cur_flow = cur_flow.combine_seq(entry_flow);
                     context.maybe_report_value_error(&mut cur_flow);
                 }
+                S::BindElse(_, _, rhs, else_e) => {
+                    let entry_flow = value(context, rhs);
+                    cur_flow = cur_flow.combine_seq(entry_flow);
+                    context.maybe_report_value_error(&mut cur_flow);
+                    let _else_flow = statement(context, else_e);
+                }
             }
         }
     }

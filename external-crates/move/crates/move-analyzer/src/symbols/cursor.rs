@@ -98,7 +98,7 @@ impl CursorContext {
             }
             MP::FieldConstructor(chain, _) => Some(ChainInfo::new(chain.clone(), CT::Type, false)),
             MP::Name(_, chain) => Some(ChainInfo::new(chain.clone(), CT::All, false)),
-            MP::Literal(_) | MP::Or(..) | MP::At(..) => None,
+            MP::Literal(_) | MP::Or(..) | MP::At(..) | MP::Tuple(..) => None,
         }
     }
 

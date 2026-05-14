@@ -754,12 +754,18 @@ pub type Sequence = (
 pub enum SequenceItem_ {
     // e;
     Seq(Box<Exp>),
-    // let b : t = e;
-    // let b = e;
-    Declare(BindList, Option<Type>),
-    // let b : t = e;
-    // let b = e;
-    Bind(BindList, Option<Type>, Box<Exp>),
+    // let <pat> : t;
+    // let <pat>;
+    Declare(MatchPattern, Option<Type>),
+    // let <pat> : t = e;
+    // let <pat> = e;
+    Bind(MatchPattern, Option<Type>, Box<Exp>),
+    // let <pat> : t = e else <divergent>;
+    // let <pat> = e else <divergent>;
+    //
+    // The else branch must diverge (return/abort/break/continue); the binders
+    // in <pat> are introduced into the enclosing sequence on the success path.
+    BindElse(MatchPattern, Option<Type>, Box<Exp>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
@@ -795,6 +801,8 @@ pub enum MatchPattern_ {
     Or(Box<MatchPattern>, Box<MatchPattern>),
     // x @ pat
     At(Var, Box<MatchPattern>),
+    /// `(pat1, pat2, ..., patn)` is a tuple destructuring for `let` LHS cases.
+    Tuple(Spanned<Vec<MatchPattern>>),
 }
 
 pub type MatchPattern = Spanned<MatchPattern_>;
@@ -2304,21 +2312,32 @@ impl AstDebug for SequenceItem_ {
         use SequenceItem_ as I;
         match self {
             I::Seq(e) => e.ast_debug(w),
-            I::Declare(sp!(_, bs), ty_opt) => {
+            I::Declare(pat, ty_opt) => {
                 w.write("let ");
-                bs.ast_debug(w);
+                pat.ast_debug(w);
                 if let Some(ty) = ty_opt {
                     ty.ast_debug(w)
                 }
             }
-            I::Bind(sp!(_, bs), ty_opt, e) => {
+            I::Bind(pat, ty_opt, e) => {
                 w.write("let ");
-                bs.ast_debug(w);
+                pat.ast_debug(w);
                 if let Some(ty) = ty_opt {
                     ty.ast_debug(w)
                 }
                 w.write(" = ");
                 e.ast_debug(w);
+            }
+            I::BindElse(pat, ty_opt, e, else_e) => {
+                w.write("let ");
+                pat.ast_debug(w);
+                if let Some(ty) = ty_opt {
+                    ty.ast_debug(w)
+                }
+                w.write(" = ");
+                e.ast_debug(w);
+                w.write(" else ");
+                else_e.ast_debug(w);
             }
         }
     }
@@ -2614,6 +2633,11 @@ impl AstDebug for MatchPattern_ {
             At(x, pat) => {
                 w.write(format!("{} @ ", x));
                 pat.ast_debug(w);
+            }
+            Tuple(sp!(_, pats)) => {
+                w.write("(");
+                w.comma(pats.iter(), |w, pat| pat.ast_debug(w));
+                w.write(")");
             }
         }
     }

@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/matching/let_else_tuple_invalid.move:10:13
+   │
+10 │         let (O::S(x), O::S(y)) = (a, b) else { return 0 };
+   │             ^^^^^^^^^^^^^^^^^^ Tuple patterns are not allowed in match arms. Tuple destructuring is only valid in 'let' bindings
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/matching/let_else_tuple_invalid.move:11:9
+   │
+ 9 │     fun two(a: O<u64>, b: O<u64>): u64 {
+   │             - Similarly named defintion found here
+10 │         let (O::S(x), O::S(y)) = (a, b) else { return 0 };
+11 │         x + y
+   │         ^
+   │         │
+   │         Unbound variable 'x'
+   │         Did you mean: 'a'
+
+error[E03009]: unbound variable
+   ┌─ tests/move_2024/matching/let_else_tuple_invalid.move:11:13
+   │
+ 9 │     fun two(a: O<u64>, b: O<u64>): u64 {
+   │             - Similarly named defintion found here
+10 │         let (O::S(x), O::S(y)) = (a, b) else { return 0 };
+11 │         x + y
+   │             ^
+   │             │
+   │             Unbound variable 'y'
+   │             Did you mean: 'a'

@@ -20,4 +20,4 @@ error[E01002]: unexpected token
   │         ^
   │         │
   │         Unexpected '{'
-  │         Expected a variable or struct name
+  │         Expected a variable, struct, or pattern with 'else'

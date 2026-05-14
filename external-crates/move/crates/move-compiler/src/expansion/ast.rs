@@ -441,6 +441,10 @@ pub enum SequenceItem_ {
     Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
     Bind(LValueList, Box<Exp>),
+    // `let <pat> = e else <divergent>;`. The pattern is kept as a `MatchPattern`
+    // (rather than an `LValueList`) because it may be refutable; the else
+    // branch must diverge and is type-checked accordingly in `typing/translate`.
+    BindElse(MatchPattern, Box<Exp>, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
 
@@ -1433,6 +1437,14 @@ impl AstDebug for SequenceItem_ {
                 bs.ast_debug(w);
                 w.write(" = ");
                 e.ast_debug(w);
+            }
+            I::BindElse(sp!(_, bs), e, else_e) => {
+                w.write("let ");
+                bs.ast_debug(w);
+                w.write(" = ");
+                e.ast_debug(w);
+                w.write(" else ");
+                else_e.ast_debug(w);
             }
         }
     }

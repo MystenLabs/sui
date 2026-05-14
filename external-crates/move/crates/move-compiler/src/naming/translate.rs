@@ -2896,6 +2896,16 @@ fn sequence_item(context: &mut Context, sp!(loc, ns_): E::SequenceItem) -> N::Se
                 Some(bind) => NS::Bind(bind, e),
             }
         }
+        ES::BindElse(pat, e, else_e) => {
+            let e = exp(context, e);
+            let else_e = exp(context, else_e);
+            let pat_binders = unique_pattern_binders(context, &pat);
+            for (_, binder) in &pat_binders {
+                context.declare_local(/* is_parameter */ false, binder.0);
+            }
+            let pat = match_pattern(context, Box::new(pat));
+            NS::BindElse(*pat, e, else_e)
+        }
     };
     sp(loc, s_)
 }
@@ -4098,14 +4108,21 @@ fn lvalue(
                     stype
                 }
                 Some(ResolvedConstructor::Variant(variant)) => {
-                    context.add_diag(diag!(
+                    let mut diag = diag!(
                         NameResolution::NamePositionMismatch,
                         (tn.loc, format!("Invalid {}. Expected a struct", msg)),
                         (
                             variant.enum_name.loc(),
                             format!("But '{}' is an enum", variant.enum_name)
                         )
-                    ));
+                    );
+                    if matches!(case, C::Bind) {
+                        diag.add_note(
+                            "Variants are refutable. Use 'let <pattern> = <expr> else { /* divergent */ };' \
+                             to handle the case where the pattern does not match.",
+                        );
+                    }
+                    context.add_diag(diag);
                     return None;
                 }
                 None => {
@@ -4529,6 +4546,11 @@ fn remove_unused_bindings_seq(
             N::SequenceItem_::Bind(lvalues, e) => {
                 remove_unused_bindings_lvalues(context, used, lvalues);
                 remove_unused_bindings_exp(context, used, e)
+            }
+            N::SequenceItem_::BindElse(pat, e, else_e) => {
+                remove_unused_bindings_pattern(context, used, pat);
+                remove_unused_bindings_exp(context, used, e);
+                remove_unused_bindings_exp(context, used, else_e)
             }
         }
     }

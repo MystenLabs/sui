@@ -40,7 +40,9 @@ fn tail_block(context: &mut Context, seq: &VecDeque<T::SequenceItem>) {
     match &last.value {
         T::SequenceItem_::Seq(exp) => tail(context, exp),
         // These don't make sense and shouldn't occur, but are irrelevant to us.
-        T::SequenceItem_::Declare(_) | T::SequenceItem_::Bind(_, _, _) => (),
+        T::SequenceItem_::Declare(_)
+        | T::SequenceItem_::Bind(_, _, _)
+        | T::SequenceItem_::BindElse(_, _, _, _) => (),
     }
 }
 
@@ -169,7 +171,9 @@ fn returnable_value(context: &mut Context, exp: &T::Exp) -> bool {
             let Some(last) = seq.back() else { return false };
             match &last.value {
                 T::SequenceItem_::Seq(exp) => returnable_value(context, exp),
-                T::SequenceItem_::Declare(_) | T::SequenceItem_::Bind(_, _, _) => false,
+                T::SequenceItem_::Declare(_)
+                | T::SequenceItem_::Bind(_, _, _)
+                | T::SequenceItem_::BindElse(_, _, _, _) => false,
             }
         }
 

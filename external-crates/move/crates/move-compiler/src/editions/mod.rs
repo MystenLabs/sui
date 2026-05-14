@@ -55,6 +55,7 @@ pub enum FeatureGate {
     ModuleLabel,
     ModuleExtension,
     StringLiterals,
+    LetElse,
 }
 
 /// Compiler flavor — selects syntax and semantic rules (e.g. `Core` vs `Sui`).
@@ -178,6 +179,7 @@ const E2024_FEATURES: &[FeatureGate] = &[
     FeatureGate::ModuleLabel,
     FeatureGate::Enums,
     FeatureGate::StringLiterals,
+    FeatureGate::LetElse,
 ];
 
 impl Edition {
@@ -320,6 +322,7 @@ impl FeatureGate {
             FeatureGate::ModuleLabel => "'module' label forms (ending with ';') are",
             FeatureGate::ModuleExtension => "module extensions are",
             FeatureGate::StringLiterals => "string literals (without a leading 'b' or 'x') are",
+            FeatureGate::LetElse => "'let ... else' bindings are",
         }
     }
 }

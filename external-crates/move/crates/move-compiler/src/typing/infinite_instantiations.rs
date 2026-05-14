@@ -215,6 +215,10 @@ fn sequence_item(context: &mut Context, item: &T::SequenceItem) {
     use T::SequenceItem_ as S;
     match &item.value {
         S::Bind(_, _, te) | S::Seq(te) => exp(context, te),
+        S::BindElse(_, _, te, else_e) => {
+            exp(context, te);
+            exp(context, else_e);
+        }
         S::Declare(_) => (),
     }
 }
