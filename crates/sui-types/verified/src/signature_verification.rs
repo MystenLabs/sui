@@ -57,27 +57,21 @@ pub trait SignatureVerifiable<Addr> {
 }
 
 // ---------------------------------------------------------------------------
-// § 3  Abstract spec predicates
+// § 3  Abstract spec predicates (single-element primitives)
 // ---------------------------------------------------------------------------
-// All uninterpreted — concrete interpretations are provided via
-// `assume_specification` on the `SignatureVerifiable` impl methods during
-// proof development.
+// These operate on a single `&S` so they can be connected to the
+// `SignatureVerifiable` trait methods via `assume_specification`.
 
-/// The set of addresses derivable from the signature at position `i` in `sigs`.
-/// Undefined (and never queried) when `spec_addr_derivation_fails(sigs, i)`.
-pub uninterp spec fn spec_addresses<S, Addr>(sigs: &[S], i: int) -> Set<Addr>;
+/// The set of addresses derivable from a single signature.
+/// Undefined (and never queried) when `spec_sig_addr_fails(sig)`.
+pub uninterp spec fn spec_sig_addresses<S, Addr>(sig: &S) -> Set<Addr>;
 
-/// Whether address derivation fails for the signature at position `i`.
-pub uninterp spec fn spec_addr_derivation_fails<S>(sigs: &[S], i: int) -> bool;
+/// Whether address derivation fails for a single signature.
+pub uninterp spec fn spec_sig_addr_fails<S>(sig: &S) -> bool;
 
-/// Whether the signature at position `i` is cryptographically valid for `addr`
-/// at `epoch`. This is the underlying crypto check, independent of aliases.
-pub uninterp spec fn spec_sig_crypto_valid<S, Addr>(
-    sigs: &[S],
-    i: int,
-    addr: Addr,
-    epoch: u64,
-) -> bool;
+/// Whether a single signature is cryptographically valid for `addr` at `epoch`.
+/// Independent of aliases — this is the raw crypto check.
+pub uninterp spec fn spec_sig_crypto_valid<S, Addr>(sig: &S, addr: Addr, epoch: u64) -> bool;
 
 /// The alias set for `sender` given the `aliased_addresses` mapping.
 /// Defaults to `{sender}` when `sender` is not a key in the mapping.
@@ -87,8 +81,20 @@ pub uninterp spec fn spec_aliases<Addr>(
 ) -> Set<Addr>;
 
 // ---------------------------------------------------------------------------
-// § 4  Derived spec predicates
+// § 4  Derived spec predicates (slice-indexed, used in ensures clauses)
 // ---------------------------------------------------------------------------
+// These lift the single-element primitives to slice + index form for use
+// in the function postconditions which reason about `&[S]` inputs.
+
+/// The address set for the signature at position `i` in `sigs`.
+pub open spec fn spec_addresses<S, Addr>(sigs: &[S], i: int) -> Set<Addr> {
+    spec_sig_addresses::<S, Addr>(&sigs@[i])
+}
+
+/// Whether address derivation fails for the signature at position `i`.
+pub open spec fn spec_addr_derivation_fails<S>(sigs: &[S], i: int) -> bool {
+    spec_sig_addr_fails(&sigs@[i])
+}
 
 /// Whether any signature in `sigs` has an uncomputable address set.
 pub open spec fn spec_any_addr_derivation_fails<S>(sigs: &[S]) -> bool {
@@ -111,7 +117,7 @@ pub open spec fn spec_is_valid_for<S, Addr>(
         #![trigger spec_addresses::<S, Addr>(sigs, i).contains(a)]
         spec_addresses::<S, Addr>(sigs, i).contains(a)
         && spec_aliases(sender, aliased_addresses).contains(a)
-        && spec_sig_crypto_valid(sigs, i, a, epoch)
+        && spec_sig_crypto_valid(&sigs@[i], a, epoch)
 }
 
 /// The greedy assignment: for each sender k (in order), the index of the first
