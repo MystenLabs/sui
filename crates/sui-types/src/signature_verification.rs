@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use nonempty::NonEmpty;
-use shared_crypto::intent::Intent;
+use shared_crypto::intent::{Intent, IntentMessage};
+use sui_types_verified::signature_verification::{SigVerifyError, SignatureVerifiable};
 
 use crate::base_types::SuiAddress;
 use crate::committee::EpochId;
 use crate::digests::ZKLoginInputsDigest;
-use crate::error::{SuiErrorKind, SuiResult};
-use crate::signature::VerifyParams;
-use crate::transaction::{SenderSignedData, TransactionDataAPI};
+use crate::error::{SuiError, SuiErrorKind, SuiResult};
+use crate::signature::{GenericSignature, VerifyParams};
+use crate::transaction::{SenderSignedData, TransactionData, TransactionDataAPI};
 use lru::LruCache;
 use parking_lot::RwLock;
 use prometheus::IntCounter;
@@ -196,4 +197,126 @@ pub fn verify_sender_signed_data_message_signatures(
         )?;
     }
     Ok(signer_to_sig_index)
+}
+
+// ---------------------------------------------------------------------------
+// Verified implementation (replaces the function above once the Verus proof
+// is complete — see crates/sui-types/verified/src/signature_verification.rs)
+// ---------------------------------------------------------------------------
+
+/// A `GenericSignature` bundled with the context needed to verify it.
+///
+/// This wrapper implements `SignatureVerifiable<SuiAddress>` so that the
+/// generic verified function has no dependency on `sui-types` concrete types.
+pub struct VerifiableSig<'a> {
+    sig: &'a GenericSignature,
+    intent_message: &'a IntentMessage<TransactionData>,
+    verify_params: &'a VerifyParams,
+    zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+}
+
+impl<'a> SignatureVerifiable<SuiAddress> for VerifiableSig<'a> {
+    fn try_derive_addresses(&self) -> Result<Vec<SuiAddress>, SigVerifyError> {
+        let mut addrs = Vec::new();
+        // A zklogin signature with legacy-address support yields two addresses.
+        if self.verify_params.verify_legacy_zklogin_address {
+            if let GenericSignature::ZkLoginAuthenticator(z) = self.sig {
+                addrs.push(
+                    SuiAddress::try_from_padded(&z.inputs)
+                        .map_err(|_| SigVerifyError::AddressDerivationFailed)?,
+                );
+            }
+        }
+        let canonical =
+            SuiAddress::try_from(self.sig).map_err(|_| SigVerifyError::AddressDerivationFailed)?;
+        addrs.push(canonical);
+        Ok(addrs)
+    }
+
+    fn verify_for_address(&self, addr: &SuiAddress, epoch: u64) -> Result<(), SigVerifyError> {
+        self.sig
+            .verify_authenticator(
+                self.intent_message,
+                *addr,
+                epoch,
+                self.verify_params,
+                self.zklogin_inputs_cache.clone(),
+            )
+            .map_err(|_| SigVerifyError::CryptoVerificationFailed)
+    }
+}
+
+fn sig_verify_err_to_sui(e: SigVerifyError) -> SuiError {
+    match e {
+        SigVerifyError::WrongIntent => SuiErrorKind::InvalidSignature {
+            error: "wrong intent".to_owned(),
+        }
+        .into(),
+        SigVerifyError::SignerCountMismatch { actual, expected } => {
+            SuiErrorKind::SignerSignatureNumberMismatch { actual, expected }.into()
+        }
+        SigVerifyError::AddressDerivationFailed => SuiErrorKind::InvalidSignature {
+            error: "address derivation failed".to_owned(),
+        }
+        .into(),
+        SigVerifyError::SignerAbsent => SuiErrorKind::SignerSignatureAbsent {
+            expected: String::new(),
+            actual: vec![],
+        }
+        .into(),
+        SigVerifyError::CryptoVerificationFailed => SuiErrorKind::InvalidSignature {
+            error: "cryptographic verification failed".to_owned(),
+        }
+        .into(),
+    }
+}
+
+/// Thin wrapper that will replace [`verify_sender_signed_data_message_signatures`]
+/// once the Verus proof for [`sui_types_verified::signature_verification::verify_signatures`]
+/// is complete.
+pub fn verify_sender_signed_data_message_signatures_verified(
+    txn: &SenderSignedData,
+    current_epoch: EpochId,
+    verify_params: &VerifyParams,
+    zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
+    aliased_addresses: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
+) -> SuiResult<Vec<u8>> {
+    let intent_message = txn.intent_message();
+    let intent_is_sui_tx = intent_message.intent == Intent::sui_transaction();
+    let is_system_tx = intent_message.value.is_system_tx();
+    let required_signers: Vec<SuiAddress> = intent_message
+        .value
+        .required_signers()
+        .into_iter()
+        .collect();
+
+    // Precondition required by the verified function: signer count fits in u8.
+    // In practice required_signers has at most 2 elements.
+    assert!(required_signers.len() <= u8::MAX as usize);
+
+    let verifiable_sigs: Vec<VerifiableSig> = txn
+        .tx_signatures()
+        .iter()
+        .map(|sig| VerifiableSig {
+            sig,
+            intent_message,
+            verify_params,
+            zklogin_inputs_cache: zklogin_inputs_cache.clone(),
+        })
+        .collect();
+
+    let aliases: Vec<(SuiAddress, Vec<SuiAddress>)> = aliased_addresses
+        .into_iter()
+        .map(|(addr, aliases)| (addr, aliases.into_iter().collect()))
+        .collect();
+
+    sui_types_verified::signature_verification::verify_signatures(
+        intent_is_sui_tx,
+        &verifiable_sigs,
+        &required_signers,
+        is_system_tx,
+        current_epoch,
+        &aliases,
+    )
+    .map_err(sig_verify_err_to_sui)
 }
