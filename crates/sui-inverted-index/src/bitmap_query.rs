@@ -254,8 +254,8 @@ pub fn intersect_n(streams: Vec<BucketStream>, direction: ScanDirection) -> Buck
         if streams.is_empty() {
             return;
         }
-        let mut children: Vec<Pin<Box<Peekable<BucketStream>>>> =
-            streams.into_iter().map(|s| Box::pin(s.peekable())).collect();
+        let mut children: Vec<Peekable<BucketStream>> =
+            streams.into_iter().map(|s| s.peekable()).collect();
 
         loop {
             // Poll all child streams together so independent backend scans are
@@ -274,8 +274,7 @@ pub fn intersect_n(streams: Vec<BucketStream>, direction: ScanDirection) -> Buck
                 // All children at the same bucket: intersect and emit.
                 let mut acc: Option<RoaringBitmap> = None;
                 for child in children.iter_mut() {
-                    let (bid, bitmap) = child
-                        .as_mut()
+                    let (bid, bitmap) = Pin::new(child)
                         .next()
                         .await
                         .expect("peek reported a value")?;
@@ -301,8 +300,7 @@ pub fn intersect_n(streams: Vec<BucketStream>, direction: ScanDirection) -> Buck
                         ScanDirection::Descending => peeks[i] > target_bucket,
                     };
                     if drop_bucket {
-                        let _ = child
-                            .as_mut()
+                        let _ = Pin::new(child)
                             .next()
                             .await
                             .expect("peek reported a value")?;
@@ -321,8 +319,8 @@ pub fn union_n(streams: Vec<BucketStream>, direction: ScanDirection) -> BucketSt
         if streams.is_empty() {
             return;
         }
-        let mut children: Vec<Pin<Box<Peekable<BucketStream>>>> =
-            streams.into_iter().map(|s| Box::pin(s.peekable())).collect();
+        let mut children: Vec<Peekable<BucketStream>> =
+            streams.into_iter().map(|s| s.peekable()).collect();
 
         loop {
             let peeks = peek_buckets(&mut children).await?;
@@ -357,8 +355,7 @@ pub fn union_n(streams: Vec<BucketStream>, direction: ScanDirection) -> BucketSt
             let mut acc: Option<RoaringBitmap> = None;
             for (i, child) in children.iter_mut().enumerate() {
                 if surviving_peeks[i] == next_bucket {
-                    let (_, bitmap) = child
-                        .as_mut()
+                    let (_, bitmap) = Pin::new(child)
                         .next()
                         .await
                         .expect("peek reported a value")?;
@@ -397,14 +394,14 @@ pub fn union_n(streams: Vec<BucketStream>, direction: ScanDirection) -> BucketSt
 /// else emits `a_bm` unchanged. Drops empty results.
 pub fn subtract_two(a: BucketStream, b: BucketStream, direction: ScanDirection) -> BucketStream {
     async_stream::try_stream! {
-        let mut a = Box::pin(a.peekable());
-        let mut b = Box::pin(b.peekable());
+        let mut a = a.peekable();
+        let mut b = b.peekable();
 
         loop {
             // The peeks poll both streams concurrently and buffer their head
             // rows; the later `next()` calls consume those buffered rows.
             let (a_peek, b_peek) =
-                futures::try_join!(peek_bucket(a.as_mut()), peek_bucket(b.as_mut()))?;
+                futures::try_join!(peek_bucket(&mut a), peek_bucket(&mut b))?;
             let Some(a_bucket) = a_peek else {
                 return;
             };
@@ -412,8 +409,7 @@ pub fn subtract_two(a: BucketStream, b: BucketStream, direction: ScanDirection) 
             match b_peek {
                 None => {
                     // No more negatives: flush a.
-                    let (bid, bitmap) = a
-                        .as_mut()
+                    let (bid, bitmap) = Pin::new(&mut a)
                         .next()
                         .await
                         .expect("peek reported a value")?;
@@ -426,8 +422,7 @@ pub fn subtract_two(a: BucketStream, b: BucketStream, direction: ScanDirection) 
                         || (!direction.is_ascending() && bb < a_bucket) =>
                 {
                     // b is ahead, emit a unchanged.
-                    let (bid, bitmap) = a
-                        .as_mut()
+                    let (bid, bitmap) = Pin::new(&mut a)
                         .next()
                         .await
                         .expect("peek reported a value")?;
@@ -440,21 +435,18 @@ pub fn subtract_two(a: BucketStream, b: BucketStream, direction: ScanDirection) 
                         || (!direction.is_ascending() && bb > a_bucket) =>
                 {
                     // b is behind; skip it.
-                    let _ = b
-                        .as_mut()
+                    let _ = Pin::new(&mut b)
                         .next()
                         .await
                         .expect("peek reported a value")?;
                 }
                 Some(_) => {
                     // Same bucket: subtract.
-                    let (bid, a_bm) = a
-                        .as_mut()
+                    let (bid, a_bm) = Pin::new(&mut a)
                         .next()
                         .await
                         .expect("peek reported a value")?;
-                    let (_, b_bm) = b
-                        .as_mut()
+                    let (_, b_bm) = Pin::new(&mut b)
                         .next()
                         .await
                         .expect("peek reported a value")?;
@@ -523,7 +515,8 @@ where
 
 /// Peek at the head of a `Peekable<BucketStream>`, returning its bucket_id.
 /// If the stream's next item is an error, consumes it to propagate via `?`.
-async fn peek_bucket(mut s: Pin<&mut Peekable<BucketStream>>) -> Result<Option<u64>> {
+async fn peek_bucket(s: &mut Peekable<BucketStream>) -> Result<Option<u64>> {
+    let mut s = Pin::new(s);
     let peeked = match s.as_mut().peek().await {
         None => None,
         Some(Ok((b, _))) => Some(Ok(*b)),
@@ -541,15 +534,8 @@ async fn peek_bucket(mut s: Pin<&mut Peekable<BucketStream>>) -> Result<Option<u
     }
 }
 
-async fn peek_buckets(
-    streams: &mut [Pin<Box<Peekable<BucketStream>>>],
-) -> Result<Vec<Option<u64>>> {
-    futures::future::try_join_all(
-        streams
-            .iter_mut()
-            .map(|stream| peek_bucket(stream.as_mut())),
-    )
-    .await
+async fn peek_buckets(streams: &mut [Peekable<BucketStream>]) -> Result<Vec<Option<u64>>> {
+    futures::future::try_join_all(streams.iter_mut().map(peek_bucket)).await
 }
 
 fn complete_peeks(peeks: Vec<Option<u64>>) -> Option<(Vec<u64>, u64)> {
@@ -743,9 +729,9 @@ mod tests {
     #[tokio::test]
     async fn peek_bucket_propagates_errors_without_panicking() {
         let stream: BucketStream = stream::iter(vec![Err(anyhow::anyhow!("boom"))]).boxed();
-        let mut stream = Box::pin(stream.peekable());
+        let mut stream = stream.peekable();
 
-        let err = peek_bucket(stream.as_mut()).await.unwrap_err();
+        let err = peek_bucket(&mut stream).await.unwrap_err();
 
         assert!(err.to_string().contains("boom"));
         assert!(stream.next().await.is_none());
