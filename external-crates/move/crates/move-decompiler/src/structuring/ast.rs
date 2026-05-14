@@ -30,6 +30,47 @@ pub enum Input {
     Code(Label, Code, Option<Label>),
 }
 
+/// Provenance for a surviving `Jump`/`JumpIf`. Each variant names the structurer path that
+/// created the goto; the tag rides through `insert_breaks` and is printed on stderr when a
+/// Jump is lowered to `Unstructured(Goto)` in `generate_output`, letting the corpus driver
+/// attribute residual gotos by source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GotoSource {
+    /// Then-arm of a Condition targets the post-dominator.
+    ConseqEqPostDom,
+    /// Else-arm of a Condition targets the post-dominator.
+    AltEqPostDom,
+    /// Condition whose arm targets the condition node itself (back-edge to the loop head).
+    DegenerateJumpIf,
+    /// Arm target sits outside start's dominator subtree (typically a Continue/Break to an
+    /// enclosing loop, rewritten later by that loop's `insert_breaks`).
+    ArmOutsideSubtree,
+    /// JumpIf emitted at a latch node by `structure_latch_node`.
+    LatchTest,
+    /// Jump emitted at a latch node's Code-input by `structure_latch_node`.
+    LatchCode,
+    /// Self-edge Jump emitted by `structure_code_node` for a code block whose `next` is
+    /// itself. Suspected unreachable in practice.
+    SelfLoop,
+    /// Escape Jump synthesized in `insert_breaks` when a JumpIf has one Latch arm.
+    EscapeJumpIf,
+}
+
+impl GotoSource {
+    pub fn as_tag(&self) -> &'static str {
+        match self {
+            GotoSource::ConseqEqPostDom => "CPD",
+            GotoSource::AltEqPostDom => "APD",
+            GotoSource::DegenerateJumpIf => "DJI",
+            GotoSource::ArmOutsideSubtree => "AOS",
+            GotoSource::LatchTest => "LT",
+            GotoSource::LatchCode => "LC",
+            GotoSource::SelfLoop => "SL",
+            GotoSource::EscapeJumpIf => "EJI",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Structured {
     /// `break 'label;` — targets the labeled enclosing Loop. Structuring always knows which
@@ -49,8 +90,10 @@ pub enum Structured {
         /* enum */ (ModuleId<Symbol>, Symbol),
         /* variant x rhs */ Vec<(Symbol, Structured)>,
     ),
-    Jump(Label),
-    JumpIf(Code, Label, Label),
+    /// Goto. `GotoSource` records which structurer path created it for instrumentation.
+    Jump(GotoSource, Label),
+    /// Two-way goto. Same instrumentation as `Jump`.
+    JumpIf(GotoSource, Code, Label, Label),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -157,13 +200,19 @@ impl std::fmt::Display for Structured {
                     indent(f, level)?;
                     writeln!(f, "continue 'loop_{};", label.index())
                 }
-                Structured::Jump(node_index) => {
+                Structured::Jump(src, node_index) => {
                     indent(f, level)?;
-                    writeln!(f, "jump {:?};", node_index)
+                    writeln!(f, "jump<{}> {:?};", src.as_tag(), node_index)
                 }
-                Structured::JumpIf(_, node_index, node_index1) => {
+                Structured::JumpIf(src, _, node_index, node_index1) => {
                     indent(f, level)?;
-                    writeln!(f, "jump_if ({:?}, {:?});", node_index, node_index1)
+                    writeln!(
+                        f,
+                        "jump_if<{}> ({:?}, {:?});",
+                        src.as_tag(),
+                        node_index,
+                        node_index1
+                    )
                 }
             }
         }

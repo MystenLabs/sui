@@ -82,10 +82,6 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
         let l52 = bm::gdtp(l1, l2, l15);
         if (l6) {
             pool::cancel_all_orders(l0, l2, &l52, l3, freeze(l15))
-        } else {
-            unstructured {
-                goto 'label_41;
-            }
         };
         let (reg_31, reg_32, reg_33) = pool::pool_book_params(freeze(l0));
         let l32 = reg_33;
@@ -151,8 +147,6 @@ public fun elf<T,T,T>(l0: &mut 0x2c8d603bc51326b8c13cef9dd07031a408a48dddb541963
                     l22 = reg_134;
                     l19 = l18;
                     l50 = true;
-                } else {
-                    
                 };
                 let l49 = dbke::sp(&l22, &l19, l51, l27, l29);
                 if (l49 == 0u64) {

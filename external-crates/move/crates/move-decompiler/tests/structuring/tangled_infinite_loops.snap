@@ -11,7 +11,7 @@ if (0) {
         }
     }
 } else {
-    jump NodeIndex(3);
+    jump<APD> NodeIndex(3);
 }
 'loop_3: loop {
     { 3 }

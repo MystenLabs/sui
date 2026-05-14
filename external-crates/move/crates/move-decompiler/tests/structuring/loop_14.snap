@@ -9,8 +9,6 @@ source: crates/move-decompiler/tests/tests.rs
         { 3 }
         if (4) {
             { 5 }
-        } else {
-            { }
         }
         { 6 }
         continue 'loop_1;

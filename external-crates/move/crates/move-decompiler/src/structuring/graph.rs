@@ -22,6 +22,10 @@ pub struct Graph {
     pub loop_heads: HashSet<NodeIndex>,
     pub back_edges: HashMap<NodeIndex, HashSet<NodeIndex>>,
     pub post_dominators: Dominators<NodeIndex>,
+    /// For each node, the set of enclosing loop heads whose bodies contain it. Empty for
+    /// top-level nodes. Built once in `Graph::new` and read by `structure_acyclic_region`
+    /// to compare the loop scope of `start` against that of `post_dominator`.
+    pub loop_scopes: HashMap<NodeIndex, HashSet<NodeIndex>>,
 }
 
 impl Graph {
@@ -62,14 +66,35 @@ impl Graph {
             print_heading("loop heads");
             println!("{loop_heads:#?}");
         }
-        Self {
+        let mut graph = Self {
             cfg,
             dom_tree,
             loop_heads,
             back_edges,
             post_dominators,
             return_,
+            loop_scopes: HashMap::new(),
+        };
+        // For each loop head, compute its body and record membership. Precomputing here
+        // turns the per-call scope-equality check in `structure_acyclic_region` into O(1).
+        let mut loop_scopes: HashMap<NodeIndex, HashSet<NodeIndex>> = HashMap::new();
+        for &lh in &graph.loop_heads {
+            let (body, _) = graph.find_loop_nodes(lh);
+            for node in body {
+                loop_scopes.entry(node).or_default().insert(lh);
+            }
         }
+        graph.loop_scopes = loop_scopes;
+        graph
+    }
+
+    /// The set of loop heads whose bodies contain `node`. Empty for top-level nodes. Two
+    /// nodes share a loop scope iff this returns equal sets for them.
+    pub fn loop_scope_of(&self, node: NodeIndex) -> &HashSet<NodeIndex> {
+        static EMPTY: std::sync::OnceLock<HashSet<NodeIndex>> = std::sync::OnceLock::new();
+        self.loop_scopes
+            .get(&node)
+            .unwrap_or_else(|| EMPTY.get_or_init(HashSet::new))
     }
 
     pub fn update_latch_nodes(&mut self, node: NodeIndex, latch: NodeIndex) {

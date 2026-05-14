@@ -77,8 +77,6 @@ public entry fun mint_batch(l0: &mut 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b
         let l5 = *(&(&l1)[l3]);
         if (!(vec_set::contains(&l0.claimed, &l5))) {
             nft_claim::mint_single(l0, l5, l2)
-        } else {
-            
         };
         l3 = l3 + 1u64;
     }

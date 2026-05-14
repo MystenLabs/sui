@@ -332,7 +332,15 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             };
             // When a cond block has list of exp before the jump, we need to pop the conditional statement and
             let (cond, mut exps) = (seq.pop().unwrap(), seq);
-            let alt_exp = alt.map(|a| generate_output(terms.clone(), a));
+            // Drop an alt that collapsed to an empty Seq (typically from `LatchKind::InLoop`
+            // in `insert_breaks`); otherwise the output renders with empty `else { }` braces.
+            let alt_exp = alt.and_then(|a| {
+                let e = generate_output(terms.clone(), a);
+                match &e {
+                    Exp::Seq(items) if items.is_empty() => None,
+                    _ => Some(e),
+                }
+            });
             exps.push(Out::Exp::IfElse(
                 Box::new(cond),
                 Box::new(generate_output(terms.clone(), *conseq)),
@@ -358,11 +366,14 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             ));
             Out::Exp::Seq(exps)
         }
-        D::Structured::Jump(target) => {
+        D::Structured::Jump(src, target) => {
             let label = target.index() as u64;
+            // Surviving Jump becomes a real goto; tag the line with its creation site so
+            // the corpus driver can break down residue by category.
+            eprintln!("GOTO[{}] -> label_{}", src.as_tag(), label);
             Out::Exp::Unstructured(vec![Out::UnstructuredNode::Goto(label)])
         }
-        D::Structured::JumpIf(code, then_target, else_target) => {
+        D::Structured::JumpIf(src, code, then_target, else_target) => {
             let term = terms.remove(&(code as u32).into()).unwrap();
             let Exp::Seq(mut seq) = term else {
                 panic!("Expected Seq for JumpIf condition")
@@ -371,6 +382,12 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
 
             let then_label = then_target.index() as u64;
             let else_label = else_target.index() as u64;
+            eprintln!(
+                "GOTO[{}] -> label_{}/label_{}",
+                src.as_tag(),
+                then_label,
+                else_label
+            );
 
             seq.push(Out::Exp::IfElse(
                 Box::new(cond),
