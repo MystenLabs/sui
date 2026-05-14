@@ -64,6 +64,16 @@ pub struct RpcConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authenticated_events_indexing: Option<bool>,
 
+    /// Enable historical checkpoint/transaction indexes for RPC queries.
+    ///
+    /// This flag is folded into the `rpc-index` DB version, so flipping it in
+    /// either direction triggers a full rebuild. While it stays put, forward
+    /// indexing and pruning maintain these indexes normally.
+    ///
+    /// Defaults to `false`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ledger_history_indexing: Option<bool>,
+
     /// Configuration for rendering Objects based on the Display standard
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display: Option<DisplayConfig>,
@@ -98,6 +108,10 @@ impl RpcConfig {
 
     pub fn authenticated_events_indexing(&self) -> bool {
         self.authenticated_events_indexing.unwrap_or(false)
+    }
+
+    pub fn ledger_history_indexing(&self) -> bool {
+        self.ledger_history_indexing.unwrap_or(false)
     }
 
     pub fn display(&self) -> &DisplayConfig {
