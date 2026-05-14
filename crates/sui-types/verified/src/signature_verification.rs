@@ -57,28 +57,144 @@ pub trait SignatureVerifiable<Addr> {
 }
 
 // ---------------------------------------------------------------------------
-// § 3  Spec predicates
+// § 3  Abstract spec predicates
 // ---------------------------------------------------------------------------
 // All uninterpreted — concrete interpretations are provided via
 // `assume_specification` on the `SignatureVerifiable` impl methods during
 // proof development.
 
-/// Whether any signature in `sigs` has an uncomputable address set.
-pub uninterp spec fn spec_any_addr_derivation_fails<S>(sigs: &[S]) -> bool;
+/// The set of addresses derivable from the signature at position `i` in `sigs`.
+/// Undefined (and never queried) when `spec_addr_derivation_fails(sigs, i)`.
+pub uninterp spec fn spec_addresses<S, Addr>(sigs: &[S], i: int) -> Set<Addr>;
 
-/// Result of the greedy assignment algorithm (see informal spec).
+/// Whether address derivation fails for the signature at position `i`.
+pub uninterp spec fn spec_addr_derivation_fails<S>(sigs: &[S], i: int) -> bool;
+
+/// Whether the signature at position `i` is cryptographically valid for `addr`
+/// at `epoch`. This is the underlying crypto check, independent of aliases.
+pub uninterp spec fn spec_sig_crypto_valid<S, Addr>(
+    sigs: &[S],
+    i: int,
+    addr: Addr,
+    epoch: u64,
+) -> bool;
+
+/// The alias set for `sender` given the `aliased_addresses` mapping.
+/// Defaults to `{sender}` when `sender` is not a key in the mapping.
+pub uninterp spec fn spec_aliases<Addr>(
+    sender: Addr,
+    aliased_addresses: &[(Addr, Vec<Addr>)],
+) -> Set<Addr>;
+
+// ---------------------------------------------------------------------------
+// § 4  Derived spec predicates
+// ---------------------------------------------------------------------------
+
+/// Whether any signature in `sigs` has an uncomputable address set.
+pub open spec fn spec_any_addr_derivation_fails<S>(sigs: &[S]) -> bool {
+    exists|i: int| 0 <= i < sigs@.len() && spec_addr_derivation_fails(sigs, i)
+}
+
+/// Whether the signature at position `i` is valid for `sender`:
+///   - there exists an address A in both addresses(sigs[i]) and aliases(sender), AND
+///   - sigs[i] is cryptographically valid for A at `epoch`.
 ///
-/// `Some(indices)` — every required signer was matched; `indices[k]` is the
-/// first unused position in `sigs` that is valid for `required_signers[k]`.
-/// `None` — the algorithm failed for at least one required signer.
-pub uninterp spec fn spec_greedy_result<S, Addr>(
+/// Verification runs against the matching address A, not against `sender` directly.
+pub open spec fn spec_is_valid_for<S, Addr>(
+    sigs: &[S],
+    i: int,
+    sender: Addr,
+    aliased_addresses: &[(Addr, Vec<Addr>)],
+    epoch: u64,
+) -> bool {
+    exists|a: Addr|
+        #![trigger spec_addresses::<S, Addr>(sigs, i).contains(a)]
+        spec_addresses::<S, Addr>(sigs, i).contains(a)
+        && spec_aliases(sender, aliased_addresses).contains(a)
+        && spec_sig_crypto_valid(sigs, i, a, epoch)
+}
+
+/// The greedy assignment: for each sender k (in order), the index of the first
+/// unused position j in `sigs` such that `spec_is_valid_for(sigs, j, signers[k], ...)`.
+/// Returns `None` if no such position exists for any sender.
+pub open spec fn spec_greedy_result<S, Addr>(
     sigs: &[S],
     required_signers: &[Addr],
     aliased_addresses: &[(Addr, Vec<Addr>)],
     epoch: u64,
-) -> Option<Seq<u8>>;
+) -> Option<Seq<u8>>
+    decreases required_signers@.len()
+{
+    spec_greedy_helper(sigs, required_signers@, aliased_addresses, epoch, Set::empty())
+}
 
-// Helper: extracts the byte sequence from an Ok result, or empty on Err.
+/// Recursive helper for the greedy algorithm.
+///
+/// `used` tracks which positions have already been assigned to earlier senders.
+/// At each step, finds the smallest j ∉ used with `spec_is_valid_for(sigs, j, signers[0], ...)`.
+pub open spec fn spec_greedy_helper<S, Addr>(
+    sigs: &[S],
+    signers: Seq<Addr>,
+    aliased_addresses: &[(Addr, Vec<Addr>)],
+    epoch: u64,
+    used: Set<int>,
+) -> Option<Seq<u8>>
+    decreases signers.len()
+{
+    if signers.len() == 0 {
+        Some(seq![])
+    } else {
+        // Find the first unused position valid for signers[0].
+        let j = spec_first_valid_unused(sigs, signers[0], aliased_addresses, epoch, used);
+        match j {
+            None => None,
+            Some(j) => {
+                match spec_greedy_helper(sigs, signers.skip(1), aliased_addresses, epoch, used.insert(j)) {
+                    None => None,
+                    Some(rest) => Some(seq![j as u8] + rest),
+                }
+            }
+        }
+    }
+}
+
+/// The smallest position j in `sigs` that is (a) not in `used` and
+/// (b) valid for `sender`. Returns `None` if no such position exists.
+pub open spec fn spec_first_valid_unused<S, Addr>(
+    sigs: &[S],
+    sender: Addr,
+    aliased_addresses: &[(Addr, Vec<Addr>)],
+    epoch: u64,
+    used: Set<int>,
+) -> Option<int>
+    decreases sigs@.len()
+{
+    spec_first_valid_unused_from(sigs, sender, aliased_addresses, epoch, used, 0)
+}
+
+pub open spec fn spec_first_valid_unused_from<S, Addr>(
+    sigs: &[S],
+    sender: Addr,
+    aliased_addresses: &[(Addr, Vec<Addr>)],
+    epoch: u64,
+    used: Set<int>,
+    start: int,
+) -> Option<int>
+    decreases sigs@.len() - start
+{
+    if start >= sigs@.len() {
+        None
+    } else if !used.contains(start) && spec_is_valid_for(sigs, start, sender, aliased_addresses, epoch) {
+        Some(start)
+    } else {
+        spec_first_valid_unused_from(sigs, sender, aliased_addresses, epoch, used, start + 1)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// § 5  Helper: extract Ok value
+// ---------------------------------------------------------------------------
+
 spec fn ok_indices(result: &Result<Vec<u8>, SigVerifyError>) -> Seq<u8> {
     match result {
         Ok(v) => v@,
@@ -87,7 +203,7 @@ spec fn ok_indices(result: &Result<Vec<u8>, SigVerifyError>) -> Seq<u8> {
 }
 
 // ---------------------------------------------------------------------------
-// § 4  Verified function (body left unimplemented — proof to follow)
+// § 6  Verified function (body left unimplemented — proof to follow)
 // ---------------------------------------------------------------------------
 
 /// Verify signatures on a user-signed transaction.
@@ -96,20 +212,19 @@ spec fn ok_indices(result: &Result<Vec<u8>, SigVerifyError>) -> Seq<u8> {
 /// - Checking that the transaction intent is `SUI_TRANSACTION_INTENT`.
 /// - Skipping this call for system transactions (which are unconditionally valid).
 ///
-/// # Parameters
-/// - `tx_signatures` — ordered sequence of authenticators.
-/// - `required_signers` — ordered sequence of addresses that must sign.
-/// - `epoch` — current epoch, used for cryptographic verification.
-/// - `aliased_addresses` — maps each canonical sender to its valid signing
-///   aliases; a sender not in this list is its own sole alias.
+/// # Preconditions
+/// - `required_signers.len() <= 255` (indices stored as `u8`).
+/// - For all distinct positions i ≠ j in `tx_signatures`,
+///   `addresses(tx_signatures[i]) ∩ addresses(tx_signatures[j]) = {}`.
+///   (No address collision — required for the greedy algorithm to be correct.)
 ///
 /// # Contract
 ///
 /// See `crates/sui-types/verify_sig_spec.md`.
 ///
 /// Returns `Ok(indices)` where `indices[k]` is the position of the first
-/// unused valid signature for `required_signers[k]`, or `Err` if any
-/// validity condition is violated.
+/// unused valid signature for `required_signers[k]` (greedy, in sender order).
+/// Returns `Err` if any validity condition is violated.
 #[verifier::external_body]
 pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
     tx_signatures: &[S],
@@ -118,8 +233,16 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
     aliased_addresses: &[(Addr, Vec<Addr>)],
 ) -> (result: Result<Vec<u8>, SigVerifyError>)
     requires
-        // Indices are stored as u8; the caller must ensure the signer count fits.
         required_signers@.len() <= u8::MAX as nat,
+        // No address collision across distinct signature positions.
+        forall|i: int, j: int|
+            0 <= i < tx_signatures@.len()
+            && 0 <= j < tx_signatures@.len()
+            && i != j
+            && !spec_addr_derivation_fails(tx_signatures, i)
+            && !spec_addr_derivation_fails(tx_signatures, j)
+            ==> #[trigger] spec_addresses::<S, Addr>(tx_signatures, i)
+                    .disjoint(spec_addresses::<S, Addr>(tx_signatures, j)),
     ensures
         // E1: count mismatch → Err
         tx_signatures@.len() != required_signers@.len() ==> result.is_Err(),
@@ -144,6 +267,30 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
                     epoch,
                 ).get_Some_0()
         },
+        // Return value invariants when Ok:
+        // R1: length matches required_signers
+        result.is_Ok() ==> ok_indices(&result).len() == required_signers@.len(),
+        // R2: every index is in bounds
+        result.is_Ok() ==>
+            forall|k: int| 0 <= k < ok_indices(&result).len()
+                ==> (ok_indices(&result)[k] as int) < tx_signatures@.len(),
+        // R3: indices are pairwise distinct (bijection — no sig position used twice)
+        result.is_Ok() ==>
+            forall|k1: int, k2: int|
+                0 <= k1 < ok_indices(&result).len()
+                && 0 <= k2 < ok_indices(&result).len()
+                && k1 != k2
+                ==> ok_indices(&result)[k1] != ok_indices(&result)[k2],
+        // R4: each assigned signature is valid for its required signer
+        result.is_Ok() ==>
+            forall|k: int| 0 <= k < ok_indices(&result).len()
+                ==> #[trigger] spec_is_valid_for(
+                        tx_signatures,
+                        ok_indices(&result)[k] as int,
+                        required_signers@[k],
+                        aliased_addresses,
+                        epoch,
+                    ),
 {
     unimplemented!()
 }
