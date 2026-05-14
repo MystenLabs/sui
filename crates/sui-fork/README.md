@@ -35,7 +35,9 @@ That means that you have full control over the advancement of checkpoints, time,
     `./target/debug/sui-fork`.
 
 2.  In a terminal, run `sui-fork start` with the desired flags:
+
     **From latest checkpoint on mainnet**
+
     ```bash
     sui-fork start
     ```
@@ -45,6 +47,7 @@ That means that you have full control over the advancement of checkpoints, time,
     > The fork serves Sui gRPC on `127.0.0.1:9000` by default.
 
     **From latest checkpoint on testnet**
+
     ```bash
     sui-fork start --network testnet
     ```
@@ -52,11 +55,13 @@ That means that you have full control over the advancement of checkpoints, time,
     > Supported networks are `mainnet`, `testnet`, and `devnet`. The default is `mainnet`.
 
     **From a specific checkpoint on mainnet**
+
     ```bash
     sui-fork start --checkpoint 12345678
     ```
 
-    ***From a specific checkpoint on testnet with custom data directory**
+    **From a specific checkpoint on testnet with custom data directory**
+
     ```bash
     sui-fork start --network testnet --checkpoint 12345678 --data-dir /tmp/sui-fork-demo
     ```
@@ -92,8 +97,7 @@ That means that you have full control over the advancement of checkpoints, time,
     ```
 
     If your test depends on address-owned objects at startup, add repeatable
-    `--address 0x...` or `--object 0x...` flags to `sui-fork start`. This is
-    especially important when forking from older checkpoints.
+    `--address 0x...` or `--object 0x...` flags to `sui-fork start`.
 
 ## Impersonating Senders
 
