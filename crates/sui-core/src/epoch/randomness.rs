@@ -449,7 +449,10 @@ impl RandomnessManager {
             );
         }
 
-        // Resume randomness round tracking from where we left off.
+        // Resume randomness generation from where we left off.
+        // This must be loaded regardless of whether DKG has finished yet, since the
+        // RandomnessEventLoop and commit-handling logic in AuthorityPerEpochStore both depend on
+        // this state.
         rm.next_randomness_round = tables
             .randomness_next_round
             .get(&SINGLETON_KEY)
@@ -620,6 +623,7 @@ impl RandomnessManager {
                 Err(e) => debug!("random beacon: observer error merging DKG Messages: {e:?}"),
             }
         } else {
+            // Once we have enough Messages, send a Confirmation.
             let party = self.party.clone().expect("party must be set for validator");
             match VersionedProcessedMessage::merge_party(party, messages) {
                 Ok((conf, used_msgs)) => {
