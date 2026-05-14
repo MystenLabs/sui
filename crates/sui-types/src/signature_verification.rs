@@ -248,10 +248,6 @@ impl<'a> SignatureVerifiable<SuiAddress> for VerifiableSig<'a> {
 
 fn sig_verify_err_to_sui(e: SigVerifyError) -> SuiError {
     match e {
-        SigVerifyError::WrongIntent => SuiErrorKind::InvalidSignature {
-            error: "wrong intent".to_owned(),
-        }
-        .into(),
         SigVerifyError::SignerCountMismatch { actual, expected } => {
             SuiErrorKind::SignerSignatureNumberMismatch { actual, expected }.into()
         }
@@ -274,6 +270,9 @@ fn sig_verify_err_to_sui(e: SigVerifyError) -> SuiError {
 /// Thin wrapper that will replace [`verify_sender_signed_data_message_signatures`]
 /// once the Verus proof for [`sui_types_verified::signature_verification::verify_signatures`]
 /// is complete.
+///
+/// Handles intent checking and the system-transaction bypass before delegating
+/// user-transaction verification to the generic verified function.
 pub fn verify_sender_signed_data_message_signatures_verified(
     txn: &SenderSignedData,
     current_epoch: EpochId,
@@ -282,13 +281,25 @@ pub fn verify_sender_signed_data_message_signatures_verified(
     aliased_addresses: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
 ) -> SuiResult<Vec<u8>> {
     let intent_message = txn.intent_message();
-    let intent_is_sui_tx = intent_message.intent == Intent::sui_transaction();
-    let is_system_tx = intent_message.value.is_system_tx();
+
+    // Intent check: must be a Sui transaction.
+    if intent_message.intent != Intent::sui_transaction() {
+        return Err(SuiErrorKind::InvalidSignature {
+            error: "wrong intent".to_owned(),
+        }
+        .into());
+    }
+
     let required_signers: Vec<SuiAddress> = intent_message
         .value
         .required_signers()
         .into_iter()
         .collect();
+
+    // System transactions are unconditionally valid; return sequential indices.
+    if intent_message.value.is_system_tx() {
+        return Ok((0..required_signers.len() as u8).collect());
+    }
 
     // Precondition required by the verified function: signer count fits in u8.
     // In practice required_signers has at most 2 elements.
@@ -311,10 +322,8 @@ pub fn verify_sender_signed_data_message_signatures_verified(
         .collect();
 
     sui_types_verified::signature_verification::verify_signatures(
-        intent_is_sui_tx,
         &verifiable_sigs,
         &required_signers,
-        is_system_tx,
         current_epoch,
         &aliases,
     )

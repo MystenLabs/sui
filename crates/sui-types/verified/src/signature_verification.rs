@@ -1,11 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Formally verified signature verification for sender-signed transactions.
+//! Formally verified signature verification for user-signed transactions.
 //!
-//! The function [`verify_signatures`] is generic over the signature and address
-//! types so that this crate has no dependency on `sui-types`. The concrete
-//! instantiation (`GenericSignature`, `SuiAddress`) lives in `sui-types`.
+//! [`verify_signatures`] handles only user transactions: intent checking and
+//! the system-transaction bypass are the caller's responsibility.
+//!
+//! The function is generic over the signature and address types so that this
+//! crate has no dependency on `sui-types`. The concrete instantiation
+//! (`GenericSignature`, `SuiAddress`) lives in `sui-types`.
 //!
 //! Informal spec: `crates/sui-types/verify_sig_spec.md`
 
@@ -22,8 +25,6 @@ verus! {
 /// Callers in `sui-types` convert these variants into the appropriate
 /// `SuiError` / `SuiErrorKind` variants.
 pub enum SigVerifyError {
-    /// The transaction intent is not `SUI_TRANSACTION_INTENT`.
-    WrongIntent,
     /// `|tx_signatures| ≠ |required_signers|`.
     SignerCountMismatch { actual: usize, expected: usize },
     /// A signature's address cannot be derived (malformed bytes).
@@ -89,14 +90,15 @@ spec fn ok_indices(result: &Result<Vec<u8>, SigVerifyError>) -> Seq<u8> {
 // § 4  Verified function (body left unimplemented — proof to follow)
 // ---------------------------------------------------------------------------
 
-/// Verify signatures on a sender-signed transaction.
+/// Verify signatures on a user-signed transaction.
+///
+/// The caller is responsible for:
+/// - Checking that the transaction intent is `SUI_TRANSACTION_INTENT`.
+/// - Skipping this call for system transactions (which are unconditionally valid).
 ///
 /// # Parameters
-/// - `intent_is_sui_tx` — whether the transaction's intent is
-///   `SUI_TRANSACTION_INTENT` (checked by the caller before this call).
 /// - `tx_signatures` — ordered sequence of authenticators.
 /// - `required_signers` — ordered sequence of addresses that must sign.
-/// - `is_system_tx` — system transactions are unconditionally valid.
 /// - `epoch` — current epoch, used for cryptographic verification.
 /// - `aliased_addresses` — maps each canonical sender to its valid signing
 ///   aliases; a sender not in this list is its own sole alias.
@@ -105,15 +107,13 @@ spec fn ok_indices(result: &Result<Vec<u8>, SigVerifyError>) -> Seq<u8> {
 ///
 /// See `crates/sui-types/verify_sig_spec.md`.
 ///
-/// Briefly: returns `Ok(indices)` where `indices[k]` is the position of the
-/// first unused valid signature for `required_signers[k]`, or `Err` if any
+/// Returns `Ok(indices)` where `indices[k]` is the position of the first
+/// unused valid signature for `required_signers[k]`, or `Err` if any
 /// validity condition is violated.
 #[verifier::external_body]
 pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
-    intent_is_sui_tx: bool,
     tx_signatures: &[S],
     required_signers: &[Addr],
-    is_system_tx: bool,
     epoch: u64,
     aliased_addresses: &[(Addr, Vec<Addr>)],
 ) -> (result: Result<Vec<u8>, SigVerifyError>)
@@ -121,37 +121,28 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
         // Indices are stored as u8; the caller must ensure the signer count fits.
         required_signers@.len() <= u8::MAX as nat,
     ensures
-        // E1: wrong intent → Err
-        !intent_is_sui_tx ==> result.is_Err(),
-        // E2: count mismatch (user tx) → Err
-        (!is_system_tx && tx_signatures@.len() != required_signers@.len())
-            ==> result.is_Err(),
-        // E3: address derivation failure → Err
+        // E1: count mismatch → Err
+        tx_signatures@.len() != required_signers@.len() ==> result.is_Err(),
+        // E2: address derivation failure → Err
         spec_any_addr_derivation_fails(tx_signatures) ==> result.is_Err(),
-        // S1: system tx (no derivation failure) → Ok with sequential indices
-        (intent_is_sui_tx
-            && is_system_tx
-            && !spec_any_addr_derivation_fails(tx_signatures)) ==> {
-            &&& result.is_Ok()
-            &&& ok_indices(&result) =~= Seq::new(required_signers@.len(), |i: int| i as u8)
-        },
-        // E4: greedy fails (user tx) → Err
-        (intent_is_sui_tx
-            && !is_system_tx
-            && !spec_any_addr_derivation_fails(tx_signatures)
+        // E3: greedy fails → Err
+        (!spec_any_addr_derivation_fails(tx_signatures)
             && tx_signatures@.len() == required_signers@.len()
             && spec_greedy_result(tx_signatures, required_signers, aliased_addresses, epoch).is_None())
             ==> result.is_Err(),
-        // S2: greedy succeeds (user tx) → Ok with greedy assignment
-        (intent_is_sui_tx
-            && !is_system_tx
-            && !spec_any_addr_derivation_fails(tx_signatures)
+        // S1: greedy succeeds → Ok with greedy assignment
+        (!spec_any_addr_derivation_fails(tx_signatures)
             && tx_signatures@.len() == required_signers@.len()
             && spec_greedy_result(tx_signatures, required_signers, aliased_addresses, epoch).is_Some())
             ==> {
             &&& result.is_Ok()
-            &&& ok_indices(&result) =~= spec_greedy_result(
-                    tx_signatures, required_signers, aliased_addresses, epoch).get_Some_0()
+            &&& ok_indices(&result)
+                =~= spec_greedy_result(
+                    tx_signatures,
+                    required_signers,
+                    aliased_addresses,
+                    epoch,
+                ).get_Some_0()
         },
 {
     unimplemented!()
