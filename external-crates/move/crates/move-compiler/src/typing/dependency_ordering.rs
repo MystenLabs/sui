@@ -265,13 +265,16 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition
 //**************************************************************************************************
 
 fn function(context: &mut Context, fdef: &T::Function) {
+    if fdef.macro_.is_some() {
+        // Macros do not add dependencies; their bodies are expanded at call sites.
+        return;
+    }
     match &fdef.body.value {
         T::FunctionBody_::Defined(seq) => {
             function_signature(context, &fdef.signature);
             sequence(context, seq)
         }
         T::FunctionBody_::Native => function_signature(context, &fdef.signature),
-        // macros do not add dependencies
         T::FunctionBody_::Macro => (),
     }
 }

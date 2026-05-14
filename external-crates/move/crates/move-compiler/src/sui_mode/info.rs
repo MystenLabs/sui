@@ -264,7 +264,9 @@ fn all_transferred(
 
         if let Some(mdef) = modules.get(&mident) {
             for (_, _, fdef) in &mdef.functions {
-                add_private_transfers(&mut transferred, fdef);
+                if fdef.macro_.is_none() {
+                    add_private_transfers(&mut transferred, fdef);
+                }
             }
         }
     }

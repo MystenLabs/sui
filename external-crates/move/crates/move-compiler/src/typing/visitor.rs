@@ -247,7 +247,9 @@ pub trait TypingVisitorContext {
                 .for_each(|ty| self.visit_type(None, ty));
             self.visit_type(None, &fdef.signature.return_type);
         }
-        if let T::FunctionBody_::Defined(seq) = &fdef.body.value {
+        if fdef.macro_.is_none()
+            && let T::FunctionBody_::Defined(seq) = &fdef.body.value
+        {
             self.visit_seq(fdef.body.loc, seq);
         }
         self.pop_warning_filter_scope();
@@ -854,7 +856,9 @@ pub trait TypingMutVisitorContext {
                 .for_each(|ty| self.visit_type(None, ty));
             self.visit_type(None, &mut fdef.signature.return_type);
         }
-        if let T::FunctionBody_::Defined(seq) = &mut fdef.body.value {
+        if fdef.macro_.is_none()
+            && let T::FunctionBody_::Defined(seq) = &mut fdef.body.value
+        {
             self.visit_seq(seq);
         }
         self.pop_warning_filter_scope();

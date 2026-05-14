@@ -181,7 +181,11 @@ fn module<'a>(
     module
         .functions
         .key_cloned_iter()
-        .for_each(|(_fname, fdef)| function_body(context, &fdef.body));
+        .for_each(|(_fname, fdef)| {
+            if fdef.macro_.is_none() {
+                function_body(context, &fdef.body)
+            }
+        });
     let graph = context.instantiation_graph();
     // - get the strongly connected components
     // - fitler out SCCs that do not contain a 'nested' or 'strong' edge

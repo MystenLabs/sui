@@ -529,6 +529,10 @@ fn function_signature(context: &mut Context, macro_: Option<Loc>, sig: &N::Funct
 /// Best-effort typing of a macro function body in IDE mode. Uses declared parameter types
 /// (already in scope from function_signature) to type the body, generating IDE annotations
 /// (DotAutocompleteInfo, etc.). Diagnostics from this best-effort pass are discarded.
+///
+/// The returned body is kept as `FunctionBody_::Defined` through typing so IDE consumers can
+/// inspect it, but the function remains marked as `macro_` and is filtered out during HLIR
+/// translation rather than compiled as a regular function.
 fn ide_macro_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::FunctionBody {
     let mut context = context.fork_for_ide_macro_body_typing();
     let mut b_ = match nb_ {
