@@ -12,7 +12,7 @@ use sui_types::{
 /// - number of inputs and pure input bytes
 /// - number of commands and their arguments
 /// - for Move calls, count arguments to the function (both value and type arguments) as the
-///   "arguments" to charge for for the command.
+///   "arguments" to charge for the command.
 pub fn meter<E: ExecutionErrorTrait>(
     meter: &mut TranslationMeter,
     transaction: &ProgrammableTransaction,

@@ -183,7 +183,7 @@ fn load_packages(
         }
     };
 
-    // Should all be the same length, the the ordering should be preserved.
+    // Should all be the same length, the ordering should be preserved.
     debug_assert_eq!(pkgs.len(), ids.len());
     for (pkg, id) in pkgs.iter().zip(ids.iter()) {
         debug_assert_eq!(pkg.version_id, *id);
