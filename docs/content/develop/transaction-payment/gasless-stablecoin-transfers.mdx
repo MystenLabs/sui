@@ -38,7 +38,7 @@ Gasless stablecoin transfers are limited to the Move functions `withdrawal_split
 
 ### Integrating gasless stablecoins into wallets
 
-To integrate gasless stablecoins into wallets, wallet builders need to detect eligible transfers and construct them with `@mysten/sui`. To do this, build a PTB that calls `0x2::balance::send_funds<T>` with a `Balance<T>` from `tx.balance()`, then submit it through `SuiGrpcClient`. The SDK detects eligibility during simulate, sets `gasPrice = 0` and `gasBudget = 0`, and pays gas from the sender's address balance.
+To integrate gasless stablecoins into wallets, wallet builders need to detect eligible transfers and construct them with `@mysten/sui`. To do this, build a PTB that calls `0x2::balance::send_funds<T>` with a `Balance<T>` from `tx.balance()`, then submit it through `SuiGrpcClient`. The SDK detects eligibility during simulate and sets `gasPrice = 0` and `gasBudget = 0`.
 
 ```tsx
 import { SuiGrpcClient } from '@mysten/sui/grpc';
