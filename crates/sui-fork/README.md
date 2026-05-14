@@ -4,7 +4,7 @@ This is highly experimental tooling intended for development and testing purpose
 
 Expect breaking changes until this is officially released and stable.
 
-# Sui Forking Tool
+# Sui Fork Tool
 
 A development tool that enables testing and developing against a local Sui network initialized with state from mainnet, testnet, or devnet at a specific checkpoint.
 
