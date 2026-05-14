@@ -745,15 +745,16 @@ impl TemporaryStore<'_> {
         &self,
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
-        gas_charger: &mut GasCharger,
+        gas_charger: &GasCharger,
         mutable_inputs: &HashSet<ObjectID>,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         let gas_objs: HashSet<&ObjectID> = gas_charger.used_coins().map(|g| &g.0).collect();
         let gas_owner = sponsor.as_ref().unwrap_or(sender);
 
         // mark input objects as authenticated
-        let mut authenticated_for_mutation: HashSet<_> = self
+        let objects_authenticated_for_mutation: HashSet<SuiAddress> = self
             .input_objects
             .iter()
             .filter_map(|(id, obj)| {
@@ -800,13 +801,27 @@ impl TemporaryStore<'_> {
             // Add any object IDs generated in the object runtime during execution to the
             // authenticated set (i.e., new (non-package) objects, and possibly ephemeral UIDs).
             .chain(self.generated_runtime_ids.iter().copied())
+            .map(SuiAddress::from)
             .collect();
 
         // Add sender and sponsor (if present) to authenticated set
-        authenticated_for_mutation.insert((*sender).into());
-        if let Some(sponsor) = sponsor {
-            authenticated_for_mutation.insert((*sponsor).into());
-        }
+        let mut authenticated_for_mutation = {
+            assert!(
+                !objects_authenticated_for_mutation.contains(sender),
+                "Sender cannot be an object"
+            );
+            assert!(
+                sponsor
+                    .is_none_or(|sponsor| !objects_authenticated_for_mutation.contains(&sponsor)),
+                "Sponsor cannot be an object"
+            );
+            let mut s = objects_authenticated_for_mutation.clone();
+            s.insert(*sender);
+            if let Some(sponsor) = sponsor {
+                s.insert(*sponsor);
+            }
+            s
+        };
 
         // check all modified objects are authenticated
         let mut objects_to_authenticate = self
@@ -817,7 +832,7 @@ impl TemporaryStore<'_> {
             .collect::<Vec<_>>();
 
         while let Some(to_authenticate) = objects_to_authenticate.pop() {
-            if authenticated_for_mutation.contains(&to_authenticate) {
+            if authenticated_for_mutation.contains(&to_authenticate.into()) {
                 // object has already been authenticated
                 continue;
             }
@@ -880,9 +895,82 @@ impl TemporaryStore<'_> {
             };
 
             // we now assume the object is authenticated and check the parent
-            authenticated_for_mutation.insert(to_authenticate);
+            authenticated_for_mutation.insert(to_authenticate.into());
             objects_to_authenticate.push(parent);
         }
+
+        // Check that all funds accumulator splits are authorized
+        let sui_balance_type =
+            sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
+        let gas_payment_address_balance =
+            gas_charger
+                .gas_payment_location()
+                .and_then(|location| match location {
+                    PaymentLocation::Coin(_) => None,
+                    PaymentLocation::AddressBalance(address) => Some(address),
+                });
+        let mut funds_net_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
+        for event in self.execution_results.accumulator_events.iter() {
+            let amount = match event.write.value {
+                AccumulatorValue::Integer(a) => a as i128,
+                AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+                    assert!(
+                        !sui_types::balance::Balance::is_balance_type(&event.write.address.ty),
+                        "Non-integer accumulator changes should not be balances"
+                    );
+                    continue;
+                }
+            };
+            let signed = match event.write.operation {
+                AccumulatorOperation::Split => -amount,
+                AccumulatorOperation::Merge => amount,
+            };
+            let address = event.write.address.address;
+            let type_tag = &event.write.address.ty;
+            let key = (address, type_tag.clone());
+            *funds_net_changes.entry(key.clone()).or_insert(0) += signed;
+            // Authorized if it is:
+            // - A merge/deposit (anyone can deposit)
+            // - A withdrawal
+            //   - with a corresponding input reservation
+            //   - from an object authenticated for mutation
+            //   - for the gas payment (potentially from a GasCoin send_funds transfer)
+            let authorized = match event.write.operation {
+                AccumulatorOperation::Merge => true,
+                AccumulatorOperation::Split => {
+                    input_reservations.contains_key(&key)
+                        || objects_authenticated_for_mutation.contains(&address)
+                        || (*type_tag == sui_balance_type
+                            && gas_payment_address_balance
+                                .is_some_and(|gas_addr| gas_addr == address))
+                }
+            };
+            assert!(
+                authorized,
+                "Unauthenticated funds-accumulator Split at address {address} for type \
+                 {type_tag}: no input reservation, address is not an authenticated object, and \
+                 it is not the final gas payment address balance"
+            );
+        }
+
+        // For all net negative changes (net withdrawals), the net changes _must_ be less than the
+        // reservation amount, or it must be from an object. This excludes the final gas payment
+        // address since the case where that withdrawal is allowed should be a net positive (or
+        // zero) since it occurs only in the case where the gas coin is transferred via send_funds
+        for (key, change) in funds_net_changes {
+            // skip if deposit or for an object
+            if change >= 0 || objects_authenticated_for_mutation.contains(&key.0) {
+                continue;
+            }
+            let reservation = input_reservations.get(&key).copied().unwrap_or(0) as u128;
+            let withdrawn = change.unsigned_abs();
+            assert!(
+                withdrawn <= reservation,
+                "Net withdrawal of {withdrawn} for {key:?} exceeds input reservation of \
+                 {reservation}"
+            );
+        }
+
         Ok(())
     }
 }
@@ -1195,6 +1283,10 @@ impl TemporaryStore<'_> {
             let amount = match event.write.value {
                 AccumulatorValue::Integer(amount) => amount as i128,
                 AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+                    assert_invariant!(
+                        !sui_types::balance::Balance::is_balance_type(&event.write.address.ty),
+                        "Non-integer accumulator changes should not be balances"
+                    );
                     continue;
                 }
             };
