@@ -244,30 +244,23 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
             ==> #[trigger] spec_addresses::<S, Addr>(tx_signatures, i)
                     .disjoint(spec_addresses::<S, Addr>(tx_signatures, j)),
     ensures
-        // E1: count mismatch → Err
-        tx_signatures@.len() != required_signers@.len() ==> result.is_Err(),
-        // E2: address derivation failure → Err
-        spec_any_addr_derivation_fails(tx_signatures) ==> result.is_Err(),
-        // E3: greedy fails → Err
-        (tx_signatures@.len() == required_signers@.len()
-            && spec_greedy_result(tx_signatures, required_signers, aliased_addresses, epoch).is_None())
-            ==> result.is_Err(),
-        // S1: greedy succeeds → Ok with greedy assignment
-        // (must exclude all error conditions to avoid contradicting E1/E2/E3)
-        (!spec_any_addr_derivation_fails(tx_signatures)
-            && tx_signatures@.len() == required_signers@.len()
-            && spec_greedy_result(tx_signatures, required_signers, aliased_addresses, epoch).is_Some())
-            ==> {
-            &&& result.is_Ok()
+        // Complete case analysis — the else implicitly excludes all prior conditions.
+        if tx_signatures@.len() != required_signers@.len() {
+            result.is_Err()                                          // E1: count mismatch
+        } else if spec_any_addr_derivation_fails(tx_signatures) {
+            result.is_Err()                                          // E2: derivation failure
+        } else if spec_greedy_result(
+            tx_signatures, required_signers, aliased_addresses, epoch,
+        ).is_None() {
+            result.is_Err()                                          // E3: greedy fails
+        } else {
+            &&& result.is_Ok()                                       // S1: greedy succeeds
             &&& ok_indices(&result)
-                =~= spec_greedy_result(
-                    tx_signatures,
-                    required_signers,
-                    aliased_addresses,
-                    epoch,
-                ).get_Some_0()
+                    =~= spec_greedy_result(
+                            tx_signatures, required_signers, aliased_addresses, epoch,
+                        ).get_Some_0()
         },
-        // Return value invariants when Ok:
+        // Return value invariants (stated separately for callers; derivable from S1 + greedy spec).
         // R1: length matches required_signers
         result.is_Ok() ==> ok_indices(&result).len() == required_signers@.len(),
         // R2: every index is in bounds
