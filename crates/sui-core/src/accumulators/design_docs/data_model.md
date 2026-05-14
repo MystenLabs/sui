@@ -163,9 +163,10 @@ The same machinery supports balances owned by *another object* rather than an ad
 `AccumulatorKey { owner }` field is a `SuiAddress`, but a Move object's UID encodes as an address
 too, so the same dynamic-field structure works. The differences are operational, not structural:
 
-- An object-owned balance is mutated by Move code that has access to that object. Therefore the
-  withdrawal *amount* is decided at runtime, inside the PTB.
-- Sufficiency must be checked *after* execution. That is what
+- An object-owned balance can only be withdrawn from by a Move program with access to the owning
+  object, and the withdrawal *amount* is determined by that program's logic at runtime — not
+  declared up front in transaction data.
+- Sufficiency must therefore be checked *after* execution. That is what
   [`object_funds_checking.md`](./object_funds_checking.md) is about.
 
 The on-chain layout is unchanged: still a dynamic field under `0xACC`, still a `U128` value,

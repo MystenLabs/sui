@@ -15,9 +15,10 @@ and concepts but are distinct subsystems with different correctness arguments.
 
 Address funds withdrawals have a key advantage: the maximum withdrawal amount is declared in
 the transaction data, so it can be checked before the transaction is run. Object funds withdrawals
-have no such advantage. An object-owned accumulator account is controlled by a Move program,
-and the withdrawal amount is computed at runtime. There is no way to know how much will be
-withdrawn until execution finishes.
+have no such advantage. An object-owned accumulator account can only be withdrawn from by a Move
+program with access to the owning object, and the withdrawal amount is determined by that
+program's logic at runtime. There is no way to know how much will be withdrawn until execution
+finishes.
 
 This means the system must **execute first, then check**. If the check fails, the transaction
 must be re-executed in a way that produces a deterministic failure.

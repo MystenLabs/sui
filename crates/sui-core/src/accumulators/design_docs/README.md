@@ -87,7 +87,7 @@ on those modules is the source of truth — no separate doc is provided here.
 - **Address funds** — virtual balances owned by an address (`SuiAddress`). Withdraw maximums are
   declared in transaction data; sufficiency can be checked **before** execution.
 - **Object funds** — virtual balances owned by another object (UID). Withdraw amounts are
-  computed by Move code at runtime; sufficiency must be checked **after** execution.
+  determined by Move program logic at runtime; sufficiency must be checked **after** execution.
 - **Settlement** — the act of folding a commit's accumulator events into the on-chain root.
   Implemented as N parallel settlement transactions (`NonExclusiveWrite` access) plus one
   barrier transaction (`Mutable` access).
