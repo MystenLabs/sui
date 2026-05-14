@@ -46,8 +46,8 @@ impl Default for ConsensusProtocolConfig {
             num_leaders_per_round: None,
             bad_nodes_stake_threshold: 0,
             enable_v3: false,
-            leader_schedule_window_size: 300,
-            leader_schedule_update_interval: 12,
+            leader_schedule_window_size: 600,
+            leader_schedule_update_interval: 60,
         }
     }
 }
@@ -97,8 +97,8 @@ impl ConsensusProtocolConfig {
             num_leaders_per_round: Some(1),
             bad_nodes_stake_threshold: 30,
             enable_v3: false,
-            leader_schedule_window_size: 300,
-            leader_schedule_update_interval: 12,
+            leader_schedule_window_size: 600,
+            leader_schedule_update_interval: 60,
         }
     }
 
@@ -144,12 +144,15 @@ impl ConsensusProtocolConfig {
         self.enable_v3
     }
 
+    // Clamped to ≥ 1: downstream code (LeaderScheduleV3) uses these as window
+    // sizes and modulus operands, so a 0 config would divide by zero or be
+    // an empty window. Treat 0 as "effectively 1" instead of panicking.
     pub fn leader_schedule_window_size(&self) -> u32 {
-        self.leader_schedule_window_size
+        self.leader_schedule_window_size.max(1)
     }
 
     pub fn leader_schedule_update_interval(&self) -> u32 {
-        self.leader_schedule_update_interval
+        self.leader_schedule_update_interval.max(1)
     }
 
     // Test setter methods

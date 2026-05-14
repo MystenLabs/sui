@@ -451,7 +451,8 @@ impl Proposer for ValidatorProposer {
         }
 
         // TODO(v3): support these metrics under v3 multi leader logic:
-        // - Leader slots can be empty when the quorum round is no greater than already committed leader round.
+        // - Leader slots are empty when the quorum round is no greater than last committed leader round,
+        //   because of async process or recovery.
         // - Record accepted time for each block, to decide the last leader and the amount of time waiting for it.
         if !self.context.protocol_config.enable_v3() {
             let leader_slot = leader_slots.first().unwrap();

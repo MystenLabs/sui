@@ -149,8 +149,8 @@ impl Core {
         // Create the ValidatorProposer.
         let leader_waiter = if let Some(schedule) = leader_schedule_v3.as_ref() {
             let next_commit_leader_schedule = schedule.next_commit_leader_schedule();
-            debug!(
-                "Initial v3 commit leaders: index={} min_round={} num={} allowed={:?}",
+            info!(
+                "Recovered next commit leaders: index={} min_round={} num={} allowed={:?}",
                 next_commit_leader_schedule.next_commit_index,
                 next_commit_leader_schedule.min_next_leader_round,
                 next_commit_leader_schedule.num_leaders,

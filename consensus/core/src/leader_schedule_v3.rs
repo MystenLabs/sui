@@ -13,11 +13,14 @@ use rand::{SeedableRng, prelude::SliceRandom, rngs::StdRng};
 
 use crate::{
     CommitIndex, CommitRef, CommittedSubDag, DagState,
-    block::{BlockAPI, GENESIS_ROUND, VerifiedBlock},
+    block::{BlockAPI, VerifiedBlock},
     commit::{CommitRange, load_committed_subdag_from_store},
     context::Context,
     leader_scoring::ReputationScores,
 };
+
+// Max pending commits kept for scoring.
+const MAX_PENDING_COMMITS: usize = 3;
 
 /// Incremental, sliding-window leader scorer over recent commits.
 ///
@@ -46,7 +49,6 @@ use crate::{
 /// The overall score for A is `score[A] = voted_for_stake[A] * certified_by_stake[A]`.
 pub(crate) struct LeaderScheduleV3 {
     context: Arc<Context>,
-    next_commit_index: CommitIndex,
     // Total scores per authority in the running window, indexed by AuthorityIndex.
     // Each scored commit contributes `voted_for_stake[A] * certified_by_stake[A]`
     // (stake² units) per authority A, summed across the running window.
@@ -64,46 +66,15 @@ pub(crate) struct LeaderScheduleV3 {
     // Score entries are produced once 3 commits have accumulated; on each
     // subsequent `add_commit`, the oldest is evicted and a new commit appended.
     pending_commits: VecDeque<CommittedSubDag>,
-    // One entry per scored commit still in the running window. Used to
-    // subtract a commit's contributions from `total_scores_per_authority` on
-    // eviction. Bounded by `leader_schedule_window_size`.
+    // One entry per scored commit in the running window.
+    // Used to subtract a commit's contributions from `total_scores_per_authority`
+    // on eviction. Bounded by `leader_schedule_window_size`.
     scores_entries: VecDeque<ScoresEntry>,
-    // Most recent schedule to return to the proposer. The commit index and
+    // Leader schedule for the current commit interval. The commit index and
     // minimum round move every commit; leader selection changes only at
-    // configured rotation boundaries.
-    cached_schedule: NextCommitLeaderSchedule,
+    // configured interval boundaries.
+    current_schedule: NextCommitLeaderSchedule,
 }
-
-/// This is used by the commit rule to figure out the next commit leaders.
-#[derive(Clone, Debug, Default)]
-pub(crate) struct NextCommitLeaderSchedule {
-    // Index of the next commit.
-    pub(crate) next_commit_index: CommitIndex,
-    // Minimum round of the next commit leader.
-    pub(crate) min_next_leader_round: Round,
-    // Number of leaders to select per round.
-    pub(crate) num_leaders: usize,
-    // Authorities allowed to be leaders.
-    pub(crate) allowed_leaders: Vec<AuthorityIndex>,
-}
-
-struct ScoresEntry {
-    // CommitRef of the scored commit (the C-3-equivalent: oldest pending commit
-    // at the time the entry was produced).
-    commit_ref: CommitRef,
-    // Per-authority incremental score contributed by the scored commit, indexed
-    // by AuthorityIndex. Retained so eviction can subtract from
-    // `total_scores_per_authority`.
-    score_contributions: Vec<u64>,
-    // Number of leader blocks in the scored commit. Retained so
-    // eviction can subtract from `total_num_leaders`.
-    num_leaders: usize,
-    // `Σ stake(leader_authors)` for the scored commit. Retained so eviction
-    // can subtract from `total_leader_stakes`.
-    leader_stakes: u64,
-}
-
-const MAX_PENDING_COMMITS: usize = 3;
 
 impl LeaderScheduleV3 {
     /// Constructs a `LeaderScheduleV3`.
@@ -114,18 +85,17 @@ impl LeaderScheduleV3 {
         dag_state: Arc<RwLock<DagState>>,
     ) -> LeaderScheduleV3 {
         let committee_size = context.committee.size();
-        let last_commit_index = dag_state.read().last_commit_index();
-        if last_commit_index == 0 {
-            return LeaderScheduleV3::new(context, 1, vec![0; committee_size]);
-        }
+        let mut leader_schedule = LeaderScheduleV3::new(context.clone(), vec![0; committee_size]);
 
+        let last_commit_index = dag_state.read().last_commit_index();
         let replay_count = LeaderScheduleV3::replay_length(&context);
         // Replay maximum replay_count commits, and starting from commit 1 at minimum.
         let replay_start = last_commit_index.saturating_sub(replay_count) + 1;
-        // The first replayed commit's index will be replay_start, so initializing next_commit_index
-        // to replay_start.
-        let mut leader_schedule =
-            LeaderScheduleV3::new(context.clone(), replay_start, vec![0; committee_size]);
+        if replay_start > last_commit_index {
+            // No commits to replay, return the new schedule with empty state.
+            return leader_schedule;
+        }
+
         let store = dag_state.read().store();
         let commits = store
             .scan_commits((replay_start..=last_commit_index).into())
@@ -137,63 +107,69 @@ impl LeaderScheduleV3 {
         leader_schedule
     }
 
-    pub(crate) fn new(
-        context: Arc<Context>,
-        next_commit_index: CommitIndex,
-        total_scores_per_authority: Vec<u64>,
-    ) -> Self {
+    pub(crate) fn new(context: Arc<Context>, total_scores_per_authority: Vec<u64>) -> Self {
         assert_eq!(total_scores_per_authority.len(), context.committee.size());
-        let running_length = context.protocol_config.leader_schedule_window_size() as usize;
+        let window_size = context.protocol_config.leader_schedule_window_size() as usize;
         let mut schedule = Self {
             context,
-            next_commit_index,
             total_scores_per_authority,
             total_num_leaders: 0,
             total_leader_stakes: 0,
             pending_commits: VecDeque::with_capacity(MAX_PENDING_COMMITS),
-            scores_entries: VecDeque::with_capacity(running_length),
-            cached_schedule: NextCommitLeaderSchedule::default(),
+            scores_entries: VecDeque::with_capacity(window_size),
+            current_schedule: NextCommitLeaderSchedule::default(),
         };
-        schedule.cached_schedule = schedule.compute_next_commit_leader_schedule();
+        schedule.current_schedule = schedule.compute_next_commit_leader_schedule();
         schedule
+    }
+
+    /// Index of the next commit to be added — one past the last commit in
+    /// `pending_commits`, or 1 if none have been added yet.
+    pub(crate) fn next_commit_index(&self) -> CommitIndex {
+        self.pending_commits
+            .back()
+            .map(|c| c.commit_ref.index)
+            .unwrap_or(0)
+            + 1
+    }
+
+    /// Minimum round the next commit's leader can be at — one past the leader
+    /// round of the last commit in `pending_commits`, or 1 if none have been
+    /// added yet.
+    pub(crate) fn min_next_leader_round(&self) -> Round {
+        self.pending_commits
+            .back()
+            .map(|c| c.leader.round)
+            .unwrap_or(0)
+            + 1
     }
 
     /// Number of recent committed sub-dags that must be replayed on startup
     /// to reconstruct the full state: `leader_schedule_window_size` for the
     /// scoring window, the pending commits held before scoring begins, and
-    /// enough additional commits to reconstruct the cached schedule boundary.
+    /// `interval - 1` more so the replay spans back to the most recent rotation
+    /// boundary with the full scoring window already populated.
     fn replay_length(context: &Context) -> u32 {
         context.protocol_config.leader_schedule_window_size()
             + MAX_PENDING_COMMITS as u32
-            + context
-                .protocol_config
-                .leader_schedule_update_interval()
-                .saturating_sub(1)
+            + context.protocol_config.leader_schedule_update_interval()
+            - 1
     }
 
-    /// Returns the cached leader schedule. See `cached_schedule` for what
+    /// Returns the current leader schedule. See `current_schedule` for what
     /// is refreshed every commit vs. only on rotation boundaries.
     pub(crate) fn next_commit_leader_schedule(&self) -> NextCommitLeaderSchedule {
-        self.cached_schedule.clone()
+        self.current_schedule.clone()
     }
 
     pub(crate) fn compute_next_commit_leader_schedule(&self) -> NextCommitLeaderSchedule {
-        let min_next_leader_round = self
-            .pending_commits
-            .back()
-            .map(|c| c.leader.round)
-            .unwrap_or(GENESIS_ROUND)
-            + 1;
-        let num_leaders = self
-            .context
-            .protocol_config
-            .num_leaders_per_round()
-            .unwrap_or(1);
+        let allowed_leaders = self.select_allowed_leaders_with_fixed_config();
+        let num_leaders = allowed_leaders.len();
         NextCommitLeaderSchedule {
-            next_commit_index: self.next_commit_index,
-            min_next_leader_round,
+            next_commit_index: self.next_commit_index(),
+            min_next_leader_round: self.min_next_leader_round(),
             num_leaders,
-            allowed_leaders: self.select_allowed_leaders_with_fixed_config(),
+            allowed_leaders,
         }
     }
 
@@ -239,7 +215,6 @@ impl LeaderScheduleV3 {
         // Use stable sort to produce deterministic order of authorities with the same score.
         by_score.sort_by(|a, b| b.1.cmp(&a.1));
 
-        // A bad threshold of 0 will select all authorities.
         let mut accumulated_bad_stake = 0u64;
         let cutoff = (self.context.protocol_config.bad_nodes_stake_threshold()
             * self.context.committee.total_stake())
@@ -266,15 +241,18 @@ impl LeaderScheduleV3 {
     /// to satisfy both the r+1 voting-block scan and the r+2 certifying-block
     /// scan (some commit in [C-2, C-1, c] satisfies each `>` bound).
     pub(crate) fn add_commit(&mut self, c: CommittedSubDag) {
-        // Ensure commits are added in order.
-        assert_eq!(c.commit_ref.index, self.next_commit_index);
-        self.next_commit_index += 1;
+        // Ensure commits are added in order. On the very first call there is
+        // no prior commit to check against; once we have one, every subsequent
+        // commit must be consecutive.
+        if let Some(last) = self.pending_commits.back() {
+            assert_eq!(c.commit_ref.index, last.commit_ref.index + 1);
+        }
 
         // Need C-3, C-2, C-1 in pending before producing a score entry.
         // Until then, this is warmup (new instance, new epoch, or recovery).
         if self.pending_commits.len() < MAX_PENDING_COMMITS {
             self.pending_commits.push_back(c);
-            self.refresh_cached_schedule();
+            self.refresh_current_schedule();
             self.report_metrics();
             return;
         }
@@ -286,9 +264,7 @@ impl LeaderScheduleV3 {
         let vote_round = leader_round + 1;
         let certify_round = leader_round + 2;
 
-        // Architectural invariant check. Depth 3 is only enough to bracket
-        // both scan ranges if consecutive commits have strictly increasing
-        // leader rounds; trip loudly if upstream stops upholding this.
+        // Scoring logic assumes strictly increasing leader rounds across consecutive commits.
         assert!(
             c_minus_3.leader.round < c_minus_2.leader.round
                 && c_minus_2.leader.round < c_minus_1.leader.round
@@ -301,8 +277,8 @@ impl LeaderScheduleV3 {
             c.leader.round,
         );
 
-        // leader_refs: every round-r block in C-3. A commit may legitimately
-        // contain multiple round-r leader blocks; all of them count.
+        // Every block in leader round is a leader block. A commit may
+        // contain one or multiple leader blocks.
         let leader_refs: BTreeSet<BlockRef> = c_minus_3
             .blocks
             .iter()
@@ -310,9 +286,7 @@ impl LeaderScheduleV3 {
             .map(|b| b.reference())
             .collect();
 
-        // C-3's leader is by construction in C-3.blocks at round r, so it
-        // must show up in leader_refs. A failure here points at an
-        // malformed CommittedSubDag.
+        // A failure here points at an malformed CommittedSubDag.
         assert!(!leader_refs.is_empty());
         assert!(
             leader_refs.contains(&c_minus_3.leader),
@@ -322,13 +296,14 @@ impl LeaderScheduleV3 {
         );
 
         // Walk [C-2, C-1, C] up to and including the first commit whose
-        // leader round exceeds each bound.
+        // leader round exceeds each bound. The cut off is chosen to exclude
+        // blocks that are produced late relative to the current highest round.
         let voting_commits =
             Self::scan_commits_until_leader_round_above(&self.pending_commits, &c, vote_round);
         let certifying_commits =
             Self::scan_commits_until_leader_round_above(&self.pending_commits, &c, certify_round);
 
-        // Group r+1 voting blocks by author; len() != 1 detects equivocation.
+        // Group round r+1 voting blocks by author.
         let mut voting_blocks_by_author: BTreeMap<AuthorityIndex, Vec<&VerifiedBlock>> =
             BTreeMap::new();
         for cmt in &voting_commits {
@@ -358,15 +333,15 @@ impl LeaderScheduleV3 {
             }
             let voting_block = voting_blocks[0];
 
-            // voted_for_stake[A]: distinct P authorities whose round-r block
-            // in C-3 is an ancestor of A's voting block.
-            let mut ps = BTreeSet::<AuthorityIndex>::new();
+            // voted_for_stake[A]: distinct authorities whose leader block
+            // in C-3 is voted by A's voting block.
+            let mut leader_authorities = BTreeSet::<AuthorityIndex>::new();
             for anc in voting_block.ancestors() {
                 if leader_refs.contains(anc) {
-                    ps.insert(anc.author);
+                    leader_authorities.insert(anc.author);
                 }
             }
-            let voted_for_stake: u64 = ps
+            let voted_for_stake: u64 = leader_authorities
                 .into_iter()
                 .map(|i| self.context.committee.stake(i))
                 .sum();
@@ -375,16 +350,16 @@ impl LeaderScheduleV3 {
                 continue;
             }
 
-            // certified_by_stake[A]: distinct Q authorities whose r+2 block
+            // certified_by_stake[A]: distinct authorities whose round r+2 block
             // certifies A's voting block (has it as an ancestor).
             let voting_block_ref = voting_block.reference();
-            let mut qs = BTreeSet::<AuthorityIndex>::new();
-            for q_block in &certifying_blocks {
-                if q_block.ancestors().contains(&voting_block_ref) {
-                    qs.insert(q_block.author());
+            let mut certifying_authorities = BTreeSet::<AuthorityIndex>::new();
+            for certifying_block in &certifying_blocks {
+                if certifying_block.ancestors().contains(&voting_block_ref) {
+                    certifying_authorities.insert(certifying_block.author());
                 }
             }
-            let certified_by_stake: u64 = qs
+            let certified_by_stake: u64 = certifying_authorities
                 .into_iter()
                 .map(|i| self.context.committee.stake(i))
                 .sum();
@@ -399,9 +374,7 @@ impl LeaderScheduleV3 {
             .map(|block_ref| self.context.committee.stake(block_ref.author))
             .sum();
 
-        // All inputs validated and computed; eviction can now happen
-        // immediately before pushing the new entry.
-        while self.scores_entries.len() >= self.running_length() {
+        while self.scores_entries.len() >= self.window_size() {
             let evicted = self.scores_entries.pop_front().expect("non empty");
             tracing::trace!(
                 "LeaderScheduleV3 evicting scored commit {} from running window",
@@ -436,37 +409,31 @@ impl LeaderScheduleV3 {
             leader_stakes,
         });
 
-        // Rotate pending: drop C-3, keep C-2 and C-1, append c.
+        // Rotate pending commits: drop C-3, keep C-2 and C-1, append c.
         self.pending_commits.pop_front();
         self.pending_commits.push_back(c);
 
-        self.refresh_cached_schedule();
+        self.refresh_current_schedule();
         self.report_metrics();
     }
 
-    fn refresh_cached_schedule(&mut self) {
+    fn refresh_current_schedule(&mut self) {
         let interval = self
             .context
             .protocol_config
             .leader_schedule_update_interval() as CommitIndex;
-        let on_boundary = interval == 0
-            || self
-                .next_commit_index
-                .saturating_sub(1)
-                .is_multiple_of(interval);
+        let on_boundary = self
+            .next_commit_index()
+            .saturating_sub(1)
+            .is_multiple_of(interval);
         if on_boundary {
             // Boundary: full recompute, including allowed_leaders.
-            self.cached_schedule = self.compute_next_commit_leader_schedule();
+            self.current_schedule = self.compute_next_commit_leader_schedule();
         } else {
             // Off-boundary: only the per-commit fields move; skip the
             // expensive allowed-leaders selection.
-            self.cached_schedule.next_commit_index = self.next_commit_index;
-            self.cached_schedule.min_next_leader_round = self
-                .pending_commits
-                .back()
-                .map(|c| c.leader.round)
-                .unwrap_or(GENESIS_ROUND)
-                + 1;
+            self.current_schedule.next_commit_index = self.next_commit_index();
+            self.current_schedule.min_next_leader_round = self.min_next_leader_round();
         }
     }
 
@@ -497,12 +464,14 @@ impl LeaderScheduleV3 {
 
     /// Snapshot of the running per-authority scores.
     pub(crate) fn current_reputation_scores(&self) -> ReputationScores {
-        let commit_range = match (self.scores_entries.front(), self.scores_entries.back()) {
-            (Some(front), Some(back)) => {
-                CommitRange::new(front.commit_ref.index..=back.commit_ref.index)
-            }
-            _ => CommitRange::default(),
-        };
+        let interval_size = self
+            .context
+            .protocol_config
+            .leader_schedule_update_interval();
+        let interval_num = (self.current_schedule.next_commit_index - 1) / interval_size;
+        let commit_range = CommitRange::new(
+            (interval_num * interval_size + 1)..=(interval_num + 1) * interval_size,
+        );
         ReputationScores::new(commit_range, self.total_scores_per_authority.clone())
     }
 
@@ -549,7 +518,7 @@ impl LeaderScheduleV3 {
         }
     }
 
-    fn running_length(&self) -> usize {
+    fn window_size(&self) -> usize {
         self.context.protocol_config.leader_schedule_window_size() as usize
     }
 
@@ -586,6 +555,33 @@ impl LeaderScheduleV3 {
     }
 }
 
+/// This is used by the commit rule to figure out the next commit leaders.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct NextCommitLeaderSchedule {
+    // Index of the next commit.
+    pub(crate) next_commit_index: CommitIndex,
+    // Informs the committer about the minimum round of the next commit leader.
+    pub(crate) min_next_leader_round: Round,
+    // Number of leaders to select per round.
+    pub(crate) num_leaders: usize,
+    // Authorities allowed to be leaders.
+    pub(crate) allowed_leaders: Vec<AuthorityIndex>,
+}
+
+struct ScoresEntry {
+    // CommitRef of the oldest pending commit at the time the entry was produced.
+    commit_ref: CommitRef,
+    // Per-authority incremental score indexed by AuthorityIndex.
+    // Retained so eviction can subtract from `total_scores_per_authority`.
+    score_contributions: Vec<u64>,
+    // Number of leader blocks in the commit.
+    // Retained so eviction can subtract from `total_num_leaders`.
+    num_leaders: usize,
+    // `Σ stake(leader_authors)` from this commit's leaders.
+    // Retained so eviction can subtract from `total_leader_stakes`.
+    leader_stakes: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -601,15 +597,12 @@ mod tests {
     };
 
     fn setup(committee_size: usize) -> Arc<Context> {
-        setup_with_running_length(committee_size, None)
+        setup_with_window_size(committee_size, None)
     }
 
-    fn setup_with_running_length(
-        committee_size: usize,
-        running_length: Option<u32>,
-    ) -> Arc<Context> {
+    fn setup_with_window_size(committee_size: usize, window_size: Option<u32>) -> Arc<Context> {
         let (mut context, _) = Context::new_for_test(committee_size);
-        if let Some(len) = running_length {
+        if let Some(len) = window_size {
             context
                 .protocol_config
                 .set_leader_schedule_window_size_for_testing(len);
@@ -664,10 +657,35 @@ mod tests {
             .collect()
     }
 
+    fn assert_current_schedule_matches_computed(schedule: &LeaderScheduleV3) {
+        let current = schedule.next_commit_leader_schedule();
+        let computed = schedule.compute_next_commit_leader_schedule();
+        assert_eq!(current.next_commit_index, computed.next_commit_index);
+        assert_eq!(
+            current.min_next_leader_round,
+            computed.min_next_leader_round
+        );
+        assert_eq!(current.num_leaders, computed.num_leaders);
+        assert_eq!(current.allowed_leaders, computed.allowed_leaders);
+    }
+
+    fn assert_current_reputation_range(
+        schedule: &LeaderScheduleV3,
+        start: CommitIndex,
+        end: CommitIndex,
+    ) {
+        let scores = schedule.current_reputation_scores();
+        assert_eq!(scores.commit_range, CommitRange::new(start..=end));
+        assert_eq!(
+            scores.scores_per_authority.as_slice(),
+            schedule.total_scores_per_authority()
+        );
+    }
+
     #[tokio::test]
     async fn test_new_state_is_zero() {
         let context = setup(4);
-        let schedule = LeaderScheduleV3::new(context, 1, vec![0; 4]);
+        let schedule = LeaderScheduleV3::new(context, vec![0; 4]);
         assert_eq!(schedule.total_scores_per_authority(), &[0u64; 4]);
         assert_eq!(schedule.scores_entries_len(), 0);
         assert_eq!(schedule.pending_commits_len(), 0);
@@ -677,10 +695,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_first_three_commits_score_zero() {
-        // The new rule needs C-3, C-2, C-1 in pending before producing the
+        // Scoring logic needs C-3, C-2, C-1 in pending before producing the
         // first score entry, so the first three commits are warmup.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context, 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context, vec![0; 4]);
 
         let leader1 = make_block(1, 0, vec![]);
         schedule.add_commit(make_commit(1, leader1.reference(), vec![leader1.clone()]));
@@ -709,7 +727,7 @@ mod tests {
         // Voting blocks live at round 2 in C2, certifying blocks at round 3 in
         // C3, and C4 acts as the > r+2 sentinel.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         // C1: leader = L0_1 (auth 0); blocks include L1_1 too, so leader_refs
         // for C-3 = {L0_1, L1_1}.
@@ -771,13 +789,13 @@ mod tests {
     async fn test_eviction_subtracts_contributions() {
         // Uniform chain: rounds 1..=8, two authorities (0 and 1) producing
         // blocks at each round and linking to both of the previous round's
-        // blocks. With `running_length=3` and the new rule, the first score
+        // blocks. With `window_size=3` and the new rule, the first score
         // entry lands when commit 4 is added, the window fills at commit 6,
         // and commit 7 evicts the earliest entry. Because every scored commit
         // contributes an identical delta, post-eviction totals equal
         // pre-eviction totals — proving eviction is subtracting correctly.
-        let context = setup_with_running_length(4, Some(3));
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let context = setup_with_window_size(4, Some(3));
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         let mut blocks_by_round: Vec<Vec<VerifiedBlock>> = Vec::new();
         blocks_by_round.push(vec![make_block(1, 0, vec![]), make_block(1, 1, vec![])]);
@@ -829,23 +847,21 @@ mod tests {
     #[tokio::test]
     async fn test_select_returns_next_commit_index_and_requested_count() {
         // With the default threshold disabled, no authority is "bad", so the
-        // full randomized order is available and selection returns exactly
-        // `num_leaders` authorities. The returned CommitIndex echoes the one
-        // supplied to `new`.
+        // full randomized order is available and `num_leaders` equals the
+        // committee size. With no pending commits, the returned CommitIndex
+        // is the default 1.
         let (mut ctx, _) = Context::new_for_test(4);
-        ctx.protocol_config
-            .set_num_leaders_per_round_for_testing(Some(3));
         ctx.protocol_config
             .set_bad_nodes_stake_threshold_for_testing(0);
         let context = Arc::new(ctx);
-        let schedule = LeaderScheduleV3::new(context, 7, vec![5, 10, 0, 2]);
+        let schedule = LeaderScheduleV3::new(context, vec![5, 10, 0, 2]);
         let next = schedule.compute_next_commit_leader_schedule();
-        assert_eq!(next.next_commit_index, 7);
-        // No pending commits -> min_next_leader_round is GENESIS_ROUND + 1.
+        assert_eq!(next.next_commit_index, 1);
+        // No pending commits -> min_next_leader_round defaults to 1.
         assert_eq!(next.min_next_leader_round, 1);
-        assert_eq!(next.num_leaders, 3);
         // Threshold is 0, so every authority is allowed.
         assert_eq!(next.allowed_leaders.len(), 4);
+        assert_eq!(next.num_leaders, next.allowed_leaders.len());
         // The allowed-leaders list is a permutation of distinct authorities.
         let mut sorted = next.allowed_leaders.clone();
         sorted.sort();
@@ -854,55 +870,73 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_select_skips_bad_nodes() {
-        // 4 equal-stake authorities. Threshold 30% with total_stake=4 gives a
-        // cutoff of 1; the single lowest-score authority (a1, score 0) is
-        // filtered out of the allowed-leaders list. The remaining 3 must not
-        // include it, regardless of the randomized order.
-        let (mut ctx, _) = Context::new_for_test(4);
-        ctx.protocol_config
-            .set_bad_nodes_stake_threshold_for_testing(30);
-        let context = Arc::new(ctx);
-        let schedule = LeaderScheduleV3::new(context.clone(), 1, vec![100, 0, 100, 100]);
+    async fn test_select_allowed_leaders_threshold_cases() {
+        struct Case {
+            name: &'static str,
+            stakes: Vec<u64>,
+            scores: Vec<u64>,
+            threshold: u64,
+            expected_len: usize,
+            excluded: Vec<u32>,
+            exact_allowed: Option<Vec<u32>>,
+        }
 
-        let allowed = schedule.select_allowed_leaders_with_fixed_config();
-        assert_eq!(allowed.len(), 3);
-        assert!(!allowed.contains(&AuthorityIndex::new_for_test(1)));
-    }
+        let cases = [
+            Case {
+                name: "filters single lowest equal-stake authority",
+                stakes: vec![1; 4],
+                scores: vec![100, 0, 100, 100],
+                threshold: 30,
+                expected_len: 3,
+                excluded: vec![1],
+                exact_allowed: None,
+            },
+            Case {
+                name: "does not exceed stake threshold",
+                stakes: vec![2500; 4],
+                scores: vec![10, 0, 1, 2],
+                threshold: 30,
+                expected_len: 3,
+                excluded: vec![1],
+                exact_allowed: None,
+            },
+            Case {
+                name: "only highest score remains",
+                stakes: vec![1; 4],
+                scores: vec![10, 0, 1, 2],
+                threshold: 80,
+                expected_len: 1,
+                excluded: vec![1, 2, 3],
+                exact_allowed: Some(vec![0]),
+            },
+        ];
 
-    #[tokio::test]
-    async fn test_select_bad_nodes_does_not_exceed_stake_threshold() {
-        // 4 equal-stake authorities with total stake 10,000. A 30% threshold
-        // permits excluding one 2,500-stake authority, but excluding the next
-        // one would cross the 3,000-stake cutoff.
-        let (mut ctx, _) = Context::new_for_test(4);
-        let (committee, _) = local_committee_and_keys(0, vec![2500; 4]);
-        ctx = ctx.with_committee(committee);
-        ctx.protocol_config
-            .set_bad_nodes_stake_threshold_for_testing(30);
-        let context = Arc::new(ctx);
-        let schedule = LeaderScheduleV3::new(context, 1, vec![10, 0, 1, 2]);
+        for case in cases {
+            let (mut ctx, _) = Context::new_for_test(case.stakes.len());
+            let (committee, _) = local_committee_and_keys(0, case.stakes);
+            ctx = ctx.with_committee(committee);
+            ctx.protocol_config
+                .set_bad_nodes_stake_threshold_for_testing(case.threshold);
+            let context = Arc::new(ctx);
+            let schedule = LeaderScheduleV3::new(context, case.scores);
 
-        let allowed = schedule.select_allowed_leaders_with_fixed_config();
-        assert_eq!(allowed.len(), 3);
-        assert!(!allowed.contains(&AuthorityIndex::new_for_test(1)));
-        assert!(allowed.contains(&AuthorityIndex::new_for_test(2)));
-    }
-
-    #[tokio::test]
-    async fn test_select_allowed_leaders_returns_only_good_stake() {
-        // Threshold 80% with total_stake=4 gives a cutoff of 3; the three
-        // lowest-score authorities accumulate exactly 3 stake and are filtered
-        // from the allowed list. Only the single highest-score authority
-        // remains.
-        let (mut ctx, _) = Context::new_for_test(4);
-        ctx.protocol_config
-            .set_bad_nodes_stake_threshold_for_testing(80);
-        let context = Arc::new(ctx);
-        let schedule = LeaderScheduleV3::new(context, 1, vec![10, 0, 1, 2]);
-
-        let allowed = schedule.select_allowed_leaders_with_fixed_config();
-        assert_eq!(allowed, vec![AuthorityIndex::new_for_test(0)]);
+            let allowed = schedule.select_allowed_leaders_with_fixed_config();
+            assert_eq!(allowed.len(), case.expected_len, "{}", case.name);
+            for excluded in case.excluded {
+                assert!(
+                    !allowed.contains(&AuthorityIndex::new_for_test(excluded)),
+                    "{}: unexpectedly allowed authority {excluded}",
+                    case.name
+                );
+            }
+            if let Some(exact_allowed) = case.exact_allowed {
+                let expected = exact_allowed
+                    .into_iter()
+                    .map(AuthorityIndex::new_for_test)
+                    .collect::<Vec<_>>();
+                assert_eq!(allowed, expected, "{}", case.name);
+            }
+        }
     }
 
     #[tokio::test]
@@ -923,7 +957,7 @@ mod tests {
             ctx.protocol_config
                 .set_bad_nodes_stake_threshold_for_testing(30);
             let context = Arc::new(ctx);
-            let schedule = LeaderScheduleV3::new(context, 1, zero_scores.clone());
+            let schedule = LeaderScheduleV3::new(context, zero_scores.clone());
             let allowed = schedule.select_allowed_leaders_with_fixed_config();
             // Sanity: 30% cutoff filters exactly one of four equal-stake authorities.
             assert_eq!(allowed.len(), 3);
@@ -942,7 +976,7 @@ mod tests {
     #[tokio::test]
     async fn test_replay_length() {
         // Replay covers scored entries, pending commits, and enough additional
-        // history to reconstruct the cached schedule at the last rotation.
+        // history to reconstruct the current schedule at the last rotation.
         let (mut ctx, _) = Context::new_for_test(4);
         ctx.protocol_config
             .set_leader_schedule_window_size_for_testing(5);
@@ -961,6 +995,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_current_reputation_scores_uses_effective_interval_one_for_zero() {
+        let (mut ctx, _) = Context::new_for_test(4);
+        ctx.protocol_config
+            .set_leader_schedule_update_interval_for_testing(0);
+        let context = Arc::new(ctx);
+        let mut schedule = LeaderScheduleV3::new(context, vec![1, 2, 3, 4]);
+        let commits = make_uniform_chain_commits(2);
+
+        assert_current_reputation_range(&schedule, 1, 1);
+        schedule.add_commit(commits[0].clone());
+        assert_current_reputation_range(&schedule, 2, 2);
+        schedule.add_commit(commits[1].clone());
+        assert_current_reputation_range(&schedule, 3, 3);
+    }
+
+    #[tokio::test]
+    async fn test_current_reputation_scores_interval_boundaries() {
+        let (mut ctx, _) = Context::new_for_test(4);
+        ctx.protocol_config
+            .set_leader_schedule_update_interval_for_testing(12);
+        let context = Arc::new(ctx);
+        let mut schedule = LeaderScheduleV3::new(context, vec![1, 2, 3, 4]);
+        let commits = make_uniform_chain_commits(12);
+
+        assert_eq!(schedule.next_commit_leader_schedule().next_commit_index, 1);
+        assert_current_reputation_range(&schedule, 1, 12);
+
+        for commit in commits.iter().take(11) {
+            schedule.add_commit(commit.clone());
+        }
+        assert_eq!(schedule.next_commit_leader_schedule().next_commit_index, 12);
+        assert_current_reputation_range(&schedule, 1, 12);
+
+        schedule.add_commit(commits[11].clone());
+        assert_eq!(schedule.next_commit_leader_schedule().next_commit_index, 13);
+        assert_current_reputation_range(&schedule, 13, 24);
+    }
+
+    #[tokio::test]
     async fn test_recovery_replay_produces_same_state_as_live() {
         let (mut ctx, _) = Context::new_for_test(4);
         ctx.protocol_config
@@ -972,7 +1045,7 @@ mod tests {
         let commits = make_uniform_chain_commits(23);
 
         // Live path: feed all commits into a fresh schedule starting at index 1.
-        let mut live = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut live = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
         for commit in &commits {
             live.add_commit(commit.clone());
         }
@@ -984,7 +1057,7 @@ mod tests {
         let last_commit_index = commits.last().unwrap().commit_ref.index;
         let replay_start = last_commit_index.saturating_sub(replay_count) + 1;
         assert_eq!(replay_start, 5);
-        let mut replayed = LeaderScheduleV3::new(context.clone(), replay_start, vec![0; 4]);
+        let mut replayed = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
         for commit in commits.iter().skip((replay_start - 1) as usize).cloned() {
             replayed.add_commit(commit);
         }
@@ -1022,7 +1095,7 @@ mod tests {
         ctx.protocol_config
             .set_bad_nodes_stake_threshold_for_testing(0);
         let context = Arc::new(ctx);
-        let schedule = LeaderScheduleV3::new(context, 42, vec![1, 2, 3, 4]);
+        let schedule = LeaderScheduleV3::new(context, vec![1, 2, 3, 4]);
         let first = schedule.compute_next_commit_leader_schedule();
         let second = schedule.compute_next_commit_leader_schedule();
         assert_eq!(first.allowed_leaders, second.allowed_leaders);
@@ -1034,7 +1107,7 @@ mod tests {
         ctx.protocol_config
             .set_leader_schedule_update_interval_for_testing(12);
         let context = Arc::new(ctx);
-        let mut schedule = LeaderScheduleV3::new(context, 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context, vec![0; 4]);
         let commits = make_uniform_chain_commits(12);
 
         let initial = schedule.next_commit_leader_schedule();
@@ -1053,59 +1126,38 @@ mod tests {
         assert_eq!(before_boundary.allowed_leaders, initial.allowed_leaders);
 
         schedule.add_commit(commits[11].clone());
-        let on_boundary = schedule.next_commit_leader_schedule();
-        let computed_on_boundary = schedule.compute_next_commit_leader_schedule();
-        assert_eq!(on_boundary.next_commit_index, 13);
-        assert_eq!(
-            on_boundary.min_next_leader_round,
-            computed_on_boundary.min_next_leader_round
-        );
-        assert_eq!(on_boundary.num_leaders, computed_on_boundary.num_leaders);
-        assert_eq!(
-            on_boundary.allowed_leaders,
-            computed_on_boundary.allowed_leaders
-        );
+        assert_eq!(schedule.next_commit_leader_schedule().next_commit_index, 13);
+        // On boundary: cached schedule was just fully recomputed.
+        assert_current_schedule_matches_computed(&schedule);
     }
 
     #[tokio::test]
-    async fn test_interval_zero_refreshes_every_commit() {
-        let (mut ctx, _) = Context::new_for_test(4);
-        ctx.protocol_config
-            .set_leader_schedule_update_interval_for_testing(0);
-        let context = Arc::new(ctx);
-        let mut schedule = LeaderScheduleV3::new(context, 1, vec![0; 4]);
-        let commits = make_uniform_chain_commits(2);
+    async fn test_effective_interval_one_refreshes_full_schedule_every_commit() {
+        for interval in [0, 1] {
+            let (mut ctx, _) = Context::new_for_test(4);
+            ctx.protocol_config
+                .set_leader_schedule_update_interval_for_testing(interval);
+            let context = Arc::new(ctx);
+            let mut schedule = LeaderScheduleV3::new(context, vec![0; 4]);
+            let commits = make_uniform_chain_commits(4);
 
-        schedule.add_commit(commits[0].clone());
-        assert_eq!(schedule.next_commit_leader_schedule().next_commit_index, 2);
-        schedule.add_commit(commits[1].clone());
-        assert_eq!(schedule.next_commit_leader_schedule().next_commit_index, 3);
+            assert_current_schedule_matches_computed(&schedule);
+            for commit in commits {
+                schedule.add_commit(commit);
+                assert_current_schedule_matches_computed(&schedule);
+            }
+        }
     }
 
     #[tokio::test]
-    async fn test_interval_one_refreshes_every_commit() {
-        let (mut ctx, _) = Context::new_for_test(4);
-        ctx.protocol_config
-            .set_leader_schedule_update_interval_for_testing(1);
-        let context = Arc::new(ctx);
-        let mut schedule = LeaderScheduleV3::new(context, 1, vec![0; 4]);
-        let commits = make_uniform_chain_commits(2);
-
-        schedule.add_commit(commits[0].clone());
-        assert_eq!(schedule.next_commit_leader_schedule().next_commit_index, 2);
-        schedule.add_commit(commits[1].clone());
-        assert_eq!(schedule.next_commit_leader_schedule().next_commit_index, 3);
-    }
-
-    #[tokio::test]
-    async fn test_recovery_cache_matches_live_before_first_rotation_boundary() {
+    async fn test_recovery_matches_live_before_first_rotation_boundary() {
         let (mut ctx, _) = Context::new_for_test(4);
         ctx.protocol_config
             .set_leader_schedule_update_interval_for_testing(12);
         let context = Arc::new(ctx);
         let commits = make_uniform_chain_commits(5);
 
-        let mut live = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut live = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
         for commit in &commits {
             live.add_commit(commit.clone());
         }
@@ -1114,7 +1166,7 @@ mod tests {
         let last_commit_index = commits.last().unwrap().commit_ref.index;
         let replay_start = last_commit_index.saturating_sub(replay_count) + 1;
         assert_eq!(replay_start, 1);
-        let mut replayed = LeaderScheduleV3::new(context, replay_start, vec![0; 4]);
+        let mut replayed = LeaderScheduleV3::new(context, vec![0; 4]);
         for commit in commits {
             replayed.add_commit(commit);
         }
@@ -1133,7 +1185,7 @@ mod tests {
         //   (b) A has a voting block but no r+2 block certifies it →
         //       certified_by_stake = 0, multiplicative score = 0.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         // C1: round-1 leader blocks for authorities 0 and 1.
         let l0_1 = make_block(1, 0, vec![]);
@@ -1187,7 +1239,7 @@ mod tests {
         // by equivocation. Correct behavior: C4 isn't in the voting range, so
         // auth 1 has exactly one voting block (in C3) and score is nonzero.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         let l0_1 = make_block(1, 0, vec![]);
         schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
@@ -1236,7 +1288,7 @@ mod tests {
         // sentinel. Place a round-3 block in C4 (as ancestor of C4's round-4
         // leader) and verify it contributes to certified_by_stake.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         let l0_1 = make_block(1, 0, vec![]);
         schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
@@ -1280,7 +1332,7 @@ mod tests {
         // were broken and the block were scanned for r+1, auth 2 would
         // accrue a nonzero score.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         let l0_1 = make_block(1, 0, vec![]);
         schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
@@ -1332,7 +1384,7 @@ mod tests {
         // leader_refs is a multi-element set. A=3's voting block links all
         // three; voted_for_stake[3] must include all three stakes.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         let l0_1 = make_block(1, 0, vec![]);
         let l1_1 = make_block(1, 1, vec![]);
@@ -1373,7 +1425,7 @@ mod tests {
         // Authority 0 produces two distinct round-2 voting blocks → score=0.
         // Authority 1 produces exactly one → score follows the formula.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         let l0_1 = make_block(1, 0, vec![]);
         schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
@@ -1410,7 +1462,7 @@ mod tests {
         // from auths 1 and 3 certify A=0's voting block
         // (certified_by_stake = s1 + s3). Assert the exact product.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         let l1_1 = make_block(1, 1, vec![]);
         let l2_1 = make_block(1, 2, vec![]);
@@ -1451,7 +1503,7 @@ mod tests {
         //   (b) A=0's voting block links a leader, but no r+2 block certifies
         //       it → certified_by_stake=0 → multiplicative zero.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         let l0_1 = make_block(1, 0, vec![]);
         schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
@@ -1475,12 +1527,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_repeated_q_authority_counts_once() {
+    async fn test_repeated_certifying_authority_counts_once() {
         // Authority 1 produces two distinct round-3 certifying blocks (in C3
         // and C4) that both certify A=0's voting block. certified_by_stake[0]
         // must include stake(1) exactly once.
         let context = setup(4);
-        let mut schedule = LeaderScheduleV3::new(context.clone(), 1, vec![0; 4]);
+        let mut schedule = LeaderScheduleV3::new(context.clone(), vec![0; 4]);
 
         let l0_1 = make_block(1, 0, vec![]);
         schedule.add_commit(make_commit(1, l0_1.reference(), vec![l0_1.clone()]));
