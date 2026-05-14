@@ -633,7 +633,7 @@ impl RandomnessManager {
                     .complete_dkg(party, self.confirmations.values())
             };
 
-            let role = if self.observer.is_some() {
+            let role = if self.is_observer() {
                 "Observer"
             } else {
                 "Party"
@@ -858,7 +858,7 @@ impl RandomnessManager {
 
     /// Starts the process of generating the given RandomnessRound (validators only).
     pub fn generate_randomness(&self, epoch: EpochId, randomness_round: RandomnessRound) {
-        if self.observer.is_some() {
+        if self.is_observer() {
             return;
         }
         self.network_handle
@@ -876,7 +876,7 @@ impl RandomnessManager {
     /// Generates a new RandomnessReporter for reporting observed rounds to this RandomnessManager.
     /// Returns None for observers (they don't generate partial signatures).
     pub fn reporter(&self) -> Option<RandomnessReporter> {
-        if self.observer.is_some() {
+        if self.is_observer() {
             return None;
         }
         Some(RandomnessReporter {
@@ -885,6 +885,10 @@ impl RandomnessManager {
             network_handle: self.network_handle.clone(),
             highest_completed_round: self.highest_completed_round.clone(),
         })
+    }
+
+    fn is_observer(&self) -> bool {
+        self.observer.is_some()
     }
 
     fn epoch_store(&self) -> SuiResult<Arc<AuthorityPerEpochStore>> {
