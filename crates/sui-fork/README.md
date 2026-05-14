@@ -17,87 +17,98 @@ A development tool that enables testing and developing against a local Sui netwo
 - Develop locally while maintaining consistency with production state
 - Run integration tests against forked network state and using packages deployed on the real live network
 
-**Important Note**
-Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
-That means that you have full control over the advancement of checkpoints, time, and (in soon epochs) to simulate different scenarios.
+> [!NOTE]
+> Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
+> That means that you have full control over the advancement of checkpoints, time, (and soon epochs too) to simulate different scenarios.
 
 ## Quick Start
-1. Build or install `sui-fork`.
 
-    From the Sui workspace root:
+#### 1. Build or install `sui-fork`
 
-    ```bash
-    cargo build -p sui-fork
-    ```
+From the Sui workspace root:
 
-    The examples below assume `sui-fork` is on your `PATH`. If you are using the
-    workspace build directly, replace `sui-fork` with
-    `./target/debug/sui-fork`.
+```bash
+cargo build -p sui-fork
+```
 
-2.  In a terminal, run `sui-fork start` with the desired flags:
+> [!NOTE]
+> The examples below assume `sui-fork` is on your `PATH`. If you are using the
+> workspace build directly, replace `sui-fork` with
+> `./target/debug/sui-fork`.
 
-    **From latest checkpoint on mainnet**
+#### 2. Start the fork
 
-    ```bash
-    sui-fork start
-    ```
+In a terminal, run `sui-fork start` with the desired flags.
 
-    > [!TIP]
-    > By default, if no flags are specified, the fork starts from mainnet at the latest known checkpoint.
-    > The fork serves Sui gRPC on `127.0.0.1:9000` by default.
+**From latest checkpoint on mainnet**
 
-    **From latest checkpoint on testnet**
+```bash
+sui-fork start
+```
 
-    ```bash
-    sui-fork start --network testnet
-    ```
-    > [!TIP]
-    > Supported networks are `mainnet`, `testnet`, and `devnet`. The default is `mainnet`.
+> [!TIP]
+> By default, if no flags are specified, the fork starts from mainnet at the latest known checkpoint.
+> The fork serves Sui gRPC on `127.0.0.1:9000` by default.
 
-    **From a specific checkpoint on mainnet**
+**From latest checkpoint on testnet**
 
-    ```bash
-    sui-fork start --checkpoint 12345678
-    ```
+```bash
+sui-fork start --network testnet
+```
 
-    **From a specific checkpoint on testnet with custom data directory**
+> [!TIP]
+> Supported networks are `mainnet`, `testnet`, and `devnet`. The default is `mainnet`.
 
-    ```bash
-    sui-fork start --network testnet --checkpoint 12345678 --data-dir /tmp/sui-fork-demo
-    ```
+**From a specific checkpoint on mainnet**
 
-    Local resume state is stored under
-    `{data-dir}/{network}/forked_at_{checkpoint}`. When you restart the same
-    fork, reuse the same `--data-dir`, `--network`, and `--checkpoint`.
+```bash
+sui-fork start --checkpoint 12345678
+```
 
-3. In terminal 2, confirm the fork is reachable:
+**From a specific checkpoint on testnet with custom data directory**
 
-    ```bash
-    sui-fork status
-    ```
+```bash
+sui-fork start --network testnet --checkpoint 12345678 --data-dir /tmp/sui-fork-demo
+```
 
-4. Add the fork as a Sui CLI environment:
+> [!NOTE]
+> Local resume state is stored under
+> `{data-dir}/{network}/forked_at_{checkpoint}`. When you restart the same
+> fork, reuse the same `--data-dir`, `--network`, and `--checkpoint`.
 
-    ```bash
-    sui client new-env --alias local-fork --rpc http://127.0.0.1:9000
-    sui client switch --env local-fork
-    ```
+#### 3. Confirm the fork is reachable
 
-    You can now use Sui CLI commands such as `sui client ptb`,
-    `sui client publish`, `sui client upgrade`, or other read/write commands against the forked network.
-    Use `--forking-mode` on transaction commands when you need to impersonate a
-    sender on the local fork. Note that this is not available yet for `sui client ptb`, only for regular write commands.
+In another terminal, check the fork status:
 
-5. Control checkpoint and time progression:
+```bash
+sui-fork status
+```
 
-    ```bash
-    sui-fork advance-checkpoint
-    sui-fork advance-clock --duration-ms 1000
-    sui-fork status
-    ```
+#### 4. Add the fork as a Sui CLI environment
 
-    If your test depends on address-owned objects at startup, add repeatable
-    `--address 0x...` or `--object 0x...` flags to `sui-fork start`.
+```bash
+sui client new-env --alias local-fork --rpc http://127.0.0.1:9000
+sui client switch --env local-fork
+```
+
+You can now use Sui CLI commands such as `sui client ptb`,
+`sui client publish`, `sui client upgrade`, or other read/write commands against the forked network.
+
+> [!NOTE]
+> Use `--forking-mode` on transaction commands when you need to impersonate a
+> sender on the local fork. Note that this is not available yet for `sui client ptb`, only for regular write commands.
+
+#### 5. Control checkpoint and time progression
+
+```bash
+sui-fork advance-checkpoint
+sui-fork advance-clock --duration-ms 1000
+sui-fork status
+```
+
+> [!TIP]
+> If your test depends on address-owned objects at startup, add repeatable
+> `--address 0x...` or `--object 0x...` flags to `sui-fork start`.
 
 ## Impersonating Senders
 
@@ -143,7 +154,7 @@ sui-fork start --checkpoint 12345678 --address 0x... --object 0x...
 - On Windows, the default `{base_path}` is `%APPDATA%/sui_fork_data`.
 - `--address` is repeatable and seeds metadata for every object owned by that
   address at the fork checkpoint. Address seeding requires a checkpoint in the
-  GraphQL object enumeration range.
+  GraphQL object enumeration range, which is usually a range within the last hour.
 - `--object` is repeatable and fetches that object at the fork checkpoint. If
   the object is address-owned, it is added to the initial owned-object index.
 - Fork metadata is written once to `seed_manifest.json` under the fork
