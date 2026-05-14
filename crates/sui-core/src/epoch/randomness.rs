@@ -925,6 +925,11 @@ impl RandomnessManager {
         self.observer.is_some()
     }
 
+    #[cfg(test)]
+    fn dkg_output(&self) -> Option<&dkg_v1::Output<PkG, EncG>> {
+        self.dkg_output.get().and_then(|o| o.as_ref())
+    }
+
     fn epoch_store(&self) -> SuiResult<Arc<AuthorityPerEpochStore>> {
         self.epoch_store
             .upgrade()
@@ -1284,6 +1289,213 @@ mod tests {
         // Verify DKG failed.
         for randomness_manager in &randomness_managers {
             assert_eq!(DkgStatus::Failed, randomness_manager.dkg_status());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dkg_observer_v1() {
+        test_dkg_observer(1).await;
+    }
+
+    /// Verifies that an Observer completes DKG alongside validators and derives the same
+    /// shared public key (vss_pk), but without receiving any private key shares.
+    async fn test_dkg_observer(version: u64) {
+        telemetry_subscribers::init_for_testing();
+
+        let network_config =
+            sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
+                .committee_size(NonZeroUsize::new(4).unwrap())
+                .with_reference_gas_price(500)
+                .build();
+
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_random_beacon_dkg_version_for_testing(version);
+
+        let num_validators = network_config.validator_configs.len();
+        let mut epoch_stores = Vec::new();
+        let mut randomness_managers = Vec::new();
+        let (tx_consensus, mut rx_consensus) = mpsc::channel(100);
+
+        for validator in network_config.validator_configs.iter() {
+            let mut mock_consensus_client = MockConsensusClient::new();
+            let tx_consensus = tx_consensus.clone();
+            mock_consensus_client
+                .expect_submit()
+                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
+                    tx_consensus.try_send(transactions.to_vec()).unwrap();
+                    true
+                })
+                .returning(|_, _| {
+                    Ok((
+                        Vec::new(),
+                        with_block_status(BlockStatus::Sequenced(BlockRef::MIN)),
+                    ))
+                });
+
+            let state = TestAuthorityBuilder::new()
+                .with_protocol_config(protocol_config.clone())
+                .with_genesis_and_keypair(&network_config.genesis, validator.protocol_key_pair())
+                .build()
+                .await;
+            let consensus_adapter = Arc::new(ConsensusAdapter::new(
+                Arc::new(mock_consensus_client),
+                CheckpointStore::new_for_tests(),
+                state.name,
+                100_000,
+                100_000,
+                ConsensusAdapterMetrics::new_test(),
+                Arc::new(tokio::sync::Notify::new()),
+            ));
+            let epoch_store = state.epoch_store_for_testing();
+            let randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_store),
+                Box::new(consensus_adapter.clone()),
+                sui_network::randomness::Handle::new_stub(),
+                Some(validator.protocol_key_pair()),
+            )
+            .await
+            .unwrap();
+
+            epoch_stores.push(epoch_store);
+            randomness_managers.push(randomness_manager);
+        }
+
+        // Append an Observer as the last entry, reusing a validator's epoch store (same committee).
+        {
+            let observer_epoch_store = epoch_stores[0].clone();
+            let mut mock_observer_consensus = MockConsensusClient::new();
+            mock_observer_consensus
+                .expect_submit()
+                .returning(|_, _| panic!("observer should not submit to consensus"));
+            let observer_adapter = Arc::new(ConsensusAdapter::new(
+                Arc::new(mock_observer_consensus),
+                CheckpointStore::new_for_tests(),
+                observer_epoch_store.name,
+                100_000,
+                100_000,
+                ConsensusAdapterMetrics::new_test(),
+                Arc::new(tokio::sync::Notify::new()),
+            ));
+            let observer_manager = RandomnessManager::try_new(
+                Arc::downgrade(&observer_epoch_store),
+                Box::new(observer_adapter),
+                sui_network::randomness::Handle::new_stub(),
+                None,
+            )
+            .await
+            .unwrap();
+
+            epoch_stores.push(observer_epoch_store.into());
+            randomness_managers.push(observer_manager);
+        }
+        let observer_idx = randomness_managers.len() - 1;
+
+        // Generate DKG Messages from validators. The observer's start_dkg is a no-op.
+        let mut dkg_messages = Vec::new();
+        for randomness_manager in randomness_managers.iter_mut() {
+            randomness_manager.start_dkg().await.unwrap();
+        }
+        for _ in 0..num_validators {
+            let mut dkg_message = rx_consensus.recv().await.unwrap();
+            assert!(dkg_message.len() == 1);
+            match dkg_message.remove(0).kind {
+                ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
+                    let msg: VersionedDkgMessage = bcs::from_bytes(&bytes)
+                        .expect("DKG message deserialization should not fail");
+                    dkg_messages.push(msg);
+                }
+                _ => panic!("wrong type of message sent"),
+            }
+        }
+
+        // Distribute messages to all participants (validators + observer).
+        for i in 0..randomness_managers.len() {
+            let mut output = ConsensusCommitOutput::new(0);
+            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
+                index: ExecutionIndices {
+                    last_committed_round: 0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            for (j, dkg_message) in dkg_messages.iter().cloned().enumerate() {
+                randomness_managers[i]
+                    .add_message(&epoch_stores[j].name, dkg_message)
+                    .unwrap();
+            }
+            randomness_managers[i]
+                .advance_dkg(&mut output, 0)
+                .await
+                .unwrap();
+            let mut batch = epoch_stores[i].db_batch_for_test();
+            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
+            batch.write().unwrap();
+        }
+
+        // Verify DKG is not yet complete for any participant after the message phase.
+        for randomness_manager in &randomness_managers {
+            assert_eq!(DkgStatus::Pending, randomness_manager.dkg_status());
+        }
+
+        // Collect Confirmations (only validators produce these).
+        let mut dkg_confirmations = Vec::new();
+        for _ in 0..num_validators {
+            let mut dkg_confirmation = rx_consensus.recv().await.unwrap();
+            assert!(dkg_confirmation.len() == 1);
+            match dkg_confirmation.remove(0).kind {
+                ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
+                    let msg: VersionedDkgConfirmation = bcs::from_bytes(&bytes)
+                        .expect("DKG confirmation deserialization should not fail");
+                    dkg_confirmations.push(msg);
+                }
+                _ => panic!("wrong type of message sent"),
+            }
+        }
+
+        // Distribute confirmations to all participants (validators + observer).
+        for i in 0..randomness_managers.len() {
+            let mut output = ConsensusCommitOutput::new(0);
+            output.record_consensus_commit_stats(ExecutionIndicesWithStatsV2 {
+                index: ExecutionIndices {
+                    last_committed_round: 1,
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            for (j, dkg_confirmation) in dkg_confirmations.iter().cloned().enumerate() {
+                randomness_managers[i]
+                    .add_confirmation(&mut output, &epoch_stores[j].name, dkg_confirmation)
+                    .unwrap();
+            }
+            randomness_managers[i]
+                .advance_dkg(&mut output, 0)
+                .await
+                .unwrap();
+            let mut batch = epoch_stores[i].db_batch_for_test();
+            output.write_to_batch(&epoch_stores[i], &mut batch).unwrap();
+            batch.write().unwrap();
+        }
+
+        // Verify all participants completed DKG.
+        for randomness_manager in &randomness_managers {
+            assert_eq!(DkgStatus::Successful, randomness_manager.dkg_status());
+        }
+
+        // Verify the observer derived the same vss_pk as validators, but without shares.
+        let observer_output = randomness_managers[observer_idx]
+            .dkg_output()
+            .expect("observer should have DKG output");
+        let validator_output = randomness_managers[0]
+            .dkg_output()
+            .expect("validator should have DKG output");
+        assert_eq!(observer_output.vss_pk, validator_output.vss_pk);
+        assert!(observer_output.shares.is_none());
+
+        // Verify validators have private key shares.
+        for rm in &randomness_managers[..num_validators] {
+            let output = rm.dkg_output().expect("validator should have DKG output");
+            assert!(output.shares.is_some());
         }
     }
 }
