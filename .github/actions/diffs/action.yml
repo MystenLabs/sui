@@ -115,6 +115,8 @@ runs:
         is_non_framework_markdown_only=false
       fi
 
+      # These dirs contain .md files consumed by Move package builds /
+      # doc snapshot tests, so markdown changes here must still run CI. 
       for file in "${changed_files[@]}"; do
         case "$file" in
           crates/sui-framework/* | external-crates/move/documentation/* | external-crates/move/crates/move-stdlib/*)
