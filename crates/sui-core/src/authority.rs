@@ -99,7 +99,7 @@ use tap::TapFallible;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::watch::error::RecvError;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, info, instrument, warn};
@@ -6362,19 +6362,32 @@ impl AuthorityState {
     }
 }
 
+/// A randomness signature for a specific epoch and round, broadcast to observer peers.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RandomnessSignatureMessage {
+    pub epoch: EpochId,
+    pub round: RandomnessRound,
+    pub signature_bytes: Vec<u8>,
+}
+
 pub struct RandomnessRoundReceiver {
     authority_state: Arc<AuthorityState>,
     randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
+    /// Broadcasts verified randomness signatures to connected observer peers.
+    /// Used by ObserverService to push signatures on the block stream.
+    signature_broadcast_tx: Option<broadcast::Sender<bytes::Bytes>>,
 }
 
 impl RandomnessRoundReceiver {
     pub fn spawn(
         authority_state: Arc<AuthorityState>,
         randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
+        signature_broadcast_tx: Option<broadcast::Sender<bytes::Bytes>>,
     ) -> JoinHandle<()> {
         let rrr = RandomnessRoundReceiver {
             authority_state,
             randomness_rx,
+            signature_broadcast_tx,
         };
         spawn_monitored_task!(rrr.run())
     }
@@ -6409,6 +6422,19 @@ impl RandomnessRoundReceiver {
             );
             return;
         }
+        // Broadcast signature to connected observer peers so they can create the same
+        // transaction. This enables observer-to-observer relay chains.
+        if let Some(tx) = &self.signature_broadcast_tx {
+            let msg = RandomnessSignatureMessage {
+                epoch,
+                round,
+                signature_bytes: bytes.clone(),
+            };
+            if let Ok(encoded) = bcs::to_bytes(&msg) {
+                let _ = tx.send(bytes::Bytes::from(encoded));
+            }
+        }
+
         let key = TransactionKey::RandomnessRound(epoch, round);
         let transaction = VerifiedTransaction::new_randomness_state_update(
             epoch,

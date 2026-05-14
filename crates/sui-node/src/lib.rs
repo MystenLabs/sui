@@ -283,6 +283,13 @@ pub struct SuiNode {
     // Channel to allow signaling upstream to shutdown sui-node
     shutdown_channel_tx: broadcast::Sender<Option<RunWithRange>>,
 
+    /// Long-lived broadcast sender for randomness signatures, passed to per-epoch
+    /// consensus ObserverService instances for pushing signatures to observer peers.
+    randomness_sig_broadcast_tx: tokio::sync::broadcast::Sender<bytes::Bytes>,
+
+    /// Long-lived sender for feeding verified randomness signatures into RandomnessRoundReceiver.
+    randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
+
     /// AuthorityAggregator of the network, created at start and beginning of each epoch.
     /// Use ArcSwap so that we could mutate it without taking mut reference.
     // TODO: Eventually we can make this auth aggregator a shared reference so that this
@@ -705,6 +712,7 @@ impl SuiNode {
                 .unwrap_or_default()
                 .mailbox_capacity(),
         );
+        let randomness_tx_clone = randomness_tx.clone();
         let P2pComponents {
             p2p_network,
             known_peers,
@@ -808,8 +816,17 @@ impl SuiNode {
                 .unwrap();
         }
 
+        // Broadcast channel for propagating randomness signatures to observer peers.
+        // Long-lived (node lifetime): per-epoch ObserverService instances subscribe to it.
+        let (randomness_sig_broadcast_tx, _) =
+            tokio::sync::broadcast::channel::<bytes::Bytes>(1000);
+
         // Start the loop that receives new randomness and generates transactions for it.
-        RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
+        RandomnessRoundReceiver::spawn(
+            state.clone(),
+            randomness_rx,
+            Some(randomness_sig_broadcast_tx.clone()),
+        );
 
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
@@ -880,6 +897,8 @@ impl SuiNode {
                 sui_node_metrics.clone(),
                 checkpoint_metrics.clone(),
                 node_role,
+                randomness_sig_broadcast_tx.clone(),
+                randomness_tx_clone.clone(),
             )
             .await?;
 
@@ -940,6 +959,8 @@ impl SuiNode {
 
             _state_snapshot_uploader_handle: state_snapshot_handle,
             shutdown_channel_tx: shutdown_channel,
+            randomness_sig_broadcast_tx,
+            randomness_tx: randomness_tx_clone,
 
             auth_agg,
             subscription_service_checkpoint_sender,
@@ -1279,6 +1300,8 @@ impl SuiNode {
         sui_node_metrics: Arc<SuiNodeMetrics>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
+        randomness_sig_broadcast_tx: tokio::sync::broadcast::Sender<bytes::Bytes>,
+        randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1304,6 +1327,8 @@ impl SuiNode {
             registry_service,
             client,
             node_role,
+            Some(randomness_sig_broadcast_tx),
+            randomness_tx.clone(),
         ));
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
@@ -1971,6 +1996,8 @@ impl SuiNode {
                         self.metrics.clone(),
                         self.checkpoint_metrics.clone(),
                         new_role,
+                        self.randomness_sig_broadcast_tx.clone(),
+                        self.randomness_tx.clone(),
                     )
                     .await?;
 

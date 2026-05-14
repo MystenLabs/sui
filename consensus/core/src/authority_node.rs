@@ -70,6 +70,12 @@ impl ConsensusAuthority {
         // has been running. It's useful for making decisions on whether amnesia recovery should run.
         // When `boot_counter` is 0, `ConsensusAuthority` will initiate the process of amnesia recovery if that's enabled in the parameters.
         boot_counter: u64,
+        // Broadcast sender for randomness signatures. ObserverService subscribes to push
+        // signatures to connected observer peers.
+        sig_broadcast: Option<tokio::sync::broadcast::Sender<bytes::Bytes>>,
+        // Handler for auxiliary data from the block stream (e.g. randomness signatures).
+        // Only set for observer nodes.
+        auxiliary_data_handler: Option<Arc<dyn crate::AuxiliaryDataHandler>>,
     ) -> Self {
         match network_type {
             NetworkType::Tonic => {
@@ -85,6 +91,8 @@ impl ConsensusAuthority {
                     commit_consumer,
                     registry,
                     boot_counter,
+                    sig_broadcast,
+                    auxiliary_data_handler,
                 )
                 .await;
                 Self::WithTonic(authority)
@@ -176,6 +184,8 @@ where
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         boot_counter: u64,
+        sig_broadcast: Option<tokio::sync::broadcast::Sender<bytes::Bytes>>,
+        auxiliary_data_handler: Option<Arc<dyn crate::AuxiliaryDataHandler>>,
     ) -> Self {
         let metrics = initialise_metrics(registry);
 
@@ -453,6 +463,7 @@ where
                     transaction_vote_tracker.clone(),
                     synchronizer.clone(),
                     block_sync_service.clone(),
+                    sig_broadcast.clone(),
                 ));
                 network_manager
                     .start_observer_server(observer_service)
@@ -473,6 +484,7 @@ where
                 transaction_vote_tracker.clone(),
                 synchronizer.clone(),
                 block_sync_service.clone(),
+                sig_broadcast.clone(),
             ));
 
             let observer_subscriber = ObserverSubscriber::new(
@@ -480,6 +492,7 @@ where
                 observer_client,
                 observer_service.clone(),
                 dag_state.clone(),
+                auxiliary_data_handler,
             );
 
             network_manager
@@ -664,6 +677,8 @@ mod tests {
             commit_consumer,
             registry,
             0,
+            None,
+            None,
         )
         .await;
 
@@ -705,6 +720,8 @@ mod tests {
             commit_consumer,
             registry,
             0,
+            None,
+            None,
         )
         .await;
 
@@ -820,6 +837,8 @@ mod tests {
             observer_commit_consumer,
             Registry::new(),
             0,
+            None,
+            None,
         )
         .await;
         // The relevant endpoints are now implemented for the synchronizer and commit_syncer components, so the Observer node should be able to catch up and
@@ -1255,6 +1274,8 @@ mod tests {
             commit_consumer,
             registry,
             boot_counter,
+            None,
+            None,
         )
         .await;
 

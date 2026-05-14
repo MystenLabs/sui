@@ -31,7 +31,8 @@ use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
 use sui_types::node_role::NodeRole;
 use sui_types::{
-    committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
+    committee::EpochId, crypto::RandomnessRound,
+    sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
 use tokio::sync::{Mutex, broadcast};
 use tokio::time::{sleep, timeout};
@@ -190,6 +191,14 @@ pub struct ConsensusManager {
     consumer_monitor: ArcSwapOption<CommitConsumerMonitor>,
     consumer_monitor_sender: broadcast::Sender<Arc<CommitConsumerMonitor>>,
 
+    /// Long-lived broadcast sender for randomness signatures, passed to per-epoch
+    /// ObserverService instances so they can push signatures to connected observers.
+    sig_broadcast: Option<tokio::sync::broadcast::Sender<bytes::Bytes>>,
+
+    /// Long-lived sender for feeding verified randomness signatures into RandomnessRoundReceiver.
+    /// Used by the per-epoch ObserverRandomnessHandler on observer nodes.
+    randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
+
     running: Mutex<Running>,
 
     #[cfg(test)]
@@ -209,6 +218,8 @@ impl ConsensusManager {
         registry_service: &RegistryService,
         consensus_client: Arc<UpdatableConsensusClient>,
         node_role: NodeRole,
+        sig_broadcast: Option<tokio::sync::broadcast::Sender<bytes::Bytes>>,
+        randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
     ) -> Self {
         let metrics = Arc::new(ConsensusManagerMetrics::new(
             &registry_service.default_registry(),
@@ -236,6 +247,8 @@ impl ConsensusManager {
             running: Mutex::new(Running::False),
             boot_counter: Mutex::new(0),
             address_overrides: parking_lot::Mutex::new(AddressOverridesMap::new()),
+            sig_broadcast,
+            randomness_tx,
         }
     }
 
@@ -301,6 +314,22 @@ impl ConsensusManager {
 
         let node_role = epoch_store.node_role();
 
+        // For observer nodes: create the ObserverRandomnessHandler and its handle.
+        // The handle implements AuxiliaryDataHandler and is passed to the ObserverSubscriber.
+        // The handler spawns a background task that verifies and forwards signatures.
+        let auxiliary_data_handler: Option<Arc<dyn consensus_core::AuxiliaryDataHandler>> =
+            if node_role.runs_consensus() && node_role.is_fullnode() {
+                let observer =
+                    crate::randomness_signature_observer::RandomnessSignatureObserver::start(
+                        self.randomness_tx.clone(),
+                    );
+                // TODO: pass `observer` to RandomnessManager so it calls
+                // update_epoch(vss_pk) when observer DKG completes.
+                Some(Arc::new(observer))
+            } else {
+                None
+            };
+
         // Spin up the new Mysticeti consensus handler to listen for committed sub dags, before starting authority.
         let handler = MysticetiConsensusHandler::new(
             last_processed_commit_index,
@@ -349,6 +378,8 @@ impl ConsensusManager {
             commit_consumer,
             registry.clone(),
             *boot_counter,
+            self.sig_broadcast.clone(),
+            auxiliary_data_handler,
         )
         .await;
         let client = authority.transaction_client();

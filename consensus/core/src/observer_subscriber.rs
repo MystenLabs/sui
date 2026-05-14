@@ -23,7 +23,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
-    network::{ObserverNetworkClient, ObserverNetworkService, PeerId},
+    network::{AuxiliaryDataHandler, ObserverNetworkClient, ObserverNetworkService, PeerId},
 };
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
@@ -36,6 +36,7 @@ pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetwor
     observer_service: Arc<S>,
     dag_state: Arc<parking_lot::RwLock<DagState>>,
     subscription: Arc<Mutex<Option<JoinHandle<()>>>>,
+    auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
 }
 
 #[allow(unused)]
@@ -45,6 +46,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         network_client: Arc<C>,
         observer_service: Arc<S>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
+        auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
     ) -> Self {
         Self {
             context,
@@ -52,6 +54,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             observer_service,
             dag_state,
             subscription: Arc::new(Mutex::new(None)),
+            auxiliary_data_handler,
         }
     }
 
@@ -62,6 +65,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         let network_client = self.network_client.clone();
         let observer_service = self.observer_service.clone();
         let dag_state = self.dag_state.clone();
+        let auxiliary_data_handler = self.auxiliary_data_handler.clone();
 
         let mut subscription = self.subscription.lock();
         if let Some(handle) = subscription.take() {
@@ -73,6 +77,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             observer_service,
             dag_state,
             peer,
+            auxiliary_data_handler,
         )));
     }
 
@@ -90,6 +95,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         observer_service: Arc<S>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
         peer: PeerId,
+        auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
         const MIN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -153,14 +159,25 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                 let _scope = monitored_scope("ObserverSubscriberStreamConsumer");
 
                 match blocks.next().await {
-                    Some(batch) => {
+                    Some(item) => {
                         context
                             .metrics
                             .node_metrics
                             .observer_subscribed_blocks_batch_size
-                            .observe(batch.len() as f64);
+                            .observe(item.blocks.len() as f64);
 
-                        for block in batch {
+                        // Forward randomness signatures to sui-core, but only when caught up.
+                        // During catch-up (commit lagging behind quorum), drop silently --
+                        // those rounds will arrive via checkpoint sync, same as lagging validators.
+                        if let Some(handler) = &auxiliary_data_handler
+                            && !observer_service.is_commit_lagging()
+                        {
+                            for sig in item.auxiliary_data.randomness_signatures {
+                                handler.handle(sig);
+                            }
+                        }
+
+                        for block in item.blocks {
                             // Backpressure: wait if we've hit max parallelism
                             while active_tasks.load(Ordering::Acquire) >= max_parallel_tasks {
                                 // Block until a task completes instead of busy-waiting
@@ -266,7 +283,7 @@ mod tests {
         commit::{CommitRange, TrustedCommit},
         context::Context,
         error::ConsensusResult,
-        network::{NodeId, ObserverBlockStream},
+        network::{NodeId, ObserverBlockStream, ObserverStreamItem},
         storage::mem_store::MemStore,
     };
 
@@ -294,7 +311,13 @@ mod tests {
 
             let block_stream = stream::unfold(block_value, move |val| async move {
                 sleep(Duration::from_millis(1)).await;
-                Some((vec![Bytes::from(vec![val; 8])], val))
+                Some((
+                    ObserverStreamItem {
+                        blocks: vec![Bytes::from(vec![val; 8])],
+                        auxiliary_data: Default::default(),
+                    },
+                    val,
+                ))
             })
             .take(10);
             Ok(Box::pin(block_stream))
@@ -335,6 +358,10 @@ mod tests {
 
     #[async_trait]
     impl ObserverNetworkService for ObserverSubscriberTestService {
+        fn is_commit_lagging(&self) -> bool {
+            false
+        }
+
         async fn handle_block(&self, peer: PeerId, block: Bytes) -> ConsensusResult<()> {
             self.handle_block_calls.lock().push((peer, block));
             Ok(())
@@ -382,6 +409,7 @@ mod tests {
             network_client,
             observer_service.clone(),
             dag_state,
+            None,
         );
 
         // Subscribe to a validator peer
@@ -422,6 +450,7 @@ mod tests {
             network_client,
             observer_service.clone(),
             dag_state,
+            None,
         );
 
         // Subscribe to first peer (validator 0)
