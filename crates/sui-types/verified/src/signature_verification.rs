@@ -249,11 +249,11 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
         // E2: address derivation failure → Err
         spec_any_addr_derivation_fails(tx_signatures) ==> result.is_Err(),
         // E3: greedy fails → Err
-        (!spec_any_addr_derivation_fails(tx_signatures)
-            && tx_signatures@.len() == required_signers@.len()
+        (tx_signatures@.len() == required_signers@.len()
             && spec_greedy_result(tx_signatures, required_signers, aliased_addresses, epoch).is_None())
             ==> result.is_Err(),
         // S1: greedy succeeds → Ok with greedy assignment
+        // (must exclude all error conditions to avoid contradicting E1/E2/E3)
         (!spec_any_addr_derivation_fails(tx_signatures)
             && tx_signatures@.len() == required_signers@.len()
             && spec_greedy_result(tx_signatures, required_signers, aliased_addresses, epoch).is_Some())
