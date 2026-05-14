@@ -62,6 +62,92 @@ pub(crate) fn structure(
     structured_blocks.remove(&entry_node).unwrap()
 }
 
+// -------------------------------------------------------------------------------------------------
+// Threaded fall-through info: `next_in_outer`
+// -------------------------------------------------------------------------------------------------
+// Every call into `structure_acyclic` carries a `next_in_outer: Option<NodeIndex>` — the CFG
+// node that will be placed immediately after this node's structured form in its containing
+// Seq. The structurer uses it to make a single decision at emission time:
+//   - In `arm_for`, the effective adjacent-next-sibling is `post_dom` when we inline it,
+//     else `next_in_outer`. An arm whose target equals that sibling becomes `None` (a
+//     fall-through) instead of a `Jump`.
+//
+// Pre-structured children come out of `structured_blocks` having been built without this
+// context (post-order structures children before their consumer). When we consume one, we
+// walk its tail positions with `elide_tail_jump_to` against the same adjacent-next target —
+// the same decision the child would have made if it had known.
+//
+// Callers compute the value they pass down:
+//   - `structure_nodes`: `None` — no surrounding Seq.
+//   - `structure_loop` head: the loop's successor node — what follows the `Loop` form.
+//   - `structure_acyclic_region`: when inlining post_dom, the post_dom block's tails see
+//     our own `next_in_outer`.
+//
+// Loop-body RPO adjacency (body[i]'s next is body[i+1]) is the one case the threading
+// doesn't reach: body items are structured by `structure_nodes` before the body is laid out,
+// so they get `None`. `structure_loop`'s body assembly walks pairwise with the same helper.
+
+/// The CFG node id this structured form starts execution at, when one is well-defined.
+/// Returns `None` for forms with no single entry (empty Seq, Continue/Break, raw Jumps).
+fn entry_label(s: &D::Structured) -> Option<NodeIndex> {
+    use D::Structured as DS;
+    match s {
+        DS::Block(code) => Some(NodeIndex::new(*code as usize)),
+        DS::IfElse(code, _, _) => Some(NodeIndex::new(*code as usize)),
+        DS::Switch(code, _, _) => Some(NodeIndex::new(*code as usize)),
+        DS::JumpIf(_, code, _, _) => Some(NodeIndex::new(*code as usize)),
+        DS::Loop(label, _) => Some(*label),
+        DS::Seq(items) => items.iter().find_map(entry_label),
+        DS::Break(_) | DS::Continue(_) | DS::Jump(_, _) => None,
+    }
+}
+
+/// Drop any `Jump(_, target)` sitting at a tail position of `s`. Walks through `Seq`'s last
+/// item, both `IfElse` arms, and every `Switch` arm. Doesn't descend into `Loop` bodies -
+/// they don't fall through.
+fn elide_tail_jump_to(s: &mut D::Structured, target: NodeIndex) {
+    use D::Structured as DS;
+    match s {
+        DS::Jump(_, label) if *label == target => {
+            *s = DS::Seq(vec![]);
+        }
+        DS::Seq(items) => {
+            if let Some(last) = items.last_mut() {
+                elide_tail_jump_to(last, target);
+            }
+        }
+        DS::IfElse(_, conseq, alt) => {
+            elide_tail_jump_to(conseq, target);
+            if let Some(alt_inner) = alt.as_mut().as_mut() {
+                elide_tail_jump_to(alt_inner, target);
+            }
+        }
+        DS::Switch(_, _, cases) => {
+            for (_, body) in cases.iter_mut() {
+                elide_tail_jump_to(body, target);
+            }
+        }
+        DS::Block(_)
+        | DS::Loop(_, _)
+        | DS::Break(_)
+        | DS::Continue(_)
+        | DS::Jump(_, _)
+        | DS::JumpIf(_, _, _, _) => {}
+    }
+}
+
+/// Used only by `structure_loop`'s body assembly: body[i]'s next sibling is body[i+1], and
+/// neither was structured with that knowledge. For every consecutive pair, walk `items[i]`'s
+/// tails and drop a `Jump` whose target is `items[i+1]`'s entry label.
+fn elide_inter_item_gotos(items: &mut [D::Structured]) {
+    for i in 0..items.len().saturating_sub(1) {
+        if let Some(next_label) = entry_label(&items[i + 1]) {
+            let (left, _) = items.split_at_mut(i + 1);
+            elide_tail_jump_to(&mut left[i], next_label);
+        }
+    }
+}
+
 fn structure_nodes(
     config: &config::Config,
     input: &mut BTreeMap<NodeIndex, ast::Input>,
@@ -86,6 +172,7 @@ fn structure_nodes(
                 node,
                 input,
                 /*inside_loop*/ false,
+                /*next_in_outer*/ None,
             );
         }
     }
@@ -102,6 +189,12 @@ fn structure_loop(
     if config.debug_print.structuring {
         println!("structuring loop at node {loop_head:#?}");
     }
+    let (loop_nodes, succ_nodes) = graph.find_loop_nodes(loop_head);
+    let succ_node = succ_nodes.iter().copied().next();
+    if config.debug_print.structuring {
+        println!("  loop nodes: {loop_nodes:#?}");
+        println!("  successor nodes: {succ_nodes:#?}");
+    }
     structure_acyclic(
         config,
         graph,
@@ -109,12 +202,8 @@ fn structure_loop(
         loop_head,
         input,
         /*inside_loop*/ true,
+        /*next_in_outer*/ succ_node,
     );
-    let (loop_nodes, succ_nodes) = graph.find_loop_nodes(loop_head);
-    if config.debug_print.structuring {
-        println!("  loop nodes: {loop_nodes:#?}");
-        println!("  successor nodes: {succ_nodes:#?}");
-    }
 
     // Emit body nodes in reverse post-order restricted to `loop_nodes`. After
     // `structure_acyclic_region` has absorbed arm children into structured IfElse/Switch
@@ -129,7 +218,6 @@ fn structure_loop(
     let body_order = reverse_post_order_within(&graph.cfg, loop_head, &loop_nodes);
 
     let mut loop_body = vec![];
-    let succ_node = succ_nodes.into_iter().next();
     for node in body_order {
         let Some(node) = structured_blocks.remove(&node) else {
             continue;
@@ -137,6 +225,9 @@ fn structure_loop(
         let result = insert_breaks(&loop_nodes, loop_head, succ_node, node);
         loop_body.push(result);
     }
+    // Drop tail-Jumps in body[i] that target body[i+1]'s entry: RPO adjacency makes them
+    // jumps to their own fall-through.
+    elide_inter_item_gotos(&mut loop_body);
 
     let seq = D::Structured::Seq(loop_body);
     graph.update_loop_info(loop_head);
@@ -280,13 +371,21 @@ fn structure_acyclic(
     node: NodeIndex,
     input: &mut BTreeMap<D::Label, D::Input>,
     inside_loop: bool,
+    next_in_outer: Option<NodeIndex>,
 ) {
     if graph.back_edges.contains_key(&node) {
         let result = structure_latch_node(config, graph, node, input.remove(&node).unwrap());
         structured_blocks.insert(node, result);
     } else {
-        let result =
-            structure_acyclic_region(config, graph, structured_blocks, input, node, inside_loop);
+        let result = structure_acyclic_region(
+            config,
+            graph,
+            structured_blocks,
+            input,
+            node,
+            inside_loop,
+            next_in_outer,
+        );
         structured_blocks.insert(node, result);
     }
 }
@@ -298,6 +397,7 @@ fn structure_acyclic_region(
     input: &mut BTreeMap<D::Label, D::Input>,
     start: NodeIndex,
     inside_loop: bool,
+    next_in_outer: Option<NodeIndex>,
 ) -> D::Structured {
     // Code has no arms and no post-dominator role; delegate before the dom-tree work.
     if matches!(&input[&start], D::Input::Code(..)) {
@@ -323,43 +423,64 @@ fn structure_acyclic_region(
         );
     }
 
-    // True when every predecessor of `post_dominator` lies in start's dominator subtree.
-    // Post-dom is then reachable only through us, so no outer scope will emit it; arm-jumps
-    // targeting it become redundant and can be elided in favor of inline sequencing.
-    let we_own_post_dom = if post_dominator == graph.return_ {
-        false
-    } else {
-        let subtree: HashSet<NodeIndex> = dom_node
-            .all_children()
-            .chain(std::iter::once(start))
-            .collect();
-        graph
-            .cfg
-            .neighbors_directed(post_dominator, petgraph::Direction::Incoming)
-            .all(|pred| subtree.contains(&pred))
+    // Arm processing below absorbs child structured blocks and transfers their back-edges
+    // to `start` via `update_latch_branch_nodes`. The inline decision has to reflect that
+    // post-absorption state — predict it now so `arm_for` and the actual inline agree.
+    let absorbed_children: Vec<NodeIndex> = match &input[&start] {
+        D::Input::Condition(_, _, c, a) => [*c, *a]
+            .into_iter()
+            .filter(|t| *t != start && *t != post_dominator && ichildren.contains(t))
+            .collect(),
+        D::Input::Variants(_, _, _, items) => items
+            .iter()
+            .map(|(_, t)| *t)
+            .filter(|t| *t != post_dominator)
+            .collect(),
+        D::Input::Code(..) => vec![],
     };
-    // True when start and post_dominator share the same set of enclosing loops. Inlining
-    // post_dom consumes it from `structured_blocks`; if it belongs to an outer scope (e.g.,
-    // a post-loop continuation), the consuming structurer would drag it inside the wrong
-    // region.
-    let same_loop_scope = graph.loop_scope_of(start) == graph.loop_scope_of(post_dominator);
+    let start_has_back_edges_post_absorption = graph.back_edges.contains_key(&start)
+        || absorbed_children
+            .iter()
+            .any(|t| graph.back_edges.contains_key(t));
+
+    // True iff this structurer will sequence `post_dominator` immediately after the
+    // IfElse/Switch in its outer Seq. The predicate has to match what actually happens
+    // below, because `arm_for` uses it to decide between emitting a `Jump` and an empty
+    // fall-through arm.
     let emit_post_dom_in_seq = post_dominator != graph.return_
-        && we_own_post_dom
-        && same_loop_scope
-        && !graph.back_edges.contains_key(&start)
+        && ichildren.contains(&post_dominator)
+        && !start_has_back_edges_post_absorption
         && !inside_loop;
 
     if config.debug_print.dominators {
-        println!("  we own post-dominator: {we_own_post_dom}");
         println!("  emit post-dominator in sequence: {emit_post_dom_in_seq}");
     }
 
+    // The CFG node that will be sequenced immediately after this IfElse/Switch in its
+    // enclosing Seq. If we inline `post_dominator`, that's the inlined block; otherwise
+    // our caller's `next_in_outer` is what they'll place next.
+    //
+    // For the loop-head call (`inside_loop`), `next_in_outer` is the loop's successor —
+    // which arms reach as a *break* through `insert_breaks`, not as a fall-through. We
+    // must leave those arm Jumps in place for `insert_breaks` to reclassify.
+    let arms_next_sibling = if inside_loop {
+        None
+    } else if emit_post_dom_in_seq {
+        Some(post_dominator)
+    } else {
+        next_in_outer
+    };
+
     /// Classify one Condition arm and produce its structured form (or `None` to omit it):
     ///   - `target == start`: back-edge to a loop head; emit `Jump(DegenerateJumpIf)`.
-    ///   - `target == post_dom`, owned and inline-sequenced: `None` (fall through).
-    ///   - `target == post_dom`, not owned/sequenced: `Jump(pd_src)` for `insert_breaks`
-    ///     to rewrite. `pd_src` distinguishes which arm produced it.
-    ///   - `target` in start's dominator subtree: embed its already-structured form.
+    ///   - `target == arms_next_sibling`: the literal next instruction after our IfElse;
+    ///     omit (fall through). Subsumes the inline-post_dom case via the computation of
+    ///     `arms_next_sibling` above.
+    ///   - `target == post_dom` (but not adjacent): `Jump(pd_src)`. `pd_src` distinguishes
+    ///     which arm produced it.
+    ///   - `target` in start's dominator subtree: embed its already-structured form, with
+    ///     tail-`Jump`s to `arms_next_sibling` elided — the child was structured before us
+    ///     and so didn't know what would be sequenced after it.
     ///   - Otherwise: `Jump(ArmOutsideSubtree)`. Target is owned by an enclosing structure;
     ///     the enclosing `insert_breaks` rewrites it.
     fn arm_for(
@@ -368,19 +489,21 @@ fn structure_acyclic_region(
         post_dominator: NodeIndex,
         ichildren: &HashSet<NodeIndex>,
         structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
-        emit_post_dom_in_seq: bool,
+        arms_next_sibling: Option<NodeIndex>,
         pd_src: GotoSource,
     ) -> Option<D::Structured> {
         if target == start {
             Some(D::Structured::Jump(GotoSource::DegenerateJumpIf, target))
+        } else if Some(target) == arms_next_sibling {
+            None
         } else if target == post_dominator {
-            if emit_post_dom_in_seq {
-                None
-            } else {
-                Some(D::Structured::Jump(pd_src, target))
-            }
+            Some(D::Structured::Jump(pd_src, target))
         } else if ichildren.contains(&target) {
-            Some(structured_blocks.remove(&target).unwrap())
+            let mut arm = structured_blocks.remove(&target).unwrap();
+            if let Some(next) = arms_next_sibling {
+                elide_tail_jump_to(&mut arm, next);
+            }
+            Some(arm)
         } else {
             Some(D::Structured::Jump(GotoSource::ArmOutsideSubtree, target))
         }
@@ -396,7 +519,7 @@ fn structure_acyclic_region(
                 post_dominator,
                 &ichildren,
                 structured_blocks,
-                emit_post_dom_in_seq,
+                arms_next_sibling,
                 GotoSource::ConseqEqPostDom,
             );
             let alt_arm = arm_for(
@@ -405,7 +528,7 @@ fn structure_acyclic_region(
                 post_dominator,
                 &ichildren,
                 structured_blocks,
-                emit_post_dom_in_seq,
+                arms_next_sibling,
                 GotoSource::AltEqPostDom,
             );
 
@@ -450,7 +573,7 @@ fn structure_acyclic_region(
             let arms = items
                 .into_iter()
                 .map(|(v, item)| {
-                    if post_dominator == item {
+                    if item == post_dominator || Some(item) == arms_next_sibling {
                         (v, D::Structured::Seq(vec![]))
                     } else {
                         assert!(
@@ -466,7 +589,11 @@ fn structure_acyclic_region(
                                 .collect::<Vec<_>>(),
                             item
                         );
-                        (v, structured_blocks.remove(&item).unwrap())
+                        let mut arm = structured_blocks.remove(&item).unwrap();
+                        if let Some(next) = arms_next_sibling {
+                            elide_tail_jump_to(&mut arm, next);
+                        }
+                        (v, arm)
                     }
                 })
                 .collect();
@@ -478,27 +605,17 @@ fn structure_acyclic_region(
     };
     let mut exp = vec![structured];
 
-    // TODO ensure end nodes are not back edges
-    let start_dominates_post_dom = graph
-        .dom_tree
-        .get(start)
-        .all_children()
-        .any(|child| child == post_dominator);
-    let emit_post_dom_in_seq = ichildren.contains(&post_dominator)
-        && !graph.back_edges.contains_key(&start)
-        && start_dominates_post_dom
-        && !inside_loop;
-
-    if config.debug_print.dominators {
-        println!("  start dominates post-dominator: {start_dominates_post_dom}");
-        println!("  emit post-dominator in sequence: {emit_post_dom_in_seq}");
-    }
-
-    if post_dominator != graph.return_ && emit_post_dom_in_seq {
+    if emit_post_dom_in_seq {
         if config.debug_print.dominators {
             println!("  => emitting post-dominator");
         }
-        exp.push(structured_blocks.remove(&post_dominator).unwrap());
+        let mut pd_block = structured_blocks.remove(&post_dominator).unwrap();
+        // The inlined post-dom is sequenced next; whatever follows it in our Seq is what
+        // our caller will place after us (their `next_in_outer`). Walk pre-built tails.
+        if let Some(next) = next_in_outer {
+            elide_tail_jump_to(&mut pd_block, next);
+        }
+        exp.push(pd_block);
     }
     flatten_sequence(D::Structured::Seq(exp))
 }
