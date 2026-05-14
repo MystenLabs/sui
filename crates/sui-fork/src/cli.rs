@@ -60,7 +60,7 @@ enum Command {
         #[arg(long = "address")]
         addresses: Vec<SuiAddress>,
 
-        /// Object ID to fetch and seed if it is address-owned
+        /// Object ID to fetch and seed if it is owned by an address
         #[arg(long = "object")]
         object_ids: Vec<ObjectID>,
 

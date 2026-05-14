@@ -126,7 +126,7 @@ impl RemovedObjectKind {
     }
 }
 
-/// Index entry for a live address-owned object.
+/// Index entry for a live object owned by an address.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub(crate) struct OwnedObjectEntry {
     pub(crate) owner: SuiAddress,
@@ -138,11 +138,12 @@ pub(crate) struct OwnedObjectEntry {
 
 impl OwnedObjectEntry {
     fn from_object(object: &Object) -> Option<Self> {
-        let Owner::AddressOwner(owner) = &object.owner else {
-            return None;
+        let owner = match &object.owner {
+            Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => *owner,
+            _ => return None,
         };
         Some(Self {
-            owner: *owner,
+            owner,
             object_id: object.id(),
             version: object.version(),
             object_type: object.struct_tag()?,

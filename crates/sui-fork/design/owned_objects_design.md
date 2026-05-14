@@ -72,8 +72,9 @@ struct OwnedObjectEntry {
 }
 ```
 
-Only address-owned Move objects with a `StructTag` are indexed. Shared,
-immutable, object-owned, consensus-owned, and package objects are excluded.
+Only Move objects owned by an address with a `StructTag` are indexed. This
+includes `AddressOwner` and `ConsensusAddressOwner`. Shared, immutable,
+object-owned, and package objects are excluded.
 
 ## Write Path
 
@@ -143,8 +144,8 @@ The design should be validated with tests for:
 - removal markers blocking latest/current reads while preserving exact-version
   reads
 - owned index upsert, removal, persistence, and sort order
-- address-owned writes appearing in `owned_objects`
+- address writes appearing in `owned_objects`
 - transfers moving entries between owners
-- non-address-owned transitions removing entries
+- transitions away from address ownership removing entries
 - local deletion removing entries and blocking remote resurrection
 - RPC owned-object iteration type filtering and cursor behavior
