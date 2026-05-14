@@ -19,7 +19,7 @@ A development tool that enables testing and developing against a local Sui netwo
 
 **Important Note**
 Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
-That means that you have full control over the advancement of checkpoints, time, and epochs to simulate different scenarios.
+That means that you have full control over the advancement of checkpoints, time, and (in soon epochs) to simulate different scenarios.
 
 ## Quick Start
 1. Build or install `sui-fork`.
@@ -34,20 +34,36 @@ That means that you have full control over the advancement of checkpoints, time,
     workspace build directly, replace `sui-fork` with
     `./target/debug/sui-fork`.
 
-2. In terminal 1, start a forked network:
+2.  In a terminal, run `sui-fork start` with the desired flags:
+    **From latest checkpoint on mainnet**
+    ```bash
+    sui-fork start
+    ```
 
+    > [!TIP]
+    > By default, if no flags are specified, the fork starts from mainnet at the latest known checkpoint.
+    > The fork serves Sui gRPC on `127.0.0.1:9000` by default.
+
+    **From latest checkpoint on testnet**
+    ```bash
+    sui-fork start --network testnet
+    ```
+    > [!TIP]
+    > Supported networks are `mainnet`, `testnet`, and `devnet`. The default is `mainnet`.
+
+    **From a specific checkpoint on mainnet**
+    ```bash
+    sui-fork start --checkpoint 12345678
+    ```
+
+    ***From a specific checkpoint on testnet with custom data directory**
     ```bash
     sui-fork start --network testnet --checkpoint 12345678 --data-dir /tmp/sui-fork-demo
     ```
 
-    Replace `12345678` with the checkpoint you want to pin. Use a recent
-    checkpoint unless you also seed the owned objects your test needs. Running
-    `sui-fork start` with no flags forks from mainnet at the latest checkpoint.
-    The fork serves Sui gRPC on `127.0.0.1:9000` by default.
-
-    In this example, local resume state is stored directly under
-    `/tmp/sui-fork-demo`. When you restart the same fork, reuse the same fork
-    data directory and omit seed flags.
+    Local resume state is stored under
+    `{data-dir}/{network}/forked_at_{checkpoint}`. When you restart the same
+    fork, reuse the same `--data-dir`, `--network`, and `--checkpoint`.
 
 3. In terminal 2, confirm the fork is reachable:
 
@@ -63,9 +79,9 @@ That means that you have full control over the advancement of checkpoints, time,
     ```
 
     You can now use Sui CLI commands such as `sui client ptb`,
-    `sui client publish`, or `sui client upgrade` against the forked network.
+    `sui client publish`, `sui client upgrade`, or other read/write commands against the forked network.
     Use `--forking-mode` on transaction commands when you need to impersonate a
-    sender on the local fork. Note that this is not available yet for `sui client ptb`.
+    sender on the local fork. Note that this is not available yet for `sui client ptb`, only for regular write commands.
 
 5. Control checkpoint and time progression:
 
@@ -140,6 +156,7 @@ authoritative over the manifest seed entries.
 
 ## Limitations
 - Sequential execution: Transactions are executed one at a time, no parallelism.
+- Simulating transactions is currently not supported, so automatic gas estimation is not available via CLI or SDKs. All transactions require explicit gas budget.
 - Staking and related operations are not supported.
 - Single validator, single authority network.
 - Object fetching overhead: First access to objects requires network download.
