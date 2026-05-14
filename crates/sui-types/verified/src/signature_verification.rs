@@ -313,20 +313,28 @@ proof fn lemma_greedy_bounds<S, Addr>(
             lemma_first_valid_from_bounds(sigs, signers[0].1@.to_set(), epoch, used, 0);
             lemma_greedy_bounds(sigs, signers.skip(1), epoch, used.insert(j));
             lemma_greedy_len(sigs, signers.skip(1), epoch, used.insert(j));
-            let indices = spec_greedy_helper(sigs, signers, epoch, used)->Some_0;
-            let rest = spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j))->Some_0;
-            // TODO: prove by unrolling spec_greedy_helper (trigger/SMT issue).
-            assume(indices[0] == j as u8);
-            assume(forall|k: int| 1 <= k < indices.len() ==> #[trigger] indices[k] == rest[k - 1]);
-            assume(indices.len() == 1 + rest.len());
-            assert forall|k: int| 0 <= k < indices.len() implies (indices[k] as int) < sigs@.len() as int
-            by {
-                if k == 0 {
-                    assert(indices[0] == j as u8);
-                } else {
-                    assert(indices[k] == rest[k - 1]);
-                }
-            };
+            let rec_opt = spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j));
+            if rec_opt matches Some(_) {
+                let rest = rec_opt->Some_0;
+                let indices = spec_greedy_helper(sigs, signers, epoch, used)->Some_0;
+                assert(rec_opt == Some(rest));
+                lemma_greedy_helper_unfold::<S, Addr>(sigs, signers, epoch, used, j, rest);
+                assert(spec_greedy_helper(sigs, signers, epoch, used) == Some(seq![j as u8] + rest));
+                assert(indices =~= seq![j as u8] + rest);
+                assert(indices.len() == 1 + rest.len());
+                assert(indices[0] == j as u8);
+                assert forall|k: int| 1 <= k < indices.len() implies indices[k] == rest[k - 1] by {
+                    assert(indices[k] == (seq![j as u8] + rest)[k]);
+                };
+                assert forall|k: int| 0 <= k < indices.len() implies (indices[k] as int) < sigs@.len() as int
+                by {
+                    if k == 0 {
+                        assert(indices[0] == j as u8);
+                    } else {
+                        assert(indices[k] == rest[k - 1]);
+                    }
+                };
+            }
         }
     }
 }
@@ -338,6 +346,8 @@ proof fn lemma_greedy_not_in_used_and_distinct<S, Addr>(
     epoch: u64,
     used: Set<int>,
 )
+    requires
+        sigs@.len() <= u8::MAX as nat,
     ensures
         spec_greedy_helper(sigs, signers, epoch, used) matches Some(_) ==> {
             let indices = spec_greedy_helper(sigs, signers, epoch, used)->Some_0;
@@ -359,22 +369,94 @@ proof fn lemma_greedy_not_in_used_and_distinct<S, Addr>(
         if j_opt matches Some(_) {
             let j = j_opt->Some_0;
             let used2 = used.insert(j);
+            lemma_first_valid_from_bounds(sigs, signers[0].1@.to_set(), epoch, used, 0);
             lemma_first_valid_from_not_in_used(sigs, signers[0].1@.to_set(), epoch, used, 0);
             lemma_greedy_not_in_used_and_distinct(sigs, signers.skip(1), epoch, used2);
             let rest_opt = spec_greedy_helper(sigs, signers.skip(1), epoch, used2);
             if rest_opt matches Some(_) {
                 let rest = rest_opt->Some_0;
+                assert(rest_opt == Some(rest));
+                assert(spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j)) == Some(rest));
                 let indices = spec_greedy_helper(sigs, signers, epoch, used)->Some_0;
-                // TODO: prove by unrolling spec_greedy_helper (trigger/SMT issue).
-                assume(indices[0] == j as u8);
-                assume(forall|k: int| 1 <= k < indices.len() ==> #[trigger] indices[k] == rest[k - 1]);
-                assume(indices.len() == 1 + rest.len());
-                // CT3a and CT3b: logical argument is sound but assert-forall by-blocks
-                // cannot access the outer assumes due to trigger scoping. TODO.
-                assume(forall|k: int| 0 <= k < indices.len() ==> !used.contains(#[trigger] indices[k] as int));
-                assume(forall|k1: int, k2: int|
+                lemma_greedy_helper_unfold::<S, Addr>(sigs, signers, epoch, used, j, rest);
+                assert(spec_greedy_helper(sigs, signers, epoch, used) == Some(seq![j as u8] + rest));
+                assert(indices =~= seq![j as u8] + rest);
+                assert(indices.len() == 1 + rest.len());
+                assert(indices[0] == j as u8);
+                assert forall|k: int| 1 <= k < indices.len() implies indices[k] == rest[k - 1] by {
+                    assert(indices[k] == (seq![j as u8] + rest)[k]);
+                };
+                // j is not in used (from lemma_first_valid_from_not_in_used applied above)
+                assert(!used.contains(j));
+                // Abbreviate spec_greedy_helper(sigs, signers.skip(1), epoch, used2)->Some_0 as rest2
+                // to correctly trigger the IH's forall quantifier
+                let rest2 = spec_greedy_helper(sigs, signers.skip(1), epoch, used2)->Some_0;
+                assert(rest2 =~= rest);
+                // CT3a: indices[k] not in used
+                assert forall|k: int| 0 <= k < indices.len() implies !used.contains(#[trigger] indices[k] as int)
+                by {
+                    if k == 0 {
+                        assert(indices[0] == j as u8);
+                        assert(!used.contains(j));
+                        // j in [0, sigs.len()) ⊆ [0, u8::MAX], so j as u8 as int = j
+                        // From lemma_first_valid_from_bounds with start=0: 0 <= j < sigs.len()
+                        assert(0 <= j < sigs@.len() as int);
+                        assert(sigs@.len() as nat <= u8::MAX as nat);
+                        assert(indices[0] as int == j);
+                    } else {
+                        assert(indices[k] == rest[k - 1]);
+                        // IH trigger: !used2.contains(rest2[k-1] as int)
+                        assert(!used2.contains(rest2[k - 1] as int));
+                        assert(rest2[k - 1] == rest[k - 1]);
+                        // used ⊆ used2: !used2.contains(x) ==> !used.contains(x)
+                        // Because used2 = used.insert(j), so used.contains(x) => used2.contains(x)
+                        // Contrapositive: !used2.contains(x) => !used.contains(x)
+                        assert(!used.contains(rest[k - 1] as int)) by {
+                            assert(used2 =~= used.insert(j));
+                            if used.contains(rest[k - 1] as int) {
+                                // then used2.contains(rest[k-1] as int) since used ⊆ used2
+                                assert(used2.contains(rest[k - 1] as int));
+                            }
+                        };
+                        assert(indices[k] as int == rest[k - 1] as int);
+                    }
+                };
+                // CT3b: indices are pairwise distinct
+                assert forall|k1: int, k2: int|
                     0 <= k1 < indices.len() && 0 <= k2 < indices.len() && k1 != k2
-                        ==> #[trigger] indices[k1] != #[trigger] indices[k2]);
+                        implies #[trigger] indices[k1] != #[trigger] indices[k2]
+                by {
+                    if k1 == 0 && k2 > 0 {
+                        assert(indices[0] == j as u8);
+                        assert(indices[k2] == rest[k2 - 1]);
+                        assert(!used2.contains(rest2[k2 - 1] as int));
+                        assert(rest2[k2 - 1] == rest[k2 - 1]);
+                        assert(used2.contains(j));
+                        // !used2.contains(rest[k2-1] as int) but used2.contains(j) → rest[k2-1] as int != j
+                        assert(rest[k2 - 1] as int != j);
+                        // j as u8 == indices[0] and rest[k2-1] == indices[k2]
+                        // so indices[0] as int = j != rest[k2-1] as int = indices[k2] as int
+                        assert(indices[0] as int != indices[k2] as int);
+                    } else if k1 > 0 && k2 == 0 {
+                        assert(indices[0] == j as u8);
+                        assert(indices[k1] == rest[k1 - 1]);
+                        assert(!used2.contains(rest2[k1 - 1] as int));
+                        assert(rest2[k1 - 1] == rest[k1 - 1]);
+                        assert(used2.contains(j));
+                        assert(rest[k1 - 1] as int != j);
+                        assert(indices[0] as int != indices[k1] as int);
+                    } else {
+                        // Both k1, k2 > 0: indices[k1] = rest[k1-1], indices[k2] = rest[k2-1]
+                        // Distinct by IH on rest2
+                        assert(indices[k1] == rest[k1 - 1]);
+                        assert(indices[k2] == rest[k2 - 1]);
+                        assert(rest2[k1 - 1] == rest[k1 - 1]);
+                        assert(rest2[k2 - 1] == rest[k2 - 1]);
+                        // IH gives: rest2[k1-1] != rest2[k2-1] (pairwise distinct for signers.skip(1))
+                        assert(rest2[k1 - 1] != rest2[k2 - 1]);
+                        assert(indices[k1] != indices[k2]);
+                    }
+                };
             }
         }
     }
@@ -387,6 +469,8 @@ proof fn lemma_greedy_valid<S, Addr>(
     epoch: u64,
     used: Set<int>,
 )
+    requires
+        sigs@.len() <= u8::MAX as nat,
     ensures
         spec_greedy_helper(sigs, signers, epoch, used) matches Some(_)
             ==> forall|k: int|
@@ -406,22 +490,142 @@ proof fn lemma_greedy_valid<S, Addr>(
         let j_opt = spec_first_valid_unused(sigs, signers[0].1@.to_set(), epoch, used);
         if j_opt matches Some(_) {
             let j = j_opt->Some_0;
+            lemma_first_valid_from_bounds(sigs, signers[0].1@.to_set(), epoch, used, 0);
             lemma_first_valid_from_is_valid(sigs, signers[0].1@.to_set(), epoch, used, 0);
             lemma_greedy_valid(sigs, signers.skip(1), epoch, used.insert(j));
             lemma_greedy_len(sigs, signers.skip(1), epoch, used.insert(j));
-            let indices = spec_greedy_helper(sigs, signers, epoch, used)->Some_0;
-            let rest = spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j))->Some_0;
-            // TODO: prove by unrolling spec_greedy_helper (trigger/SMT issue).
-            assume(indices[0] == j as u8);
-            assume(forall|k: int| 1 <= k < indices.len() ==> #[trigger] indices[k] == rest[k - 1]);
-            assume(indices.len() == 1 + rest.len());
-            // TODO: same assert-forall trigger scoping issue as CT3.
-            assume(forall|k: int|
-                0 <= k < indices.len()
-                    ==> #[trigger] spec_is_valid_for(
-                            &sigs@[indices[k] as int], signers[k].1@.to_set(), epoch,
-                        ));
+            let rec_opt = spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j));
+            if rec_opt matches Some(_) {
+                let rest = rec_opt->Some_0;
+                assert(rec_opt == Some(rest));
+                assert(spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j)) == Some(rest));
+                let indices = spec_greedy_helper(sigs, signers, epoch, used)->Some_0;
+                lemma_greedy_helper_unfold::<S, Addr>(sigs, signers, epoch, used, j, rest);
+                assert(spec_greedy_helper(sigs, signers, epoch, used) == Some(seq![j as u8] + rest));
+                assert(indices =~= seq![j as u8] + rest);
+                assert(indices.len() == 1 + rest.len());
+                assert(indices[0] == j as u8);
+                assert forall|k: int| 1 <= k < indices.len() implies indices[k] == rest[k - 1] by {
+                    assert(indices[k] == (seq![j as u8] + rest)[k]);
+                };
+                // CT4: spec_is_valid_for for each index
+                assert forall|k: int|
+                    0 <= k < indices.len()
+                        implies #[trigger] spec_is_valid_for(
+                                &sigs@[indices[k] as int], signers[k].1@.to_set(), epoch,
+                            )
+                by {
+                    if k == 0 {
+                        assert(indices[0] == j as u8);
+                        // j in [0, sigs.len()) ⊆ [0, u8::MAX], so j as u8 as int = j
+                        assert(0 <= j < sigs@.len() as int);
+                        assert(sigs@.len() as nat <= u8::MAX as nat);
+                        assert(indices[0] as int == j);
+                        assert(spec_is_valid_for(&sigs@[j], signers[0].1@.to_set(), epoch));
+                    } else {
+                        assert(indices[k] == rest[k - 1]);
+                        assert(signers.skip(1)[k - 1] == signers[k]);
+                        // Trigger the IH by naming the helper result at position k-1
+                        let rest_k = spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j))->Some_0[k - 1];
+                        assert(rest_k == rest[k - 1]);
+                        assert(spec_is_valid_for(&sigs@[rest_k as int], signers.skip(1)[k - 1].1@.to_set(), epoch));
+                        assert(signers.skip(1)[k - 1].1@.to_set() =~= signers[k].1@.to_set());
+                        assert(indices[k] as int == rest_k as int);
+                    }
+                };
+            }
         }
+    }
+}
+
+/// spec_greedy_helper with known first_valid_unused=Some(j) and recursive=Some(rest)
+/// returns Some(seq![j as u8] + rest). Body empty: follows from the open spec fn definition.
+proof fn lemma_greedy_helper_unfold<S, Addr>(
+    sigs: &[S],
+    signers: Seq<(Addr, Vec<Addr>)>,
+    epoch: u64,
+    used: Set<int>,
+    j: int,
+    rest: Seq<u8>,
+)
+    requires
+        signers.len() > 0,
+        spec_first_valid_unused(sigs, signers[0].1@.to_set(), epoch, used) == Some(j),
+        spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j)) == Some(rest),
+    ensures
+        spec_greedy_helper(sigs, signers, epoch, used) == Some(seq![j as u8] + rest)
+{
+    // Follows directly from unrolling spec_greedy_helper: signers.len() > 0, j = Some(j), rest = Some(rest)
+}
+
+/// spec_greedy_helper with first_valid_unused=None returns None.
+proof fn lemma_greedy_helper_none_first<S, Addr>(
+    sigs: &[S],
+    signers: Seq<(Addr, Vec<Addr>)>,
+    epoch: u64,
+    used: Set<int>,
+)
+    requires
+        signers.len() > 0,
+        !(spec_first_valid_unused(sigs, signers[0].1@.to_set(), epoch, used) matches Some(_)),
+    ensures
+        !(spec_greedy_helper(sigs, signers, epoch, used) matches Some(_))
+{
+    // Follows directly from unrolling spec_greedy_helper: signers.len() > 0, j = None → None
+}
+
+/// If all unused positions in [start, j) satisfy: used OR !spec_is_valid_for,
+/// and position j is unused and valid, then spec_first_valid_unused_from(start) = Some(j).
+proof fn lemma_first_valid_from_correct<S, Addr>(
+    sigs: &[S],
+    aliases: Set<Addr>,
+    epoch: u64,
+    used: Set<int>,
+    start: int,
+    j: int,
+)
+    requires
+        start <= j < sigs@.len() as int,
+        !used.contains(j),
+        spec_is_valid_for(&sigs@[j], aliases, epoch),
+        forall|k: int| start <= k < j ==>
+            used.contains(k) || !spec_is_valid_for(&sigs@[k], aliases, epoch),
+    ensures
+        spec_first_valid_unused_from(sigs, aliases, epoch, used, start) == Some(j)
+    decreases j - start
+{
+    if start == j {
+        // !used.contains(j) && spec_is_valid_for → returns Some(j) by definition
+    } else {
+        assert(used.contains(start) || !spec_is_valid_for(&sigs@[start], aliases, epoch));
+        lemma_first_valid_from_correct(sigs, aliases, epoch, used, start + 1, j);
+    }
+}
+
+/// If all unused positions in [start, sigs.len()) have addresses disjoint from aliases,
+/// then spec_first_valid_unused_from(start) = None.
+proof fn lemma_first_valid_from_none<S, Addr>(
+    sigs: &[S],
+    aliases: Set<Addr>,
+    epoch: u64,
+    used: Set<int>,
+    start: int,
+)
+    requires
+        forall|k: int| start <= k < sigs@.len() as int && !used.contains(k) ==>
+            spec_addresses::<S, Addr>(sigs, k).disjoint(aliases),
+    ensures
+        spec_first_valid_unused_from(sigs, aliases, epoch, used, start) matches None
+    decreases sigs@.len() - start
+{
+    if start >= sigs@.len() {
+    } else if used.contains(start) {
+        lemma_first_valid_from_none(sigs, aliases, epoch, used, start + 1);
+    } else {
+        assert(!spec_is_valid_for(&sigs@[start], aliases, epoch)) by {
+            assert(spec_addresses::<S, Addr>(sigs, start).disjoint(aliases));
+        };
+        lemma_first_valid_from_none(sigs, aliases, epoch, used, start + 1);
     }
 }
 
@@ -478,6 +682,7 @@ fn derive_all_addresses<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Cop
 ) -> (result: Result<Vec<Vec<Addr>>, SigVerifyError>)
     ensures
         result matches Err(_) ==> spec_any_addr_derivation_fails(tx_signatures),
+        result matches Ok(_) ==> !spec_any_addr_derivation_fails(tx_signatures),
         result matches Ok(sig_addrs) ==> {
             &&& sig_addrs@.len() == tx_signatures@.len()
             &&& forall|m: int| 0 <= m < sig_addrs@.len() ==>
@@ -499,41 +704,33 @@ fn derive_all_addresses<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Cop
 // § 9  Scan helper
 // ---------------------------------------------------------------------------
 
-/// Scan `sig_addrs` for the first position not in `taken` whose address set
-/// intersects `aliases`. Returns `(position_as_u8, matching_addr)` or `None`.
-///
-/// Trusted (`external_body`) — the body uses `slice::contains` which is not
-/// in vstd. The spec captures the key properties the caller needs.
+/// Find the first unused position j where sig j's address set intersects `aliases`
+/// AND the signature is cryptographically valid for the matching address.
+/// Returns `None` iff `spec_first_valid_unused` returns `None`.
 #[verifier::external_body]
-fn scan_addr_match<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
+fn scan_first_valid<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
     tx_signatures: &[S],
     sig_addrs: &[Vec<Addr>],
     aliases: &Vec<Addr>,
+    epoch: u64,
     taken: &[u8],
-    used: Ghost<Set<int>>,
+    _ghost_used: Ghost<Set<int>>,
 ) -> (r: Option<(u8, Addr)>)
     requires
         tx_signatures@.len() == sig_addrs@.len(),
         forall|m: int| 0 <= m < sig_addrs@.len() ==>
             #[trigger] sig_addrs@[m]@.to_set() =~= spec_addresses::<S, Addr>(tx_signatures, m),
-        // Ghost used agrees with exec taken
-        forall|p: int| 0 <= p < taken@.len() ==> used@.contains(#[trigger] taken@[p] as int),
-        forall|m: int| used@.contains(m) ==>
+        forall|p: int| 0 <= p < taken@.len() ==> _ghost_used@.contains(#[trigger] taken@[p] as int),
+        forall|m: int| _ghost_used@.contains(m) ==>
             exists|p: int| 0 <= p < taken@.len() && taken@[p] as int == m,
     ensures
-        // None: every unused position has no address intersection with aliases
         r.is_none() ==>
-            forall|k: int| 0 <= k < tx_signatures@.len() && !used@.contains(k) ==>
-                spec_addresses::<S, Addr>(tx_signatures, k).disjoint(aliases@.to_set()),
-        // Some(j, addr): j is the first unused position with address intersection
+            !(spec_first_valid_unused(tx_signatures, aliases@.to_set(), epoch, _ghost_used@) matches Some(_)),
         r matches Some((j, addr)) ==> {
             &&& (j as int) < tx_signatures@.len() as int
-            &&& !used@.contains(j as int)
-            &&& #[trigger] spec_addresses::<S, Addr>(tx_signatures, j as int).contains(addr)
-            &&& aliases@.to_set().contains(addr)
-            // All unused positions before j have no address intersection
-            &&& forall|k: int| 0 <= k < j as int && !used@.contains(k) ==>
-                    spec_addresses::<S, Addr>(tx_signatures, k).disjoint(aliases@.to_set())
+            &&& !_ghost_used@.contains(j as int)
+            &&& spec_is_valid_for(&tx_signatures@[j as int], aliases@.to_set(), epoch)
+            &&& spec_first_valid_unused(tx_signatures, aliases@.to_set(), epoch, _ghost_used@) == Some(j as int)
         },
 {
     let n = tx_signatures.len();
@@ -542,7 +739,10 @@ fn scan_addr_match<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
             continue;
         }
         if let Some(addr) = find_common_addr(&sig_addrs[j], aliases) {
-            return Some((j as u8, addr));
+            if tx_signatures[j].verify_for_address(&addr, epoch).is_ok() {
+                return Some((j as u8, addr));
+            }
+            // Crypto failed — continue scanning for another valid position.
         }
     }
     None
@@ -568,6 +768,8 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
     requires
         tx_signatures@.len() == sig_addrs@.len(),
         tx_signatures@.len() <= u8::MAX as nat,
+        // taken@.len() + signers@.len() <= u8::MAX: enables overflow-free capacity arithmetic
+        taken@.len() + signers@.len() <= u8::MAX as nat,
         forall|m: int| 0 <= m < sig_addrs@.len() ==>
             #[trigger] sig_addrs@[m]@.to_set() =~= spec_addresses::<S, Addr>(tx_signatures, m),
         // Ghost/exec agreement for taken positions
@@ -585,6 +787,7 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
         result matches Ok(v) ==> {
             &&& spec_greedy_helper(tx_signatures, signers@, epoch, used@) matches Some(_)
             &&& v@ =~= spec_greedy_helper(tx_signatures, signers@, epoch, used@)->Some_0
+            &&& v@.len() == signers@.len()
         },
         result matches Err(_) ==>
             !(spec_greedy_helper(tx_signatures, signers@, epoch, used@) matches Some(_)),
@@ -597,65 +800,31 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
 
     let (_, aliases) = &signers[0];
 
-    // Find the first unused position with an address intersection.
-    let scan_result = scan_addr_match(tx_signatures, sig_addrs, aliases, taken, used);
+    let scan_result = scan_first_valid(tx_signatures, sig_addrs, aliases, epoch, taken, used);
 
-    let (j, addr) = match scan_result {
+    let (j, _addr) = match scan_result {
         None => {
-            // No unused position has an address intersection with aliases.
-            // Therefore spec_first_valid_unused = None → spec_greedy_helper = None.
+            // scan_first_valid ensures: spec_first_valid_unused = None → spec_greedy_helper = None
             proof {
-                assert(!(spec_greedy_helper(
-                    tx_signatures, signers@, epoch, used@,
-                ) matches Some(_))) by {
-                    // TODO: prove spec_greedy_helper unfolding once automation improves.
-                    assume(!(spec_greedy_helper(
-                        tx_signatures, signers@, epoch, used@,
-                    ) matches Some(_)));
-                };
+                lemma_greedy_helper_none_first::<S, Addr>(tx_signatures, signers@, epoch, used@);
             }
             return Err(SigVerifyError::SignerAbsent);
         }
         Some(pair) => pair,
     };
 
-    // Verify the signature cryptographically.
-    match tx_signatures[j as usize].verify_for_address(&addr, epoch) {
-        Err(e) => {
-            // Crypto failed for the unique matching position.
-            // spec_is_valid_for requires crypto, so spec_first_valid_unused = None.
-            proof {
-                assume(!(spec_greedy_helper(
-                    tx_signatures, signers@, epoch, used@,
-                ) matches Some(_)));
-            }
-            return Err(e);
-        }
-        Ok(()) => {}
-    }
-
-    // j is confirmed: not in used@, address match, crypto valid.
-    // Therefore spec_is_valid_for(sigs[j], aliases, epoch) holds,
-    // and spec_first_valid_unused(sigs, aliases.to_set(), epoch, used@) = Some(j).
+    // scan_first_valid ensures: spec_first_valid_unused = Some(j) and spec_is_valid_for holds.
+    // No separate crypto verification needed.
     proof {
-        assert(spec_sig_crypto_valid(&tx_signatures@[j as int], addr, epoch));
-        assert(spec_addresses::<S, Addr>(tx_signatures, j as int).contains(addr));
-        assert(aliases@.to_set().contains(addr));
-        assert(spec_is_valid_for(&tx_signatures@[j as int], aliases@.to_set(), epoch));
-        // j is the first valid unused: scan ensures all unused k < j have no address
-        // match → spec_is_valid_for false → spec_first_valid_unused_from skips them.
-        // TODO: prove from scan ensures once automation is better.
-        assume(spec_first_valid_unused_from(
-            tx_signatures, aliases@.to_set(), epoch, used@, 0,
-        ) == Some(j as int));
+        assert(spec_first_valid_unused(tx_signatures, aliases@.to_set(), epoch, used@) == Some(j as int));
+        assert(spec_first_valid_unused_from(tx_signatures, aliases@.to_set(), epoch, used@, 0) == Some(j as int));
     }
 
-    // Build the updated taken list for the recursive call.
-    // For at most 2 signers this is at most a 1-element Vec.
-    // taken@.len() < signers@.len() <= u8::MAX, so taken.len() + 1 cannot overflow.
+    // Build taken_new = taken + [j] for the recursive call.
+    // taken@.len() + signers@.len() <= u8::MAX and signers@.len() >= 1
     assert(taken@.len() < u8::MAX as int) by {
-        // TODO: derive from signers@.len() <= u8::MAX via recursion depth bound.
-        assume(taken@.len() < u8::MAX as int);
+        assert(signers@.len() >= 1);
+        assert(taken@.len() + signers@.len() <= u8::MAX as nat);
     };
     let mut taken_new: Vec<u8> = Vec::with_capacity(taken.len() + 1);
     let mut ti = 0usize;
@@ -671,19 +840,60 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
     }
     taken_new.push(j);
 
-    // Recurse for the remaining senders with j marked as used.
     let ghost used_new = used@.insert(j as int);
     proof {
-        // TODO: prove taken_new@ =~= taken@ + seq![j as u8] from the while-loop invariant.
-        assume(taken_new@ =~= taken@ + seq![j]);
-        // Ghost/exec agreement for the recursive call.
-        // used_new = used@.insert(j), taken_new@ = taken@ + seq![j as u8].
-        // TODO: prove from seq concat axioms + the above assume.
-        assume(forall|p: int| 0 <= p < taken_new@.len() ==>
-            used_new.contains(taken_new@[p] as int));
-        assume(forall|m: int| used_new.contains(m) ==>
-            exists|p: int| 0 <= p < taken_new@.len() && taken_new@[p] as int == m);
+        // taken_new@ = taken@ + seq![j as u8]
+        assert(taken_new@ =~= taken@ + seq![j]) by {
+            assert(taken_new@.len() == taken@.len() + 1);
+            assert forall|i: int| 0 <= i < taken_new@.len() implies
+                taken_new@[i] == (taken@ + seq![j])[i]
+            by {
+                if i < taken@.len() as int {
+                    assert(taken_new@[i] == taken@[i]);
+                } else {
+                    // i = taken@.len(): taken_new@[i] = j (the pushed element)
+                }
+            };
+        };
+        // Ghost/exec agreement for the recursive call
+        assert(forall|p: int| 0 <= p < taken_new@.len() ==>
+            used_new.contains(taken_new@[p] as int)) by {
+            assert forall|p: int| 0 <= p < taken_new@.len() implies
+                used_new.contains(taken_new@[p] as int)
+            by {
+                if p < taken@.len() as int {
+                    assert(taken_new@[p] == taken@[p]);
+                    assert(used@.contains(taken@[p] as int));
+                } else {
+                    assert(taken_new@[p] == j);
+                    assert(used_new.contains(j as int));
+                }
+            };
+        };
+        assert(forall|m: int| used_new.contains(m) ==>
+            exists|p: int| 0 <= p < taken_new@.len() && taken_new@[p] as int == m) by {
+            assert forall|m: int| used_new.contains(m) implies
+                exists|p: int| 0 <= p < taken_new@.len() && taken_new@[p] as int == m
+            by {
+                if used@.contains(m) {
+                    let p = choose|p: int| 0 <= p < taken@.len() && taken@[p] as int == m;
+                    assert(taken_new@[p] == taken@[p]);
+                } else {
+                    assert(m == j as int);
+                    assert(taken_new@[taken@.len() as int] == j);
+                }
+            };
+        };
+        // Precondition for recursive call: taken_new@.len() + signers.skip(1)@.len() <= u8::MAX
+        // taken_new@.len() = taken@.len() + 1, signers.skip(1)@.len() = signers@.len() - 1
+        // Sum = taken@.len() + signers@.len() <= u8::MAX (by precondition)
+        assert(taken_new@.len() + signers@.skip(1).len() <= u8::MAX as nat) by {
+            assert(taken_new@.len() == taken@.len() + 1);
+            assert(signers@.skip(1).len() == signers@.len() - 1);
+            assert(taken@.len() + signers@.len() <= u8::MAX as nat);
+        };
     }
+
     let rest = verify_sigs_rec(
         tx_signatures,
         sig_addrs,
@@ -693,9 +903,13 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
         Ghost(used_new),
     )?;
 
-    // Assemble the result: prepend j to the recursive result.
-    // rest.len() <= u8::MAX - 1 (bounded by signers depth), so 1 + rest.len() fits usize.
-    assume(rest@.len() < u8::MAX as int);
+    // Build result = [j] + rest
+    // rest@.len() = signers.skip(1)@.len() = signers@.len() - 1 <= u8::MAX - 1
+    assert(rest@.len() < u8::MAX as int) by {
+        assert(rest@.len() == signers@.skip(1).len() as nat);
+        assert(signers@.len() >= 1);
+        assert(taken@.len() + signers@.len() <= u8::MAX as nat);
+    };
     let mut result = Vec::with_capacity(1 + rest.len());
     result.push(j);
     let mut ri = 0usize;
@@ -712,16 +926,31 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
     }
 
     proof {
-        // result@ = seq![j] + rest@
-        // spec_greedy_helper(sigs, signers@, epoch, used)
-        //   unfolds to Some(seq![j as u8] + spec_greedy_helper(sigs, signers@.skip(1), epoch, used_new)->Some_0)
-        //   = Some(seq![j as u8] + rest@)
-        //   = Some(result@) (since result@ = seq![j] + rest@)
-        // TODO: prove the unfolding from the open spec_greedy_helper definition.
-        // TODO: prove result@ =~= seq![j] + rest@ from the while-loop invariant.
-        assume(result@ =~= seq![j] + rest@);
-        // TODO: prove spec_greedy_helper unfolding with j and rest@ known.
-        assume(spec_greedy_helper(tx_signatures, signers@, epoch, used@) =~= Some(result@));
+        // result@ = seq![j as u8] + rest@
+        assert(result@ =~= seq![j] + rest@) by {
+            assert(result@.len() == 1 + rest@.len());
+            assert forall|i: int| 0 <= i < result@.len() implies
+                result@[i] == (seq![j] + rest@)[i]
+            by {
+                if i == 0 {
+                    assert(result@[0] == j);
+                } else {
+                    assert(result@[i] == rest@[i - 1]);
+                }
+            };
+        };
+        // Apply lemma_greedy_helper_unfold
+        lemma_greedy_helper_unfold::<S, Addr>(
+            tx_signatures, signers@, epoch, used@, j as int, rest@,
+        );
+        // spec_greedy_helper == Some(seq![j as u8] + rest@) == Some(result@)
+        assert(spec_greedy_helper(tx_signatures, signers@, epoch, used@) == Some(result@));
+        // result@.len() == signers@.len()
+        assert(result@.len() == signers@.len() as nat) by {
+            assert(result@.len() == 1 + rest@.len());
+            assert(rest@.len() == signers@.skip(1).len() as nat);
+            assert(signers@.skip(1).len() == signers@.len() - 1);
+        };
     }
 
     Ok(result)
@@ -817,16 +1046,28 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
     // `taken` starts empty; `used` starts as Set::empty().
     // verify_sigs_rec directly mirrors spec_greedy_helper.
     proof {
-        // TODO: remove once derive_all_addresses postcondition connection is proven
-        assume(sig_addrs@.len() == n as int);
-        // derive_all_addresses succeeded → no signature fails address derivation.
-        // Therefore the conditional no-collision precondition (from verify_signatures)
-        // implies the unconditional form required by verify_sigs_rec.
-        // TODO: prove from derive_all_addresses ensures + contrapositive.
-        assume(forall|i: int, j: int|
+        // derive_all_addresses Ok → sig_addrs@.len() == tx_signatures@.len() == n
+        assert(sig_addrs@.len() == n as int);
+        // derive_all_addresses Ok → !spec_any_addr_derivation_fails
+        assert(!spec_any_addr_derivation_fails(tx_signatures));
+        // With no failures, the conditional disjoint precondition becomes unconditional.
+        // verify_signatures requires: i != j && !fails(i) && !fails(j) ==> disjoint.
+        // Since !fails holds for all, the guards are always true.
+        assert(forall|i: int, j: int|
             0 <= i < tx_signatures@.len() && 0 <= j < tx_signatures@.len() && i != j
             ==> spec_addresses::<S, Addr>(tx_signatures, i)
-                    .disjoint(spec_addresses::<S, Addr>(tx_signatures, j)));
+                    .disjoint(spec_addresses::<S, Addr>(tx_signatures, j))) by {
+            assert forall|i: int, j: int|
+                0 <= i < tx_signatures@.len() && 0 <= j < tx_signatures@.len() && i != j
+                implies spec_addresses::<S, Addr>(tx_signatures, i)
+                        .disjoint(spec_addresses::<S, Addr>(tx_signatures, j))
+            by {
+                // !spec_any_addr_derivation_fails means !spec_addr_derivation_fails for all k
+                assert(!spec_addr_derivation_fails(tx_signatures, i));
+                assert(!spec_addr_derivation_fails(tx_signatures, j));
+                // These are exactly the guards in verify_signatures requires
+            };
+        };
     }
     let rec_result = verify_sigs_rec(
         tx_signatures,
@@ -838,42 +1079,91 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
     );
 
     proof {
-        // n == required_signers@.len() (count check passed); derive_all_addresses succeeded
-        // so !spec_any_addr_derivation_fails (contrapositive of its ensures).
         assert(tx_signatures@.len() == required_signers@.len() as nat);
-        assert(!spec_any_addr_derivation_fails(tx_signatures)) by {
-            // derive_all_addresses Ok branch: if addr_derivation_fails, it returns Err.
-            // We're in the Ok branch, so addr_derivation_fails cannot hold.
-            // TODO: derive directly from derive_all_addresses ensures contrapositive.
-            assume(!spec_any_addr_derivation_fails(tx_signatures));
-        };
-        // Connect verify_sigs_rec ensures to verify_signatures ensures.
-        // TODO: discharge R1-R4 from verify_sigs_rec ensures once automation improves.
-        assume(rec_result matches Ok(_) ==> {
-            &&& spec_greedy_result(tx_signatures, required_signers, epoch) matches Some(_)
-            &&& ok_indices(&rec_result)
-                    =~= spec_greedy_result(tx_signatures, required_signers, epoch)->Some_0
-        });
-        assume(rec_result matches Err(_) ==>
-            !(spec_greedy_result(tx_signatures, required_signers, epoch) matches Some(_)));
-        assume(rec_result matches Ok(_) ==>
-            ok_indices(&rec_result).len() == required_signers@.len());
-        assume(rec_result matches Ok(_) ==>
-            forall|k: int| 0 <= k < ok_indices(&rec_result).len()
-                ==> (ok_indices(&rec_result)[k] as int) < tx_signatures@.len());
-        assume(rec_result matches Ok(_) ==>
-            forall|k1: int, k2: int|
+        // derive_all_addresses Ok ensures !spec_any_addr_derivation_fails
+        assert(!spec_any_addr_derivation_fails(tx_signatures));
+
+        // spec_greedy_result = spec_greedy_helper(..., Set::empty())
+        // verify_sigs_rec was called with empty taken/used, so its ensures connect directly.
+
+        // Apply challenge theorem lemmas to get CT1-CT4 for Set::empty()
+        lemma_greedy_len::<S, Addr>(tx_signatures, required_signers@, epoch, Set::empty());
+        lemma_greedy_bounds::<S, Addr>(tx_signatures, required_signers@, epoch, Set::empty());
+        lemma_greedy_not_in_used_and_distinct::<S, Addr>(tx_signatures, required_signers@, epoch, Set::empty());
+        lemma_greedy_valid::<S, Addr>(tx_signatures, required_signers@, epoch, Set::empty());
+
+        // Connect verify_sigs_rec Ok result to spec_greedy_result
+        // verify_sigs_rec ensures: Ok(v) ==> spec_greedy_helper(..., Set::empty()) = Some(v@)
+        // spec_greedy_result(sigs, signers, epoch) = spec_greedy_helper(sigs, signers@, epoch, Set::empty())
+        // R1: ok result matches spec_greedy_result
+        if rec_result matches Ok(_) {
+            let v = rec_result->Ok_0;
+            assert(spec_greedy_helper(tx_signatures, required_signers@, epoch, Set::empty()) matches Some(_));
+            assert(v@ =~= spec_greedy_helper(tx_signatures, required_signers@, epoch, Set::empty())->Some_0);
+            assert(spec_greedy_result(tx_signatures, required_signers, epoch) matches Some(_));
+            assert(ok_indices(&rec_result) =~= spec_greedy_result(tx_signatures, required_signers, epoch)->Some_0);
+
+            // R1: ok_indices.len() == required_signers@.len()
+            // From lemma_greedy_len: Some ==> len == signers.len()
+            assert(ok_indices(&rec_result).len() == required_signers@.len());
+
+            // R2: ok_indices[k] < tx_signatures.len() for all k
+            // From lemma_greedy_bounds
+            assert(forall|k: int| 0 <= k < ok_indices(&rec_result).len()
+                ==> (ok_indices(&rec_result)[k] as int) < tx_signatures@.len()) by {
+                let indices = spec_greedy_result(tx_signatures, required_signers, epoch)->Some_0;
+                assert forall|k: int| 0 <= k < ok_indices(&rec_result).len()
+                    implies (ok_indices(&rec_result)[k] as int) < tx_signatures@.len()
+                by {
+                    assert(ok_indices(&rec_result)[k] == indices[k]);
+                };
+            };
+
+            // R3: ok_indices pairwise distinct
+            // From lemma_greedy_not_in_used_and_distinct
+            assert(forall|k1: int, k2: int|
                 0 <= k1 < ok_indices(&rec_result).len()
                 && 0 <= k2 < ok_indices(&rec_result).len()
                 && k1 != k2
-                ==> ok_indices(&rec_result)[k1] != ok_indices(&rec_result)[k2]);
-        assume(rec_result matches Ok(_) ==>
-            forall|k: int| 0 <= k < ok_indices(&rec_result).len()
+                ==> ok_indices(&rec_result)[k1] != ok_indices(&rec_result)[k2]) by {
+                let indices = spec_greedy_result(tx_signatures, required_signers, epoch)->Some_0;
+                assert forall|k1: int, k2: int|
+                    0 <= k1 < ok_indices(&rec_result).len()
+                    && 0 <= k2 < ok_indices(&rec_result).len()
+                    && k1 != k2
+                    implies ok_indices(&rec_result)[k1] != ok_indices(&rec_result)[k2]
+                by {
+                    assert(ok_indices(&rec_result)[k1] == indices[k1]);
+                    assert(ok_indices(&rec_result)[k2] == indices[k2]);
+                };
+            };
+
+            // R4: spec_is_valid_for at each index
+            // From lemma_greedy_valid
+            assert(forall|k: int| 0 <= k < ok_indices(&rec_result).len()
                 ==> spec_is_valid_for(
                         &tx_signatures@[ok_indices(&rec_result)[k] as int],
                         required_signers@[k].1@.to_set(),
                         epoch,
+                    )) by {
+                let indices = spec_greedy_result(tx_signatures, required_signers, epoch)->Some_0;
+                assert forall|k: int| 0 <= k < ok_indices(&rec_result).len()
+                    implies spec_is_valid_for(
+                            &tx_signatures@[ok_indices(&rec_result)[k] as int],
+                            required_signers@[k].1@.to_set(),
+                            epoch,
+                        )
+                by {
+                    assert(ok_indices(&rec_result)[k] == indices[k]);
+                    // Trigger lemma_greedy_valid's forall: spec_greedy_helper(...)->Some_0[k]
+                    assert(spec_is_valid_for(
+                        &tx_signatures@[indices[k] as int],
+                        required_signers@[k].1@.to_set(),
+                        epoch,
                     ));
+                };
+            };
+        }
     }
     rec_result
 }
