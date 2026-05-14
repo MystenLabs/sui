@@ -116,13 +116,21 @@ fn structure_loop(
         println!("  successor nodes: {succ_nodes:#?}");
     }
 
-    let mut loop_nodes_iter = loop_nodes.clone().into_iter().collect::<Vec<_>>();
-    loop_nodes_iter.sort();
+    // Emit body nodes in reverse post-order restricted to `loop_nodes`. After
+    // `structure_acyclic_region` has absorbed arm children into structured IfElse/Switch
+    // nodes, the only Seq-level siblings of an in-body IfElse are nodes the IfElse does
+    // not structurally contain, and RPO places the IfElse's post-dominator immediately
+    // after them. That adjacency is what makes the `LatchKind::InLoop` Jump drop in
+    // `insert_breaks` sound: falling through goes to the right node.
+    //
+    // Sort order over NodeIndex would only give the same answer when the upstream
+    // bytecode happens to lay blocks out in CFG-flow order, which is true today but
+    // isn't an asserted invariant.
+    let body_order = reverse_post_order_within(&graph.cfg, loop_head, &loop_nodes);
 
     let mut loop_body = vec![];
-
     let succ_node = succ_nodes.into_iter().next();
-    for node in loop_nodes_iter.into_iter().rev() {
+    for node in body_order {
         let Some(node) = structured_blocks.remove(&node) else {
             continue;
         };
@@ -130,7 +138,6 @@ fn structure_loop(
         loop_body.push(result);
     }
 
-    let loop_body = loop_body.into_iter().rev().collect::<Vec<_>>();
     let seq = D::Structured::Seq(loop_body);
     graph.update_loop_info(loop_head);
     let mut result = D::Structured::Loop(loop_head, Box::new(seq));
@@ -550,6 +557,37 @@ fn structure_code_node(
         }
         D::Input::Condition(..) | D::Input::Variants(..) => unreachable!(),
     }
+}
+
+/// Reverse-post-order DFS over `cfg`, restricted to nodes in `members`, rooted at `root`.
+/// Successor edges that leave `members` are not followed; nodes not reachable from `root`
+/// through `members` are omitted. Returns nodes in RPO (a topological order on the DAG-like
+/// projection of the CFG inside `members`).
+fn reverse_post_order_within(
+    cfg: &petgraph::Graph<(), ()>,
+    root: NodeIndex,
+    members: &HashSet<NodeIndex>,
+) -> Vec<NodeIndex> {
+    fn visit(
+        cfg: &petgraph::Graph<(), ()>,
+        node: NodeIndex,
+        members: &HashSet<NodeIndex>,
+        visited: &mut HashSet<NodeIndex>,
+        post: &mut Vec<NodeIndex>,
+    ) {
+        if !members.contains(&node) || !visited.insert(node) {
+            return;
+        }
+        for succ in cfg.neighbors(node) {
+            visit(cfg, succ, members, visited, post);
+        }
+        post.push(node);
+    }
+    let mut visited = HashSet::new();
+    let mut post = Vec::new();
+    visit(cfg, root, members, &mut visited, &mut post);
+    post.reverse();
+    post
 }
 
 fn flatten_sequence(seq: D::Structured) -> D::Structured {
