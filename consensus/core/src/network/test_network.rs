@@ -13,8 +13,8 @@ use crate::{
     commit::{CommitRange, TrustedCommit},
     error::ConsensusResult,
     network::{
-        BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService, PeerId,
-        ValidatorNetworkService,
+        BlockStream, NodeId, ObserverBlockStream, ObserverNetworkService, ObserverStreamItem,
+        PeerId, ValidatorNetworkService,
     },
 };
 
@@ -114,6 +114,10 @@ impl ValidatorNetworkService for Mutex<TestService> {
 
 #[async_trait]
 impl ObserverNetworkService for Mutex<TestService> {
+    fn is_commit_lagging(&self) -> bool {
+        false
+    }
+
     async fn handle_block(&self, _peer: PeerId, _block: Bytes) -> ConsensusResult<()> {
         unimplemented!("ObserverNetworkService handle_block not implemented for TestService")
     }
@@ -146,11 +150,15 @@ impl ObserverNetworkService for Mutex<TestService> {
                 .collect::<Vec<_>>()
         };
 
-        let block_stream = stream::iter(
-            blocks_to_send
-                .into_iter()
-                .map(|extended_block| vec![extended_block.block]),
-        );
+        let block_stream =
+            stream::iter(
+                blocks_to_send
+                    .into_iter()
+                    .map(|extended_block| ObserverStreamItem {
+                        blocks: vec![extended_block.block],
+                        auxiliary_data: Default::default(),
+                    }),
+            );
 
         Ok(Box::pin(block_stream))
     }
