@@ -439,6 +439,13 @@ fn encode_cursor(cursor: CursorToken) -> Bytes {
     bcs::to_bytes(&cursor).unwrap().into()
 }
 
+// This digest is a cursor-scope guard, not a portable canonical protobuf hash.
+// We intentionally hash the server-side prost value after tonic/prost has
+// decoded the request and dropped unknown fields, then re-encode it with our
+// generated serializer. Protobuf wire bytes are not canonical, so do not
+// replace this with hashing raw request bytes. If cursors need to remain
+// compatible across proto/codegen/schema changes, replace this with a versioned
+// canonical digest over the validated internal query representation.
 fn scope_digest<F: Message>(filter: Option<&F>) -> [u8; 32] {
     let mut hasher = DefaultHash::default();
     hash_optional_message(&mut hasher, filter);
