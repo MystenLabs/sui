@@ -2,7 +2,7 @@
 
 This document covers the **post-execution** sufficiency check for object-owned virtual balance
 withdrawals — the work done by `ObjectFundsChecker` (in
-`crates/sui-core/src/accumulators/object_funds_checker/`) after the Move VM finishes a
+`crates/sui-core/src/accumulators/object_funds_checker/`) after PTB execution finishes a
 transaction that withdrew from object-owned accumulator accounts.
 
 For the on-chain data layout, see [`data_model.md`](./data_model.md). For how withdrawals are
@@ -14,7 +14,7 @@ and concepts but are distinct subsystems with different correctness arguments.
 ## 1. Why post-execution?
 
 Address funds withdrawals have a key advantage: the maximum withdrawal amount is declared in
-the transaction data, so it can be checked before the Move VM runs. Object funds withdrawals
+the transaction data, so it can be checked before the transaction is run. Object funds withdrawals
 have no such advantage. An object-owned accumulator account is controlled by a Move program,
 and the withdrawal amount is computed at runtime. There is no way to know how much will be
 withdrawn until execution finishes.
@@ -25,7 +25,7 @@ must be re-executed in a way that produces a deterministic failure.
 ```
   ┌───────────────┐     ┌───────────────────┐     ┌────────────────────┐
   │ Execute       │     │ ObjectFundsChecker │     │ Commit Effects     │
-  │ Move VM       │ ──> │ (post-execution    │ ──> │                    │
+  │ adapter       │ ──> │ (post-execution    │ ──> │                    │
   │               │     │  sufficiency check)│     │                    │
   └───────────────┘     └────────┬──────────┘     └────────────────────┘
                                  │
@@ -40,7 +40,7 @@ must be re-executed in a way that produces a deterministic failure.
 
 ### Computing the withdrawal amount: the running max
 
-After the Move VM finishes executing a transaction, the system examines all accumulator events
+After the adapter finishes executing a transaction, the system examines all accumulator events
 produced during execution. These events are either **Split** operations (withdrawals — taking
 funds out of an account) or **Merge** operations (deposits — putting funds into an account).
 See [`write_path.md`](./write_path.md) §3 for the event types.
@@ -145,7 +145,7 @@ settled and the checker can make a definitive decision.
 When the version **is settled** but the balance is insufficient, the checker immediately sends
 an `Insufficient` status. The transaction is re-enqueued with
 `FundsWithdrawStatus::Insufficient` set in its `ExecutionEnv`, so the next execution
-short-circuits with an `InsufficientFundsForWithdraw` error without running the Move VM.
+short-circuits with an `InsufficientFundsForWithdraw` error without executing the transaction.
 
 One subtlety worth noting: a balance read at a historical version is only meaningful if that
 version is still readable. This is guaranteed by the pipeline, not by a separate retention
@@ -277,7 +277,7 @@ approved, allowing 1100 to be withdrawn from an account with only 1000.
 
 **Consensus Commit at version 6** contains TX1, which reads accumulator version 6.
 
-**TX1's first execution**: the Move VM runs and produces a running max withdrawal of 200 from
+**TX1's first execution**: the transaction is executed and produces a running max withdrawal of 200 from
 Y.
 
 - Checker sees accumulator version 6. Last settled version is 5.
@@ -290,7 +290,7 @@ Y.
 `MaybeSufficient` through its oneshot channel. The background task re-enqueues TX1 for
 execution.
 
-**TX1's second execution**: the Move VM runs again (same code, same inputs) and again produces
+**TX1's second execution**: the transaction is executed again (same code, same inputs) and again produces
 a running max withdrawal of 200 from Y.
 
 - Checker sees accumulator version 6. Last settled version is now 6.
@@ -303,7 +303,7 @@ a running max withdrawal of 200 from Y.
 
 If the balance after settlement had been only 100, the checker would have immediately sent
 `Insufficient`. TX1 would be re-enqueued with the insufficient flag, and its third execution
-would produce an `InsufficientFundsForWithdraw` early error without running the Move VM.
+would produce an `InsufficientFundsForWithdraw` early error without executing the transaction.
 
 ## 4. Garbage collection
 
@@ -348,15 +348,15 @@ While both systems validate withdrawals against accumulator balances, they diffe
 fundamental ways:
 
 **When the amount is known.** Address fund withdrawal maximums are declared in the
-transaction data and known before execution. Object fund withdrawal amounts are computed by
-the Move VM during execution.
+transaction data and known before execution. Object fund withdrawal amounts are computed
+during execution.
 
 **When the check happens.** Address funds are checked *before* execution (pre-execution gate).
 Object funds are checked *after* execution (post-execution validation).
 
 **How insufficient funds are handled.** For address funds, the eager scheduler can
-immediately fail the transaction — the Move VM never runs. For object funds, the Move VM has
-already run; the checker must re-enqueue the transaction for a second execution with an
+immediately fail the transaction. For object funds, the PTB has
+already been run; the checker must re-enqueue the transaction for a second execution with an
 `Insufficient` flag that triggers an early error.
 
 **Reservation vs. exact amounts.** The address funds scheduler uses conservative reservations

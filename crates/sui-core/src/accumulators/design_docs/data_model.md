@@ -164,7 +164,7 @@ The same machinery supports balances owned by *another object* rather than an ad
 too, so the same dynamic-field structure works. The differences are operational, not structural:
 
 - An object-owned balance is mutated by Move code that has access to that object. Therefore the
-  withdrawal *amount* is decided at runtime, inside the Move VM.
+  withdrawal *amount* is decided at runtime, inside the PTB.
 - Sufficiency must be checked *after* execution. That is what
   [`object_funds_checking.md`](./object_funds_checking.md) is about.
 

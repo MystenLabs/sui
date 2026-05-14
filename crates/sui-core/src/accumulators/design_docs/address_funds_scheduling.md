@@ -19,11 +19,11 @@ Address-funds withdrawals are withdrawals from address-owned accumulator account
 *maximum* withdrawal amount is known **before execution**. The transaction data declares an
 upper bound (`Reservation::MaxAmountU64`) on how much each account may withdraw — the actual
 amount withdrawn during execution can be smaller (or even zero), but never larger. This upper
-bound is enough to check sufficiency before the Move VM starts: if the account doesn't have
+bound is enough to check sufficiency before transaction execution starts: if the account doesn't have
 enough to cover the declared maximum, the transaction is guaranteed to fail, so we skip
 execution entirely and return an early error.
 
-Object-funds withdrawals (where the amount is known only after the Move VM runs) are out of
+Object-funds withdrawals (where the amount is known only after the transaction is executed) are out of
 scope here — see [`object_funds_checking.md`](./object_funds_checking.md).
 
 ### Core data structures
@@ -57,7 +57,7 @@ The scheduler returns a `ScheduleResult` for each transaction, which is one of t
   transaction can proceed to execution (where it may withdraw up to that amount).
 - **`InsufficientFunds`** — the account cannot cover the declared maximum. The transaction
   will be executed with an `Insufficient` flag, causing it to fail immediately with an
-  `InsufficientFundsForWithdraw` error without running any Move code.
+  `InsufficientFundsForWithdraw` error without executing the transaction.
 - **`SkipSchedule`** — the accumulator version for this transaction has already been settled.
   This happens either when the scheduler's own in-memory version has advanced past it (the
   validator path), or — more commonly for a node that is catching up — when the on-chain
@@ -101,19 +101,20 @@ When a checkpoint is being applied via the **checkpoint executor**
 ([`write_path.md`](./write_path.md) §5), the settlement and barrier transactions run through
 the normal execution pipeline like any other system transaction, and the on-chain state
 advances. But because the node didn't construct those transactions, `settle_address_funds` is
-**not** invoked. The scheduler is designed to handle this gracefully — see §3 below for the
-specific in-memory checks that keep the scheduler consistent with storage.
+**not** invoked. The scheduler is designed to handle this gracefully — see
+[§3 below](#3-the-eager-scheduler) for the specific in-memory checks that keep the scheduler
+consistent with storage.
 
 ### After scheduling
 
 Once the scheduler returns a result for a transaction:
 
 - **SufficientFunds** — the transaction is re-enqueued into the normal execution pipeline. It
-  will execute its Move code normally, and the withdrawal will happen as part of execution.
+  will execute the transaction normally, and the withdrawal will happen as part of execution.
 - **InsufficientFunds** — the transaction is re-enqueued with
   `FundsWithdrawStatus::Insufficient` set in its `ExecutionEnv`. When the execution pipeline
   picks it up, it sees this flag and immediately returns
-  `ExecutionErrorKind::InsufficientFundsForWithdraw` — the Move VM never runs. The transaction
+  `ExecutionErrorKind::InsufficientFundsForWithdraw` — the transaction never runs. The transaction
   still produces effects (a failed execution) so it can be included in checkpoints.
 - **SkipSchedule** — the transaction is dropped from the scheduler's perspective. This
   typically means a checkpoint executor has already executed the corresponding settlement (and

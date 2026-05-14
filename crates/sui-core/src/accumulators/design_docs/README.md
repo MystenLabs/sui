@@ -14,7 +14,7 @@ If you are touching code under `crates/sui-core/src/accumulators/` or
 | [`data_model.md`](./data_model.md) | On-chain layout: the `0xACC` root, `AccumulatorObjId` derivation, dynamic-field representation, and the version invariant. |
 | [`write_path.md`](./write_path.md) | How a balance changes: `FundsWithdrawalArg`, transaction rewriting, accumulator events (Split/Merge), `AccumulatorSettlementTxBuilder`, and the placeholder→settlement-txns→barrier expansion. Also covers the two paths by which settlement reaches a node (validator vs. checkpoint executor). |
 | [`address_funds_scheduling.md`](./address_funds_scheduling.md) | Pre-execution withdraw scheduling for **address-owned** accumulator accounts (max amounts known up front). Eager scheduler, naive baseline, determinism. |
-| [`object_funds_checking.md`](./object_funds_checking.md) | Post-execution sufficiency checking for **object-owned** accumulator accounts (amounts known only after Move VM runs). |
+| [`object_funds_checking.md`](./object_funds_checking.md) | Post-execution sufficiency checking for **object-owned** accumulator accounts (amounts known only after the transaction is run). |
 | [`coin_reservations.md`](./coin_reservations.md) | Backward-compat layer that lets pre-address-balance SDKs use address balances by encoding withdrawals as fake `ObjectRef`s. Transitional — expected to be removed once SDK migration is done. |
 
 The **read path** (RPC balance queries via `accumulators/balances.rs` and the
@@ -44,7 +44,7 @@ on those modules is the source of truth — no separate doc is provided here.
                            │            │
                            ▼            ▼
                   ┌──────────────────────────────────┐
-                  │           Move VM                │
+                  │     execution engine/adapter     │
                   │  emits AccumulatorEvents per     │
                   │  Split/Merge — see write_path.md │
                   └──────────────┬───────────────────┘
@@ -93,7 +93,7 @@ on those modules is the source of truth — no separate doc is provided here.
   barrier transaction (`Mutable` access).
 - **Barrier transaction** — the final settlement transaction that gates the accumulator version
   bump. Driven by `accumulators::build_accumulator_barrier_tx`.
-- **Split / Merge** — Move VM accumulator events. Split = withdrawal, Merge = deposit.
+- **Split / Merge** — Accumulator events. Split = withdrawal, Merge = deposit.
 - **Running max withdraw** — the peak net withdrawal an account experiences during a single
   transaction's execution. The basis for object-funds sufficiency checking.
 - **Reservation** — in the address-funds scheduler, the *declared maximum* a transaction may
