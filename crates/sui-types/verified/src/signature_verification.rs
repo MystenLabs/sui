@@ -49,11 +49,19 @@ pub trait SignatureVerifiable<Addr> {
     /// A single signature may yield more than one address (e.g. a zklogin
     /// signature with legacy-address support). Returns
     /// `Err(SigVerifyError::AddressDerivationFailed)` for malformed input.
-    fn try_derive_addresses(&self) -> (r: Result<Vec<Addr>, SigVerifyError>);
+    fn try_derive_addresses(&self) -> (r: Result<Vec<Addr>, SigVerifyError>)
+        ensures
+            // Derivation fails iff the signature is malformed.
+            r.is_Err() <==> spec_sig_addr_fails(self),
+            // On success, the returned addresses exactly match the spec set.
+            r.is_Ok() ==> r.get_Ok_0()@ =~= spec_sig_addresses::<Self, Addr>(self);
 
     /// Cryptographically verify this signature as proof of authorization by
     /// `addr` at `epoch`. Returns `Err(CryptoVerificationFailed)` on failure.
-    fn verify_for_address(&self, addr: &Addr, epoch: u64) -> (r: Result<(), SigVerifyError>);
+    fn verify_for_address(&self, addr: &Addr, epoch: u64) -> (r: Result<(), SigVerifyError>)
+        ensures
+            // Ok iff the signature is cryptographically valid for addr at epoch.
+            r.is_Ok() <==> spec_sig_crypto_valid(self, *addr, epoch);
 }
 
 // ---------------------------------------------------------------------------
