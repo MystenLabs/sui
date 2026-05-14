@@ -8,8 +8,7 @@ use sui_test_transaction_builder::{FundSource, TestTransactionBuilder};
 use sui_types::{
     base_types::{FullObjectRef, ObjectID, SequenceNumber, SuiAddress},
     coin_reservation::ParsedObjectRefWithdrawal,
-    crypto::default_hash,
-    digests::{CheckpointDigest, TransactionDigest},
+    digests::CheckpointDigest,
     effects::TransactionEffectsAPI,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     transaction::{
@@ -1413,14 +1412,13 @@ async fn test_fake_coin_reservation_dry_run_does_not_panic() {
         },
         expiration: TransactionExpiration::None,
     });
-    let digest = TransactionDigest::new(default_hash(&tx_data));
 
     let state = test_env
         .cluster
         .fullnode_handle
         .sui_node
         .with(|node| node.state().clone());
-    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data, digest).await });
+    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data).await });
 
     match join.await {
         Ok(Ok(_)) => panic!("dry-run with fake coin reservation should have errored"),
@@ -1522,14 +1520,13 @@ async fn test_fake_coin_reservation_dry_run_safe_when_flag_disabled() {
         },
         expiration: TransactionExpiration::None,
     });
-    let digest = TransactionDigest::new(default_hash(&tx_data));
 
     let state = test_env
         .cluster
         .fullnode_handle
         .sui_node
         .with(|node| node.state().clone());
-    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data, digest).await });
+    let join = tokio::task::spawn(async move { state.dry_exec_transaction(tx_data).await });
 
     match join.await {
         Ok(Ok(_)) => panic!("dry-run with fake coin reservation should have errored"),
