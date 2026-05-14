@@ -13,9 +13,8 @@ A development tool that enables testing and developing against a local Sui netwo
 `sui-fork` allows developers to start a local network in lock-step mode and execute transactions against some initial state derived from the live Sui network. This enables you to:
 
 - Depend on existing on-chain packages and data
-- Test contracts that interact with real deployed packages
-- Develop locally while maintaining consistency with production state
-- Run integration tests against forked network state and using packages deployed on the real live network
+- Develop locally and test contracts that interact with real deployed packages
+- Have full control over checkpoint and time progression to simulate different scenarios
 
 > [!NOTE]
 > Unlike a standard local Sui network with validators, the forking tool runs in lock-step mode where each transaction is executed sequentially and creates a checkpoint.
