@@ -5,6 +5,7 @@ pub mod bitmap_query;
 pub mod dimensions;
 
 pub use bitmap_query::BitmapBucketSource;
+pub use bitmap_query::BitmapKey;
 pub use bitmap_query::BitmapLiteral;
 pub use bitmap_query::BitmapQuery;
 pub use bitmap_query::BitmapTerm;

@@ -37,6 +37,8 @@ use futures::stream::Peekable;
 use itertools::Itertools;
 use roaring::RoaringBitmap;
 
+use crate::dimensions::IndexDimension;
+
 /// A stream of `(bucket_id, RoaringBitmap)` in the requested bucket order.
 /// Bitmap positions are **relative** to the bucket (u32 offsets `[0, BUCKET_SIZE)`)
 /// - edge trimming against the requested range happens at the flatten step.
@@ -86,59 +88,84 @@ pub struct BitmapTerm {
     literals: Vec<BitmapLiteral>,
 }
 
+/// Validated `[dimension_tag][dimension_value]` lookup key.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct BitmapKey(Vec<u8>);
+
 /// One signed dimension-key literal in a bitmap term.
 #[derive(Clone, Debug)]
 pub enum BitmapLiteral {
-    Include(Vec<u8>),
-    Exclude(Vec<u8>),
+    Include(BitmapKey),
+    Exclude(BitmapKey),
+}
+
+impl BitmapKey {
+    pub fn new(bytes: Vec<u8>) -> Result<Self> {
+        if bytes.is_empty() {
+            bail!("bitmap dimension key must not be empty");
+        }
+        if bytes.len() == 1 {
+            bail!("bitmap dimension value must not be empty");
+        }
+        if IndexDimension::from_tag_byte(bytes[0]).is_none() {
+            bail!("unknown bitmap dimension tag {}", bytes[0]);
+        }
+        Ok(Self(bytes))
+    }
+
+    pub fn into_inner(self) -> Vec<u8> {
+        self.0
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl TryFrom<Vec<u8>> for BitmapKey {
+    type Error = anyhow::Error;
+
+    fn try_from(value: Vec<u8>) -> Result<Self> {
+        Self::new(value)
+    }
+}
+
+impl BitmapLiteral {
+    pub fn include(dimension_key: Vec<u8>) -> Result<Self> {
+        Ok(Self::Include(BitmapKey::new(dimension_key)?))
+    }
+
+    pub fn exclude(dimension_key: Vec<u8>) -> Result<Self> {
+        Ok(Self::Exclude(BitmapKey::new(dimension_key)?))
+    }
 }
 
 impl BitmapQuery {
     pub fn new(terms: Vec<BitmapTerm>) -> Result<Self> {
-        let query = Self { terms };
-        query.validate()?;
-        Ok(query)
-    }
-
-    pub fn scan(dimension_key: Vec<u8>) -> Self {
-        Self {
-            terms: vec![BitmapTerm {
-                literals: vec![BitmapLiteral::Include(dimension_key)],
-            }],
-        }
-    }
-
-    pub fn validate(&self) -> Result<()> {
-        if self.terms.is_empty() {
+        if terms.is_empty() {
             bail!("bitmap query must contain at least one term");
         }
-        for (i, term) in self.terms.iter().enumerate() {
-            if !term.has_include() {
-                bail!("bitmap query term {i} must contain at least one include literal");
-            }
-        }
-        Ok(())
+        Ok(Self { terms })
+    }
+
+    pub fn scan(dimension_key: Vec<u8>) -> Result<Self> {
+        Ok(Self {
+            terms: vec![BitmapTerm::new(vec![BitmapLiteral::include(
+                dimension_key,
+            )?])?],
+        })
     }
 }
 
 impl BitmapTerm {
     pub fn new(literals: Vec<BitmapLiteral>) -> Result<Self> {
-        let term = Self { literals };
-        term.validate()?;
-        Ok(term)
-    }
-
-    pub fn validate(&self) -> Result<()> {
-        if !self.has_include() {
-            bail!("bitmap query term must contain at least one include literal");
-        }
-        Ok(())
-    }
-
-    pub fn has_include(&self) -> bool {
-        self.literals
+        if !literals
             .iter()
             .any(|literal| matches!(literal, BitmapLiteral::Include(_)))
+        {
+            bail!("bitmap query term must contain at least one include literal");
+        }
+        Ok(Self { literals })
     }
 }
 
@@ -156,40 +183,12 @@ pub fn eval_bitmap_query_stream<S>(
 where
     S: BitmapBucketSource,
 {
-    async_stream::try_stream! {
-        let stream = eval_bitmap_query_bucket_stream(source, query, range.clone(), direction);
-        let flattened = flatten_bucket_stream(stream, range, bucket_size, direction);
-        futures::pin_mut!(flattened);
-        while let Some(item) = flattened.next().await {
-            yield item?;
-        }
-    }
-    .boxed()
+    let stream = eval_bitmap_query_bucket_stream(source, query, range.clone(), direction);
+    flatten_bucket_stream(stream, range, bucket_size, direction)
 }
 
 /// Evaluate a DNF `BitmapQuery` as an ordered stream of relative bucket bitmaps.
 pub fn eval_bitmap_query_bucket_stream<S>(
-    source: S,
-    query: BitmapQuery,
-    range: Range<u64>,
-    direction: ScanDirection,
-) -> BucketStream
-where
-    S: BitmapBucketSource,
-{
-    async_stream::try_stream! {
-        query.validate()?;
-        let stream =
-            eval_bitmap_query_bucket_stream_unchecked(source, query, range, direction);
-        futures::pin_mut!(stream);
-        while let Some(item) = stream.next().await {
-            yield item?;
-        }
-    }
-    .boxed()
-}
-
-fn eval_bitmap_query_bucket_stream_unchecked<S>(
     source: S,
     query: BitmapQuery,
     range: Range<u64>,
@@ -220,8 +219,8 @@ where
     let mut exclude = Vec::new();
     for literal in term.literals {
         match literal {
-            BitmapLiteral::Include(key) => include.push(key),
-            BitmapLiteral::Exclude(key) => exclude.push(key),
+            BitmapLiteral::Include(key) => include.push(key.into_inner()),
+            BitmapLiteral::Exclude(key) => exclude.push(key.into_inner()),
         }
     }
 
@@ -634,28 +633,41 @@ mod tests {
             .collect()
     }
 
+    fn test_key(value: &[u8]) -> Vec<u8> {
+        crate::dimensions::encode_dimension_key(crate::dimensions::IndexDimension::Sender, value)
+    }
+
+    fn include(value: &[u8]) -> BitmapLiteral {
+        BitmapLiteral::include(test_key(value)).unwrap()
+    }
+
+    fn exclude(value: &[u8]) -> BitmapLiteral {
+        BitmapLiteral::exclude(test_key(value)).unwrap()
+    }
+
     #[test]
     fn bitmap_query_validation_rejects_empty_shapes() {
         assert!(BitmapQuery::new(Vec::new()).is_err());
-        assert!(BitmapTerm::new(vec![BitmapLiteral::Exclude(b"neg".to_vec())]).is_err());
+        assert!(BitmapLiteral::include(Vec::new()).is_err());
+        assert!(
+            BitmapLiteral::include(vec![crate::dimensions::IndexDimension::Sender.tag_byte()])
+                .is_err()
+        );
+        assert!(BitmapLiteral::include(vec![0xff, 0x00]).is_err());
+        assert!(BitmapTerm::new(vec![exclude(b"neg")]).is_err());
     }
 
     #[tokio::test]
     async fn eval_bitmap_query_stream_uses_backend_source() {
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
-                (b"a".to_vec(), vec![(0, vec![1, 2, 3]), (1, vec![5])]),
-                (b"b".to_vec(), vec![(0, vec![2, 3]), (1, vec![5])]),
-                (b"c".to_vec(), vec![(0, vec![3])]),
+                (test_key(b"a"), vec![(0, vec![1, 2, 3]), (1, vec![5])]),
+                (test_key(b"b"), vec![(0, vec![2, 3]), (1, vec![5])]),
+                (test_key(b"c"), vec![(0, vec![3])]),
             ])),
         };
         let query = BitmapQuery::new(vec![
-            BitmapTerm::new(vec![
-                BitmapLiteral::Include(b"a".to_vec()),
-                BitmapLiteral::Include(b"b".to_vec()),
-                BitmapLiteral::Exclude(b"c".to_vec()),
-            ])
-            .unwrap(),
+            BitmapTerm::new(vec![include(b"a"), include(b"b"), exclude(b"c")]).unwrap(),
         ])
         .unwrap();
 
@@ -677,18 +689,13 @@ mod tests {
     async fn eval_bitmap_query_stream_descending() {
         let source = TestBucketSource {
             buckets: Arc::new(BTreeMap::from([
-                (b"a".to_vec(), vec![(0, vec![1, 2, 3]), (1, vec![5])]),
-                (b"b".to_vec(), vec![(0, vec![2, 3]), (1, vec![5])]),
-                (b"c".to_vec(), vec![(0, vec![3])]),
+                (test_key(b"a"), vec![(0, vec![1, 2, 3]), (1, vec![5])]),
+                (test_key(b"b"), vec![(0, vec![2, 3]), (1, vec![5])]),
+                (test_key(b"c"), vec![(0, vec![3])]),
             ])),
         };
         let query = BitmapQuery::new(vec![
-            BitmapTerm::new(vec![
-                BitmapLiteral::Include(b"a".to_vec()),
-                BitmapLiteral::Include(b"b".to_vec()),
-                BitmapLiteral::Exclude(b"c".to_vec()),
-            ])
-            .unwrap(),
+            BitmapTerm::new(vec![include(b"a"), include(b"b"), exclude(b"c")]).unwrap(),
         ])
         .unwrap();
 

@@ -185,11 +185,21 @@ fn convert_transaction_literal(
     match polarity {
         transaction_literal::Polarity::Include(predicate) => {
             let key = convert_transaction_predicate(predicate, &format!("{field_prefix}.include"))?;
-            Ok(BitmapLiteral::Include(key))
+            BitmapLiteral::include(key).map_err(|e| {
+                FieldViolation::new(field_prefix)
+                    .with_description(e.to_string())
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into()
+            })
         }
         transaction_literal::Polarity::Exclude(predicate) => {
             let key = convert_transaction_predicate(predicate, &format!("{field_prefix}.exclude"))?;
-            Ok(BitmapLiteral::Exclude(key))
+            BitmapLiteral::exclude(key).map_err(|e| {
+                FieldViolation::new(field_prefix)
+                    .with_description(e.to_string())
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into()
+            })
         }
         _ => Err(FieldViolation::new(field_prefix)
             .with_description("unknown literal polarity")
@@ -210,11 +220,21 @@ fn convert_event_literal(
     match polarity {
         event_literal::Polarity::Include(predicate) => {
             let key = convert_event_predicate(predicate, &format!("{field_prefix}.include"))?;
-            Ok(BitmapLiteral::Include(key))
+            BitmapLiteral::include(key).map_err(|e| {
+                FieldViolation::new(field_prefix)
+                    .with_description(e.to_string())
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into()
+            })
         }
         event_literal::Polarity::Exclude(predicate) => {
             let key = convert_event_predicate(predicate, &format!("{field_prefix}.exclude"))?;
-            Ok(BitmapLiteral::Exclude(key))
+            BitmapLiteral::exclude(key).map_err(|e| {
+                FieldViolation::new(field_prefix)
+                    .with_description(e.to_string())
+                    .with_reason(ErrorReason::FieldInvalid)
+                    .into()
+            })
         }
         _ => Err(FieldViolation::new(field_prefix)
             .with_description("unknown literal polarity")

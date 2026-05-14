@@ -208,8 +208,8 @@ async fn test_eval_bitmap_query_and() -> Result<()> {
     write_bitmap(&mut client, &dim_b, 0, &[3, 4, 5, 6, 7]).await?;
 
     let query = BitmapQuery::new(vec![BitmapTerm::new(vec![
-        BitmapLiteral::Include(dim_a),
-        BitmapLiteral::Include(dim_b),
+        BitmapLiteral::include(dim_a)?,
+        BitmapLiteral::include(dim_b)?,
     ])?])?;
     let result: Vec<u64> = bitmap_query_stream(
         &client,
@@ -236,8 +236,8 @@ async fn test_eval_bitmap_query_or() -> Result<()> {
     write_bitmap(&mut client, &dim_b, 0, &[3, 4, 5]).await?;
 
     let query = BitmapQuery::new(vec![
-        BitmapTerm::new(vec![BitmapLiteral::Include(dim_a)])?,
-        BitmapTerm::new(vec![BitmapLiteral::Include(dim_b)])?,
+        BitmapTerm::new(vec![BitmapLiteral::include(dim_a)?])?,
+        BitmapTerm::new(vec![BitmapLiteral::include(dim_b)?])?,
     ])?;
     let result: Vec<u64> = bitmap_query_stream(
         &client,
@@ -267,8 +267,8 @@ async fn test_eval_bitmap_query_not() -> Result<()> {
 
     // "sender EE but NOT move_call FF" → [1, 2, 5]
     let query = BitmapQuery::new(vec![BitmapTerm::new(vec![
-        BitmapLiteral::Include(dim_a),
-        BitmapLiteral::Exclude(dim_b),
+        BitmapLiteral::include(dim_a)?,
+        BitmapLiteral::exclude(dim_b)?,
     ])?])?;
     let result: Vec<u64> = bitmap_query_stream(
         &client,
@@ -401,7 +401,7 @@ async fn test_full_pipeline() -> Result<()> {
     assert_eq!(tx_range, 0..5);
 
     // Query: sender_a only
-    let query = BitmapQuery::scan(dim_a.clone());
+    let query = BitmapQuery::scan(dim_a.clone())?;
     let matching: Vec<u64> = bitmap_query_stream(
         &client,
         query,
@@ -425,8 +425,8 @@ async fn test_full_pipeline() -> Result<()> {
 
     // Query: sender_a OR sender_b → all 5
     let query = BitmapQuery::new(vec![
-        BitmapTerm::new(vec![BitmapLiteral::Include(dim_a.clone())])?,
-        BitmapTerm::new(vec![BitmapLiteral::Include(dim_b.clone())])?,
+        BitmapTerm::new(vec![BitmapLiteral::include(dim_a.clone())?])?,
+        BitmapTerm::new(vec![BitmapLiteral::include(dim_b.clone())?])?,
     ])?;
     let matching: Vec<u64> = bitmap_query_stream(
         &client,
@@ -441,8 +441,8 @@ async fn test_full_pipeline() -> Result<()> {
 
     // Query: sender_a AND NOT sender_b → still [0, 2, 4] (no overlap)
     let query = BitmapQuery::new(vec![BitmapTerm::new(vec![
-        BitmapLiteral::Include(dim_a),
-        BitmapLiteral::Exclude(dim_b),
+        BitmapLiteral::include(dim_a)?,
+        BitmapLiteral::exclude(dim_b)?,
     ])?])?;
     let matching: Vec<u64> = bitmap_query_stream(
         &client,
@@ -459,11 +459,13 @@ async fn test_full_pipeline() -> Result<()> {
 }
 
 #[test]
-fn test_bitmap_query_rejects_invalid_dnf() {
+fn test_bitmap_query_rejects_invalid_dnf() -> Result<()> {
     let dim = encode_dimension_key(IndexDimension::Sender, &[0xCC; 32]);
 
     assert!(BitmapQuery::new(Vec::new()).is_err());
-    assert!(BitmapTerm::new(vec![BitmapLiteral::Exclude(dim)]).is_err());
+    assert!(BitmapTerm::new(vec![BitmapLiteral::exclude(dim)?]).is_err());
+
+    Ok(())
 }
 
 /// resolve_tx_digests: 4 checkpoints, out-of-order input, exact boundaries, single tx_seq.

@@ -819,7 +819,7 @@ async fn test_indexer_e2e() -> Result<()> {
 
         let matching_tx_seqs = bitmap_query_stream(
             harness.bigtable_client(),
-            BitmapQuery::scan(sender_dim_key.clone()),
+            BitmapQuery::scan(sender_dim_key.clone())?,
             tx_range.clone(),
             BitmapIndexSpec::tx(),
             ScanDirection::Ascending,
@@ -845,7 +845,7 @@ async fn test_indexer_e2e() -> Result<()> {
             ..event_bitmap_index::event_seq_lo(tx_range.end);
         let matching_event_seqs = bitmap_query_stream(
             harness.bigtable_client(),
-            BitmapQuery::scan(sender_dim_key),
+            BitmapQuery::scan(sender_dim_key)?,
             event_range,
             BitmapIndexSpec::event(),
             ScanDirection::Ascending,

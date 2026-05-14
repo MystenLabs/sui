@@ -51,6 +51,19 @@ impl IndexDimension {
     pub fn tag_byte(self) -> u8 {
         self as u8
     }
+
+    pub fn from_tag_byte(tag: u8) -> Option<Self> {
+        match tag {
+            tag if tag == Self::Sender.tag_byte() => Some(Self::Sender),
+            tag if tag == Self::AffectedAddress.tag_byte() => Some(Self::AffectedAddress),
+            tag if tag == Self::AffectedObject.tag_byte() => Some(Self::AffectedObject),
+            tag if tag == Self::MoveCall.tag_byte() => Some(Self::MoveCall),
+            tag if tag == Self::EmitModule.tag_byte() => Some(Self::EmitModule),
+            tag if tag == Self::EventType.tag_byte() => Some(Self::EventType),
+            tag if tag == Self::EventStreamHead.tag_byte() => Some(Self::EventStreamHead),
+            _ => None,
+        }
+    }
 }
 
 const COMPOUND_VALUE_SEPARATOR: u8 = 0x00;
