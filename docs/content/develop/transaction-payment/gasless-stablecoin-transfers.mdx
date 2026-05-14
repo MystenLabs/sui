@@ -23,7 +23,7 @@ The stablecoins eligible for gasless stablecoin transfers are governed by the pr
 Gasless stablecoin transfers are narrow by design. A transaction qualifies only when:
 
 - The PTB consists of allowlisted `balance` or `coin` operations on an allowlisted stablecoin type. The primary one is `0x2::balance::send_funds<T>`. A few related helpers (`balance::redeem_funds`, `coin::send_funds`, `coin::into_balance`, and so on) are also allowed and might appear in resolved transactions.
-- Gas is paid from the sender's address balance. `gasPayment` is empty and `gasPrice = 0`.
+- `gasPayment` is empty and `gasPrice = 0`.
 - No objects are written during the transaction, and all input coins are consumed or converted to address balances.
 
 If the user is sending SUI, sending a non-allowlisted token, or executing any other Move call (NFT mint, swap, app interaction), the gasless stablecoin transfer does not apply and the transaction requires a normal gas payment.
