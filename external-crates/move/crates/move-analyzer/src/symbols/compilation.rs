@@ -1195,7 +1195,13 @@ fn merge_compiler_analysis_info(
     // Add new entries - no additional filtering needed
     // as incremental compilation produced these
     // only for modified files
-    result.macro_info.extend(new_info.macro_info);
+    for (loc, mut entries) in new_info.macro_info {
+        result
+            .macro_info
+            .entry(loc)
+            .or_default()
+            .append(&mut entries);
+    }
     result.expanded_lambdas.extend(new_info.expanded_lambdas);
     result.ellipsis_binders.extend(new_info.ellipsis_binders);
     result.string_values.extend(new_info.string_values);

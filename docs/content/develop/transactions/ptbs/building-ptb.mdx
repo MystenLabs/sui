@@ -14,7 +14,7 @@ keywords:
   ]
 ---
 
-This guide explores creating a [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) on Sui using the [TypeScript SDK](https://sdk.mystenlabs.com/typescript/install).
+This guide explores creating a [programmable transaction block (PTB)](/develop/transactions/ptbs/prog-txn-blocks) on Sui using the [TypeScript SDK](https://sdk.mystenlabs.com/typescript/install) and the Sui CLI.
 
 This example constructs a PTB to send SUI tokens. First, import the `Transaction` class, and construct it:
 
@@ -65,6 +65,22 @@ After you define the transaction, directly execute it with a Sui client and `Key
 ```ts
 client.signAndExecuteTransaction({ signer: keypair, transaction: tx });
 ```
+
+## Build PTBs with the CLI
+
+Use `sui client ptb` to build and execute PTBs from the command line. Prefer `sui client ptb` for examples that build transactions, including basic transfers and coin operations, because it exposes the same PTB commands used by SDKs.
+
+The following CLI PTB splits 500,000,000 MIST from the gas coin and transfers the new coin to `eloquent-amber`:
+
+```sh
+$ sui client ptb \
+    --split-coins gas "[500000000]" \
+    --assign coin \
+    --transfer-objects "[coin]" eloquent-amber \
+    --gas-budget 5000000
+```
+
+Use `--preview` to inspect the PTB commands without executing them, `--dry-run` to simulate execution, and `--summary` for concise output after execution. For more examples, see [Sui Client PTB CLI](/references/cli/ptb).
 
 ## Constructing inputs
 

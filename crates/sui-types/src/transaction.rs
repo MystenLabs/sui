@@ -22,8 +22,8 @@ use crate::crypto::{
     DefaultHash, Ed25519SuiSignature, EmptySignInfo, RandomnessRound, Signature, Signer,
     SuiSignatureInner, ToFromBytes, default_hash,
 };
-use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
-use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
+use crate::digests::{AdditionalConsensusStateDigest, SenderSignedDataDigest};
+use crate::digests::{ChainIdentifier, ConsensusCommitDigest};
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::funds_accumulator::{FUNDS_ACCUMULATOR_MODULE_NAME, WITHDRAWAL_SPLIT_FUNC_NAME};
 use crate::gas_coin::GAS;
@@ -4292,58 +4292,8 @@ impl SignedTransaction {
 pub type CertifiedTransaction = Envelope<SenderSignedData, AuthorityStrongQuorumSignInfo>;
 
 impl CertifiedTransaction {
-    pub fn certificate_digest(&self) -> CertificateDigest {
-        let mut digest = DefaultHash::default();
-        bcs::serialize_into(&mut digest, self).expect("serialization should not fail");
-        let hash = digest.finalize();
-        CertificateDigest::new(hash.into())
-    }
-
     pub fn gas_price(&self) -> u64 {
         self.data().transaction_data().gas_price()
-    }
-
-    // TODO: Eventually we should remove all calls to verify_signature
-    // and make sure they all call verify to avoid repeated verifications.
-    pub fn verify_signatures_authenticated(
-        &self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-    ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(
-            self.data(),
-            committee.epoch(),
-            verify_params,
-            zklogin_inputs_cache,
-            vec![],
-        )?;
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
-    }
-
-    pub fn try_into_verified_for_testing(
-        self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedCertificate> {
-        self.verify_signatures_authenticated(
-            committee,
-            verify_params,
-            Arc::new(VerifiedDigestCache::new_empty()),
-        )?;
-        Ok(VerifiedCertificate::new_from_verified(self))
-    }
-
-    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult {
-        self.auth_sig().verify_secure(
-            self.data(),
-            Intent::sui_app(IntentScope::SenderSignedTransaction),
-            committee,
-        )
     }
 }
 

@@ -6,6 +6,8 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use anyhow::Result;
+use clap::CommandFactory;
+use clap::FromArgMatches;
 use clap::Parser;
 use clap::Subcommand;
 use reqwest::Url;
@@ -123,6 +125,13 @@ struct StatusOutput {
 }
 
 impl Cli {
+    pub fn parse_with_version(version: &'static str) -> Self {
+        let command = Self::command().version(version);
+        let matches = command.get_matches();
+
+        Self::from_arg_matches(&matches).unwrap_or_else(|err| err.exit())
+    }
+
     pub async fn execute(self, version: &'static str) -> Result<()> {
         match self.command {
             Command::Start {

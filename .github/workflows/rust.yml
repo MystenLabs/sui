@@ -163,6 +163,9 @@ jobs:
       - name: cargo test with tidehunter
         run: |
           RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core --features typed-store/tidehunter
+      - name: cargo check sui-tool with tidehunter + tideconsole
+        run: |
+          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo check --quiet -p sui-tool --features typed-store/tidehunter,sui-tool/tideconsole
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash

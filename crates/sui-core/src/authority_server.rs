@@ -186,14 +186,7 @@ impl AuthorityServer {
 pub struct ValidatorServiceMetrics {
     pub signature_errors: IntCounter,
     pub tx_verification_latency: Histogram,
-    pub cert_verification_latency: Histogram,
     pub handle_transaction_latency: Histogram,
-    pub submit_certificate_consensus_latency: Histogram,
-    pub handle_certificate_consensus_latency: Histogram,
-    pub handle_certificate_non_consensus_latency: Histogram,
-    pub handle_soft_bundle_certificates_consensus_latency: Histogram,
-    pub handle_soft_bundle_certificates_count: Histogram,
-    pub handle_soft_bundle_certificates_size_bytes: Histogram,
     pub handle_transaction_consensus_latency: Histogram,
     pub handle_submit_transaction_consensus_latency: HistogramVec,
     pub handle_wait_for_effects_ping_latency: HistogramVec,
@@ -231,59 +224,10 @@ impl ValidatorServiceMetrics {
                 registry,
             )
             .unwrap(),
-            cert_verification_latency: register_histogram_with_registry!(
-                "validator_service_cert_verification_latency",
-                "Latency of verifying a certificate",
-                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
             handle_transaction_latency: register_histogram_with_registry!(
                 "validator_service_handle_transaction_latency",
                 "Latency of handling a transaction",
                 mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_certificate_consensus_latency: register_histogram_with_registry!(
-                "validator_service_handle_certificate_consensus_latency",
-                "Latency of handling a consensus transaction certificate",
-                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            submit_certificate_consensus_latency: register_histogram_with_registry!(
-                "validator_service_submit_certificate_consensus_latency",
-                "Latency of submit_certificate RPC handler",
-                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_certificate_non_consensus_latency: register_histogram_with_registry!(
-                "validator_service_handle_certificate_non_consensus_latency",
-                "Latency of handling a non-consensus transaction certificate",
-                mysten_metrics::SUBSECOND_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_soft_bundle_certificates_consensus_latency: register_histogram_with_registry!(
-                "validator_service_handle_soft_bundle_certificates_consensus_latency",
-                "Latency of handling a consensus soft bundle",
-                mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_soft_bundle_certificates_count: register_histogram_with_registry!(
-                "handle_soft_bundle_certificates_count",
-                "The number of certificates included in a soft bundle",
-                mysten_metrics::COUNT_BUCKETS.to_vec(),
-                registry,
-            )
-            .unwrap(),
-            handle_soft_bundle_certificates_size_bytes: register_histogram_with_registry!(
-                "handle_soft_bundle_certificates_size_bytes",
-                "The size of soft bundle in bytes",
-                mysten_metrics::BYTES_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

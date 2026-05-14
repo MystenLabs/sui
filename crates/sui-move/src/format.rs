@@ -30,11 +30,18 @@ const NPM_INSTALL_ARGS: &[&str] = &["i", "-g", "prettier", "@mysten/prettier-plu
 
 impl Format {
     pub async fn execute(self) -> anyhow::Result<()> {
-        if which::which("prettier-move").is_err() {
-            bootstrap_prettier_move()?;
-        }
+        // Resolve to an absolute path: Windows `CreateProcess` doesn't honor `PATHEXT`.
+        let prettier_move = match which::which("prettier-move") {
+            Ok(p) => p,
+            Err(_) => {
+                bootstrap_prettier_move()?;
+                which::which("prettier-move").context(
+                    "`prettier-move` was just installed but could not be located on PATH",
+                )?
+            }
+        };
 
-        let status = Command::new("prettier-move")
+        let status = Command::new(&prettier_move)
             .args(&self.args)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
@@ -52,12 +59,13 @@ impl Format {
 fn bootstrap_prettier_move() -> anyhow::Result<()> {
     let install_cmd = format!("npm {}", NPM_INSTALL_ARGS.join(" "));
 
-    ensure!(
-        which::which("npm").is_ok(),
-        "`prettier-move` is not installed and `npm` was not found on PATH.\n\
-         Install Node.js 18+ (which provides `npm`) from https://nodejs.org, \
-         then install `prettier-move` with:\n    {install_cmd}"
-    );
+    let npm = which::which("npm").map_err(|_| {
+        anyhow::anyhow!(
+            "`prettier-move` is not installed and `npm` was not found on PATH.\n\
+             Install Node.js 18+ (which provides `npm`) from https://nodejs.org, \
+             then install `prettier-move` with:\n    {install_cmd}"
+        )
+    })?;
 
     ensure!(
         io::stdin().is_terminal(),
@@ -79,7 +87,7 @@ fn bootstrap_prettier_move() -> anyhow::Result<()> {
         "aborted: `prettier-move` is required for `sui move format`"
     );
 
-    let status = Command::new("npm")
+    let status = Command::new(&npm)
         .args(NPM_INSTALL_ARGS)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())

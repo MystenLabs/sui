@@ -71,6 +71,8 @@ use typed_store::DBMetrics;
 pub mod commands;
 pub mod db_tool;
 mod formal_snapshot_util;
+#[cfg(all(feature = "tideconsole", not(windows)))]
+pub mod tideconsole_cmd;
 
 #[derive(
     Clone, Serialize, Deserialize, Debug, PartialEq, Copy, PartialOrd, Ord, Eq, ValueEnum, Default,
