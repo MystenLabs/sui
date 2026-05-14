@@ -11,6 +11,7 @@ pub mod authority_name;
 pub mod authority_sign_info;
 pub mod collections;
 pub mod serde_helpers;
+pub mod signature_verification;
 
 // Re-export so downstream verified crates can import directly from here.
 pub use authority_name::AuthorityPublicKeyBytes;
