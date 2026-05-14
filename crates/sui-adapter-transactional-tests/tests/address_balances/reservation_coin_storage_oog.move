@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercises the storage-OOG reset + re-smash path for `[AddressBalance, Coin]`
-// gas payment. This is the only OOG shape where reset must **un-delete** a
-// secondary coin: the coin is deleted during the first smash; reset has to
-// restore it so the re-smash can re-read its value and re-delete it. Also
-// exercises clearing the Merge deposit-back accumulator event before it's
+// Storage-OOG reset + re-smash for `[AddressBalance, Coin]` gas payment.
+// The secondary coin is deleted during the first smash, so reset has to
+// un-delete it before the re-smash can re-read its value and re-delete it.
+// Also clears the Merge deposit-back accumulator event before it's
 // re-emitted.
 
 //# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators

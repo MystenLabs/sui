@@ -1,12 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercises gas smashing for `[AddressBalance, AddressBalance, Coin]` (same
-// address). The two withdrawals share a payment location and are summed
-// into a single entry *before* smashing runs. What smashing then sees is
-// `[AddressBalance(merged), Coin]`, but the snapshot must show only *one*
-// withdrawal-side accumulator event for the merged reservation (not two),
-// confirming that the dedup happens upfront.
+// `[AddressBalance, AddressBalance, Coin]` (same address). The two
+// withdrawals share a payment location and are summed into a single entry
+// before smashing runs. Smashing then sees `[AddressBalance(merged), Coin]`.
+// The snapshot must show only one withdrawal-side accumulator event for the
+// merged reservation (not two), confirming the dedup happens upfront.
 
 //# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
 

@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercises the storage-OOG reset + re-smash path for `[Coin, AddressBalance]`
-// gas payment.
-// Smash target = Coin: reset must un-mutate the gas coin's smashed value and
-// clear the secondary's `Split` withdraw accumulator event; re-smash must
-// re-mutate and re-emit consistently.
+// Storage-OOG reset + re-smash for `[Coin, AddressBalance]` gas payment.
+// Smash target is the Coin: reset must un-mutate the gas coin's smashed
+// value and clear the secondary's Split withdraw accumulator event; re-smash
+// must re-mutate and re-emit consistently.
 
 //# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
 

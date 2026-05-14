@@ -1,27 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Paired comparison: `[Coin, AddressBalance]` vs `[AddressBalance, Coin]` with
-// identical coin sizes, identical reservations, identical workloads, and
-// identical pre-state. Exposes the smash-order asymmetry that's otherwise
-// obscured by varying setups:
-//   - `[Coin, AB]`: the smash-target coin is MUTATED. Storage cost includes
-//     its re-storage AND any new objects created during execution. Storage
-//     rebate refunds the coin's pre-existing rebate. Net storage gas ~ high.
-//     The reservation lands in the coin's `balance.value`; AB is debited via
-//     a Split accumulator event.
-//   - `[AB, Coin]`: the secondary coin is DELETED. Storage cost only counts
-//     newly created objects. The deleted coin's storage rebate refunds in
-//     full with no offsetting re-storage. Net storage gas ~ low. The coin's
-//     balance VALUE flows back into AB via a Merge accumulator event; the
+// Paired comparison of `[Coin, AddressBalance]` vs `[AddressBalance, Coin]`
+// with identical coin sizes, reservations, workloads, and pre-state.
+// Exposes the smash-order asymmetry:
+//   - `[Coin, AB]`: smash-target coin is mutated. Storage cost includes its
+//     re-storage plus any new objects created during execution; rebate
+//     refunds the coin's pre-existing rebate; net storage gas is high. The
+//     reservation lands in the coin's `balance.value`; AB is debited via a
+//     Split accumulator event.
+//   - `[AB, Coin]`: the secondary coin is deleted. Storage cost only counts
+//     newly created objects; the deleted coin's storage rebate refunds in
+//     full with no offsetting re-storage; net storage gas is low. The coin's
+//     balance value flows back into AB via a Merge accumulator event; the
 //     gas charge against AB happens separately.
-// The two senders (A, B) start with identical funded address balances and
-// identical 1_000_000_000 coins; the workload is the same (split 100 MIST
-// off Gas and TransferObjects to self). Anything that differs between the
-// two `gas summary` / `accumulators_written` lines is attributable to the
-// smash order alone.
+// Senders A and B start with identical funded address balances and identical
+// 1_000_000_000 coins; the workload is the same (split 100 MIST off Gas and
+// TransferObjects to a common third party C). Anything differing between
+// the two
+// `gas summary` / `accumulators_written` lines is attributable to smash
+// order alone.
 
-//# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
+//# init --addresses test=0x0 --accounts A B C --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
 
 // Seed A's and B's address balances identically.
 //# programmable --sender A --inputs 100000000000 @A
@@ -57,14 +57,14 @@
 // ===== Case A: smash [Coin, AB] =====
 // Coin (object 3,0, value 1_000_000_000) is the smash target.
 // Reservation = 500_000_000 from A's address balance.
-//# programmable --sender A --gas-budget 500000000 --gas-payment object(3,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --inputs 100 @A
+//# programmable --sender A --gas-budget 500000000 --gas-payment object(3,0) --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --inputs 100 @C
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
 
 // ===== Case B: smash [AB, Coin] =====
 // Reservation = 500_000_000 from B's address balance is the smash target.
-// Coin (object 4,0, value 1_000_000_000) is the secondary; will be DELETED.
-//# programmable --sender B --gas-budget 500000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --gas-payment object(4,0) --inputs 100 @B
+// Coin (object 4,0, value 1_000_000_000) is the secondary; will be deleted.
+//# programmable --sender B --gas-budget 500000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --gas-payment object(4,0) --inputs 100 @C
 //> 0: SplitCoins(Gas, [Input(0)]);
 //> TransferObjects([Result(0)], Input(1))
 

@@ -1,11 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercises the storage-OOG reset + re-smash path for pure `[AddressBalance]`
-// gas payment.
-// Workload creates many new objects; with a tight budget storage charging
-// fails, triggering reset + re-smash. Verifies the re-smash invariant doesn't
-// fire and the post-reset accumulator event is emitted cleanly without
+// Storage-OOG reset + re-smash for pure `[AddressBalance]` gas payment. The
+// workload creates many new objects; with a tight budget, storage charging
+// fails, triggering reset + re-smash. Verifies the re-smash invariant holds
+// and the post-reset accumulator event is emitted cleanly without
 // duplication.
 
 //# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators

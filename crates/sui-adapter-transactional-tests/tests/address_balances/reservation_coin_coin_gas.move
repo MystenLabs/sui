@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercises gas smashing for `[AddressBalance, Coin, Coin]`: an address-balance
-// withdrawal as the smash target with two Coin secondaries. Distinct path from
-// `[Coin, Coin, AddressBalance]`:
+// `[AddressBalance, Coin, Coin]`: address-balance withdrawal as smash target
+// with two Coin secondaries.
 //   - both coins are consumed (deleted),
-//   - the surplus (total smashed minus reservation) is deposited back into
-//     the address balance via a single Merge accumulator event,
-//   - the actual gas charge against the address balance happens at final
-//     charging time via a separate Split event.
+//   - surplus (total smashed minus reservation) is deposited back into the
+//     address balance via a single Merge accumulator event,
+//   - the gas charge against the address balance happens at final charging
+//     time via a separate Split event.
 
 //# init --addresses test=0x0 --accounts A B --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
 

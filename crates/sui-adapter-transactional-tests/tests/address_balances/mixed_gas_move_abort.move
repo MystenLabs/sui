@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercises the abort-path of gas charging for `[Coin, AddressBalance]`
-// payment: a Move abort triggers a temporary-store reset and a re-smash
-// before storage is charged. Verifies that re-smashing produces consistent
-// results, and that the final accumulator event and gas coin charge reflect
-// the post-abort state, not the pre-abort attempt.
+// Move abort with `[Coin, AddressBalance]` gas payment. The abort triggers a
+// temporary-store reset and a re-smash before storage is charged. Verifies
+// that re-smashing produces consistent results, and that the final
+// accumulator event and gas coin charge reflect the post-abort state, not
+// the pre-abort attempt.
 
 //# init --addresses test=0x0 --accounts A --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
 

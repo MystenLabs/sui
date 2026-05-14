@@ -1,16 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Esoteric override edge case: `[AddressBalance(A), Coin]` smash target =
-// AB, secondary Coin gets deleted; then `send_funds(Gas, @A)` transfers the
-// ephemeral gas coin's value back into A's address balance. At gas
-// finalization, the gas-charge location is overridden to the recipient's
-// address balance -- which is the SAME address as the original payer, so
-// the override is logically a no-op. This test pins down that the gas
-// accounting still settles correctly.
-// Compared to the existing pure-address-balance send_funds-to-self test,
-// this adds a secondary Coin to the smash so the secondary-coin deletion
-// and Merge deposit-back paths run too.
+// Unsponsored tx, sender A pays with `[AB(A), Coin]`, workload
+// `send_funds(Gas, @A)` sends the ephemeral gas coin's value back into A's
+// own address balance. At gas finalization, the gas-charge location is
+// overridden to the recipient's AB -- the same address as the original
+// payer, so the override is logically a no-op.
 
 //# init --addresses test=0x0 --accounts A --enable-address-balance-gas-payments --enable-coin-reservations --enable-accumulators
 

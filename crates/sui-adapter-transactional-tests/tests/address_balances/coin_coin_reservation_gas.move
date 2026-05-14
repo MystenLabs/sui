@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercises gas smashing for `[Coin, Coin, AddressBalance]`: a real Coin as
-// the smash target with a second Coin secondary and an address-balance
-// reservation. All three smash side-effects fire together:
+// `[Coin, Coin, AddressBalance]`: real Coin as smash target plus a second
+// Coin secondary plus an address-balance reservation. Three smash
+// side-effects fire together:
 //   - the second coin is consumed (deleted),
 //   - the reservation emits a single Split accumulator event,
 //   - the smash target is mutated with the summed value.

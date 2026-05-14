@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercises gas smashing for `[gas_coin, withdraw, withdraw]`: a real Coin as
-// the smash target with multiple address-balance reservations from the same
-// sender. The two reservations share a payment location and are summed before
-// being smashed into the gas coin. Verifies that:
+// `[gas_coin, withdraw, withdraw]`: real Coin as smash target, multiple
+// address-balance reservations from the same sender. The two reservations
+// share a payment location and are summed before being smashed in.
+// Verifies that:
 //   - the smash target stays a real Coin (no ephemeral coin path),
 //   - a single accumulator event is emitted for the merged reservation,
 //   - leftover reservation lands in the gas coin (not refunded to the balance).

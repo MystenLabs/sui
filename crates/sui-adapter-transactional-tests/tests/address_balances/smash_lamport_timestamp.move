@@ -1,16 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Verifies that a `[AddressBalance, Coin]` smash respects the lamport-
-// timestamp rule across the FULL input set, including the secondary Coin
-// (which is deleted during smashing). All mutable inputs end up at
-// max(input versions) + 1, even when that maximum is carried by the
-// to-be-deleted secondary.
+// Lamport-timestamp rule on `[AddressBalance, Coin]` smash: mutable inputs
+// end up at max(input versions) + 1 across the full input set, including
+// the secondary Coin (which is deleted during smashing).
 // Setup:
-//   - Three W mutable inputs created early at low versions (K).
-//   - A Coin X created and then bumped (via being the gas object in
-//     several minimal txs) to a high version C >> K.
-//   - Final tx smashes `[withdraw, X]` and force-mutates W1, W2, W3.
+//   - three W mutable inputs created early at low versions (call them K),
+//   - one Coin X created and then bumped (via being the gas object in
+//     several minimal txs) to a high version C >> K,
+//   - final tx smashes `[withdraw, X]` and force-mutates W1, W2, W3.
 // Expected: post-tx versions of W1, W2, W3 all equal C + 1 (not K + 1),
 // confirming X's pre-tx version is folded into the tx's lamport timestamp
 // even though X itself is deleted.
@@ -30,7 +28,7 @@ public fun make(ctx: &mut TxContext) {
 //> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
 //> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
 
-// Create three small W mutable inputs early so they end up at LOW versions.
+// Create three small W mutable inputs early so they end up at low versions.
 //# run test::obj::make --sender A
 
 //# run test::obj::make --sender A
@@ -57,7 +55,7 @@ public fun make(ctx: &mut TxContext) {
 
 //# create-checkpoint
 
-// Pre-state: W1, W2, W3 are at low versions; X is at a HIGHER version due to
+// Pre-state: W1, W2, W3 are at low versions; X is at a higher version due to
 // the bumping above.
 //# view-object 3,0 --hide-contents
 
@@ -76,7 +74,7 @@ public fun make(ctx: &mut TxContext) {
 
 //# create-checkpoint
 
-// Post-state: W1, W2, W3 should ALL be at the SAME post-tx version, which
+// Post-state: W1, W2, W3 should all be at the same post-tx version, which
 // equals (X's pre-tx version) + 1 -- not (W's pre-tx version + 1).
 //# view-object 3,0 --hide-contents
 

@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercises the deepest OOG fallback: when even input-object-only storage
-// charging fails (after the usual reset + retry), the engine gives up on
-// charging storage and instead charges the user the FULL gas budget.
+// Deepest OOG fallback: when even input-object-only storage charging fails
+// (after the usual reset + retry), the engine gives up on charging storage
+// and charges the user the full gas budget instead.
 // Strategy: pre-create several large input objects (W containing a big
-// vector<u8>). On the OOG tx, pass them as inputs and TransferObjects them
-// to self, with a tight budget. Re-mutating each input costs a small
+// vector<u8>); on the OOG tx, pass them as inputs and TransferObjects them
+// to self with a tight budget. Re-mutating each input costs a small
 // non-refundable fee on top of the rebate refund. With big-data objects,
 // that non-refundable slice adds up enough that even input-only storage
 // can't be paid, forcing the fallback. The snapshot shows A's address
@@ -69,7 +69,7 @@ public fun make(size: u64, ctx: &mut TxContext) {
 
 // After the OOG fallback, the engine drops all writes from execution but
 // still forces every mutable input to be re-stored (version bump) for
-// safety. All five W's should land on the SAME post-tx version (the tx's
+// safety. All five W's should land on the same post-tx version (the tx's
 // lamport timestamp), even though the workload's TransferObjects was rolled
 // back.
 //# view-object 3,0 --hide-contents
