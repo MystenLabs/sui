@@ -42,7 +42,8 @@ use crate::dimensions::IndexDimension;
 /// A stream of `(bucket_id, RoaringBitmap)` in the requested bucket order.
 /// Bitmap positions are **relative** to the bucket (u32 offsets `[0, BUCKET_SIZE)`)
 /// - edge trimming against the requested range happens at the flatten step.
-pub type BucketStream = BoxStream<'static, Result<(u64, RoaringBitmap)>>;
+type BucketItem = Result<(u64, RoaringBitmap)>;
+pub type BucketStream = BoxStream<'static, BucketItem>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ScanDirection {
@@ -184,7 +185,7 @@ where
     S: BitmapBucketSource,
 {
     let stream = eval_bitmap_query_bucket_stream(source, query, range.clone(), direction);
-    flatten_bucket_stream(stream, range, bucket_size, direction)
+    flatten_bucket_stream(stream, range, bucket_size, direction).boxed()
 }
 
 /// Evaluate a DNF `BitmapQuery` as an ordered stream of relative bucket bitmaps.
@@ -200,9 +201,9 @@ where
     let streams: Vec<BucketStream> = query
         .terms
         .into_iter()
-        .map(|term| term_bucket_stream(source.clone(), term, range.clone(), direction))
+        .map(|term| term_bucket_stream(source.clone(), term, range.clone(), direction).boxed())
         .collect();
-    union_n(streams, direction)
+    union_n(streams, direction).boxed()
 }
 
 /// Evaluate one DNF term: intersect all includes, then subtract excludes.
@@ -211,7 +212,7 @@ fn term_bucket_stream<S>(
     term: BitmapTerm,
     range: Range<u64>,
     direction: ScanDirection,
-) -> BucketStream
+) -> impl Stream<Item = BucketItem> + Send + 'static
 where
     S: BitmapBucketSource,
 {
@@ -229,10 +230,7 @@ where
         .map(|key| source.scan_bucket_stream(key, range.clone(), direction))
         .collect();
 
-    let result = intersect_n(include_streams, direction);
-    if exclude.is_empty() {
-        return result;
-    }
+    let include_stream = intersect_n(include_streams, direction);
 
     let exclude_streams: Vec<BucketStream> = exclude
         .into_iter()
@@ -243,18 +241,24 @@ where
     // Stream construction above is lazy. `subtract_two` polls both sides with
     // `try_join!`, so the include intersection and exclude union are opened/read
     // concurrently when this term stream is consumed.
-    subtract_two(result, exclude_stream, direction)
+    subtract_two(include_stream, exclude_stream, direction)
 }
 
 /// Multi-way merge intersection over ordered bucket streams. Emits only those
 /// bucket_ids present in every child stream, with the bitwise AND of all their
 /// bitmaps. Drops empty results.
-pub fn intersect_n(streams: Vec<BucketStream>, direction: ScanDirection) -> BucketStream {
+pub fn intersect_n<S>(
+    streams: Vec<S>,
+    direction: ScanDirection,
+) -> impl Stream<Item = BucketItem> + Send + 'static
+where
+    S: Stream<Item = BucketItem> + Send + Unpin + 'static,
+{
     async_stream::try_stream! {
         if streams.is_empty() {
             return;
         }
-        let mut children: Vec<Peekable<BucketStream>> =
+        let mut children: Vec<Peekable<S>> =
             streams.into_iter().map(|s| s.peekable()).collect();
 
         loop {
@@ -309,17 +313,22 @@ pub fn intersect_n(streams: Vec<BucketStream>, direction: ScanDirection) -> Buck
             }
         }
     }
-    .boxed()
 }
 
 /// Multi-way merge union over ordered bucket streams. Emits every bucket_id
 /// produced by any child, with the bitwise OR of the bitmaps at that bucket.
-pub fn union_n(streams: Vec<BucketStream>, direction: ScanDirection) -> BucketStream {
+pub fn union_n<S>(
+    streams: Vec<S>,
+    direction: ScanDirection,
+) -> impl Stream<Item = BucketItem> + Send + 'static
+where
+    S: Stream<Item = BucketItem> + Send + Unpin + 'static,
+{
     async_stream::try_stream! {
         if streams.is_empty() {
             return;
         }
-        let mut children: Vec<Peekable<BucketStream>> =
+        let mut children: Vec<Peekable<S>> =
             streams.into_iter().map(|s| s.peekable()).collect();
 
         loop {
@@ -372,7 +381,6 @@ pub fn union_n(streams: Vec<BucketStream>, direction: ScanDirection) -> BucketSt
             }
         }
     }
-    .boxed()
 }
 
 /// Merge-join subtraction for an anchored negative literal.
@@ -392,16 +400,26 @@ pub fn union_n(streams: Vec<BucketStream>, direction: ScanDirection) -> BucketSt
 ///
 /// For each bucket in `a`, emits `a_bm - b_bm` if `b` has the same bucket,
 /// else emits `a_bm` unchanged. Drops empty results.
-pub fn subtract_two(a: BucketStream, b: BucketStream, direction: ScanDirection) -> BucketStream {
+pub fn subtract_two<A, B>(
+    a: A,
+    b: B,
+    direction: ScanDirection,
+) -> impl Stream<Item = BucketItem> + Send + 'static
+where
+    A: Stream<Item = BucketItem> + Send + 'static,
+    B: Stream<Item = BucketItem> + Send + 'static,
+{
     async_stream::try_stream! {
-        let mut a = a.peekable();
-        let mut b = b.peekable();
+        let a = a.peekable();
+        let b = b.peekable();
+        futures::pin_mut!(a);
+        futures::pin_mut!(b);
 
         loop {
             // The peeks poll both streams concurrently and buffer their head
             // rows; the later `next()` calls consume those buffered rows.
             let (a_peek, b_peek) =
-                futures::try_join!(peek_bucket(&mut a), peek_bucket(&mut b))?;
+                futures::try_join!(peek_bucket(a.as_mut()), peek_bucket(b.as_mut()))?;
             let Some(a_bucket) = a_peek else {
                 return;
             };
@@ -409,7 +427,8 @@ pub fn subtract_two(a: BucketStream, b: BucketStream, direction: ScanDirection) 
             match b_peek {
                 None => {
                     // No more negatives: flush a.
-                    let (bid, bitmap) = Pin::new(&mut a)
+                    let (bid, bitmap) = a
+                        .as_mut()
                         .next()
                         .await
                         .expect("peek reported a value")?;
@@ -422,7 +441,8 @@ pub fn subtract_two(a: BucketStream, b: BucketStream, direction: ScanDirection) 
                         || (!direction.is_ascending() && bb < a_bucket) =>
                 {
                     // b is ahead, emit a unchanged.
-                    let (bid, bitmap) = Pin::new(&mut a)
+                    let (bid, bitmap) = a
+                        .as_mut()
                         .next()
                         .await
                         .expect("peek reported a value")?;
@@ -435,18 +455,21 @@ pub fn subtract_two(a: BucketStream, b: BucketStream, direction: ScanDirection) 
                         || (!direction.is_ascending() && bb > a_bucket) =>
                 {
                     // b is behind; skip it.
-                    let _ = Pin::new(&mut b)
+                    let _ = b
+                        .as_mut()
                         .next()
                         .await
                         .expect("peek reported a value")?;
                 }
                 Some(_) => {
                     // Same bucket: subtract.
-                    let (bid, a_bm) = Pin::new(&mut a)
+                    let (bid, a_bm) = a
+                        .as_mut()
                         .next()
                         .await
                         .expect("peek reported a value")?;
-                    let (_, b_bm) = Pin::new(&mut b)
+                    let (_, b_bm) = b
+                        .as_mut()
                         .next()
                         .await
                         .expect("peek reported a value")?;
@@ -458,7 +481,6 @@ pub fn subtract_two(a: BucketStream, b: BucketStream, direction: ScanDirection) 
             }
         }
     }
-    .boxed()
 }
 
 /// Convert a stream of `(bucket_id, relative RoaringBitmap)` into absolute
@@ -468,9 +490,9 @@ pub fn flatten_bucket_stream<S>(
     range: Range<u64>,
     bucket_size: u64,
     direction: ScanDirection,
-) -> BoxStream<'static, Result<u64>>
+) -> impl Stream<Item = Result<u64>> + Send + 'static
 where
-    S: Stream<Item = Result<(u64, RoaringBitmap)>> + Send + 'static,
+    S: Stream<Item = BucketItem> + Send + 'static,
 {
     async_stream::try_stream! {
         if range.is_empty() {
@@ -510,13 +532,14 @@ where
             }
         }
     }
-    .boxed()
 }
 
 /// Peek at the head of a `Peekable<BucketStream>`, returning its bucket_id.
 /// If the stream's next item is an error, consumes it to propagate via `?`.
-async fn peek_bucket(s: &mut Peekable<BucketStream>) -> Result<Option<u64>> {
-    let mut s = Pin::new(s);
+async fn peek_bucket<S>(mut s: Pin<&mut Peekable<S>>) -> Result<Option<u64>>
+where
+    S: Stream<Item = BucketItem>,
+{
     let peeked = match s.as_mut().peek().await {
         None => None,
         Some(Ok((b, _))) => Some(Ok(*b)),
@@ -534,8 +557,16 @@ async fn peek_bucket(s: &mut Peekable<BucketStream>) -> Result<Option<u64>> {
     }
 }
 
-async fn peek_buckets(streams: &mut [Peekable<BucketStream>]) -> Result<Vec<Option<u64>>> {
-    futures::future::try_join_all(streams.iter_mut().map(peek_bucket)).await
+async fn peek_buckets<S>(streams: &mut [Peekable<S>]) -> Result<Vec<Option<u64>>>
+where
+    S: Stream<Item = BucketItem> + Unpin,
+{
+    futures::future::try_join_all(
+        streams
+            .iter_mut()
+            .map(|stream| peek_bucket(Pin::new(stream))),
+    )
+    .await
 }
 
 fn complete_peeks(peeks: Vec<Option<u64>>) -> Option<(Vec<u64>, u64)> {
@@ -602,14 +633,14 @@ mod tests {
     }
 
     fn make_bucket_stream(items: Vec<(u64, &[u32])>) -> BucketStream {
-        let items: Vec<Result<(u64, RoaringBitmap)>> = items
+        let items: Vec<BucketItem> = items
             .into_iter()
             .map(|(bid, bits)| Ok((bid, make_bitmap(bits))))
             .collect();
         stream::iter(items).boxed()
     }
 
-    fn collect_bitmap_items(items: Vec<Result<(u64, RoaringBitmap)>>) -> Vec<(u64, Vec<u32>)> {
+    fn collect_bitmap_items(items: Vec<BucketItem>) -> Vec<(u64, Vec<u32>)> {
         items
             .into_iter()
             .map(|r| {
@@ -731,7 +762,7 @@ mod tests {
         let stream: BucketStream = stream::iter(vec![Err(anyhow::anyhow!("boom"))]).boxed();
         let mut stream = stream.peekable();
 
-        let err = peek_bucket(&mut stream).await.unwrap_err();
+        let err = peek_bucket(Pin::new(&mut stream)).await.unwrap_err();
 
         assert!(err.to_string().contains("boom"));
         assert!(stream.next().await.is_none());
@@ -793,8 +824,8 @@ mod tests {
             dropped: Arc<AtomicBool>,
         }
 
-        impl<S: Stream<Item = Result<(u64, RoaringBitmap)>> + Unpin> Stream for ObserveDrop<S> {
-            type Item = Result<(u64, RoaringBitmap)>;
+        impl<S: Stream<Item = BucketItem> + Unpin> Stream for ObserveDrop<S> {
+            type Item = BucketItem;
             fn poll_next(
                 mut self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
@@ -817,7 +848,8 @@ mod tests {
         .boxed();
         let long = make_bucket_stream(vec![(0, &[2]), (1, &[3]), (2, &[4])]);
 
-        let mut merged = union_n(vec![short, long], ScanDirection::Ascending);
+        let merged = union_n(vec![short, long], ScanDirection::Ascending);
+        futures::pin_mut!(merged);
 
         // Bucket 0 merges both children; the short stream is now exhausted
         // underneath but eviction has not run yet — it happens on the next
