@@ -290,10 +290,20 @@ pub fn verify_sender_signed_data_message_signatures_verified(
         .into());
     }
 
-    let required_signers: Vec<SuiAddress> = intent_message
+    // Build (canonical_sender, aliases) pairs. When a sender is absent from
+    // aliased_addresses, its alias set defaults to {sender} (the typical case).
+    let required_signers: Vec<(SuiAddress, Vec<SuiAddress>)> = intent_message
         .value
         .required_signers()
         .into_iter()
+        .map(|signer| {
+            let aliases = aliased_addresses
+                .iter()
+                .find(|(addr, _)| *addr == signer)
+                .map(|(_, a)| a.iter().cloned().collect())
+                .unwrap_or_else(|| vec![signer]);
+            (signer, aliases)
+        })
         .collect();
 
     // System transactions are unconditionally valid; return sequential indices.
@@ -316,16 +326,10 @@ pub fn verify_sender_signed_data_message_signatures_verified(
         })
         .collect();
 
-    let aliases: Vec<(SuiAddress, Vec<SuiAddress>)> = aliased_addresses
-        .into_iter()
-        .map(|(addr, aliases)| (addr, aliases.into_iter().collect()))
-        .collect();
-
     sui_types_verified::signature_verification::verify_signatures(
         &verifiable_sigs,
         &required_signers,
         current_epoch,
-        &aliases,
     )
     .map_err(sig_verify_err_to_sui)
 }
