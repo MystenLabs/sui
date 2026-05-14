@@ -1,3 +1,4 @@
+TEST 
 # To add a new native Move function
 
 1. Add a new `./sui-framework/{name}.move` file or find an appropriate `.move`.
