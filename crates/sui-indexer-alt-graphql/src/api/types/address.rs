@@ -222,7 +222,7 @@ impl Address {
 
     /// How this address (interpreted as an object ID) was referenced by a specific transaction.
     ///
-    /// Returns `null` if the address was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
+    /// Returns `null` if the object was not referenced, or was present only as a non-object marker variant of unchanged consensus input (e.g. cancelled, stream-ended, per-epoch).
     ///
     /// In an `events` subscription, the `transactionDigest` argument may be omitted; the field then resolves against the transaction that emitted the parent event.
     ///

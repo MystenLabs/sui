@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 4 tasks
+processed 12 tasks
 
 init:
 A: object(0,0)
@@ -36,6 +36,129 @@ Response: {
     },
     "notReferenced": {
       "asTransactionObject": null
+    }
+  }
+}
+
+task 4, lines 42-65:
+//# publish
+created: object(4,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6680400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 5, line 67:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 6, lines 69-71:
+//# programmable --sender A --inputs 7u64 @A
+//> 0: P::M::create_object(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1));
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 73:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 8, lines 75-76:
+//# programmable --sender A --inputs object(6,0) 99u64
+//> 0: P::M::mutate_and_emit(Input(0), Input(1));
+events: Event { package_id: P, transaction_module: Identifier("M"), sender: A, type_: StructTag { address: P, module: Identifier("M"), name: Identifier("TestAddressEvent"), type_params: [] }, contents: [62, 219, 117, 132, 227, 135, 32, 1, 102, 151, 41, 1, 101, 98, 132, 247, 88, 218, 211, 19, 164, 9, 23, 115, 161, 29, 20, 131, 114, 1, 203, 163] }
+mutated: object(0,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 2302344, non_refundable_storage_fee: 23256
+
+task 9, line 78:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 10, lines 80-105:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionEffects": {
+      "events": {
+        "nodes": [
+          {
+            "contents": {
+              "extract": {
+                "asAddress": {
+                  "asTransactionObject": {
+                    "__typename": "ObjectChange",
+                    "inputState": {
+                      "asMoveObject": {
+                        "contents": {
+                          "json": {
+                            "id": "0x3edb7584e387200166972901656284f758dad313a4091773a11d14837201cba3",
+                            "value": "7"
+                          }
+                        }
+                      }
+                    },
+                    "outputState": {
+                      "asMoveObject": {
+                        "contents": {
+                          "json": {
+                            "id": "0x3edb7584e387200166972901656284f758dad313a4091773a11d14837201cba3",
+                            "value": "99"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+task 11, lines 107-134:
+//# run-graphql
+Response: {
+  "data": {
+    "transaction": {
+      "effects": {
+        "events": {
+          "nodes": [
+            {
+              "contents": {
+                "extract": {
+                  "asAddress": {
+                    "asTransactionObject": {
+                      "__typename": "ObjectChange",
+                      "inputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "json": {
+                              "id": "0x3edb7584e387200166972901656284f758dad313a4091773a11d14837201cba3",
+                              "value": "7"
+                            }
+                          }
+                        }
+                      },
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "json": {
+                              "id": "0x3edb7584e387200166972901656284f758dad313a4091773a11d14837201cba3",
+                              "value": "99"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
     }
   }
 }
