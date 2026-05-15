@@ -54,6 +54,16 @@ pub struct Function {
 pub enum ModuleRef {
     Qualified(ModuleId<Symbol>),
     Aliased(Symbol),
+    /// No module prefix — for macros and other unqualified builtins. The `Symbol` in the
+    /// containing `Call` is rendered alone, e.g. `assert!`. `Display` emits an empty string;
+    /// the Call printers detect this variant and skip the `::` separator.
+    Builtin,
+}
+
+impl ModuleRef {
+    pub fn is_builtin(&self) -> bool {
+        matches!(self, ModuleRef::Builtin)
+    }
 }
 
 impl std::fmt::Display for ModuleRef {
@@ -61,6 +71,7 @@ impl std::fmt::Display for ModuleRef {
         match self {
             ModuleRef::Qualified(mid) => write!(f, "{mid}"),
             ModuleRef::Aliased(name) => write!(f, "{name}"),
+            ModuleRef::Builtin => Ok(()),
         }
     }
 }
@@ -589,8 +600,15 @@ impl std::fmt::Display for Exp {
                 }
                 Exp::Call((module_name, fun_name), exps) => {
                     indent(f, level)?;
-                    write!(f, "{module_name}::{fun_name}(")?;
-                    for exp in exps {
+                    if module_name.is_builtin() {
+                        write!(f, "{fun_name}(")?;
+                    } else {
+                        write!(f, "{module_name}::{fun_name}(")?;
+                    }
+                    for (i, exp) in exps.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
                         fmt_exp(f, exp, level)?;
                     }
                     writeln!(f, ")")

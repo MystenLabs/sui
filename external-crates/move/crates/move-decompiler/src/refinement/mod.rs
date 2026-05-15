@@ -10,6 +10,7 @@ mod hoist_arm_assignments;
 mod introduce_while;
 mod loop_to_seq;
 mod reconstruct_match;
+mod recover_asserts;
 mod remove_trailing_continue;
 mod remove_trailing_return;
 mod strip_loop_labels;
@@ -25,6 +26,7 @@ const REFINEMENTS: &[Refinement] = &[
     introduce_while::refine,
     loop_to_seq::refine,
     reconstruct_match::refine,
+    recover_asserts::refine,
     remove_trailing_continue::refine,
     remove_trailing_return::refine,
     strip_loop_labels::refine,
