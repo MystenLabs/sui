@@ -9541,10 +9541,12 @@ dependencies = [
  "mysten-metrics",
  "once_cell",
  "parking_lot 0.12.3",
+ "prost-types 0.14.1",
  "rand 0.8.5",
  "serde_json",
  "sui-macros",
  "tempfile",
+ "thiserror 1.0.69",
  "tokio",
  "tracing",
 ]
