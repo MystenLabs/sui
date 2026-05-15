@@ -12,11 +12,10 @@ use itertools::Itertools;
 use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
-use tokio::sync::broadcast;
 use tracing::{info, warn};
 
 use crate::{
-    AuxiliaryDataHandler, BlockAPI as _, CommitConsumerArgs,
+    BlockAPI as _, CommitConsumerArgs, RandomnessSignatureHandler,
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_sync_service::BlockSyncService,
@@ -71,12 +70,7 @@ impl ConsensusAuthority {
         // has been running. It's useful for making decisions on whether amnesia recovery should run.
         // When `boot_counter` is 0, `ConsensusAuthority` will initiate the process of amnesia recovery if that's enabled in the parameters.
         boot_counter: u64,
-        // Broadcast sender for randomness signatures. ObserverService subscribes to push
-        // signatures to connected observer peers.
-        randomness_signatures: broadcast::Sender<bytes::Bytes>,
-        // Handler for auxiliary data from the block stream (e.g. randomness signatures).
-        // Only set for observer nodes.
-        auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         match network_type {
             NetworkType::Tonic => {
@@ -92,8 +86,7 @@ impl ConsensusAuthority {
                     commit_consumer,
                     registry,
                     boot_counter,
-                    randomness_signatures,
-                    auxiliary_data_handler,
+                    randomness_signature_handler,
                 )
                 .await;
                 Self::WithTonic(authority)
@@ -185,8 +178,7 @@ where
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         boot_counter: u64,
-        randomness_signatures: broadcast::Sender<bytes::Bytes>,
-        auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         let metrics = initialise_metrics(registry);
 
@@ -464,7 +456,7 @@ where
                     transaction_vote_tracker.clone(),
                     synchronizer.clone(),
                     block_sync_service.clone(),
-                    randomness_signatures.clone(),
+                    randomness_signature_handler.clone(),
                 ));
                 network_manager
                     .start_observer_server(observer_service)
@@ -485,7 +477,7 @@ where
                 transaction_vote_tracker.clone(),
                 synchronizer.clone(),
                 block_sync_service.clone(),
-                randomness_signatures.clone(),
+                randomness_signature_handler.clone(),
             ));
 
             let observer_subscriber = ObserverSubscriber::new(
@@ -493,7 +485,7 @@ where
                 observer_client,
                 observer_service.clone(),
                 dag_state.clone(),
-                auxiliary_data_handler,
+                randomness_signature_handler,
             );
 
             network_manager
@@ -678,7 +670,6 @@ mod tests {
             commit_consumer,
             registry,
             0,
-            broadcast::channel(1).0,
             None,
         )
         .await;
@@ -721,7 +712,6 @@ mod tests {
             commit_consumer,
             registry,
             0,
-            broadcast::channel(1).0,
             None,
         )
         .await;
@@ -838,7 +828,6 @@ mod tests {
             observer_commit_consumer,
             Registry::new(),
             0,
-            broadcast::channel(1).0,
             None,
         )
         .await;
@@ -1275,7 +1264,6 @@ mod tests {
             commit_consumer,
             registry,
             boot_counter,
-            broadcast::channel(1).0,
             None,
         )
         .await;

@@ -4,7 +4,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use consensus_core::AuxiliaryDataHandler;
 use fastcrypto::groups::bls12381;
 use fastcrypto_tbls::{tbls::ThresholdBls, types::ThresholdBls12381MinSig};
 use mysten_common::debug_fatal_no_invariant;
@@ -40,6 +39,7 @@ const AUXILIARY_DATA_CHANNEL_SIZE: usize = 1000;
 pub struct RandomnessRoundReceiverHandle {
     consensus_signatures_tx: mysten_metrics::monitored_mpsc::Sender<bytes::Bytes>,
     vss_pk_tx: watch::Sender<Option<bls12381::G2Element>>,
+    signatures_broadcast: broadcast::Sender<bytes::Bytes>,
     _task_handle: JoinHandle<()>,
 }
 
@@ -63,21 +63,27 @@ impl RandomnessRoundReceiverHandle {
         let (consensus_signatures_tx, _) =
             mysten_metrics::monitored_mpsc::channel("test_auxiliary", 1);
         let (vss_pk_tx, _) = watch::channel(None);
+        let (signatures_broadcast, _) = broadcast::channel(1);
         Arc::new(Self {
             consensus_signatures_tx,
             vss_pk_tx,
+            signatures_broadcast,
             _task_handle: tokio::spawn(futures::future::pending()),
         })
     }
 }
 
-impl AuxiliaryDataHandler for RandomnessRoundReceiverHandle {
+impl consensus_core::RandomnessSignatureHandler for RandomnessRoundReceiverHandle {
     fn handle_randomness_signature(&self, data: bytes::Bytes) {
         if let Err(e) = self.consensus_signatures_tx.try_send(data) {
             warn!(
                 "RandomnessRoundReceiverHandle: failed to forward randomness round signature: {e}"
             );
         }
+    }
+
+    fn subscribe_randomness_signatures(&self) -> broadcast::Receiver<bytes::Bytes> {
+        self.signatures_broadcast.subscribe()
     }
 }
 
@@ -93,18 +99,13 @@ pub struct RandomnessRoundReceiver {
 }
 
 impl RandomnessRoundReceiver {
-    /// Spawns the receiver loop and returns the broadcast sender for randomness
-    /// signatures and the shared handle.
+    /// Spawns the receiver loop and returns the shared handle.
     pub fn spawn(
         authority_state: Arc<AuthorityState>,
         randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
-    ) -> (
-        broadcast::Sender<bytes::Bytes>,
-        Arc<RandomnessRoundReceiverHandle>,
-    ) {
+    ) -> Arc<RandomnessRoundReceiverHandle> {
         let (signatures_broadcast, _) =
             broadcast::channel::<bytes::Bytes>(SIGNATURES_BROADCAST_CAPACITY);
-        let broadcast_sender = signatures_broadcast.clone();
 
         let (consensus_signatures_tx, consensus_signatures_rx) =
             mysten_metrics::monitored_mpsc::channel(
@@ -118,17 +119,16 @@ impl RandomnessRoundReceiver {
             randomness_rx,
             consensus_signatures_rx,
             vss_pk_rx,
-            signatures_broadcast,
+            signatures_broadcast: signatures_broadcast.clone(),
         };
         let task_handle = spawn_monitored_task!(rrr.run());
 
-        let handle = Arc::new(RandomnessRoundReceiverHandle {
+        Arc::new(RandomnessRoundReceiverHandle {
             consensus_signatures_tx,
             vss_pk_tx,
+            signatures_broadcast,
             _task_handle: task_handle,
-        });
-
-        (broadcast_sender, handle)
+        })
     }
 
     async fn run(mut self) {
@@ -314,7 +314,7 @@ impl RandomnessRoundReceiver {
 mod tests {
     use super::*;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use consensus_core::AuxiliaryDataHandler;
+    use consensus_core::RandomnessSignatureHandler;
     use fastcrypto::groups::{GroupElement, HashToGroupElement, bls12381};
 
     fn generate_keypair() -> (bls12381::Scalar, bls12381::G2Element) {
@@ -347,8 +347,8 @@ mod tests {
         let epoch = state.epoch_store_for_testing().epoch();
 
         let (_randomness_tx, randomness_rx) = mpsc::channel(1);
-        let (signatures_broadcast, handle) = RandomnessRoundReceiver::spawn(state, randomness_rx);
-        let mut sig_rx = signatures_broadcast.subscribe();
+        let handle = RandomnessRoundReceiver::spawn(state, randomness_rx);
+        let mut sig_rx = handle.subscribe_randomness_signatures();
 
         handle.set_public_key(pk);
         tokio::task::yield_now().await;
@@ -369,8 +369,8 @@ mod tests {
         let state = TestAuthorityBuilder::new().build().await;
 
         let (_randomness_tx, randomness_rx) = mpsc::channel(1);
-        let (signatures_broadcast, handle) = RandomnessRoundReceiver::spawn(state, randomness_rx);
-        let mut sig_rx = signatures_broadcast.subscribe();
+        let handle = RandomnessRoundReceiver::spawn(state, randomness_rx);
+        let mut sig_rx = handle.subscribe_randomness_signatures();
 
         handle.set_public_key(pk);
         tokio::task::yield_now().await;
@@ -389,8 +389,8 @@ mod tests {
         let epoch = state.epoch_store_for_testing().epoch();
 
         let (_randomness_tx, randomness_rx) = mpsc::channel(1);
-        let (signatures_broadcast, handle) = RandomnessRoundReceiver::spawn(state, randomness_rx);
-        let mut sig_rx = signatures_broadcast.subscribe();
+        let handle = RandomnessRoundReceiver::spawn(state, randomness_rx);
+        let mut sig_rx = handle.subscribe_randomness_signatures();
 
         // Send before DKG completes — should buffer.
         let round = RandomnessRound(1);
@@ -421,8 +421,8 @@ mod tests {
         let epoch = state.epoch_store_for_testing().epoch();
 
         let (_randomness_tx, randomness_rx) = mpsc::channel(1);
-        let (signatures_broadcast, handle) = RandomnessRoundReceiver::spawn(state, randomness_rx);
-        let mut sig_rx = signatures_broadcast.subscribe();
+        let handle = RandomnessRoundReceiver::spawn(state, randomness_rx);
+        let mut sig_rx = handle.subscribe_randomness_signatures();
 
         // Set key, verify a signature flows through.
         handle.set_public_key(pk);

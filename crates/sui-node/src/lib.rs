@@ -284,10 +284,6 @@ pub struct SuiNode {
     // Channel to allow signaling upstream to shutdown sui-node
     shutdown_channel_tx: broadcast::Sender<Option<RunWithRange>>,
 
-    /// Broadcast sender for randomness signatures. Consensus subscribes
-    /// to forward the signatures to peers that sync consensus state (Observers).
-    signatures_broadcast: broadcast::Sender<bytes::Bytes>,
-
     /// Handle shared with RandomnessManager and the consensus layer.
     randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
 
@@ -822,7 +818,8 @@ impl SuiNode {
 
         // Start the loop that receives new randomness and generates transactions for it.
         // The returned broadcast sender and handle are long-lived (node lifetime).
-        let (signatures_broadcast, randomness_receiver_handle) =
+        // Start the loop that receives new randomness and generates transactions for it.
+        let randomness_receiver_handle =
             RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
 
         let (end_of_epoch_channel, end_of_epoch_receiver) =
@@ -894,7 +891,6 @@ impl SuiNode {
                 sui_node_metrics.clone(),
                 checkpoint_metrics.clone(),
                 node_role,
-                signatures_broadcast.clone(),
                 randomness_receiver_handle.clone(),
                 randomness_tx_clone.clone(),
             )
@@ -957,7 +953,6 @@ impl SuiNode {
 
             _state_snapshot_uploader_handle: state_snapshot_handle,
             shutdown_channel_tx: shutdown_channel,
-            signatures_broadcast,
             randomness_receiver_handle,
             randomness_tx: randomness_tx_clone,
 
@@ -1299,7 +1294,6 @@ impl SuiNode {
         sui_node_metrics: Arc<SuiNodeMetrics>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
-        randomness_signatures_broadcast: tokio::sync::broadcast::Sender<bytes::Bytes>,
         randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
         randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
     ) -> Result<ValidatorComponents> {
@@ -1327,7 +1321,6 @@ impl SuiNode {
             registry_service,
             client,
             node_role,
-            randomness_signatures_broadcast,
         ));
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
@@ -1498,8 +1491,8 @@ impl SuiNode {
                 sui_tx_validator_metrics.clone(),
             );
             let consensus_manager = consensus_manager.clone();
-            let auxiliary_data_handler: Arc<dyn consensus_core::AuxiliaryDataHandler> =
-                randomness_receiver_handle.clone();
+            let handler: Arc<dyn consensus_core::RandomnessSignatureHandler> =
+                randomness_receiver_handle;
             async move {
                 consensus_manager
                     .start(
@@ -1507,7 +1500,7 @@ impl SuiNode {
                         epoch_store,
                         consensus_handler_initializer,
                         sui_tx_validator,
-                        Some(auxiliary_data_handler),
+                        Some(handler),
                     )
                     .await;
             }
@@ -2009,7 +2002,6 @@ impl SuiNode {
                         self.metrics.clone(),
                         self.checkpoint_metrics.clone(),
                         new_role,
-                        self.signatures_broadcast.clone(),
                         self.randomness_receiver_handle.clone(),
                         self.randomness_tx.clone(),
                     )

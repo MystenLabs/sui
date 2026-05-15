@@ -66,7 +66,7 @@ pub use commit::{CommitAPI, CommitDigest, CommitIndex, CommitRange, CommitRef, C
 pub use commit_consumer::{CommitConsumerArgs, CommitConsumerMonitor};
 pub use context::Clock;
 pub use metrics::Metrics;
-pub use network::AuxiliaryDataHandler;
+pub use network::RandomnessSignatureHandler;
 pub use transaction::{
     BlockStatus, ClientError, TransactionClient, TransactionVerifier, ValidationError,
 };
