@@ -240,12 +240,9 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
 }
 
 /// Trait for handling auxiliary data received from the observer block stream.
-/// Defined in the consensus layer, implemented by the application layer (sui-core).
-/// Follows the same boundary-crossing pattern as `TransactionVerifier`.
 pub trait AuxiliaryDataHandler: Send + Sync + 'static {
-    /// Called by the observer subscriber for each piece of auxiliary data received.
-    /// Must be non-blocking; implementations should buffer internally if needed.
-    fn handle(&self, data: Bytes);
+    /// Called by the observer subscriber for each randomness round signature that exists in auxiliary data.
+    fn handle_randomness_signature(&self, data: Bytes);
 }
 
 /// A single item in the observer block stream, carrying both blocks and auxiliary data.
@@ -277,10 +274,6 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
         highest_round_per_authority: Vec<u64>,
     ) -> ConsensusResult<ObserverBlockStream>;
 
-    /// Returns true if the local commit index is lagging too far behind the quorum.
-    /// Used to gate auxiliary data forwarding during catch-up.
-    fn is_commit_lagging(&self) -> bool;
-
     /// Handles the request to fetch blocks by references from an observer peer.
     #[allow(unused)]
     async fn handle_fetch_blocks(
@@ -299,6 +292,9 @@ pub(crate) trait ObserverNetworkService: Send + Sync + 'static {
         peer: NodeId,
         commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
+
+    /// Returns true if the local commit index is lagging too far behind the quorum.
+    fn is_commit_lagging(&self) -> bool;
 }
 
 /// Observer network client for communicating with validators' observer ports or other observers.

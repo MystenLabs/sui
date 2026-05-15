@@ -20,7 +20,7 @@ use crate::execution_cache::build_execution_cache;
 use crate::jsonrpc_index::IndexStore;
 use crate::mock_consensus::{ConsensusMode, MockConsensusClient};
 use crate::module_cache_metrics::ResolverMetrics;
-use crate::randomness_signature_observer::RandomnessSignatureObserver;
+use crate::randomness_round_receiver::RandomnessRoundReceiverHandle;
 use crate::rpc_index::RpcIndexStore;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
@@ -432,14 +432,12 @@ impl<'a> TestAuthorityBuilder<'a> {
                 Arc::downgrade(&state),
                 ConsensusMode::Noop,
             ));
-            let (randomness_tx, _randomness_rx) = tokio::sync::mpsc::channel(1);
-            let signature_observer = Arc::new(RandomnessSignatureObserver::start(randomness_tx));
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 consensus_client,
                 randomness::Handle::new_stub(),
                 Some(config.protocol_key_pair()),
-                signature_observer,
+                RandomnessRoundReceiverHandle::new_for_testing(),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {
