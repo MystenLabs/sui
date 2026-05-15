@@ -673,10 +673,6 @@ fn find_common_addr<Addr: PartialEq + Eq + Copy>(
 /// Derive addresses for every signature in one pass.
 /// Returns `Err` if any signature is malformed, otherwise `Ok(sig_addrs)`
 /// where `sig_addrs[i]@.to_set() == spec_addresses(tx_signatures, i)`.
-///
-/// Trusted (`external_body`) — the loop is a simple utility whose spec
-/// captures exactly the connection between the exec Vec and spec predicates.
-#[verifier::external_body]
 fn derive_all_addresses<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
     tx_signatures: &[S],
 ) -> (result: Result<Vec<Vec<Addr>>, SigVerifyError>)
@@ -691,12 +687,63 @@ fn derive_all_addresses<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Cop
 {
     let n = tx_signatures.len();
     let mut sig_addrs: Vec<Vec<Addr>> = Vec::with_capacity(n);
-    for i in 0..n {
+
+    for i in 0..n
+        invariant
+            n == tx_signatures@.len(),
+            sig_addrs@.len() == i,
+            // Every position processed so far has correct addresses
+            forall|m: int| 0 <= m < i as int ==>
+                #[trigger] sig_addrs@[m]@.to_set()
+                    =~= spec_addresses::<S, Addr>(tx_signatures, m),
+            // No derivation failure seen yet
+            forall|m: int| 0 <= m < i as int ==>
+                !spec_addr_derivation_fails(tx_signatures, m),
+    {
         match tx_signatures[i].try_derive_addresses() {
-            Ok(addrs) => sig_addrs.push(addrs),
-            Err(_) => return Err(SigVerifyError::AddressDerivationFailed),
+            Ok(addrs) => {
+                proof {
+                    // trait ensures: r matches Err(_) <==> spec_sig_addr_fails(self)
+                    // we have Ok, so !spec_sig_addr_fails(&tx_signatures@[i])
+                    assert(!spec_sig_addr_fails(&tx_signatures@[i as int]));
+                    assert(!spec_addr_derivation_fails(tx_signatures, i as int));
+                    // trait ensures: r->Ok_0@.to_set() == spec_sig_addresses(self)
+                    //                              = spec_addresses(tx_signatures, i)
+                    assert(addrs@.to_set()
+                        =~= spec_addresses::<S, Addr>(tx_signatures, i as int));
+                }
+                sig_addrs.push(addrs);
+                proof {
+                    // vstd push: sig_addrs@ =~= old@ + seq![addrs]
+                    // so sig_addrs@[i] == addrs
+                    assert(sig_addrs@[i as int]@.to_set()
+                        =~= spec_addresses::<S, Addr>(tx_signatures, i as int));
+                }
+            }
+            Err(_) => {
+                proof {
+                    // trait ensures: Err <==> spec_sig_addr_fails(self)
+                    assert(spec_sig_addr_fails(&tx_signatures@[i as int]));
+                    assert(spec_addr_derivation_fails(tx_signatures, i as int));
+                    // therefore spec_any_addr_derivation_fails holds
+                    assert(spec_any_addr_derivation_fails(tx_signatures));
+                }
+                return Err(SigVerifyError::AddressDerivationFailed);
+            }
         }
     }
+
+    proof {
+        // All positions processed with no failure → !spec_any_addr_derivation_fails
+        assert(!spec_any_addr_derivation_fails(tx_signatures)) by {
+            assert forall|m: int| 0 <= m < tx_signatures@.len() implies
+                !spec_addr_derivation_fails(tx_signatures, m)
+            by {
+                // From loop invariant at i=n: forall m < n, !spec_addr_derivation_fails
+            };
+        };
+    }
+
     Ok(sig_addrs)
 }
 
