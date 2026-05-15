@@ -7,7 +7,7 @@ use crate::{
     PreCompiledProgramInfo,
     cfgir::{
         CFGContext,
-        absint::{AbstractDomain, JoinResult, TransferFunctions, analyze_function},
+        absint::{AbstractDomain, JoinResult, TransferFunctions},
         ast as G,
         cfg::ImmForwardCFG,
     },
@@ -546,8 +546,9 @@ pub trait SimpleAbsIntConstructor: Sized {
         let Some(mut ai) = Self::new(context, cfg, &mut init_state) else {
             return Diagnostics::new();
         };
-        let (final_state, ds) = analyze_function(&mut ai, cfg, init_state);
-        ai.finish(final_state, ds)
+        let (final_states, ds) =
+            crate::cfgir::absint::analyze_function_with_post_states(&mut ai, cfg, init_state);
+        ai.finish(final_states, ds)
     }
 }
 
@@ -556,21 +557,36 @@ pub trait SimpleAbsInt: Sized {
     /// The execution context local to a command
     type ExecutionContext: SimpleExecutionContext;
 
-    /// A hook for an additional processing after visiting all codes. The `final_states` are the
-    /// pre-states for each block (keyed by the label for the block). The `diags` are collected from
+    /// A hook for an additional processing after visiting all codes. The `final_states` give the
+    /// pre- and post-states for each block (keyed by the label for the block); the post-state is
+    /// `None` if the block was never processed (e.g. unreachable). The `diags` are collected from
     /// all code visited.
     fn finish(
         &mut self,
-        final_states: BTreeMap<Label, Self::State>,
+        final_states: BTreeMap<Label, crate::cfgir::absint::BlockStates<Self::State>>,
         diags: Diagnostics,
     ) -> Diagnostics;
 
-    /// A hook for any pre-processing at the start of a command
-    fn start_command(&self, pre: &mut Self::State) -> Self::ExecutionContext;
+    /// Called once at the start of each block, with the block's pre-state.
+    fn start_block(&mut self, _label: Label, _pre: &Self::State) {}
 
-    /// A hook for any post-processing after a command has been visited
+    /// Called once at the end of each processed block, with the block's post-state.
+    fn finish_block(&mut self, _label: Label, _post: &Self::State) {}
+
+    /// A hook for any pre-processing at the start of a command, with the enclosing block's
+    /// label and the command's index in that block.
+    fn start_command(
+        &self,
+        label: Label,
+        idx: usize,
+        pre: &mut Self::State,
+    ) -> Self::ExecutionContext;
+
+    /// A hook for any post-processing after a command has been visited.
     fn finish_command(
         &self,
+        label: Label,
+        idx: usize,
         context: Self::ExecutionContext,
         state: &mut Self::State,
     ) -> Diagnostics;
@@ -809,16 +825,24 @@ pub fn default_values<V: Clone + Default>(c: usize) -> Vec<V> {
 impl<V: SimpleAbsInt> TransferFunctions for V {
     type State = V::State;
 
+    fn start_block(&mut self, label: Label, pre: &Self::State) {
+        SimpleAbsInt::start_block(self, label, pre)
+    }
+
+    fn finish_block(&mut self, label: Label, post: &Self::State) {
+        SimpleAbsInt::finish_block(self, label, post)
+    }
+
     fn execute(
         &mut self,
         pre: &mut Self::State,
-        _lbl: Label,
-        _idx: usize,
+        lbl: Label,
+        idx: usize,
         cmd: &Command,
     ) -> Diagnostics {
-        let mut context = self.start_command(pre);
+        let mut context = self.start_command(lbl, idx, pre);
         self.command(&mut context, pre, cmd);
-        self.finish_command(context, pre)
+        self.finish_command(lbl, idx, context, pre)
     }
 }
 
