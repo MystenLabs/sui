@@ -8,14 +8,14 @@ module enums::colors;
 // -- enums -- 
 
 public enum Color has copy, drop {
-    Red {},
-    Green {},
-    Blue {},
+    Red,
+    Green,
+    Blue,
 }
 
 // -- functions -- 
 
-public fun is_blue(l0: enums::colors::Color): bool {
+public fun is_blue(l0: Color): bool {
     let l3 = l0;
     let l2 = &l3;
     let l1 = match (l2) {
@@ -33,7 +33,7 @@ public fun is_blue(l0: enums::colors::Color): bool {
     return l1
 }
 
-public fun is_green(l0: enums::colors::Color): bool {
+public fun is_green(l0: Color): bool {
     let l3 = l0;
     let l2 = &l3;
     let l1 = match (l2) {
@@ -51,7 +51,7 @@ public fun is_green(l0: enums::colors::Color): bool {
     return l1
 }
 
-public fun is_red(l0: enums::colors::Color): bool {
+public fun is_red(l0: Color): bool {
     let l3 = l0;
     let l2 = &l3;
     let l1 = match (l2) {
