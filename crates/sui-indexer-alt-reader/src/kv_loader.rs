@@ -304,15 +304,32 @@ impl KvLoader {
     /// Resolve a checkpoint digest to its sequence number. Returns `None` if the digest is not
     /// found in the configured reader. Used by `Query.checkpoint(digest:)` to translate a
     /// caller-supplied digest into the sequence number that downstream resolvers consume.
+    ///
+    /// Only the PG path goes through the DataLoader (its `Loader<CheckpointDigestKey>` impl can
+    /// batch via `eq_any`). The BigTable and LedgerGrpc paths call the reader directly because
+    /// their backends only support single-digest lookup, so DataLoader can't add real batching;
+    /// it would only fan keys out into N parallel backend requests.
     pub async fn load_one_checkpoint_seq_by_digest(
         &self,
         digest: CheckpointDigest,
     ) -> Result<Option<u64>, Error> {
-        let key = CheckpointDigestKey(digest);
         match self {
-            Self::Bigtable(loader) => loader.load_one(key).await,
-            Self::Pg(loader) => loader.load_one(key).await,
-            Self::LedgerGrpc(loader) => loader.load_one(key).await,
+            Self::Pg(loader) => loader.load_one(CheckpointDigestKey(digest)).await,
+            Self::Bigtable(loader) => {
+                let checkpoint = loader
+                    .loader()
+                    .checkpoint_by_digest(digest)
+                    .await
+                    .map_err(Error::from)?;
+                Ok(checkpoint
+                    .and_then(|c| c.summary)
+                    .map(|s| s.sequence_number))
+            }
+            Self::LedgerGrpc(loader) => loader
+                .loader()
+                .checkpoint_seq_by_digest(digest)
+                .await
+                .map_err(Error::from),
         }
     }
 
