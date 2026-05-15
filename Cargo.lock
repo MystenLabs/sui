@@ -16134,7 +16134,6 @@ dependencies = [
  "bin-version",
  "bytes",
  "clap",
- "consensus-core",
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",

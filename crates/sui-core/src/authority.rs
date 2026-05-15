@@ -6370,29 +6370,33 @@ pub struct RandomnessSignatureMessage {
     pub signature_bytes: Vec<u8>,
 }
 
-/// Broadcast sender type for randomness round signatures to observer peers.
-pub type RandomnessSignatureBroadcast = broadcast::Sender<bytes::Bytes>;
+const SIGNATURES_BROADCAST_CAPACITY: usize = 1000;
 
 pub struct RandomnessRoundReceiver {
     authority_state: Arc<AuthorityState>,
     randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
-    /// Best-effort broadcast of verified signatures to observer peers.
-    /// ObserverService subscribes per connection to push on the block stream.
-    signatures_broadcast: RandomnessSignatureBroadcast,
+    /// Best-effort broadcast of verified signatures. Primarily used for propagating the
+    /// signatures via consensus to non-committee peers (observers) syncing their state via consensus
+    /// from a read-only capacity.
+    signatures_broadcast: broadcast::Sender<bytes::Bytes>,
 }
 
 impl RandomnessRoundReceiver {
+    /// Spawns the receiver loop and returns the broadcast sender for randomness
+    /// signatures alongside the task handle.
     pub fn spawn(
         authority_state: Arc<AuthorityState>,
         randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
-        signatures_broadcast: RandomnessSignatureBroadcast,
-    ) -> JoinHandle<()> {
+    ) -> (broadcast::Sender<bytes::Bytes>, JoinHandle<()>) {
+        let (signatures_broadcast, _) =
+            broadcast::channel::<bytes::Bytes>(SIGNATURES_BROADCAST_CAPACITY);
+        let sender = signatures_broadcast.clone();
         let rrr = RandomnessRoundReceiver {
             authority_state,
             randomness_rx,
             signatures_broadcast,
         };
-        spawn_monitored_task!(rrr.run())
+        (sender, spawn_monitored_task!(rrr.run()))
     }
 
     async fn run(mut self) {
