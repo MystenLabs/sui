@@ -47,6 +47,10 @@ use sui_types::object::Owner;
 use sui_types::storage::BackingPackageStore;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::EpochInfo;
+use sui_types::storage::LedgerBitmapBucket;
+use sui_types::storage::LedgerBitmapBucketIterator;
+use sui_types::storage::LedgerTxSeqDigest;
+use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::TransactionInfo;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::sui_system_state::SuiSystemStateTrait;
@@ -80,7 +84,9 @@ const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
 // Bitmap inverted index constants
 // A change to these constants requires bumping CURRENT_DB_VERSION
 const TX_BUCKET_SIZE: u64 = 65_536;
-const EVENT_BUCKET_SIZE: u64 = 8_388_608;
+// 2^28: 4,096 transactions per bucket. Must match sui-kvstore's
+// `event_bitmap_index::BUCKET_SIZE` and the reader's `EVENT_BITMAP_BUCKET_SIZE`.
+const EVENT_BUCKET_SIZE: u64 = 268_435_456;
 const EVENT_BITS: u32 = 16;
 const MAX_EVENTS_PER_TX: u32 = 1 << EVENT_BITS;
 const MAX_TX_SEQ: u64 = u64::MAX >> EVENT_BITS;
@@ -318,6 +324,28 @@ impl From<RoaringBitmap> for BitmapBlob {
             .expect("RoaringBitmap::serialize_into on Vec cannot fail");
         Self(buf)
     }
+}
+
+fn ledger_tx_seq_digest(tx_sequence_number: u64, info: TxSeqDigestInfo) -> LedgerTxSeqDigest {
+    LedgerTxSeqDigest {
+        tx_sequence_number,
+        digest: info.digest,
+        event_count: info.event_count,
+        checkpoint_number: info.checkpoint_number,
+    }
+}
+
+fn decode_ledger_bitmap_bucket(
+    key: BitmapIndexKey,
+    blob: BitmapBlob,
+) -> Result<LedgerBitmapBucket, TypedStoreError> {
+    let bitmap = RoaringBitmap::deserialize_from(&blob.0[..]).map_err(|e| {
+        TypedStoreError::SerializationError(format!("decode ledger bitmap bucket: {e}"))
+    })?;
+    Ok(LedgerBitmapBucket {
+        bucket_id: key.bucket_id,
+        bitmap,
+    })
 }
 
 /// Which sequence space a bitmap CF is keyed by. Owns the whole-bucket
@@ -1337,6 +1365,10 @@ impl IndexStoreTables {
             }
         }
 
+        // Group tx-space bitmap bits across the whole checkpoint so repeated
+        // dimensions in the same tx bucket produce one Rocks merge operand.
+        let mut tx_groups: FxHashMap<(Vec<u8>, u64), RoaringBitmap> = FxHashMap::default();
+
         for (i, tx) in checkpoint.transactions.iter().enumerate() {
             let tx_seq = tx_lo + i as u64;
 
@@ -1357,8 +1389,8 @@ impl IndexStoreTables {
                 )],
             )?;
 
-            // Tx-space bitmap: dedup dimension_keys within this tx, then
-            // emit one merge operand per (dim_key, bucket).
+            // Tx-space bitmap: dedup dimension_keys within this tx, then add
+            // this tx's bit to the checkpoint-scoped bitmap group.
             let tx_bucket = tx_seq / TX_BUCKET_SIZE;
             let tx_bit = (tx_seq % TX_BUCKET_SIZE) as u32;
             let mut tx_dim_keys: FxHashSet<Vec<u8>> = FxHashSet::default();
@@ -1371,18 +1403,12 @@ impl IndexStoreTables {
                     tx_dim_keys.insert(encode_dimension_key(dim, value));
                 },
             );
-            let tx_ops = tx_dim_keys.into_iter().map(|dim_key| {
-                let mut bm = RoaringBitmap::new();
-                bm.insert(tx_bit);
-                (
-                    BitmapIndexKey {
-                        dimension_key: dim_key,
-                        bucket_id: tx_bucket,
-                    },
-                    BitmapBlob::from(bm),
-                )
-            });
-            batch.partial_merge_batch(&self.transaction_bitmap, tx_ops)?;
+            for dim_key in tx_dim_keys {
+                tx_groups
+                    .entry((dim_key, tx_bucket))
+                    .or_default()
+                    .insert(tx_bit);
+            }
 
             // Event-space bitmap: bits from multiple events of the same tx
             // can share a (dim_key, bucket); group into a RoaringBitmap so
@@ -1423,6 +1449,18 @@ impl IndexStoreTables {
             });
             batch.partial_merge_batch(&self.event_bitmap, event_ops)?;
         }
+
+        let tx_ops = tx_groups.into_iter().map(|((dim_key, bucket), bm)| {
+            (
+                BitmapIndexKey {
+                    dimension_key: dim_key,
+                    bucket_id: bucket,
+                },
+                BitmapBlob::from(bm),
+            )
+        });
+        batch.partial_merge_batch(&self.transaction_bitmap, tx_ops)?;
+
         Ok(())
     }
 
@@ -2225,6 +2263,147 @@ impl RpcIndexStore {
         &self,
     ) -> Result<Option<CheckpointSequenceNumber>, TypedStoreError> {
         self.tables.watermark.get(&Watermark::Indexed)
+    }
+
+    fn ensure_ledger_history_enabled(&self) -> Result<(), TypedStoreError> {
+        if self.ledger_history_enabled {
+            Ok(())
+        } else {
+            Err(TypedStoreError::SerializationError(
+                "ledger history indexing is disabled".to_owned(),
+            ))
+        }
+    }
+
+    pub fn ledger_history_tx_seq_floor(&self) -> Result<Option<u64>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        self.tables.first_tx_seq_digest_key()
+    }
+
+    pub fn ledger_tx_seq_digest(
+        &self,
+        tx_seq: u64,
+    ) -> Result<Option<LedgerTxSeqDigest>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        Ok(self
+            .tables
+            .tx_seq_digest
+            .get(&tx_seq)?
+            .map(|info| ledger_tx_seq_digest(tx_seq, info)))
+    }
+
+    pub fn ledger_tx_seq_digest_multi_get(
+        &self,
+        tx_seqs: &[u64],
+    ) -> Result<Vec<Option<LedgerTxSeqDigest>>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        let rows = self
+            .tables
+            .tx_seq_digest
+            .multi_get(tx_seqs)?
+            .into_iter()
+            .zip_debug_eq(tx_seqs.iter().copied())
+            .map(|(info, tx_seq)| info.map(|info| ledger_tx_seq_digest(tx_seq, info)))
+            .collect();
+        Ok(rows)
+    }
+
+    pub fn ledger_tx_seq_digest_iter(
+        &self,
+        start: u64,
+        end_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerTxSeqDigestIterator<'_>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        if start >= end_exclusive {
+            return Ok(Box::new(std::iter::empty()));
+        }
+
+        let iter = if descending {
+            let upper = end_exclusive - 1;
+            self.tables
+                .tx_seq_digest
+                .reversed_safe_iter_with_bounds(Some(start), Some(upper))?
+        } else {
+            self.tables
+                .tx_seq_digest
+                .safe_iter_with_bounds(Some(start), Some(end_exclusive))
+        };
+
+        Ok(Box::new(iter.map(|result| {
+            result.map(|(tx_seq, info)| ledger_tx_seq_digest(tx_seq, info))
+        })))
+    }
+
+    pub fn transaction_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        Self::bitmap_bucket_iter(
+            &self.tables.transaction_bitmap,
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+
+    pub fn event_bitmap_bucket_iter(
+        &self,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>, TypedStoreError> {
+        self.ensure_ledger_history_enabled()?;
+        Self::bitmap_bucket_iter(
+            &self.tables.event_bitmap,
+            dimension_key,
+            start_bucket,
+            end_bucket_exclusive,
+            descending,
+        )
+    }
+
+    fn bitmap_bucket_iter(
+        table: &DBMap<BitmapIndexKey, BitmapBlob>,
+        dimension_key: Vec<u8>,
+        start_bucket: u64,
+        end_bucket_exclusive: u64,
+        descending: bool,
+    ) -> Result<LedgerBitmapBucketIterator<'_>, TypedStoreError> {
+        if start_bucket >= end_bucket_exclusive {
+            return Ok(Box::new(std::iter::empty()));
+        }
+
+        let lower = BitmapIndexKey {
+            dimension_key: dimension_key.clone(),
+            bucket_id: start_bucket,
+        };
+        let upper_exclusive = BitmapIndexKey {
+            dimension_key,
+            bucket_id: end_bucket_exclusive,
+        };
+        let upper_inclusive = BitmapIndexKey {
+            dimension_key: upper_exclusive.dimension_key.clone(),
+            bucket_id: end_bucket_exclusive - 1,
+        };
+
+        let iter: Box<
+            dyn Iterator<Item = Result<(BitmapIndexKey, BitmapBlob), TypedStoreError>> + '_,
+        > = if descending {
+            table.reversed_safe_iter_with_bounds(Some(lower), Some(upper_inclusive))?
+        } else {
+            table.safe_iter_with_bounds(Some(lower), Some(upper_exclusive))
+        };
+
+        Ok(Box::new(iter.map(|result| {
+            result.and_then(|(key, blob)| decode_ledger_bitmap_bucket(key, blob))
+        })))
     }
 }
 

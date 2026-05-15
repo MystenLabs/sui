@@ -528,12 +528,17 @@ mod tests {
         let tx = &checkpoint.transactions[0];
 
         let mut extant_idxs = Vec::new();
-        for_each_event_dimension(tx, |event_idx, dim, value| {
-            if dim == IndexDimension::EventExtant {
-                assert!(value.is_empty(), "existence marker carries no payload");
-                extant_idxs.push(event_idx);
-            }
-        });
+        for_each_event_dimension(
+            tx.transaction.sender(),
+            &tx.effects,
+            tx.events.as_ref(),
+            |event_idx, dim, value| {
+                if dim == IndexDimension::EventExtant {
+                    assert!(value.is_empty(), "existence marker carries no payload");
+                    extant_idxs.push(event_idx);
+                }
+            },
+        );
 
         // Exactly one existence bit per real event, at each event's own index.
         assert_eq!(extant_idxs, vec![0, 1, 2]);
@@ -562,9 +567,15 @@ mod tests {
         let tx = &checkpoint.transactions[0];
 
         let mut saw_extant = false;
-        for_each_transaction_dimension(tx, &checkpoint.object_set, |dim, _value| {
-            saw_extant |= dim == IndexDimension::EventExtant;
-        });
+        for_each_transaction_dimension(
+            &tx.transaction,
+            &tx.effects,
+            tx.events.as_ref(),
+            &checkpoint.object_set,
+            |dim, _value| {
+                saw_extant |= dim == IndexDimension::EventExtant;
+            },
+        );
         assert!(
             !saw_extant,
             "EventExtant is event-space only and must not appear in tx-space"

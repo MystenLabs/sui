@@ -49,6 +49,9 @@ use sui_types::storage::ChildObjectResolver;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIteratorItem;
 use sui_types::storage::EpochInfo;
+use sui_types::storage::LedgerBitmapBucketIterator;
+use sui_types::storage::LedgerTxSeqDigest;
+use sui_types::storage::LedgerTxSeqDigestIterator;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::PackageObject;
@@ -1358,6 +1361,53 @@ impl RpcIndexes for DataStore {
         &self,
     ) -> StorageResult<Option<CheckpointSequenceNumber>> {
         Ok(self.get_highest_checkpoint().ok())
+    }
+
+    fn ledger_history_tx_seq_floor(&self) -> StorageResult<Option<u64>> {
+        Err(StorageError::custom(
+            "ledger history indexes are not supported by fork store",
+        ))
+    }
+
+    fn ledger_tx_seq_digest(&self, _tx_seq: u64) -> StorageResult<Option<LedgerTxSeqDigest>> {
+        Err(StorageError::custom(
+            "ledger history indexes are not supported by fork store",
+        ))
+    }
+
+    fn ledger_tx_seq_digest_iter(
+        &self,
+        _start: u64,
+        _end_exclusive: u64,
+        _descending: bool,
+    ) -> StorageResult<LedgerTxSeqDigestIterator<'_>> {
+        Err(StorageError::custom(
+            "ledger history indexes are not supported by fork store",
+        ))
+    }
+
+    fn transaction_bitmap_bucket_iter(
+        &self,
+        _dimension_key: Vec<u8>,
+        _start_bucket: u64,
+        _end_bucket_exclusive: u64,
+        _descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        Err(StorageError::custom(
+            "ledger history indexes are not supported by fork store",
+        ))
+    }
+
+    fn event_bitmap_bucket_iter(
+        &self,
+        _dimension_key: Vec<u8>,
+        _start_bucket: u64,
+        _end_bucket_exclusive: u64,
+        _descending: bool,
+    ) -> StorageResult<LedgerBitmapBucketIterator<'_>> {
+        Err(StorageError::custom(
+            "ledger history indexes are not supported by fork store",
+        ))
     }
 
     fn authenticated_event_iter(
