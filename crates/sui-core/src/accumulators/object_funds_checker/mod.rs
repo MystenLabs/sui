@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use mysten_common::assert_reachable;
+use mysten_common::{assert_reachable, debug_fatal};
 use parking_lot::RwLock;
 use sui_types::{
     SUI_ACCUMULATOR_ROOT_OBJECT_ID,
@@ -124,10 +124,10 @@ impl ObjectFundsChecker {
         // for the epoch, and every production path that produces such a tx also
         // assigns an accumulator version. The `None` paths (accumulator-disabled
         // epoch, end-of-epoch tx) never produce withdraws and so never reach here.
-        let accumulator_version = execution_env
-            .assigned_versions
-            .accumulator_version
-            .expect("accumulator_version must be set for a tx with object withdraws");
+        let Some(accumulator_version) = execution_env.assigned_versions.accumulator_version else {
+            debug_fatal!("accumulator_version must be set for a tx with object withdraws");
+            return false;
+        };
         match self.check_object_funds(object_withdraws, accumulator_version, funds_read.as_ref()) {
             // Sufficient funds, we can go ahead and commit the execution results as it is.
             ObjectFundsWithdrawStatus::SufficientFunds => {
