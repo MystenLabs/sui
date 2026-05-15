@@ -13,6 +13,6 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        7: `$f(1) + $g(2)`
-           [] -> [MacroBody(apply2)]
+           [] -> [0:MacroBody(apply2)]
        11: `apply2!(|x| x + 1, |y| y * 2)`
-           [MacroBody(apply2)] -> []
+           [0:MacroBody(apply2)] -> []

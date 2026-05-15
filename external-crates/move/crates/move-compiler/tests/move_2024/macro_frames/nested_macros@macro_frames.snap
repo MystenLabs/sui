@@ -21,16 +21,16 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        12: `quad!(v)`
-           [] -> [MacroBody(quad), Argument]
+           [] -> [0:MacroBody(quad), 1:Argument]
        4: `$x + $x`
-           [MacroBody(quad), Argument] -> [MacroBody(quad), MacroBody(double)]
+           [0:MacroBody(quad), 1:Argument] -> [0:MacroBody(quad), 2:MacroBody(double)]
        8: `double!($x) + double!($x)`
-           [MacroBody(quad), MacroBody(double)] -> [MacroBody(quad)]
+           [0:MacroBody(quad), 2:MacroBody(double)] -> [0:MacroBody(quad)]
        12: `quad!(v)`
-           [MacroBody(quad)] -> [MacroBody(quad), Argument]
+           [0:MacroBody(quad)] -> [0:MacroBody(quad), 3:Argument]
        4: `$x + $x`
-           [MacroBody(quad), Argument] -> [MacroBody(quad), MacroBody(double)]
+           [0:MacroBody(quad), 3:Argument] -> [0:MacroBody(quad), 4:MacroBody(double)]
        8: `double!($x) + double!($x)`
-           [MacroBody(quad), MacroBody(double)] -> [MacroBody(quad)]
+           [0:MacroBody(quad), 4:MacroBody(double)] -> [0:MacroBody(quad)]
        12: `quad!(v)`
-           [MacroBody(quad)] -> []
+           [0:MacroBody(quad)] -> []

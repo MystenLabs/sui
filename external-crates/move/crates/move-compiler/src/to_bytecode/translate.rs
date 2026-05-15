@@ -480,6 +480,31 @@ fn emit_macro_frame_diagnostics(
         format!("[{}]", entries.join(", "))
     }
 
+    /// Formats a stack with frame indices so same-looking frames remain distinguishable.
+    fn format_stack_indexed(frames: &[MacroFrameInfoEntry], stack: &[u32]) -> String {
+        if stack.is_empty() {
+            return "[]".to_string();
+        }
+        let entries: Vec<String> = stack
+            .iter()
+            .map(|&idx| format!("{}:{}", idx, format_kind_stack(&frames[idx as usize])))
+            .collect();
+        format!("[{}]", entries.join(", "))
+    }
+
+    /// Formats a leaf frame index for diagnostics, using `user` for no active frame.
+    fn format_frame_idx(frame_idx: Option<u32>) -> String {
+        frame_idx
+            .map(|idx| idx.to_string())
+            .unwrap_or_else(|| "user".to_string())
+    }
+
+    /// Formats the frame index plus kind without macro/function names for mismatch messages.
+    fn format_frame_idx_kind(frames: &[MacroFrameInfoEntry], frame_idx: u32) -> String {
+        let entry = &frames[frame_idx as usize];
+        format!("{}:{}", frame_idx, format_kind_short(&entry.kind))
+    }
+
     /// Build the frame stack for a given expansion index. It's intended
     /// to mirror frame transitions that would be visible in the debugger.
     fn build_frame_stack(frames: &[MacroFrameInfoEntry], idx: Option<u32>) -> Vec<u32> {
@@ -531,47 +556,75 @@ fn emit_macro_frame_diagnostics(
     ) -> String {
         let mut result = format!("Frame transitions ({}):\n", fname);
         let mut prev_stack: Vec<u32> = vec![];
+        let mut prev_frame_idx: Option<u32> = None;
         for &(pc, frame_idx) in color_map {
-            // Each instruction's color_map entry (frame_idx) points to
-            // a MacroFrameInfoEntry in the `frames` array. The
-            // instruction's source location (looked up in code_map) must
-            // fall within that entry's `source_loc` — the span of the
-            // macro definition, lambda body, or argument expression. If
-            // it doesn't (e.g., the instruction has MacroBody color but
-            // a call-site source location), that's a color/location
-            // mismatch.
-            if let Some(idx) = frame_idx {
-                let frame = &frames[idx as usize];
-                if let Some((_, instr_loc)) = code_map.range(..=pc).next_back() {
-                    if !frame.source_loc.contains(instr_loc) {
-                        let instr_line = resolve_loc_to_line(instr_loc, mapped_files);
-                        let kind = format_kind_short(&frame.kind);
-                        result.push_str(&format!(
-                            "  !! color/location mismatch at pc {}: \
-                             instruction at {} has {} color \
-                             but location outside {} source range\n",
-                            pc, instr_line, kind, kind,
-                        ));
-                    }
-                }
-            }
-
             let stack = build_frame_stack(frames, frame_idx);
-            if stack == prev_stack {
-                continue;
-            }
+            let color_changed = frame_idx != prev_frame_idx;
+            let stack_changed = stack != prev_stack;
             let instr_line = code_map
                 .range(..=pc)
                 .next_back()
                 .map(|(_, loc)| resolve_loc_to_line(loc, mapped_files))
                 .unwrap_or_else(|| "?".to_string());
-            let prev_fmt = format_stack(frames, &prev_stack);
-            let curr_fmt = format_stack(frames, &stack);
+            let mut details = vec![];
+
+            // Each instruction's color_map entry (frame_idx) points to a
+            // MacroFrameInfoEntry in the `frames` array. The instruction's
+            // source location must fall within that entry's source range.
+            if let Some(idx) = frame_idx {
+                let frame = &frames[idx as usize];
+                if let Some((_, instr_loc)) = code_map.range(..=pc).next_back() {
+                    if !frame.source_loc.contains(instr_loc) {
+                        let frame_ref = format_frame_idx_kind(frames, idx);
+                        details.push(format!(
+                            "!! color/location mismatch: instruction has {} color, \
+                             but location is outside {} source range",
+                            frame_ref, frame_ref,
+                        ));
+                    }
+                }
+            }
+
+            if color_changed && !stack_changed {
+                details.push(format!(
+                    "!! color changed without frame transition: color/frame {} -> {}",
+                    format_frame_idx(prev_frame_idx),
+                    format_frame_idx(frame_idx),
+                ));
+            }
+
+            if !color_changed && stack_changed {
+                details.push(format!(
+                    "!! frame transition without color change: color/frame stayed {}",
+                    format_frame_idx(frame_idx),
+                ));
+            }
+
+            let display_prev_fmt = format_stack(frames, &prev_stack);
+            let display_curr_fmt = format_stack(frames, &stack);
+            if stack_changed && display_prev_fmt == display_curr_fmt {
+                details.push(format!(
+                    "?? ambiguous transition: both stacks display as {}",
+                    display_curr_fmt,
+                ));
+            }
+
+            if !stack_changed && details.is_empty() {
+                prev_frame_idx = frame_idx;
+                continue;
+            }
+
+            let prev_fmt = format_stack_indexed(frames, &prev_stack);
+            let curr_fmt = format_stack_indexed(frames, &stack);
             result.push_str(&format!(
                 "  {}\n      {} -> {}\n",
                 instr_line, prev_fmt, curr_fmt
             ));
+            for detail in details {
+                result.push_str(&format!("      {}\n", detail));
+            }
             prev_stack = stack;
+            prev_frame_idx = frame_idx;
         }
         if result.ends_with('\n') {
             result.pop();

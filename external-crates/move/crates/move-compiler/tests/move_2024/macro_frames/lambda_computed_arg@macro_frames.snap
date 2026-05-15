@@ -21,14 +21,14 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        9: `let ret = 42;`
-           [] -> [MacroBody(apply_simple)]
+           [] -> [0:MacroBody(apply_simple)]
        20: `let a = apply_simple!(|x| x + p);`
-           [MacroBody(apply_simple)] -> [MacroBody(apply_simple), Lambda]
+           [0:MacroBody(apply_simple)] -> [0:MacroBody(apply_simple), 1:Lambda]
        21: `a + apply_computed!(|x| x + p)`
-           [MacroBody(apply_simple), Lambda] -> []
+           [0:MacroBody(apply_simple), 1:Lambda] -> []
        15: `let ret = 42;`
-           [] -> [MacroBody(apply_computed)]
+           [] -> [2:MacroBody(apply_computed)]
        21: `a + apply_computed!(|x| x + p)`
-           [MacroBody(apply_computed)] -> [MacroBody(apply_computed), Lambda]
+           [2:MacroBody(apply_computed)] -> [2:MacroBody(apply_computed), 3:Lambda]
        21: `a + apply_computed!(|x| x + p)`
-           [MacroBody(apply_computed), Lambda] -> []
+           [2:MacroBody(apply_computed), 3:Lambda] -> []

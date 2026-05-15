@@ -1,6 +1,5 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
-assertion_line: 295
 info:
   flavor: core
   edition: 2024.alpha
@@ -17,10 +16,10 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        11: `let base = identity(1);`
-           [] -> [MacroBody(process)]
+           [] -> [0:MacroBody(process)]
        16: `process!(p + 1)`
-           [MacroBody(process)] -> [MacroBody(process), Argument]
+           [0:MacroBody(process)] -> [0:MacroBody(process), 1:Argument]
        12: `base + $x`
-           [MacroBody(process), Argument] -> [MacroBody(process)]
+           [0:MacroBody(process), 1:Argument] -> [0:MacroBody(process)]
        16: `process!(p + 1)`
-           [MacroBody(process)] -> []
+           [0:MacroBody(process)] -> []

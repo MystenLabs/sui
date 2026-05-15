@@ -26,16 +26,16 @@ note[I15008]: macro frame info
    │  
    = Frame transitions (test):
        15: `let arg = 1;`
-           [] -> [MacroBody(apply)]
+           [] -> [0:MacroBody(apply)]
        20: `apply!(|x|`
-           [MacroBody(apply)] -> [MacroBody(apply), Lambda]
+           [0:MacroBody(apply)] -> [0:MacroBody(apply), 1:Lambda]
        22: `id!(x)`
-           [MacroBody(apply), Lambda] -> [MacroBody(apply), Lambda, MacroBody(id), Argument]
+           [0:MacroBody(apply), 1:Lambda] -> [0:MacroBody(apply), 1:Lambda, 2:MacroBody(id), 3:Argument]
        21: `if (x > p) {`
-           [MacroBody(apply), Lambda, MacroBody(id), Argument] -> [MacroBody(apply), Lambda]
+           [0:MacroBody(apply), 1:Lambda, 2:MacroBody(id), 3:Argument] -> [0:MacroBody(apply), 1:Lambda]
        24: `0`
-           [MacroBody(apply), Lambda] -> []
+           [0:MacroBody(apply), 1:Lambda] -> []
        21: `if (x > p) {`
-           [] -> [MacroBody(apply), Lambda]
+           [] -> [0:MacroBody(apply), 1:Lambda]
        20: `apply!(|x|`
-           [MacroBody(apply), Lambda] -> []
+           [0:MacroBody(apply), 1:Lambda] -> []

@@ -18,14 +18,14 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        23: `foo!(v) + foo!(v)`
-           [] -> [MacroBody(foo), Argument]
+           [] -> [0:MacroBody(foo), 1:Argument]
        17: `let y = $x + 1;`
-           [MacroBody(foo), Argument] -> [MacroBody(foo)]
+           [0:MacroBody(foo), 1:Argument] -> [0:MacroBody(foo)]
        23: `foo!(v) + foo!(v)`
-           [MacroBody(foo)] -> []
+           [0:MacroBody(foo)] -> []
        23: `foo!(v) + foo!(v)`
-           [] -> [MacroBody(foo), Argument]
+           [] -> [2:MacroBody(foo), 3:Argument]
        17: `let y = $x + 1;`
-           [MacroBody(foo), Argument] -> [MacroBody(foo)]
+           [2:MacroBody(foo), 3:Argument] -> [2:MacroBody(foo)]
        23: `foo!(v) + foo!(v)`
-           [MacroBody(foo)] -> []
+           [2:MacroBody(foo)] -> []

@@ -19,6 +19,6 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        15: `m!(1, $g)`
-           [] -> [MacroBody(outer), MacroBody(m), Argument]
+           [] -> [0:MacroBody(outer), 1:MacroBody(m), 2:Argument]
        19: `outer!(|x| x)`
-           [MacroBody(outer), MacroBody(m), Argument] -> []
+           [0:MacroBody(outer), 1:MacroBody(m), 2:Argument] -> []

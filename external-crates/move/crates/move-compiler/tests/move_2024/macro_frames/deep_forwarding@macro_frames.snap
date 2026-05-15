@@ -22,8 +22,8 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        19: `c!(v)`
-           [] -> [MacroBody(c), Argument]
+           [] -> [0:MacroBody(c), 1:Argument]
        7: `$x + 1`
-           [MacroBody(c), Argument] -> [MacroBody(c), MacroBody(b), MacroBody(a)]
+           [0:MacroBody(c), 1:Argument] -> [0:MacroBody(c), 2:MacroBody(b), 3:MacroBody(a)]
        19: `c!(v)`
-           [MacroBody(c), MacroBody(b), MacroBody(a)] -> []
+           [0:MacroBody(c), 2:MacroBody(b), 3:MacroBody(a)] -> []

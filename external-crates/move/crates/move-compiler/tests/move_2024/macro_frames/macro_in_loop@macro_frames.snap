@@ -16,8 +16,8 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        13: `i = inc!(i);`
-           [] -> [MacroBody(inc), Argument]
+           [] -> [0:MacroBody(inc), 1:Argument]
        7: `$x + 1`
-           [MacroBody(inc), Argument] -> [MacroBody(inc)]
+           [0:MacroBody(inc), 1:Argument] -> [0:MacroBody(inc)]
        13: `i = inc!(i);`
-           [MacroBody(inc)] -> []
+           [0:MacroBody(inc)] -> []

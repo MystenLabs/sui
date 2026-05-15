@@ -19,8 +19,8 @@ note[I15008]: macro frame info
   │
   = Frame transitions (test):
       8: `apply!(|x| x + 1, v)`
-          [] -> [MacroBody(apply), Argument]
+          [] -> [0:MacroBody(apply), 1:Argument]
       8: `apply!(|x| x + 1, v)`
-          [MacroBody(apply), Argument] -> [MacroBody(apply), Lambda]
+          [0:MacroBody(apply), 1:Argument] -> [0:MacroBody(apply), 2:Lambda]
       8: `apply!(|x| x + 1, v)`
-          [MacroBody(apply), Lambda] -> []
+          [0:MacroBody(apply), 2:Lambda] -> []

@@ -13,6 +13,6 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        14: `let v = 1;`
-           [] -> [MacroBody(m)]
+           [] -> [0:MacroBody(m)]
        19: `m!(|x| x)`
-           [MacroBody(m)] -> []
+           [0:MacroBody(m)] -> []

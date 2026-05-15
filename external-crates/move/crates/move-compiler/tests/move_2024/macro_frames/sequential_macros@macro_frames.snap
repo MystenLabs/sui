@@ -23,16 +23,17 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        12: `add_one!(v) + double!(v)`
-           [] -> [MacroBody(add_one), Argument]
+           [] -> [0:MacroBody(add_one), 1:Argument]
        4: `$x + 1`
-           [MacroBody(add_one), Argument] -> [MacroBody(add_one)]
+           [0:MacroBody(add_one), 1:Argument] -> [0:MacroBody(add_one)]
        12: `add_one!(v) + double!(v)`
-           [MacroBody(add_one)] -> []
+           [0:MacroBody(add_one)] -> []
        12: `add_one!(v) + double!(v)`
-           [] -> [MacroBody(double), Argument]
+           [] -> [2:MacroBody(double), 3:Argument]
        12: `add_one!(v) + double!(v)`
-           [MacroBody(double), Argument] -> [MacroBody(double), Argument]
+           [2:MacroBody(double), 3:Argument] -> [2:MacroBody(double), 4:Argument]
+           ?? ambiguous transition: both stacks display as [MacroBody(double), Argument]
        8: `$x + $x`
-           [MacroBody(double), Argument] -> [MacroBody(double)]
+           [2:MacroBody(double), 4:Argument] -> [2:MacroBody(double)]
        12: `add_one!(v) + double!(v)`
-           [MacroBody(double)] -> []
+           [2:MacroBody(double)] -> []

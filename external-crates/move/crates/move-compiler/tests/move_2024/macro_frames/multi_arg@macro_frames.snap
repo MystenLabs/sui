@@ -18,10 +18,11 @@ note[I15008]: macro frame info
    │
    = Frame transitions (test):
        11: `add!(x, y)`
-           [] -> [MacroBody(add), Argument]
+           [] -> [0:MacroBody(add), 1:Argument]
        11: `add!(x, y)`
-           [MacroBody(add), Argument] -> [MacroBody(add), Argument]
+           [0:MacroBody(add), 1:Argument] -> [0:MacroBody(add), 2:Argument]
+           ?? ambiguous transition: both stacks display as [MacroBody(add), Argument]
        7: `$a + $b`
-           [MacroBody(add), Argument] -> [MacroBody(add)]
+           [0:MacroBody(add), 2:Argument] -> [0:MacroBody(add)]
        11: `add!(x, y)`
-           [MacroBody(add)] -> []
+           [0:MacroBody(add)] -> []
