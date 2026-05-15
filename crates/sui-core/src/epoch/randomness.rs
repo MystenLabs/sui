@@ -792,7 +792,7 @@ impl RandomnessManager {
             let observer = observer.clone();
             self.enqueued_messages.insert(
                 msg.sender(),
-                tokio::task::spawn_blocking(move || {
+                tokio::task::spawn(async move {
                     match VersionedProcessedMessage::process_observer(observer, msg) {
                         Ok(processed) => Some(processed),
                         Err(err) => {
