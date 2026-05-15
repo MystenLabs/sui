@@ -117,6 +117,10 @@ harness = false
 name = "nitro_attestation_bench"
 harness = false
 
+[[bench]]
+name = "sig_verification_bench"
+harness = false
+
 [features]
 default = []
 testing = []
