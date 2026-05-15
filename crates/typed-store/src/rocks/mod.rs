@@ -1520,18 +1520,30 @@ impl DBBatch {
         from: &K,
         to: &K,
     ) -> Result<(), TypedStoreError> {
+        self.schedule_delete_range_raw(db, be_fix_int_ser(from), be_fix_int_ser(to))
+    }
+
+    /// Like [`Self::schedule_delete_range`], but takes pre-encoded byte ranges
+    /// directly. Useful when the desired bounds do not correspond to any
+    /// serializable key — for example, when the caller needs an exclusive
+    /// upper bound that is the lexicographic successor of a real key in order
+    /// to express a closed range as a half-open one (see
+    /// `schedule_delete_all`).
+    pub fn schedule_delete_range_raw<K, V>(
+        &mut self,
+        db: &DBMap<K, V>,
+        from: impl AsRef<[u8]>,
+        to: impl AsRef<[u8]>,
+    ) -> Result<(), TypedStoreError> {
         if !Arc::ptr_eq(&db.db, &self.database) {
             return Err(TypedStoreError::CrossDBBatch);
         }
 
-        let from_buf = be_fix_int_ser(from);
-        let to_buf = be_fix_int_ser(to);
-
         if let StorageWriteBatch::Rocks(b) = &mut self.batch {
             b.delete_range_cf(
                 &rocks_cf_from_db(&self.database, db.cf_name())?,
-                from_buf,
-                to_buf,
+                from.as_ref(),
+                to.as_ref(),
             );
         }
         Ok(())
@@ -1782,11 +1794,19 @@ where
             .transpose()?
             .map(|(k, _v)| k);
         if let Some((first_key, last_key)) = first_key.zip(last_key) {
+            let from_buf = be_fix_int_ser(&first_key);
+            // The underlying RocksDB range tombstone treats its upper bound as
+            // exclusive, so naively passing `last_key` would leave the largest
+            // entry behind. Appending a 0x00 byte yields the lexicographic
+            // successor of the encoded `last_key`, making the half-open range
+            // `[first_buf, last_buf ++ 0x00)` equivalent to the closed range
+            // `[first_key, last_key]`. Keeping the whole clear as a single
+            // range tombstone preserves the visibility semantics governed by
+            // `ignore_range_deletions`.
+            let mut to_buf = be_fix_int_ser(&last_key);
+            to_buf.push(0u8);
             let mut batch = self.batch();
-            // `schedule_delete_range` excludes its upper bound, so the largest key
-            // would survive; delete it explicitly to actually clear the map.
-            batch.schedule_delete_range(self, &first_key, &last_key)?;
-            batch.delete_batch(self, [last_key])?;
+            batch.schedule_delete_range_raw(self, &from_buf, &to_buf)?;
             batch.write()?;
         }
         Ok(())
