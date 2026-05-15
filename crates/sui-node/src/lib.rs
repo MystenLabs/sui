@@ -37,14 +37,13 @@ use sui_core::consensus_adapter::ConsensusClient;
 use sui_core::consensus_manager::UpdatableConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::build_execution_cache;
-use sui_core::randomness_round_receiver::RandomnessRoundReceiver;
+use sui_core::randomness_round_receiver::{RandomnessRoundReceiver, RandomnessRoundReceiverHandle};
 use sui_network::endpoint_manager::{AddressSource, EndpointId};
 use sui_network::validator::server::SUI_TLS_SERVER_NAME;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::node_role::NodeRole;
 
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
-use sui_core::randomness_round_receiver::RandomnessRoundReceiverHandle;
 use sui_core::storage::RestReadStore;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
@@ -286,9 +285,6 @@ pub struct SuiNode {
 
     /// Handle shared with RandomnessManager and the consensus layer.
     randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
-
-    /// Long-lived sender for feeding verified randomness signatures into RandomnessRoundReceiver.
-    randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
 
     /// AuthorityAggregator of the network, created at start and beginning of each epoch.
     /// Use ArcSwap so that we could mutate it without taking mut reference.
@@ -712,7 +708,6 @@ impl SuiNode {
                 .unwrap_or_default()
                 .mailbox_capacity(),
         );
-        let randomness_tx_clone = randomness_tx.clone();
         let P2pComponents {
             p2p_network,
             known_peers,
@@ -892,7 +887,6 @@ impl SuiNode {
                 checkpoint_metrics.clone(),
                 node_role,
                 randomness_receiver_handle.clone(),
-                randomness_tx_clone.clone(),
             )
             .await?;
 
@@ -954,7 +948,6 @@ impl SuiNode {
             _state_snapshot_uploader_handle: state_snapshot_handle,
             shutdown_channel_tx: shutdown_channel,
             randomness_receiver_handle,
-            randomness_tx: randomness_tx_clone,
 
             auth_agg,
             subscription_service_checkpoint_sender,
@@ -1295,7 +1288,6 @@ impl SuiNode {
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
         randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
-        randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
         let consensus_config = config_clone
@@ -1373,7 +1365,6 @@ impl SuiNode {
             state.clone(),
             consensus_adapter,
             checkpoint_store,
-            randomness_tx,
             epoch_store,
             state_sync_handle,
             randomness_handle,
@@ -1398,7 +1389,6 @@ impl SuiNode {
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         checkpoint_store: Arc<CheckpointStore>,
-        _randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
         randomness_handle: randomness::Handle,
@@ -1945,7 +1935,6 @@ impl SuiNode {
                             self.state.clone(),
                             consensus_adapter,
                             self.checkpoint_store.clone(),
-                            self.randomness_tx.clone(),
                             new_epoch_store.clone(),
                             self.state_sync_handle.clone(),
                             self.randomness_handle.clone(),
@@ -2001,7 +1990,6 @@ impl SuiNode {
                         self.checkpoint_metrics.clone(),
                         new_role,
                         self.randomness_receiver_handle.clone(),
-                        self.randomness_tx.clone(),
                     )
                     .await?;
 
