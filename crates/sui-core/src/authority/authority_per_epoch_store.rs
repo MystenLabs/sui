@@ -1340,6 +1340,8 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: RandomnessManager,
     ) -> SuiResult<()> {
         let reporter = randomness_manager.reporter();
+        debug_assert!(reporter.is_some() || self.node_role.is_fullnode());
+
         let result = randomness_manager.start_dkg().await;
         if self
             .randomness_manager
