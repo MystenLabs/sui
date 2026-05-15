@@ -83,12 +83,9 @@ public entry fun mint_batch(l0: &mut 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b
 }
 
 public fun mint_single(l0: &mut 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::ClaimCap, l1: address, l2: &mut 0x2::tx_context::TxContext) {
-    if (!(vec_set::contains(&l0.claimed, &l1))) {
-        let l3 = DEEPClaimNFT { id: object::new(l2), name: string::utf8(C3), description: string::utf8(C4), image_url: string::utf8(C5) };
-        vec_set::insert(&mut l0.claimed, l1);
-        transfer::transfer(l3, l1)
-    } else {
-        abort 0u64
-    }
+    assert!(!(vec_set::contains(&l0.claimed, &l1)), 0u64);
+    let l3 = DEEPClaimNFT { id: object::new(l2), name: string::utf8(C3), description: string::utf8(C4), image_url: string::utf8(C5) };
+    vec_set::insert(&mut l0.claimed, l1);
+    transfer::transfer(l3, l1)
 }
 
