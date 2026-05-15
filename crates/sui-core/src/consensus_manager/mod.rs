@@ -191,8 +191,8 @@ pub struct ConsensusManager {
     consumer_monitor: ArcSwapOption<CommitConsumerMonitor>,
     consumer_monitor_sender: broadcast::Sender<Arc<CommitConsumerMonitor>>,
 
-    /// Long-lived broadcast sender for randomness signatures, passed to per-epoch
-    /// ObserverService instances so they can push signatures to connected observers.
+    /// Long-lived broadcast sender for randomness signatures, passed into consensus
+    /// so it can push signatures to connected observer peers.
     signatures_broadcast: broadcast::Sender<bytes::Bytes>,
 
     running: Mutex<Running>,

@@ -284,12 +284,12 @@ pub struct SuiNode {
     // Channel to allow signaling upstream to shutdown sui-node
     shutdown_channel_tx: broadcast::Sender<Option<RunWithRange>>,
 
-    /// Broadcast sender for randomness signatures. Per-epoch ObserverService
-    /// instances subscribe to push signatures to connected observers.
-    signatures_broadcast: tokio::sync::broadcast::Sender<bytes::Bytes>,
+    /// Broadcast sender for randomness signatures. Consensus subscribes
+    /// to forward the signatures to peers that sync consensus state (Observers).
+    signatures_broadcast: broadcast::Sender<bytes::Bytes>,
 
     /// Long-lived sender for feeding verified randomness signatures into RandomnessRoundReceiver.
-    randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
+    randomness_tx: mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
 
     /// AuthorityAggregator of the network, created at start and beginning of each epoch.
     /// Use ArcSwap so that we could mutate it without taking mut reference.
@@ -817,12 +817,11 @@ impl SuiNode {
                 .unwrap();
         }
 
-        // Broadcast channel for pushing randomness signatures to observer peers.
-        // Long-lived (node lifetime): per-epoch ObserverService instances subscribe to it.
-        let (signatures_broadcast, _) = tokio::sync::broadcast::channel::<bytes::Bytes>(1000);
-
         // Start the loop that receives new randomness and generates transactions for it.
-        RandomnessRoundReceiver::spawn(state.clone(), randomness_rx, signatures_broadcast.clone());
+        // The returned broadcast sender is long-lived (node lifetime): consensus
+        // subscribes to it to push signatures to observer peers.
+        let (signatures_broadcast, _randomness_round_receiver_handle) =
+            RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
 
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
@@ -1494,8 +1493,6 @@ impl SuiNode {
                 sui_tx_validator_metrics.clone(),
             );
             let consensus_manager = consensus_manager.clone();
-            let auxiliary_data_handler: Option<Arc<dyn consensus_core::AuxiliaryDataHandler>> =
-                Some(signature_observer as Arc<dyn consensus_core::AuxiliaryDataHandler>);
             async move {
                 consensus_manager
                     .start(
@@ -1503,7 +1500,7 @@ impl SuiNode {
                         epoch_store,
                         consensus_handler_initializer,
                         sui_tx_validator,
-                        auxiliary_data_handler,
+                        Some(signature_observer),
                     )
                     .await;
             }

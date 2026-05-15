@@ -15,24 +15,28 @@ use crate::authority::RandomnessSignatureMessage;
 
 const CHANNEL_SIZE: usize = 1000;
 
-/// Implements [`AuxiliaryDataHandler`] so consensus
-/// can forward auxiliary data directly. Internally delegates to a bounded
-/// monitored channel consumed by the background worker task.
+/// Observer-side handler for randomness signatures received from the consensus
+/// block stream. Sits at the boundary between the consensus layer (which calls
+/// [`AuxiliaryDataHandler::handle`]) and the sui-core randomness pipeline.
 ///
-/// Also exposes [`update_epoch`](Self::update_epoch) so `RandomnessManager`
-/// can supply the VSS public key once observer DKG completes.
+/// Internally delegates incoming data to a bounded channel consumed by a
+/// background [`RandomnessSignatureWorker`]. The worker waits for DKG to
+/// complete (via [`set_public_key`](Self::set_public_key)), then verifies each
+/// signature against the VSS public key and forwards valid ones to
+/// `RandomnessRoundReceiver` for transaction creation.
 pub struct RandomnessSignatureObserver {
     data_tx: monitored_mpsc::Sender<Bytes>,
     vss_pk_tx: watch::Sender<Option<bls12381::G2Element>>,
 }
 
 impl RandomnessSignatureObserver {
-    /// Sets the VSS public key for signature verification. Should only be called
-    /// once per epoch, when observer DKG completes in `RandomnessManager::advance_dkg()`.
+    /// Sets the VSS public key for signature verification. Must be called
+    /// exactly once per epoch, when DKG completes in
+    /// `RandomnessManager::advance_dkg`.
     pub fn set_public_key(&self, vss_pk: bls12381::G2Element) {
         debug_assert!(
             self.vss_pk_tx.borrow().is_none(),
-            "The public key should be set only once"
+            "The public key should be set only once per epoch"
         );
         if self.vss_pk_tx.borrow().is_some() {
             return;
@@ -188,12 +192,17 @@ mod tests {
 
         let (randomness_tx, mut randomness_rx) = mpsc::channel(10);
         let observer = RandomnessSignatureObserver::start(randomness_tx);
-        observer.set_public_key(pk);
 
-        // Give the worker time to start and receive the vss_pk.
-        tokio::task::yield_now().await;
-
+        // Send data BEFORE setting the public key (DKG not yet complete).
         observer.handle(data);
+
+        // Nothing should be forwarded yet.
+        let result =
+            tokio::time::timeout(std::time::Duration::from_millis(100), randomness_rx.recv()).await;
+        assert!(result.is_err(), "should have timed out (DKG not complete)");
+
+        // Now complete DKG — the buffered message should be processed.
+        observer.set_public_key(pk);
 
         let (epoch, received_round, sig_bytes) =
             tokio::time::timeout(std::time::Duration::from_secs(5), randomness_rx.recv())
@@ -246,69 +255,6 @@ mod tests {
         let result =
             tokio::time::timeout(std::time::Duration::from_millis(100), randomness_rx.recv()).await;
         assert!(result.is_err(), "should have timed out (no message)");
-    }
-
-    #[tokio::test]
-    async fn test_data_buffered_until_dkg_completes() {
-        let (sk, pk) = generate_keypair();
-        let round = RandomnessRound(5);
-        let sig = sign(&sk, &round.signature_message());
-        let data = build_message(0, round, &sig);
-
-        let (randomness_tx, mut randomness_rx) = mpsc::channel(10);
-        let observer = RandomnessSignatureObserver::start(randomness_tx);
-
-        // Send data BEFORE setting the public key (DKG not yet complete).
-        observer.handle(data);
-
-        // Nothing should be forwarded yet.
-        let result =
-            tokio::time::timeout(std::time::Duration::from_millis(100), randomness_rx.recv()).await;
-        assert!(result.is_err(), "should have timed out (DKG not complete)");
-
-        // Now complete DKG.
-        observer.set_public_key(pk);
-
-        // The buffered message should now be processed.
-        let (epoch, received_round, _) =
-            tokio::time::timeout(std::time::Duration::from_secs(5), randomness_rx.recv())
-                .await
-                .expect("timed out")
-                .expect("channel closed");
-
-        assert_eq!(epoch, 0);
-        assert_eq!(received_round, round);
-    }
-
-    #[tokio::test]
-    async fn test_set_public_key_only_once() {
-        let (sk, pk) = generate_keypair();
-        let other_sk = bls12381::Scalar::generator() + bls12381::Scalar::generator();
-        let other_pk = bls12381::G2Element::generator() * other_sk;
-
-        let round = RandomnessRound(1);
-        let sig = sign(&sk, &round.signature_message());
-        let data = build_message(0, round, &sig);
-
-        let (randomness_tx, mut randomness_rx) = mpsc::channel(10);
-        let observer = RandomnessSignatureObserver::start(randomness_tx);
-
-        // Set the correct key first.
-        observer.set_public_key(pk);
-        // Attempt to overwrite with a different key -- should be ignored.
-        observer.set_public_key(other_pk);
-
-        tokio::task::yield_now().await;
-
-        observer.handle(data);
-
-        // Should still verify with the original key.
-        let result = tokio::time::timeout(std::time::Duration::from_secs(5), randomness_rx.recv())
-            .await
-            .expect("timed out")
-            .expect("channel closed");
-
-        assert_eq!(result.1, round);
     }
 
     #[tokio::test]
