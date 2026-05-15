@@ -11,6 +11,21 @@ fn ms_to_timestamp(ms: u64) -> prost_types::Timestamp {
         nanos: ((ms % 1000) * 1_000_000) as _,
     }
 }
+
+fn timestamp_to_ms(timestamp: &prost_types::Timestamp) -> Result<u64, &'static str> {
+    let seconds: u64 = timestamp
+        .seconds
+        .try_into()
+        .map_err(|_| "invalid timestamp: negative seconds")?;
+    let nanos: u64 = timestamp
+        .nanos
+        .try_into()
+        .map_err(|_| "invalid timestamp: negative nanos")?;
+    seconds
+        .checked_mul(1000)
+        .and_then(|ms| ms.checked_add(nanos / 1_000_000))
+        .ok_or("invalid timestamp: out of range")
+}
 use crate::message_envelope::Message as _;
 use fastcrypto::traits::ToFromBytes;
 use sui_rpc::field::FieldMaskTree;
@@ -2289,6 +2304,39 @@ impl TryFrom<&TransactionExpiration> for crate::transaction::TransactionExpirati
         Ok(match value.kind() {
             TransactionExpirationKind::None => Self::None,
             TransactionExpirationKind::Epoch => Self::Epoch(value.epoch()),
+            TransactionExpirationKind::ValidDuring => {
+                let chain_str = value
+                    .chain
+                    .as_deref()
+                    .ok_or("ValidDuring expiration is missing chain")?;
+                let chain_digest: sui_sdk_types::Digest = chain_str
+                    .parse()
+                    .map_err(|_| "ValidDuring expiration has invalid chain digest")?;
+                let chain = crate::digests::ChainIdentifier::from(
+                    crate::digests::CheckpointDigest::new(chain_digest.into_inner()),
+                );
+                let nonce = value
+                    .nonce
+                    .ok_or("ValidDuring expiration is missing nonce")?;
+                let min_timestamp = value
+                    .min_timestamp
+                    .as_ref()
+                    .map(timestamp_to_ms)
+                    .transpose()?;
+                let max_timestamp = value
+                    .max_timestamp
+                    .as_ref()
+                    .map(timestamp_to_ms)
+                    .transpose()?;
+                Self::ValidDuring {
+                    min_epoch: value.min_epoch,
+                    max_epoch: value.epoch,
+                    min_timestamp,
+                    max_timestamp,
+                    chain,
+                    nonce,
+                }
+            }
             TransactionExpirationKind::Unknown | _ => {
                 return Err("unknown TransactionExpirationKind");
             }
