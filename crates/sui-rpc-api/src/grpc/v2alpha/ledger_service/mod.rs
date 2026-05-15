@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Duration;
-
-use crate::KvRpcServer;
-use crate::operation::OperationSpec;
 use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsRequest;
 use sui_rpc::proto::sui::rpc::v2alpha::ListCheckpointsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
@@ -14,29 +10,29 @@ use sui_rpc::proto::sui::rpc::v2alpha::ListTransactionsResponse;
 use sui_rpc::proto::sui::rpc::v2alpha::ledger_service_server::LedgerService;
 use tonic::codegen::BoxStream;
 
+use crate::RpcService;
+
+mod bitmap_scan;
+mod chunked_scan;
+mod ledger_read;
 mod list_checkpoints;
 mod list_events;
 mod list_transactions;
+mod query_end;
+mod stream;
 
-// Per-RPC hard request timeout. The outer `operation::with_deadline`
-// wrapper drops the response stream with `DeadlineExceeded` when this
-// fires; debounced intermediate `Watermark` frames let the client resume
-// from wherever it got to.
-// TODO migrate CLI to config file and make these configurable.
-const LIST_TRANSACTIONS_TIMEOUT: Duration = Duration::from_secs(5);
-const LIST_EVENTS_TIMEOUT: Duration = Duration::from_secs(5);
-const LIST_CHECKPOINTS_TIMEOUT: Duration = Duration::from_secs(5);
+use stream::serve_list_stream;
 
 #[tonic::async_trait]
-impl LedgerService for KvRpcServer {
+impl LedgerService for RpcService {
     async fn list_checkpoints(
         &self,
         request: tonic::Request<ListCheckpointsRequest>,
     ) -> Result<tonic::Response<BoxStream<ListCheckpointsResponse>>, tonic::Status> {
-        self.serve_query_stream(
-            OperationSpec::new("list_checkpoints", LIST_CHECKPOINTS_TIMEOUT),
-            request,
-            list_checkpoints::list_checkpoints,
+        serve_list_stream(
+            "list_checkpoints",
+            list_checkpoints::TIMEOUT,
+            list_checkpoints::list_checkpoints(self.clone(), request.into_inner()),
         )
         .await
     }
@@ -45,10 +41,10 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<ListTransactionsRequest>,
     ) -> Result<tonic::Response<BoxStream<ListTransactionsResponse>>, tonic::Status> {
-        self.serve_query_stream(
-            OperationSpec::new("list_transactions", LIST_TRANSACTIONS_TIMEOUT),
-            request,
-            list_transactions::list_transactions,
+        serve_list_stream(
+            "list_transactions",
+            list_transactions::TIMEOUT,
+            list_transactions::list_transactions(self.clone(), request.into_inner()),
         )
         .await
     }
@@ -57,10 +53,10 @@ impl LedgerService for KvRpcServer {
         &self,
         request: tonic::Request<ListEventsRequest>,
     ) -> Result<tonic::Response<BoxStream<ListEventsResponse>>, tonic::Status> {
-        self.serve_query_stream(
-            OperationSpec::new("list_events", LIST_EVENTS_TIMEOUT),
-            request,
-            list_events::list_events,
+        serve_list_stream(
+            "list_events",
+            list_events::TIMEOUT,
+            list_events::list_events(self.clone(), request.into_inner()),
         )
         .await
     }

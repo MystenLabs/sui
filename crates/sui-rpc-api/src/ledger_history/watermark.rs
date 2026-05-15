@@ -3,12 +3,13 @@
 
 //! Shared `Watermark` construction for the v2alpha list APIs.
 //!
-//! All three list handlers (`list_transactions`, `list_events`,
-//! `list_checkpoints`) emit the same wire `Watermark`: a resume cursor plus
-//! a direction-matching completion boundary (`checkpoint_hi` ascending /
-//! `checkpoint_lo` descending). The cursor encoding and the boundary
-//! bookkeeping are identical; what differs per API is how a scan position
-//! resolves into a completion-boundary candidate:
+//! Both ledger-history backends — the fullnode (`sui-rpc-api`) and bigtable
+//! (`sui-kv-rpc`) — and all three list handlers (`list_transactions`,
+//! `list_events`, `list_checkpoints`) emit the same wire `Watermark`: a resume
+//! cursor plus a direction-matching completion boundary (`checkpoint_hi`
+//! ascending / `checkpoint_lo` descending). The cursor encoding and the
+//! boundary bookkeeping are identical; what differs per API is how a scan
+//! position resolves into a completion-boundary candidate:
 //!
 //! - `list_transactions` / `list_events` scan within a checkpoint, so an
 //!   item at cp `C` does NOT prove `C` complete (more matches may sit at
@@ -16,8 +17,8 @@
 //!   `C ∓ 1` — see [`advance_boundary_excluding_cp`].
 //! - `list_checkpoints` dedupes cp_seq, so "cp `C` emitted" ≡ "cp `C`
 //!   complete." It feeds `C` straight into [`advance_checkpoint_boundary`]
-//!   for items, and translates its tx-space scan frontier into a cp-space
-//!   candidate itself before doing the same.
+//!   for items, and translates its scan frontier into a cp-space candidate
+//!   itself before doing the same.
 //!
 //! This module owns the shared pieces; each handler keeps only its
 //! API-specific frontier-to-candidate adapter.
@@ -27,7 +28,7 @@ use sui_inverted_index::ScanDirection;
 use sui_rpc::proto::sui::rpc::v2alpha::QueryEndReason;
 use sui_rpc::proto::sui::rpc::v2alpha::Watermark;
 
-use crate::query_options::QueryOptions;
+use crate::ledger_history::query_options::QueryOptions;
 
 /// Populate the direction-matching field of a `Watermark` from the
 /// per-scan boundary value. Exactly one of `checkpoint_hi` /
@@ -47,7 +48,7 @@ fn set_checkpoint_bound(wm: &mut Watermark, options: &QueryOptions, boundary: Op
 /// Callers resolve `candidate` for their scan domain first — `list_checkpoints`
 /// passes the item's cp directly (dedup makes it complete), while the
 /// per-checkpoint scanners use [`advance_boundary_excluding_cp`].
-pub(crate) fn advance_checkpoint_boundary(
+pub fn advance_checkpoint_boundary(
     prev: Option<u64>,
     candidate: u64,
     options: &QueryOptions,
@@ -61,13 +62,14 @@ pub(crate) fn advance_checkpoint_boundary(
 
 /// Fold a cp whose own checkpoint is NOT proven complete into the
 /// accumulated boundary (`list_transactions` / `list_events`: cp `C` may
-/// still hold further matches at other tx_seqs / event_seqs). The boundary
-/// excludes `C` itself: `C - 1` ascending / `C + 1` descending.
+/// still hold further matches at other tx_seqs / event_seqs; and any scan
+/// frontier, which lands partway through the checkpoint it resolves to). The
+/// boundary excludes `C` itself: `C - 1` ascending / `C + 1` descending.
 ///
 /// When that adjusted candidate would overflow (`C == 0` ascending or
 /// `u64::MAX` descending) the previously accumulated boundary is preserved
 /// rather than collapsed back to `None`.
-pub(crate) fn advance_boundary_excluding_cp(
+pub fn advance_boundary_excluding_cp(
     prev: Option<u64>,
     cp: u64,
     options: &QueryOptions,
@@ -88,7 +90,7 @@ pub(crate) fn advance_boundary_excluding_cp(
 /// plus the current direction-matching checkpoint boundary. `cp` /
 /// `position` are the item's cursor coordinates (`list_checkpoints` passes
 /// its cp_seq for both).
-pub(crate) fn item_watermark(
+pub fn item_watermark(
     options: &QueryOptions,
     cp: u64,
     position: u64,
@@ -105,7 +107,7 @@ pub(crate) fn item_watermark(
 /// its scan domain (see [`boundary_cursor_cp`] for the per-checkpoint
 /// scanners' direction adjustment); `boundary` is the accumulated
 /// completion boundary.
-pub(crate) fn boundary_watermark(
+pub fn boundary_watermark(
     options: &QueryOptions,
     cursor_cp: u64,
     position: u64,
@@ -123,7 +125,7 @@ pub(crate) fn boundary_watermark(
 /// cp is used directly; descending `Boundary` cursors treat the cp
 /// coordinate as an EXCLUSIVE upper bound, so `cp + 1` is needed to keep
 /// `cp` itself included on resume.
-pub(crate) fn boundary_cursor_cp(cp: u64, direction: ScanDirection) -> u64 {
+pub fn boundary_cursor_cp(cp: u64, direction: ScanDirection) -> u64 {
     if direction.is_ascending() {
         cp
     } else {
@@ -138,7 +140,7 @@ pub(crate) fn boundary_cursor_cp(cp: u64, direction: ScanDirection) -> u64 {
 /// lower) — because no further items exist in it within the requested range.
 /// The `(end_checkpoint, end_position)` cursor resumes exactly past the
 /// scanned range.
-pub(crate) fn terminal_boundary_watermark(
+pub fn terminal_boundary_watermark(
     options: &QueryOptions,
     end_checkpoint: u64,
     end_position: u64,
@@ -158,7 +160,7 @@ pub(crate) fn terminal_boundary_watermark(
 /// ledger tip or a requested `end_checkpoint`) rather than being truncated
 /// by an item or scan limit, or bounded by a client cursor. Only natural
 /// completion proves the range's final checkpoint complete.
-pub(crate) fn reached_range_end(reason: QueryEndReason) -> bool {
+pub fn reached_range_end(reason: QueryEndReason) -> bool {
     matches!(
         reason,
         QueryEndReason::LedgerTip | QueryEndReason::CheckpointBound
@@ -168,7 +170,7 @@ pub(crate) fn reached_range_end(reason: QueryEndReason) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::query_options::QueryType;
+    use crate::ledger_history::query_options::QueryType;
 
     fn options(ascending: bool) -> QueryOptions {
         let mut request = sui_rpc::proto::sui::rpc::v2alpha::QueryOptions::default();
