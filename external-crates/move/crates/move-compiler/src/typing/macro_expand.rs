@@ -30,7 +30,7 @@ use std::{
     sync::Arc,
 };
 
-type LambdaMap = BTreeMap<Var_, (N::Lambda, Loc, Vec<Type>, Type)>;
+type LambdaMap = BTreeMap<Var_, (N::Lambda, Loc, Loc, Vec<Type>, Type)>;
 type ArgMap = BTreeMap<Var_, (N::Exp, Type)>;
 struct ParamInfo {
     argument: Option<EvalStrategy<Loc, Loc>>,
@@ -327,9 +327,12 @@ fn bind_lambda(
     param_ty: Vec<Type>,
     result_ty: Type,
 ) -> Option<()> {
+    // The lambda expression location includes the parameter binding site,
+    // while lambda.body.loc starts at the body expression only.
+    let lambda_loc = arg.loc;
     match arg.value {
         N::Exp_::Lambda(lambda) => {
-            lambdas.insert(param, (lambda, tfunloc, param_ty, result_ty));
+            lambdas.insert(param, (lambda, lambda_loc, tfunloc, param_ty, result_ty));
             Some(())
         }
         _ => {
@@ -1046,7 +1049,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
         ///////
         N::Exp_::Var(sp!(_, v_)) if context.lambdas.contains_key(v_) => {
             context.mark_used(v_);
-            let (lambda, tfunloc, args, ret) = context.lambdas.get(v_).unwrap();
+            let (lambda, _lambda_loc, tfunloc, args, ret) = context.lambdas.get(v_).unwrap();
             let mut lambda = lambda.clone();
             lambda
                 .extra_annotations
@@ -1066,6 +1069,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     body: mut lambda_body,
                     extra_annotations,
                 },
+                lambda_loc,
                 tfunloc,
                 param_tys,
                 result_ty,
@@ -1086,7 +1090,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             let next_color = context.core.next_variable_color();
             let lambda_info: ExpansionColor = Some(Arc::new(MacroInfo {
                 kind: MacroFrameKind::Lambda,
-                source_loc: lambda_body.loc,
+                source_loc: lambda_loc,
                 call_loc: *eloc,
                 parent: context.macro_info.clone(),
             }));

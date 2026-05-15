@@ -32,9 +32,7 @@ note[I15008]: macro frame info
        22: `id!(x)`
            [MacroBody(apply), Lambda] -> [MacroBody(apply), Lambda, MacroBody(id), Argument]
        21: `if (x > p) {`
-           [MacroBody(apply), Lambda, MacroBody(id), Argument] -> [MacroBody(apply), Lambda, MacroBody(id)]
-       21: `if (x > p) {`
-           [MacroBody(apply), Lambda, MacroBody(id)] -> [MacroBody(apply), Lambda]
+           [MacroBody(apply), Lambda, MacroBody(id), Argument] -> [MacroBody(apply), Lambda]
        24: `0`
            [MacroBody(apply), Lambda] -> []
        21: `if (x > p) {`
