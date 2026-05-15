@@ -12,7 +12,7 @@ use petgraph::{
     visit::EdgeRef,
 };
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 #[derive(Debug)]
 pub struct Graph {
@@ -361,29 +361,60 @@ fn add_infinite_loop_post_dominators<N, E>(
 /// it disconnects some nodes from `return_` in the post-dom analysis.
 ///
 /// Algorithm: tentatively filter everything, find nodes with no reachable unfiltered sink,
-/// un-filter one of their reachable sinks as an anchor, repeat to fixpoint.
+/// un-filter one of their reachable sinks as an anchor, repeat to fixpoint. The reachability
+/// precomputation is done in O(V+E) via SCC condensation rather than a DFS per node.
 fn compute_filter_set<N, E>(
     cfg: &petgraph::Graph<N, E>,
     input: &BTreeMap<D::Label, D::Input>,
     sinks: &HashSet<NodeIndex>,
 ) -> HashSet<NodeIndex> {
-    // Precompute each non-sink node's reachable sinks (forward CFG traversal).
-    let reachable_sinks: HashMap<NodeIndex, Vec<NodeIndex>> = input
-        .keys()
-        .filter(|n| !sinks.contains(n))
-        .map(|&n| (n, cfg_reachable_sinks(cfg, n, sinks)))
-        .collect();
+    // Fast path: with no sinks there's nothing to filter; with exactly one, filtering it
+    // would disconnect every non-sink node (the lone sink is the function's only exit).
+    if sinks.len() <= 1 {
+        return HashSet::new();
+    }
+
+    // `tarjan_scc` returns SCCs in reverse topological order — leaves of the SCC-DAG come
+    // first, so a node's successor SCCs are always processed before it. We compute each
+    // SCC's reachable-sinks once, then look up per-node by indexing into `scc_of`.
+    let sccs = petgraph::algo::tarjan_scc(cfg);
+    let mut scc_of: HashMap<NodeIndex, usize> = HashMap::new();
+    for (i, scc) in sccs.iter().enumerate() {
+        for &n in scc {
+            scc_of.insert(n, i);
+        }
+    }
+    let mut scc_reachable: Vec<BTreeSet<NodeIndex>> = vec![BTreeSet::new(); sccs.len()];
+    for (i, scc) in sccs.iter().enumerate() {
+        let mut reach = BTreeSet::new();
+        for &n in scc {
+            if sinks.contains(&n) {
+                reach.insert(n);
+            }
+            for succ in cfg.neighbors(n) {
+                let succ_scc = scc_of[&succ];
+                if succ_scc != i {
+                    reach.extend(scc_reachable[succ_scc].iter().copied());
+                }
+            }
+        }
+        scc_reachable[i] = reach;
+    }
 
     let mut filter = sinks.clone();
     loop {
         let mut anchors_to_unfilter: HashSet<NodeIndex> = HashSet::new();
-        for reachable in reachable_sinks.values() {
+        for &n in input.keys() {
+            if sinks.contains(&n) {
+                continue;
+            }
+            let reachable = &scc_reachable[scc_of[&n]];
             if reachable.iter().any(|s| !filter.contains(s)) {
                 continue;
             }
             // Node has no unfiltered exit; pick one of its reachable sinks as an anchor.
-            // Picking any works; we take the highest-indexed for determinism.
-            if let Some(&anchor) = reachable.iter().max() {
+            // Highest-indexed for determinism.
+            if let Some(&anchor) = reachable.iter().next_back() {
                 anchors_to_unfilter.insert(anchor);
             }
         }
@@ -395,25 +426,4 @@ fn compute_filter_set<N, E>(
         }
     }
     filter
-}
-
-fn cfg_reachable_sinks<N, E>(
-    cfg: &petgraph::Graph<N, E>,
-    start: NodeIndex,
-    sinks: &HashSet<NodeIndex>,
-) -> Vec<NodeIndex> {
-    let mut visited = HashSet::new();
-    let mut stack = vec![start];
-    let mut out = Vec::new();
-    while let Some(n) = stack.pop() {
-        if !visited.insert(n) {
-            continue;
-        }
-        if sinks.contains(&n) {
-            out.push(n);
-            continue;
-        }
-        stack.extend(cfg.neighbors(n));
-    }
-    out
 }
