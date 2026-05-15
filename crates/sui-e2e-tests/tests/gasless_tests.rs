@@ -139,14 +139,11 @@ async fn test_gasless_dryrun() {
         0,
         0,
     );
-    let tx_digest = sui_types::digests::TransactionDigest::genesis_marker();
     let result = test_env
         .cluster
         .fullnode_handle
         .sui_node
-        .with_async(
-            |node| async move { node.state().dry_exec_transaction(tx_data, tx_digest).await },
-        )
+        .with_async(|node| async move { node.state().dry_exec_transaction(tx_data).await })
         .await;
     assert!(
         result.is_ok(),

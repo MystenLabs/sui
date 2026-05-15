@@ -2184,11 +2184,7 @@ impl SuiTestAdapter {
     }
 
     async fn dry_run(&mut self, transaction: TransactionData) -> anyhow::Result<TxnSummary> {
-        let digest = transaction.digest();
-        let results = self
-            .executor
-            .dry_run_transaction_block(transaction, digest)
-            .await?;
+        let results = self.executor.dry_run_transaction_block(transaction).await?;
         let DryRunTransactionBlockResponse {
             effects, events, ..
         } = results;
