@@ -12,9 +12,11 @@ use itertools::Itertools;
 use mysten_network::Multiaddr;
 use parking_lot::RwLock;
 use prometheus::Registry;
+use tokio::sync::broadcast;
 use tracing::{info, warn};
 
 use crate::{
+    AuxiliaryDataHandler,
     BlockAPI as _, CommitConsumerArgs,
     authority_service::AuthorityService,
     block_manager::BlockManager,
@@ -72,10 +74,10 @@ impl ConsensusAuthority {
         boot_counter: u64,
         // Broadcast sender for randomness signatures. ObserverService subscribes to push
         // signatures to connected observer peers.
-        sig_broadcast: Option<tokio::sync::broadcast::Sender<bytes::Bytes>>,
+        randomness_signatures: broadcast::Sender<bytes::Bytes>,
         // Handler for auxiliary data from the block stream (e.g. randomness signatures).
         // Only set for observer nodes.
-        auxiliary_data_handler: Option<Arc<dyn crate::AuxiliaryDataHandler>>,
+        auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
     ) -> Self {
         match network_type {
             NetworkType::Tonic => {
@@ -91,7 +93,7 @@ impl ConsensusAuthority {
                     commit_consumer,
                     registry,
                     boot_counter,
-                    sig_broadcast,
+                    randomness_signatures,
                     auxiliary_data_handler,
                 )
                 .await;
@@ -184,8 +186,8 @@ where
         commit_consumer: CommitConsumerArgs,
         registry: Registry,
         boot_counter: u64,
-        sig_broadcast: Option<tokio::sync::broadcast::Sender<bytes::Bytes>>,
-        auxiliary_data_handler: Option<Arc<dyn crate::AuxiliaryDataHandler>>,
+        randomness_signatures: broadcast::Sender<bytes::Bytes>,
+        auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
     ) -> Self {
         let metrics = initialise_metrics(registry);
 
@@ -463,7 +465,7 @@ where
                     transaction_vote_tracker.clone(),
                     synchronizer.clone(),
                     block_sync_service.clone(),
-                    sig_broadcast.clone(),
+                    randomness_signatures.clone(),
                 ));
                 network_manager
                     .start_observer_server(observer_service)
@@ -484,7 +486,7 @@ where
                 transaction_vote_tracker.clone(),
                 synchronizer.clone(),
                 block_sync_service.clone(),
-                sig_broadcast.clone(),
+                randomness_signatures.clone(),
             ));
 
             let observer_subscriber = ObserverSubscriber::new(
@@ -677,7 +679,7 @@ mod tests {
             commit_consumer,
             registry,
             0,
-            None,
+            broadcast::channel(1).0,
             None,
         )
         .await;
@@ -720,7 +722,7 @@ mod tests {
             commit_consumer,
             registry,
             0,
-            None,
+            broadcast::channel(1).0,
             None,
         )
         .await;
@@ -837,7 +839,7 @@ mod tests {
             observer_commit_consumer,
             Registry::new(),
             0,
-            None,
+            broadcast::channel(1).0,
             None,
         )
         .await;
@@ -1274,7 +1276,7 @@ mod tests {
             commit_consumer,
             registry,
             boot_counter,
-            None,
+            broadcast::channel(1).0,
             None,
         )
         .await;
