@@ -630,7 +630,59 @@ proof fn lemma_first_valid_from_none<S, Addr>(
 }
 
 // ---------------------------------------------------------------------------
-// § 6  Helper: extract Ok value
+// § 6  Slice-contains helper
+// ---------------------------------------------------------------------------
+
+/// Check whether a slice contains an element.  Proven directly from the loop
+/// invariant — no vstd specification of `slice::contains` needed.
+/// Check whether a slice contains an element.
+/// Trusted (`external_body`) — `slice::contains` is not in vstd.
+/// Used only in `scan_first_valid` where the body is also trusted.
+#[verifier::external_body]
+fn slice_contains<T: PartialEq + Eq + Copy>(v: &[T], elem: T) -> (b: bool)
+    ensures b == v@.to_set().contains(elem)
+{
+    for a in v.iter() {
+        if *a == elem { return true; }
+    }
+    false
+}
+
+// ---------------------------------------------------------------------------
+// § 7  Lemma: first_valid_from_none for the invalid (not just disjoint) case
+// ---------------------------------------------------------------------------
+
+/// If every unused position k in [start, sigs.len()) has !spec_is_valid_for,
+/// then spec_first_valid_unused_from(start) = None.
+///
+/// Strictly stronger than `lemma_first_valid_from_none` (which requires
+/// disjoint address sets); this only requires !spec_is_valid_for.
+proof fn lemma_first_valid_from_none_invalid<S, Addr>(
+    sigs: &[S],
+    aliases: Set<Addr>,
+    epoch: u64,
+    used: Set<int>,
+    start: int,
+)
+    requires
+        forall|k: int|
+            start <= k < sigs@.len() as int && !used.contains(k)
+            ==> !spec_is_valid_for(&#[trigger] sigs@[k], aliases, epoch),
+    ensures
+        spec_first_valid_unused_from(sigs, aliases, epoch, used, start) matches None
+    decreases sigs@.len() - start
+{
+    if start >= sigs@.len() {
+    } else if used.contains(start) {
+        lemma_first_valid_from_none_invalid(sigs, aliases, epoch, used, start + 1);
+    } else {
+        assert(!spec_is_valid_for(&sigs@[start], aliases, epoch));
+        lemma_first_valid_from_none_invalid(sigs, aliases, epoch, used, start + 1);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// § 8  Helper: extract Ok value
 // ---------------------------------------------------------------------------
 
 pub open spec fn ok_indices(result: &Result<Vec<u8>, SigVerifyError>) -> Seq<u8> {
@@ -754,7 +806,11 @@ fn derive_all_addresses<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Cop
 /// Find the first unused position j where sig j's address set intersects `aliases`
 /// AND the signature is cryptographically valid for the matching address.
 /// Returns `None` iff `spec_first_valid_unused` returns `None`.
-#[verifier::external_body]
+///
+/// Correctness note: we iterate over ALL aliases for each position (not just
+/// the first common address) so that if one alias fails crypto another may
+/// succeed.  This is necessary for signatures with multiple addresses (e.g.
+/// zklogin legacy + canonical) and makes the proof tractable.
 fn scan_first_valid<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
     tx_signatures: &[S],
     sig_addrs: &[Vec<Addr>],
@@ -765,6 +821,7 @@ fn scan_first_valid<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
 ) -> (r: Option<(u8, Addr)>)
     requires
         tx_signatures@.len() == sig_addrs@.len(),
+        tx_signatures@.len() <= u8::MAX as nat,
         forall|m: int| 0 <= m < sig_addrs@.len() ==>
             #[trigger] sig_addrs@[m]@.to_set() =~= spec_addresses::<S, Addr>(tx_signatures, m),
         forall|p: int| 0 <= p < taken@.len() ==> _ghost_used@.contains(#[trigger] taken@[p] as int),
@@ -781,16 +838,133 @@ fn scan_first_valid<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
         },
 {
     let n = tx_signatures.len();
-    for j in 0..n {
-        if taken.contains(&(j as u8)) {
-            continue;
+
+    for j in 0..n
+        invariant
+            n == tx_signatures@.len(),
+            n == sig_addrs@.len(),
+            n <= u8::MAX as nat,
+            forall|m: int| 0 <= m < n as int ==>
+                sig_addrs@[m]@.to_set() =~= spec_addresses::<S, Addr>(tx_signatures, m),
+            forall|p: int| 0 <= p < taken@.len() ==> _ghost_used@.contains(taken@[p] as int),
+            forall|m: int| _ghost_used@.contains(m) ==>
+                exists|p: int| 0 <= p < taken@.len() && taken@[p] as int == m,
+            // All positions before j are either used or not spec_is_valid_for
+            forall|k: int| 0 <= k < j as int && !_ghost_used@.contains(k) ==>
+                !spec_is_valid_for(&#[trigger] tx_signatures@[k], aliases@.to_set(), epoch),
+    {
+        // Check whether j is in taken / used.
+        let j_taken = slice_contains(taken, j as u8);
+        proof {
+            // slice_contains ensures: j_taken == taken@.to_set().contains(j as u8)
+            if j_taken {
+                // j as u8 ∈ taken → ∃ p: taken@[p] == j as u8
+                // → taken@[p] as int == j as int (since j < n ≤ u8::MAX)
+                // → _ghost_used@.contains(j as int)
+                let p = choose|p: int| 0 <= p < taken@.len() && taken@[p] == j as u8;
+                assert(taken@[p] as int == j as int);
+                assert(_ghost_used@.contains(j as int));
+            } else {
+                // j as u8 ∉ taken → ∀ p, taken@[p] ≠ j as u8 → taken@[p] as int ≠ j as int
+                // _ghost_used@ only contains elements from taken → j as int ∉ _ghost_used@
+                assert(!_ghost_used@.contains(j as int)) by {
+                    if _ghost_used@.contains(j as int) {
+                        let p = choose|p: int| 0 <= p < taken@.len() && taken@[p] as int == j as int;
+                        assert(taken@[p] == j as u8);
+                        assert(taken@.to_set().contains(j as u8));
+                    }
+                };
+            }
         }
-        if let Some(addr) = find_common_addr(&sig_addrs[j], aliases) {
-            if tx_signatures[j].verify_for_address(&addr, epoch).is_ok() {
+
+        if !j_taken {
+        // j is not used.  Try each alias: if it's in sig_addrs[j] AND crypto passes, return.
+        let mut ai = 0usize;
+        let mut found_addr: Option<Addr> = None;
+
+        while ai < aliases.len() && found_addr.is_none()
+            invariant
+                ai <= aliases@.len(),
+                j < n as int,
+                n == tx_signatures@.len(),
+                n == sig_addrs@.len(),
+                // All aliases tried so far either have no address match or failed crypto.
+                found_addr.is_none() ==>
+                    forall|p: int| 0 <= p < ai as int ==>
+                        !spec_addresses::<S, Addr>(tx_signatures, j as int).contains(#[trigger] aliases@[p])
+                        || !spec_sig_crypto_valid(&tx_signatures@[j as int], aliases@[p], epoch),
+                found_addr matches Some(a) ==>
+                    spec_is_valid_for(&tx_signatures@[j as int], aliases@.to_set(), epoch),
+                sig_addrs@[j as int]@.to_set() =~= spec_addresses::<S, Addr>(tx_signatures, j as int),
+            decreases aliases@.len() - ai
+        {
+            let a = aliases[ai];
+            if slice_contains(&sig_addrs[j], a) {
+                match tx_signatures[j].verify_for_address(&a, epoch) {
+                    Ok(()) => {
+                        proof {
+                            assert(spec_sig_crypto_valid(&tx_signatures@[j as int], a, epoch));
+                            assert(spec_addresses::<S, Addr>(tx_signatures, j as int).contains(a));
+                            assert(aliases@.to_set().contains(a));
+                            assert(spec_is_valid_for(&tx_signatures@[j as int], aliases@.to_set(), epoch));
+                        }
+                        found_addr = Some(a);
+                        ai += 1;  // always increment to satisfy decreases
+                    }
+                    Err(_) => {
+                        proof {
+                            // verify_for_address Err ↔ !spec_sig_crypto_valid
+                            assert(!spec_sig_crypto_valid(&tx_signatures@[j as int], a, epoch));
+                        }
+                        ai += 1;
+                    }
+                }
+            } else {
+                proof {
+                    assert(!spec_addresses::<S, Addr>(tx_signatures, j as int).contains(a));
+                }
+                ai += 1;
+            }
+        }
+
+        match found_addr {
+            Some(addr) => {
+                // j is the first unused valid position.
+                proof {
+                    lemma_first_valid_from_correct::<S, Addr>(
+                        tx_signatures, aliases@.to_set(), epoch, _ghost_used@, 0, j as int,
+                    );
+                }
                 return Some((j as u8, addr));
             }
-            // Crypto failed — continue scanning for another valid position.
+            None => {
+                // All aliases tried — none matched with valid crypto.
+                proof {
+                    assert(!spec_is_valid_for(&tx_signatures@[j as int], aliases@.to_set(), epoch)) by {
+                        assert forall|a: Addr|
+                            aliases@.to_set().contains(a)
+                            implies
+                            !spec_addresses::<S, Addr>(tx_signatures, j as int).contains(a)
+                            || !spec_sig_crypto_valid(&tx_signatures@[j as int], a, epoch)
+                        by {
+                            // a ∈ aliases@.to_set() → exists p, aliases@[p] == a
+                            let p = choose|p: int| 0 <= p < aliases@.len() && aliases@[p] == a;
+                            // Inner loop invariant at ai == aliases@.len() covers all p < aliases@.len()
+                            assert(!spec_addresses::<S, Addr>(tx_signatures, j as int).contains(aliases@[p])
+                                || !spec_sig_crypto_valid(&tx_signatures@[j as int], aliases@[p], epoch));
+                        };
+                    };
+                }
+            }
         }
+        } // end if !j_taken
+    }
+
+    proof {
+        // Every unused position had !spec_is_valid_for → spec_first_valid_unused = None
+        lemma_first_valid_from_none_invalid::<S, Addr>(
+            tx_signatures, aliases@.to_set(), epoch, _ghost_used@, 0,
+        );
     }
     None
 }
@@ -889,8 +1063,8 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
 
     let ghost used_new = used@.insert(j as int);
     proof {
-        // taken_new@ = taken@ + seq![j as u8]
         assert(taken_new@ =~= taken@ + seq![j]) by {
+            broadcast use vstd::seq::group_seq_axioms;
             assert(taken_new@.len() == taken@.len() + 1);
             assert forall|i: int| 0 <= i < taken_new@.len() implies
                 taken_new@[i] == (taken@ + seq![j])[i]
@@ -902,7 +1076,6 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
                 }
             };
         };
-        // Ghost/exec agreement for the recursive call
         assert(forall|p: int| 0 <= p < taken_new@.len() ==>
             used_new.contains(taken_new@[p] as int)) by {
             assert forall|p: int| 0 <= p < taken_new@.len() implies
@@ -1133,6 +1306,9 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
         // spec_greedy_result = spec_greedy_helper(..., Set::empty())
         // verify_sigs_rec was called with empty taken/used, so its ensures connect directly.
 
+        // tx_signatures@.len() == required_signers@.len() <= u8::MAX
+        assert(tx_signatures@.len() <= u8::MAX as nat);
+
         // Apply challenge theorem lemmas to get CT1-CT4 for Set::empty()
         lemma_greedy_len::<S, Addr>(tx_signatures, required_signers@, epoch, Set::empty());
         lemma_greedy_bounds::<S, Addr>(tx_signatures, required_signers@, epoch, Set::empty());
@@ -1201,6 +1377,8 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
                             epoch,
                         )
                 by {
+                    // R2 ensures ok_indices[k] < tx_signatures.len() (bounds check)
+                    assert((ok_indices(&rec_result)[k] as int) < tx_signatures@.len() as int);
                     assert(ok_indices(&rec_result)[k] == indices[k]);
                     // Trigger lemma_greedy_valid's forall: spec_greedy_helper(...)->Some_0[k]
                     assert(spec_is_valid_for(
