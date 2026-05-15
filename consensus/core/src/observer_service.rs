@@ -49,7 +49,7 @@ pub(crate) struct ObserverService {
     block_sync_service: Arc<BlockSyncService>,
     /// Broadcasts randomness signatures to observer peers. Store the Sender so we
     /// can call .subscribe() per connection in handle_stream_blocks.
-    sig_broadcast: Option<broadcast::Sender<Bytes>>,
+    randomness_signatures: broadcast::Sender<Bytes>,
 }
 
 impl ObserverService {
@@ -63,7 +63,7 @@ impl ObserverService {
         transaction_vote_tracker: TransactionVoteTracker,
         synchronizer: Arc<SynchronizerHandle>,
         block_sync_service: Arc<BlockSyncService>,
-        sig_broadcast: Option<broadcast::Sender<Bytes>>,
+        randomness_signatures: broadcast::Sender<Bytes>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(context.clone()));
         Self {
@@ -77,7 +77,7 @@ impl ObserverService {
             transaction_vote_tracker,
             synchronizer,
             block_sync_service,
-            sig_broadcast,
+            randomness_signatures,
         }
     }
 }
@@ -281,22 +281,18 @@ impl ObserverNetworkService for ObserverService {
 
         let block_stream = past_stream.chain(live_block_stream);
 
-        // Merge randomness signature broadcast into the stream if available.
-        if let Some(sig_tx) = &self.sig_broadcast {
-            let sig_rx = sig_tx.subscribe();
-            let sig_stream =
-                tokio_stream::wrappers::BroadcastStream::new(sig_rx).filter_map(|result| {
-                    futures::future::ready(result.ok().map(|data| ObserverStreamItem {
-                        blocks: vec![],
-                        auxiliary_data: AuxiliaryData {
-                            randomness_signatures: vec![data],
-                        },
-                    }))
-                });
-            Ok(Box::pin(futures::stream::select(block_stream, sig_stream)))
-        } else {
-            Ok(Box::pin(block_stream))
-        }
+        // Merge randomness signature broadcast into the block stream.
+        let sig_rx = self.randomness_signatures.subscribe();
+        let sig_stream =
+            tokio_stream::wrappers::BroadcastStream::new(sig_rx).filter_map(|result| {
+                futures::future::ready(result.ok().map(|data| ObserverStreamItem {
+                    blocks: vec![],
+                    auxiliary_data: AuxiliaryData {
+                        randomness_signatures: vec![data],
+                    },
+                }))
+            });
+        Ok(Box::pin(futures::stream::select(block_stream, sig_stream)))
     }
 
     async fn handle_fetch_blocks(
@@ -382,7 +378,7 @@ mod tests {
             transaction_vote_tracker,
             create_mock_synchronizer(),
             block_sync_service,
-            None,
+            broadcast::channel(1).0,
         );
 
         // Observer starts with no blocks seen
@@ -454,7 +450,7 @@ mod tests {
             transaction_vote_tracker,
             create_mock_synchronizer(),
             block_sync_service,
-            None,
+            broadcast::channel(1).0,
         );
 
         let peer = keys[0].0.public().clone();

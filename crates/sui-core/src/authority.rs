@@ -6370,24 +6370,27 @@ pub struct RandomnessSignatureMessage {
     pub signature_bytes: Vec<u8>,
 }
 
+/// Broadcast sender type for randomness round signatures to observer peers.
+pub type RandomnessSignatureBroadcast = broadcast::Sender<bytes::Bytes>;
+
 pub struct RandomnessRoundReceiver {
     authority_state: Arc<AuthorityState>,
     randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
-    /// Broadcasts verified randomness signatures to connected observer peers.
-    /// Used by ObserverService to push signatures on the block stream.
-    signature_broadcast_tx: Option<broadcast::Sender<bytes::Bytes>>,
+    /// Best-effort broadcast of verified signatures to observer peers.
+    /// ObserverService subscribes per connection to push on the block stream.
+    signatures_broadcast: RandomnessSignatureBroadcast,
 }
 
 impl RandomnessRoundReceiver {
     pub fn spawn(
         authority_state: Arc<AuthorityState>,
         randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
-        signature_broadcast_tx: Option<broadcast::Sender<bytes::Bytes>>,
+        signatures_broadcast: RandomnessSignatureBroadcast,
     ) -> JoinHandle<()> {
         let rrr = RandomnessRoundReceiver {
             authority_state,
             randomness_rx,
-            signature_broadcast_tx,
+            signatures_broadcast,
         };
         spawn_monitored_task!(rrr.run())
     }
@@ -6424,15 +6427,13 @@ impl RandomnessRoundReceiver {
         }
         // Broadcast signature to connected observer peers so they can create the same
         // transaction. This enables observer-to-observer relay chains.
-        if let Some(tx) = &self.signature_broadcast_tx {
-            let msg = RandomnessSignatureMessage {
-                epoch,
-                round,
-                signature_bytes: bytes.clone(),
-            };
-            if let Ok(encoded) = bcs::to_bytes(&msg) {
-                let _ = tx.send(bytes::Bytes::from(encoded));
-            }
+        let msg = RandomnessSignatureMessage {
+            epoch,
+            round,
+            signature_bytes: bytes.clone(),
+        };
+        if let Ok(encoded) = bcs::to_bytes(&msg) {
+            let _ = self.signatures_broadcast.send(bytes::Bytes::from(encoded));
         }
 
         let key = TransactionKey::RandomnessRound(epoch, round);

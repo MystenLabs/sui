@@ -44,6 +44,7 @@ use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::node_role::NodeRole;
 
 use sui_core::global_state_hasher::GlobalStateHashMetrics;
+use sui_core::randomness_signature_observer::RandomnessSignatureObserver;
 use sui_core::storage::RestReadStore;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc_api::JsonRpcMetrics;
@@ -283,9 +284,9 @@ pub struct SuiNode {
     // Channel to allow signaling upstream to shutdown sui-node
     shutdown_channel_tx: broadcast::Sender<Option<RunWithRange>>,
 
-    /// Long-lived broadcast sender for randomness signatures, passed to per-epoch
-    /// consensus ObserverService instances for pushing signatures to observer peers.
-    randomness_sig_broadcast_tx: tokio::sync::broadcast::Sender<bytes::Bytes>,
+    /// Broadcast sender for randomness signatures. Per-epoch ObserverService
+    /// instances subscribe to push signatures to connected observers.
+    signatures_broadcast: tokio::sync::broadcast::Sender<bytes::Bytes>,
 
     /// Long-lived sender for feeding verified randomness signatures into RandomnessRoundReceiver.
     randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
@@ -816,17 +817,12 @@ impl SuiNode {
                 .unwrap();
         }
 
-        // Broadcast channel for propagating randomness signatures to observer peers.
+        // Broadcast channel for pushing randomness signatures to observer peers.
         // Long-lived (node lifetime): per-epoch ObserverService instances subscribe to it.
-        let (randomness_sig_broadcast_tx, _) =
-            tokio::sync::broadcast::channel::<bytes::Bytes>(1000);
+        let (signatures_broadcast, _) = tokio::sync::broadcast::channel::<bytes::Bytes>(1000);
 
         // Start the loop that receives new randomness and generates transactions for it.
-        RandomnessRoundReceiver::spawn(
-            state.clone(),
-            randomness_rx,
-            Some(randomness_sig_broadcast_tx.clone()),
-        );
+        RandomnessRoundReceiver::spawn(state.clone(), randomness_rx, signatures_broadcast.clone());
 
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
@@ -897,7 +893,7 @@ impl SuiNode {
                 sui_node_metrics.clone(),
                 checkpoint_metrics.clone(),
                 node_role,
-                randomness_sig_broadcast_tx.clone(),
+                signatures_broadcast.clone(),
                 randomness_tx_clone.clone(),
             )
             .await?;
@@ -959,7 +955,7 @@ impl SuiNode {
 
             _state_snapshot_uploader_handle: state_snapshot_handle,
             shutdown_channel_tx: shutdown_channel,
-            randomness_sig_broadcast_tx,
+            signatures_broadcast,
             randomness_tx: randomness_tx_clone,
 
             auth_agg,
@@ -1300,7 +1296,7 @@ impl SuiNode {
         sui_node_metrics: Arc<SuiNodeMetrics>,
         checkpoint_metrics: Arc<CheckpointMetrics>,
         node_role: NodeRole,
-        randomness_sig_broadcast_tx: tokio::sync::broadcast::Sender<bytes::Bytes>,
+        randomness_signatures_broadcast: tokio::sync::broadcast::Sender<bytes::Bytes>,
         randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
     ) -> Result<ValidatorComponents> {
         let mut config_clone = config.clone();
@@ -1327,8 +1323,7 @@ impl SuiNode {
             registry_service,
             client,
             node_role,
-            Some(randomness_sig_broadcast_tx),
-            randomness_tx.clone(),
+            randomness_signatures_broadcast,
         ));
 
         // This only gets started up once, not on every epoch. (Make call to remove every epoch.)
@@ -1381,6 +1376,7 @@ impl SuiNode {
             state.clone(),
             consensus_adapter,
             checkpoint_store,
+            randomness_tx,
             epoch_store,
             state_sync_handle,
             randomness_handle,
@@ -1404,6 +1400,7 @@ impl SuiNode {
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         checkpoint_store: Arc<CheckpointStore>,
+        randomness_tx: tokio::sync::mpsc::Sender<(EpochId, RandomnessRound, Vec<u8>)>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         state_sync_handle: state_sync::Handle,
         randomness_handle: randomness::Handle,
@@ -1431,6 +1428,12 @@ impl SuiNode {
             node_role,
         );
 
+        // Create the observer-side handler for randomness signatures on observer nodes.
+        // Shared between RandomnessManager (calls set_public_key on DKG completion)
+        // and the consensus layer (forwards signatures from the block stream).
+        let signature_observer =
+            Arc::new(RandomnessSignatureObserver::start(randomness_tx.clone()));
+
         if node_role.runs_consensus() && epoch_store.randomness_state_enabled() {
             let authority_key_pair = if node_role.is_validator() {
                 Some(config.protocol_key_pair())
@@ -1442,6 +1445,7 @@ impl SuiNode {
                 Box::new(consensus_adapter.clone()),
                 randomness_handle,
                 authority_key_pair,
+                signature_observer.clone(),
             )
             .await;
             if let Some(randomness_manager) = randomness_manager {
@@ -1490,6 +1494,8 @@ impl SuiNode {
                 sui_tx_validator_metrics.clone(),
             );
             let consensus_manager = consensus_manager.clone();
+            let auxiliary_data_handler: Option<Arc<dyn consensus_core::AuxiliaryDataHandler>> =
+                Some(signature_observer as Arc<dyn consensus_core::AuxiliaryDataHandler>);
             async move {
                 consensus_manager
                     .start(
@@ -1497,6 +1503,7 @@ impl SuiNode {
                         epoch_store,
                         consensus_handler_initializer,
                         sui_tx_validator,
+                        auxiliary_data_handler,
                     )
                     .await;
             }
@@ -1943,6 +1950,7 @@ impl SuiNode {
                             self.state.clone(),
                             consensus_adapter,
                             self.checkpoint_store.clone(),
+                            self.randomness_tx.clone(),
                             new_epoch_store.clone(),
                             self.state_sync_handle.clone(),
                             self.randomness_handle.clone(),
@@ -1996,7 +2004,7 @@ impl SuiNode {
                         self.metrics.clone(),
                         self.checkpoint_metrics.clone(),
                         new_role,
-                        self.randomness_sig_broadcast_tx.clone(),
+                        self.signatures_broadcast.clone(),
                         self.randomness_tx.clone(),
                     )
                     .await?;

@@ -30,6 +30,10 @@ impl RandomnessSignatureObserver {
     /// Sets the VSS public key for signature verification. Should only be called
     /// once per epoch, when observer DKG completes in `RandomnessManager::advance_dkg()`.
     pub fn set_public_key(&self, vss_pk: bls12381::G2Element) {
+        debug_assert!(
+            self.vss_pk_tx.borrow().is_none(),
+            "The public key should be set only once"
+        );
         if self.vss_pk_tx.borrow().is_some() {
             return;
         }
