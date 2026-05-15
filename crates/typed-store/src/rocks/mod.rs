@@ -1783,7 +1783,10 @@ where
             .map(|(k, _v)| k);
         if let Some((first_key, last_key)) = first_key.zip(last_key) {
             let mut batch = self.batch();
+            // `schedule_delete_range` excludes its upper bound, so the largest key
+            // would survive; delete it explicitly to actually clear the map.
             batch.schedule_delete_range(self, &first_key, &last_key)?;
+            batch.delete_batch(self, [last_key])?;
             batch.write()?;
         }
         Ok(())

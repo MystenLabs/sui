@@ -411,6 +411,54 @@ async fn test_delete_range() {
 }
 
 #[tokio::test]
+async fn test_schedule_delete_all_includes_last_key() {
+    let options = ReadWriteOptions::default().set_ignore_range_deletions(false);
+    let db: DBMap<i32, String> = DBMap::reopen(
+        &open_rocksdb(temp_dir(), &[rocksdb::DEFAULT_COLUMN_FAMILY_NAME]),
+        None,
+        &options,
+        false,
+    )
+    .unwrap();
+
+    let mut batch = db.batch();
+    batch
+        .insert_batch(&db, (0..101).map(|i| (i, i.to_string())))
+        .expect("Failed to batch insert");
+    batch.write().expect("Failed to execute batch");
+
+    db.schedule_delete_all().expect("Failed to delete all");
+
+    let remaining: Vec<_> = db.safe_iter().map(|item| item.unwrap()).collect();
+    assert_eq!(
+        Vec::<(i32, String)>::new(),
+        remaining,
+        "schedule_delete_all must remove every entry, including the largest key",
+    );
+}
+
+#[tokio::test]
+async fn test_schedule_delete_all_single_entry() {
+    let options = ReadWriteOptions::default().set_ignore_range_deletions(false);
+    let db: DBMap<i32, String> = DBMap::reopen(
+        &open_rocksdb(temp_dir(), &[rocksdb::DEFAULT_COLUMN_FAMILY_NAME]),
+        None,
+        &options,
+        false,
+    )
+    .unwrap();
+
+    db.insert(&42, &"only".to_string()).unwrap();
+
+    db.schedule_delete_all().expect("Failed to delete all");
+
+    assert!(
+        db.is_empty(),
+        "schedule_delete_all on a single-entry map must empty it",
+    );
+}
+
+#[tokio::test]
 async fn test_iter_with_bounds() {
     let db = open_map(temp_dir(), None);
 
