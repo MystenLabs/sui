@@ -15,7 +15,7 @@ use mysten_common::ZipDebugEqIteratorExt;
 use sui_types::{
     base_types::TxContext,
     error::ExecutionErrorTrait,
-    object::Owner,
+    object::{ObjectPermissions, Owner},
     transaction::{self as P, CallArg, FundsWithdrawalArg, ObjectArg, SharedObjectMutability},
 };
 
@@ -128,11 +128,15 @@ fn input<Mode: ExecutionMode>(
                         "Unexpected owner for SharedObject: {:?}",
                         obj.owner
                     );
-                    L::SharedObjectKind::Party
+                    L::SharedObjectKind::Party(ObjectPermissions::ALL)
                 }
                 Owner::Shared { .. } => L::SharedObjectKind::Legacy,
-                Owner::ConsensusAddressOwner { .. } => L::SharedObjectKind::Party,
-                Owner::Party { .. } => todo!("Party WIP"),
+                Owner::ConsensusAddressOwner { .. } => {
+                    L::SharedObjectKind::Party(ObjectPermissions::ALL)
+                }
+                Owner::Party { permissions, .. } => {
+                    L::SharedObjectKind::Party(permissions.permissions_for(&tx_context.sender()))
+                }
             };
             (
                 L::InputArg::Object(L::ObjectArg::SharedObject {

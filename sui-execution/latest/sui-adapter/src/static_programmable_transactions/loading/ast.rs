@@ -21,6 +21,7 @@ use std::rc::Rc;
 use sui_types::{
     Identifier, TypeTag,
     base_types::{ObjectID, ObjectRef, RESOLVED_TX_CONTEXT, SequenceNumber, TxContextKind},
+    object::{ObjectPermissions, Party},
 };
 
 //**************************************************************************************************
@@ -50,10 +51,10 @@ pub enum InputArg {
     FundsWithdrawal(FundsWithdrawalArg),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum SharedObjectKind {
     Legacy,
-    Party,
+    Party(ObjectPermissions),
 }
 
 #[derive(Debug)]
