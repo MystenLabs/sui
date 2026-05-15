@@ -1478,8 +1478,6 @@ impl SuiNode {
                 sui_tx_validator_metrics.clone(),
             );
             let consensus_manager = consensus_manager.clone();
-            let handler: Arc<dyn consensus_core::RandomnessSignatureHandler> =
-                randomness_receiver_handle;
             async move {
                 consensus_manager
                     .start(
@@ -1487,7 +1485,7 @@ impl SuiNode {
                         epoch_store,
                         consensus_handler_initializer,
                         sui_tx_validator,
-                        Some(handler),
+                        Some(randomness_receiver_handle),
                     )
                     .await;
             }
