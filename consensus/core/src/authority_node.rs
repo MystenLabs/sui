@@ -16,8 +16,7 @@ use tokio::sync::broadcast;
 use tracing::{info, warn};
 
 use crate::{
-    AuxiliaryDataHandler,
-    BlockAPI as _, CommitConsumerArgs,
+    AuxiliaryDataHandler, BlockAPI as _, CommitConsumerArgs,
     authority_service::AuthorityService,
     block_manager::BlockManager,
     block_sync_service::BlockSyncService,
