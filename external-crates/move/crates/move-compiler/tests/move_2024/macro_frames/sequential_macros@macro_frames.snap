@@ -27,14 +27,12 @@ note[I15008]: macro frame info
        4: `$x + 1`
            [MacroBody(add_one), Argument] -> [MacroBody(add_one)]
        12: `add_one!(v) + double!(v)`
-           [MacroBody(add_one)] -> [MacroBody(double), Argument]
+           [MacroBody(add_one)] -> []
+       12: `add_one!(v) + double!(v)`
+           [] -> [MacroBody(double), Argument]
        12: `add_one!(v) + double!(v)`
            [MacroBody(double), Argument] -> [MacroBody(double), Argument]
        8: `$x + $x`
            [MacroBody(double), Argument] -> [MacroBody(double)]
-       12: `add_one!(v) + double!(v)`
-           [MacroBody(double)] -> []
-       12: `add_one!(v) + double!(v)`
-           [] -> [MacroBody(double)]
        12: `add_one!(v) + double!(v)`
            [MacroBody(double)] -> []

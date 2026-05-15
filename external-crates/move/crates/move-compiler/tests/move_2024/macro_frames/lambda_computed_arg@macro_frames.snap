@@ -32,7 +32,3 @@ note[I15008]: macro frame info
            [MacroBody(apply_computed)] -> [MacroBody(apply_computed), Lambda]
        21: `a + apply_computed!(|x| x + p)`
            [MacroBody(apply_computed), Lambda] -> []
-       21: `a + apply_computed!(|x| x + p)`
-           [] -> [MacroBody(apply_computed)]
-       21: `a + apply_computed!(|x| x + p)`
-           [MacroBody(apply_computed)] -> []

@@ -24,14 +24,12 @@ note[I15008]: macro frame info
            [] -> [MacroBody(quad), Argument]
        4: `$x + $x`
            [MacroBody(quad), Argument] -> [MacroBody(quad), MacroBody(double)]
-       12: `quad!(v)`
-           [MacroBody(quad), MacroBody(double)] -> [MacroBody(quad), Argument]
-       4: `$x + $x`
-           [MacroBody(quad), Argument] -> [MacroBody(quad), MacroBody(double)]
        8: `double!($x) + double!($x)`
            [MacroBody(quad), MacroBody(double)] -> [MacroBody(quad)]
-       8: `double!($x) + double!($x)`
-           [MacroBody(quad)] -> [MacroBody(quad), MacroBody(double)]
+       12: `quad!(v)`
+           [MacroBody(quad)] -> [MacroBody(quad), Argument]
+       4: `$x + $x`
+           [MacroBody(quad), Argument] -> [MacroBody(quad), MacroBody(double)]
        8: `double!($x) + double!($x)`
            [MacroBody(quad), MacroBody(double)] -> [MacroBody(quad)]
        12: `quad!(v)`
