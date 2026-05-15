@@ -1,0 +1,150 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: true
+---
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:12:5
+   │
+12 │     pure(1); // warn
+   │     ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:18:13
+   │
+18 │     let x = pure(1); // warn
+   │             ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:24:12
+   │
+24 │     if (b) pure(1) else pure(2); // warn x2
+   │            ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:24:25
+   │
+24 │     if (b) pure(1) else pure(2); // warn x2
+   │                         ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:30:20
+   │
+30 │     let x = if (b) pure(1) else pure(2); // warn x2 (one per branch)
+   │                    ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:30:33
+   │
+30 │     let x = if (b) pure(1) else pure(2); // warn x2 (one per branch)
+   │                                 ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:37:17
+   │
+37 │         E::A => pure(1), // warn
+   │                 ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:38:17
+   │
+38 │         E::B => pure(2), // warn
+   │                 ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:46:17
+   │
+46 │         E::A => pure(1), // warn
+   │                 ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:47:17
+   │
+47 │         E::B => pure(2), // warn
+   │                 ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:55:22
+   │
+55 │         if (b) break pure(1); // warn
+   │                      ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:63:23
+   │
+63 │             return 'l pure(1) // warn
+   │                       ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:65:9
+   │
+65 │         pure2(2) // warn (tail of the labeled block)
+   │         ^^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:73:13
+   │
+73 │     let y = pure2(2); // warn (y is never read)
+   │             ^^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:79:15
+   │
+79 │     apply!(|| pure(1)); // warn
+   │               ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02013]: return value of a non-mutating call is discarded
+   ┌─ tests/linter/move_2024/true_positive_unused_return_value.move:86:29
+   │
+86 │         apply!(|| return 'l pure(1)); // warn
+   │                             ^^^^^^^ Unused return value. This function takes no '&mut' arguments, so its result is the only observable effect of the call
+   │
+   = Bind the result with 'let', or use 'let _ = ...' to discard it explicitly.
+   = This warning can be suppressed with '#[allow(lint(unused_return_value))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
