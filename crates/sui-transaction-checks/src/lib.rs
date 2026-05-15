@@ -536,6 +536,13 @@ mod checked {
         object: &Object,
         system_transaction: bool,
     ) -> UserInputResult {
+        // Defense-in-depth: Owner::Party is not yet supported.
+        if matches!(object.owner, Owner::Party { .. }) {
+            return Err(UserInputError::Unsupported(
+                "Party-owned objects are not yet supported".to_string(),
+            ));
+        }
+
         match object_kind {
             InputObjectKind::MovePackage(package_id) => {
                 fp_ensure!(
