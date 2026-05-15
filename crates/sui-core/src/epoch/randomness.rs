@@ -38,7 +38,7 @@ use crate::authority::authority_per_epoch_store::{
 };
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::consensus_adapter::SubmitToConsensus;
-use crate::randomness_signature_observer::RandomnessSignatureObserver;
+use crate::randomness_round_receiver::RandomnessRoundReceiverHandle;
 
 type PkG = bls12381::G2Element;
 type EncG = bls12381::G2Element;
@@ -166,7 +166,7 @@ pub struct RandomnessManager {
     next_randomness_round: RandomnessRound,
     highest_completed_round: Arc<Mutex<Option<RandomnessRound>>>,
 
-    signature_observer: Arc<RandomnessSignatureObserver>,
+    randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
 }
 
 impl RandomnessManager {
@@ -176,7 +176,7 @@ impl RandomnessManager {
         consensus_adapter: Box<dyn SubmitToConsensus>,
         network_handle: randomness::Handle,
         authority_key_pair: &AuthorityKeyPair,
-        signature_observer: Arc<RandomnessSignatureObserver>,
+        randomness_receiver_handle: Arc<RandomnessRoundReceiverHandle>,
     ) -> Option<Self> {
         let epoch_store = match epoch_store_weak.upgrade() {
             Some(epoch_store) => epoch_store,
@@ -306,7 +306,7 @@ impl RandomnessManager {
             dkg_output: OnceCell::new(),
             next_randomness_round: RandomnessRound(0),
             highest_completed_round: Arc::new(Mutex::new(highest_completed_round)),
-            signature_observer,
+            randomness_receiver_handle,
         };
         let dkg_output = tables
             .dkg_output
@@ -560,7 +560,8 @@ impl RandomnessManager {
                         self.party.t(),
                         None,
                     );
-                    self.signature_observer.set_public_key(*output.vss_pk.c0());
+                    self.randomness_receiver_handle
+                        .set_public_key(*output.vss_pk.c0());
 
                     consensus_output.set_dkg_output(output);
                 }
@@ -832,7 +833,7 @@ mod tests {
         consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics, MockConsensusClient},
         epoch::randomness::*,
         mock_consensus::with_block_status,
-        randomness_signature_observer::RandomnessSignatureObserver,
+        randomness_round_receiver::RandomnessRoundReceiverHandle,
     };
     use consensus_core::BlockStatus;
     use consensus_types::block::BlockRef;
@@ -896,14 +897,12 @@ mod tests {
                 Arc::new(tokio::sync::Notify::new()),
             ));
             let epoch_store = state.epoch_store_for_testing();
-            let (sig_tx, _sig_rx) = mpsc::channel(1);
-            let signature_observer = Arc::new(RandomnessSignatureObserver::start(sig_tx));
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 Box::new(consensus_adapter.clone()),
                 sui_network::randomness::Handle::new_stub(),
                 validator.protocol_key_pair(),
-                signature_observer,
+                RandomnessRoundReceiverHandle::new_for_testing(),
             )
             .await
             .unwrap();
@@ -1048,14 +1047,12 @@ mod tests {
                 Arc::new(tokio::sync::Notify::new()),
             ));
             let epoch_store = state.epoch_store_for_testing();
-            let (sig_tx, _sig_rx) = mpsc::channel(1);
-            let signature_observer = Arc::new(RandomnessSignatureObserver::start(sig_tx));
             let randomness_manager = RandomnessManager::try_new(
                 Arc::downgrade(&epoch_store),
                 Box::new(consensus_adapter.clone()),
                 sui_network::randomness::Handle::new_stub(),
                 validator.protocol_key_pair(),
-                signature_observer,
+                RandomnessRoundReceiverHandle::new_for_testing(),
             )
             .await
             .unwrap();

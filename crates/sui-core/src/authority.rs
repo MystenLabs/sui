@@ -70,7 +70,6 @@ use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_execution::Executor;
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::accumulator_root::AccumulatorObjId;
-use sui_types::crypto::RandomnessRound;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::execution::ExecutionOutput;
 use sui_types::execution::ExecutionTimeObservationKey;
@@ -78,7 +77,6 @@ use sui_types::execution::ExecutionTiming;
 use sui_types::execution_params::ExecutionOrEarlyError;
 use sui_types::execution_params::FundsWithdrawStatus;
 use sui_types::execution_params::get_early_execution_error;
-use sui_types::execution_status::ExecutionStatus;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
 use sui_types::layout_resolver::LayoutResolver;
 use sui_types::layout_resolver::into_struct_layout;
@@ -98,9 +96,8 @@ use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_metadata};
 use tap::TapFallible;
 use tokio::sync::RwLock;
 use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::oneshot;
 use tokio::sync::watch::error::RecvError;
-use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::{debug, error, info, instrument, warn};
 
@@ -6359,164 +6356,6 @@ impl AuthorityState {
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&self.execution_lock_for_reconfiguration().await);
         Ok(())
-    }
-}
-
-/// A randomness signature for a specific epoch and round, broadcast to observer peers.
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct RandomnessSignatureMessage {
-    pub epoch: EpochId,
-    pub round: RandomnessRound,
-    pub signature_bytes: Vec<u8>,
-}
-
-const SIGNATURES_BROADCAST_CAPACITY: usize = 1000;
-
-pub struct RandomnessRoundReceiver {
-    authority_state: Arc<AuthorityState>,
-    randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
-    /// Best-effort broadcast of verified signatures. Primarily used for propagating the
-    /// signatures via consensus to non-committee peers (observers) syncing their state via consensus
-    /// from a read-only capacity.
-    signatures_broadcast: broadcast::Sender<bytes::Bytes>,
-}
-
-impl RandomnessRoundReceiver {
-    /// Spawns the receiver loop and returns the broadcast sender for randomness
-    /// signatures alongside the task handle.
-    pub fn spawn(
-        authority_state: Arc<AuthorityState>,
-        randomness_rx: mpsc::Receiver<(EpochId, RandomnessRound, Vec<u8>)>,
-    ) -> (broadcast::Sender<bytes::Bytes>, JoinHandle<()>) {
-        let (signatures_broadcast, _) =
-            broadcast::channel::<bytes::Bytes>(SIGNATURES_BROADCAST_CAPACITY);
-        let sender = signatures_broadcast.clone();
-        let rrr = RandomnessRoundReceiver {
-            authority_state,
-            randomness_rx,
-            signatures_broadcast,
-        };
-        (sender, spawn_monitored_task!(rrr.run()))
-    }
-
-    async fn run(mut self) {
-        info!("RandomnessRoundReceiver event loop started");
-
-        loop {
-            tokio::select! {
-                maybe_recv = self.randomness_rx.recv() => {
-                    if let Some((epoch, round, bytes)) = maybe_recv {
-                        self.handle_new_randomness(epoch, round, bytes).await;
-                    } else {
-                        break;
-                    }
-                },
-            }
-        }
-
-        info!("RandomnessRoundReceiver event loop ended");
-    }
-
-    #[instrument(level = "debug", skip_all, fields(?epoch, ?round))]
-    async fn handle_new_randomness(&self, epoch: EpochId, round: RandomnessRound, bytes: Vec<u8>) {
-        fail_point_async!("randomness-delay");
-
-        let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
-        if epoch_store.epoch() != epoch {
-            warn!(
-                "dropping randomness for epoch {epoch}, round {round}, because we are in epoch {}",
-                epoch_store.epoch()
-            );
-            return;
-        }
-        // Broadcast signature to connected observer peers so they can create the same
-        // transaction. This enables observer-to-observer relay chains.
-        let msg = RandomnessSignatureMessage {
-            epoch,
-            round,
-            signature_bytes: bytes.clone(),
-        };
-        if let Ok(encoded) = bcs::to_bytes(&msg) {
-            let _ = self.signatures_broadcast.send(bytes::Bytes::from(encoded));
-        }
-
-        let key = TransactionKey::RandomnessRound(epoch, round);
-        let transaction = VerifiedTransaction::new_randomness_state_update(
-            epoch,
-            round,
-            bytes,
-            epoch_store
-                .epoch_start_config()
-                .randomness_obj_initial_shared_version()
-                .expect("randomness state obj must exist"),
-        );
-        debug!(
-            "created randomness state update transaction with digest: {:?}",
-            transaction.digest()
-        );
-        let transaction = VerifiedExecutableTransaction::new_system(transaction, epoch);
-        let digest = *transaction.digest();
-
-        // Randomness state updates contain the full bls signature for the random round,
-        // which cannot necessarily be reconstructed again later. Therefore we must immediately
-        // persist this transaction. If we crash before its outputs are committed, this
-        // ensures we will be able to re-execute it.
-        self.authority_state
-            .get_cache_commit()
-            .persist_transaction(&transaction);
-
-        // Notify the scheduler that the transaction key now has a known digest
-        if epoch_store.insert_tx_key(key, digest).is_err() {
-            warn!("epoch ended while handling new randomness");
-        }
-
-        let authority_state = self.authority_state.clone();
-        spawn_monitored_task!(async move {
-            // Wait for transaction execution in a separate task, to avoid deadlock in case of
-            // out-of-order randomness generation. (Each RandomnessStateUpdate depends on the
-            // output of the RandomnessStateUpdate from the previous round.)
-            //
-            // We set a very long timeout so that in case this gets stuck for some reason, the
-            // validator will eventually crash rather than continuing in a zombie mode.
-            const RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT: Duration = Duration::from_secs(300);
-            let result = tokio::time::timeout(
-                RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT,
-                authority_state
-                    .get_transaction_cache_reader()
-                    .notify_read_executed_effects(
-                        "RandomnessRoundReceiver::notify_read_executed_effects_first",
-                        &[digest],
-                    ),
-            )
-            .await;
-            let mut effects = match result {
-                Ok(result) => result,
-                Err(_) => {
-                    // Crash on randomness update execution timeout in debug builds.
-                    debug_fatal_no_invariant!(
-                        "randomness state update transaction execution timed out at epoch {epoch}, round {round}"
-                    );
-                    // Continue waiting as long as necessary in non-debug builds.
-                    authority_state
-                        .get_transaction_cache_reader()
-                        .notify_read_executed_effects(
-                            "RandomnessRoundReceiver::notify_read_executed_effects_second",
-                            &[digest],
-                        )
-                        .await
-                }
-            };
-
-            let effects = effects.pop().expect("should return effects");
-            if *effects.status() != ExecutionStatus::Success {
-                fatal!(
-                    "failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}"
-                );
-            }
-            debug!(
-                "successfully executed randomness state update transaction at epoch {epoch}, round {round}"
-            );
-        });
     }
 }
 

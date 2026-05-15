@@ -166,14 +166,13 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
                             .observer_subscribed_blocks_batch_size
                             .observe(item.blocks.len() as f64);
 
-                        // Forward randomness signatures to sui-core, but only when caught up.
                         // During catch-up (commit lagging behind quorum), drop silently --
                         // those rounds will arrive via checkpoint sync, same as lagging validators.
                         if let Some(handler) = &auxiliary_data_handler
                             && !observer_service.is_commit_lagging()
                         {
                             for sig in item.auxiliary_data.randomness_signatures {
-                                handler.handle(sig);
+                                handler.handle_randomness_signature(sig);
                             }
                         }
 
