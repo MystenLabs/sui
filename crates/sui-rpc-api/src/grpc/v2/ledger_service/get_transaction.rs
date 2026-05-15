@@ -165,7 +165,7 @@ pub fn batch_get_transactions(
     Ok(BatchGetTransactionsResponse::new(transactions))
 }
 
-fn render_executed_transaction(
+pub(crate) fn render_executed_transaction(
     service: &RpcService,
     crate::reader::TransactionRead {
         digest,

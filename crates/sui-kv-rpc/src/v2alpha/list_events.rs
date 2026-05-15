@@ -35,19 +35,19 @@ use crate::pipeline::Watermarked;
 use crate::pipeline::pipelined_chunks;
 use crate::pipeline::resolve_watermarks;
 use crate::pipeline::take_items;
-use crate::query_options::CheckpointRange;
-use crate::query_options::QueryOptions;
-use crate::query_options::QueryType;
-use crate::query_options::ResolvedRange;
 use crate::v2::render_json;
-use crate::v2alpha::watermark::advance_boundary_excluding_cp;
-use crate::v2alpha::watermark::boundary_cursor_cp;
-use crate::v2alpha::watermark::boundary_watermark;
-use crate::v2alpha::watermark::item_watermark;
-use crate::v2alpha::watermark::reached_range_end;
-use crate::v2alpha::watermark::terminal_boundary_watermark;
 use sui_inverted_index::BitmapScanLimitExceeded;
 use sui_inverted_index::error_contains;
+use sui_rpc_api::ledger_history::query_options::CheckpointRange;
+use sui_rpc_api::ledger_history::query_options::QueryOptions;
+use sui_rpc_api::ledger_history::query_options::QueryType;
+use sui_rpc_api::ledger_history::query_options::ResolvedRange;
+use sui_rpc_api::ledger_history::watermark::advance_boundary_excluding_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_cursor_cp;
+use sui_rpc_api::ledger_history::watermark::boundary_watermark;
+use sui_rpc_api::ledger_history::watermark::item_watermark;
+use sui_rpc_api::ledger_history::watermark::reached_range_end;
+use sui_rpc_api::ledger_history::watermark::terminal_boundary_watermark;
 
 use sui_rpc::proto::sui::rpc::v2alpha::EventItem;
 use sui_rpc::proto::sui::rpc::v2alpha::ListEventsRequest;
@@ -663,7 +663,7 @@ mod tests {
     use sui_types::digests::TransactionDigest;
 
     use super::*;
-    use crate::query_options::Ordering;
+    use sui_rpc_api::ledger_history::query_options::Ordering;
 
     fn options(ordering: Ordering) -> QueryOptions {
         let mut request = sui_rpc::proto::sui::rpc::v2alpha::QueryOptions::default();
