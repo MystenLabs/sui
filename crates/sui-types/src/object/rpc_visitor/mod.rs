@@ -3,10 +3,6 @@
 
 pub mod proto;
 
-// `Format` and `Meter` live in `mysten-common` so that lower-level crates (like
-// `sui-protocol-config`) can render values into any `Format`-implementing wire type without
-// pulling in `sui-types`. The re-exports below keep existing call sites in this crate (and
-// downstream consumers that imported via `sui_types::object::rpc_visitor`) working unchanged.
 pub use mysten_common::rpc_format::Format;
 pub use mysten_common::rpc_format::LocalMeter;
 pub use mysten_common::rpc_format::Meter;
