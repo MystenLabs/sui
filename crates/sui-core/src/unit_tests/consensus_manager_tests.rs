@@ -81,7 +81,6 @@ async fn test_consensus_manager() {
         &registry_service,
         consensus_client,
         sui_types::node_role::NodeRole::Validator,
-        tokio::sync::broadcast::channel::<bytes::Bytes>(1).0,
     );
 
     let boot_counter = *manager.boot_counter.lock().await;
@@ -167,7 +166,6 @@ async fn test_consensus_manager_address_update() {
         &registry_service,
         consensus_client,
         NodeRole::Validator,
-        tokio::sync::broadcast::channel::<bytes::Bytes>(1).0,
     ));
 
     // Start consensus

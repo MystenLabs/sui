@@ -23,7 +23,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     error::ConsensusError,
-    network::{AuxiliaryDataHandler, ObserverNetworkClient, ObserverNetworkService, PeerId},
+    network::{ObserverNetworkClient, ObserverNetworkService, PeerId, RandomnessSignatureHandler},
 };
 
 /// ObserverSubscriber manages block stream subscriptions to peers (validators or other observers),
@@ -36,7 +36,7 @@ pub(crate) struct ObserverSubscriber<C: ObserverNetworkClient, S: ObserverNetwor
     observer_service: Arc<S>,
     dag_state: Arc<parking_lot::RwLock<DagState>>,
     subscription: Arc<Mutex<Option<JoinHandle<()>>>>,
-    auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
+    randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
 }
 
 #[allow(unused)]
@@ -46,7 +46,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         network_client: Arc<C>,
         observer_service: Arc<S>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
-        auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) -> Self {
         Self {
             context,
@@ -54,7 +54,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             observer_service,
             dag_state,
             subscription: Arc::new(Mutex::new(None)),
-            auxiliary_data_handler,
+            randomness_signature_handler,
         }
     }
 
@@ -65,7 +65,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         let network_client = self.network_client.clone();
         let observer_service = self.observer_service.clone();
         let dag_state = self.dag_state.clone();
-        let auxiliary_data_handler = self.auxiliary_data_handler.clone();
+        let randomness_signature_handler = self.randomness_signature_handler.clone();
 
         let mut subscription = self.subscription.lock();
         if let Some(handle) = subscription.take() {
@@ -77,7 +77,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
             observer_service,
             dag_state,
             peer,
-            auxiliary_data_handler,
+            randomness_signature_handler,
         )));
     }
 
@@ -95,7 +95,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
         observer_service: Arc<S>,
         dag_state: Arc<parking_lot::RwLock<DagState>>,
         peer: PeerId,
-        auxiliary_data_handler: Option<Arc<dyn AuxiliaryDataHandler>>,
+        randomness_signature_handler: Option<Arc<dyn RandomnessSignatureHandler>>,
     ) {
         const IMMEDIATE_RETRIES: i64 = 3;
         const MIN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -168,7 +168,7 @@ impl<C: ObserverNetworkClient, S: ObserverNetworkService> ObserverSubscriber<C, 
 
                         // During catch-up (commit lagging behind quorum), drop silently --
                         // those rounds will arrive via checkpoint sync, same as lagging validators.
-                        if let Some(handler) = &auxiliary_data_handler
+                        if let Some(handler) = &randomness_signature_handler
                             && !observer_service.is_commit_lagging()
                         {
                             for sig in item.auxiliary_data.randomness_signatures {
