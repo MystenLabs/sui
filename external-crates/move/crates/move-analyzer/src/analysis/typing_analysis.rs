@@ -30,7 +30,10 @@ use move_symbol_pool::Symbol;
 
 use im::OrdMap;
 use lsp_types::Position;
-use std::{cmp, collections::BTreeMap};
+use std::{
+    cmp,
+    collections::{BTreeMap, BTreeSet},
+};
 
 /// Data used during anlysis over typed AST
 pub struct TypingAnalysisContext<'a> {
@@ -66,6 +69,13 @@ pub struct TypingAnalysisContext<'a> {
     /// Tracks the root (outermost) macro call location for the current expansion chain.
     /// Used to disambiguate MacroCallInfo lookups for nested macro calls.
     pub current_macro_call_loc: Option<Loc>,
+    /// During macro inlining, synthetic binds are introduced for macro by-value arguments
+    /// (e.g., `let temp = receiver`, where `temp` stands in for some macro argument `$x`
+    /// and shares the same location as `$x`). We have to keep track of these to avoid
+    /// overwriting information collected when analyzing macro function with information
+    /// collected when inlining this function (which would be both wrong and non-deterministic
+    /// in case macro is inlined multiple times).
+    pub macro_by_value_lvalue_locs: BTreeSet<Loc>,
 }
 
 /// Definition of a local (or parameter)
@@ -702,6 +712,48 @@ impl TypingAnalysisContext<'_> {
         }
         self.visit_exp(&arm.rhs);
     }
+
+    /// Process compiler metadata for a macro by-value argument.
+    ///
+    /// During macro inlining, by-value arguments are represented as synthetic
+    /// bindings, such as `let $x = receiver`. Analyze the RHS as the call-site
+    /// expression, and remember the synthetic LHS location so the same binding can
+    /// be ignored if it is later encountered while traversing the expanded macro
+    /// body.
+    fn visit_macro_by_value_arg(&mut self, seq_item: &T::SequenceItem) {
+        match &seq_item.value {
+            T::SequenceItem_::Bind(lvalues, _, e) => {
+                debug_assert!(
+                    lvalues.value.len() == 1,
+                    "macro by-value arguments should bind exactly one lvalue"
+                );
+                let Some(lvalue) = lvalues.value.first() else {
+                    self.visit_exp(e);
+                    return;
+                };
+                match &lvalue.value {
+                    T::LValue_::Var { var, .. } => {
+                        self.macro_by_value_lvalue_locs.insert(var.loc);
+                    }
+                    T::LValue_::Ignore => (),
+                    T::LValue_::Unpack(..)
+                    | T::LValue_::BorrowUnpack(..)
+                    | T::LValue_::UnpackVariant(..)
+                    | T::LValue_::BorrowUnpackVariant(..) => {
+                        debug_assert!(false, "macro by-value arguments should be variables");
+                    }
+                }
+                self.visit_exp(e);
+            }
+            _ => {
+                debug_assert!(
+                    false,
+                    "macro by-value arguments should be represented as binds"
+                );
+                self.visit_seq_item(seq_item);
+            }
+        }
+    }
 }
 
 impl TypingVisitorContext for TypingAnalysisContext<'_> {
@@ -1033,6 +1085,15 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                     ty,
                     unused_binding: _,
                 } => {
+                    // Skip synthetic macro receiver binds such as `let $x = receiver`.
+                    // Their lvalue locations are macro parameter locations, not real
+                    // call-site definitions, so recording them would corrupt hover/use-def
+                    // information for the macro definition.
+                    if matches!(kind, LValueKind::Bind)
+                        && self.macro_by_value_lvalue_locs.contains(&var.loc)
+                    {
+                        continue;
+                    }
                     match kind {
                         LValueKind::Bind => {
                             self.add_local_def(
@@ -1315,7 +1376,10 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                 root_call_loc: info_root,
             } = macro_call_info.clone();
             self.process_module_call(&module, &name, method_name, &type_arguments, None);
-            by_value_args.iter().for_each(|a| self.visit_seq_item(a));
+            let old_macro_by_value_lvalue_locs = self.macro_by_value_lvalue_locs.clone();
+            by_value_args
+                .iter()
+                .for_each(|a| self.visit_macro_by_value_arg(a));
             let old_traverse_mode = self.traverse_only;
             let old_macro_call_loc = self.current_macro_call_loc;
             // Set root for nested macro lookups
@@ -1325,6 +1389,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
             let result = visit_exp_inner(self, exp);
             self.traverse_only = old_traverse_mode;
             self.current_macro_call_loc = old_macro_call_loc;
+            self.macro_by_value_lvalue_locs = old_macro_by_value_lvalue_locs;
             result
         } else if expanded_lambda {
             let old_traverse_mode = self.traverse_only;
