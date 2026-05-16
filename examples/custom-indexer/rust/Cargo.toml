@@ -4,12 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-async-trait = "0.1.83"
-tokio = { version = "1.38.0", features = ["full"]}
-sui_types = { git = "https://github.com/mystenlabs/sui", package = "sui-types"}
-sui_data_ingestion_core = { git = "https://github.com/mystenlabs/sui", package = "sui-data-ingestion-core"}
-prometheus = "0.13.3"
 anyhow = "1.0.86"
+async-trait = "0.1.83"
+bytes = "1"
+object_store = { version = "0.13", features = ["gcp"] }
+prometheus = "0.13.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sui_data_ingestion_core = { git = "https://github.com/mystenlabs/sui", package = "sui-data-ingestion-core"}
+sui_types = { git = "https://github.com/mystenlabs/sui", package = "sui-types"}
+tokio = { version = "1.38.0", features = ["full"]}
 
 [[bin]]
 name = "local_reader"
@@ -18,5 +22,13 @@ path = "local_reader.rs"
 [[bin]]
 name = "remote_reader"
 path = "remote_reader.rs"
+
+[[bin]]
+name = "signature_order_checker"
+path = "signature_order_checker.rs"
+
+[[bin]]
+name = "gcs_scanner"
+path = "gcs_scanner.rs"
 
 [workspace]

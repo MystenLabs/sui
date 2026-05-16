@@ -1,0 +1,33 @@
+config:
+  gcp:project: workloads-primary
+  gcp:region: us-east4
+  sig-order-scanner:image:
+    dockerfile: examples/custom-indexer/rust/Dockerfile
+    context: examples/custom-indexer/rust
+    repo_name: sui
+    repo_ref_type: branch
+    image_ref: mlogan-custom-indexer-sigs
+    image_name: sig-order-scanner
+    try_limit: 40
+  sig-order-scanner:deploy-config:
+    namespace: sig-order-scanner
+    bucket_project: fullnode-snapshot-gcs
+    workload_identity_project: workloads-primary
+    gcp_service_account_id: sig-order-scanner
+    kubernetes_service_account_name: sig-order-scanner
+    checkpoint_bucket: mysten-mainnet-checkpoints
+    checkpoint_storage_role: roles/storage.objectViewer
+    output_gcs_bucket: mysten-mainnet-checkpoints
+    output_gcs_key: sig-order-scan/results-test.jsonl
+    start_checkpoint: "176015239"
+    end_checkpoint: "176025239"
+    concurrency: "100"
+    resources:
+      requests:
+        cpu: "2"
+        memory: 4Gi
+      limits:
+        cpu: "4"
+        memory: 8Gi
+environment:
+  - gcp-app-env-workloads-primary

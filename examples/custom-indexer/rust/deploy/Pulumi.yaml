@@ -1,0 +1,7 @@
+name: sig-order-scanner
+description: One-shot k8s Job that scans mainnet checkpoints for out-of-order signatures.
+runtime: go
+config:
+  pulumi:tags:
+    value:
+      service: sig-order-scanner
