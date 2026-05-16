@@ -11,7 +11,7 @@
 //! Under either root:
 //!     - objects/
 //!         - {object_id}/
-//!            - latest                  (text: <version>[,deleted|,wrapped])
+//!            - latest                  (text: version[,deleted|,wrapped])
 //!            - {version}                (BCS-encoded Object)
 //!     - indices/
 //!         - owned_objects              (BCS-encoded `Vec<OwnedObjectEntry>`)
