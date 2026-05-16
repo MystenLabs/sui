@@ -12,7 +12,7 @@
 //!
 //! Informal spec: `crates/sui-types/verify_sig_spec.md`
 
-use crate::utils::slice_contains;
+use crate::utils::{clone_and_set, slice_contains};
 use vstd::prelude::*;
 
 verus! {
@@ -777,17 +777,17 @@ fn scan_first_valid<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
     sig_addrs: &[Vec<Addr>],
     aliases: &Vec<Addr>,
     epoch: u64,
-    taken: &[u8],
+    visited: &[bool],
     _ghost_used: Ghost<Set<int>>,
 ) -> (r: Option<(u8, Addr)>)
     requires
         tx_signatures@.len() == sig_addrs@.len(),
         tx_signatures@.len() <= u8::MAX as nat,
+        visited@.len() == tx_signatures@.len(),
         forall|m: int| 0 <= m < sig_addrs@.len() ==>
             #[trigger] sig_addrs@[m]@.to_set() =~= spec_addresses::<S, Addr>(tx_signatures, m),
-        forall|p: int| 0 <= p < taken@.len() ==> _ghost_used@.contains(#[trigger] taken@[p] as int),
-        forall|m: int| _ghost_used@.contains(m) ==>
-            exists|p: int| 0 <= p < taken@.len() && taken@[p] as int == m,
+        // Direct correspondence: visited[k] iff k is in the used set
+        forall|k: int| 0 <= k < visited@.len() ==> (#[trigger] visited@[k] <==> _ghost_used@.contains(k)),
     ensures
         r.is_none() ==>
             !(spec_first_valid_unused(tx_signatures, aliases@.to_set(), epoch, _ghost_used@) matches Some(_)),
@@ -805,40 +805,17 @@ fn scan_first_valid<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
             n == tx_signatures@.len(),
             n == sig_addrs@.len(),
             n <= u8::MAX as nat,
+            visited@.len() == n,
             forall|m: int| 0 <= m < n as int ==>
                 sig_addrs@[m]@.to_set() =~= spec_addresses::<S, Addr>(tx_signatures, m),
-            forall|p: int| 0 <= p < taken@.len() ==> _ghost_used@.contains(taken@[p] as int),
-            forall|m: int| _ghost_used@.contains(m) ==>
-                exists|p: int| 0 <= p < taken@.len() && taken@[p] as int == m,
+            // Direct correspondence: visited[k] iff k is in the used set
+            forall|k: int| 0 <= k < n as int ==> (visited@[k] <==> _ghost_used@.contains(k)),
             // All positions before j are either used or not spec_is_valid_for
             forall|k: int| 0 <= k < j as int && !_ghost_used@.contains(k) ==>
                 !spec_is_valid_for(&#[trigger] tx_signatures@[k], aliases@.to_set(), epoch),
     {
-        // Check whether j is in taken / used.
-        let j_taken = slice_contains(taken, j as u8);
-        proof {
-            // slice_contains ensures: j_taken == taken@.to_set().contains(j as u8)
-            if j_taken {
-                // j as u8 ∈ taken → ∃ p: taken@[p] == j as u8
-                // → taken@[p] as int == j as int (since j < n ≤ u8::MAX)
-                // → _ghost_used@.contains(j as int)
-                let p = choose|p: int| 0 <= p < taken@.len() && taken@[p] == j as u8;
-                assert(taken@[p] as int == j as int);
-                assert(_ghost_used@.contains(j as int));
-            } else {
-                // j as u8 ∉ taken → ∀ p, taken@[p] ≠ j as u8 → taken@[p] as int ≠ j as int
-                // _ghost_used@ only contains elements from taken → j as int ∉ _ghost_used@
-                assert(!_ghost_used@.contains(j as int)) by {
-                    if _ghost_used@.contains(j as int) {
-                        let p = choose|p: int| 0 <= p < taken@.len() && taken@[p] as int == j as int;
-                        assert(taken@[p] == j as u8);
-                        assert(taken@.to_set().contains(j as u8));
-                    }
-                };
-            }
-        }
-
-        if !j_taken {
+        // visited[j] == _ghost_used@.contains(j) (from invariant)
+        if !visited[j] {
         // j is not used.  Try each alias: if it's in sig_addrs[j] AND crypto passes, return.
         let mut ai = 0usize;
         let mut found_addr: Option<Addr> = None;
@@ -944,20 +921,18 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
     sig_addrs: &[Vec<Addr>],
     signers: &[(Addr, Vec<Addr>)],
     epoch: u64,
-    taken: &[u8],
+    visited: &[bool],
     used: Ghost<Set<int>>,
 ) -> (result: Result<Vec<u8>, SigVerifyError>)
     requires
         tx_signatures@.len() == sig_addrs@.len(),
         tx_signatures@.len() <= u8::MAX as nat,
-        // taken@.len() + signers@.len() <= u8::MAX: enables overflow-free capacity arithmetic
-        taken@.len() + signers@.len() <= u8::MAX as nat,
+        signers@.len() <= tx_signatures@.len() as nat,
+        visited@.len() == tx_signatures@.len(),
         forall|m: int| 0 <= m < sig_addrs@.len() ==>
             #[trigger] sig_addrs@[m]@.to_set() =~= spec_addresses::<S, Addr>(tx_signatures, m),
-        // Ghost/exec agreement for taken positions
-        forall|p: int| 0 <= p < taken@.len() ==> used@.contains(#[trigger] taken@[p] as int),
-        forall|m: int| used@.contains(m) ==>
-            exists|p: int| 0 <= p < taken@.len() && taken@[p] as int == m,
+        // Direct correspondence: visited[k] iff k is in the used set
+        forall|k: int| 0 <= k < visited@.len() ==> (#[trigger] visited@[k] <==> used@.contains(k)),
         // No address collision across distinct signature positions
         forall|i: int, j: int|
             0 <= i < tx_signatures@.len()
@@ -982,11 +957,10 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
 
     let (_, aliases) = &signers[0];
 
-    let scan_result = scan_first_valid(tx_signatures, sig_addrs, aliases, epoch, taken, used);
+    let scan_result = scan_first_valid(tx_signatures, sig_addrs, aliases, epoch, visited, used);
 
     let (j, _addr) = match scan_result {
         None => {
-            // scan_first_valid ensures: spec_first_valid_unused = None → spec_greedy_helper = None
             proof {
                 lemma_greedy_helper_none_first::<S, Addr>(tx_signatures, signers@, epoch, used@);
             }
@@ -995,83 +969,34 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
         Some(pair) => pair,
     };
 
-    // scan_first_valid ensures: spec_first_valid_unused = Some(j) and spec_is_valid_for holds.
-    // No separate crypto verification needed.
     proof {
         assert(spec_first_valid_unused(tx_signatures, aliases@.to_set(), epoch, used@) == Some(j as int));
         assert(spec_first_valid_unused_from(tx_signatures, aliases@.to_set(), epoch, used@, 0) == Some(j as int));
     }
 
-    // Build taken_new = taken + [j] for the recursive call.
-    // taken@.len() + signers@.len() <= u8::MAX and signers@.len() >= 1
-    assert(taken@.len() < u8::MAX as int) by {
-        assert(signers@.len() >= 1);
-        assert(taken@.len() + signers@.len() <= u8::MAX as nat);
-    };
-    let mut taken_new: Vec<u8> = Vec::with_capacity(taken.len() + 1);
-    let mut ti = 0usize;
-    while ti < taken.len()
-        invariant
-            ti <= taken@.len(),
-            taken_new@.len() == ti,
-            forall|p: int| 0 <= p < ti as int ==> taken_new@[p] == taken@[p],
-        decreases taken@.len() - ti
-    {
-        taken_new.push(taken[ti]);
-        ti += 1;
-    }
-    taken_new.push(j);
-
+    // Mark position j as visited for the recursive call.
+    // clone_and_set ensures: result@.len() == visited@.len(), result@[j] == true,
+    //                         forall k ≠ j: result@[k] == visited@[k]
+    let visited_new = clone_and_set(visited, j as usize, true);
     let ghost used_new = used@.insert(j as int);
+
     proof {
-        assert(taken_new@ =~= taken@ + seq![j]) by {
-            broadcast use vstd::seq::group_seq_axioms;
-            assert(taken_new@.len() == taken@.len() + 1);
-            assert forall|i: int| 0 <= i < taken_new@.len() implies
-                taken_new@[i] == (taken@ + seq![j])[i]
-            by {
-                if i < taken@.len() as int {
-                    assert(taken_new@[i] == taken@[i]);
-                } else {
-                    // i = taken@.len(): taken_new@[i] = j (the pushed element)
-                }
-            };
+        // visited_new[k] <==> used_new.contains(k) for all k < n
+        assert forall|k: int| 0 <= k < visited_new@.len() implies
+            (visited_new@[k] <==> used_new.contains(k))
+        by {
+            if k == j as int {
+                assert(visited_new@[k] == true);
+                assert(used_new.contains(j as int));
+            } else {
+                assert(visited_new@[k] == visited@[k]);
+                assert(visited@[k] <==> used@.contains(k));
+                assert(used_new.contains(k) <==> used@.contains(k) || k == j as int);
+            }
         };
-        assert(forall|p: int| 0 <= p < taken_new@.len() ==>
-            used_new.contains(taken_new@[p] as int)) by {
-            assert forall|p: int| 0 <= p < taken_new@.len() implies
-                used_new.contains(taken_new@[p] as int)
-            by {
-                if p < taken@.len() as int {
-                    assert(taken_new@[p] == taken@[p]);
-                    assert(used@.contains(taken@[p] as int));
-                } else {
-                    assert(taken_new@[p] == j);
-                    assert(used_new.contains(j as int));
-                }
-            };
-        };
-        assert(forall|m: int| used_new.contains(m) ==>
-            exists|p: int| 0 <= p < taken_new@.len() && taken_new@[p] as int == m) by {
-            assert forall|m: int| used_new.contains(m) implies
-                exists|p: int| 0 <= p < taken_new@.len() && taken_new@[p] as int == m
-            by {
-                if used@.contains(m) {
-                    let p = choose|p: int| 0 <= p < taken@.len() && taken@[p] as int == m;
-                    assert(taken_new@[p] == taken@[p]);
-                } else {
-                    assert(m == j as int);
-                    assert(taken_new@[taken@.len() as int] == j);
-                }
-            };
-        };
-        // Precondition for recursive call: taken_new@.len() + signers.skip(1)@.len() <= u8::MAX
-        // taken_new@.len() = taken@.len() + 1, signers.skip(1)@.len() = signers@.len() - 1
-        // Sum = taken@.len() + signers@.len() <= u8::MAX (by precondition)
-        assert(taken_new@.len() + signers@.skip(1).len() <= u8::MAX as nat) by {
-            assert(taken_new@.len() == taken@.len() + 1);
+        // signers.skip(1)@.len() <= signers@.len() <= tx_signatures@.len()
+        assert(signers@.skip(1).len() <= tx_signatures@.len() as nat) by {
             assert(signers@.skip(1).len() == signers@.len() - 1);
-            assert(taken@.len() + signers@.len() <= u8::MAX as nat);
         };
     }
 
@@ -1080,16 +1005,15 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
         sig_addrs,
         &signers[1..signers.len()],
         epoch,
-        &taken_new,
+        &visited_new,
         Ghost(used_new),
     )?;
 
     // Build result = [j] + rest
-    // rest@.len() = signers.skip(1)@.len() = signers@.len() - 1 <= u8::MAX - 1
+    // signers@.len() <= tx_signatures@.len() <= u8::MAX, so skip(1).len() < u8::MAX
     assert(rest@.len() < u8::MAX as int) by {
         assert(rest@.len() == signers@.skip(1).len() as nat);
-        assert(signers@.len() >= 1);
-        assert(taken@.len() + signers@.len() <= u8::MAX as nat);
+        assert(signers@.skip(1).len() == signers@.len() - 1);
     };
     let mut result = Vec::with_capacity(1 + rest.len());
     result.push(j);
@@ -1224,7 +1148,7 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
 
 
     // Delegate to the recursive greedy implementation.
-    // `taken` starts empty; `used` starts as Set::empty().
+    // All positions start unvisited; `used` starts as Set::empty().
     // verify_sigs_rec directly mirrors spec_greedy_helper.
     proof {
         // derive_all_addresses Ok → sig_addrs@.len() == tx_signatures@.len() == n
@@ -1250,12 +1174,21 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
             };
         };
     }
+    // visited starts as all-false (no positions used yet)
+    // required_signers@.len() == n == tx_signatures@.len() (count check passed)
+    let visited_init = vec![false; n];
+    proof {
+        // vec![false; n]: all positions unvisited → visited_init@[k] == false == Set::empty().contains(k)
+        assume(forall|k: int| 0 <= k < visited_init@.len() ==>
+            (visited_init@[k] <==> Set::<int>::empty().contains(k)));
+        assume(visited_init@.len() == n as nat);
+    }
     let rec_result = verify_sigs_rec(
         tx_signatures,
         &sig_addrs,
         required_signers,
         epoch,
-        &[],
+        &visited_init,
         Ghost(Set::empty()),
     );
 
