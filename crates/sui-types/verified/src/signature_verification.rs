@@ -693,33 +693,7 @@ pub open spec fn ok_indices(result: &Result<Vec<u8>, SigVerifyError>) -> Seq<u8>
 }
 
 // ---------------------------------------------------------------------------
-// § 7  Address-intersection helper
-// ---------------------------------------------------------------------------
-
-/// Find an address that appears in both `v1` and `v2`, if one exists.
-/// Returns `None` iff the two address sets are disjoint.
-///
-/// Trusted (`external_body`) — the body uses `slice::contains` which is not
-/// in vstd. The spec precisely captures what the caller needs.
-#[verifier::external_body]
-fn find_common_addr<Addr: PartialEq + Eq + Copy>(
-    v1: &Vec<Addr>,
-    v2: &Vec<Addr>,
-) -> (result: Option<Addr>)
-    ensures
-        result.is_none() ==> v1@.to_set().disjoint(v2@.to_set()),
-        result matches Some(a) ==> v1@.to_set().contains(a) && v2@.to_set().contains(a),
-{
-    for a in v1.iter() {
-        if v2.contains(a) {
-            return Some(*a);
-        }
-    }
-    None
-}
-
-// ---------------------------------------------------------------------------
-// § 8  Address derivation helper
+// § 7  Address derivation helper
 // ---------------------------------------------------------------------------
 
 /// Derive addresses for every signature in one pass.
