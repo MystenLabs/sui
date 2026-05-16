@@ -53,7 +53,7 @@ use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
@@ -962,6 +962,9 @@ pub struct AuthorityState {
     /// Limits the number of concurrent post-processing tasks to avoid overwhelming
     /// the blocking thread pool. Defaults to the number of available CPUs.
     post_processing_semaphore: Arc<tokio::sync::Semaphore>,
+
+    // Allows gracefully handling long-running operation while the node is shutting down
+    shutting_down: AtomicBool,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -3637,6 +3640,7 @@ impl AuthorityState {
             object_funds_checker_metrics,
             pending_post_processing: Arc::new(DashMap::new()),
             post_processing_semaphore: Arc::new(tokio::sync::Semaphore::new(num_cpus::get())),
+            shutting_down: AtomicBool::new(false),
         });
         state.init_object_funds_checker().await;
 
@@ -6369,6 +6373,15 @@ impl AuthorityState {
         self.get_reconfig_api()
             .clear_state_end_of_epoch(&self.execution_lock_for_reconfiguration().await);
         Ok(())
+    }
+
+    pub fn signal_shutdown(&self) {
+        self.shutting_down
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn is_shutting_down(&self) -> bool {
+        self.shutting_down.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 

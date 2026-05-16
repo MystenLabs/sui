@@ -2311,6 +2311,10 @@ impl SuiNode {
             }
         }
     }
+
+    pub fn signal_shutdown(&self) {
+        self.state.signal_shutdown();
+    }
 }
 
 #[cfg(not(msim))]

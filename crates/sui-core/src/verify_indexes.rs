@@ -119,7 +119,18 @@ pub async fn fix_indexes(authority_state: Weak<AuthorityState>) -> Result<()> {
         if let Some(authority) = authority_state_clone.upgrade() {
             let mut batch = vec![];
             if let Some(indexes) = &authority.indexes {
-                for entry in indexes.tables().coin_index().safe_iter() {
+                for (i, entry) in indexes.tables().coin_index().safe_iter().enumerate() {
+                    if i % 1000 == 0 {
+                        if authority.is_shutting_down() {
+                            tracing::info!("Authority is shutting down, stopped fixing coin index");
+                            return Ok(vec![]);
+                        }
+                        // Avoid spamming the logs, while keeping a frequent step size to keep operators informed
+                        // of this ongoing background task
+                        if i % 50000 == 0 {
+                            tracing::info!("Evaluating coin index {}", i);
+                        }
+                    }
                     let (coin_index_key, _) = entry?;
                     if is_violation(&coin_index_key, &authority) {
                         batch.push(coin_index_key);

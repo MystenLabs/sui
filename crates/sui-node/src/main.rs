@@ -126,6 +126,7 @@ fn main() {
     // if it deadlocks.
     let node_once_cell = Arc::new(AsyncOnceCell::<Arc<sui_node::SuiNode>>::new());
     let node_once_cell_clone = node_once_cell.clone();
+    let node_once_cell_for_shutdown = node_once_cell.clone();
 
     // let sui-node signal main to shutdown runtimes
     let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel::<()>(1);
@@ -195,6 +196,13 @@ fn main() {
         .build()
         .unwrap()
         .block_on(wait_termination(runtime_shutdown_rx));
+
+    // we pass any main thread SIGINT down to the node
+    // this should be used to signal any long running batched operation to stop
+    runtimes.sui_node.block_on(async {
+        let node = node_once_cell_for_shutdown.get().await;
+        node.signal_shutdown();
+    });
 
     // Drop and wait all runtimes on main thread
     drop(runtimes);
