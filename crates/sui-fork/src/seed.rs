@@ -160,7 +160,7 @@ pub(crate) fn ensure_seed_manifest_matches(
     Ok(())
 }
 
-/// Initialize the durable owned-object index from the seed manifest when it is safe to do so.
+/// Initialize the owned-object index from the seed manifest when it is safe to do so.
 pub(crate) fn initialize_owned_index_from_seed(
     data_store: &DataStore,
     manifest: &SeedManifest,
