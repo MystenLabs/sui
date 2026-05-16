@@ -837,6 +837,7 @@ fn scan_first_valid<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
             decreases aliases@.len() - ai
         {
             let a = aliases[ai];
+            ai += 1;  // single increment point; branches only update found_addr
             if slice_contains(&sig_addrs[j], a) {
                 match tx_signatures[j].verify_for_address(&a, epoch) {
                     Ok(()) => {
@@ -847,21 +848,17 @@ fn scan_first_valid<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
                             assert(spec_is_valid_for(&tx_signatures@[j as int], aliases@.to_set(), epoch));
                         }
                         found_addr = Some(a);
-                        ai += 1;  // always increment to satisfy decreases
                     }
                     Err(_) => {
                         proof {
-                            // verify_for_address Err ↔ !spec_sig_crypto_valid
                             assert(!spec_sig_crypto_valid(&tx_signatures@[j as int], a, epoch));
                         }
-                        ai += 1;
                     }
                 }
             } else {
                 proof {
                     assert(!spec_addresses::<S, Addr>(tx_signatures, j as int).contains(a));
                 }
-                ai += 1;
             }
         }
 
