@@ -318,10 +318,7 @@ proof fn lemma_greedy_bounds<S, Addr>(
             if rec_opt matches Some(_) {
                 let rest = rec_opt->Some_0;
                 let indices = spec_greedy_helper(sigs, signers, epoch, used)->Some_0;
-                assert(rec_opt == Some(rest));
                 lemma_greedy_helper_unfold::<S, Addr>(sigs, signers, epoch, used, j, rest);
-                assert(spec_greedy_helper(sigs, signers, epoch, used) == Some(seq![j as u8] + rest));
-                assert(indices =~= seq![j as u8] + rest);
                 assert(indices.len() == 1 + rest.len());
                 assert(indices[0] == j as u8);
                 assert forall|k: int| 1 <= k < indices.len() implies indices[k] == rest[k - 1] by {
@@ -376,12 +373,8 @@ proof fn lemma_greedy_not_in_used_and_distinct<S, Addr>(
             let rest_opt = spec_greedy_helper(sigs, signers.skip(1), epoch, used2);
             if rest_opt matches Some(_) {
                 let rest = rest_opt->Some_0;
-                assert(rest_opt == Some(rest));
-                assert(spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j)) == Some(rest));
                 let indices = spec_greedy_helper(sigs, signers, epoch, used)->Some_0;
                 lemma_greedy_helper_unfold::<S, Addr>(sigs, signers, epoch, used, j, rest);
-                assert(spec_greedy_helper(sigs, signers, epoch, used) == Some(seq![j as u8] + rest));
-                assert(indices =~= seq![j as u8] + rest);
                 assert(indices.len() == 1 + rest.len());
                 assert(indices[0] == j as u8);
                 assert forall|k: int| 1 <= k < indices.len() implies indices[k] == rest[k - 1] by {
@@ -498,12 +491,8 @@ proof fn lemma_greedy_valid<S, Addr>(
             let rec_opt = spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j));
             if rec_opt matches Some(_) {
                 let rest = rec_opt->Some_0;
-                assert(rec_opt == Some(rest));
-                assert(spec_greedy_helper(sigs, signers.skip(1), epoch, used.insert(j)) == Some(rest));
                 let indices = spec_greedy_helper(sigs, signers, epoch, used)->Some_0;
                 lemma_greedy_helper_unfold::<S, Addr>(sigs, signers, epoch, used, j, rest);
-                assert(spec_greedy_helper(sigs, signers, epoch, used) == Some(seq![j as u8] + rest));
-                assert(indices =~= seq![j as u8] + rest);
                 assert(indices.len() == 1 + rest.len());
                 assert(indices[0] == j as u8);
                 assert forall|k: int| 1 <= k < indices.len() implies indices[k] == rest[k - 1] by {
@@ -938,10 +927,6 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
         Some(pair) => pair,
     };
 
-    proof {
-        assert(spec_first_valid_unused(tx_signatures, aliases@.to_set(), epoch, used@) == Some(j as int));
-        assert(spec_first_valid_unused_from(tx_signatures, aliases@.to_set(), epoch, used@, 0) == Some(j as int));
-    }
 
     // Mark position j as visited for the recursive call.
     // clone_and_set ensures: result@.len() == visited@.len(), result@[j] == true,
@@ -962,10 +947,6 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
                 assert(visited@[k] <==> used@.contains(k));
                 assert(used_new.contains(k) <==> used@.contains(k) || k == j as int);
             }
-        };
-        // signers.skip(1)@.len() <= signers@.len() <= tx_signatures@.len()
-        assert(signers@.skip(1).len() <= tx_signatures@.len() as nat) by {
-            assert(signers@.skip(1).len() == signers@.len() - 1);
         };
     }
 
@@ -1115,12 +1096,6 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
     // visited starts as all-false (no positions used yet)
     // required_signers@.len() == n == tx_signatures@.len() (count check passed)
     let visited_init = vec![false; n];
-    proof {
-        // vec![false; n]: all positions unvisited → visited_init@[k] == false == Set::empty().contains(k)
-        assume(forall|k: int| 0 <= k < visited_init@.len() ==>
-            (visited_init@[k] <==> Set::<int>::empty().contains(k)));
-        assume(visited_init@.len() == n as nat);
-    }
     let rec_result = verify_sigs_rec(
         tx_signatures,
         &sig_addrs,
