@@ -93,35 +93,11 @@ public fun find_first_left(l0: &BinTree, l1: u32): ( u32, bool) {
         let (reg_31, reg_32) = almm_bin_tree::closest_bit_left(*(vec_map::get(&l0.level2, &l13)), l2);
         if (reg_32) {
             return (l13 << 8u8 | reg_31as u256as u32, true)
-        };
-        unstructured {
-            goto 'label_58;
         }
-    } else {
-        /* block 58 */;
-        let l11 = l13 >> 8u8;
-        let l3 = l13 & C1as u256as u8;
-        if (l3 >= C1) {
-            /* block 127 */;
-            let l4 = l11 & C1as u256as u8;
-            if (l4 < C1) {
-                let (reg_108, reg_109) = almm_bin_tree::closest_bit_left(*(&l0.level0), l4);
-                if (reg_109) {
-                    let l12 = reg_108as u256;
-                    assert!(vec_map::contains(&l0.level1, &l12), C3);
-                    let reg_124;
-                    (reg_124, reg_125) = bit_math::least_significant_bit(*(vec_map::get(&l0.level1, &l12)));
-                    let l17 = reg_124;
-                    let l15 = l12 << 8u8 | l17as u256;
-                    assert!(vec_map::contains(&l0.level2, &l15), C4);
-                    let reg_143;
-                    (reg_143, reg_144) = bit_math::least_significant_bit(*(vec_map::get(&l0.level2, &l15)));
-                    let l18 = reg_143;
-                    return (l15 << 8u8 | l18as u256as u32, true)
-                }
-            };
-            return (0u32, false)
-        };
+    };
+    let l11 = l13 >> 8u8;
+    let l3 = l13 & C1as u256as u8;
+    if (l3 < C1) {
         assert!(vec_map::contains(&l0.level1, &l11), C3);
         let (reg_66, reg_67) = almm_bin_tree::closest_bit_left(*(vec_map::get(&l0.level1, &l11)), l3);
         if (reg_67) {
@@ -131,11 +107,26 @@ public fun find_first_left(l0: &BinTree, l1: u32): ( u32, bool) {
             (reg_86, reg_87) = bit_math::least_significant_bit(*(vec_map::get(&l0.level2, &l14)));
             let l16 = reg_86;
             return (l14 << 8u8 | l16as u256as u32, true)
-        };
-        unstructured {
-            goto 'label_127;
         }
-    }
+    };
+    let l4 = l11 & C1as u256as u8;
+    if (l4 < C1) {
+        let (reg_108, reg_109) = almm_bin_tree::closest_bit_left(*(&l0.level0), l4);
+        if (reg_109) {
+            let l12 = reg_108as u256;
+            assert!(vec_map::contains(&l0.level1, &l12), C3);
+            let reg_124;
+            (reg_124, reg_125) = bit_math::least_significant_bit(*(vec_map::get(&l0.level1, &l12)));
+            let l17 = reg_124;
+            let l15 = l12 << 8u8 | l17as u256;
+            assert!(vec_map::contains(&l0.level2, &l15), C4);
+            let reg_143;
+            (reg_143, reg_144) = bit_math::least_significant_bit(*(vec_map::get(&l0.level2, &l15)));
+            let l18 = reg_143;
+            return (l15 << 8u8 | l18as u256as u32, true)
+        }
+    };
+    return (0u32, false)
 }
 
 public fun find_first_right(l0: &BinTree, l1: u32): ( u32, bool) {
@@ -147,35 +138,11 @@ public fun find_first_right(l0: &BinTree, l1: u32): ( u32, bool) {
         let (reg_31, reg_32) = almm_bin_tree::closest_bit_right(*(vec_map::get(&l0.level2, &l13)), l2);
         if (reg_32) {
             return (l13 << 8u8 | reg_31as u256as u32, true)
-        };
-        unstructured {
-            goto 'label_58;
         }
-    } else {
-        /* block 58 */;
-        let l11 = l13 >> 8u8;
-        let l3 = l13 & C1as u256as u8;
-        if (l3 <= 0u8) {
-            /* block 117 */;
-            let l4 = l11 & C1as u256as u8;
-            if (l4 > 0u8) {
-                let (reg_102, reg_103) = almm_bin_tree::closest_bit_right(*(&l0.level0), l4);
-                if (reg_103) {
-                    let l12 = reg_102as u256;
-                    assert!(vec_map::contains(&l0.level1, &l12), C3);
-                    let reg_118;
-                    (reg_118, reg_119) = bit_math::most_significant_bit(*(vec_map::get(&l0.level1, &l12)));
-                    let l17 = reg_118;
-                    let l15 = l12 << 8u8 | l17as u256;
-                    assert!(vec_map::contains(&l0.level2, &l15), C4);
-                    let reg_137;
-                    (reg_137, reg_138) = bit_math::most_significant_bit(*(vec_map::get(&l0.level2, &l15)));
-                    let l18 = reg_137;
-                    return (l15 << 8u8 | l18as u256as u32, true)
-                }
-            };
-            return (0u32, false)
-        };
+    };
+    let l11 = l13 >> 8u8;
+    let l3 = l13 & C1as u256as u8;
+    if (l3 > 0u8) {
         let (reg_60, reg_61) = almm_bin_tree::closest_bit_right(*(vec_map::get(&l0.level1, &l11)), l3);
         if (reg_61) {
             let l14 = l11 << 8u8 | reg_60as u256;
@@ -184,11 +151,26 @@ public fun find_first_right(l0: &BinTree, l1: u32): ( u32, bool) {
             (reg_80, reg_81) = bit_math::most_significant_bit(*(vec_map::get(&l0.level2, &l14)));
             let l16 = reg_80;
             return (l14 << 8u8 | l16as u256as u32, true)
-        };
-        unstructured {
-            goto 'label_117;
         }
-    }
+    };
+    let l4 = l11 & C1as u256as u8;
+    if (l4 > 0u8) {
+        let (reg_102, reg_103) = almm_bin_tree::closest_bit_right(*(&l0.level0), l4);
+        if (reg_103) {
+            let l12 = reg_102as u256;
+            assert!(vec_map::contains(&l0.level1, &l12), C3);
+            let reg_118;
+            (reg_118, reg_119) = bit_math::most_significant_bit(*(vec_map::get(&l0.level1, &l12)));
+            let l17 = reg_118;
+            let l15 = l12 << 8u8 | l17as u256;
+            assert!(vec_map::contains(&l0.level2, &l15), C4);
+            let reg_137;
+            (reg_137, reg_138) = bit_math::most_significant_bit(*(vec_map::get(&l0.level2, &l15)));
+            let l18 = reg_137;
+            return (l15 << 8u8 | l18as u256as u32, true)
+        }
+    };
+    return (0u32, false)
 }
 
 public fun remove(l0: &mut BinTree, l1: u32): bool {

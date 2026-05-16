@@ -472,26 +472,16 @@ public fun modify_order(l0: &mut OrderManager, l1: u64, l2: Option<u64>, l3: Opt
     if (option::is_some(&l2)) {
         let l11 = option::destroy_some(l2);
         assert!(l11 > 0u64, C1);
-        *(&mut l13.price) = l11;
-        unstructured {
-            goto 'label_96;
-        }
-    } else {
-        /* block 96 */;
-        if (option::is_some(&l3)) {
-            let l12 = option::destroy_some(l3);
-            assert!(l12 > 0u64, C2);
-            *(&mut l13.quantity) = l12;
-            unstructured {
-                goto 'label_115;
-            }
-        } else {
-            /* block 115 */;
-            let l6 = *(&l13.price);
-            let l7 = *(&l13.quantity);
-            event::emit(OrderModifiedEvent { order_id: l1, old_price: l9, new_price: l6, old_quantity: l10, new_quantity: l7, modified_at: l8 })
-        }
-    }
+        *(&mut l13.price) = l11
+    };
+    if (option::is_some(&l3)) {
+        let l12 = option::destroy_some(l3);
+        assert!(l12 > 0u64, C2);
+        *(&mut l13.quantity) = l12
+    };
+    let l6 = *(&l13.price);
+    let l7 = *(&l13.quantity);
+    event::emit(OrderModifiedEvent { order_id: l1, old_price: l9, new_price: l6, old_quantity: l10, new_quantity: l7, modified_at: l8 })
 }
 
 public entry fun modify_order_entry(l0: &mut OrderManager, l1: u64, l2: u64, l3: u64, l4: &Clock, l5: &mut TxContext) {

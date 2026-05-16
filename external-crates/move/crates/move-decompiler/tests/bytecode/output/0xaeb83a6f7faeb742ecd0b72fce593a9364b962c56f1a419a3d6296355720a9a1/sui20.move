@@ -233,14 +233,14 @@ public fun mint(l0: &mut Global, l1: &Clock, l2: String, l3: u64, l4: Coin<SUI>,
                 }
             } else {
                 if (l11 > C0) {
-                    unstructured {
-                        goto 'label_241;
-                    }
-                } else {
-                    unstructured {
-                        goto 'label_241;
-                    }
+                    break
+                };
+                unstructured {
+                    goto 'label_241;
                 }
+            };
+            unstructured {
+                goto 'label_241;
             }
         }
     };

@@ -484,14 +484,14 @@ public fun accept_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlaceStore, l2
                 let l22 = vector::remove(l35, l40);
             };
             if (freeze(l35).len() == 0u64) {
-                std::vector::destroy_empty(linked_table::remove(&mut l36.collection_bids, l7));
-                unstructured {
-                    goto 'label_383;
-                }
-            } else {
-                unstructured {
-                    goto 'label_383;
-                }
+                break
+            };
+            unstructured {
+                goto 'label_383;
+            };
+            std::vector::destroy_empty(linked_table::remove(&mut l36.collection_bids, l7));
+            unstructured {
+                goto 'label_383;
             }
         }
     } else {
@@ -705,14 +705,14 @@ public fun accept_unlisted_bid<T0: key + store>(l0: &Clock, l1: &mut MarketPlace
                 let l18 = vector::remove(l32, l37);
             };
             if (freeze(l32).len() == 0u64) {
-                std::vector::destroy_empty(linked_table::remove(&mut l33.collection_bids, l6));
-                unstructured {
-                    goto 'label_321;
-                }
-            } else {
-                unstructured {
-                    goto 'label_321;
-                }
+                break
+            };
+            unstructured {
+                goto 'label_321;
+            };
+            std::vector::destroy_empty(linked_table::remove(&mut l33.collection_bids, l6));
+            unstructured {
+                goto 'label_321;
             }
         }
     } else {
@@ -980,14 +980,14 @@ public fun cancel_bid<T0: key + store>(l0: &mut MarketPlaceStore, l1: Option<ID>
                 let l22 = vector::remove(l20, l30);
             };
             if (freeze(l20).len() == 0u64) {
-                std::vector::destroy_empty(linked_table::remove(&mut l28.collection_bids, l27));
-                unstructured {
-                    goto 'label_166;
-                }
-            } else {
-                unstructured {
-                    goto 'label_166;
-                }
+                break
+            };
+            unstructured {
+                goto 'label_166;
+            };
+            std::vector::destroy_empty(linked_table::remove(&mut l28.collection_bids, l27));
+            unstructured {
+                goto 'label_166;
             }
         }
     };

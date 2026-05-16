@@ -5,10 +5,7 @@ source: crates/move-decompiler/tests/tests.rs
 if (1) {
     if (2) {
         { 3 }
-    } else {
-        jump<AOS> NodeIndex(4);
     }
-} else {
-    { 4 }
 }
+{ 4 }
 { 5 }
