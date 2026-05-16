@@ -8,3 +8,4 @@
 //! scripts/verus-check.sh.
 
 pub mod signature_verification;
+pub mod utils;

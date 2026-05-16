@@ -12,6 +12,7 @@
 //!
 //! Informal spec: `crates/sui-types/verify_sig_spec.md`
 
+use crate::utils::slice_contains;
 use vstd::prelude::*;
 
 verus! {
@@ -634,20 +635,6 @@ proof fn lemma_first_valid_from_none<S, Addr>(
 // ---------------------------------------------------------------------------
 
 /// Check whether a slice contains an element.  Proven directly from the loop
-/// invariant — no vstd specification of `slice::contains` needed.
-/// Check whether a slice contains an element.
-/// Trusted (`external_body`) — `slice::contains` is not in vstd.
-/// Used only in `scan_first_valid` where the body is also trusted.
-#[verifier::external_body]
-fn slice_contains<T: PartialEq + Eq + Copy>(v: &[T], elem: T) -> (b: bool)
-    ensures b == v@.to_set().contains(elem)
-{
-    for a in v.iter() {
-        if *a == elem { return true; }
-    }
-    false
-}
-
 // ---------------------------------------------------------------------------
 // § 7  Lemma: first_valid_from_none for the invalid (not just disjoint) case
 // ---------------------------------------------------------------------------
