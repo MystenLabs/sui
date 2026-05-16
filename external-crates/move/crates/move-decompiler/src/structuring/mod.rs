@@ -381,6 +381,11 @@ fn structure_acyclic(
     }
 }
 
+/// A CFG node with no outgoing edges — i.e. terminated by `return`/`abort`.
+fn is_cfg_sink(target: NodeIndex, cfg: &petgraph::graph::DiGraph<(), ()>) -> bool {
+    cfg.neighbors_directed(target, Direction::Outgoing).count() == 0
+}
+
 /// A node is "singly entered" if exactly one of its CFG predecessors lies outside its own
 /// dom subtree (including itself). Predecessors inside the subtree are back-edges from a
 /// contained loop's latch — they don't represent independent entry into the scope. The
@@ -436,10 +441,17 @@ fn structure_acyclic_region(
     ///   - `target == start`: back-edge to a loop head; emit `Jump(DegenerateJumpIf)`.
     ///   - `loop_succ == Some(target)`: loop-head arm exits the loop. Emit `Jump(LoopBreak)`
     ///     for `insert_breaks` to convert to `Break`.
-    ///   - `target` is an exit of an enclosing loop: emit `Jump(ArmOutsideSubtree)`. The
-    ///     outer `structure_loop` will append `target` after its `Loop` form, and
-    ///     `insert_breaks` will rewrite this Jump to a `Break`. We must not embed even if
-    ///     `target` is singly entered — that would bury the loop exit inside the body.
+    ///   - At a loop head, `target` is one of *our* loop's exits and is a CFG sink
+    ///     (`abort`/`return`): embed it inline. `structure_loop` only appends one loop
+    ///     successor after the `Loop` form, and the orphan hoist runs only for non-loop
+    ///     calls; without this branch, a sink that's an extra loop exit gets neither
+    ///     placement and its arm-Jump survives as a goto. Embedding here keeps the abort
+    ///     inline so `recover_asserts` can fire.
+    ///   - `target` is an exit of an enclosing loop (and we're *not* at the head of that
+    ///     loop): emit `Jump(ArmOutsideSubtree)`. The outer `structure_loop` will append
+    ///     `target` after its `Loop` form, and `insert_breaks` will rewrite this Jump to a
+    ///     `Break`. We must not embed even if `target` is singly entered — that would bury
+    ///     the loop exit inside the body.
     ///   - `target ∈ ichildren` and `target` is singly-entered (the only CFG predecessor
     ///     outside its own dom subtree is the edge from `start`): embed the structured form
     ///     as the arm body. Back-edges from inside `target`'s subtree don't count — a loop
@@ -462,6 +474,13 @@ fn structure_acyclic_region(
             D::Structured::Jump(GotoSource::DegenerateJumpIf, target)
         } else if Some(target) == loop_succ {
             D::Structured::Jump(GotoSource::LoopBreak, target)
+        } else if loop_succ.is_some()
+            && loop_exits.is_some_and(|e| e.contains(&target))
+            && is_cfg_sink(target, cfg)
+            && ichildren.contains(&target)
+            && structured_blocks.contains_key(&target)
+        {
+            structured_blocks.remove(&target).unwrap()
         } else if loop_exits.is_some_and(|e| e.contains(&target)) {
             D::Structured::Jump(GotoSource::ArmOutsideSubtree, target)
         } else if ichildren.contains(&target) && is_singly_entered(target, cfg, dom_tree) {
