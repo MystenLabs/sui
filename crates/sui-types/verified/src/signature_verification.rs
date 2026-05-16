@@ -818,7 +818,6 @@ fn scan_first_valid<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
                             assert(spec_sig_crypto_valid(&tx_signatures@[j as int], a, epoch));
                             assert(spec_addresses::<S, Addr>(tx_signatures, j as int).contains(a));
                             assert(aliases@.to_set().contains(a));
-                            assert(spec_is_valid_for(&tx_signatures@[j as int], aliases@.to_set(), epoch));
                         }
                         found_addr = Some(a);
                     }
