@@ -96,46 +96,41 @@ public(friend) fun a40f8bc58a06c8b33(l0: &A0ea878587b719a64, l1: &mut Ad1f26f3c0
                 } else {
                     l66 - l60
                 } < l53 / 2u64) {
-                    
-                } else {
                     unstructured {
-                        goto 'label_292;
+                        goto 'label_440;
                     }
                 }
+            };
+            let l44 = a2ec4300f6df080d1::a7235c62aa5b27437(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l47, false);
+            let l43 = a2ec4300f6df080d1::a7235c62aa5b27437(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l46, true);
+            let l61 = l44;
+            let l67 = l43;
+            let l16 = if (l61 < l67) {
+                l61
             } else {
-                let l16;
-                /* block 292 */;
-                let l44 = a2ec4300f6df080d1::a7235c62aa5b27437(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l47, false);
-                let l43 = a2ec4300f6df080d1::a7235c62aa5b27437(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l46, true);
-                let l61 = l44;
-                let l67 = l43;
-                l16 = if (l61 < l67) {
-                    l61
-                } else {
-                    l67
-                };
-                let l41 = l16;
-                let l48 = a2ec4300f6df080d1::a8fa7d5a111cd2750(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28) * a783956f993d811bc::afa416ea5d7b9d0f7(l25);
-                let l62 = l41;
-                let l68 = l48;
-                let l42 = if (l62 < l68) {
-                    l62
-                } else {
-                    l68
-                };
-                let l63 = l42;
-                let l69 = ad9e4d11aecc532fa::afb1904d62fe08653(&l36);
-                if (if (l63 > l69) {
-                    l63 - l69
-                } else {
-                    l69 - l63
-                } < l42 / 2u128) {
-                    
-                } else {
-                    a2ec4300f6df080d1::a6dc79187e3841ff0(l40, l27, l24, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l42, l33, l34)
-                }
+                l67
+            };
+            let l48 = a2ec4300f6df080d1::a8fa7d5a111cd2750(l40, l49, l50, l31, l30, l32, l55, l56, l29, l28) * a783956f993d811bc::afa416ea5d7b9d0f7(l25);
+            let l62 = l16;
+            let l68 = l48;
+            let l42 = if (l62 < l68) {
+                l62
+            } else {
+                l68
+            };
+            let l63 = l42;
+            let l69 = ad9e4d11aecc532fa::afb1904d62fe08653(&l36);
+            if (if (l63 > l69) {
+                l63 - l69
+            } else {
+                l69 - l63
+            } < l42 / 2u128) {
+                
+            } else {
+                a2ec4300f6df080d1::a6dc79187e3841ff0(l40, l27, l24, l49, l50, l31, l30, l32, l55, l56, l29, l28, l26, l23, l42, l33, l34)
             }
-        }
+        };
+        /* block 440 */
     }
 }
 

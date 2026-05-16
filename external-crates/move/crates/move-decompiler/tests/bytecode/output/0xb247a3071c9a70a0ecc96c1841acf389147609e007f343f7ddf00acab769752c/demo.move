@@ -1010,26 +1010,22 @@ public fun get_token_revenue<T0>(l0: &StakingPool<T0>, l1: String): u64 {
 
 fun get_token_type_string_any<T0>(): String {
     let l2 = ascii::into_bytes(type_name::into_string(type_name::get()));
-    if (&l2.len() <= 0u64) {
-        /* block 50 */;
-        return string::utf8(l2)
+    if (&l2.len() > 0u64) {
+        if (*(&(&l2)[0u64]) == 76u8) {
+            let l4 = vector[];
+            (&mut l4).push_back(48u8);
+            (&mut l4).push_back(120u8);
+            let l3 = &l2.len();
+            let l1 = 1u64;
+            while (l1 < l3) {
+                let l0 = *(&(&l2)[l1]);
+                (&mut l4).push_back(l0);
+                l1 = l1 + 1u64;
+            };
+            return string::utf8(l4)
+        }
     };
-    if (*(&(&l2)[0u64]) == 76u8) {
-        let l4 = vector[];
-        (&mut l4).push_back(48u8);
-        (&mut l4).push_back(120u8);
-        let l3 = &l2.len();
-        let l1 = 1u64;
-        while (l1 < l3) {
-            let l0 = *(&(&l2)[l1]);
-            (&mut l4).push_back(l0);
-            l1 = l1 + 1u64;
-        };
-        return string::utf8(l4)
-    };
-    unstructured {
-        goto 'label_50;
-    }
+    return string::utf8(l2)
 }
 
 fun get_token_type_string_sui<T0>(): String {
@@ -1480,41 +1476,36 @@ public entry fun stake_nft_in_slot<T0: key + store, T1>(l0: &mut StakingPool<T1>
     let l10 = clock::timestamp_ms(l6);
     assert!(l10 >= *(&l0.start_time), C7);
     if (*(&l0.end_time) > 0u64) {
-        assert!(l10 < *(&l0.end_time), C10);
-        unstructured {
-            goto 'label_108;
-        }
-    } else {
-        /* block 108 */;
-        let l15 = tx_context::sender(freeze(l7));
-        let l18 = demo::get_slot_config(&l0.slot_configs, l5);
-        assert!(demo::is_collection_allowed_in_slot(l18, &l4), C8);
-        let l14 = type_name::get();
-        let l22 = StakeKey { nft_id: l3, nft_type: l14 };
-        assert!(!(dynamic_object_field::exists_(&l0.id, l22)), C12);
-        assert!(demo::is_slot_unlocked(freeze(l0), l15, l5), C27);
-        assert!(!(demo::is_slot_occupied(freeze(l0), l15, l5)), C28);
-        let l16 = object::id(freeze(l0));
-        let l12 = object::id(freeze(l1));
-        let l9 = *(&l0.default_reward_rate);
-        let l20 = *(&l18.reward_multiplier);
-        let l13 = demo::get_effective_nft_multiplier(freeze(l0), l3, &l4);
-        let l23 = demo::get_wallet_bonus_multiplier(freeze(l0), l15);
-        let l11 = demo::calculate_effective_reward_rate_enhanced(l9, l20, l13, l23);
-        let l19 = demo::get_or_create_slot_data(l0, l15, l5, l7);
-        *(&mut l19.staked_nft) = option::some(l3);
-        *(&mut l19.staked_collection) = option::some(l4);
-        *(&mut l19.stake_time) = l10;
-        *(&mut l19.last_claim_time) = l10;
-        *(&mut l19.nft_type) = option::some(l14);
-        *(&mut l19.pending_rewards) = 0u64;
-        let l17 = kiosk::list_with_purchase_cap(l1, l2, l3, 1000000000000u64, l7);
-        let l21 = StakeInfo { id: object::new(l7), nft_id: l3, owner: l15, kiosk_id: l12, collection: l4, purchase_cap: l17, stake_time: l10, last_claim_time: l10, pending_rewards: 0u64, nft_type: l14, total_claimed: 0u64, slot_number: l5 };
-        dynamic_object_field::add(&mut l0.id, l22, l21);
-        transfer::transfer(StakeReceipt { id: object::new(l7), pool_id: l16, nft_id: l3, kiosk_id: l12, owner: l15, stake_time: l10, nft_type: l14, slot_number: l5 }, l15);
-        *(&mut l0.total_staked) = demo::safe_add(*(&l0.total_staked), 1u64);
-        event::emit(NftStaked { pool_id: l16, nft_id: l3, kiosk_id: l12, owner: l15, collection: l4, stake_time: l10, nft_type: l14, slot_number: l5, base_reward_rate: l9, slot_multiplier: l20, nft_multiplier: l13, wallet_bonus_multiplier: l23, effective_reward_rate: l11 })
-    }
+        assert!(l10 < *(&l0.end_time), C10)
+    };
+    let l15 = tx_context::sender(freeze(l7));
+    let l18 = demo::get_slot_config(&l0.slot_configs, l5);
+    assert!(demo::is_collection_allowed_in_slot(l18, &l4), C8);
+    let l14 = type_name::get();
+    let l22 = StakeKey { nft_id: l3, nft_type: l14 };
+    assert!(!(dynamic_object_field::exists_(&l0.id, l22)), C12);
+    assert!(demo::is_slot_unlocked(freeze(l0), l15, l5), C27);
+    assert!(!(demo::is_slot_occupied(freeze(l0), l15, l5)), C28);
+    let l16 = object::id(freeze(l0));
+    let l12 = object::id(freeze(l1));
+    let l9 = *(&l0.default_reward_rate);
+    let l20 = *(&l18.reward_multiplier);
+    let l13 = demo::get_effective_nft_multiplier(freeze(l0), l3, &l4);
+    let l23 = demo::get_wallet_bonus_multiplier(freeze(l0), l15);
+    let l11 = demo::calculate_effective_reward_rate_enhanced(l9, l20, l13, l23);
+    let l19 = demo::get_or_create_slot_data(l0, l15, l5, l7);
+    *(&mut l19.staked_nft) = option::some(l3);
+    *(&mut l19.staked_collection) = option::some(l4);
+    *(&mut l19.stake_time) = l10;
+    *(&mut l19.last_claim_time) = l10;
+    *(&mut l19.nft_type) = option::some(l14);
+    *(&mut l19.pending_rewards) = 0u64;
+    let l17 = kiosk::list_with_purchase_cap(l1, l2, l3, 1000000000000u64, l7);
+    let l21 = StakeInfo { id: object::new(l7), nft_id: l3, owner: l15, kiosk_id: l12, collection: l4, purchase_cap: l17, stake_time: l10, last_claim_time: l10, pending_rewards: 0u64, nft_type: l14, total_claimed: 0u64, slot_number: l5 };
+    dynamic_object_field::add(&mut l0.id, l22, l21);
+    transfer::transfer(StakeReceipt { id: object::new(l7), pool_id: l16, nft_id: l3, kiosk_id: l12, owner: l15, stake_time: l10, nft_type: l14, slot_number: l5 }, l15);
+    *(&mut l0.total_staked) = demo::safe_add(*(&l0.total_staked), 1u64);
+    event::emit(NftStaked { pool_id: l16, nft_id: l3, kiosk_id: l12, owner: l15, collection: l4, stake_time: l10, nft_type: l14, slot_number: l5, base_reward_rate: l9, slot_multiplier: l20, nft_multiplier: l13, wallet_bonus_multiplier: l23, effective_reward_rate: l11 })
 }
 
 public entry fun toggle_pause<T0>(l0: &mut StakingPool<T0>, l1: &mut TxContext) {

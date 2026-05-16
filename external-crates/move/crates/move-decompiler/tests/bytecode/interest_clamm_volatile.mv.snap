@@ -1067,83 +1067,63 @@ fun tweak_price<T0>(l0: &mut StateV1<T0>, l1: vector<CoinState>, l2: u64, l3: u2
         l49 = l40 * l45 / l39;
         assert!(!(l39 > l45 && *(&(&l0.a_gamma).future_time) == 0u64), errors::incurred_a_loss());
         if (*(&(&l0.a_gamma).future_time) == 1u64) {
-            *(&mut (&mut l0.a_gamma).future_time) = 0u64;
-            unstructured {
-                goto 'label_268;
-            }
-        } else {
-            unstructured {
-                goto 'label_268;
-            }
+            *(&mut (&mut l0.a_gamma).future_time) = 0u64
         }
-    } else {
-        let (l12, l37);
-        /* block 268 */;
-        *(&mut l0.xcp_profit) = l49;
-        l37 = *(&l0.not_adjusted);
-        l12 = !(l37) && l45 * 2u256 - C6 > l49 + 2u256 * *(&(&l0.rebalancing_params).extra_profit);
-        if (l12) {
-            l37 = true;
-            *(&mut l0.not_adjusted) = true
+    };
+    *(&mut l0.xcp_profit) = l49;
+    let l37 = *(&l0.not_adjusted);
+    if (!(l37) && l45 * 2u256 - C6 > l49 + 2u256 * *(&(&l0.rebalancing_params).extra_profit)) {
+        l37 = true;
+        *(&mut l0.not_adjusted) = true
+    };
+    if (l37) {
+        let l15 = *(&(&l0.rebalancing_params).adjustment_step);
+        let l38 = 0u256;
+        let l31 = 1u64;
+        while (l36 > l31) {
+            let l22 = &(&l1)[l31];
+            let l42 = math256::diff(C6, fixed_point_wad::div_down(*(&l22.price_oracle), *(&l22.price)));
+            l38 = l38 + math256::pow(l42, 2u256);
+            l31 = l31 + 1u64;
         };
-        if (l37) {
-            let l15 = *(&(&l0.rebalancing_params).adjustment_step);
-            let l38 = 0u256;
-            let l31 = 1u64;
-            while (l36 > l31) {
-                let l22 = &(&l1)[l31];
-                let l42 = math256::diff(C6, fixed_point_wad::div_down(*(&l22.price_oracle), *(&l22.price)));
-                l38 = l38 + math256::pow(l42, 2u256);
-                l31 = l31 + 1u64;
+        if (l38 > math256::pow(l15, 2u256) && l39 != 0u256) {
+            l38 = volatile_math::sqrt(l38 / C6);
+            let l41 = C17;
+            let l52 = l5;
+            let l32 = 1u64;
+            while (l36 > l32) {
+                let l23 = &(&l1)[l32];
+                let l44 = *(&l23.price) * l38 - l15 + l15 * *(&l23.price_oracle) / l38;
+                (&mut l41).push_back(l44);
+                let l46 = &mut (&mut l52)[l32];
+                *l46 = *l46 * l44 / *(&l23.price);
+                l32 = l32 + 1u64;
             };
-            if (l38 > math256::pow(l15, 2u256) && l39 != 0u256) {
-                l38 = volatile_math::sqrt(l38 / C6);
-                let l41 = C17;
-                let l52 = l5;
-                let l32 = 1u64;
-                while (l36 > l32) {
-                    let l23 = &(&l1)[l32];
-                    let l44 = *(&l23.price) * l38 - l15 + l15 * *(&l23.price_oracle) / l38;
-                    (&mut l41).push_back(l44);
-                    let l46 = &mut (&mut l52)[l32];
-                    *l46 = *l46 * l44 / *(&l23.price);
-                    l32 = l32 + 1u64;
+            let l25 = volatile_math::invariant_(l3, l4, l52);
+            *(&mut (&mut l52)[0u64]) = l25 / *(&l0.n_coins);
+            let l33 = 1u64;
+            while (l36 > l33) {
+                *(&mut (&mut l52)[l33]) = fixed_point_wad::div_down(l25, *(&l0.n_coins) * *(&(&l41)[l33]));
+                l33 = l33 + 1u64;
+            };
+            l39 = fixed_point_wad::div_down(volatile_math::geometric_mean(l52, true), l9);
+            if (l39 > C6 && 2u256 * l39 - C6 > l49) {
+                let l34 = 1u64;
+                while (l36 > l34) {
+                    *(&mut (&mut (&mut l1)[l34]).price) = *(&(&l41)[l34]);
+                    l34 = l34 + 1u64;
                 };
-                let l25 = volatile_math::invariant_(l3, l4, l52);
-                *(&mut (&mut l52)[0u64]) = l25 / *(&l0.n_coins);
-                let l33 = 1u64;
-                while (l36 > l33) {
-                    *(&mut (&mut l52)[l33]) = fixed_point_wad::div_down(l25, *(&l0.n_coins) * *(&(&l41)[l33]));
-                    l33 = l33 + 1u64;
-                };
-                l39 = fixed_point_wad::div_down(volatile_math::geometric_mean(l52, true), l9);
-                if (l39 > C6 && 2u256 * l39 - C6 > l49) {
-                    let l34 = 1u64;
-                    while (l36 > l34) {
-                        *(&mut (&mut (&mut l1)[l34]).price) = *(&(&l41)[l34]);
-                        l34 = l34 + 1u64;
-                    };
-                    interest_clamm_volatile::update_coin_state_prices(l0, l1);
-                    *(&mut l0.d) = l25;
-                    *(&mut l0.virtual_price) = l39
-                } else {
-                    *(&mut l0.not_adjusted) = false;
-                    unstructured {
-                        goto 'label_523;
-                    }
-                }
-            } else {
-                unstructured {
-                    goto 'label_523;
-                }
-            }
-        } else {
-            /* block 523 */;
-            interest_clamm_volatile::update_coin_state_prices(l0, l1);
-            *(&mut l0.d) = l26;
-            *(&mut l0.virtual_price) = l45
+                interest_clamm_volatile::update_coin_state_prices(l0, l1);
+                *(&mut l0.d) = l25;
+                *(&mut l0.virtual_price) = l39;
+                return
+            };
+            *(&mut l0.not_adjusted) = false
         }
-    }
+    };
+    interest_clamm_volatile::update_coin_state_prices(l0, l1);
+    *(&mut l0.d) = l26;
+    *(&mut l0.virtual_price) = l45
 }
 
 fun update_coin_state_prices<T0>(l0: &mut StateV1<T0>, l1: vector<CoinState>) {

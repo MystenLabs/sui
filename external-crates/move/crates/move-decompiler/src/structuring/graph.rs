@@ -7,7 +7,6 @@ use crate::{
 };
 
 use petgraph::{
-    algo::dominators::Dominators,
     graph::{DiGraph, NodeIndex},
     visit::EdgeRef,
 };
@@ -17,11 +16,9 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 #[derive(Debug)]
 pub struct Graph {
     pub cfg: DiGraph<(), ()>,
-    pub return_: NodeIndex,
     pub dom_tree: dom_tree::DominatorTree,
     pub loop_heads: HashSet<NodeIndex>,
     pub back_edges: HashMap<NodeIndex, HashSet<NodeIndex>>,
-    pub post_dominators: Dominators<NodeIndex>,
     /// For each non-loop-head node, the succ_nodes of every loop whose body contains it.
     /// `structure_acyclic_region`'s orphan hoist consults this so it doesn't eat an
     /// enclosing-loop successor that `structure_loop` will append after the `Loop` form;
@@ -64,12 +61,9 @@ impl Graph {
 
         let (loop_heads, back_edges) = find_loop_heads_and_back_edges(&cfg, start_node);
         let dom_tree = dom_tree::DominatorTree::from_graph(&cfg, start_node);
-        let (return_, post_dominators) = compute_post_dominators(config, &cfg, input);
         if config.debug_print.control_flow_graph {
             print_heading("dominators");
             println!("{dom_tree:#?}");
-            print_heading("post-dominators");
-            println!("{post_dominators:#?}");
             print_heading("loop heads");
             println!("{loop_heads:#?}");
         }
@@ -79,8 +73,6 @@ impl Graph {
             dom_tree,
             loop_heads,
             back_edges,
-            post_dominators,
-            return_,
             loop_exits: HashMap::new(),
             emitted: vec![false; node_count],
         };
@@ -300,75 +292,4 @@ fn find_loop_heads_and_back_edges<N, E>(
     );
 
     (loop_heads, back_edges)
-}
-
-/// Vanilla post-dominator analysis. `structure_acyclic_region` consults the result only to
-/// identify a Switch/IfElse's convergence point so we emit a `Jump` rather than embedding
-/// the join into one of the arms — the owned-children hoist then places the join as a
-/// sibling. No filter on `Code(_, _, None)` sinks: the hoist handles assertion / early-return
-/// patterns directly via the per-scope sibling placement.
-fn compute_post_dominators<N, E>(
-    config: &Config,
-    cfg: &petgraph::Graph<N, E>,
-    input: &BTreeMap<D::Label, D::Input>,
-) -> (NodeIndex, Dominators<NodeIndex>) {
-    let mut rev = petgraph::graph::DiGraph::<(), ()>::from_edges(
-        cfg.edge_references().map(|e| (e.target(), e.source())),
-    );
-    let return_: NodeIndex = rev.add_node(());
-    if config.debug_print.control_flow_graph {
-        println!("Return node: {return_:?}");
-    }
-
-    // Wire `return_` to each original sink (no outgoing edges in cfg = no incoming in rev).
-    for node in rev.node_indices() {
-        if node == return_ || !input.contains_key(&node) {
-            continue;
-        }
-        if rev
-            .neighbors_directed(node, petgraph::Direction::Incoming)
-            .count()
-            == 0
-        {
-            rev.add_edge(return_, node, ());
-        }
-    }
-
-    add_infinite_loop_post_dominators(config, &mut rev, return_, cfg, input);
-
-    (
-        return_,
-        petgraph::algo::dominators::simple_fast(&rev, return_),
-    )
-}
-
-/// Add *impossible edges* (the folk-literature name for synthetic edges introduced to make
-/// post-domination total) from `return_` to one representative of each terminal SCC of the
-/// original CFG — an infinite loop or abort-cycle that never reaches a real exit. Without
-/// them, `simple_fast` leaves `immediate_dominator` undefined for nodes in those regions and
-/// structuring later crashes on `.unwrap()`.
-fn add_infinite_loop_post_dominators<N, E>(
-    config: &Config,
-    rev: &mut DiGraph<(), ()>,
-    return_: NodeIndex,
-    cfg: &petgraph::Graph<N, E>,
-    input: &BTreeMap<D::Label, D::Input>,
-) {
-    for scc in petgraph::algo::tarjan_scc(cfg) {
-        let members: HashSet<NodeIndex> = scc.iter().copied().collect();
-        let stays_in_scc = scc
-            .iter()
-            .flat_map(|&n| cfg.neighbors(n))
-            .all(|m| members.contains(&m));
-        if !stays_in_scc {
-            continue;
-        }
-        let Some(rep) = scc.iter().filter(|n| input.contains_key(n)).max().copied() else {
-            continue;
-        };
-        if config.debug_print.control_flow_graph {
-            println!("Adding impossible edge return_ -> {rep:?}");
-        }
-        rev.add_edge(return_, rep, ());
-    }
 }

@@ -62,51 +62,47 @@ const C19: vector<u8> = vector[48u8, 120u8];
 // -- functions -- 
 
 fun append_format_piece(l0: &mut vector<u8>, l1: &vector<u8>, l2: u64, l3: &vector<u8>): bool {
-    if (l1.len() <= 0u64) {
-        /* block 87 */;
-        let l8 = metadata::get_chunks_ids(l3);
-        if (l2 < &l8.len()) {
-            let l7 = *(&(&l8)[l2]);
-            let l6 = x2_format::meta_chunk_to_string(l3, l7, l1);
-            vector::append(l0, l6);
-            return true
-        };
-        vector::append(l0, C12);
-        return true
-    };
-    let l12 = C9;
-    let l13 = vector[];
-    if (*(&l1[0u64]) != 58u8) {
-        let l10 = 0u64;
-        let l9 = l1.len();
-        let l11 = false;
-        while (l10 < l9) {
-            let l4 = *(&l1[l10]);
-            if (l11) {
-                (&mut l13).push_back(l4)
-            } else {
-                if (l4 == 58u8) {
-                    l11 = true;
-                    (&mut l13).push_back(58u8)
+    if (l1.len() > 0u64) {
+        let l12 = C9;
+        let l13 = vector[];
+        if (*(&l1[0u64]) != 58u8) {
+            let l10 = 0u64;
+            let l9 = l1.len();
+            let l11 = false;
+            while (l10 < l9) {
+                let l4 = *(&l1[l10]);
+                if (l11) {
+                    (&mut l13).push_back(l4)
                 } else {
-                    (&mut l12).push_back(l4)
-                }
+                    if (l4 == 58u8) {
+                        l11 = true;
+                        (&mut l13).push_back(58u8)
+                    } else {
+                        (&mut l12).push_back(l4)
+                    }
+                };
+                l10 = l10 + 1u64;
+            }
+        };
+        if (&l12.len() > 0u64) {
+            if (metadata::has_chunk(l3, metadata::key(&l12))) {
+                let l5 = x2_format::meta_chunk_to_string(l3, metadata::key(&l12), &l13);
+                vector::append(l0, l5);
+                return false
             };
-            l10 = l10 + 1u64;
+            vector::append(l0, C12);
+            return false
         }
     };
-    if (&l12.len() > 0u64) {
-        if (metadata::has_chunk(l3, metadata::key(&l12))) {
-            let l5 = x2_format::meta_chunk_to_string(l3, metadata::key(&l12), &l13);
-            vector::append(l0, l5);
-            return false
-        };
-        vector::append(l0, C12);
-        return false
+    let l8 = metadata::get_chunks_ids(l3);
+    if (l2 < &l8.len()) {
+        let l7 = *(&(&l8)[l2]);
+        let l6 = x2_format::meta_chunk_to_string(l3, l7, l1);
+        vector::append(l0, l6);
+        return true
     };
-    unstructured {
-        goto 'label_87;
-    }
+    vector::append(l0, C12);
+    return true
 }
 
 public fun bool_to_string(l0: bool): vector<u8> {

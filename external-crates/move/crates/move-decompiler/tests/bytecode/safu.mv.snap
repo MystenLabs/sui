@@ -299,13 +299,14 @@ public(friend) fun get_user_share(l0: &Registry, l1: u64, l2: address): Option<S
                 l4 = l4 + 1u64;
             } else {
                 if (l4 == l5) {
-                    return option::none()
+                    break
                 };
                 unstructured {
                     goto 'label_99;
                 }
             }
-        }
+        };
+        return option::none()
     };
     /* block 99 */;
     return option::none()

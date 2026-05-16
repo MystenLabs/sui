@@ -427,9 +427,8 @@ public entry fun batch_update_art20_image_uri_by_asset_ids(l0: &CollectionCap, l
                 *(&mut (&mut l15).logo_uri) = url::new_unsafe_from_bytes(*l14);
                 event::emit(LogoURIUpdateEvent { id: object::uid_to_inner(&(&l15).id), artinals_id: *(&(&l15).artinals_id), new_logo_uri: *(&(&l15).logo_uri) });
                 l10 = true;
-            } else {
-                (&mut l18).push_back(l15)
-            }
+            };
+            (&mut l18).push_back(l15)
         };
         while (!(vector::is_empty(&l18))) {
             (&mut l1).push_back((&mut l18).pop_back())
@@ -449,62 +448,42 @@ public entry fun batch_update_metadata(l0: &CollectionCap, l1: vector<NFT>, l2: 
     let l10 = tx_context::sender(freeze(l6));
     let l8 = xf_ART20::get_collection_cap_id(l0);
     if (option::is_some(&l2)) {
-        assert!(string::length(option::borrow(&l2)) <= 128u64, C10);
-        unstructured {
-            goto 'label_24;
-        }
-    } else {
-        /* block 24 */;
+        assert!(string::length(option::borrow(&l2)) <= 128u64, C10)
+    };
+    if (option::is_some(&l3)) {
+        assert!(string::length(option::borrow(&l3)) <= 1000u64, C10)
+    };
+    if (option::is_some(&l4)) {
+        assert!(option::borrow(&l4).len() <= 256u64, C10)
+    };
+    if (option::is_some(&l5)) {
+        assert!(option::borrow(&l5).len() <= 256u64, C10)
+    };
+    let l9 = 0u64;
+    while (l9 < l7) {
+        let l11 = &mut (&mut l1)[l9];
+        assert!(*(&l11.collection_id) == l8, C5);
+        assert!(*(&l0.is_mutable), C2);
+        assert!(l10 == *(&l11.creator), C1);
+        if (option::is_some(&l2)) {
+            *(&mut l11.name) = *(option::borrow(&l2))
+        };
         if (option::is_some(&l3)) {
-            assert!(string::length(option::borrow(&l3)) <= 1000u64, C10);
-            unstructured {
-                goto 'label_38;
-            }
-        } else {
-            /* block 38 */;
-            if (option::is_some(&l4)) {
-                assert!(option::borrow(&l4).len() <= 256u64, C10);
-                unstructured {
-                    goto 'label_52;
-                }
-            } else {
-                /* block 52 */;
-                if (option::is_some(&l5)) {
-                    assert!(option::borrow(&l5).len() <= 256u64, C10);
-                    unstructured {
-                        goto 'label_66;
-                    }
-                } else {
-                    /* block 66 */;
-                    let l9 = 0u64;
-                    while (l9 < l7) {
-                        let l11 = &mut (&mut l1)[l9];
-                        assert!(*(&l11.collection_id) == l8, C5);
-                        assert!(*(&l0.is_mutable), C2);
-                        assert!(l10 == *(&l11.creator), C1);
-                        if (option::is_some(&l2)) {
-                            *(&mut l11.name) = *(option::borrow(&l2))
-                        };
-                        if (option::is_some(&l3)) {
-                            *(&mut l11.description) = *(option::borrow(&l3))
-                        };
-                        if (option::is_some(&l4)) {
-                            *(&mut l11.uri) = url::new_unsafe_from_bytes(*(option::borrow(&l4)))
-                        };
-                        if (option::is_some(&l5)) {
-                            *(&mut l11.logo_uri) = url::new_unsafe_from_bytes(*(option::borrow(&l5)))
-                        };
-                        event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&l11.id), new_name: *(&l11.name), new_description: *(&l11.description) });
-                        l9 = l9 + 1u64;
-                    };
-                    while (!(vector::is_empty(&l1))) {
-                        transfer::transfer((&mut l1).pop_back(), l10)
-                    };
-                    std::vector::destroy_empty(l1)
-                }
-            }
-        }
-    }
+            *(&mut l11.description) = *(option::borrow(&l3))
+        };
+        if (option::is_some(&l4)) {
+            *(&mut l11.uri) = url::new_unsafe_from_bytes(*(option::borrow(&l4)))
+        };
+        if (option::is_some(&l5)) {
+            *(&mut l11.logo_uri) = url::new_unsafe_from_bytes(*(option::borrow(&l5)))
+        };
+        event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&l11.id), new_name: *(&l11.name), new_description: *(&l11.description) });
+        l9 = l9 + 1u64;
+    };
+    while (!(vector::is_empty(&l1))) {
+        transfer::transfer((&mut l1).pop_back(), l10)
+    };
+    std::vector::destroy_empty(l1)
 }
 
 public entry fun batch_update_metadata_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>, l2: vector<u64>, l3: Option<String>, l4: Option<String>, l5: Option<vector<u8>>, l6: Option<vector<u8>>, l7: &mut TxContext) {
@@ -517,92 +496,70 @@ public entry fun batch_update_metadata_by_asset_ids(l0: &CollectionCap, l1: vect
         assert!(string::length(l19) <= 128u64, C10);
         let l12 = string::as_bytes(l19);
         assert!(l12.len() <= 512u64, C10);
-        assert!(l12.len() > 0u64, C10);
-        unstructured {
-            goto 'label_79;
-        }
-    } else {
-        /* block 79 */;
-        if (option::is_some(&l4)) {
-            let l15 = option::borrow(&l4);
-            assert!(string::length(l15) <= 1000u64, C10);
-            let l13 = string::as_bytes(l15);
-            assert!(l13.len() <= 4000u64, C10);
-            assert!(l13.len() > 0u64, C10);
-            unstructured {
-                goto 'label_128;
-            }
-        } else {
-            /* block 128 */;
-            if (option::is_some(&l5)) {
-                let l24 = option::borrow(&l5);
-                assert!(l24.len() <= 256u64, C10);
-                assert!(l24.len() > 0u64, C10);
-                unstructured {
-                    goto 'label_160;
-                }
-            } else {
-                /* block 160 */;
+        assert!(l12.len() > 0u64, C10)
+    };
+    if (option::is_some(&l4)) {
+        let l15 = option::borrow(&l4);
+        assert!(string::length(l15) <= 1000u64, C10);
+        let l13 = string::as_bytes(l15);
+        assert!(l13.len() <= 4000u64, C10);
+        assert!(l13.len() > 0u64, C10)
+    };
+    if (option::is_some(&l5)) {
+        let l24 = option::borrow(&l5);
+        assert!(l24.len() <= 256u64, C10);
+        assert!(l24.len() > 0u64, C10)
+    };
+    if (option::is_some(&l6)) {
+        let l18 = option::borrow(&l6);
+        assert!(l18.len() <= 256u64, C10);
+        assert!(l18.len() > 0u64, C10)
+    };
+    let l21 = table::new(l7);
+    let l17 = 0u64;
+    loop {
+        if (l17 >= l10) {
+            table::drop(l21);
+            break
+        };
+        let l11 = *(&(&l2)[l17]);
+        assert!(!(table::contains(&l21, l11)), C20);
+        table::add(&mut l21, l11, true);
+        let l16 = false;
+        let l23 = vector[];
+        while (!(vector::is_empty(&l1))) {
+            let l20 = (&mut l1).pop_back();
+            if (!(l16) && *(&(&l20).collection_id) == l14 && *(&(&l20).asset_id) == l11) {
+                assert!(*(&l0.is_mutable), C2);
+                assert!(l22 == *(&(&l20).creator), C1);
+                if (option::is_some(&l3)) {
+                    *(&mut (&mut l20).name) = *(option::borrow(&l3))
+                };
+                if (option::is_some(&l4)) {
+                    *(&mut (&mut l20).description) = *(option::borrow(&l4))
+                };
+                if (option::is_some(&l5)) {
+                    *(&mut (&mut l20).uri) = url::new_unsafe_from_bytes(*(option::borrow(&l5)))
+                };
                 if (option::is_some(&l6)) {
-                    let l18 = option::borrow(&l6);
-                    assert!(l18.len() <= 256u64, C10);
-                    assert!(l18.len() > 0u64, C10);
-                    unstructured {
-                        goto 'label_192;
-                    }
-                } else {
-                    let (l17, l21);
-                    /* block 192 */;
-                    l21 = table::new(l7);
-                    l17 = 0u64;
-                    loop {
-                        if (l17 >= l10) {
-                            table::drop(l21);
-                            break
-                        };
-                        let l11 = *(&(&l2)[l17]);
-                        assert!(!(table::contains(&l21, l11)), C20);
-                        table::add(&mut l21, l11, true);
-                        let l16 = false;
-                        let l23 = vector[];
-                        while (!(vector::is_empty(&l1))) {
-                            let l20 = (&mut l1).pop_back();
-                            if (!(l16) && *(&(&l20).collection_id) == l14 && *(&(&l20).asset_id) == l11) {
-                                assert!(*(&l0.is_mutable), C2);
-                                assert!(l22 == *(&(&l20).creator), C1);
-                                if (option::is_some(&l3)) {
-                                    *(&mut (&mut l20).name) = *(option::borrow(&l3))
-                                };
-                                if (option::is_some(&l4)) {
-                                    *(&mut (&mut l20).description) = *(option::borrow(&l4))
-                                };
-                                if (option::is_some(&l5)) {
-                                    *(&mut (&mut l20).uri) = url::new_unsafe_from_bytes(*(option::borrow(&l5)))
-                                };
-                                if (option::is_some(&l6)) {
-                                    *(&mut (&mut l20).logo_uri) = url::new_unsafe_from_bytes(*(option::borrow(&l6)))
-                                };
-                                event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&(&l20).id), new_name: *(&(&l20).name), new_description: *(&(&l20).description) });
-                                l16 = true;
-                            } else {
-                                (&mut l23).push_back(l20)
-                            }
-                        };
-                        while (!(vector::is_empty(&l23))) {
-                            (&mut l1).push_back((&mut l23).pop_back())
-                        };
-                        std::vector::destroy_empty(l23);
-                        assert!(l16, C15);
-                        l17 = l17 + 1u64;
-                    };
-                    while (!(vector::is_empty(&l1))) {
-                        transfer::transfer((&mut l1).pop_back(), l22)
-                    };
-                    std::vector::destroy_empty(l1)
-                }
-            }
-        }
-    }
+                    *(&mut (&mut l20).logo_uri) = url::new_unsafe_from_bytes(*(option::borrow(&l6)))
+                };
+                event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&(&l20).id), new_name: *(&(&l20).name), new_description: *(&(&l20).description) });
+                l16 = true;
+            };
+            (&mut l23).push_back(l20)
+        };
+        while (!(vector::is_empty(&l23))) {
+            (&mut l1).push_back((&mut l23).pop_back())
+        };
+        std::vector::destroy_empty(l23);
+        assert!(l16, C15);
+        l17 = l17 + 1u64;
+    };
+    while (!(vector::is_empty(&l1))) {
+        transfer::transfer((&mut l1).pop_back(), l22)
+    };
+    std::vector::destroy_empty(l1)
 }
 
 public entry fun batch_update_token_logo_uri(l0: vector<NFT>, l1: vector<vector<u8>>, l2: &CollectionCap, l3: &mut TxContext) {
@@ -1097,14 +1054,14 @@ public entry fun mint_additional_art20(l0: &mut CollectionCap, l1: u64, l2: &mut
                 l10 = true;
             };
             if (!(l10)) {
-                transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14);
-                unstructured {
-                    goto 'label_132;
-                }
-            } else {
-                unstructured {
-                    goto 'label_132;
-                }
+                break
+            };
+            unstructured {
+                goto 'label_132;
+            };
+            transfer::transfer(UserBalance { id: object::new(l5), collection_id: l11, balance: l1 }, l14);
+            unstructured {
+                goto 'label_132;
             }
         }
     };
@@ -1338,11 +1295,11 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
     let l9 = vector[];
     let l16 = 0u64;
     let l19;
-    'loop_23: loop {
+    loop {
         if (l16 >= l10) {
             event::emit(BatchTransferEvent { from: l24, recipients: vector[l4], token_ids: l26, amounts: l9, collection_id: l14, timestamp: clock::timestamp_ms(l5) });
             l19 = 0u64;
-            break 'loop_23
+            break
         };
         let l11 = *(&(&l3)[l16]);
         let (reg_25, reg_26) = xf_ART20::get_nft_by_asset_id(l0, &l1, l11);
@@ -1357,18 +1314,15 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
         let l15 = false;
         let (l13, l18);
         loop {
-            if (l17 >= l20) {
-                assert!(l15, C15);
-                l16 = l16 + 1u64;
-                continue 'loop_23
-            };
-            let l25 = &mut (&mut l1)[l17];
-            if (*(&l25.collection_id) == l14 && *(&l25.asset_id) == l11 && !(l15)) {
-                l13 = false;
-                l18 = 0u64;
-                break
-            };
-            l17 = l17 + 1u64;
+            if (l17 < l20) {
+                let l25 = &mut (&mut l1)[l17];
+                if (*(&l25.collection_id) == l14 && *(&l25.asset_id) == l11 && !(l15)) {
+                    l13 = false;
+                    l18 = 0u64;
+                    break
+                };
+                l17 = l17 + 1u64;
+            }
         };
         loop {
             if (l18 < &l2.len()) {
@@ -1386,7 +1340,9 @@ public entry fun transfer_art20_by_asset_ids(l0: &CollectionCap, l1: vector<NFT>
             (&mut l9).push_back(1u64);
             transfer::transfer(vector::remove(&mut l1, l17), l4);
             l15 = true;
-        }
+        };
+        assert!(l15, C15);
+        l16 = l16 + 1u64;
     };
     while (l19 < &l2.len()) {
         if (*(&(&mut (&mut l2)[l19]).balance) == 0u64) {
@@ -1503,10 +1459,9 @@ public entry fun update_art20_image_uri_by_asset_id(l0: &CollectionCap, l1: vect
             *(&mut (&mut l11).logo_uri) = url::new_unsafe_from_bytes(l3);
             event::emit(LogoURIUpdateEvent { id: object::uid_to_inner(&(&l11).id), artinals_id: *(&(&l11).artinals_id), new_logo_uri: *(&(&l11).logo_uri) });
             l7 = true;
-        } else {
-            (&mut l12).push_back(l11);
-            l8 = l8 + 1u64;
-        }
+        };
+        (&mut l12).push_back(l11);
+        l8 = l8 + 1u64;
     };
     while (!(vector::is_empty(&l12))) {
         transfer::transfer((&mut l12).pop_back(), l10)
@@ -1527,80 +1482,58 @@ public entry fun update_metadata_by_asset_id(l0: &CollectionCap, l1: vector<NFT>
         assert!(string::length(l15) <= 128u64, C10);
         let l16 = string::as_bytes(l15);
         assert!(l16.len() <= 512u64, C10);
-        assert!(l16.len() > 0u64, C10);
-        unstructured {
-            goto 'label_50;
-        }
-    } else {
-        /* block 50 */;
-        if (option::is_some(&l4)) {
-            let l12 = option::borrow(&l4);
-            assert!(string::length(l12) <= 1000u64, C10);
-            let l11 = string::as_bytes(l12);
-            assert!(l11.len() <= 4000u64, C10);
-            assert!(l11.len() > 0u64, C10);
-            unstructured {
-                goto 'label_93;
-            }
-        } else {
-            /* block 93 */;
+        assert!(l16.len() > 0u64, C10)
+    };
+    if (option::is_some(&l4)) {
+        let l12 = option::borrow(&l4);
+        assert!(string::length(l12) <= 1000u64, C10);
+        let l11 = string::as_bytes(l12);
+        assert!(l11.len() <= 4000u64, C10);
+        assert!(l11.len() > 0u64, C10)
+    };
+    if (option::is_some(&l5)) {
+        let l20 = option::borrow(&l5);
+        assert!(l20.len() <= 256u64, C10);
+        assert!(l20.len() > 0u64, C10)
+    };
+    if (option::is_some(&l6)) {
+        let l14 = option::borrow(&l6);
+        assert!(l14.len() <= 256u64, C10);
+        assert!(l14.len() > 0u64, C10)
+    };
+    let l19 = vector[];
+    let l13 = false;
+    while (!(vector::is_empty(&l1)) && !(l13)) {
+        let l17 = (&mut l1).pop_back();
+        if (*(&(&l17).collection_id) == l10 && *(&(&l17).asset_id) == l2) {
+            assert!(*(&l0.is_mutable), C2);
+            assert!(l18 == *(&(&l17).creator), C1);
+            if (option::is_some(&l3)) {
+                *(&mut (&mut l17).name) = option::extract(&mut l3)
+            };
+            if (option::is_some(&l4)) {
+                *(&mut (&mut l17).description) = option::extract(&mut l4)
+            };
             if (option::is_some(&l5)) {
-                let l20 = option::borrow(&l5);
-                assert!(l20.len() <= 256u64, C10);
-                assert!(l20.len() > 0u64, C10);
-                unstructured {
-                    goto 'label_121;
-                }
-            } else {
-                /* block 121 */;
-                if (option::is_some(&l6)) {
-                    let l14 = option::borrow(&l6);
-                    assert!(l14.len() <= 256u64, C10);
-                    assert!(l14.len() > 0u64, C10);
-                    unstructured {
-                        goto 'label_149;
-                    }
-                } else {
-                    let (l13, l19);
-                    /* block 149 */;
-                    l19 = vector[];
-                    l13 = false;
-                    while (!(vector::is_empty(&l1)) && !(l13)) {
-                        let l17 = (&mut l1).pop_back();
-                        if (*(&(&l17).collection_id) == l10 && *(&(&l17).asset_id) == l2) {
-                            assert!(*(&l0.is_mutable), C2);
-                            assert!(l18 == *(&(&l17).creator), C1);
-                            if (option::is_some(&l3)) {
-                                *(&mut (&mut l17).name) = option::extract(&mut l3)
-                            };
-                            if (option::is_some(&l4)) {
-                                *(&mut (&mut l17).description) = option::extract(&mut l4)
-                            };
-                            if (option::is_some(&l5)) {
-                                *(&mut (&mut l17).uri) = url::new_unsafe_from_bytes(option::extract(&mut l5))
-                            };
-                            if (option::is_some(&l6)) {
-                                *(&mut (&mut l17).logo_uri) = url::new_unsafe_from_bytes(option::extract(&mut l6))
-                            };
-                            event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&(&l17).id), new_name: *(&(&l17).name), new_description: *(&(&l17).description) });
-                            l13 = true;
-                        } else {
-                            (&mut l19).push_back(l17)
-                        }
-                    };
-                    while (!(vector::is_empty(&l1))) {
-                        (&mut l19).push_back((&mut l1).pop_back())
-                    };
-                    assert!(l13, C15);
-                    while (!(vector::is_empty(&l19))) {
-                        transfer::transfer((&mut l19).pop_back(), l18)
-                    };
-                    std::vector::destroy_empty(l1);
-                    std::vector::destroy_empty(l19)
-                }
-            }
-        }
-    }
+                *(&mut (&mut l17).uri) = url::new_unsafe_from_bytes(option::extract(&mut l5))
+            };
+            if (option::is_some(&l6)) {
+                *(&mut (&mut l17).logo_uri) = url::new_unsafe_from_bytes(option::extract(&mut l6))
+            };
+            event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&(&l17).id), new_name: *(&(&l17).name), new_description: *(&(&l17).description) });
+            l13 = true;
+        };
+        (&mut l19).push_back(l17)
+    };
+    while (!(vector::is_empty(&l1))) {
+        (&mut l19).push_back((&mut l1).pop_back())
+    };
+    assert!(l13, C15);
+    while (!(vector::is_empty(&l19))) {
+        transfer::transfer((&mut l19).pop_back(), l18)
+    };
+    std::vector::destroy_empty(l1);
+    std::vector::destroy_empty(l19)
 }
 
 public entry fun update_metadata_by_object(l0: &mut NFT, l1: &CollectionCap, l2: Option<String>, l3: Option<String>, l4: Option<vector<u8>>, l5: Option<vector<u8>>, l6: &mut TxContext) {
@@ -1610,44 +1543,24 @@ public entry fun update_metadata_by_object(l0: &mut NFT, l1: &CollectionCap, l2:
     if (option::is_some(&l2)) {
         let l9 = option::extract(&mut l2);
         assert!(string::length(&l9) <= 128u64, C10);
-        *(&mut l0.name) = l9;
-        unstructured {
-            goto 'label_60;
-        }
-    } else {
-        /* block 60 */;
-        if (option::is_some(&l3)) {
-            let l7 = option::extract(&mut l3);
-            assert!(string::length(&l7) <= 1000u64, C10);
-            *(&mut l0.description) = l7;
-            unstructured {
-                goto 'label_80;
-            }
-        } else {
-            /* block 80 */;
-            if (option::is_some(&l4)) {
-                let l10 = option::extract(&mut l4);
-                assert!(&l10.len() <= 256u64, C10);
-                *(&mut l0.uri) = url::new_unsafe_from_bytes(l10);
-                unstructured {
-                    goto 'label_101;
-                }
-            } else {
-                /* block 101 */;
-                if (option::is_some(&l5)) {
-                    let l8 = option::extract(&mut l5);
-                    assert!(&l8.len() <= 256u64, C10);
-                    *(&mut l0.logo_uri) = url::new_unsafe_from_bytes(l8);
-                    unstructured {
-                        goto 'label_122;
-                    }
-                } else {
-                    /* block 122 */;
-                    event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&l0.id), new_name: *(&l0.name), new_description: *(&l0.description) })
-                }
-            }
-        }
-    }
+        *(&mut l0.name) = l9
+    };
+    if (option::is_some(&l3)) {
+        let l7 = option::extract(&mut l3);
+        assert!(string::length(&l7) <= 1000u64, C10);
+        *(&mut l0.description) = l7
+    };
+    if (option::is_some(&l4)) {
+        let l10 = option::extract(&mut l4);
+        assert!(&l10.len() <= 256u64, C10);
+        *(&mut l0.uri) = url::new_unsafe_from_bytes(l10)
+    };
+    if (option::is_some(&l5)) {
+        let l8 = option::extract(&mut l5);
+        assert!(&l8.len() <= 256u64, C10);
+        *(&mut l0.logo_uri) = url::new_unsafe_from_bytes(l8)
+    };
+    event::emit(MetadataUpdateEvent { id: object::uid_to_inner(&l0.id), new_name: *(&l0.name), new_description: *(&l0.description) })
 }
 
 public fun validate_transfer(l0: &CollectionCap, l1: address, l2: address) {

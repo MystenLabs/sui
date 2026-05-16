@@ -231,17 +231,13 @@ public fun get_bet_max_payout(l0: u64, l1: u64, l2: Option<u64>): u64 {
         return bet_manager::mul(l0, 150000000000u64)
     };
     assert!(l1 == C18, C0);
-    if (!(option::is_some(&l2))) {
-        /* block 457 */;
-        return bet_manager::mul(l0, 7000000000u64)
+    if (option::is_some(&l2)) {
+        let l27 = *(option::borrow(&l2));
+        if (l27 == 2u64 || l27 == 3u64 || l27 == 12u64) {
+            return bet_manager::mul(l0, 3000000000u64)
+        }
     };
-    let l27 = *(option::borrow(&l2));
-    if (l27 == 2u64 || l27 == 3u64 || l27 == 12u64) {
-        return bet_manager::mul(l0, 3000000000u64)
-    };
-    unstructured {
-        goto 'label_457;
-    }
+    return bet_manager::mul(l0, 7000000000u64)
 }
 
 public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &VecSet<u64>, l4: u64, l5: u64, l6: u64): ( bool, bool, u64) {
@@ -424,115 +420,56 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             return (false, false, 0u64)
         };
         let l100 = *(option::borrow(&l1));
-        if (l100 != l5) {
-            /* block 936 */;
-            return (false, true, 0u64)
-        };
-        let (reg_575, reg_576) = dice_interpreter::get_dice(l4);
-        if (reg_575 != reg_576) {
-            return (false, false, 0u64)
-        };
-        if (l100 == 4u64 || l100 == 10u64) {
-            return (true, false, bet_manager::mul(l2, 7000000000u64))
-        };
-        if (l100 == 6u64 || l100 == 8u64) {
-            return (true, false, bet_manager::mul(l2, 9000000000u64))
-        };
-        unstructured {
-            goto 'label_936;
-        }
-    } else {
-        if (l0 == C9) {
-            if (option::is_none(&l1)) {
-                if (l5 == 7u64 || l5 == 11u64) {
-                    return (true, false, bet_manager::mul(l2, 1000000000u64))
-                };
-                if (l5 == 2u64 || l5 == 3u64 || l5 == 12u64) {
-                    return (false, false, 0u64)
-                };
-                return (false, true, 0u64)
-            };
-            if (l5 == 7u64) {
+        if (l100 == l5) {
+            let (reg_575, reg_576) = dice_interpreter::get_dice(l4);
+            if (reg_575 != reg_576) {
                 return (false, false, 0u64)
             };
-            if (*(option::borrow(&l1)) == l5) {
-                return (true, false, bet_manager::mul(l2, 1000000000u64))
-            };
-            return (false, true, 0u64)
-        };
-        if (l0 == C16) {
-            let l98 = *(option::borrow(&l1));
-            if (l5 == 7u64) {
-                return (false, false, 0u64)
-            };
-            if (l98 != l5) {
-                return (false, true, 0u64)
-            };
-            if (l98 == 4u64 || l98 == 10u64) {
-                return (true, false, bet_manager::mul(l2, 2000000000u64))
-            };
-            if (l98 == 5u64 || l98 == 9u64) {
-                return (true, false, bet_manager::mul(l2, 1500000000u64))
-            };
-            return (true, false, bet_manager::mul(l2, 1200000000u64))
-        };
-        if (l0 == C10) {
-            if (option::is_none(&l1)) {
-                if (l5 == 7u64 || l5 == 11u64) {
-                    return (false, false, 0u64)
-                };
-                if (l5 == 2u64 || l5 == 3u64) {
-                    return (true, false, bet_manager::mul(l2, 1000000000u64))
-                };
-                if (l5 == 12u64) {
-                    return (true, false, 0u64)
-                };
-                return (false, true, 0u64)
-            };
-            if (l5 == 7u64) {
-                return (true, false, bet_manager::mul(l2, 1000000000u64))
-            };
-            if (*(option::borrow(&l1)) == l5) {
-                return (false, false, 0u64)
-            };
-            return (false, true, 0u64)
-        };
-        if (l0 == C17) {
-            if (l5 == 7u64) {
-                let l101 = *(option::borrow(&l1));
-                if (l101 == 4u64 || l101 == 10u64) {
-                    return (true, false, bet_manager::mul(l2, 500000000u64))
-                };
-                if (l101 == 5u64 || l101 == 9u64) {
-                    return (true, false, bet_manager::mul(l2, 666666666u64))
-                };
-                return (true, false, bet_manager::mul(l2, 833333333u64))
-            };
-            if (*(option::borrow(&l1)) == l5) {
-                return (false, false, 0u64)
-            };
-            return (false, true, 0u64)
-        };
-        if (l0 == C18) {
-            if (l5 == 11u64) {
+            if (l100 == 4u64 || l100 == 10u64) {
                 return (true, false, bet_manager::mul(l2, 7000000000u64))
             };
-            if (l5 == 2u64 || l5 == 3u64 || l5 == 12u64) {
-                return (true, false, bet_manager::mul(l2, 3000000000u64))
+            if (l100 == 6u64 || l100 == 8u64) {
+                return (true, false, bet_manager::mul(l2, 9000000000u64))
+            }
+        };
+        return (false, true, 0u64)
+    };
+    if (l0 == C9) {
+        if (option::is_none(&l1)) {
+            if (l5 == 7u64 || l5 == 11u64) {
+                return (true, false, bet_manager::mul(l2, 1000000000u64))
             };
+            if (l5 == 2u64 || l5 == 3u64 || l5 == 12u64) {
+                return (false, false, 0u64)
+            };
+            return (false, true, 0u64)
+        };
+        if (l5 == 7u64) {
             return (false, false, 0u64)
         };
-        if (l6 == 0u64) {
-            if (l0 == C0) {
-                if (l5 == 7u64 || l5 == 11u64) {
-                    return (true, false, bet_manager::mul(l2, 1000000000u64))
-                };
-                if (l5 == 2u64 || l5 == 3u64 || l5 == 12u64) {
-                    return (false, false, 0u64)
-                };
-                return (false, true, 0u64)
-            };
-            assert!(l0 == C1, C0);
+        if (*(option::borrow(&l1)) == l5) {
+            return (true, false, bet_manager::mul(l2, 1000000000u64))
+        };
+        return (false, true, 0u64)
+    };
+    if (l0 == C16) {
+        let l98 = *(option::borrow(&l1));
+        if (l5 == 7u64) {
+            return (false, false, 0u64)
+        };
+        if (l98 != l5) {
+            return (false, true, 0u64)
+        };
+        if (l98 == 4u64 || l98 == 10u64) {
+            return (true, false, bet_manager::mul(l2, 2000000000u64))
+        };
+        if (l98 == 5u64 || l98 == 9u64) {
+            return (true, false, bet_manager::mul(l2, 1500000000u64))
+        };
+        return (true, false, bet_manager::mul(l2, 1200000000u64))
+    };
+    if (l0 == C10) {
+        if (option::is_none(&l1)) {
             if (l5 == 7u64 || l5 == 11u64) {
                 return (false, false, 0u64)
             };
@@ -545,55 +482,100 @@ public fun get_bet_result_and_payout(l0: u64, l1: Option<u64>, l2: u64, l3: &Vec
             return (false, true, 0u64)
         };
         if (l5 == 7u64) {
-            if (l0 == C1) {
-                return (true, false, bet_manager::mul(l2, 1000000000u64))
-            };
-            if (l0 == C15) {
-                let l102 = *(option::borrow(&l1));
-                if (l102 == 4u64 || l102 == 10u64) {
-                    return (true, false, bet_manager::mul(l2, 500000000u64))
-                };
-                if (l102 == 5u64 || l102 == 9u64) {
-                    return (true, false, bet_manager::mul(l2, 666666666u64))
-                };
-                return (true, false, bet_manager::mul(l2, 833333333u64))
-            };
+            return (true, false, bet_manager::mul(l2, 1000000000u64))
+        };
+        if (*(option::borrow(&l1)) == l5) {
             return (false, false, 0u64)
         };
-        if (l0 == C1 || l0 == C15) {
-            if (l5 == l6) {
+        return (false, true, 0u64)
+    };
+    if (l0 == C17) {
+        if (l5 == 7u64) {
+            let l101 = *(option::borrow(&l1));
+            if (l101 == 4u64 || l101 == 10u64) {
+                return (true, false, bet_manager::mul(l2, 500000000u64))
+            };
+            if (l101 == 5u64 || l101 == 9u64) {
+                return (true, false, bet_manager::mul(l2, 666666666u64))
+            };
+            return (true, false, bet_manager::mul(l2, 833333333u64))
+        };
+        if (*(option::borrow(&l1)) == l5) {
+            return (false, false, 0u64)
+        };
+        return (false, true, 0u64)
+    };
+    if (l0 == C18) {
+        if (l5 == 11u64) {
+            return (true, false, bet_manager::mul(l2, 7000000000u64))
+        };
+        if (l5 == 2u64 || l5 == 3u64 || l5 == 12u64) {
+            return (true, false, bet_manager::mul(l2, 3000000000u64))
+        };
+        return (false, false, 0u64)
+    };
+    if (l6 == 0u64) {
+        if (l0 == C0) {
+            if (l5 == 7u64 || l5 == 11u64) {
+                return (true, false, bet_manager::mul(l2, 1000000000u64))
+            };
+            if (l5 == 2u64 || l5 == 3u64 || l5 == 12u64) {
                 return (false, false, 0u64)
             };
             return (false, true, 0u64)
         };
-        if (l0 == C0) {
-            if (l5 == l6) {
-                return (true, false, bet_manager::mul(l2, 1000000000u64))
+        assert!(l0 == C1, C0);
+        if (l5 == 7u64 || l5 == 11u64) {
+            return (false, false, 0u64)
+        };
+        if (l5 == 2u64 || l5 == 3u64) {
+            return (true, false, bet_manager::mul(l2, 1000000000u64))
+        };
+        if (l5 == 12u64) {
+            return (true, false, 0u64)
+        };
+        return (false, true, 0u64)
+    };
+    if (l5 == 7u64) {
+        if (l0 == C1) {
+            return (true, false, bet_manager::mul(l2, 1000000000u64))
+        };
+        if (l0 == C15) {
+            let l102 = *(option::borrow(&l1));
+            if (l102 == 4u64 || l102 == 10u64) {
+                return (true, false, bet_manager::mul(l2, 500000000u64))
             };
-            unstructured {
-                goto 'label_1497;
-            }
-        } else {
-            /* block 1497 */;
-            if (l0 != C14) {
-                /* block 1553 */;
-                return (false, true, 0u64)
+            if (l102 == 5u64 || l102 == 9u64) {
+                return (true, false, bet_manager::mul(l2, 666666666u64))
             };
-            if (l5 == l6) {
-                let l103 = *(option::borrow(&l1));
-                if (l103 == 4u64 || l103 == 10u64) {
-                    return (true, false, bet_manager::mul(l2, 2000000000u64))
-                };
-                if (l103 == 5u64 || l103 == 9u64) {
-                    return (true, false, bet_manager::mul(l2, 1500000000u64))
-                };
-                return (true, false, bet_manager::mul(l2, 1200000000u64))
-            };
-            unstructured {
-                goto 'label_1553;
-            }
+            return (true, false, bet_manager::mul(l2, 833333333u64))
+        };
+        return (false, false, 0u64)
+    };
+    if (l0 == C1 || l0 == C15) {
+        if (l5 == l6) {
+            return (false, false, 0u64)
+        };
+        return (false, true, 0u64)
+    };
+    if (l0 == C0) {
+        if (l5 == l6) {
+            return (true, false, bet_manager::mul(l2, 1000000000u64))
         }
-    }
+    };
+    if (l0 == C14) {
+        if (l5 == l6) {
+            let l103 = *(option::borrow(&l1));
+            if (l103 == 4u64 || l103 == 10u64) {
+                return (true, false, bet_manager::mul(l2, 2000000000u64))
+            };
+            if (l103 == 5u64 || l103 == 9u64) {
+                return (true, false, bet_manager::mul(l2, 1500000000u64))
+            };
+            return (true, false, bet_manager::mul(l2, 1200000000u64))
+        }
+    };
+    return (false, true, 0u64)
 }
 
 public fun hard_ways_bet(): u64 {
@@ -603,193 +585,125 @@ public fun hard_ways_bet(): u64 {
 public fun is_valid_bet(l0: u64, l1: u64, l2: Option<u64>, l3: u64, l4: vector<u64>, l5: &vector<Bet>) {
     assert!(l0 < 19u64 && l0 >= 0u64, C0);
     if (l0 == C0 || l0 == C1) {
-        assert!(l3 == 0u64, C0);
-        unstructured {
-            goto 'label_40;
-        }
-    } else {
-        /* block 40 */;
-        if (l0 == C14) {
-            assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
-            let l26 = 0u64;
-            let l25 = false;
-            while (l26 < l5.len()) {
-                let l18 = &l5[l26];
-                if (*(&l18.bet_type) == C0) {
-                    l25 = true;
-                    assert!(l1 <= *(&l18.bet_size) * 5u64, C0)
-                };
-                l26 = l26 + 1u64;
+        assert!(l3 == 0u64, C0)
+    };
+    if (l0 == C14) {
+        assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
+        let l26 = 0u64;
+        let l25 = false;
+        while (l26 < l5.len()) {
+            let l18 = &l5[l26];
+            if (*(&l18.bet_type) == C0) {
+                l25 = true;
+                assert!(l1 <= *(&l18.bet_size) * 5u64, C0)
             };
-            assert!(l25, C0);
-            unstructured {
-                goto 'label_113;
-            }
-        } else {
-            /* block 113 */;
-            if (l0 == C15) {
-                assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
-                let l27 = 0u64;
-                let l24 = false;
-                while (l27 < l5.len()) {
-                    let l19 = &l5[l27];
-                    if (*(&l19.bet_type) == C1) {
-                        l24 = true;
-                        assert!(l1 <= *(&l19.bet_size) * 5u64, C0)
-                    };
-                    l27 = l27 + 1u64;
-                };
-                assert!(l24, C0);
-                unstructured {
-                    goto 'label_186;
-                }
+            l26 = l26 + 1u64;
+        };
+        assert!(l25, C0)
+    };
+    if (l0 == C15) {
+        assert!(l3 == *(option::borrow(&l2)) && l3 != 0u64, C0);
+        let l27 = 0u64;
+        let l24 = false;
+        while (l27 < l5.len()) {
+            let l19 = &l5[l27];
+            if (*(&l19.bet_type) == C1) {
+                l24 = true;
+                assert!(l1 <= *(&l19.bet_size) * 5u64, C0)
+            };
+            l27 = l27 + 1u64;
+        };
+        assert!(l24, C0)
+    };
+    if (l0 == C9 || l0 == C10) {
+        assert!(option::is_none(&l2), C0);
+        assert!(l3 != 0u64, C0)
+    };
+    if (l0 == C16) {
+        let l28 = 0u64;
+        let l22 = false;
+        loop {
+            if (l28 >= l5.len()) {
+                
             } else {
-                /* block 186 */;
-                let l13 = l0 == C9 || l0 == C10;
-                if (l13) {
-                    assert!(option::is_none(&l2), C0);
-                    assert!(l3 != 0u64, C0);
-                    unstructured {
-                        goto 'label_216;
-                    }
-                } else {
-                    /* block 216 */;
-                    if (l0 == C16) {
-                        let l28 = 0u64;
-                        let l22 = false;
-                        loop {
-                            if (l28 >= l5.len()) {
-                                
-                            } else {
-                                let l20 = &l5[l28];
-                                if (*(&l20.bet_type) == C9) {
-                                    if (option::is_some(&l20.bet_number)) {
-                                        if (*(option::borrow(&l20.bet_number)) == *(option::borrow(&l2))) {
-                                            assert!(l1 <= *(&l20.bet_size) * 5u64, C0);
-                                            l22 = true;
-                                        }
-                                    }
-                                };
-                                l28 = l28 + 1u64;
-                                continue
-                            };
-                            assert!(l22, C0);
-                            unstructured {
-                                goto 'label_289;
-                            }
-                        }
-                    } else {
-                        /* block 289 */;
-                        if (l0 == C17) {
-                            let l29 = 0u64;
-                            let l23 = false;
-                            loop {
-                                if (l29 >= l5.len()) {
-                                    
-                                } else {
-                                    let l21 = &l5[l29];
-                                    if (*(&l21.bet_type) == C10) {
-                                        if (option::is_some(&l21.bet_number)) {
-                                            if (*(option::borrow(&l21.bet_number)) == *(option::borrow(&l2))) {
-                                                assert!(l1 <= *(&l21.bet_size) * 5u64, C0);
-                                                l23 = true;
-                                            }
-                                        }
-                                    };
-                                    l29 = l29 + 1u64;
-                                    continue
-                                };
-                                assert!(l23, C0);
-                                unstructured {
-                                    goto 'label_364;
-                                }
-                            }
-                        };
-                        /* block 364 */;
-                        if (l0 == C3) {
-                            assert!(option::is_some(&l2), C1);
-                            assert!(vector::contains(&C19, option::borrow(&l2)), C1);
-                            unstructured {
-                                goto 'label_384;
-                            }
-                        } else {
-                            /* block 384 */;
-                            if (l0 == C5) {
-                                assert!(option::is_some(&l2), C1);
-                                assert!(vector::contains(&C19, option::borrow(&l2)), C1);
-                                unstructured {
-                                    goto 'label_404;
-                                }
-                            } else {
-                                /* block 404 */;
-                                if (l0 == C4) {
-                                    assert!(option::is_some(&l2), C1);
-                                    assert!(vector::contains(&C19, option::borrow(&l2)), C1);
-                                    unstructured {
-                                        goto 'label_424;
-                                    }
-                                } else {
-                                    /* block 424 */;
-                                    if (l0 == C11) {
-                                        assert!(option::is_some(&l2), C1);
-                                        assert!(vector::contains(&C20, option::borrow(&l2)), C1);
-                                        unstructured {
-                                            goto 'label_444;
-                                        }
-                                    } else {
-                                        /* block 444 */;
-                                        if (l0 == C12) {
-                                            if (option::is_some(&l2)) {
-                                                assert!(vector::contains(&C21, option::borrow(&l2)) || *(option::borrow(&l2)) == 11u64, C1);
-                                                unstructured {
-                                                    goto 'label_472;
-                                                }
-                                            } else {
-                                                unstructured {
-                                                    goto 'label_472;
-                                                }
-                                            }
-                                        } else {
-                                            /* block 472 */;
-                                            let l9 = l0 == C6 || l0 == C7 || l0 == C8;
-                                            if (l9) {
-                                                assert!(&l4.len() == 0u64, C0);
-                                                unstructured {
-                                                    goto 'label_500;
-                                                }
-                                            } else {
-                                                /* block 500 */
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                let l20 = &l5[l28];
+                if (*(&l20.bet_type) == C9) {
+                    if (option::is_some(&l20.bet_number)) {
+                        if (*(option::borrow(&l20.bet_number)) == *(option::borrow(&l2))) {
+                            assert!(l1 <= *(&l20.bet_size) * 5u64, C0);
+                            l22 = true;
                         }
                     }
-                }
+                };
+                l28 = l28 + 1u64;
+                continue
+            };
+            assert!(l22, C0);
+            unstructured {
+                goto 'label_289;
             }
         }
+    };
+    /* block 289 */;
+    if (l0 == C17) {
+        let l29 = 0u64;
+        let l23 = false;
+        loop {
+            if (l29 >= l5.len()) {
+                
+            } else {
+                let l21 = &l5[l29];
+                if (*(&l21.bet_type) == C10) {
+                    if (option::is_some(&l21.bet_number)) {
+                        if (*(option::borrow(&l21.bet_number)) == *(option::borrow(&l2))) {
+                            assert!(l1 <= *(&l21.bet_size) * 5u64, C0);
+                            l23 = true;
+                        }
+                    }
+                };
+                l29 = l29 + 1u64;
+                continue
+            };
+            assert!(l23, C0);
+            unstructured {
+                goto 'label_364;
+            }
+        }
+    };
+    /* block 364 */;
+    if (l0 == C3) {
+        assert!(option::is_some(&l2), C1);
+        assert!(vector::contains(&C19, option::borrow(&l2)), C1)
+    };
+    if (l0 == C5) {
+        assert!(option::is_some(&l2), C1);
+        assert!(vector::contains(&C19, option::borrow(&l2)), C1)
+    };
+    if (l0 == C4) {
+        assert!(option::is_some(&l2), C1);
+        assert!(vector::contains(&C19, option::borrow(&l2)), C1)
+    };
+    if (l0 == C11) {
+        assert!(option::is_some(&l2), C1);
+        assert!(vector::contains(&C20, option::borrow(&l2)), C1)
+    };
+    if (l0 == C12) {
+        if (option::is_some(&l2)) {
+            assert!(vector::contains(&C21, option::borrow(&l2)) || *(option::borrow(&l2)) == 11u64, C1)
+        }
+    };
+    if (l0 == C6 || l0 == C7 || l0 == C8) {
+        assert!(&l4.len() == 0u64, C0)
     }
 }
 
 public fun is_valid_remove(l0: u64, l1: Option<u64>, l2: u64, l3: u8, l4: vector<u64>, l5: &vector<Bet>) {
     assert!(l3 != 1u8, C2);
     if (l0 == C0 || l0 == C1) {
-        assert!(l2 == 0u64, C2);
-        unstructured {
-            goto 'label_27;
-        }
-    } else {
-        /* block 27 */;
-        let l7 = l0 == C9 || l0 == C10;
-        if (l7) {
-            assert!(option::is_none(&l1), C2);
-            unstructured {
-                goto 'label_46;
-            }
-        } else {
-            /* block 46 */
-        }
+        assert!(l2 == 0u64, C2)
+    };
+    if (l0 == C9 || l0 == C10) {
+        assert!(option::is_none(&l1), C2)
     }
 }
 

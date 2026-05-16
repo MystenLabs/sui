@@ -489,33 +489,29 @@ public fun set<T0>(l0: &mut vector<u8>, l1: u32, l2: &T0): bool {
     let l5 = 8u8;
     let l3 = bcs::to_bytes(l2);
     let l4 = &l3.len();
-    if (l9 == 0u32) {
-        /* block 72 */;
-        if (freeze(l0).len() == 0u64) {
-            l0.push_back(0u8)
+    if (l9 != 0u32) {
+        if (l4as u32 == l9as u32 - l5as u32) {
+            let l11 = freeze(l0).len();
+            let l12 = l10 + l9as u64;
+            while (!(vector::is_empty(&l3))) {
+                l12 = l12 - 1u64;
+                l0.push_back((&mut l3).pop_back());
+                l0.swap(l11, l12)
+            };
+            std::vector::destroy_empty(l3);
+            return true
         };
-        let l6 = bcs::to_bytes(&l1);
-        vector::append(l0, l6);
-        let l8 = bcs::to_bytes(&l4as u32 + l5as u32);
-        vector::append(l0, l8);
-        vector::append(l0, l3);
-        return true
+        metadata::clamp(l0, l10, l9as u64)
     };
-    if (l4as u32 == l9as u32 - l5as u32) {
-        let l11 = freeze(l0).len();
-        let l12 = l10 + l9as u64;
-        while (!(vector::is_empty(&l3))) {
-            l12 = l12 - 1u64;
-            l0.push_back((&mut l3).pop_back());
-            l0.swap(l11, l12)
-        };
-        std::vector::destroy_empty(l3);
-        return true
+    if (freeze(l0).len() == 0u64) {
+        l0.push_back(0u8)
     };
-    metadata::clamp(l0, l10, l9as u64);
-    unstructured {
-        goto 'label_72;
-    }
+    let l6 = bcs::to_bytes(&l1);
+    vector::append(l0, l6);
+    let l8 = bcs::to_bytes(&l4as u32 + l5as u32);
+    vector::append(l0, l8);
+    vector::append(l0, l3);
+    return true
 }
 
 public fun single<T0>(l0: &T0): vector<u8> {

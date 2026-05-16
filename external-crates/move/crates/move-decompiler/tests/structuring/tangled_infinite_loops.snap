@@ -2,14 +2,7 @@
 source: crates/move-decompiler/tests/tests.rs
 ---
 if (0) {
-    'loop_1: loop {
-        { 1 }
-        if (2) {
-            continue 'loop_1;
-        } else {
-            break 'loop_1;
-        }
-    }
+    { }
 }
 'loop_3: loop {
     { 3 }
@@ -17,5 +10,13 @@ if (0) {
         continue 'loop_3;
     } else {
         break 'loop_3;
+    }
+}
+'loop_1: loop {
+    { 1 }
+    if (2) {
+        continue 'loop_1;
+    } else {
+        break 'loop_1;
     }
 }
