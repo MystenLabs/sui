@@ -53,17 +53,21 @@ pub const REQUEST_ID_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-req
 /// bucketed into `CLIENT_LABEL_OTHER`.
 const CLIENT_SDK_TYPE_HEADER: HeaderName = HeaderName::from_static("client-sdk-type");
 
-/// Header identifying the SDK version that issued the request. The value flows into the
-/// `client_sdk_version` Prometheus label, sanitized by `sanitize_sdk_version`. Values longer
-/// than `MAX_SDK_VERSION_LEN` or containing characters outside `[A-Za-z0-9._-]` are bucketed
-/// into `CLIENT_LABEL_OTHER`.
+/// Header identifying the SDK version that issued the request. The value is matched against
+/// `SDK_VERSION_ALLOWLIST` before being used as the `client_sdk_version` Prometheus label or
+/// recorded in request log lines; versions outside the allowlist appear as
+/// `CLIENT_LABEL_OTHER`.
 const CLIENT_SDK_VERSION_HEADER: HeaderName = HeaderName::from_static("client-sdk-version");
 
 /// SDKs we accept verbatim as the `client_sdk_type` Prometheus label.
 const SDK_TYPE_WHITELIST: &[&str] = &["rust", "typescript", "python"];
 
-/// Maximum length of a `client-sdk-version` value we accept verbatim.
-const MAX_SDK_VERSION_LEN: usize = 32;
+/// Per-SDK list of versions we emit verbatim as the `client_sdk_version` Prometheus label.
+/// Versions outside this list map to `CLIENT_LABEL_OTHER`, which keeps label cardinality
+/// bounded by the size of this list rather than by the space of possible header values.
+/// Add an entry only when we explicitly want to track adoption or retention of a specific
+/// SDK version.
+const SDK_VERSION_ALLOWLIST: &[(&str, &[&str])] = &[];
 
 /// Sentinel label value substituted when a client SDK header is present but does not match an
 /// allowed value. Distinct from the empty string we use when the header is absent, so dashboards
@@ -128,15 +132,17 @@ impl Session {
 
 impl ClientInfo {
     pub(crate) fn from_headers(headers: &HeaderMap) -> Self {
+        let sdk_type = headers
+            .get(&CLIENT_SDK_TYPE_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(sanitize_sdk_type);
+        let sdk_version = headers
+            .get(&CLIENT_SDK_VERSION_HEADER)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| sanitize_sdk_version(sdk_type.as_deref().unwrap_or(""), v));
         Self {
-            sdk_type: headers
-                .get(&CLIENT_SDK_TYPE_HEADER)
-                .and_then(|v| v.to_str().ok())
-                .map(sanitize_sdk_type),
-            sdk_version: headers
-                .get(&CLIENT_SDK_VERSION_HEADER)
-                .and_then(|v| v.to_str().ok())
-                .map(sanitize_sdk_version),
+            sdk_type,
+            sdk_version,
         }
     }
 }
@@ -347,18 +353,15 @@ fn sanitize_sdk_type(value: &str) -> String {
     }
 }
 
-/// Sanitize a `client-sdk-version` header value before it is used as a Prometheus label. Values
-/// longer than `MAX_SDK_VERSION_LEN` or containing characters outside `[A-Za-z0-9._-]` are
-/// bucketed to `CLIENT_LABEL_OTHER`. Build metadata (`+...`) is rejected on purpose, because
-/// per-build suffixes are exactly the cardinality vector we are trying to avoid.
-fn sanitize_sdk_version(value: &str) -> String {
-    let valid = !value.is_empty()
-        && value.len() <= MAX_SDK_VERSION_LEN
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'));
-
-    if valid {
+/// Sanitize a `client-sdk-version` header value before it is used as a Prometheus label.
+/// Returns the value verbatim if `(sdk_type, value)` is listed in `SDK_VERSION_ALLOWLIST`,
+/// otherwise `CLIENT_LABEL_OTHER`. Bounding label cardinality this way is what protects the
+/// metric against an adversarially-chosen version string.
+fn sanitize_sdk_version(sdk_type: &str, value: &str) -> String {
+    if SDK_VERSION_ALLOWLIST
+        .iter()
+        .any(|&(t, vs)| t == sdk_type && vs.contains(&value))
+    {
         value.to_string()
     } else {
         CLIENT_LABEL_OTHER.to_string()
@@ -386,7 +389,15 @@ mod tests {
     }
 
     #[test]
-    fn client_info_extracts_sdk_headers() {
+    fn client_info_missing_headers_yield_none() {
+        let info = ClientInfo::from_headers(&HeaderMap::new());
+
+        assert!(info.sdk_type.is_none());
+        assert!(info.sdk_version.is_none());
+    }
+
+    #[test]
+    fn client_info_non_allowlisted_version_bucketed_other() {
         let mut headers = HeaderMap::new();
         headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
         headers.insert(
@@ -397,15 +408,7 @@ mod tests {
         let info = ClientInfo::from_headers(&headers);
 
         assert_eq!(info.sdk_type.as_deref(), Some("rust"));
-        assert_eq!(info.sdk_version.as_deref(), Some("1.69.0"));
-    }
-
-    #[test]
-    fn client_info_missing_headers_yield_none() {
-        let info = ClientInfo::from_headers(&HeaderMap::new());
-
-        assert!(info.sdk_type.is_none());
-        assert!(info.sdk_version.is_none());
+        assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
     }
 
     #[test]
@@ -417,36 +420,6 @@ mod tests {
         let info = ClientInfo::from_headers(&headers);
 
         assert_eq!(info.sdk_type.as_deref(), Some(CLIENT_LABEL_OTHER));
-        assert_eq!(info.sdk_version.as_deref(), Some("0.1.0"));
-    }
-
-    #[test]
-    fn client_info_oversized_version_bucketed_other() {
-        let mut headers = HeaderMap::new();
-        let too_long = "1.".to_string() + &"0".repeat(MAX_SDK_VERSION_LEN);
-        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
-        headers.insert(
-            CLIENT_SDK_VERSION_HEADER,
-            HeaderValue::from_str(&too_long).unwrap(),
-        );
-
-        let info = ClientInfo::from_headers(&headers);
-
-        assert_eq!(info.sdk_type.as_deref(), Some("rust"));
-        assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
-    }
-
-    #[test]
-    fn client_info_version_with_build_metadata_bucketed_other() {
-        let mut headers = HeaderMap::new();
-        headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
-        headers.insert(
-            CLIENT_SDK_VERSION_HEADER,
-            HeaderValue::from_static("1.0.0+abc123"),
-        );
-
-        let info = ClientInfo::from_headers(&headers);
-
         assert_eq!(info.sdk_version.as_deref(), Some(CLIENT_LABEL_OTHER));
     }
 
