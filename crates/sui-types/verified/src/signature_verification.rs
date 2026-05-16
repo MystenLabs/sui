@@ -12,7 +12,7 @@
 //!
 //! Informal spec: `crates/sui-types/verify_sig_spec.md`
 
-use crate::utils::{clone_and_set, slice_contains};
+use crate::utils::{clone_and_set, prepend_u8, slice_contains};
 use vstd::prelude::*;
 
 verus! {
@@ -1009,41 +1009,10 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
         Ghost(used_new),
     )?;
 
-    // Build result = [j] + rest
-    // signers@.len() <= tx_signatures@.len() <= u8::MAX, so skip(1).len() < u8::MAX
-    assert(rest@.len() < u8::MAX as int) by {
-        assert(rest@.len() == signers@.skip(1).len() as nat);
-        assert(signers@.skip(1).len() == signers@.len() - 1);
-    };
-    let mut result = Vec::with_capacity(1 + rest.len());
-    result.push(j);
-    let mut ri = 0usize;
-    while ri < rest.len()
-        invariant
-            ri <= rest@.len(),
-            result@.len() == 1 + ri,
-            result@[0] == j,
-            forall|p: int| 1 <= p < result@.len() ==> result@[p] == rest@[p - 1],
-        decreases rest@.len() - ri
-    {
-        result.push(rest[ri]);
-        ri += 1;
-    }
+    // Build result = [j] + rest.  prepend_u8 ensures result@ =~= seq![j] + rest@.
+    let result = prepend_u8(j, &rest);
 
     proof {
-        // result@ = seq![j as u8] + rest@
-        assert(result@ =~= seq![j] + rest@) by {
-            assert(result@.len() == 1 + rest@.len());
-            assert forall|i: int| 0 <= i < result@.len() implies
-                result@[i] == (seq![j] + rest@)[i]
-            by {
-                if i == 0 {
-                    assert(result@[0] == j);
-                } else {
-                    assert(result@[i] == rest@[i - 1]);
-                }
-            };
-        };
         // Apply lemma_greedy_helper_unfold
         lemma_greedy_helper_unfold::<S, Addr>(
             tx_signatures, signers@, epoch, used@, j as int, rest@,

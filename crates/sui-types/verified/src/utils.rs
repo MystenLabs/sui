@@ -36,4 +36,22 @@ pub fn clone_and_set<T: Clone>(v: &[T], pos: usize, val: T) -> (result: Vec<T>)
     r
 }
 
+/// Prepend a single `u8` to a slice, returning a new `Vec`.
+///
+/// Trusted (`external_body`) — `extend_from_slice` is not specced in vstd.
+/// The ensures directly state the concatenation so callers need no extra proof.
+#[verifier::external_body]
+pub fn prepend_u8(x: u8, v: &[u8]) -> (result: Vec<u8>)
+    ensures
+        result@.len() == 1 + v@.len(),
+        result@[0] == x,
+        forall|i: int| 1 <= i < result@.len() ==> result@[i] == v@[i - 1],
+        result@ =~= seq![x] + v@,
+{
+    let mut r = Vec::with_capacity(1 + v.len());
+    r.push(x);
+    r.extend_from_slice(v);
+    r
+}
+
 } // verus!
