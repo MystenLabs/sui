@@ -8,8 +8,8 @@ For example, if a user would like to execute a transaction, the forked network d
 yet the ownership information - which gas coins it owns. To enable this, seeding
 allows the tool to resolve ownership information at startup and build an initial ownership index.
 
-Seeding resolves object refs (id, version, digest) + lightweight metadata (owner, type)
-at startup, establishing the data needed to build an ownership index.
+Seeding resolves object refs (id, version, digest) plus owner at startup,
+establishing the data needed to build an ownership index.
 
 Object contents are NOT fetched during seeding for address-based seeds. Content
 fetching is deferred to the existing `get_object_from_remote()` path used by
@@ -46,7 +46,7 @@ manifest after the fork has executed local transactions.
 
 One file is written to `{data_dir}/{network}/forked_at_{checkpoint}/`:
 
-### `seed_manifest.json` — internal, full metadata for index rebuilding
+### `seed_manifest.json` — internal refs for index rebuilding
 
 ```json
 {
@@ -54,12 +54,8 @@ One file is written to `{data_dir}/{network}/forked_at_{checkpoint}/`:
     "checkpoint": 12345678,
     "entries": [
         {
-            "object_id": "0x...",
-            "version": 42,
-            "digest": "...",
-            "owner": "0x...",
-            "object_type": "0x2::coin::Coin<0x2::sui::SUI>",
-            "balance": 1000000
+            "object_ref": ["0x...", 42, "..."],
+            "owner": "0x..."
         }
     ]
 }
@@ -101,10 +97,6 @@ query($sequenceNumber: UInt53, $address: SuiAddress!, $first: Int, $after: Strin
               ... on AddressOwner { address { address } }
               ... on ConsensusAddressOwner { address { address } }
             }
-            contents {
-              type { repr }
-              json
-            }
           }
           pageInfo { hasNextPage endCursor }
         }
@@ -124,8 +116,8 @@ query($sequenceNumber: UInt53, $address: SuiAddress!, $first: Int, $after: Strin
 
 For explicit `--object` IDs, reuse the existing `object_query::query()`
 infrastructure (`multiGetObjects` with `ObjectFragment` that fetches `objectBcs`).
-BCS gets cached to disk. After fetching, extract metadata (owner, type, version,
-digest) from the deserialized `Object` for the `SeedEntry`.
+BCS gets cached to disk. After fetching, extract the owner and object ref from
+the deserialized `Object`; persist only those fields in the `SeedEntry`.
 
 ## Implementation Details
 
@@ -134,12 +126,8 @@ digest) from the deserialized `Object` for the `SeedEntry`.
 ```rust
 #[derive(Serialize, Deserialize)]
 struct SeedEntry {
-    object_id: ObjectID,
-    version: SequenceNumber,
-    digest: ObjectDigest,
+    object_ref: ObjectRef,
     owner: SuiAddress,
-    object_type: StructTag,
-    balance: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -168,7 +156,7 @@ async fn resolve_seeds(
 
 1. For each address → paginate `address_objects_query`, collect entries
 2. Collect explicit object IDs not already resolved by address seeding (dedup)
-3. For remaining object IDs → `object_query::query()` (existing), extract metadata
+3. For remaining object IDs → `object_query::query()` (existing), extract refs and owner
 4. Merge, dedup by `object_id`
 5. Return `SeedManifest`
 
@@ -187,8 +175,8 @@ state once the fork has started executing.
 
 **When a seeded object is first accessed** (e.g., as tx input):
 - `get_object_from_remote()` fetches full BCS, writes to disk
-- the owned index entry can already satisfy default owned-object listing, while object-loading
-  read masks fetch BCS lazily
+- the owned index entry identifies candidate objects, while object-loading reads fetch BCS lazily
+  before type, balance, or object contents are returned
 
 **When a seeded object is deleted/mutated post-fork**:
 - `update_objects()` removes the old index entry, adds the new address-owned entry, or removes the

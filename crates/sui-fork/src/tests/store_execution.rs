@@ -305,19 +305,19 @@ fn test_owned_objects_removes_non_address_owned_transitions() {
 }
 
 #[test]
-fn test_seeded_owned_object_metadata_lists_without_bcs_until_deleted() {
+fn test_seeded_owned_object_info_is_derived_from_bcs_until_deleted() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();
     let object_id = ObjectID::random();
+    let object = make_gas_object(object_id, 7, Owner::AddressOwner(owner));
+
+    store.local().write_object(&object).unwrap();
 
     store
         .local()
         .write_owned_object_entries(&[OwnedObjectEntry {
             owner,
-            object_id,
-            version: SequenceNumber::from_u64(7),
-            object_type: GasCoin::type_(),
-            balance: Some(123),
+            object_ref: object.compute_object_reference(),
         }])
         .unwrap();
 
@@ -328,15 +328,8 @@ fn test_seeded_owned_object_metadata_lists_without_bcs_until_deleted() {
     assert_eq!(infos.len(), 1);
     assert_eq!(infos[0].object_id, object_id);
     assert_eq!(infos[0].version, SequenceNumber::from_u64(7));
-    assert_eq!(infos[0].balance, Some(123));
-    assert!(
-        store
-            .local()
-            .get_latest_object(&object_id)
-            .expect("local lookup should not fail")
-            .is_none(),
-        "seed metadata should not require local BCS",
-    );
+    assert_eq!(infos[0].object_type, GasCoin::type_());
+    assert_eq!(infos[0].balance, Some(1_000_000));
 
     store.update_objects(
         BTreeMap::new(),

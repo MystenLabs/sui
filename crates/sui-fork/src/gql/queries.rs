@@ -229,9 +229,8 @@ pub(crate) mod address_owned_objects_query {
     use anyhow::Error;
     use anyhow::anyhow;
     use cynic::QueryBuilder as _;
-    use move_core_types::language_storage::StructTag;
-    use sui_types::SUI_FRAMEWORK_ADDRESS;
     use sui_types::base_types::ObjectID;
+    use sui_types::base_types::ObjectRef;
     use sui_types::base_types::SequenceNumber;
     use sui_types::base_types::SuiAddress as SuiAddressType;
     use sui_types::digests::ObjectDigest;
@@ -245,12 +244,8 @@ pub(crate) mod address_owned_objects_query {
     /// Lightweight metadata for an address-owned object at a checkpoint.
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub(crate) struct AddressOwnedObject {
-        pub(crate) object_id: ObjectID,
-        pub(crate) version: SequenceNumber,
-        pub(crate) digest: ObjectDigest,
+        pub(crate) object_ref: ObjectRef,
         pub(crate) owner: SuiAddressType,
-        pub(crate) object_type: StructTag,
-        pub(crate) balance: Option<u64>,
     }
 
     #[derive(cynic::QueryVariables)]
@@ -327,7 +322,6 @@ pub(crate) mod address_owned_objects_query {
         version: Option<u64>,
         digest: Option<String>,
         owner: Option<Owner>,
-        contents: Option<MoveValue>,
     }
 
     #[derive(cynic::InlineFragments)]
@@ -359,24 +353,6 @@ pub(crate) mod address_owned_objects_query {
     pub(crate) struct OwnerAddress {
         address: SuiAddress,
     }
-
-    #[derive(cynic::QueryFragment)]
-    #[cynic(schema_module = "crate::gql::queries::schema")]
-    pub(crate) struct MoveValue {
-        #[cynic(rename = "type")]
-        object_type: Option<MoveType>,
-        json: Option<Json>,
-    }
-
-    #[derive(cynic::QueryFragment)]
-    #[cynic(schema_module = "crate::gql::queries::schema")]
-    pub(crate) struct MoveType {
-        repr: String,
-    }
-
-    #[derive(cynic::Scalar, Debug, Clone)]
-    #[cynic(graphql_type = "JSON")]
-    pub(crate) struct Json(pub serde_json::Value);
 
     #[derive(cynic::Scalar, Debug, Clone)]
     #[cynic(graphql_type = "SuiAddress")]
@@ -436,23 +412,6 @@ pub(crate) mod address_owned_objects_query {
         Ok(entries)
     }
 
-    fn coin_balance_from_json(
-        object_type: &StructTag,
-        json: Option<&serde_json::Value>,
-    ) -> Option<u64> {
-        if object_type.address != SUI_FRAMEWORK_ADDRESS
-            || object_type.module.as_ident_str().as_str() != "coin"
-            || object_type.name.as_ident_str().as_str() != "Coin"
-        {
-            return None;
-        }
-
-        let balance = json?.get("balance")?;
-        balance
-            .as_u64()
-            .or_else(|| balance.as_str().and_then(|value| value.parse().ok()))
-    }
-
     fn decode_move_object(node: MoveObject) -> Result<Option<AddressOwnedObject>, Error> {
         let owner = match node.owner {
             Some(Owner::AddressOwner(owner)) => {
@@ -463,15 +422,6 @@ pub(crate) mod address_owned_objects_query {
             }
             _ => return Ok(None),
         };
-        let contents = node
-            .contents
-            .ok_or_else(|| anyhow!("seed object {} is missing contents", node.address.0))?;
-        let object_type = contents
-            .object_type
-            .ok_or_else(|| anyhow!("seed object {} is missing type", node.address.0))?
-            .repr
-            .parse::<StructTag>()
-            .with_context(|| format!("invalid seed object type for {}", node.address.0))?;
         let object_id = node
             .address
             .0
@@ -485,16 +435,10 @@ pub(crate) mod address_owned_objects_query {
         let version = node
             .version
             .ok_or_else(|| anyhow!("seed object {object_id} is missing version"))?;
-        let balance =
-            coin_balance_from_json(&object_type, contents.json.as_ref().map(|json| &json.0));
 
         Ok(Some(AddressOwnedObject {
-            object_id,
-            version: SequenceNumber::from_u64(version),
-            digest,
+            object_ref: (object_id, SequenceNumber::from_u64(version), digest),
             owner,
-            object_type,
-            balance,
         }))
     }
 
@@ -513,7 +457,6 @@ pub(crate) mod address_owned_objects_query {
     #[cfg(test)]
     mod tests {
         use sui_types::base_types::ObjectID;
-        use sui_types::gas_coin::GasCoin;
         use sui_types::object::Object;
         use sui_types::object::Owner as SuiOwner;
         use wiremock::Mock;
@@ -584,10 +527,6 @@ pub(crate) mod address_owned_objects_query {
                 "owner": {
                     "__typename": "AddressOwner",
                     "address": { "address": owner.to_string() },
-                },
-                "contents": {
-                    "type": { "repr": object.struct_tag().unwrap().to_canonical_string(true) },
-                    "json": { "balance": "123" },
                 }
             })
         }
@@ -600,10 +539,6 @@ pub(crate) mod address_owned_objects_query {
                 "owner": {
                     "__typename": "ConsensusAddressOwner",
                     "address": { "address": owner.to_string() },
-                },
-                "contents": {
-                    "type": { "repr": object.struct_tag().unwrap().to_canonical_string(true) },
-                    "json": { "balance": "456" },
                 }
             })
         }
@@ -615,23 +550,8 @@ pub(crate) mod address_owned_objects_query {
                 "digest": object.digest().to_string(),
                 "owner": {
                     "__typename": "Immutable",
-                },
-                "contents": {
-                    "type": { "repr": object.struct_tag().unwrap().to_canonical_string(true) },
-                    "json": { "balance": "789" },
                 }
             })
-        }
-
-        #[test]
-        fn coin_balance_from_json_reads_string_balance() {
-            let ty = GasCoin::type_();
-            let json = serde_json::json!({
-                "id": "0x1",
-                "balance": "42",
-            });
-
-            assert_eq!(coin_balance_from_json(&ty, Some(&json)), Some(42));
         }
 
         #[tokio::test]
@@ -696,12 +616,10 @@ pub(crate) mod address_owned_objects_query {
                 .expect("address seed should resolve");
 
             assert_eq!(entries.len(), 2);
-            assert_eq!(entries[0].object_id, first.id());
-            assert_eq!(entries[0].version, first.version());
-            assert_eq!(entries[0].balance, Some(123));
-            assert_eq!(entries[1].object_id, second.id());
-            assert_eq!(entries[1].version, second.version());
-            assert_eq!(entries[1].balance, Some(456));
+            assert_eq!(entries[0].object_ref, first.compute_object_reference());
+            assert_eq!(entries[0].owner, owner);
+            assert_eq!(entries[1].object_ref, second.compute_object_reference());
+            assert_eq!(entries[1].owner, owner);
 
             let requests = server
                 .received_requests()
@@ -717,6 +635,8 @@ pub(crate) mod address_owned_objects_query {
             assert!(query.contains("address(address: $address)"));
             assert!(query.contains("... on AddressOwner"));
             assert!(query.contains("... on ConsensusAddressOwner"));
+            assert!(!query.contains("contents"));
+            assert!(!query.contains("balance"));
         }
 
         #[tokio::test]

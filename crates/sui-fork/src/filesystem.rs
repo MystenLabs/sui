@@ -41,7 +41,6 @@ use anyhow::Error;
 use anyhow::bail;
 use anyhow::ensure;
 
-use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
@@ -162,10 +161,7 @@ impl ObjectLatestMetadata {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub(crate) struct OwnedObjectEntry {
     pub(crate) owner: SuiAddress,
-    pub(crate) object_id: ObjectID,
-    pub(crate) version: SequenceNumber,
-    pub(crate) object_type: StructTag,
-    pub(crate) balance: Option<u64>,
+    pub(crate) object_ref: ObjectRef,
 }
 
 impl OwnedObjectEntry {
@@ -176,10 +172,7 @@ impl OwnedObjectEntry {
         };
         Some(Self {
             owner,
-            object_id: object.id(),
-            version: object.version(),
-            object_type: object.struct_tag()?,
-            balance: object.as_coin_maybe().map(|coin| coin.value()),
+            object_ref: object.compute_object_reference(),
         })
     }
 }
@@ -948,13 +941,13 @@ fn parse_object_latest_inner(content: &str) -> anyhow::Result<ObjectLatestMetada
 }
 
 fn remove_owned_entry(entries: &mut Vec<OwnedObjectEntry>, object_id: ObjectID) {
-    if let Ok(index) = entries.binary_search_by_key(&object_id, |entry| entry.object_id) {
+    if let Ok(index) = entries.binary_search_by_key(&object_id, |entry| entry.object_ref.0) {
         entries.remove(index);
     }
 }
 
 fn upsert_owned_entry(entries: &mut Vec<OwnedObjectEntry>, entry: OwnedObjectEntry) {
-    match entries.binary_search_by_key(&entry.object_id, |existing| existing.object_id) {
+    match entries.binary_search_by_key(&entry.object_ref.0, |existing| existing.object_ref.0) {
         Ok(index) => entries[index] = entry,
         Err(index) => entries.insert(index, entry),
     }

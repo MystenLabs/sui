@@ -151,14 +151,14 @@ sui-fork start --checkpoint 12345678 --address 0x... --object 0x...
 - On Unix, the default `{base_path}` is `$XDG_DATA_HOME/sui_fork_data` when
   `XDG_DATA_HOME` is set, otherwise `$HOME/.sui_fork_data`.
 - On Windows, the default `{base_path}` is `%APPDATA%/sui_fork_data`.
-- `--address` is repeatable and seeds metadata for every object owned by that
+- `--address` is repeatable and seeds object references for every object owned by that
   address at the fork checkpoint. Address seeding requires a checkpoint in the
   GraphQL object enumeration range, which is usually a range within the last hour.
 - `--object` is repeatable and fetches that object at the fork checkpoint. If
   the object is address-owned, it is added to the initial owned-object index.
 - Fork metadata is written once to `seed_manifest.json` under the fork
   directory. The manifest is immutable and records the source network, original
-  fork checkpoint, and any optional seed object metadata. When no seed inputs
+  fork checkpoint, and any optional seed object references. When no seed inputs
   are provided, it is still written with an empty seed entry list.
 
 When restarting with the same fork data directory, omit seed flags. If a seed

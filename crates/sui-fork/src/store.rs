@@ -610,67 +610,82 @@ impl DataStore {
         object_type: Option<StructTag>,
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
-        let _local_snapshot_guard = self.read_local_snapshot()?;
-        self.get_owned_objects_unlocked(owner, object_type, cursor)
+        self.get_owned_object_infos(owner, object_type, cursor)
     }
 
-    /// Get owned objects while the caller holds a local snapshot guard.
-    fn get_owned_objects_unlocked(
+    /// Read the owned-object index, load object BCS, validate object refs, and return owned-object
+    /// RPC metadata.
+    fn get_owned_object_infos(
         &self,
         owner: SuiAddress,
         object_type: Option<StructTag>,
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
-        let entries = self
-            .inner
-            .local
-            .get_owned_object_entries()
-            .map_err(|e| StorageError::custom(e.to_string()))?;
+        let entries = {
+            let _local_snapshot_guard = self.read_local_snapshot()?;
+            self.inner
+                .local
+                .get_owned_object_entries()
+                .map_err(|e| StorageError::custom(e.to_string()))?
+        };
         let cursor_object_id = cursor.map(|cursor| cursor.object_id);
 
-        Ok(entries
+        entries
             .into_iter()
             .filter(|entry| entry.owner == owner)
-            .filter(|entry| {
-                object_type
-                    .as_ref()
-                    .is_none_or(|ty| struct_tag_filter_matches(ty, &entry.object_type))
-            })
             // `RpcIndexes` cursors are lower bounds. The v2 RPC layer stores
             // the first not-yet-returned item in the page token and expects
             // the next iterator to include it.
-            .filter(|entry| cursor_object_id.is_none_or(|id| entry.object_id >= id))
-            .filter_map(|entry| self.valid_owned_object_info(entry))
-            .collect())
+            .filter(|entry| cursor_object_id.is_none_or(|id| entry.object_ref.0 >= id))
+            .try_fold(Vec::new(), |mut infos, entry| {
+                if let Some(info) = self.valid_owned_object_info(entry, object_type.as_ref())? {
+                    infos.push(info);
+                }
+                Ok(infos)
+            })
     }
 
     /// Validate that the given `OwnedObjectEntry` corresponds to a locally cached object still
     /// controlled by the indexed address. This guards against stale index
     /// entries that point to objects that have been deleted or wrapped by later transactions.
-    fn valid_owned_object_info(&self, entry: OwnedObjectEntry) -> Option<OwnedObjectInfo> {
-        if let Some(object) = self.local().get_latest_object(&entry.object_id).ok()? {
-            if object.version() != entry.version {
-                return None;
+    fn valid_owned_object_info(
+        &self,
+        entry: OwnedObjectEntry,
+        object_type_filter: Option<&StructTag>,
+    ) -> StorageResult<Option<OwnedObjectInfo>> {
+        let object = self
+            .get_object(&entry.object_ref.0)
+            .map_err(|e| StorageError::custom(e.to_string()))?;
+        let Some(object) = object else {
+            return Ok(None);
+        };
+
+        let owner_matches = match &object.owner {
+            sui_types::object::Owner::AddressOwner(owner)
+            | sui_types::object::Owner::ConsensusAddressOwner { owner, .. } => {
+                *owner == entry.owner
             }
-            match &object.owner {
-                sui_types::object::Owner::AddressOwner(owner)
-                | sui_types::object::Owner::ConsensusAddressOwner { owner, .. }
-                    if *owner == entry.owner => {}
-                _ => return None,
-            }
-            let object_type = object.struct_tag()?;
-            if object_type != entry.object_type {
-                return None;
-            }
+            _ => false,
+        };
+        if !owner_matches || object.compute_object_reference() != entry.object_ref {
+            return Ok(None);
         }
 
-        Some(OwnedObjectInfo {
+        let Some(object_type) = object.struct_tag() else {
+            return Ok(None);
+        };
+        if object_type_filter.is_some_and(|filter| !struct_tag_filter_matches(filter, &object_type))
+        {
+            return Ok(None);
+        }
+
+        Ok(Some(OwnedObjectInfo {
             owner: entry.owner,
-            object_type: entry.object_type,
-            balance: entry.balance,
-            object_id: entry.object_id,
-            version: entry.version,
-        })
+            object_type,
+            balance: object.as_coin_maybe().map(|coin| coin.value()),
+            object_id: entry.object_ref.0,
+            version: entry.object_ref.1,
+        }))
     }
 }
 
@@ -889,24 +904,17 @@ impl SimulatorStore for DataStore {
     }
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
-        let objects = match self
-            .read_local_snapshot()
-            .and_then(|_local_snapshot_guard| {
-                self.get_owned_objects_unlocked(owner, None, None)
-                    .map(|infos| {
-                        infos
-                            .into_iter()
-                            .filter_map(|info| {
-                                self.inner
-                                    .local
-                                    .get_latest_object(&info.object_id)
-                                    .ok()
-                                    .flatten()
-                                    .filter(|object| object.version() == info.version)
-                            })
-                            .collect()
-                    })
-            }) {
+        let objects = match self.get_owned_object_infos(owner, None, None).map(|infos| {
+            infos
+                .into_iter()
+                .filter_map(|info| {
+                    self.get_object(&info.object_id)
+                        .ok()
+                        .flatten()
+                        .filter(|object| object.version() == info.version)
+                })
+                .collect()
+        }) {
             Ok(objects) => objects,
             Err(err) => {
                 tracing::error!(%owner, "failed to read owned-object index: {err:?}");

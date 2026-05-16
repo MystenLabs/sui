@@ -4,8 +4,8 @@
 //! Fork manifest and seed resolution for the initial owned-object index.
 //!
 //! The manifest is written for every initialized fork directory. Address seeds resolve
-//! lightweight object metadata at the fork checkpoint, while explicit object seeds also cache
-//! the full object BCS through the existing object query path.
+//! object references at the fork checkpoint, while explicit object seeds also cache the full
+//! object BCS through the existing object query path.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -17,11 +17,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use tracing::warn;
 
-use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
-use sui_types::digests::ObjectDigest;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::object::Owner;
@@ -43,15 +42,11 @@ pub struct SeedInput {
     pub object_ids: Vec<ObjectID>,
 }
 
-/// Object metadata used to seed the initial owned-object index.
+/// Object reference and owner used to seed the initial owned-object index.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct SeedEntry {
-    pub(crate) object_id: ObjectID,
-    pub(crate) version: SequenceNumber,
-    pub(crate) digest: ObjectDigest,
+    pub(crate) object_ref: ObjectRef,
     pub(crate) owner: SuiAddress,
-    pub(crate) object_type: StructTag,
-    pub(crate) balance: Option<u64>,
 }
 
 /// Durable manifest for fork metadata and optional pre-fork seed metadata.
@@ -80,12 +75,8 @@ impl SeedEntry {
         };
 
         Some(Self {
-            object_id: object.id(),
-            version: object.version(),
-            digest: object.digest(),
+            object_ref: object.compute_object_reference(),
             owner,
-            object_type: object.struct_tag()?,
-            balance: object.as_coin_maybe().map(|coin| coin.value()),
         })
     }
 }
@@ -100,12 +91,8 @@ impl SeedInput {
 impl From<AddressOwnedObject> for SeedEntry {
     fn from(object: AddressOwnedObject) -> Self {
         Self {
-            object_id: object.object_id,
-            version: object.version,
-            digest: object.digest,
+            object_ref: object.object_ref,
             owner: object.owner,
-            object_type: object.object_type,
-            balance: object.balance,
         }
     }
 }
@@ -114,10 +101,7 @@ impl From<&SeedEntry> for OwnedObjectEntry {
     fn from(entry: &SeedEntry) -> Self {
         Self {
             owner: entry.owner,
-            object_id: entry.object_id,
-            version: entry.version,
-            object_type: entry.object_type.clone(),
-            balance: entry.balance,
+            object_ref: entry.object_ref,
         }
     }
 }
@@ -313,7 +297,7 @@ async fn resolve_seeds(
             warn!(%address, checkpoint, "address seed resolved no owned objects");
         }
         for entry in address_entries {
-            entries.insert(entry.object_id, entry);
+            entries.insert(entry.object_ref.0, entry);
         }
     }
 
@@ -322,7 +306,7 @@ async fn resolve_seeds(
         .filter(|object_id| !entries.contains_key(object_id))
         .collect();
     for entry in resolve_object_seeds(data_store, checkpoint, &remaining_object_ids)? {
-        entries.insert(entry.object_id, entry);
+        entries.insert(entry.object_ref.0, entry);
     }
 
     Ok(SeedManifest {
@@ -471,7 +455,10 @@ mod tests {
         .expect("seed manifest should resolve");
 
         assert_eq!(manifest.entries.len(), 1);
-        assert_eq!(manifest.entries[0].object_id, object.id());
+        assert_eq!(
+            manifest.entries[0].object_ref,
+            object.compute_object_reference()
+        );
         assert_eq!(
             store
                 .local()

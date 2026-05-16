@@ -54,10 +54,7 @@ indices/
 ```rust
 struct OwnedObjectEntry {
     owner: SuiAddress,
-    object_id: ObjectID,
-    version: SequenceNumber,
-    object_type: StructTag,
-    balance: Option<u64>,
+    object_ref: ObjectRef,
 }
 ```
 
@@ -98,15 +95,16 @@ falling back to GraphQL. This keeps post-fork removals authoritative.
 historical cached object versions even if the current object is marked removed.
 
 `SimulatorStore::owned_objects(owner)` reads `indices/owned_objects`, filters by
-owner, validates each entry against the current object state, then returns the
-matching objects.
+owner, loads each candidate object through the normal object read path,
+validates the loaded object against the indexed object ref and owner, then
+returns the matching objects.
 
 `RpcStateReader::indexes()` returns the `DataStore` itself as a minimal
 `RpcIndexes` implementation. `owned_objects_iter` supports:
 
 - owner filtering
 - optional type filtering, with empty type parameters matching all type params
-  for the same address/module/name
+  for the same address/module/name, after object BCS is loaded
 - cursor lower-bound filtering by `object_id`
 
 Unsupported index methods return empty iterators or `None`.
