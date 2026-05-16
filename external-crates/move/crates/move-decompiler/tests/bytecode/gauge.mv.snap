@@ -219,14 +219,14 @@ public fun deposit_position<T0, T1, T2>(l0: &GlobalConfig, l1: &DistributionConf
                 }
             };
             if (l8 >= l18.len()) {
-                (table::borrow_mut(&mut l2.stakes, l13)).push_back(l11);
-                unstructured {
-                    goto 'label_192;
-                }
-            } else {
-                unstructured {
-                    goto 'label_192;
-                }
+                break
+            };
+            unstructured {
+                goto 'label_192;
+            };
+            (table::borrow_mut(&mut l2.stakes, l13)).push_back(l11);
+            unstructured {
+                goto 'label_192;
             }
         }
     };

@@ -190,52 +190,22 @@ public fun add_liquidity_computation(l0: &Clock, l1: &mut CurvedPoolConfig, l2: 
 
 public fun assert_new_config_params(l0: u64, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64) {
     if (l0 > 0u64) {
-        assert!(l0 >= C5 && l0 <= C6, C28);
-        unstructured {
-            goto 'label_20;
-        }
-    } else {
-        /* block 20 */;
-        if (l1 > 0u64) {
-            assert!(l1 >= C5 && l1 <= C6, C30);
-            unstructured {
-                goto 'label_40;
-            }
-        } else {
-            /* block 40 */;
-            if (l2 > 0u64) {
-                assert!(l2 >= C11 && l2 <= C12, C31);
-                unstructured {
-                    goto 'label_60;
-                }
-            } else {
-                /* block 60 */;
-                if (l4 > 0u64) {
-                    assert!(l4as u256 >= C2 && l4as u256 <= C10, C32);
-                    unstructured {
-                        goto 'label_82;
-                    }
-                } else {
-                    /* block 82 */;
-                    if (l5 > 0u64) {
-                        assert!(l5as u256 >= C2 && l5as u256 <= C10, C33);
-                        unstructured {
-                            goto 'label_104;
-                        }
-                    } else {
-                        /* block 104 */;
-                        if (l3 > 0u64) {
-                            assert!(l3 >= C8 && l3 <= C9, C29);
-                            unstructured {
-                                goto 'label_124;
-                            }
-                        } else {
-                            /* block 124 */
-                        }
-                    }
-                }
-            }
-        }
+        assert!(l0 >= C5 && l0 <= C6, C28)
+    };
+    if (l1 > 0u64) {
+        assert!(l1 >= C5 && l1 <= C6, C30)
+    };
+    if (l2 > 0u64) {
+        assert!(l2 >= C11 && l2 <= C12, C31)
+    };
+    if (l4 > 0u64) {
+        assert!(l4as u256 >= C2 && l4as u256 <= C10, C32)
+    };
+    if (l5 > 0u64) {
+        assert!(l5as u256 >= C2 && l5as u256 <= C10, C33)
+    };
+    if (l3 > 0u64) {
+        assert!(l3 >= C8 && l3 <= C9, C29)
     }
 }
 
@@ -677,9 +647,8 @@ public fun newton_y(l0: u256, l1: u256, l2: vector<u256>, l3: u256, l4: u64): u2
         if (l21 != l4) {
             let l19 = math::mul_div_u256(*(&(&l2)[l21]), C0, l3);
             assert!(l19 > math::pow_10_u256(16u8) - 1u256 && l19 < math::pow_10_u256(20u8) + 1u256, C17)
-        } else {
-            l21 = l21 + 1u64;
-        }
+        };
+        l21 = l21 + 1u64;
     };
     loop {
         if (l22 <= l25 - 2u64) {
@@ -830,74 +799,58 @@ fun tweak_price(l0: &mut CurvedPoolConfig, l1: u64, l2: u256, l3: vector<u256>, 
         let l39 = curved_math::calc_geometric_mean(l42, true);
         l38 = math::mul_div_u256(C0, l39, l7);
         l40 = math::mul_div_u256(l33, l38, l32);
-        assert!(!(l38 < l32 && *(&l0.future_A_gamma_time) < l9), C34);
-        unstructured {
-            goto 'label_200;
-        }
-    } else {
-        let (l12, l25);
-        /* block 200 */;
-        *(&mut l0.xcp_profit) = l40;
-        l25 = *(&l0.not_adjusted);
-        l12 = !(l25) && l38 * 2u256 - C0 > l40 + 2u256 * *(&l0.allowed_extra_profit);
-        if (l12) {
-            l25 = true;
-            *(&mut l0.not_adjusted) = true
+        assert!(!(l38 < l32 && *(&l0.future_A_gamma_time) < l9), C34)
+    };
+    *(&mut l0.xcp_profit) = l40;
+    let l25 = *(&l0.not_adjusted);
+    if (!(l25) && l38 * 2u256 - C0 > l40 + 2u256 * *(&l0.allowed_extra_profit)) {
+        l25 = true;
+        *(&mut l0.not_adjusted) = true
+    };
+    if (l25) {
+        let l15 = *(&l0.adjustment_step);
+        let l29 = 0u256;
+        let l22 = 1u64;
+        while (l22 < l24) {
+            let l35 = math::subtract_mod_u256(math::mul_div_u256(*(&(&l0.oracle_prices)[l22]), C0, *(&(&l0.price_scale)[l22])), C0);
+            l29 = l29 + l35 * l35;
+            l22 = l22 + 1u64;
         };
-        if (l25) {
-            let l15 = *(&l0.adjustment_step);
-            let l29 = 0u256;
-            let l22 = 1u64;
-            while (l22 < l24) {
-                let l35 = math::subtract_mod_u256(math::mul_div_u256(*(&(&l0.oracle_prices)[l22]), C0, *(&(&l0.price_scale)[l22])), C0);
-                l29 = l29 + l35 * l35;
-                l22 = l22 + 1u64;
+        if (l29 > l15 * l15 && l32 > 0u256) {
+            let l30 = math::sqrt_int_u256(l29 / C0);
+            let l27 = vector[];
+            (&mut l27).push_back(C0);
+            let l23 = 1u64;
+            while (l23 < l24) {
+                let l31 = *(&(&l0.price_scale)[l23]) * l30 - l15 + l15 * *(&(&l0.oracle_prices)[l23]);
+                (&mut l27).push_back(l31 / l30);
+                l23 = l23 + 1u64;
             };
-            if (l29 > l15 * l15 && l32 > 0u256) {
-                let l30 = math::sqrt_int_u256(l29 / C0);
-                let l27 = vector[];
-                (&mut l27).push_back(C0);
-                let l23 = 1u64;
-                while (l23 < l24) {
-                    let l31 = *(&(&l0.price_scale)[l23]) * l30 - l15 + l15 * *(&(&l0.oracle_prices)[l23]);
-                    (&mut l27).push_back(l31 / l30);
-                    l23 = l23 + 1u64;
-                };
-                let l36 = l3;
-                l23 = 1u64;
-                while (l23 < l24) {
-                    *(&mut (&mut l36)[l23]) = math::mul_div_u256(*(&(&l3)[l23]), *(&(&l27)[l23]), *(&(&l0.price_scale)[l23]));
-                    l23 = l23 + 1u64;
-                };
-                let l26 = curved_math::solve_D(l1, l2, l36);
-                l23 = 0u64;
-                while (l23 < l24) {
-                    let l34 = *(&(&l27)[l23]);
-                    *(&mut (&mut l36)[l23]) = math::mul_div_u256(l26, C0, l34 * l24as u256);
-                    l23 = l23 + 1u64;
-                };
-                let l28 = math::mul_div_u256(curved_math::calc_geometric_mean(l36, true), C0, l7);
-                if (l28 > C0 && 2u256 * l28 - C0 > l40) {
-                    *(&mut l0.price_scale) = l27;
-                    *(&mut l0._D) = l26;
-                    *(&mut l0.virtual_price) = l28
-                } else {
-                    *(&mut l0.not_adjusted) = false;
-                    unstructured {
-                        goto 'label_441;
-                    }
-                }
-            } else {
-                unstructured {
-                    goto 'label_441;
-                }
-            }
-        } else {
-            /* block 441 */;
-            *(&mut l0._D) = l17;
-            *(&mut l0.virtual_price) = l38
+            let l36 = l3;
+            l23 = 1u64;
+            while (l23 < l24) {
+                *(&mut (&mut l36)[l23]) = math::mul_div_u256(*(&(&l3)[l23]), *(&(&l27)[l23]), *(&(&l0.price_scale)[l23]));
+                l23 = l23 + 1u64;
+            };
+            let l26 = curved_math::solve_D(l1, l2, l36);
+            l23 = 0u64;
+            while (l23 < l24) {
+                let l34 = *(&(&l27)[l23]);
+                *(&mut (&mut l36)[l23]) = math::mul_div_u256(l26, C0, l34 * l24as u256);
+                l23 = l23 + 1u64;
+            };
+            let l28 = math::mul_div_u256(curved_math::calc_geometric_mean(l36, true), C0, l7);
+            if (l28 > C0 && 2u256 * l28 - C0 > l40) {
+                *(&mut l0.price_scale) = l27;
+                *(&mut l0._D) = l26;
+                *(&mut l0.virtual_price) = l28;
+                return
+            };
+            *(&mut l0.not_adjusted) = false
         }
-    }
+    };
+    *(&mut l0._D) = l17;
+    *(&mut l0.virtual_price) = l38
 }
 
 public fun update_A_and_gamma(l0: &mut CurvedPoolConfig, l1: u64, l2: u64, l3: u256, l4: u64) {
@@ -918,53 +871,28 @@ public fun update_A_and_gamma(l0: &mut CurvedPoolConfig, l1: u64, l2: u64, l3: u
 public fun update_config_fee_params(l0: &mut CurvedPoolConfig, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64) {
     if (l1 > 0u64) {
         assert!(l1 >= C5 && l1 <= C6, C28);
-        *(&mut l0.mid_fee) = l1;
-        unstructured {
-            goto 'label_26;
-        }
-    } else {
-        /* block 26 */;
-        if (l2 > 0u64) {
-            assert!(l2 >= C5 && l2 <= C6, C30);
-            *(&mut l0.out_fee) = l2;
-            unstructured {
-                goto 'label_52;
-            }
-        } else {
-            /* block 52 */;
-            assert!(*(&l0.mid_fee) <= *(&l0.out_fee), C20);
-            if (l3 > 0u64) {
-                assert!(l3 >= C11 && l3 <= C12, C31);
-                *(&mut l0.fee_gamma) = l3;
-                unstructured {
-                    goto 'label_91;
-                }
-            } else {
-                /* block 91 */;
-                if (l5 > 0u64) {
-                    assert!(l5as u256 >= C2 && l5as u256 <= C10, C32);
-                    *(&mut l0.allowed_extra_profit) = l5as u256;
-                    unstructured {
-                        goto 'label_120;
-                    }
-                } else {
-                    /* block 120 */;
-                    if (l6 > 0u64) {
-                        assert!(l6as u256 >= C2 && l6as u256 <= C10, C33);
-                        *(&mut l0.adjustment_step) = l6as u256;
-                        unstructured {
-                            goto 'label_149;
-                        }
-                    } else {
-                        /* block 149 */;
-                        if (l4 > 0u64) {
-                            assert!(l4 >= C8 && l4 <= C9, C29);
-                            *(&mut l0.ma_half_time) = l4as u256
-                        }
-                    }
-                }
-            }
-        }
+        *(&mut l0.mid_fee) = l1
+    };
+    if (l2 > 0u64) {
+        assert!(l2 >= C5 && l2 <= C6, C30);
+        *(&mut l0.out_fee) = l2
+    };
+    assert!(*(&l0.mid_fee) <= *(&l0.out_fee), C20);
+    if (l3 > 0u64) {
+        assert!(l3 >= C11 && l3 <= C12, C31);
+        *(&mut l0.fee_gamma) = l3
+    };
+    if (l5 > 0u64) {
+        assert!(l5as u256 >= C2 && l5as u256 <= C10, C32);
+        *(&mut l0.allowed_extra_profit) = l5as u256
+    };
+    if (l6 > 0u64) {
+        assert!(l6as u256 >= C2 && l6as u256 <= C10, C33);
+        *(&mut l0.adjustment_step) = l6as u256
+    };
+    if (l4 > 0u64) {
+        assert!(l4 >= C8 && l4 <= C9, C29);
+        *(&mut l0.ma_half_time) = l4as u256
     }
 }
 

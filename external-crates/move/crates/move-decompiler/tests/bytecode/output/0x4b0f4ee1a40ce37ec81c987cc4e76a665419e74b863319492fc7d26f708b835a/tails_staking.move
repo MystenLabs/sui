@@ -728,22 +728,24 @@ fun unstake_tails_(l0: &mut TailsStakingRegistry, l1: address, l2: address): Tai
     let l4 = 0u64;
     let (l12, l5, l7);
     loop {
-        if (l4 >= l6) {
-            /* block 151 */;
-            abort C12
-        };
-        l12 = big_vector::borrow_from_slice_mut(l8, l4 % l11);
-        if (*(&l12.user) == l2) {
-            l5 = 0u64;
-            l7 = &l12.tails.len();
-            break
-        };
-        if (l4 + 1u64 < l6 && l4 + 1u64 == l9 * l11 + l10) {
-            l9 = big_vector::get_slice_idx(freeze(l8)) + 1u64;
-            l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
-            l10 = big_vector::get_slice_length(freeze(l8));
-        };
-        l4 = l4 + 1u64;
+        if (l4 < l6) {
+            l12 = big_vector::borrow_from_slice_mut(l8, l4 % l11);
+            if (*(&l12.user) == l2) {
+                l5 = 0u64;
+                l7 = &l12.tails.len();
+                break
+            };
+            if (l4 + 1u64 < l6 && l4 + 1u64 == l9 * l11 + l10) {
+                l9 = big_vector::get_slice_idx(freeze(l8)) + 1u64;
+                l8 = big_vector::borrow_slice_mut(&mut l0.staking_infos, l9);
+                l10 = big_vector::get_slice_length(freeze(l8));
+            };
+            l4 = l4 + 1u64;
+        } else {
+            unstructured {
+                goto 'label_151;
+            }
+        }
     };
     let l13;
     loop {

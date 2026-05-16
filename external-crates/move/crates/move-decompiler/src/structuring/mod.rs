@@ -381,6 +381,29 @@ fn structure_acyclic(
     }
 }
 
+/// A node is "singly entered" if exactly one of its CFG predecessors lies outside its own
+/// dom subtree (including itself). Predecessors inside the subtree are back-edges from a
+/// contained loop's latch — they don't represent independent entry into the scope. The
+/// `target` itself is part of the subtree so a self-loop's self-edge counts as a back-edge.
+/// This is the criterion `arm_for` uses to decide whether an arm body owns its target
+/// outright (embed) or whether the target is a shared join point that other paths also
+/// reach (sibling-hoist).
+fn is_singly_entered(
+    target: NodeIndex,
+    cfg: &petgraph::graph::DiGraph<(), ()>,
+    dom_tree: &dom_tree::DominatorTree,
+) -> bool {
+    let subtree: HashSet<NodeIndex> = dom_tree
+        .get(target)
+        .all_children()
+        .chain(std::iter::once(target))
+        .collect();
+    cfg.neighbors_directed(target, Direction::Incoming)
+        .filter(|pred| !subtree.contains(pred))
+        .count()
+        == 1
+}
+
 fn structure_acyclic_region(
     config: &config::Config,
     graph: &mut Graph,
@@ -397,34 +420,41 @@ fn structure_acyclic_region(
 
     let dom_node = graph.dom_tree.get(start);
     let ichildren = dom_node.immediate_children().collect::<HashSet<_>>();
-    let post_dominator = graph.post_dominators.immediate_dominator(start).unwrap();
 
     if config.debug_print.structuring {
         println!("structuring acyclic region at node {start:#?}");
         println!("  blocks: {structured_blocks:#?}");
         println!("  immediate children: {ichildren:#?}");
-        println!("  post dominator: {post_dominator:#?}");
         if let Some(s) = loop_succ {
             println!("  loop successor: {s:#?}");
         }
     }
 
+    let enclosing_loop_exits: Option<HashSet<NodeIndex>> = graph.loop_exits.get(&start).cloned();
+
     /// Classify one Condition/Switch arm:
     ///   - `target == start`: back-edge to a loop head; emit `Jump(DegenerateJumpIf)`.
     ///   - `loop_succ == Some(target)`: loop-head arm exits the loop. Emit `Jump(LoopBreak)`
     ///     for `insert_breaks` to convert to `Break`.
-    ///   - `target == post_dominator` (and not `return_`): the arms' join point. Emit
-    ///     `Jump(ArmOutsideSubtree)` so the owned-children hoist below can place `target`
-    ///     as a sibling and elide.
-    ///   - `target ∈ ichildren`: embed the already-structured form.
-    ///   - Otherwise: `Jump(ArmOutsideSubtree)`. Target is owned by an enclosing scope,
-    ///     which will hoist it or `insert_breaks` will reclassify.
+    ///   - `target` is an exit of an enclosing loop: emit `Jump(ArmOutsideSubtree)`. The
+    ///     outer `structure_loop` will append `target` after its `Loop` form, and
+    ///     `insert_breaks` will rewrite this Jump to a `Break`. We must not embed even if
+    ///     `target` is singly entered — that would bury the loop exit inside the body.
+    ///   - `target ∈ ichildren` and `target` is singly-entered (the only CFG predecessor
+    ///     outside its own dom subtree is the edge from `start`): embed the structured form
+    ///     as the arm body. Back-edges from inside `target`'s subtree don't count — a loop
+    ///     head is entered once from outside, even though its latch loops back in.
+    ///   - Otherwise: emit `Jump(ArmOutsideSubtree)`. If `target` is a join point in our
+    ///     scope, the owned-children hoist below places it as a sibling and elides this
+    ///     Jump. If `target` is owned by an ancestor scope, the Jump survives for that
+    ///     scope's hoist or `insert_breaks`.
     fn arm_for(
         target: NodeIndex,
         start: NodeIndex,
         loop_succ: Option<NodeIndex>,
-        post_dominator: NodeIndex,
-        return_: NodeIndex,
+        loop_exits: Option<&HashSet<NodeIndex>>,
+        cfg: &petgraph::graph::DiGraph<(), ()>,
+        dom_tree: &dom_tree::DominatorTree,
         ichildren: &HashSet<NodeIndex>,
         structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
     ) -> D::Structured {
@@ -432,14 +462,26 @@ fn structure_acyclic_region(
             D::Structured::Jump(GotoSource::DegenerateJumpIf, target)
         } else if Some(target) == loop_succ {
             D::Structured::Jump(GotoSource::LoopBreak, target)
-        } else if target == post_dominator && post_dominator != return_ {
+        } else if loop_exits.is_some_and(|e| e.contains(&target)) {
             D::Structured::Jump(GotoSource::ArmOutsideSubtree, target)
-        } else if ichildren.contains(&target) {
+        } else if ichildren.contains(&target) && is_singly_entered(target, cfg, dom_tree) {
             structured_blocks.remove(&target).unwrap()
         } else {
             D::Structured::Jump(GotoSource::ArmOutsideSubtree, target)
         }
     }
+
+    // Use the same predicate as `arm_for` to record absorbed arms for back-edge ownership
+    // transfer.
+    let is_absorbed = |target: NodeIndex| -> bool {
+        target != start
+            && Some(target) != loop_succ
+            && !enclosing_loop_exits
+                .as_ref()
+                .is_some_and(|e| e.contains(&target))
+            && ichildren.contains(&target)
+            && is_singly_entered(target, &graph.cfg, &graph.dom_tree)
+    };
 
     let structured = match input.remove(&start).unwrap() {
         D::Input::Condition(_lbl, code, conseq, alt) => {
@@ -447,8 +489,9 @@ fn structure_acyclic_region(
                 conseq,
                 start,
                 loop_succ,
-                post_dominator,
-                graph.return_,
+                enclosing_loop_exits.as_ref(),
+                &graph.cfg,
+                &graph.dom_tree,
                 &ichildren,
                 structured_blocks,
             );
@@ -456,8 +499,9 @@ fn structure_acyclic_region(
                 alt,
                 start,
                 loop_succ,
-                post_dominator,
-                graph.return_,
+                enclosing_loop_exits.as_ref(),
+                &graph.cfg,
+                &graph.dom_tree,
                 &ichildren,
                 structured_blocks,
             );
@@ -465,10 +509,10 @@ fn structure_acyclic_region(
             // Transfer back-edge ownership for absorbed arms (only the ichildren-embed branch
             // of `arm_for` absorbs).
             let mut absorbed = vec![];
-            if conseq != start && ichildren.contains(&conseq) && Some(conseq) != loop_succ {
+            if is_absorbed(conseq) {
                 absorbed.push(conseq);
             }
-            if alt != start && ichildren.contains(&alt) && Some(alt) != loop_succ {
+            if is_absorbed(alt) {
                 absorbed.push(alt);
             }
             if !absorbed.is_empty() {
@@ -490,8 +534,10 @@ fn structure_acyclic_region(
             // Variant arms can share a target (e.g. several variants branching to the same
             // fall-through label). `arm_for`'s `ichildren`-embed path calls
             // `structured_blocks.remove(&target).unwrap()`, which would panic on the second
-            // occurrence. For shared targets, emit a `Jump` from every arm and let the
-            // owned-children hoist place the target once and elide all the Jumps.
+            // occurrence. With the in-degree-1 absorb predicate, a shared target also has
+            // in-degree > 1, so `arm_for` naturally emits `Jump(AOS)` for each. We keep the
+            // explicit count guard as a defensive belt-and-suspenders: even if some future
+            // refactor weakens the predicate, the panic stays at bay.
             let mut counts: HashMap<NodeIndex, usize> = HashMap::new();
             for (_, item) in &items {
                 *counts.entry(*item).or_insert(0) += 1;
@@ -506,8 +552,9 @@ fn structure_acyclic_region(
                             item,
                             start,
                             loop_succ,
-                            post_dominator,
-                            graph.return_,
+                            enclosing_loop_exits.as_ref(),
+                            &graph.cfg,
+                            &graph.dom_tree,
                             &ichildren,
                             structured_blocks,
                         )
@@ -554,13 +601,13 @@ fn structure_acyclic_region(
     // orphans here; tracked as a follow-up.
     let mut exp = vec![structured];
     if loop_succ.is_none() {
-        let enclosing_loop_exits: Option<&HashSet<NodeIndex>> = graph.loop_exits.get(&start);
         let mut orphans: Vec<NodeIndex> = ichildren
             .iter()
             .copied()
             .filter(|c| structured_blocks.contains_key(c))
             .filter(|c| {
                 enclosing_loop_exits
+                    .as_ref()
                     .map(|exits| !exits.contains(c))
                     .unwrap_or(true)
             })
@@ -710,30 +757,45 @@ fn structure_code_node(
                     seq.push(D::Structured::Jump(GotoSource::CodeBranch, next));
                 }
             }
-            D::Structured::Seq(seq)
+            // Owned-children hoist: any `ichildren` of this Code block that we didn't embed
+            // as `next` and that the enclosing-loop logic doesn't claim is a node every CFG
+            // path through us reaches. Place them in dom-tree-order siblings of our Block,
+            // and walk prior items' tails to elide `Jump`s targeting them.
+            //
+            // This is the same mechanism `structure_acyclic_region` runs after its
+            // IfElse/Switch construction; without it, function bodies whose dom tree looks
+            // like `entry -> {first_test, label_X, second_test, label_Y, ...}` lose every
+            // sibling after `next` to orphan-in-structured_blocks, and the surviving Jumps
+            // to those siblings stay as gotos.
+            let mut orphans: Vec<NodeIndex> = ichildren
+                .iter()
+                .copied()
+                .filter(|c| Some(*c) != next)
+                .filter(|c| structured_blocks.contains_key(c))
+                .filter(|c| {
+                    enclosing_loop_exits
+                        .as_ref()
+                        .map(|exits| !exits.contains(c))
+                        .unwrap_or(true)
+                })
+                .collect();
+            orphans.sort_by_key(|n| n.index());
+            for orphan in hoist_order(graph, node_ndx, &orphans) {
+                let body = structured_blocks.remove(&orphan).unwrap();
+                let target = entry_label(&body);
+                if let Some(target) = target {
+                    for prior in seq.iter_mut() {
+                        elide_tail_jump_to(prior, target);
+                    }
+                }
+                seq.push(body);
+            }
+            let mut result = D::Structured::Seq(seq);
+            flatten_sequence(&mut result);
+            result
         }
         D::Input::Condition(..) | D::Input::Variants(..) => unreachable!(),
     }
-}
-
-/// A node is "singly entered" if exactly one of its CFG predecessors lies outside its own
-/// dom subtree (including itself). Predecessors inside the subtree are back-edges from a
-/// contained loop's latch — they don't represent independent entry into the scope. `target`
-/// itself is part of the subtree so a self-loop's self-edge counts as a back-edge.
-fn is_singly_entered(
-    target: NodeIndex,
-    cfg: &petgraph::graph::DiGraph<(), ()>,
-    dom_tree: &dom_tree::DominatorTree,
-) -> bool {
-    let subtree: HashSet<NodeIndex> = dom_tree
-        .get(target)
-        .all_children()
-        .chain(std::iter::once(target))
-        .collect();
-    cfg.neighbors_directed(target, Direction::Incoming)
-        .filter(|pred| !subtree.contains(pred))
-        .count()
-        == 1
 }
 
 /// Reverse-post-order DFS over `cfg`, restricted to nodes in `members`, rooted at `root`.
