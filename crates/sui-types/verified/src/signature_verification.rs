@@ -603,33 +603,6 @@ proof fn lemma_first_valid_from_correct<S, Addr>(
     }
 }
 
-/// If all unused positions in [start, sigs.len()) have addresses disjoint from aliases,
-/// then spec_first_valid_unused_from(start) = None.
-proof fn lemma_first_valid_from_none<S, Addr>(
-    sigs: &[S],
-    aliases: Set<Addr>,
-    epoch: u64,
-    used: Set<int>,
-    start: int,
-)
-    requires
-        forall|k: int| start <= k < sigs@.len() as int && !used.contains(k) ==>
-            spec_addresses::<S, Addr>(sigs, k).disjoint(aliases),
-    ensures
-        spec_first_valid_unused_from(sigs, aliases, epoch, used, start) matches None
-    decreases sigs@.len() - start
-{
-    if start >= sigs@.len() {
-    } else if used.contains(start) {
-        lemma_first_valid_from_none(sigs, aliases, epoch, used, start + 1);
-    } else {
-        assert(!spec_is_valid_for(&sigs@[start], aliases, epoch)) by {
-            assert(spec_addresses::<S, Addr>(sigs, start).disjoint(aliases));
-        };
-        lemma_first_valid_from_none(sigs, aliases, epoch, used, start + 1);
-    }
-}
-
 // ---------------------------------------------------------------------------
 // § 6  Slice-contains helper
 // ---------------------------------------------------------------------------
