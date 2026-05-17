@@ -1,0 +1,82 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+{
+  "constant_map": {},
+  "definition_location": {"file_hash": "0x..bff6c", "start": 92, "end": 96},
+  "enum_map": {},
+  "from_file_path": null,
+  "function_map": {
+    "0": {
+      "code_map": {
+        "0": {"file_hash": "0x..bff6c", "start": 269, "end": 270},
+        "1": {"file_hash": "0x..bff6c", "start": 148, "end": 149},
+        "2": {"file_hash": "0x..bff6c", "start": 146, "end": 147},
+        "3": {"file_hash": "0x..bff6c", "start": 262, "end": 271}
+      },
+      "definition_location": {"file_hash": "0x..bff6c", "start": 234, "end": 238},
+      "is_native": false,
+      "labels": {
+        "0": 0
+      },
+      "locals": [],
+      "location": {"file_hash": "0x..bff6c", "start": 223, "end": 277},
+      "macro_color_map": [
+        [0, 1],
+        [1, 2],
+        [2, 2],
+        [3, null]
+      ],
+      "macro_frame_info": [
+        {
+          "call_loc": {"file_hash": "0x..bff6c", "start": 262, "end": 271},
+          "kind": {
+            "MacroBody": {
+              "function_name": "outer",
+              "module_addr": "0000000000000000000000000000000000000000000000000000000000000041",
+              "module_name": "m"
+            }
+          },
+          "parent_index": null,
+          "source_loc": {"file_hash": "0x..bff6c", "start": 161, "end": 217}
+        },
+        {
+          "call_loc": {"file_hash": "0x..bff6c", "start": 208, "end": 210},
+          "kind": "Argument",
+          "parent_index": 0,
+          "source_loc": {"file_hash": "0x..bff6c", "start": 269, "end": 270}
+        },
+        {
+          "call_loc": {"file_hash": "0x..bff6c", "start": 201, "end": 211},
+          "kind": {
+            "MacroBody": {
+              "function_name": "inner",
+              "module_addr": "0000000000000000000000000000000000000000000000000000000000000041",
+              "module_name": "m"
+            }
+          },
+          "parent_index": 0,
+          "source_loc": {"file_hash": "0x..bff6c", "start": 103, "end": 155}
+        }
+      ],
+      "nops": {},
+      "parameters": [
+        ["v#0#0", {"file_hash": "0x..bff6c", "start": 239, "end": 240}]
+      ],
+      "returns": [
+        {"file_hash": "0x..bff6c", "start": 248, "end": 251}
+      ],
+      "type_parameters": []
+    }
+  },
+  "module_name": [
+    "0000000000000000000000000000000000000000000000000000000000000041",
+    "m"
+  ],
+  "struct_map": {},
+  "version": 3
+}
