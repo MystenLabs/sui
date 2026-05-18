@@ -1007,9 +1007,11 @@ pub open spec fn lookup_aliases<Addr>(
 /// Look up the alias set for `signer` in `aliased_addresses`.
 /// Returns `[signer]` if no entry matches (the typical case).
 ///
-/// Trusted (`external_body`) — NonEmpty<T>'s internals and tuple-field access
-/// through slice indexing aren't cleanly tracked in Verus.  The spec captures
-/// exactly what callers need via `lookup_aliases`.
+/// Trusted (`external_body`).  The obstacle is unrelated to NonEmpty: Verus
+/// does not currently connect `aliased[i].0` (exec) to `aliased@[i].0` (spec)
+/// through tuple-field access on slice indexing, so the if-branch's failure
+/// can't be lifted to the spec inequality needed for the loop invariant.
+/// The spec captures exactly what callers need via `lookup_aliases`.
 #[verifier::external_body]
 fn find_aliases_for_signer<Addr: PartialEq + Eq + Copy>(
     signer: Addr,
