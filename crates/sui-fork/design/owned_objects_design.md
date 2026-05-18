@@ -72,8 +72,7 @@ struct OwnedObjectEntry {
 }
 ```
 
-Only Move objects owned by an address with a `StructTag` are indexed. This
-includes `AddressOwner` and `ConsensusAddressOwner`. Shared, immutable,
+Objets with `AddressOwner` and `ConsensusAddressOwner` types are kept in the index. Shared, immutable,
 object-owned, and package objects are excluded.
 
 ## Write Path
