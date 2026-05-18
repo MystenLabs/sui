@@ -1137,7 +1137,6 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
     epoch: u64,
 ) -> (result: Result<Vec<u8>, SigVerifyError>)
     requires
-        required_signers@.len() <= u8::MAX as nat,
         forall|i: int, j: int|
             0 <= i < tx_signatures@.len()
             && 0 <= j < tx_signatures@.len()
@@ -1147,7 +1146,9 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
             ==> #[trigger] spec_addresses::<S, Addr>(tx_signatures, i)
                     .disjoint(spec_addresses::<S, Addr>(tx_signatures, j)),
     ensures
-        if tx_signatures@.len() != required_signers@.len() {
+        if required_signers@.len() > u8::MAX as nat {
+            result matches Err(_)
+        } else if tx_signatures@.len() != required_signers@.len() {
             result matches Err(_)
         } else if spec_any_addr_derivation_fails(tx_signatures) {
             result matches Err(_)
@@ -1176,6 +1177,17 @@ pub fn verify_signatures<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Co
                         epoch,
                     ),
 {
+    // E0: signer count exceeds u8::MAX (indices stored as u8)
+    if required_signers.len() > u8::MAX as usize {
+        return Err(SigVerifyError::SignerCountMismatch {
+            actual: required_signers.len(),
+            expected: u8::MAX as usize,
+        });
+    }
+    proof {
+        assert(required_signers@.len() <= u8::MAX as nat);
+    }
+
     let n = tx_signatures.len();
 
     // E1: count mismatch

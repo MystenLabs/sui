@@ -223,10 +223,8 @@ pub fn verify_sender_signed_data_message_signatures(
         return Ok((0..required_signers.len() as u8).collect());
     }
 
-    // Precondition required by the verified function: signer count fits in u8.
-    // In practice required_signers has at most 2 elements.
-    assert!(required_signers.len() <= u8::MAX as usize);
-
+    // Importing SenderSignedData into sui-types-verified would be prohibitively
+    // difficult, so we pull out the sigs here.
     let verifiable_sigs: Vec<VerifiableSig> = txn
         .tx_signatures()
         .iter()
