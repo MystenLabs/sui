@@ -7,8 +7,8 @@ SPDX-License-Identifier: Apache-2.0
 
 This document describes the first-version owned-object index design for
 `sui-fork`. The design is intentionally small: it supports owned object
-enumeration for locally materialized post-fork state while preserving the
-existing object-version cache.
+enumeration for seeded fork-point objects and locally materialized post-fork
+state while preserving the existing object-version cache.
 
 ## Goals
 
@@ -20,8 +20,10 @@ existing object-version cache.
 - Support `SimulatorStore::owned_objects(owner)` and the v2 RPC
   `list_owned_objects` path through `RpcIndexes::owned_objects_iter`.
 
-This does not build a full pre-fork address inventory. Objects only enter the
-owned-object index when local execution writes them through `update_objects`.
+This does not build a full pre-fork address inventory by default. Seeded
+objects enter the owned-object index when it is lazily initialized from
+`seed_manifest.json`; post-fork objects enter when local execution writes them
+through `update_objects`.
 
 ## Filesystem State
 
@@ -55,11 +57,14 @@ indices/
 struct OwnedObjectEntry {
     owner: SuiAddress,
     object_ref: ObjectRef,
+    object_type: StructTag,
+    balance: Option<u64>,
 }
 ```
 
-Objets with `AddressOwner` and `ConsensusAddressOwner` types are kept in the index. Shared, immutable,
-object-owned, and package objects are excluded.
+Objects with `AddressOwner` and `ConsensusAddressOwner` types are kept in the
+index. Shared, immutable, object-owned, and package objects are excluded. Coin
+objects store their balance in the index; non-coin objects use `None`.
 
 ## Write Path
 
@@ -68,6 +73,9 @@ and update numeric live `latest` metadata; they preserve existing deleted or
 wrapped `latest` state and do not update the owned index.
 
 Local execution flows through `DataStore::update_objects`:
+
+Before applying the local diff, initialize `indices/owned_objects` from
+`seed_manifest.json` if the index is missing.
 
 1. For each deleted object ID:
    - write `objects/<object_id>/latest` as `<version>,deleted`
@@ -95,16 +103,15 @@ falling back to GraphQL. This keeps post-fork removals authoritative.
 historical cached object versions even if the current object is marked removed.
 
 `SimulatorStore::owned_objects(owner)` reads `indices/owned_objects`, filters by
-owner, loads each candidate object through the normal object read path,
-validates the loaded object against the indexed object ref and owner, then
-returns the matching objects.
+owner, then loads each candidate object through the normal object read path and
+returns the matching objects at the indexed versions.
 
 `RpcStateReader::indexes()` returns the `DataStore` itself as a minimal
 `RpcIndexes` implementation. `owned_objects_iter` supports:
 
 - owner filtering
 - optional type filtering, with empty type parameters matching all type params
-  for the same address/module/name, after object BCS is loaded
+  for the same address/module/name, using the indexed object type
 - cursor lower-bound filtering by `object_id`
 
 Unsupported index methods return empty iterators or `None`.
@@ -113,13 +120,13 @@ Unsupported index methods return empty iterators or `None`.
 
 - The current-object read path cannot resurrect locally deleted objects from the
   remote endpoint.
-- The owned-object index is sorted, but it is not a complete live
-  object database.
+- The owned-object index is durable and sorted, but it is not a complete live
+  object database; it covers seeded objects plus local post-fork writes.
 - Owned-object reads and local object/index updates are coordinated by an
   in-process snapshot guard shared by cloned `DataStore` handles. This does not
   provide cross-process locking for multiple processes using the same data
   directory.
-- The index only covers locally materialized post-fork writes.
+- The index does not enumerate unseeded pre-fork objects.
 - Aggregate balance APIs are out of scope for this first version.
 - Crash recovery is limited to atomic replacement of the index file. A future
   version can rebuild the index by scanning object files and object `latest`

@@ -7,7 +7,10 @@ use std::sync::RwLock;
 use std::sync::RwLockReadGuard;
 use std::sync::RwLockWriteGuard;
 
+use anyhow::Context as _;
 use anyhow::anyhow;
+use anyhow::bail;
+use itertools::Itertools as _;
 use tracing::info;
 
 use move_core_types::annotated_value::MoveTypeLayout;
@@ -518,16 +521,96 @@ impl DataStore {
         None
     }
 
+    fn ensure_owned_object_index_initialized(&self) -> anyhow::Result<()> {
+        if self.inner.local.owned_object_index_exists() {
+            return Ok(());
+        }
+
+        let _local_snapshot_guard = self.write_local_snapshot()?;
+        if self.inner.local.owned_object_index_exists() {
+            return Ok(());
+        }
+
+        if let Some(checkpoint) = self.inner.local.get_highest_verified_checkpoint()?
+            && checkpoint.data().sequence_number > self.forked_at_checkpoint()
+        {
+            bail!(
+                "owned-object index is missing while local checkpoints have advanced past the fork checkpoint; refusing to rebuild stale seed state",
+            );
+        }
+
+        let mut entries = BTreeMap::new();
+        if self.inner.local.seed_manifest_exists() {
+            let manifest = self.inner.local.read_seed_manifest()?;
+            if manifest.checkpoint != self.forked_at_checkpoint() {
+                bail!(
+                    "Seed manifest checkpoint {} does not match requested checkpoint {}. Use a different --data-dir.",
+                    manifest.checkpoint,
+                    self.forked_at_checkpoint(),
+                );
+            }
+
+            let keys: Vec<_> = manifest
+                .entries
+                .iter()
+                .map(|entry| ObjectKey {
+                    object_id: entry.object_ref.0,
+                    version_query: VersionQuery::VersionAtCheckpoint {
+                        version: entry.object_ref.1.value(),
+                        checkpoint: self.forked_at_checkpoint(),
+                    },
+                })
+                .collect();
+            let objects = self
+                .inner
+                .gql
+                .get_objects(&keys)
+                .context("failed to fetch seeded objects for owned-object index")?;
+
+            for (seed_entry, object) in manifest.entries.iter().zip_eq(objects) {
+                let Some((object, _)) = object else {
+                    bail!(
+                        "seeded object {} version {} was not found at fork checkpoint {}",
+                        seed_entry.object_ref.0,
+                        seed_entry.object_ref.1.value(),
+                        self.forked_at_checkpoint(),
+                    );
+                };
+                let entry = OwnedObjectEntry::from_object(&object).with_context(|| {
+                    format!(
+                        "seeded object {} is not an address-owned Move object",
+                        seed_entry.object_ref.0,
+                    )
+                })?;
+                if entry.owner != seed_entry.owner || entry.object_ref != seed_entry.object_ref {
+                    bail!(
+                        "seeded object {} metadata does not match fetched object at fork checkpoint {}",
+                        seed_entry.object_ref.0,
+                        self.forked_at_checkpoint(),
+                    );
+                }
+
+                self.inner.local.write_object(&object)?;
+                entries.insert(entry.object_ref.0, entry);
+            }
+        }
+
+        let entries: Vec<_> = entries.into_values().collect();
+        self.inner.local.write_owned_object_entries(&entries)
+    }
+
     /// Persist local object writes and current-state removals, then update the address-owned
     /// index from the same diff.
     fn apply_object_updates(
         &mut self,
         written_objects: BTreeMap<ObjectID, Object>,
         removed_objects: Vec<RemovedObject>,
-    ) {
+    ) -> anyhow::Result<()> {
+        self.ensure_owned_object_index_initialized()
+            .context("failed to initialize owned-object index")?;
         let _local_snapshot_guard = self
             .write_local_snapshot()
-            .expect("failed to lock local snapshot for object update");
+            .context("failed to lock local snapshot for object update")?;
         let removed_object_ids: Vec<_> = removed_objects
             .iter()
             .map(|removed| removed.object_id)
@@ -539,17 +622,32 @@ impl DataStore {
                     .inner
                     .local
                     .mark_object_as_deleted(removed.object_id, removed.version)
-                    .expect("failed to write deleted object latest state on disk"),
+                    .with_context(|| {
+                        format!(
+                            "failed to mark object {} deleted on disk",
+                            removed.object_id
+                        )
+                    })?,
                 RemovedObjectKind::Wrapped => self
                     .inner
                     .local
                     .mark_object_as_wrapped(removed.object_id, removed.version)
-                    .expect("failed to write wrapped object latest state on disk"),
+                    .with_context(|| {
+                        format!(
+                            "failed to mark object {} wrapped on disk",
+                            removed.object_id
+                        )
+                    })?,
                 RemovedObjectKind::UnwrappedThenDeleted => self
                     .inner
                     .local
                     .mark_object_as_unwrapped_then_deleted(removed.object_id, removed.version)
-                    .expect("failed to write unwrapped-then-deleted object latest state on disk"),
+                    .with_context(|| {
+                        format!(
+                            "failed to mark object {} unwrapped-then-deleted on disk",
+                            removed.object_id
+                        )
+                    })?,
             }
         }
 
@@ -557,24 +655,26 @@ impl DataStore {
             self.inner
                 .local
                 .write_live_object(object)
-                .expect("failed to write object to disk");
+                .with_context(|| format!("failed to write object {} to disk", object.id()))?;
         }
 
-        let indexable_written_objects: Vec<_> = written_objects
-            .values()
-            .filter(|object| {
-                self.inner
-                    .local
-                    .object_latest_state(&object.id())
-                    .expect("failed to read object latest state")
-                    != Some(ObjectLatestState::Deleted)
-            })
-            .collect();
+        let mut indexable_written_objects = Vec::new();
+        for object in written_objects.values() {
+            if self
+                .inner
+                .local
+                .object_latest_state(&object.id())
+                .with_context(|| format!("failed to read object {} latest state", object.id()))?
+                != Some(ObjectLatestState::Deleted)
+            {
+                indexable_written_objects.push(object);
+            }
+        }
 
         self.inner
             .local
             .apply_owned_object_index_updates(&removed_object_ids, indexable_written_objects)
-            .expect("failed to update owned-object index");
+            .context("failed to update owned-object index")
     }
 
     /// Construct a `DataStore` for tests, backed by an explicit local root and a fake (unused)
@@ -613,14 +713,15 @@ impl DataStore {
         self.get_owned_object_infos(owner, object_type, cursor)
     }
 
-    /// Read the owned-object index, load object BCS, validate object refs, and return owned-object
-    /// RPC metadata.
+    /// Initialize the owned-object index when needed, then read complete indexed RPC metadata.
     fn get_owned_object_infos(
         &self,
         owner: SuiAddress,
         object_type: Option<StructTag>,
         cursor: Option<OwnedObjectInfo>,
     ) -> StorageResult<Vec<OwnedObjectInfo>> {
+        self.ensure_owned_object_index_initialized()
+            .map_err(|e| StorageError::custom(e.to_string()))?;
         let entries = {
             let _local_snapshot_guard = self.read_local_snapshot()?;
             self.inner
@@ -630,62 +731,26 @@ impl DataStore {
         };
         let cursor_object_id = cursor.map(|cursor| cursor.object_id);
 
-        entries
+        Ok(entries
             .into_iter()
             .filter(|entry| entry.owner == owner)
             // `RpcIndexes` cursors are lower bounds. The v2 RPC layer stores
             // the first not-yet-returned item in the page token and expects
             // the next iterator to include it.
             .filter(|entry| cursor_object_id.is_none_or(|id| entry.object_ref.0 >= id))
-            .try_fold(Vec::new(), |mut infos, entry| {
-                if let Some(info) = self.valid_owned_object_info(entry, object_type.as_ref())? {
-                    infos.push(info);
-                }
-                Ok(infos)
+            .filter(|entry| {
+                object_type
+                    .as_ref()
+                    .is_none_or(|filter| struct_tag_filter_matches(filter, &entry.object_type))
             })
-    }
-
-    /// Validate that the given `OwnedObjectEntry` corresponds to a locally cached object still
-    /// controlled by the indexed address. This guards against stale index
-    /// entries that point to objects that have been deleted or wrapped by later transactions.
-    fn valid_owned_object_info(
-        &self,
-        entry: OwnedObjectEntry,
-        object_type_filter: Option<&StructTag>,
-    ) -> StorageResult<Option<OwnedObjectInfo>> {
-        let object = self
-            .get_object(&entry.object_ref.0)
-            .map_err(|e| StorageError::custom(e.to_string()))?;
-        let Some(object) = object else {
-            return Ok(None);
-        };
-
-        let owner_matches = match &object.owner {
-            sui_types::object::Owner::AddressOwner(owner)
-            | sui_types::object::Owner::ConsensusAddressOwner { owner, .. } => {
-                *owner == entry.owner
-            }
-            _ => false,
-        };
-        if !owner_matches || object.compute_object_reference() != entry.object_ref {
-            return Ok(None);
-        }
-
-        let Some(object_type) = object.struct_tag() else {
-            return Ok(None);
-        };
-        if object_type_filter.is_some_and(|filter| !struct_tag_filter_matches(filter, &object_type))
-        {
-            return Ok(None);
-        }
-
-        Ok(Some(OwnedObjectInfo {
-            owner: entry.owner,
-            object_type,
-            balance: object.as_coin_maybe().map(|coin| coin.value()),
-            object_id: entry.object_ref.0,
-            version: entry.object_ref.1,
-        }))
+            .map(|entry| OwnedObjectInfo {
+                owner: entry.owner,
+                object_type: entry.object_type,
+                balance: entry.balance,
+                object_id: entry.object_ref.0,
+                version: entry.object_ref.1,
+            })
+            .collect())
     }
 }
 
@@ -1002,30 +1067,56 @@ impl SimulatorStore for DataStore {
         self.insert_transaction(transaction);
         self.insert_transaction_effects(effects);
         self.insert_events(&tx_digest, events);
-        self.apply_object_updates(written_objects, removed_objects);
+        if let Err(err) = self.apply_object_updates(written_objects, removed_objects) {
+            tracing::error!(
+                tx_digest = %tx_digest,
+                "failed to persist transaction object updates: {err:?}",
+            );
+        }
     }
 
     fn insert_transaction(&mut self, transaction: VerifiedTransaction) {
         let digest = *transaction.digest();
-        self.inner
+        if let Err(err) = self
+            .inner
             .local
             .write_transaction(&digest, &transaction)
-            .expect("failed to persist transaction to disk");
+            .with_context(|| format!("failed to persist transaction {digest} to disk"))
+        {
+            tracing::error!(
+                tx_digest = %digest,
+                "failed to persist transaction: {err:?}",
+            );
+        }
     }
 
     fn insert_transaction_effects(&mut self, effects: TransactionEffects) {
         let digest = *effects.transaction_digest();
-        self.inner
+        if let Err(err) = self
+            .inner
             .local
             .write_transaction_effects(&digest, &effects)
-            .expect("failed to persist transaction effects to disk");
+            .with_context(|| format!("failed to persist transaction {digest} effects to disk"))
+        {
+            tracing::error!(
+                tx_digest = %digest,
+                "failed to persist transaction effects: {err:?}",
+            );
+        }
     }
 
     fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
-        self.inner
+        if let Err(err) = self
+            .inner
             .local
             .write_transaction_events(tx_digest, &events)
-            .expect("failed to persist transaction events to disk");
+            .with_context(|| format!("failed to persist transaction {tx_digest} events to disk"))
+        {
+            tracing::error!(
+                tx_digest = %tx_digest,
+                "failed to persist transaction events: {err:?}",
+            );
+        }
     }
 
     fn update_objects(
@@ -1041,7 +1132,9 @@ impl SimulatorStore for DataStore {
                 kind: RemovedObjectKind::Deleted,
             })
             .collect();
-        self.apply_object_updates(written_objects, removed_objects);
+        if let Err(err) = self.apply_object_updates(written_objects, removed_objects) {
+            tracing::error!("failed to persist object updates: {err:?}");
+        }
     }
 
     fn backing_store(&self) -> &dyn BackingStore {

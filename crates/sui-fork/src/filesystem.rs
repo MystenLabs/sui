@@ -41,6 +41,7 @@ use anyhow::Error;
 use anyhow::bail;
 use anyhow::ensure;
 
+use move_core_types::language_storage::StructTag;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
@@ -162,17 +163,22 @@ impl ObjectLatestMetadata {
 pub(crate) struct OwnedObjectEntry {
     pub(crate) owner: SuiAddress,
     pub(crate) object_ref: ObjectRef,
+    pub(crate) object_type: StructTag,
+    pub(crate) balance: Option<u64>,
 }
 
 impl OwnedObjectEntry {
-    fn from_object(object: &Object) -> Option<Self> {
+    pub(crate) fn from_object(object: &Object) -> Option<Self> {
         let owner = match &object.owner {
             Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => *owner,
             _ => return None,
         };
+        let object_type = object.struct_tag()?;
         Some(Self {
             owner,
             object_ref: object.compute_object_reference(),
+            object_type,
+            balance: object.as_coin_maybe().map(|coin| coin.value()),
         })
     }
 }

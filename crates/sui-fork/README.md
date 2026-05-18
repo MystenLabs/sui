@@ -106,7 +106,7 @@ sui-fork status
 ```
 
 > [!TIP]
-> If your test depends on address-owned objects at startup, add repeatable
+> If your test depends on address-owned objects in the fork, add repeatable
 > `--address 0x...` or `--object 0x...` flags to `sui-fork start`.
 
 ## Impersonating Senders
@@ -155,7 +155,7 @@ sui-fork start --checkpoint 12345678 --address 0x... --object 0x...
   address at the fork checkpoint. Address seeding requires a checkpoint in the
   GraphQL object enumeration range, which is usually a range within the last hour.
 - `--object` is repeatable and fetches that object at the fork checkpoint. If
-  the object is address-owned, it is added to the initial owned-object index.
+  the object is address-owned, it is recorded in the seed manifest.
 - Fork metadata is written once to `seed_manifest.json` under the fork
   directory. The manifest is immutable and records the source network, original
   fork checkpoint, and any optional seed object references. When no seed inputs
@@ -166,7 +166,9 @@ manifest already exists and any seed flags are provided, startup fails instead
 of overwriting or reinterpreting the local state. Resume uses the original fork
 checkpoint from `seed_manifest.json`, starts from the highest locally persisted
 checkpoint, and keeps the durable owned-object index and deleted-object markers
-authoritative over the manifest seed entries.
+authoritative over the manifest seed entries. If the owned-object index has not
+been initialized yet, the first owned-object read or local execution update
+builds it from the manifest by fetching the exact seeded object versions.
 
 ## Limitations
 - Sequential execution: Transactions are executed one at a time, no parallelism.
@@ -174,8 +176,8 @@ authoritative over the manifest seed entries.
 - Staking and related operations are not supported.
 - Single validator, single authority network.
 - Object fetching overhead: First access to objects requires network download.
-- Forking from a checkpoint older than 1 hour requires explicit object seeding (you need to know which owned objects you want to have pulled at startup)
-- Owned-object enumeration only covers locally materialized post-fork state; it is not a full inventory of every object an address owned at the fork checkpoint.
+- Forking from a checkpoint older than 1 hour requires explicit object seeding (you need to know which owned objects should be recorded in the seed manifest).
+- Owned-object enumeration covers seeded objects plus locally materialized post-fork state; it is not a full inventory of every object an address owned at the fork checkpoint unless those objects were seeded.
 - Objects deleted or wrapped after the fork point are no longer available through direct current-ID lookup, but exact historical versions remain readable when available.
 - If it forks at checkpoint X, you cannot depend on objects created after checkpoint X from the actual real network. You'll need to restart the network at that checkpoint or a later one.
 - Not recommended for parallel test execution since all transactions are executed sequentially on a single validator.

@@ -3,17 +3,18 @@
 ## Problem
 
 The forking tool can execute transactions against forked state but cannot answer
-"what objects does address X own?" without explicit rpc querying at startup / before first transaction.
+"what objects does address X own?" unless the fork has durable ownership metadata.
 For example, if a user would like to execute a transaction, the forked network does not have
 yet the ownership information - which gas coins it owns. To enable this, seeding
-allows the tool to resolve ownership information at startup and build an initial ownership index.
+records object ownership metadata at startup so the owned-object index can be initialized
+when it is first needed.
 
 Seeding resolves object refs (id, version, digest) plus owner at startup,
-establishing the data needed to build an ownership index.
+establishing the minimal manifest needed to build a complete ownership index later.
 
 Object contents are NOT fetched during seeding for address-based seeds. Content
-fetching is deferred to the existing `get_object_from_remote()` path used by
-execution. For explicit `--object` IDs, we reuse the existing `multiGetObjects`
+fetching is deferred until lazy owned-object index initialization. For explicit
+`--object` IDs, we reuse the existing `multiGetObjects`
 infrastructure which does fetch BCS — a useful side-effect since these objects
 will likely be accessed during execution anyway.
 
@@ -28,19 +29,20 @@ Two new flags on the `start` command:
 
 ```
 --address <ADDR>     Seed all owned objects for this address (repeatable)
---object <ID>        Seed a specific object by ID (repeatable)
+--object <ID>        Seed a specific object ID if it is address-owned (repeatable)
 ```
 
-Both can be combined. Addresses are resolved into object refs; explicit
-object IDs are fetched via the existing `multiGetObjects` path. Results are
-merged and deduped by object ID. It is important to note if addresses is passed,
-the checkpoint must be within the last 1h.
+Both can be combined. Addresses are resolved into seed entries with owner plus
+object ref; explicit object IDs are fetched via the existing `multiGetObjects`
+path and reduced to the same minimal seed entry shape. Results are merged and
+deduped by object ID. It is important to note if addresses is passed, the
+checkpoint must be within the last 1h.
 
 When restarting a fork with the same `--data-dir` and `--checkpoint`, the existing
 seeding information that is stored on disk will be reused. If `--address` or `--object` is
 provided, the tool will error with a message indicating that a seed manifest already exists.
 The owned-object index and local object `latest` state remain authoritative over the
-manifest after the fork has executed local transactions.
+manifest after the fork has initialized the index or executed local transactions.
 
 ## Generated files
 
@@ -118,6 +120,7 @@ For explicit `--object` IDs, reuse the existing `object_query::query()`
 infrastructure (`multiGetObjects` with `ObjectFragment` that fetches `objectBcs`).
 BCS gets cached to disk. After fetching, extract the owner and object ref from
 the deserialized `Object`; persist only those fields in the `SeedEntry`.
+Object type and balance are not part of the seed manifest.
 
 ## Implementation Details
 
@@ -166,17 +169,16 @@ The seed manifest is the immutable pre-fork baseline. The
 `indices/owned_objects` file and object `latest` metadata are the current local
 state once the fork has started executing.
 
-**Index rebuild on startup** (two sources):
+**Index initialization**:
 1. If `indices/owned_objects` exists, use it as-is and do not rewrite it from the manifest.
 2. If the index is missing and the fork has not advanced past the fork checkpoint, initialize it
-   from `seed_manifest.json`.
+   from `seed_manifest.json` before the first owned-object read or local execution update.
 3. If the index is missing but local checkpoints are newer than the fork checkpoint, fail closed
    instead of rebuilding stale seed state over local mutations.
 
-**When a seeded object is first accessed** (e.g., as tx input):
-- `get_object_from_remote()` fetches full BCS, writes to disk
-- the owned index entry identifies candidate objects, while object-loading reads fetch BCS lazily
-  before type, balance, or object contents are returned
+During initialization, each seed entry is fetched at the exact seeded version and fork checkpoint,
+validated against the manifest owner/ref, written to the local object cache, and converted into a
+complete owned-object index entry with object type and optional coin balance.
 
 **When a seeded object is deleted/mutated post-fork**:
 - `update_objects()` removes the old index entry, adds the new address-owned entry, or removes the
@@ -199,12 +201,12 @@ through the owned-object index, object BCS files, and object `latest` state.
 
 | File | Action |
 |------|--------|
-| `src/seed.rs` | New — types, seed policy, manifest/index initialization |
+| `src/seed.rs` | New — types, seed policy, manifest resolution |
 | `src/gql/queries.rs` | Modify — new `address_owned_objects_query` module |
-| `src/cli.rs` | Modify — three new CLI args on Start |
+| `src/cli.rs` | Modify — seed CLI args on Start |
 | `src/startup.rs` | Modify — wire seeding into initialize() |
 | `src/filesystem.rs` | Modify — seed manifest read/write |
-| `src/store.rs` | Modify — expose `gql()` and `local()` accessors |
+| `src/store.rs` | Modify — lazy owned-object index initialization |
 | `src/lib.rs` | Modify — add `mod seed` |
 
 ## Implementation order
@@ -214,5 +216,5 @@ through the owned-object index, object BCS files, and object `latest` state.
 3. Filesystem manifest read/write
 4. Resolution logic (`resolve_seeds()`)
 5. CLI args + plumbing through `cmd_start` → `initialize`
-6. Store accessors
+6. Lazy index initialization in `DataStore`
 7. Tests

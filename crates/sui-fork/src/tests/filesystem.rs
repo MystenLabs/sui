@@ -424,6 +424,12 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
     assert!(
         entries
             .iter()
+            .all(|entry| entry.object_type == sui_types::gas_coin::GasCoin::type_())
+    );
+    assert!(entries.iter().all(|entry| entry.balance == Some(1_000_000)));
+    assert!(
+        entries
+            .iter()
             .any(|entry| entry.object_ref == first.compute_object_reference())
     );
     assert!(
@@ -447,6 +453,11 @@ fn test_owned_object_index_upserts_removes_and_stays_sorted() {
         first_entry.object_ref,
         transferred.compute_object_reference()
     );
+    assert_eq!(
+        first_entry.object_type,
+        sui_types::gas_coin::GasCoin::type_()
+    );
+    assert_eq!(first_entry.balance, Some(1_000_000));
 
     store
         .apply_owned_object_index_updates(&[second_id], std::iter::empty::<&Object>())

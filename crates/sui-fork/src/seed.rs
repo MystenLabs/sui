@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Fork manifest and seed resolution for the initial owned-object index.
+//! Fork manifest and seed resolution for lazy owned-object index initialization.
 //!
 //! The manifest is written for every initialized fork directory. Address seeds resolve
 //! object references at the fork checkpoint, while explicit object seeds also cache the full
@@ -29,20 +29,19 @@ use crate::DataStore;
 use crate::ObjectKey;
 use crate::ObjectRead as _;
 use crate::VersionQuery;
-use crate::filesystem::OwnedObjectEntry;
 use crate::gql::AddressOwnedObject;
 use crate::gql::GraphQLClient;
 
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
 pub struct SeedInput {
-    /// Addresses whose owned objects should seed the initial owned-object index.
+    /// Addresses whose owned objects should be recorded in the seed manifest.
     pub addresses: Vec<SuiAddress>,
     /// Object IDs to fetch and seed when they are owned by an address.
     pub object_ids: Vec<ObjectID>,
 }
 
-/// Object reference and owner used to seed the initial owned-object index.
+/// Object reference and owner used to seed lazy owned-object index initialization.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub(crate) struct SeedEntry {
     pub(crate) object_ref: ObjectRef,
@@ -97,15 +96,6 @@ impl From<AddressOwnedObject> for SeedEntry {
     }
 }
 
-impl From<&SeedEntry> for OwnedObjectEntry {
-    fn from(entry: &SeedEntry) -> Self {
-        Self {
-            owner: entry.owner,
-            object_ref: entry.object_ref,
-        }
-    }
-}
-
 /// Reject seed inputs that would overwrite or reinterpret an existing manifest.
 pub(crate) fn ensure_seed_policy(data_store: &DataStore, input: &SeedInput) -> Result<(), Error> {
     if data_store.local().seed_manifest_exists() && !input.is_empty() {
@@ -142,31 +132,6 @@ pub(crate) fn ensure_seed_manifest_matches(
     }
 
     Ok(())
-}
-
-/// Initialize the owned-object index from the seed manifest when it is safe to do so.
-pub(crate) fn initialize_owned_index_from_seed(
-    data_store: &DataStore,
-    manifest: &SeedManifest,
-) -> Result<(), Error> {
-    if data_store.local().owned_object_index_exists() {
-        return Ok(());
-    }
-
-    if let Some(checkpoint) = data_store.get_highest_verified_checkpoint()?
-        && checkpoint.data().sequence_number > data_store.forked_at_checkpoint()
-    {
-        bail!(
-            "seed manifest exists but the owned-object index is missing while local checkpoints have advanced past the fork checkpoint; refusing to rebuild stale seed state",
-        );
-    }
-
-    let entries: Vec<_> = manifest
-        .entries
-        .iter()
-        .map(OwnedObjectEntry::from)
-        .collect();
-    data_store.local().write_owned_object_entries(&entries)
 }
 
 /// Load or create the seed manifest for the current fork directory.
@@ -271,7 +236,7 @@ fn resolve_object_seeds(
             warn!(
                 %object_id,
                 checkpoint,
-                "object seed is not owned by an address and will not be added to the owned-object index",
+                "object seed is not owned by an address and will not be added to the seed manifest",
             );
         }
     }
