@@ -68,6 +68,7 @@ pub(crate) struct KvRpcMetrics {
     bigtable_limiter: Arc<BigTableLimiterMetrics>,
     response_render_latency_ms: HistogramVec,
     stream_item_yield_wait_ms: HistogramVec,
+    bitmap_buckets_evaluated: HistogramVec,
 }
 
 impl KvRpcMetrics {
@@ -90,6 +91,16 @@ impl KvRpcMetrics {
                 registry,
             )
             .unwrap(),
+            bitmap_buckets_evaluated: register_histogram_vec_with_registry!(
+                "kv_rpc_bitmap_buckets_evaluated",
+                "Buckets evaluated against the per-request bitmap scan budget. Caps at the configured budget; actual backend bucket reads may exceed it by up to max_bitmap_filter_literals (one extra fetched-and-discarded bucket per leaf stream at exhaustion). Tail near the per-request cap means clients are hitting SCAN_LIMIT and paging.",
+                &["method"],
+                // Exponential 1..2048: many requests evaluate few buckets
+                // (small or empty scans), a tail saturates at the default 1k cap.
+                prometheus::exponential_buckets(1.0, 2.0, 12).unwrap(),
+                registry,
+            )
+            .unwrap(),
         })
     }
 
@@ -104,6 +115,12 @@ impl KvRpcMetrics {
             .with_label_values(&[method])
             .observe(elapsed.as_secs_f64() * 1000.0);
     }
+
+    fn observe_bitmap_buckets_evaluated(&self, method: &'static str, buckets: u64) {
+        self.bitmap_buckets_evaluated
+            .with_label_values(&[method])
+            .observe(buckets as f64);
+    }
 }
 
 #[derive(Clone)]
@@ -116,7 +133,7 @@ pub struct KvRpcServer {
     cache: Arc<RwLock<Option<GetServiceInfoResponse>>>,
     package_resolver: PackageResolver,
     metrics: Arc<KvRpcMetrics>,
-    concurrency: ConcurrencyConfig,
+    pub(crate) concurrency: ConcurrencyConfig,
 }
 
 /// Optional configuration for the gRPC server (TLS, metrics, reflection).

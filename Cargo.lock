@@ -14583,7 +14583,6 @@ dependencies = [
 [[package]]
 name = "sui-crypto"
 version = "0.3.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd#f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd"
 dependencies = [
  "ark-bn254",
  "ark-ff 0.4.2",
@@ -14591,6 +14590,7 @@ dependencies = [
  "ark-snark",
  "ark-std 0.4.0",
  "base64ct",
+ "blst",
  "bnum",
  "ed25519-dalek",
  "itertools 0.14.0",
@@ -15476,6 +15476,7 @@ dependencies = [
  "move-core-types",
  "roaring",
  "sui-types",
+ "thiserror 1.0.69",
  "tokio",
 ]
 
@@ -15711,6 +15712,7 @@ dependencies = [
  "sui-storage",
  "sui-types",
  "telemetry-subscribers",
+ "thiserror 1.0.69",
  "tokio",
  "tonic 0.14.5",
  "tonic-prost",
@@ -16545,7 +16547,6 @@ dependencies = [
 [[package]]
 name = "sui-rpc"
 version = "0.3.1"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd#f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd"
 dependencies = [
  "base64 0.22.1",
  "bcs",
@@ -16557,6 +16558,7 @@ dependencies = [
  "prost-types 0.14.1",
  "serde",
  "serde_json",
+ "sui-crypto",
  "sui-sdk-types",
  "tap",
  "tokio",
@@ -16732,7 +16734,6 @@ dependencies = [
 [[package]]
 name = "sui-sdk-types"
 version = "0.3.1"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd#f7487a58c6c31f07da08ba1c0cd81ebb8fe90ddd"
 dependencies = [
  "base64ct",
  "bcs",

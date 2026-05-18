@@ -18,6 +18,10 @@ mod list_checkpoints;
 mod list_events;
 mod list_transactions;
 
+// Per-RPC hard request timeout. The outer `operation::with_deadline`
+// wrapper drops the response stream with `DeadlineExceeded` when this
+// fires; debounced intermediate `Watermark` frames let the client resume
+// from wherever it got to.
 // TODO migrate CLI to config file and make these configurable.
 const LIST_TRANSACTIONS_TIMEOUT: Duration = Duration::from_secs(5);
 const LIST_EVENTS_TIMEOUT: Duration = Duration::from_secs(5);
