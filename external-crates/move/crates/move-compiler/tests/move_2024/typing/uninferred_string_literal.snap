@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W04039]: unable to determine type of literal
+warning[W04039]: unable to determine literal's type
   ┌─ tests/move_2024/typing/uninferred_string_literal.move:2:27
   │
 2 │     fun test() { let _x = "hi"; }

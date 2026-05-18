@@ -16,7 +16,7 @@ error[E04007]: incompatible types
   │                   │   
   │                   Invalid pattern field type
 
-warning[W04039]: unable to determine type of literal
+warning[W04039]: unable to determine literal's type
   ┌─ tests/move_2024/matching/bool_nested_25452.move:5:22
   │
 5 │               S { b: 0 } => 1,
