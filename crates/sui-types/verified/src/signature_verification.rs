@@ -37,8 +37,18 @@ pub enum SigVerifyError {
     /// A signature's address cannot be derived (malformed bytes).
     AddressDerivationFailed,
     /// A required signer has no matching signature (including via aliases).
+    ///
+    /// Note: crypto failures inside `scan_first_valid` are absorbed here —
+    /// if all candidate signatures for a signer fail cryptographic verification
+    /// the error that surfaces at the `verify_signatures` boundary is
+    /// `SignerAbsent`, not `CryptoVerificationFailed`.
     SignerAbsent,
     /// A signature failed cryptographic verification.
+    ///
+    /// Used by `SignatureVerifiable::verify_for_address` implementations and
+    /// caught internally by `scan_first_valid`.  **Never returned directly by
+    /// `verify_signatures`** — crypto failures are folded into `SignerAbsent`
+    /// after all candidate aliases have been exhausted.
     CryptoVerificationFailed,
 }
 
@@ -1125,8 +1135,15 @@ pub fn build_required_signers<Addr: PartialEq + Eq + Copy>(
 /// - `epoch` — current epoch for cryptographic verification.
 ///
 /// # Preconditions
-/// - `required_signers.len() <= 255` (indices stored as `u8`).
-/// - Distinct signatures in `tx_signatures` have disjoint address sets.
+/// - The signer-count ≤ 255 precondition is now checked at runtime (E0).
+/// - **Disjoint address sets** — distinct signatures must have disjoint derived
+///   address sets (excluding signatures with failed derivation).  This is the
+///   project-level trust boundary: the precondition is expressed as a `requires`
+///   clause and satisfied by convention in the unverified caller
+///   (`verify_sender_signed_data_message_signatures`), not by a Verus proof.
+///   Violating it degrades correctness (the greedy algorithm may miss a valid
+///   assignment) but does not create a security hole — all crypto checks still
+///   run on every returned index.
 ///
 /// # Contract
 ///
