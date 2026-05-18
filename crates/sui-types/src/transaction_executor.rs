@@ -5,6 +5,7 @@ use crate::base_types::ObjectID;
 use crate::effects::TransactionEffects;
 use crate::effects::TransactionEvents;
 use crate::error::ExecutionError;
+use crate::error::ExecutionErrorMetadata;
 use crate::error::SuiError;
 use crate::execution::ExecutionResult;
 use crate::full_checkpoint_content::ObjectSet;
@@ -37,6 +38,7 @@ pub struct SimulateTransactionResult {
     pub events: Option<TransactionEvents>,
     pub objects: ObjectSet,
     pub execution_result: Result<Vec<ExecutionResult>, ExecutionError>,
+    pub execution_error_metadata: Option<ExecutionErrorMetadata>,
     pub mock_gas_id: Option<ObjectID>,
     pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
     pub suggested_gas_price: Option<u64>,

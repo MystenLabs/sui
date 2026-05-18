@@ -27,6 +27,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::effects::ObjectChange;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::event::Event;
 use sui_types::object::Object;
 use sui_types::object::Owner;
@@ -97,6 +98,12 @@ pub(super) async fn dry_run(
 ) -> Result<DryRunTransactionBlockResponse, RpcError<Error>> {
     let effects = deserialize_effects(executed_tx)?;
     let tx_digest = tx_data.digest();
+    let execution_error_metadata = executed_tx
+        .effects()
+        .status()
+        .error_opt()
+        .map(|error| ExecutionErrorMetadata::from(error.metadata()))
+        .filter(|metadata| !metadata.is_empty());
 
     Ok(DryRunTransactionBlockResponse {
         effects: effects_response(&effects)?,
@@ -105,6 +112,7 @@ pub(super) async fn dry_run(
         balance_changes: balance_changes(executed_tx)?,
         input: input(ctx, tx_data, vec![]).await?.data,
         execution_error_source: None,
+        execution_error_metadata,
         suggested_gas_price,
     })
 }

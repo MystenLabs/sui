@@ -163,14 +163,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(protocol_config, transaction_digest, error);
         }
-        (
-            inner_temp_store,
-            gas_status,
-            effects,
-            timings,
-            result,
-            None,
-        )
+        (inner_temp_store, gas_status, effects, timings, result, None)
     }
 
     fn dev_inspect_transaction(
@@ -195,6 +188,7 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
+        Option<ExecutionErrorMetadata>,
     ) {
         let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
@@ -236,7 +230,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(protocol_config, transaction_digest, error);
         }
-        (inner_temp_store, gas_status, effects, result)
+        (inner_temp_store, gas_status, effects, result, None)
     }
 
     fn update_genesis_state(

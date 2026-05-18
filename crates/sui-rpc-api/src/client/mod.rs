@@ -15,6 +15,7 @@ use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
 use sui_types::digests::ChainIdentifier;
 use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::full_checkpoint_content::Checkpoint;
 use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointSequenceNumber};
 use sui_types::object::Object;
@@ -663,6 +664,8 @@ pub struct ExecutedTransaction {
     pub signatures: Vec<GenericSignature>,
     pub effects: TransactionEffects,
     pub clever_error: Option<proto::CleverError>,
+    #[serde(skip_serializing_if = "execution_error_metadata_is_empty")]
+    pub execution_error_metadata: ExecutionErrorMetadata,
     pub events: Option<TransactionEvents>,
     pub event_json: Vec<Option<serde_json::Value>>,
     pub changed_objects: Vec<proto::ChangedObject>,
@@ -694,6 +697,12 @@ impl ExecutedTransaction {
                 .error()
                 .abort()
                 .clever_error()
+                .finish(),
+            ExecutedTransaction::path_builder()
+                .effects()
+                .status()
+                .error()
+                .metadata()
                 .finish(),
             ExecutedTransaction::path_builder()
                 .effects()
@@ -762,6 +771,10 @@ pub struct SimulateTransactionResponse {
     pub transaction: ExecutedTransaction,
     pub command_outputs: Vec<proto::CommandResult>,
     pub suggested_gas_price: Option<u64>,
+}
+
+fn execution_error_metadata_is_empty(metadata: &ExecutionErrorMetadata) -> bool {
+    metadata.is_empty()
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from a proto::Checkpoint
@@ -846,6 +859,12 @@ fn executed_transaction_try_from_proto(
         .abort()
         .clever_error_opt()
         .cloned();
+    let execution_error_metadata = executed_transaction
+        .effects()
+        .status()
+        .error_opt()
+        .map(|error| ExecutionErrorMetadata::from(error.metadata()))
+        .unwrap_or_default();
     let events = executed_transaction
         .events
         .as_ref()
@@ -875,6 +894,7 @@ fn executed_transaction_try_from_proto(
         signatures,
         effects,
         clever_error,
+        execution_error_metadata,
         events,
         event_json,
         balance_changes,

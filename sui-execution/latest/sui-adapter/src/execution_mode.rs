@@ -202,12 +202,15 @@ where
 /// WARNING! Using this mode will bypass all normal checks around Move entry functions! This
 /// includes the various rules for function arguments, meaning any object can be created just from
 /// BCS bytes!
-pub struct DevInspect<const SKIP_ALL_CHECKS: bool>;
+pub struct DevInspect<const SKIP_ALL_CHECKS: bool, E = ExecutionError>(PhantomData<fn() -> E>);
 
-impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> {
+impl<const SKIP_ALL_CHECKS: bool, E> ExecutionMode for DevInspect<SKIP_ALL_CHECKS, E>
+where
+    E: ExecutionErrorTrait,
+{
     type ArgumentUpdates = Vec<(Argument, Vec<u8>, TypeTag)>;
     type ExecutionResults = Vec<ExecutionResult>;
-    type Error = ExecutionError;
+    type Error = E;
 
     fn allow_arbitrary_function_calls() -> bool {
         SKIP_ALL_CHECKS

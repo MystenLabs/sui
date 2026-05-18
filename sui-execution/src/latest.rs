@@ -14,10 +14,7 @@ use sui_types::{
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
-    error::{
-        ExecutionError, ExecutionErrorMetadata, ExecutionErrorTrait,
-        SuiError, SuiResult,
-    },
+    error::{ExecutionError, ExecutionErrorMetadata, ExecutionErrorTrait, SuiError, SuiResult},
     execution::{ExecutionResult, TypeLayoutStore},
     execution_status::ExecutionFailure,
     gas::SuiGasStatus,
@@ -199,9 +196,10 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
+        Option<ExecutionErrorMetadata>,
     ) {
         let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
-            execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
+            execute_transaction_to_effects::<execution_mode::DevInspect<true, ExecutionErrorContext>>(
                 store,
                 input_objects,
                 gas,
@@ -220,7 +218,7 @@ impl executor::Executor for Executor {
                 &mut None,
             )
         } else {
-            execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
+            execute_transaction_to_effects::<execution_mode::DevInspect<false, ExecutionErrorContext>>(
                 store,
                 input_objects,
                 gas,
@@ -242,7 +240,17 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (inner_temp_store, gas_status, effects, result)
+        let execution_error_metadata = result
+            .as_ref()
+            .err()
+            .and_then(ExecutionErrorContext::metadata_with_source);
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            result.map_err(ExecutionError::from),
+            execution_error_metadata,
+        )
     }
 
     fn update_genesis_state(

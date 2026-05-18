@@ -2717,6 +2717,8 @@ fn to_legacy_dry_run_transaction_block_response(
         ExecutionStatus::Failure(ExecutionFailure { error, .. }) => Some(format!("{error:?}")),
         ExecutionStatus::Success => None,
     };
+    let execution_error_metadata = (!response.transaction.execution_error_metadata.is_empty())
+        .then(|| response.transaction.execution_error_metadata.clone());
 
     Some(DryRunTransactionBlockResponse {
         effects,
@@ -2725,6 +2727,7 @@ fn to_legacy_dry_run_transaction_block_response(
         balance_changes: to_legacy_balance_changes(&response.transaction),
         input,
         execution_error_source,
+        execution_error_metadata,
         suggested_gas_price: response.suggested_gas_price,
     })
 }

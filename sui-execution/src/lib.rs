@@ -20,9 +20,9 @@ mod v1;
 mod v2;
 mod v3;
 
+mod error_context;
 #[cfg(test)]
 mod tests;
-mod error_context;
 
 pub fn executor(
     protocol_config: &ProtocolConfig,
