@@ -386,6 +386,53 @@ fn is_cfg_sink(target: NodeIndex, cfg: &petgraph::graph::DiGraph<(), ()>) -> boo
     cfg.neighbors_directed(target, Direction::Outgoing).count() == 0
 }
 
+/// The owned-children hoist places orphans as siblings of an IfElse/Switch (or a Code
+/// block in `structure_code_node`) and elides tail `Jump`s targeting them. The elision
+/// step pretends that "fall through out of the absorbed structural region" reaches the
+/// hoisted sibling. That's true iff the hoisted siblings are the *only* CFG destinations
+/// the absorbed region can reach within our own scope.
+///
+/// `convergence_ok` checks that explicitly: for every CFG edge `(u, v)` with
+/// `u ∈ absorbed_subtree` and `v ∉ absorbed_subtree`, `v` must be (a) outside our
+/// `start_subtree` (an escape — survives as a goto regardless), (b) an enclosing loop's
+/// exit (handled by `insert_breaks`/`structure_loop`'s append), or (c) one of our
+/// planned `candidates`. Otherwise the absorbed region has an exit we'd be silently
+/// rewriting as fall-through to the wrong place, so the caller skips elision.
+fn convergence_ok(
+    absorbed_subtree: &HashSet<NodeIndex>,
+    start_subtree: &HashSet<NodeIndex>,
+    candidates: &HashSet<NodeIndex>,
+    enclosing_loop_exits: Option<&HashSet<NodeIndex>>,
+    cfg: &petgraph::graph::DiGraph<(), ()>,
+) -> bool {
+    for &u in absorbed_subtree {
+        for v in cfg.neighbors_directed(u, Direction::Outgoing) {
+            if absorbed_subtree.contains(&v) {
+                continue;
+            }
+            if !start_subtree.contains(&v) {
+                continue;
+            }
+            if enclosing_loop_exits.is_some_and(|e| e.contains(&v)) {
+                continue;
+            }
+            if !candidates.contains(&v) {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// `start`'s dom subtree, inclusive — every node `start` dominates plus `start` itself.
+fn dom_subtree(start: NodeIndex, dom_tree: &dom_tree::DominatorTree) -> HashSet<NodeIndex> {
+    dom_tree
+        .get(start)
+        .all_children()
+        .chain(std::iter::once(start))
+        .collect()
+}
+
 /// A node is "singly entered" if exactly one of its CFG predecessors lies outside its own
 /// dom subtree (including itself). Predecessors inside the subtree are back-edges from a
 /// contained loop's latch — they don't represent independent entry into the scope. The
@@ -490,18 +537,23 @@ fn structure_acyclic_region(
         }
     }
 
-    // Use the same predicate as `arm_for` to record absorbed arms for back-edge ownership
-    // transfer.
-    let is_absorbed = |target: NodeIndex| -> bool {
+    // Compute the absorbed-arm predicate up front (mirrors `arm_for`'s embed branch) so
+    // we don't need to hold a borrow on `graph` through the closure. Each arm is checked
+    // against this once via `is_absorbed_arm` below.
+    let is_absorbed_arm = |target: NodeIndex,
+                           cfg: &petgraph::graph::DiGraph<(), ()>,
+                           dom_tree: &dom_tree::DominatorTree|
+     -> bool {
         target != start
             && Some(target) != loop_succ
             && !enclosing_loop_exits
                 .as_ref()
                 .is_some_and(|e| e.contains(&target))
             && ichildren.contains(&target)
-            && is_singly_entered(target, &graph.cfg, &graph.dom_tree)
+            && is_singly_entered(target, cfg, dom_tree)
     };
 
+    let mut absorbed_arms: Vec<NodeIndex> = Vec::new();
     let structured = match input.remove(&start).unwrap() {
         D::Input::Condition(_lbl, code, conseq, alt) => {
             let conseq_arm = arm_for(
@@ -525,17 +577,14 @@ fn structure_acyclic_region(
                 structured_blocks,
             );
 
-            // Transfer back-edge ownership for absorbed arms (only the ichildren-embed branch
-            // of `arm_for` absorbs).
-            let mut absorbed = vec![];
-            if is_absorbed(conseq) {
-                absorbed.push(conseq);
+            if is_absorbed_arm(conseq, &graph.cfg, &graph.dom_tree) {
+                absorbed_arms.push(conseq);
             }
-            if is_absorbed(alt) {
-                absorbed.push(alt);
+            if is_absorbed_arm(alt, &graph.cfg, &graph.dom_tree) {
+                absorbed_arms.push(alt);
             }
-            if !absorbed.is_empty() {
-                graph.update_latch_branch_nodes(start, absorbed);
+            if !absorbed_arms.is_empty() {
+                graph.update_latch_branch_nodes(start, absorbed_arms.clone());
             }
 
             graph.mark_emitted(code);
@@ -567,7 +616,7 @@ fn structure_acyclic_region(
                     let body = if counts.get(&item).copied().unwrap_or(0) > 1 {
                         D::Structured::Jump(GotoSource::ArmOutsideSubtree, item)
                     } else {
-                        arm_for(
+                        let arm = arm_for(
                             item,
                             start,
                             loop_succ,
@@ -576,7 +625,11 @@ fn structure_acyclic_region(
                             &graph.dom_tree,
                             &ichildren,
                             structured_blocks,
-                        )
+                        );
+                        if is_absorbed_arm(item, &graph.cfg, &graph.dom_tree) {
+                            absorbed_arms.push(item);
+                        }
+                        arm
                     };
                     (v, body)
                 })
@@ -590,17 +643,24 @@ fn structure_acyclic_region(
     };
 
     // Hoist orphan dom-tree children. After arm processing, any `ichildren` of `start` that
-    // weren't absorbed as arms and aren't an enclosing loop's exit remain in
-    // `structured_blocks`. They're owned by us — every CFG path to them goes through
-    // `start` — so they semantically belong in our sequence. Append them, then walk the
-    // tail positions of everything emitted so far to drop now-redundant `Jump`s to their
-    // entry labels.
+    // weren't absorbed as arms and weren't the loop successor remain in `structured_blocks`.
+    // They're "owned" by us — every CFG path to them goes through `start` — so they
+    // semantically belong in our sequence. Append them as siblings; whether we also elide
+    // tail `Jump`s targeting them is decided by `convergence_ok` (see its doc).
     //
-    // Skip at the loop-head call: the loop's successor stays in `structured_blocks` so
-    // `structure_loop` can append it after the `Loop` form, and body-side ichildren are
-    // placed by the body-assembly logic. We also skip orphans that are succ_nodes of an
-    // enclosing loop — `structure_loop` for that outer loop will append them after its
-    // `Loop`, so we mustn't eat them at this inner level.
+    // We always hoist (otherwise the orphan leaks — its idom is `start`, no ancestor scope
+    // sees it as an ichild). The convergence check only governs elision: when fall-through
+    // out of absorbed arms truly reaches our siblings, eliding tail Jumps is sound; when
+    // some absorbed-arm CFG path exits to a node we *can't* place here (a loop exit, an
+    // ancestor escape, or a sibling not in our `ichildren`), eliding would silently rewrite
+    // the wrong control flow. In that case Jumps survive as gotos and the orphan body still
+    // appears as a labeled landing spot for them.
+    //
+    // We skip both the hoist and the check at loop heads: the loop's successor stays in
+    // `structured_blocks` so `structure_loop` can append it after the `Loop` form, and
+    // body-side ichildren are placed by the body-assembly logic. We also skip orphans that
+    // are succ_nodes of an enclosing loop — `structure_loop` for that outer loop will
+    // append them after its `Loop`, so we mustn't eat them at this inner level.
     //
     // TODO: alternate orphans. The current logic places every orphan as a sibling in
     // `hoist_order` (CFG-topo over the orphan-induced subgraph) and elides tail Jumps to
@@ -634,12 +694,30 @@ fn structure_acyclic_region(
         // `ichildren` is a `HashSet`; sort for deterministic hoist order. `hoist_order`
         // then runs a topological sort over this CFG-stable input.
         orphans.sort_by_key(|n| n.index());
+
+        // Convergence check: do the absorbed arms' CFG exits all go to our planned
+        // siblings (or to escapes/back-edges/loop-exits)? If so, eliding tail Jumps to
+        // those siblings is sound.
+        let absorbed_subtree: HashSet<NodeIndex> = std::iter::once(start)
+            .chain(
+                absorbed_arms
+                    .iter()
+                    .flat_map(|&arm| dom_subtree(arm, &graph.dom_tree)),
+            )
+            .collect();
+        let start_subtree = dom_subtree(start, &graph.dom_tree);
+        let candidates_set: HashSet<NodeIndex> = orphans.iter().copied().collect();
+        let elision_sound = convergence_ok(
+            &absorbed_subtree,
+            &start_subtree,
+            &candidates_set,
+            enclosing_loop_exits.as_ref(),
+            &graph.cfg,
+        );
+
         for orphan in hoist_order(graph, start, &orphans) {
             let body = structured_blocks.remove(&orphan).unwrap();
-            let target = entry_label(&body);
-            if let Some(target) = target {
-                // Walk every prior item's tails, dropping `Jump(_, target)` — these are
-                // arm-tail branches that now fall through to the literal next instruction.
+            if elision_sound && let Some(target) = entry_label(&body) {
                 for prior in exp.iter_mut() {
                     elide_tail_jump_to(prior, target);
                 }
@@ -756,36 +834,38 @@ fn structure_code_node(
                 graph.loop_exits.get(&node_ndx).cloned();
             graph.mark_emitted(code);
             let mut seq = vec![D::Structured::Block(code)];
-            if let Some(next) = next {
-                let fuse = ichildren.contains(&next)
-                    && structured_blocks.contains_key(&next)
-                    && is_singly_entered(next, &graph.cfg, &graph.dom_tree)
-                    && !enclosing_loop_exits
-                        .as_ref()
-                        .is_some_and(|e| e.contains(&next));
-                if fuse {
+            let fused_next = match next {
+                Some(next)
+                    if ichildren.contains(&next)
+                        && structured_blocks.contains_key(&next)
+                        && is_singly_entered(next, &graph.cfg, &graph.dom_tree)
+                        && !enclosing_loop_exits
+                            .as_ref()
+                            .is_some_and(|e| e.contains(&next)) =>
+                {
                     let successor = structured_blocks.remove(&next).unwrap();
                     graph.update_latch_nodes(node_ndx, next);
                     seq.push(successor);
-                } else {
+                    Some(next)
+                }
+                Some(next) => {
                     // `next` is not exclusively ours — either it's reached from other
                     // paths or it's owned by an enclosing structure. Emit an explicit
                     // `Jump(CodeBranch)` so the owned-children hoist or `insert_breaks`
                     // can see and rewrite it. Without this, the branch lives only in the
                     // bytecode terminator and is invisible to elision.
                     seq.push(D::Structured::Jump(GotoSource::CodeBranch, next));
+                    None
                 }
-            }
-            // Owned-children hoist: any `ichildren` of this Code block that we didn't embed
-            // as `next` and that the enclosing-loop logic doesn't claim is a node every CFG
-            // path through us reaches. Place them in dom-tree-order siblings of our Block,
-            // and walk prior items' tails to elide `Jump`s targeting them.
-            //
-            // This is the same mechanism `structure_acyclic_region` runs after its
-            // IfElse/Switch construction; without it, function bodies whose dom tree looks
-            // like `entry -> {first_test, label_X, second_test, label_Y, ...}` lose every
-            // sibling after `next` to orphan-in-structured_blocks, and the surviving Jumps
-            // to those siblings stay as gotos.
+                None => None,
+            };
+
+            // Owned-children hoist: same shape as `structure_acyclic_region`'s — place any
+            // remaining `ichildren` as siblings, and elide tail Jumps to them only when
+            // the convergence check passes (see `convergence_ok`). In practice a Code
+            // node's `ichildren` is `{}` or `{next}`, so this loop is usually empty; we
+            // run it for symmetry and so any future CFG with a Code node dominating more
+            // than its `next` still gets a consistent placement.
             let mut orphans: Vec<NodeIndex> = ichildren
                 .iter()
                 .copied()
@@ -799,10 +879,27 @@ fn structure_code_node(
                 })
                 .collect();
             orphans.sort_by_key(|n| n.index());
+
+            let absorbed_subtree: HashSet<NodeIndex> = std::iter::once(node_ndx)
+                .chain(
+                    fused_next
+                        .into_iter()
+                        .flat_map(|n| dom_subtree(n, &graph.dom_tree)),
+                )
+                .collect();
+            let start_subtree = dom_subtree(node_ndx, &graph.dom_tree);
+            let candidates_set: HashSet<NodeIndex> = orphans.iter().copied().collect();
+            let elision_sound = convergence_ok(
+                &absorbed_subtree,
+                &start_subtree,
+                &candidates_set,
+                enclosing_loop_exits.as_ref(),
+                &graph.cfg,
+            );
+
             for orphan in hoist_order(graph, node_ndx, &orphans) {
                 let body = structured_blocks.remove(&orphan).unwrap();
-                let target = entry_label(&body);
-                if let Some(target) = target {
+                if elision_sound && let Some(target) = entry_label(&body) {
                     for prior in seq.iter_mut() {
                         elide_tail_jump_to(prior, target);
                     }
