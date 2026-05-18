@@ -22,6 +22,23 @@ pub struct ExNonEmpty<T>(NonEmpty<T>);
 /// declared yet; add a non-emptiness axiom if/when a proof needs it.
 pub uninterp spec fn nonempty_view<T>(ne: &NonEmpty<T>) -> Seq<T>;
 
+/// Number of elements in a `NonEmpty<T>`.
+#[verifier::external_body]
+pub fn nonempty_len<T>(ne: &NonEmpty<T>) -> (result: usize)
+    ensures result == nonempty_view(ne).len()
+{
+    ne.len()
+}
+
+/// Get the element at index `i`.
+#[verifier::external_body]
+pub fn nonempty_index<T: Copy>(ne: &NonEmpty<T>, i: usize) -> (result: T)
+    requires i < nonempty_view(ne).len()
+    ensures result == nonempty_view(ne)[i as int]
+{
+    ne[i]
+}
+
 /// Clone a `NonEmpty<T>`'s elements into a fresh `Vec<T>`.
 ///
 /// Trusted (`external_body`) — `NonEmpty::iter` and collection are not specced
