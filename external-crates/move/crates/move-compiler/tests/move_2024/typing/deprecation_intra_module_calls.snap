@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
   ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:8:21
   │
 8 │     public struct Z(Y) has drop;
@@ -13,7 +13,7 @@ warning[W04037]: use of deprecated item
   │
   = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:21:9
    │
 21 │         internal();
@@ -21,7 +21,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:23:17
    │
 23 │         let y = other(&Y());
@@ -29,7 +29,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:23:24
    │
 23 │         let y = other(&Y());
@@ -37,7 +37,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:9
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
@@ -45,7 +45,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:15
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
@@ -53,7 +53,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:21
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
@@ -61,7 +61,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:27
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
@@ -69,7 +69,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:33
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
@@ -77,7 +77,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:39
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
@@ -85,7 +85,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:45
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
@@ -93,7 +93,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:51
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
@@ -101,7 +101,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:57
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));
@@ -109,7 +109,7 @@ warning[W04037]: use of deprecated item
    │
    = This warning can be suppressed with '#[allow(deprecated_usage)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-warning[W04037]: use of deprecated item
+warning[W04037]: deprecated usage
    ┌─ tests/move_2024/typing/deprecation_intra_module_calls.move:26:63
    │
 26 │         other(other(other(other(other(other(other(other(other(other(y))))))))));

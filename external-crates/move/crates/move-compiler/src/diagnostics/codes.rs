@@ -305,7 +305,7 @@ codes!(
         IncompatibleSyntaxMethods: { msg: "'syntax' method types differ", severity: BlockingError },
         InvalidErrorUsage: { msg: "invalid constant usage in error context", severity: BlockingError },
         IncompletePattern: { msg: "non-exhaustive pattern", severity: BlockingError },
-        DeprecatedUsage: { msg: "use of deprecated item", severity: Warning },
+        DeprecatedUsage: { msg: "deprecated usage", severity: Warning },
         InvalidString: { msg: "invalid string after type inference", severity: NonblockingError },
         MissingLiteralType:
             { msg: "unable to determine literal's type", severity: Warning },
