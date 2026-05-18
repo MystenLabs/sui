@@ -41,14 +41,13 @@ public fun increase_speed(l0: &mut Action, l1: u64) {
         MoveTo { x: reg_9, y: reg_10 } => {
             abort 0u64
         },
-        ChangeSpeed => {
-            
+        ChangeSpeed { pos0: reg_13 } => {
+            let Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
+            let l4 = reg_15 : &mut u64;
+            *l4 = l1;
+            return
         }
-    };
-    let Action::ChangeSpeed { pos0: reg_13 } = &l2;
-    let Action::ChangeSpeed { pos0: reg_15 } = &mut l3;
-    let l4 = reg_15 : &mut u64;
-    *l4 = l1
+    }
 }
 
 public fun speed(l0: &Action): u64 {

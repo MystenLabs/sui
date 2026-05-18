@@ -15,9 +15,9 @@ use crate::{
     },
 };
 
-use petgraph::{graph::NodeIndex, visit::DfsPostOrder};
+use petgraph::{Direction, graph::NodeIndex, visit::DfsPostOrder};
 
-use std::collections::{BTreeMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 // ------------------------------------------------------------------------------------------------
 // Structuring Algorithm
@@ -59,33 +59,26 @@ pub(crate) fn structure(
         &mut structured_blocks,
     );
 
-    structured_blocks.remove(&entry_node).unwrap()
+    let mut result = structured_blocks.remove(&entry_node).unwrap();
+    flatten_sequence(&mut result);
+    result
 }
 
 // -------------------------------------------------------------------------------------------------
-// Threaded fall-through info: `next_in_outer`
+// Owned-children hoist
 // -------------------------------------------------------------------------------------------------
-// Every call into `structure_acyclic` carries a `next_in_outer: Option<NodeIndex>` — the CFG
-// node that will be placed immediately after this node's structured form in its containing
-// Seq. The structurer uses it to make a single decision at emission time:
-//   - In `arm_for`, the effective adjacent-next-sibling is `post_dom` when we inline it,
-//     else `next_in_outer`. An arm whose target equals that sibling becomes `None` (a
-//     fall-through) instead of a `Jump`.
+// `structure_acyclic_region` builds an IfElse/Switch by absorbing each arm target that's an
+// immediate dom-tree child of the conditional, and emitting `Jump` for arms targeting the
+// post-dominator (the convergence point) or arms whose target lies outside the dom subtree.
+// After building the IfElse/Switch, any *other* `ichildren` of the conditional that are
+// still in `structured_blocks` are "orphans" — every CFG path to them goes through the
+// conditional, so they semantically belong in our sequence. We append them and walk the
+// IfElse/Switch's tail positions to drop `Jump`s targeting the now-adjacent block.
 //
-// Pre-structured children come out of `structured_blocks` having been built without this
-// context (post-order structures children before their consumer). When we consume one, we
-// walk its tail positions with `elide_tail_jump_to` against the same adjacent-next target —
-// the same decision the child would have made if it had known.
-//
-// Callers compute the value they pass down:
-//   - `structure_nodes`: `None` — no surrounding Seq.
-//   - `structure_loop` head: the loop's successor node — what follows the `Loop` form.
-//   - `structure_acyclic_region`: when inlining post_dom, the post_dom block's tails see
-//     our own `next_in_outer`.
-//
-// Loop-body RPO adjacency (body[i]'s next is body[i+1]) is the one case the threading
-// doesn't reach: body items are structured by `structure_nodes` before the body is laid out,
-// so they get `None`. `structure_loop`'s body assembly walks pairwise with the same helper.
+// Each structurer makes its decisions locally using `ichildren`, the immediate
+// post-dominator, and the optional `loop_succ` for loop-head calls — no threaded
+// next-sibling context. Loop-body RPO adjacency (body[i]'s next is body[i+1]) is handled
+// separately in `structure_loop`'s body assembly via pairwise `elide_tail_jump_to`.
 
 /// The CFG node id this structured form starts execution at, when one is well-defined.
 /// Returns `None` for forms with no single entry (empty Seq, Continue/Break, raw Jumps).
@@ -103,8 +96,9 @@ fn entry_label(s: &D::Structured) -> Option<NodeIndex> {
 }
 
 /// Drop any `Jump(_, target)` sitting at a tail position of `s`. Walks through `Seq`'s last
-/// item, both `IfElse` arms, and every `Switch` arm. Doesn't descend into `Loop` bodies -
-/// they don't fall through.
+/// item, both `IfElse` arms, and every `Switch` arm. Doesn't descend into `Loop` bodies —
+/// they don't fall through. When the tail Jump is the last item of a `Seq`, pop it (rather
+/// than replacing with an empty `Seq`) so we don't leave stray empties behind.
 fn elide_tail_jump_to(s: &mut D::Structured, target: NodeIndex) {
     use D::Structured as DS;
     match s {
@@ -112,7 +106,9 @@ fn elide_tail_jump_to(s: &mut D::Structured, target: NodeIndex) {
             *s = DS::Seq(vec![]);
         }
         DS::Seq(items) => {
-            if let Some(last) = items.last_mut() {
+            if matches!(items.last(), Some(DS::Jump(_, label)) if *label == target) {
+                items.pop();
+            } else if let Some(last) = items.last_mut() {
                 elide_tail_jump_to(last, target);
             }
         }
@@ -171,8 +167,7 @@ fn structure_nodes(
                 structured_blocks,
                 node,
                 input,
-                /*inside_loop*/ false,
-                /*next_in_outer*/ None,
+                /*loop_succ*/ None,
             );
         }
     }
@@ -190,7 +185,8 @@ fn structure_loop(
         println!("structuring loop at node {loop_head:#?}");
     }
     let (loop_nodes, succ_nodes) = graph.find_loop_nodes(loop_head);
-    let succ_node = succ_nodes.iter().copied().next();
+    // succ_nodes is a HashSet; take the lowest index for determinism.
+    let succ_node = succ_nodes.iter().copied().min();
     if config.debug_print.structuring {
         println!("  loop nodes: {loop_nodes:#?}");
         println!("  successor nodes: {succ_nodes:#?}");
@@ -201,8 +197,7 @@ fn structure_loop(
         structured_blocks,
         loop_head,
         input,
-        /*inside_loop*/ true,
-        /*next_in_outer*/ succ_node,
+        /*loop_succ*/ succ_node,
     );
 
     // Emit body nodes in reverse post-order restricted to `loop_nodes`. After
@@ -370,22 +365,14 @@ fn structure_acyclic(
     structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
     node: NodeIndex,
     input: &mut BTreeMap<D::Label, D::Input>,
-    inside_loop: bool,
-    next_in_outer: Option<NodeIndex>,
+    loop_succ: Option<NodeIndex>,
 ) {
     if graph.back_edges.contains_key(&node) {
         let result = structure_latch_node(config, graph, node, input.remove(&node).unwrap());
         structured_blocks.insert(node, result);
     } else {
-        let result = structure_acyclic_region(
-            config,
-            graph,
-            structured_blocks,
-            input,
-            node,
-            inside_loop,
-            next_in_outer,
-        );
+        let result =
+            structure_acyclic_region(config, graph, structured_blocks, input, node, loop_succ);
         structured_blocks.insert(node, result);
     }
 }
@@ -396,8 +383,7 @@ fn structure_acyclic_region(
     structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
     input: &mut BTreeMap<D::Label, D::Input>,
     start: NodeIndex,
-    inside_loop: bool,
-    next_in_outer: Option<NodeIndex>,
+    loop_succ: Option<NodeIndex>,
 ) -> D::Structured {
     // Code has no arms and no post-dominator role; delegate before the dom-tree work.
     if matches!(&input[&start], D::Input::Code(..)) {
@@ -414,221 +400,227 @@ fn structure_acyclic_region(
         println!("  blocks: {structured_blocks:#?}");
         println!("  immediate children: {ichildren:#?}");
         println!("  post dominator: {post_dominator:#?}");
-    }
-    if post_dominator != graph.return_ {
-        assert!(
-            structured_blocks.contains_key(&post_dominator)
-            // Technically, it should be "my_loop_head" but we don't have that info here
-            || graph.loop_heads.contains(&post_dominator)
-        );
+        if let Some(s) = loop_succ {
+            println!("  loop successor: {s:#?}");
+        }
     }
 
-    // Arm processing below absorbs child structured blocks and transfers their back-edges
-    // to `start` via `update_latch_branch_nodes`. The inline decision has to reflect that
-    // post-absorption state — predict it now so `arm_for` and the actual inline agree.
-    let absorbed_children: Vec<NodeIndex> = match &input[&start] {
-        D::Input::Condition(_, _, c, a) => [*c, *a]
-            .into_iter()
-            .filter(|t| *t != start && *t != post_dominator && ichildren.contains(t))
-            .collect(),
-        D::Input::Variants(_, _, _, items) => items
-            .iter()
-            .map(|(_, t)| *t)
-            .filter(|t| *t != post_dominator)
-            .collect(),
-        D::Input::Code(..) => vec![],
-    };
-    let start_has_back_edges_post_absorption = graph.back_edges.contains_key(&start)
-        || absorbed_children
-            .iter()
-            .any(|t| graph.back_edges.contains_key(t));
-
-    // True iff this structurer will sequence `post_dominator` immediately after the
-    // IfElse/Switch in its outer Seq. The predicate has to match what actually happens
-    // below, because `arm_for` uses it to decide between emitting a `Jump` and an empty
-    // fall-through arm.
-    //
-    // `ichildren.contains(&post_dominator)` is the load-bearing membership check: an
-    // immediate dom-tree child of `start` is by construction both (a) dominated by `start`
-    // and (b) in the same enclosing-loop scope as `start` (the dom tree doesn't cross loop
-    // boundaries for immediate children), so we don't need separate predicates for those.
-    let emit_post_dom_in_seq = post_dominator != graph.return_
-        && ichildren.contains(&post_dominator)
-        && !start_has_back_edges_post_absorption
-        && !inside_loop;
-
-    if config.debug_print.dominators {
-        println!("  emit post-dominator in sequence: {emit_post_dom_in_seq}");
-    }
-
-    // The CFG node that will be sequenced immediately after this IfElse/Switch in its
-    // enclosing Seq. If we inline `post_dominator`, that's the inlined block; otherwise
-    // our caller's `next_in_outer` is what they'll place next.
-    //
-    // For the loop-head call (`inside_loop`), `next_in_outer` is the loop's successor —
-    // which arms reach as a *break* through `insert_breaks`, not as a fall-through. We
-    // must leave those arm Jumps in place for `insert_breaks` to reclassify.
-    let arms_next_sibling = if inside_loop {
-        None
-    } else if emit_post_dom_in_seq {
-        Some(post_dominator)
-    } else {
-        next_in_outer
-    };
-
-    /// Classify one Condition arm and produce its structured form (or `None` to omit it):
+    /// Classify one Condition/Switch arm:
     ///   - `target == start`: back-edge to a loop head; emit `Jump(DegenerateJumpIf)`.
-    ///   - `target == arms_next_sibling`: the literal next instruction after our IfElse;
-    ///     omit (fall through). Subsumes the inline-post_dom case via the computation of
-    ///     `arms_next_sibling` above.
-    ///   - `target == post_dom` (but not adjacent): `Jump(pd_src)`. `pd_src` distinguishes
-    ///     which arm produced it.
-    ///   - `target` in start's dominator subtree: embed its already-structured form, with
-    ///     tail-`Jump`s to `arms_next_sibling` elided — the child was structured before us
-    ///     and so didn't know what would be sequenced after it.
-    ///   - Otherwise: `Jump(ArmOutsideSubtree)`. Target is owned by an enclosing structure;
-    ///     the enclosing `insert_breaks` rewrites it.
+    ///   - `loop_succ == Some(target)`: loop-head arm exits the loop. Emit `Jump(LoopBreak)`
+    ///     for `insert_breaks` to convert to `Break`.
+    ///   - `target == post_dominator` (and not `return_`): the arms' join point. Emit
+    ///     `Jump(ArmOutsideSubtree)` so the owned-children hoist below can place `target`
+    ///     as a sibling and elide.
+    ///   - `target ∈ ichildren`: embed the already-structured form.
+    ///   - Otherwise: `Jump(ArmOutsideSubtree)`. Target is owned by an enclosing scope,
+    ///     which will hoist it or `insert_breaks` will reclassify.
     fn arm_for(
         target: NodeIndex,
         start: NodeIndex,
+        loop_succ: Option<NodeIndex>,
         post_dominator: NodeIndex,
+        return_: NodeIndex,
         ichildren: &HashSet<NodeIndex>,
         structured_blocks: &mut BTreeMap<NodeIndex, D::Structured>,
-        arms_next_sibling: Option<NodeIndex>,
-        pd_src: GotoSource,
-    ) -> Option<D::Structured> {
+    ) -> D::Structured {
         if target == start {
-            Some(D::Structured::Jump(GotoSource::DegenerateJumpIf, target))
-        } else if Some(target) == arms_next_sibling {
-            None
-        } else if target == post_dominator {
-            Some(D::Structured::Jump(pd_src, target))
+            D::Structured::Jump(GotoSource::DegenerateJumpIf, target)
+        } else if Some(target) == loop_succ {
+            D::Structured::Jump(GotoSource::LoopBreak, target)
+        } else if target == post_dominator && post_dominator != return_ {
+            D::Structured::Jump(GotoSource::ArmOutsideSubtree, target)
         } else if ichildren.contains(&target) {
-            let mut arm = structured_blocks
-                .remove(&target)
-                .expect("ichildren member must be structured by post-order traversal");
-            if let Some(next) = arms_next_sibling {
-                elide_tail_jump_to(&mut arm, next);
-            }
-            Some(arm)
+            structured_blocks.remove(&target).unwrap()
         } else {
-            Some(D::Structured::Jump(GotoSource::ArmOutsideSubtree, target))
+            D::Structured::Jump(GotoSource::ArmOutsideSubtree, target)
         }
     }
 
     let structured = match input.remove(&start).unwrap() {
         D::Input::Condition(_lbl, code, conseq, alt) => {
-            // No `ichildren.contains(&conseq)` assertion: `arm_for` handles every case
-            // (in-subtree, post-dom, self-edge, or outside-subtree).
             let conseq_arm = arm_for(
                 conseq,
                 start,
+                loop_succ,
                 post_dominator,
+                graph.return_,
                 &ichildren,
                 structured_blocks,
-                arms_next_sibling,
-                GotoSource::ConseqEqPostDom,
             );
             let alt_arm = arm_for(
                 alt,
                 start,
+                loop_succ,
                 post_dominator,
+                graph.return_,
                 &ichildren,
                 structured_blocks,
-                arms_next_sibling,
-                GotoSource::AltEqPostDom,
             );
 
-            // Transfer back-edge ownership for absorbed arms (arms whose structured body we
-            // embedded; only the `ichildren` branch of `arm_for` absorbs). Arms that emit a
-            // Jump marker keep their own bookkeeping.
+            // Transfer back-edge ownership for absorbed arms (only the ichildren-embed branch
+            // of `arm_for` absorbs).
             let mut absorbed = vec![];
-            if conseq != start && ichildren.contains(&conseq) && conseq != post_dominator {
+            if conseq != start && ichildren.contains(&conseq) && Some(conseq) != loop_succ {
                 absorbed.push(conseq);
             }
-            if alt != start && ichildren.contains(&alt) && alt != post_dominator {
+            if alt != start && ichildren.contains(&alt) && Some(alt) != loop_succ {
                 absorbed.push(alt);
             }
             if !absorbed.is_empty() {
                 graph.update_latch_branch_nodes(start, absorbed);
             }
 
-            match (conseq_arm, alt_arm) {
-                // Both arms collapsed to the inline post-dom. Conditional reduces to
-                // evaluating `code` for effect; the post-dom block is sequenced below.
-                (None, None) => D::Structured::Block(code),
-                // Empty-then with non-empty else. A later `Exp::IfElse` refinement can
-                // negate the condition and flip into a non-empty `then`.
-                (None, Some(body)) => D::Structured::IfElse(
-                    code,
-                    Box::new(D::Structured::Seq(vec![])),
-                    Box::new(Some(body)),
-                ),
-                (Some(body), None) => D::Structured::IfElse(code, Box::new(body), Box::new(None)),
-                (Some(c), Some(a)) => D::Structured::IfElse(code, Box::new(c), Box::new(Some(a))),
-            }
+            D::Structured::IfElse(code, Box::new(conseq_arm), Box::new(Some(alt_arm)))
         }
         D::Input::Variants(_lbl, code, enum_, items) => {
             let latches = items
                 .iter()
                 .map(|(_v, item)| item)
-                .filter(|item| item != &&post_dominator)
+                .filter(|item| Some(**item) != loop_succ)
                 .cloned()
                 .collect::<Vec<_>>();
             graph.update_latch_branch_nodes(start, latches);
 
+            // Variant arms can share a target (e.g. several variants branching to the same
+            // fall-through label). `arm_for`'s `ichildren`-embed path calls
+            // `structured_blocks.remove(&target).unwrap()`, which would panic on the second
+            // occurrence. For shared targets, emit a `Jump` from every arm and let the
+            // owned-children hoist place the target once and elide all the Jumps.
+            let mut counts: HashMap<NodeIndex, usize> = HashMap::new();
+            for (_, item) in &items {
+                *counts.entry(*item).or_insert(0) += 1;
+            }
             let arms = items
                 .into_iter()
                 .map(|(v, item)| {
-                    if item == post_dominator || Some(item) == arms_next_sibling {
-                        (v, D::Structured::Seq(vec![]))
+                    let body = if counts.get(&item).copied().unwrap_or(0) > 1 {
+                        D::Structured::Jump(GotoSource::ArmOutsideSubtree, item)
                     } else {
-                        assert!(
-                            graph
-                                .cfg
-                                .neighbors_directed(item, petgraph::Direction::Incoming)
-                                .count()
-                                == 1,
-                            "Structured arms must have exactly one predecessor, found {:#?} for {:#?}",
-                            graph
-                                .cfg
-                                .neighbors_directed(item, petgraph::Direction::Incoming)
-                                .collect::<Vec<_>>(),
-                            item
-                        );
-                        let mut arm = structured_blocks
-                            .remove(&item)
-                            .expect("Switch arm must be structured by post-order traversal");
-                        if let Some(next) = arms_next_sibling {
-                            elide_tail_jump_to(&mut arm, next);
-                        }
-                        (v, arm)
-                    }
+                        arm_for(
+                            item,
+                            start,
+                            loop_succ,
+                            post_dominator,
+                            graph.return_,
+                            &ichildren,
+                            structured_blocks,
+                        )
+                    };
+                    (v, body)
                 })
                 .collect();
-            // Maybe we could reconstruct matches from the arms? It would require a lot more -- and
-            // more painful -- analysis.
+            // Maybe we could reconstruct matches from the arms? It would require a lot more —
+            // and more painful — analysis.
             D::Structured::Switch(code, enum_, arms)
         }
         D::Input::Code(..) => unreachable!("Code shortcut at top of structure_acyclic_region"),
     };
-    let mut exp = vec![structured];
 
-    if emit_post_dom_in_seq {
-        if config.debug_print.dominators {
-            println!("  => emitting post-dominator");
+    // Hoist orphan dom-tree children. After arm processing, any `ichildren` of `start` that
+    // weren't absorbed as arms and aren't an enclosing loop's exit remain in
+    // `structured_blocks`. They're owned by us — every CFG path to them goes through
+    // `start` — so they semantically belong in our sequence. Append them, then walk the
+    // tail positions of everything emitted so far to drop now-redundant `Jump`s to their
+    // entry labels.
+    //
+    // Skip at the loop-head call: the loop's successor stays in `structured_blocks` so
+    // `structure_loop` can append it after the `Loop` form, and body-side ichildren are
+    // placed by the body-assembly logic. We also skip orphans that are succ_nodes of an
+    // enclosing loop — `structure_loop` for that outer loop will append them after its
+    // `Loop`, so we mustn't eat them at this inner level.
+    //
+    // TODO: alternate orphans. The current logic places every orphan as a sibling in
+    // `hoist_order` (CFG-topo over the orphan-induced subgraph) and elides tail Jumps to
+    // each. This is correct when the orphans form a chain (orphan A reaches orphan B
+    // through the CFG, so A goes first and falls through to B), but it is *wrong* when
+    // two orphans P and Q are mutually exclusive — reached on disjoint paths through
+    // `start`'s arms (e.g. `start: A|B`; each of A/B further branches, and one branch
+    // leads to P, the other to Q, on both sides). Both have `idom = start`, so both are
+    // orphans; the CFG never visits both in a single execution, but sibling-hoist places
+    // them as `IfElse(...); P_body; Q_body`, which falls through from P into Q. This is
+    // masked when P's body always terminates (return/abort/break/continue), which covers
+    // many corpus cases (shared cleanup blocks), but is unsound in general. The principled
+    // fix is to wrap the IfElse in nested labeled blocks (`'go_q: { ... ; P_body; break
+    // 'outer }; Q_body`) and rewrite the offending arm-Jumps to `break` of the appropriate
+    // label — Move's `'label: { body }` form gives us exactly this control flow. That
+    // requires an `Exp::LabeledBlock` first-class AST node plus detection of alternate
+    // orphans here; tracked as a follow-up.
+    let mut exp = vec![structured];
+    if loop_succ.is_none() {
+        let enclosing_loop_exits: Option<&HashSet<NodeIndex>> = graph.loop_exits.get(&start);
+        let mut orphans: Vec<NodeIndex> = ichildren
+            .iter()
+            .copied()
+            .filter(|c| structured_blocks.contains_key(c))
+            .filter(|c| {
+                enclosing_loop_exits
+                    .map(|exits| !exits.contains(c))
+                    .unwrap_or(true)
+            })
+            .collect();
+        // `ichildren` is a `HashSet`; sort for deterministic hoist order. `hoist_order`
+        // then runs a topological sort over this CFG-stable input.
+        orphans.sort_by_key(|n| n.index());
+        for orphan in hoist_order(graph, start, &orphans) {
+            let body = structured_blocks.remove(&orphan).unwrap();
+            let target = entry_label(&body);
+            if let Some(target) = target {
+                // Walk every prior item's tails, dropping `Jump(_, target)` — these are
+                // arm-tail branches that now fall through to the literal next instruction.
+                for prior in exp.iter_mut() {
+                    elide_tail_jump_to(prior, target);
+                }
+            }
+            exp.push(body);
         }
-        let mut pd_block = structured_blocks
-            .remove(&post_dominator)
-            .expect("post-dom in ichildren must be structured by post-order traversal");
-        // The inlined post-dom is sequenced next; whatever follows it in our Seq is what
-        // our caller will place after us (their `next_in_outer`). Walk pre-built tails.
-        if let Some(next) = next_in_outer {
-            elide_tail_jump_to(&mut pd_block, next);
-        }
-        exp.push(pd_block);
     }
-    flatten_sequence(D::Structured::Seq(exp))
+    D::Structured::Seq(exp)
+}
+
+/// Order orphan ichildren of `start` by CFG-reachability: each orphan should appear in the
+/// Seq after the orphan(s) whose subtrees branch to it. Topological sort over the subgraph
+/// induced by `orphans`, breaking cycles by index. In practice the orphan set is tiny
+/// (typically just one — the post-dom of the IfElse) and any ordering works.
+fn hoist_order(graph: &Graph, _start: NodeIndex, orphans: &[NodeIndex]) -> Vec<NodeIndex> {
+    let cfg = &graph.cfg;
+    let set: HashSet<NodeIndex> = orphans.iter().copied().collect();
+    // `BTreeMap` for deterministic initial iteration when seeding the ready queue.
+    let mut in_deg: BTreeMap<NodeIndex, usize> = orphans.iter().map(|&n| (n, 0)).collect();
+    for &n in orphans {
+        for succ in cfg.neighbors(n) {
+            if set.contains(&succ) && succ != n {
+                *in_deg.entry(succ).or_insert(0) += 1;
+            }
+        }
+    }
+    let mut ready: Vec<NodeIndex> = in_deg
+        .iter()
+        .filter_map(|(&n, &d)| (d == 0).then_some(n))
+        .collect();
+    ready.sort_by_key(|n| n.index());
+    let mut out = Vec::new();
+    while let Some(n) = ready.pop() {
+        out.push(n);
+        for succ in cfg.neighbors(n) {
+            if let Some(d) = in_deg.get_mut(&succ) {
+                *d -= 1;
+                if *d == 0 {
+                    ready.push(succ);
+                    ready.sort_by_key(|n: &NodeIndex| n.index());
+                }
+            }
+        }
+    }
+    // Anything left is on a cycle; append by index for determinism.
+    let mut remaining: Vec<NodeIndex> = orphans
+        .iter()
+        .copied()
+        .filter(|n| !out.contains(n))
+        .collect();
+    remaining.sort_by_key(|n| n.index());
+    out.extend(remaining);
+    out
 }
 
 fn structure_latch_node(
@@ -669,22 +661,65 @@ fn structure_code_node(
             D::Structured::Jump(GotoSource::SelfLoop, next),
         ]),
         D::Input::Code(_, code, next) => {
+            // Fuse `next` only if it's our exclusive dom-tree child — i.e. it's in
+            // `ichildren` and singly entered (no other path from outside its own subtree
+            // reaches it). For Code nodes specifically, `ichildren.contains(&next)` already
+            // implies single-entry (Code has only one CFG successor, so any other
+            // predecessor of `next` would prevent `next ∈ ichildren`); we spell the
+            // `is_singly_entered` check explicitly so the principle reads identically to
+            // `arm_for`'s: fold the target into our region iff control enters it
+            // exclusively through this edge. The `enclosing_loop_exits` guard prevents
+            // burying a loop-exit body inside an inner Code block; `structure_loop` will
+            // append it after its `Loop`.
+            let ichildren: HashSet<NodeIndex> =
+                graph.dom_tree.get(node_ndx).immediate_children().collect();
+            let enclosing_loop_exits: Option<HashSet<NodeIndex>> =
+                graph.loop_exits.get(&node_ndx).cloned();
             let mut seq = vec![D::Structured::Block(code)];
-            if let Some(next) = next
-                && graph
-                    .dom_tree
-                    .get(node_ndx)
-                    .immediate_children()
-                    .any(|node| node == next)
-            {
-                let successor = structured_blocks.remove(&next).unwrap();
-                graph.update_latch_nodes(node_ndx, next);
-                seq.push(successor);
+            if let Some(next) = next {
+                let fuse = ichildren.contains(&next)
+                    && structured_blocks.contains_key(&next)
+                    && is_singly_entered(next, &graph.cfg, &graph.dom_tree)
+                    && !enclosing_loop_exits
+                        .as_ref()
+                        .is_some_and(|e| e.contains(&next));
+                if fuse {
+                    let successor = structured_blocks.remove(&next).unwrap();
+                    graph.update_latch_nodes(node_ndx, next);
+                    seq.push(successor);
+                } else {
+                    // `next` is not exclusively ours — either it's reached from other
+                    // paths or it's owned by an enclosing structure. Emit an explicit
+                    // `Jump(CodeBranch)` so the owned-children hoist or `insert_breaks`
+                    // can see and rewrite it. Without this, the branch lives only in the
+                    // bytecode terminator and is invisible to elision.
+                    seq.push(D::Structured::Jump(GotoSource::CodeBranch, next));
+                }
             }
-            flatten_sequence(D::Structured::Seq(seq))
+            D::Structured::Seq(seq)
         }
         D::Input::Condition(..) | D::Input::Variants(..) => unreachable!(),
     }
+}
+
+/// A node is "singly entered" if exactly one of its CFG predecessors lies outside its own
+/// dom subtree (including itself). Predecessors inside the subtree are back-edges from a
+/// contained loop's latch — they don't represent independent entry into the scope. `target`
+/// itself is part of the subtree so a self-loop's self-edge counts as a back-edge.
+fn is_singly_entered(
+    target: NodeIndex,
+    cfg: &petgraph::graph::DiGraph<(), ()>,
+    dom_tree: &dom_tree::DominatorTree,
+) -> bool {
+    let subtree: HashSet<NodeIndex> = dom_tree
+        .get(target)
+        .all_children()
+        .chain(std::iter::once(target))
+        .collect();
+    cfg.neighbors_directed(target, Direction::Incoming)
+        .filter(|pred| !subtree.contains(pred))
+        .count()
+        == 1
 }
 
 /// Reverse-post-order DFS over `cfg`, restricted to nodes in `members`, rooted at `root`.
@@ -718,29 +753,47 @@ fn reverse_post_order_within(
     post
 }
 
-fn flatten_sequence(seq: D::Structured) -> D::Structured {
+/// Final normalization pass over the structured output. Recursively drops empty `Seq`s,
+/// splices non-empty nested `Seq`s into their parent, and collapses `Some(Seq([]))` alts
+/// to `None`. Called once at the end of `structure()`; the per-scope code paths leave
+/// stray empties from tail-elision and from `insert_breaks`'s in-loop-Jump replacement,
+/// and this is the single place that normalizes them away.
+fn flatten_sequence(s: &mut D::Structured) {
     use D::Structured as DS;
-
-    let mut result = vec![];
-    let mut queue = VecDeque::from([seq]);
-
-    while let Some(entry) = queue.pop_front() {
-        match entry {
-            DS::Seq(structureds) => {
-                for entry in structureds.into_iter().rev() {
-                    queue.push_front(entry);
+    match s {
+        DS::Seq(items) => {
+            for item in items.iter_mut() {
+                flatten_sequence(item);
+            }
+            let mut flat = Vec::with_capacity(items.len());
+            for item in items.drain(..) {
+                match item {
+                    DS::Seq(inner) if inner.is_empty() => {}
+                    DS::Seq(inner) => flat.extend(inner),
+                    other => flat.push(other),
                 }
             }
-            DS::Block(_)
-            | DS::Break(_)
-            | DS::Loop(_, _)
-            | DS::IfElse(_, _, _)
-            | DS::Switch(_, _, _)
-            | DS::Continue(_)
-            | DS::Jump(_, _)
-            | DS::JumpIf(_, _, _, _) => result.push(entry),
+            *items = flat;
+        }
+        DS::IfElse(_, conseq, alt) => {
+            flatten_sequence(conseq);
+            if let Some(alt_inner) = alt.as_mut().as_mut() {
+                flatten_sequence(alt_inner);
+            }
+            // `arm_for` always returns *some* body, so an alt that elided away ends up as
+            // an empty Seq; later refinements/printers treat `IfElse(_, _, None)` as the
+            // canonical "no-else" shape.
+            if matches!(alt.as_ref().as_ref(), Some(DS::Seq(items)) if items.is_empty()) {
+                **alt = None;
+            }
+        }
+        DS::Switch(_, _, cases) => {
+            for (_, body) in cases.iter_mut() {
+                flatten_sequence(body);
+            }
+        }
+        DS::Loop(_, body) => flatten_sequence(body),
+        DS::Block(_) | DS::Break(_) | DS::Continue(_) | DS::Jump(_, _) | DS::JumpIf(_, _, _, _) => {
         }
     }
-
-    DS::Seq(result)
 }

@@ -247,33 +247,40 @@ public entry fun add_collateral_single<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T
     let l44 = vault::before_add_collateral(l21, l20, l19, l18, l17, l16, l15, cetus_clmm_worker::health(freeze(l41), freeze(l42), l43), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
     let l46 = vault::extract_add_collateral_context_coin_send(&mut l44, l14);
     let l48 = vault::get_add_collateral_context_debt(&l44);
-    assert!(table::contains(&l0.shares, l5), C35);
-    let l53 = *(table::borrow(&l0.shares, l5));
-    let l22 = l53;
-    let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l22);
-    let l47 = cetus_clmm_worker::work_inner(l0, l3, l4, l5, l46, l7, l48, l9, l10, l13, l14);
-    if (coin::value(&l47) == 0u64) {
-        coin::destroy_zero(l47)
+    if (table::contains(&l0.shares, l5)) {
+        let l53 = *(table::borrow(&l0.shares, l5));
+        let l22 = l53;
+        let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l22);
+        let l47 = cetus_clmm_worker::work_inner(l0, l3, l4, l5, l46, l7, l48, l9, l10, l13, l14);
+        if (coin::value(&l47) == 0u64) {
+            coin::destroy_zero(l47)
+        } else {
+            pay::keep(l47, freeze(l14))
+        };
+        let l28 = l13;
+        let l27 = l12;
+        let l26 = l11;
+        let l25 = l4;
+        let l24 = l1;
+        let l50 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l24), freeze(l25), l26, l27, l28);
+        let l36 = &l0.position_operator_cap;
+        let l35 = l1;
+        let l34 = l44;
+        let l33 = l8;
+        let l31 = l5;
+        let l30 = l4;
+        let l29 = l0;
+        vault::after_add_collateral(l36, l35, l34, l33, cetus_clmm_worker::health(freeze(l29), freeze(l30), l31), l50, cetus_clmm_worker::is_reserve_consistent());
+        let l52 = *(table::borrow(&l0.shares, l5));
+        let l37 = l52;
+        if (cetus_clmm_worker::share_to_balance(freeze(l0), l37) > l45) {
+            
+        } else {
+            abort C36
+        }
     } else {
-        pay::keep(l47, freeze(l14))
-    };
-    let l28 = l13;
-    let l27 = l12;
-    let l26 = l11;
-    let l25 = l4;
-    let l24 = l1;
-    let l50 = cetus_clmm_worker::is_stable(freeze(l0), freeze(l24), freeze(l25), l26, l27, l28);
-    let l36 = &l0.position_operator_cap;
-    let l35 = l1;
-    let l34 = l44;
-    let l33 = l8;
-    let l31 = l5;
-    let l30 = l4;
-    let l29 = l0;
-    vault::after_add_collateral(l36, l35, l34, l33, cetus_clmm_worker::health(freeze(l29), freeze(l30), l31), l50, cetus_clmm_worker::is_reserve_consistent());
-    let l52 = *(table::borrow(&l0.shares, l5));
-    let l37 = l52;
-    assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l37) > l45, C36)
+        abort C35
+    }
 }
 
 public entry fun add_collateral_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut GlobalStorage, l2: &mut Storage, l3: &GlobalConfig, l4: &mut Pool<T1, T0>, l5: u64, l6: Coin<T0>, l7: Coin<T1>, l8: bool, l9: u8, l10: vector<u8>, l11: &Aggregator, l12: &Aggregator, l13: &Clock, l14: &mut TxContext) {
@@ -286,46 +293,53 @@ public entry fun add_collateral_single_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T
     let l33 = l4;
     let l24 = l1;
     let l49 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l24), freeze(l33), l39, l40, l41);
-    assert!(table::contains(&l0.shares, l5), C35);
-    let l53 = *(table::borrow(&l0.shares, l5));
-    let l42 = l53;
-    let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l42);
-    let l23 = &l0.position_operator_cap;
-    let l22 = l1;
-    let l21 = l2;
-    let l20 = &l51;
-    let l19 = l5;
-    let l18 = l6;
-    let l17 = l8;
-    let l16 = l5;
-    let l15 = l4;
-    let l43 = l0;
-    let l44 = vault::before_add_collateral(l23, l22, l21, l20, l19, l18, l17, cetus_clmm_worker::health_reverse(freeze(l43), freeze(l15), l16), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
-    let l46 = vault::extract_add_collateral_context_coin_send(&mut l44, l14);
-    let l48 = vault::get_add_collateral_context_debt(&l44);
-    let l47 = cetus_clmm_worker::work_inner_reverse(l0, l3, l4, l5, l46, l7, l48, l9, l10, l13, l14);
-    if (coin::value(&l47) == 0u64) {
-        coin::destroy_zero(l47)
+    if (table::contains(&l0.shares, l5)) {
+        let l53 = *(table::borrow(&l0.shares, l5));
+        let l42 = l53;
+        let l45 = cetus_clmm_worker::share_to_balance(freeze(l0), l42);
+        let l23 = &l0.position_operator_cap;
+        let l22 = l1;
+        let l21 = l2;
+        let l20 = &l51;
+        let l19 = l5;
+        let l18 = l6;
+        let l17 = l8;
+        let l16 = l5;
+        let l15 = l4;
+        let l43 = l0;
+        let l44 = vault::before_add_collateral(l23, l22, l21, l20, l19, l18, l17, cetus_clmm_worker::health_reverse(freeze(l43), freeze(l15), l16), l49, cetus_clmm_worker::is_reserve_consistent(), l13, l14);
+        let l46 = vault::extract_add_collateral_context_coin_send(&mut l44, l14);
+        let l48 = vault::get_add_collateral_context_debt(&l44);
+        let l47 = cetus_clmm_worker::work_inner_reverse(l0, l3, l4, l5, l46, l7, l48, l9, l10, l13, l14);
+        if (coin::value(&l47) == 0u64) {
+            coin::destroy_zero(l47)
+        } else {
+            pay::keep(l47, freeze(l14))
+        };
+        let l29 = l13;
+        let l28 = l12;
+        let l27 = l11;
+        let l26 = l4;
+        let l25 = l1;
+        let l50 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l25), freeze(l26), l27, l28, l29);
+        let l37 = &l0.position_operator_cap;
+        let l36 = l1;
+        let l35 = l44;
+        let l34 = l8;
+        let l32 = l5;
+        let l31 = l4;
+        let l30 = l0;
+        vault::after_add_collateral(l37, l36, l35, l34, cetus_clmm_worker::health_reverse(freeze(l30), freeze(l31), l32), l50, cetus_clmm_worker::is_reserve_consistent());
+        let l52 = *(table::borrow(&l0.shares, l5));
+        let l38 = l52;
+        if (cetus_clmm_worker::share_to_balance(freeze(l0), l38) > l45) {
+            
+        } else {
+            abort C36
+        }
     } else {
-        pay::keep(l47, freeze(l14))
-    };
-    let l29 = l13;
-    let l28 = l12;
-    let l27 = l11;
-    let l26 = l4;
-    let l25 = l1;
-    let l50 = cetus_clmm_worker::is_stable_reverse(freeze(l0), freeze(l25), freeze(l26), l27, l28, l29);
-    let l37 = &l0.position_operator_cap;
-    let l36 = l1;
-    let l35 = l44;
-    let l34 = l8;
-    let l32 = l5;
-    let l31 = l4;
-    let l30 = l0;
-    vault::after_add_collateral(l37, l36, l35, l34, cetus_clmm_worker::health_reverse(freeze(l30), freeze(l31), l32), l50, cetus_clmm_worker::is_reserve_consistent());
-    let l52 = *(table::borrow(&l0.shares, l5));
-    let l38 = l52;
-    assert!(cetus_clmm_worker::share_to_balance(freeze(l0), l38) > l45, C36)
+        abort C35
+    }
 }
 
 fun add_share<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: u64, l2: u128, l3: u128) {
@@ -333,18 +347,21 @@ fun add_share<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: u64, l2: u128, l3
         let l5 = l3;
         let l4 = l2;
         let l9 = cetus_clmm_worker::balance_to_share_inner(freeze(l0), l4, l5);
-        assert!(l9 > 0u128, C3);
-        let l10 = &mut l0.shares;
-        let l6 = l1;
-        let l7 = if (table::contains(freeze(l10), l6)) {
-            table::borrow_mut(l10, l1)
+        if (l9 > 0u128) {
+            let l10 = &mut l0.shares;
+            let l6 = l1;
+            let l7 = if (table::contains(freeze(l10), l6)) {
+                table::borrow_mut(l10, l1)
+            } else {
+                table::add(l10, l1, 0u128);
+                table::borrow_mut(l10, l1)
+            };
+            let l8 = l7;
+            *l8 = *l8 + l9;
+            *(&mut l0.total_share) = *(&l0.total_share) + l9
         } else {
-            table::add(l10, l1, 0u128);
-            table::borrow_mut(l10, l1)
-        };
-        let l8 = l7;
-        *l8 = *l8 + l9;
-        *(&mut l0.total_share) = *(&l0.total_share) + l9
+            abort C3
+        }
     } else {
         
     }
@@ -359,12 +376,17 @@ fun balance_to_share_inner<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: u128, l2
     let l3 = *(&l0.total_share);
     if (l3 == 0u128) {
         return l1
-    };
-    return mole_math::mul_div_u128(l1, l3, l2)
+    } else {
+        return mole_math::mul_div_u128(l1, l3, l2)
+    }
 }
 
 public fun checked_package_version<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>) {
-    assert!(*(&l0.package_version) == C2, C32)
+    if (*(&l0.package_version) == C2) {
+        
+    } else {
+        abort C32
+    }
 }
 
 public fun collect_reward<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut RewarderGlobalVault, l3: &mut Pool<T0, T1>, l4: &mut Pool<T0, T3>, l5: bool, l6: bool, l7: bool, l8: &Clock, l9: &mut TxContext): ( u64, u64) {
@@ -1135,17 +1157,21 @@ public fun get_max_reinvestor_bounty_bps<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>
 fun get_mkt_sell_amount(l0: u64, l1: u64, l2: u64): u64 {
     if (l0 == 0u64) {
         return 0u64
-    };
-    let l3 = if (l1 > 0u64) {
-        l2 > 0u64
     } else {
-        false
-    };
-    assert!(l3, C5);
-    let l4 = l0 * 9980u64;
-    let l6 = l4as u128 * l2as u128;
-    let l5 = l1as u128 * 10000u128 + l4as u128;
-    return l6 / l5as u64
+        let l3 = if (l1 > 0u64) {
+            l2 > 0u64
+        } else {
+            false
+        };
+        if (l3) {
+            let l4 = l0 * 9980u64;
+            let l6 = l4as u128 * l2as u128;
+            let l5 = l1as u128 * 10000u128 + l4as u128;
+            return l6 / l5as u64
+        } else {
+            abort C5
+        }
+    }
 }
 
 public fun get_mole_cetus_worker_addr(): address {
@@ -1231,33 +1257,51 @@ fun init(l0: &mut TxContext) {
 public entry fun initialize<T0, T1, T2>(l0: &AdminCap, l1: &x5_AdminCap, l2: &x3_AdminCap, l3: &mut GlobalStorage, l4: &mut WorkerInfoStore, l5: &CoinMetadata<T0>, l6: &CoinMetadata<T1>, l7: &GlobalConfig, l8: &mut Pool<T0, T1>, l9: address, l10: u64, l11: address, l12: u64, l13: u32, l14: u32, l15: &mut TxContext) {
     let l18 = cetus_clmm_worker::get_mole_cetus_worker_addr();
     let l16 = l18;
-    assert!(!(worker_config::is_worker_info_registered(freeze(l4), l16)), C1);
-    assert!(vault::is_vault_initialized(freeze(l3)), C12);
-    let l20 = vault::acquire_position_operator_cap(l1);
-    let l17 = C44;
-    assert!(l10 <= l17, C14);
-    let l19 = pool::open_position(l7, l8, l13, l14, l15);
-    let l21 = WorkerInfo { id: object::new(l15), reinvest_bounty_bps: l10, max_reinvest_bounty_bps: l17, ok_reinvestors: table::new(l15), ok_rebalancers: table::new(l15), ok_strategies: table::new(l15), treasury_account: l11, reinvest_path: vector[], reinvest_threshold: l12, shares: table::new(l15), total_share: 0u128, config: l9, position_nft: option::some(l19), position_operator_cap: l20, coin_base_decimals: coin::get_decimals(l5), coin_farming_decimals: coin::get_decimals(l6), tiny_coin_base: balance::zero(), tiny_coin_farming: balance::zero(), pool_id: object::id(freeze(l8)), package_version: C2, tiny_coin_base_bounty: balance::zero(), tiny_coin_farming_bounty: balance::zero() };
-    let l22 = object::uid_to_address(&(&l21).id);
-    transfer::share_object(l21);
-    worker_config::register_worker_info(l2, l4, l18);
-    event::emit(InitializeEvent { worker_info: l22 })
+    if (!(worker_config::is_worker_info_registered(freeze(l4), l16))) {
+        if (vault::is_vault_initialized(freeze(l3))) {
+            let l20 = vault::acquire_position_operator_cap(l1);
+            let l17 = C44;
+            if (l10 <= l17) {
+                let l19 = pool::open_position(l7, l8, l13, l14, l15);
+                let l21 = WorkerInfo { id: object::new(l15), reinvest_bounty_bps: l10, max_reinvest_bounty_bps: l17, ok_reinvestors: table::new(l15), ok_rebalancers: table::new(l15), ok_strategies: table::new(l15), treasury_account: l11, reinvest_path: vector[], reinvest_threshold: l12, shares: table::new(l15), total_share: 0u128, config: l9, position_nft: option::some(l19), position_operator_cap: l20, coin_base_decimals: coin::get_decimals(l5), coin_farming_decimals: coin::get_decimals(l6), tiny_coin_base: balance::zero(), tiny_coin_farming: balance::zero(), pool_id: object::id(freeze(l8)), package_version: C2, tiny_coin_base_bounty: balance::zero(), tiny_coin_farming_bounty: balance::zero() };
+                let l22 = object::uid_to_address(&(&l21).id);
+                transfer::share_object(l21);
+                worker_config::register_worker_info(l2, l4, l18);
+                event::emit(InitializeEvent { worker_info: l22 })
+            } else {
+                abort C14
+            }
+        } else {
+            abort C12
+        }
+    } else {
+        abort C1
+    }
 }
 
 public entry fun initialize_reverse<T0, T1, T2>(l0: &AdminCap, l1: &x5_AdminCap, l2: &x3_AdminCap, l3: &mut GlobalStorage, l4: &mut WorkerInfoStore, l5: &CoinMetadata<T0>, l6: &CoinMetadata<T1>, l7: &GlobalConfig, l8: &mut Pool<T1, T0>, l9: address, l10: u64, l11: address, l12: u64, l13: u32, l14: u32, l15: &mut TxContext) {
     let l18 = cetus_clmm_worker::get_mole_cetus_worker_addr();
     let l16 = l18;
-    assert!(!(worker_config::is_worker_info_registered(freeze(l4), l16)), C1);
-    assert!(vault::is_vault_initialized(freeze(l3)), C12);
-    let l20 = vault::acquire_position_operator_cap(l1);
-    let l17 = C44;
-    assert!(l10 <= l17, C14);
-    let l19 = pool::open_position(l7, l8, l13, l14, l15);
-    let l21 = WorkerInfo { id: object::new(l15), reinvest_bounty_bps: l10, max_reinvest_bounty_bps: l17, ok_reinvestors: table::new(l15), ok_rebalancers: table::new(l15), ok_strategies: table::new(l15), treasury_account: l11, reinvest_path: vector[], reinvest_threshold: l12, shares: table::new(l15), total_share: 0u128, config: l9, position_nft: option::some(l19), position_operator_cap: l20, coin_base_decimals: coin::get_decimals(l5), coin_farming_decimals: coin::get_decimals(l6), tiny_coin_base: balance::zero(), tiny_coin_farming: balance::zero(), pool_id: object::id(freeze(l8)), package_version: C2, tiny_coin_base_bounty: balance::zero(), tiny_coin_farming_bounty: balance::zero() };
-    let l22 = object::uid_to_address(&(&l21).id);
-    transfer::share_object(l21);
-    worker_config::register_worker_info(l2, l4, l18);
-    event::emit(InitializeEvent { worker_info: l22 })
+    if (!(worker_config::is_worker_info_registered(freeze(l4), l16))) {
+        if (vault::is_vault_initialized(freeze(l3))) {
+            let l20 = vault::acquire_position_operator_cap(l1);
+            let l17 = C44;
+            if (l10 <= l17) {
+                let l19 = pool::open_position(l7, l8, l13, l14, l15);
+                let l21 = WorkerInfo { id: object::new(l15), reinvest_bounty_bps: l10, max_reinvest_bounty_bps: l17, ok_reinvestors: table::new(l15), ok_rebalancers: table::new(l15), ok_strategies: table::new(l15), treasury_account: l11, reinvest_path: vector[], reinvest_threshold: l12, shares: table::new(l15), total_share: 0u128, config: l9, position_nft: option::some(l19), position_operator_cap: l20, coin_base_decimals: coin::get_decimals(l5), coin_farming_decimals: coin::get_decimals(l6), tiny_coin_base: balance::zero(), tiny_coin_farming: balance::zero(), pool_id: object::id(freeze(l8)), package_version: C2, tiny_coin_base_bounty: balance::zero(), tiny_coin_farming_bounty: balance::zero() };
+                let l22 = object::uid_to_address(&(&l21).id);
+                transfer::share_object(l21);
+                worker_config::register_worker_info(l2, l4, l18);
+                event::emit(InitializeEvent { worker_info: l22 })
+            } else {
+                abort C14
+            }
+        } else {
+            abort C12
+        }
+    } else {
+        abort C1
+    }
 }
 
 public fun is_rebalancer<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: address): bool {
@@ -1299,19 +1343,21 @@ public fun is_stable<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &GlobalStorage
     let l12 = cetus_clmm_worker::now_seconds(l5);
     if (l8 + 86400u64 <= l12) {
         return false
-    };
-    let l9 = l16 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / l15 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
-    let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
-    let l11 = worker_config::get_max_price_diff_scale();
-    let l6 = if (l9 * l11 > l14 * l10) {
-        true
     } else {
-        l9 * l10 < l14 * l11
-    };
-    if (l6) {
-        return false
-    };
-    return true
+        let l9 = l16 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / l15 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
+        let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
+        let l11 = worker_config::get_max_price_diff_scale();
+        let l6 = if (l9 * l11 > l14 * l10) {
+            true
+        } else {
+            l9 * l10 < l14 * l11
+        };
+        if (l6) {
+            return false
+        } else {
+            return true
+        }
+    }
 }
 
 public fun is_stable_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &GlobalStorage, l2: &Pool<T1, T0>, l3: &Aggregator, l4: &Aggregator, l5: &Clock): bool {
@@ -1327,19 +1373,21 @@ public fun is_stable_reverse<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: &Globa
     let l12 = cetus_clmm_worker::now_seconds(l5);
     if (l8 + 86400u64 <= l12) {
         return false
-    };
-    let l9 = l16 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / l15 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
-    let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
-    let l11 = worker_config::get_max_price_diff_scale();
-    let l6 = if (l9 * l11 > l14 * l10) {
-        true
     } else {
-        l9 * l10 < l14 * l11
-    };
-    if (l6) {
-        return false
-    };
-    return true
+        let l9 = l16 * math::pow(10u64, 8u8)as u128 * math::pow(10u64, 9u8 - *(&l0.coin_farming_decimals))as u128 / l15 / math::pow(10u64, 9u8 - *(&l0.coin_base_decimals))as u128as u64;
+        let l10 = worker_config::get_max_price_diff(l1, l7, cetus_clmm_worker::get_mole_cetus_worker_addr());
+        let l11 = worker_config::get_max_price_diff_scale();
+        let l6 = if (l9 * l11 > l14 * l10) {
+            true
+        } else {
+            l9 * l10 < l14 * l11
+        };
+        if (l6) {
+            return false
+        } else {
+            return true
+        }
+    }
 }
 
 public fun is_strategy_ok<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: u8): bool {
@@ -1414,9 +1462,12 @@ fun liquidate<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut Pool<T0, T1>
     let (reg_17, reg_18) = cetus_clmm_worker::strategy_execute(l0, l2, l1, coin::zero(l5), coin::zero(l5), l6, 0u64, C39, coder::encode_u64(0u64), l4, l5);
     let l8 = reg_18;
     let l7 = reg_17;
-    assert!(coin::value(&l8) == 0u64, C23);
-    coin::destroy_zero(l8);
-    return l7
+    if (coin::value(&l8) == 0u64) {
+        coin::destroy_zero(l8);
+        return l7
+    } else {
+        abort C23
+    }
 }
 
 fun liquidate_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut Pool<T1, T0>, l2: &GlobalConfig, l3: u64, l4: &Clock, l5: &mut TxContext): Coin<T0> {
@@ -1424,9 +1475,12 @@ fun liquidate_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut Pool
     let (reg_17, reg_18) = cetus_clmm_worker::strategy_execute_reverse(l0, l2, l1, coin::zero(l5), coin::zero(l5), l6, 0u64, C39, coder::encode_u64(0u64), l4, l5);
     let l8 = reg_18;
     let l7 = reg_17;
-    assert!(coin::value(&l8) == 0u64, C23);
-    coin::destroy_zero(l8);
-    return l7
+    if (coin::value(&l8) == 0u64) {
+        coin::destroy_zero(l8);
+        return l7
+    } else {
+        abort C23
+    }
 }
 
 fun now_seconds(l0: &Clock): u64 {
@@ -1469,104 +1523,130 @@ public entry fun rebalance_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut W
 
 fun rebalance_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T0, T1>, l3: u32, l4: u32, l5: u128, l6: u64, l7: u64, l8: vector<u8>, l9: &Clock, l10: &mut TxContext) {
     let l11 = tx_context::sender(freeze(l10));
-    assert!(cetus_clmm_worker::is_rebalancer(freeze(l0), l11), C31);
-    let (reg_16, reg_17) = position::tick_range(option::borrow(&l0.position_nft));
-    let l25 = reg_17;
-    let l12 = if (i32::as_u32(reg_16) == l3) {
-        i32::as_u32(l25) == l4
-    } else {
-        false
-    };
-    assert!(!(l12), C25);
-    let (l13, l14);
-    let l23 = pool::open_position(l1, l2, l3, l4, l10);
-    let l24 = option::extract(&mut l0.position_nft);
-    let l21 = position::liquidity(&l24);
-    l13 = if (l21 > 0u128) {
-        let (reg_52, reg_53) = pool::remove_liquidity(l1, l2, &mut l24, l21, l9);
-        l14 = reg_53;
-        reg_52
-    } else {
-        l14 = balance::zero();
-        balance::zero()
-    };
-    let l18 = l14;
-    let l17 = l13;
-    pool::close_position(l1, l2, l24);
-    option::fill(&mut l0.position_nft, l23);
-    let l15 = if (balance::value(&l17) > 0u64) {
-        true
-    } else {
-        balance::value(&l18) > 0u64
-    };
-    if (l15) {
-        let (reg_99, reg_100) = cetus_clmm_worker::strategy_execute(l0, l1, l2, coin::from_balance(l17, l10), coin::from_balance(l18, l10), 0u128, 0u64, C38, l8, l9, l10);
-        let l20 = reg_100;
-        let l19 = reg_99;
-        let l16 = if (coin::value(&l19) <= l6) {
-            coin::value(&l20) <= l7
+    if (cetus_clmm_worker::is_rebalancer(freeze(l0), l11)) {
+        let (reg_16, reg_17) = position::tick_range(option::borrow(&l0.position_nft));
+        let l25 = reg_17;
+        let l12 = if (i32::as_u32(reg_16) == l3) {
+            i32::as_u32(l25) == l4
         } else {
             false
         };
-        assert!(l16, C26)
+        if (l12) {
+            abort C25
+        } else {
+            let (l13, l14);
+            let l23 = pool::open_position(l1, l2, l3, l4, l10);
+            let l24 = option::extract(&mut l0.position_nft);
+            let l21 = position::liquidity(&l24);
+            l13 = if (l21 > 0u128) {
+                let (reg_52, reg_53) = pool::remove_liquidity(l1, l2, &mut l24, l21, l9);
+                l14 = reg_53;
+                reg_52
+            } else {
+                l14 = balance::zero();
+                balance::zero()
+            };
+            let l18 = l14;
+            let l17 = l13;
+            pool::close_position(l1, l2, l24);
+            option::fill(&mut l0.position_nft, l23);
+            let l15 = if (balance::value(&l17) > 0u64) {
+                true
+            } else {
+                balance::value(&l18) > 0u64
+            };
+            if (l15) {
+                let (reg_99, reg_100) = cetus_clmm_worker::strategy_execute(l0, l1, l2, coin::from_balance(l17, l10), coin::from_balance(l18, l10), 0u128, 0u64, C38, l8, l9, l10);
+                let l20 = reg_100;
+                let l19 = reg_99;
+                let l16 = if (coin::value(&l19) <= l6) {
+                    coin::value(&l20) <= l7
+                } else {
+                    false
+                };
+                if (l16) {
+                    
+                } else {
+                    abort C26
+                }
+            } else {
+                balance::destroy_zero(l17);
+                balance::destroy_zero(l18)
+            };
+            let l22 = position::liquidity(option::borrow(&l0.position_nft));
+            if (l22 >= l5) {
+                event::emit(RebalanceEvent { tick_lower_idx: l3, tick_upper_idx: l4, liquidity_before: l21, liquidity_after: l22 })
+            } else {
+                abort C27
+            }
+        }
     } else {
-        balance::destroy_zero(l17);
-        balance::destroy_zero(l18)
-    };
-    let l22 = position::liquidity(option::borrow(&l0.position_nft));
-    assert!(l22 >= l5, C27);
-    event::emit(RebalanceEvent { tick_lower_idx: l3, tick_upper_idx: l4, liquidity_before: l21, liquidity_after: l22 })
+        abort C31
+    }
 }
 
 fun rebalance_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T1, T0>, l3: u32, l4: u32, l5: u128, l6: u64, l7: u64, l8: vector<u8>, l9: &Clock, l10: &mut TxContext) {
     let l11 = tx_context::sender(freeze(l10));
-    assert!(cetus_clmm_worker::is_rebalancer(freeze(l0), l11), C31);
-    let (reg_16, reg_17) = position::tick_range(option::borrow(&l0.position_nft));
-    let l25 = reg_17;
-    let l12 = if (i32::as_u32(reg_16) == l3) {
-        i32::as_u32(l25) == l4
-    } else {
-        false
-    };
-    assert!(!(l12), C25);
-    let (l13, l14);
-    let l23 = pool::open_position(l1, l2, l3, l4, l10);
-    let l24 = option::extract(&mut l0.position_nft);
-    let l21 = position::liquidity(&l24);
-    l13 = if (l21 > 0u128) {
-        let (reg_52, reg_53) = pool::remove_liquidity(l1, l2, &mut l24, l21, l9);
-        l14 = reg_53;
-        reg_52
-    } else {
-        l14 = balance::zero();
-        balance::zero()
-    };
-    let l17 = l14;
-    let l18 = l13;
-    pool::close_position(l1, l2, l24);
-    option::fill(&mut l0.position_nft, l23);
-    let l15 = if (balance::value(&l17) > 0u64) {
-        true
-    } else {
-        balance::value(&l18) > 0u64
-    };
-    if (l15) {
-        let (reg_99, reg_100) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, coin::from_balance(l17, l10), coin::from_balance(l18, l10), 0u128, 0u64, C38, l8, l9, l10);
-        let l20 = reg_100;
-        let l19 = reg_99;
-        let l16 = if (coin::value(&l19) <= l6) {
-            coin::value(&l20) <= l7
+    if (cetus_clmm_worker::is_rebalancer(freeze(l0), l11)) {
+        let (reg_16, reg_17) = position::tick_range(option::borrow(&l0.position_nft));
+        let l25 = reg_17;
+        let l12 = if (i32::as_u32(reg_16) == l3) {
+            i32::as_u32(l25) == l4
         } else {
             false
         };
-        assert!(l16, C26)
+        if (l12) {
+            abort C25
+        } else {
+            let (l13, l14);
+            let l23 = pool::open_position(l1, l2, l3, l4, l10);
+            let l24 = option::extract(&mut l0.position_nft);
+            let l21 = position::liquidity(&l24);
+            l13 = if (l21 > 0u128) {
+                let (reg_52, reg_53) = pool::remove_liquidity(l1, l2, &mut l24, l21, l9);
+                l14 = reg_53;
+                reg_52
+            } else {
+                l14 = balance::zero();
+                balance::zero()
+            };
+            let l17 = l14;
+            let l18 = l13;
+            pool::close_position(l1, l2, l24);
+            option::fill(&mut l0.position_nft, l23);
+            let l15 = if (balance::value(&l17) > 0u64) {
+                true
+            } else {
+                balance::value(&l18) > 0u64
+            };
+            if (l15) {
+                let (reg_99, reg_100) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, coin::from_balance(l17, l10), coin::from_balance(l18, l10), 0u128, 0u64, C38, l8, l9, l10);
+                let l20 = reg_100;
+                let l19 = reg_99;
+                let l16 = if (coin::value(&l19) <= l6) {
+                    coin::value(&l20) <= l7
+                } else {
+                    false
+                };
+                if (l16) {
+                    
+                } else {
+                    abort C26
+                }
+            } else {
+                balance::destroy_zero(l17);
+                balance::destroy_zero(l18)
+            };
+            let l22 = position::liquidity(option::borrow(&l0.position_nft));
+            if (l22 >= l5) {
+                event::emit(RebalanceEvent { tick_lower_idx: l3, tick_upper_idx: l4, liquidity_before: l21, liquidity_after: l22 })
+            } else {
+                abort C27
+            }
+        }
     } else {
-        balance::destroy_zero(l17);
-        balance::destroy_zero(l18)
-    };
-    let l22 = position::liquidity(option::borrow(&l0.position_nft));
-    assert!(l22 >= l5, C27);
-    event::emit(RebalanceEvent { tick_lower_idx: l3, tick_upper_idx: l4, liquidity_before: l21, liquidity_after: l22 })
+        abort C31
+    }
 }
 
 public entry fun rebalance_one_other<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut RewarderGlobalVault, l3: &mut Pool<T0, T1>, l4: &mut Pool<T0, T3>, l5: &mut Pool<T1, T3>, l6: bool, l7: bool, l8: bool, l9: u32, l10: u32, l11: u128, l12: u64, l13: u64, l14: vector<u8>, l15: bool, l16: &Clock, l17: &mut TxContext) {
@@ -1655,54 +1735,78 @@ public entry fun reinvest_all_reverse_two_others<T0, T1, T2, T3, T4>(l0: &mut Wo
 
 fun reinvest_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T0, T1>, l3: u128, l4: u64, l5: u64, l6: vector<u8>, l7: &Clock, l8: &mut TxContext) {
     let l9 = tx_context::sender(freeze(l8));
-    assert!(cetus_clmm_worker::is_reinvestor(freeze(l0), l9), C19);
-    let l16 = position::liquidity(option::borrow(&l0.position_nft));
-    let l12 = balance::withdraw_all(&mut l0.tiny_coin_base);
-    let l13 = balance::withdraw_all(&mut l0.tiny_coin_farming);
-    let l10 = if (balance::value(&l12) == 0u64) {
-        balance::value(&l13) == 0u64
+    if (cetus_clmm_worker::is_reinvestor(freeze(l0), l9)) {
+        let l16 = position::liquidity(option::borrow(&l0.position_nft));
+        let l12 = balance::withdraw_all(&mut l0.tiny_coin_base);
+        let l13 = balance::withdraw_all(&mut l0.tiny_coin_farming);
+        let l10 = if (balance::value(&l12) == 0u64) {
+            balance::value(&l13) == 0u64
+        } else {
+            false
+        };
+        if (l10) {
+            abort C28
+        } else {
+            let (reg_54, reg_55) = cetus_clmm_worker::strategy_execute(l0, l1, l2, coin::from_balance(l12, l8), coin::from_balance(l13, l8), 0u128, 0u64, C38, l6, l7, l8);
+            let l15 = reg_55;
+            let l14 = reg_54;
+            let l11 = if (coin::value(&l14) <= l4) {
+                coin::value(&l15) <= l5
+            } else {
+                false
+            };
+            if (l11) {
+                let l17 = position::liquidity(option::borrow(&l0.position_nft));
+                if (l17 >= l16 + l3) {
+                    event::emit(ReinvestEvent { liquidity_before: l16, liquidity_after: l17 })
+                } else {
+                    abort C27
+                }
+            } else {
+                abort C26
+            }
+        }
     } else {
-        false
-    };
-    assert!(!(l10), C28);
-    let (reg_54, reg_55) = cetus_clmm_worker::strategy_execute(l0, l1, l2, coin::from_balance(l12, l8), coin::from_balance(l13, l8), 0u128, 0u64, C38, l6, l7, l8);
-    let l15 = reg_55;
-    let l14 = reg_54;
-    let l11 = if (coin::value(&l14) <= l4) {
-        coin::value(&l15) <= l5
-    } else {
-        false
-    };
-    assert!(l11, C26);
-    let l17 = position::liquidity(option::borrow(&l0.position_nft));
-    assert!(l17 >= l16 + l3, C27);
-    event::emit(ReinvestEvent { liquidity_before: l16, liquidity_after: l17 })
+        abort C19
+    }
 }
 
 fun reinvest_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T1, T0>, l3: u128, l4: u64, l5: u64, l6: vector<u8>, l7: &Clock, l8: &mut TxContext) {
     let l9 = tx_context::sender(freeze(l8));
-    assert!(cetus_clmm_worker::is_reinvestor(freeze(l0), l9), C19);
-    let l16 = position::liquidity(option::borrow(&l0.position_nft));
-    let l12 = balance::withdraw_all(&mut l0.tiny_coin_base);
-    let l13 = balance::withdraw_all(&mut l0.tiny_coin_farming);
-    let l10 = if (balance::value(&l12) == 0u64) {
-        balance::value(&l13) == 0u64
+    if (cetus_clmm_worker::is_reinvestor(freeze(l0), l9)) {
+        let l16 = position::liquidity(option::borrow(&l0.position_nft));
+        let l12 = balance::withdraw_all(&mut l0.tiny_coin_base);
+        let l13 = balance::withdraw_all(&mut l0.tiny_coin_farming);
+        let l10 = if (balance::value(&l12) == 0u64) {
+            balance::value(&l13) == 0u64
+        } else {
+            false
+        };
+        if (l10) {
+            abort C28
+        } else {
+            let (reg_54, reg_55) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, coin::from_balance(l12, l8), coin::from_balance(l13, l8), 0u128, 0u64, C38, l6, l7, l8);
+            let l15 = reg_55;
+            let l14 = reg_54;
+            let l11 = if (coin::value(&l14) <= l4) {
+                coin::value(&l15) <= l5
+            } else {
+                false
+            };
+            if (l11) {
+                let l17 = position::liquidity(option::borrow(&l0.position_nft));
+                if (l17 >= l16 + l3) {
+                    event::emit(ReinvestEvent { liquidity_before: l16, liquidity_after: l17 })
+                } else {
+                    abort C27
+                }
+            } else {
+                abort C26
+            }
+        }
     } else {
-        false
-    };
-    assert!(!(l10), C28);
-    let (reg_54, reg_55) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, coin::from_balance(l12, l8), coin::from_balance(l13, l8), 0u128, 0u64, C38, l6, l7, l8);
-    let l15 = reg_55;
-    let l14 = reg_54;
-    let l11 = if (coin::value(&l14) <= l4) {
-        coin::value(&l15) <= l5
-    } else {
-        false
-    };
-    assert!(l11, C26);
-    let l17 = position::liquidity(option::borrow(&l0.position_nft));
-    assert!(l17 >= l16 + l3, C27);
-    event::emit(ReinvestEvent { liquidity_before: l16, liquidity_after: l17 })
+        abort C19
+    }
 }
 
 public entry fun reinvest_one_other<T0, T1, T2, T3>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut RewarderGlobalVault, l3: &mut Pool<T0, T1>, l4: &mut Pool<T0, T3>, l5: &mut Pool<T1, T3>, l6: bool, l7: bool, l8: bool, l9: u128, l10: u64, l11: u64, l12: vector<u8>, l13: bool, l14: &Clock, l15: &mut TxContext) {
@@ -1773,6 +1877,8 @@ fun remove_share<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: u64): u128 {
             *(&mut l0.total_share) = *(&l0.total_share) - l3;
             *(table::borrow_mut(&mut l0.shares, l1)) = 0u128;
             return l2
+        } else {
+            
         }
     } else {
         
@@ -1782,8 +1888,11 @@ fun remove_share<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: u64): u128 {
 
 public entry fun set_max_reinvestor_bounty_bps<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInfo<T0, T1, T2>, l2: u64) {
     cetus_clmm_worker::checked_package_version(freeze(l1));
-    assert!(l2 >= *(&l1.reinvest_bounty_bps), C15);
-    *(&mut l1.max_reinvest_bounty_bps) = l2
+    if (l2 >= *(&l1.reinvest_bounty_bps)) {
+        *(&mut l1.max_reinvest_bounty_bps) = l2
+    } else {
+        abort C15
+    }
 }
 
 public entry fun set_rebalancers_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInfo<T0, T1, T2>, l2: vector<address>, l3: bool) {
@@ -1810,8 +1919,11 @@ public entry fun set_reinvest_threshold<T0, T1, T2>(l0: &AdminCap, l1: &mut Work
 
 public entry fun set_reinvestor_bounty_bps<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInfo<T0, T1, T2>, l2: u64) {
     cetus_clmm_worker::checked_package_version(freeze(l1));
-    assert!(l2 <= *(&l1.max_reinvest_bounty_bps), C14);
-    *(&mut l1.reinvest_bounty_bps) = l2
+    if (l2 <= *(&l1.max_reinvest_bounty_bps)) {
+        *(&mut l1.reinvest_bounty_bps) = l2
+    } else {
+        abort C14
+    }
 }
 
 public entry fun set_reinvestor_ok<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInfo<T0, T1, T2>, l2: address, l3: bool) {
@@ -1883,8 +1995,9 @@ public fun share_to_balance<T0, T1, T2>(l0: &WorkerInfo<T0, T1, T2>, l1: u128): 
 fun share_to_balance_inner<T0>(l0: u128, l1: u128, l2: u128): u128 {
     if (l1 == 0u128) {
         return l2
-    };
-    return mole_math::mul_div_u128(l2, l0, l1)
+    } else {
+        return mole_math::mul_div_u128(l2, l0, l1)
+    }
 }
 
 fun strategy_execute<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T0, T1>, l3: Coin<T0>, l4: Coin<T1>, l5: u128, l6: u64, l7: u8, l8: vector<u8>, l9: &Clock, l10: &mut TxContext): ( Coin<T0>, Coin<T1>) {
@@ -1892,28 +2005,34 @@ fun strategy_execute<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalCon
     if (l7 == C37) {
         let (reg_20, reg_21) = cetus_clmm_strategy_add_base_coin_only::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
         return (reg_20, reg_21)
-    };
-    if (l7 == C38) {
-        let (reg_39, reg_40) = cetus_clmm_strategy_add_two_sides_optimal::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_39, reg_40)
-    };
-    if (l7 == C39) {
-        let (reg_58, reg_59) = cetus_clmm_strategy_liquidate::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_58, reg_59)
-    };
-    if (l7 == C40) {
-        let (reg_77, reg_78) = cetus_clmm_strategy_withdraw_minimize_trading::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_77, reg_78)
-    };
-    if (l7 == C41) {
-        let (reg_96, reg_97) = cetus_clmm_strategy_partial_close_liquidate::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_96, reg_97)
-    };
-    if (l7 == C42) {
-        let (reg_115, reg_116) = cetus_clmm_strategy_partial_close_minimize_trading::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_115, reg_116)
-    };
-    abort C4
+    } else {
+        if (l7 == C38) {
+            let (reg_39, reg_40) = cetus_clmm_strategy_add_two_sides_optimal::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+            return (reg_39, reg_40)
+        } else {
+            if (l7 == C39) {
+                let (reg_58, reg_59) = cetus_clmm_strategy_liquidate::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+                return (reg_58, reg_59)
+            } else {
+                if (l7 == C40) {
+                    let (reg_77, reg_78) = cetus_clmm_strategy_withdraw_minimize_trading::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+                    return (reg_77, reg_78)
+                } else {
+                    if (l7 == C41) {
+                        let (reg_96, reg_97) = cetus_clmm_strategy_partial_close_liquidate::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+                        return (reg_96, reg_97)
+                    } else {
+                        if (l7 == C42) {
+                            let (reg_115, reg_116) = cetus_clmm_strategy_partial_close_minimize_trading::execute(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+                            return (reg_115, reg_116)
+                        } else {
+                            abort C4
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 fun strategy_execute_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T1, T0>, l3: Coin<T0>, l4: Coin<T1>, l5: u128, l6: u64, l7: u8, l8: vector<u8>, l9: &Clock, l10: &mut TxContext): ( Coin<T0>, Coin<T1>) {
@@ -1921,28 +2040,34 @@ fun strategy_execute_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &G
     if (l7 == C37) {
         let (reg_20, reg_21) = cetus_clmm_strategy_add_base_coin_only::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
         return (reg_20, reg_21)
-    };
-    if (l7 == C38) {
-        let (reg_39, reg_40) = cetus_clmm_strategy_add_two_sides_optimal::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_39, reg_40)
-    };
-    if (l7 == C39) {
-        let (reg_58, reg_59) = cetus_clmm_strategy_liquidate::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_58, reg_59)
-    };
-    if (l7 == C40) {
-        let (reg_77, reg_78) = cetus_clmm_strategy_withdraw_minimize_trading::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_77, reg_78)
-    };
-    if (l7 == C41) {
-        let (reg_96, reg_97) = cetus_clmm_strategy_partial_close_liquidate::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_96, reg_97)
-    };
-    if (l7 == C42) {
-        let (reg_115, reg_116) = cetus_clmm_strategy_partial_close_minimize_trading::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
-        return (reg_115, reg_116)
-    };
-    abort C4
+    } else {
+        if (l7 == C38) {
+            let (reg_39, reg_40) = cetus_clmm_strategy_add_two_sides_optimal::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+            return (reg_39, reg_40)
+        } else {
+            if (l7 == C39) {
+                let (reg_58, reg_59) = cetus_clmm_strategy_liquidate::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+                return (reg_58, reg_59)
+            } else {
+                if (l7 == C40) {
+                    let (reg_77, reg_78) = cetus_clmm_strategy_withdraw_minimize_trading::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+                    return (reg_77, reg_78)
+                } else {
+                    if (l7 == C41) {
+                        let (reg_96, reg_97) = cetus_clmm_strategy_partial_close_liquidate::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+                        return (reg_96, reg_97)
+                    } else {
+                        if (l7 == C42) {
+                            let (reg_115, reg_116) = cetus_clmm_strategy_partial_close_minimize_trading::execute_reverse(l1, l2, l3, l4, l5, l11, l6, l8, &mut l0.tiny_coin_base, &mut l0.tiny_coin_farming, l9, l10);
+                            return (reg_115, reg_116)
+                        } else {
+                            abort C4
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 entry fun upgrade_package_version<T0, T1, T2>(l0: &AdminCap, l1: &mut WorkerInfo<T0, T1, T2>, l2: u64) {
@@ -1955,8 +2080,15 @@ public entry fun withdraw_rewards_bounty<T0, T1, T2>(l0: &AdminCap, l1: &mut Wor
         l3 = balance::value(&l1.tiny_coin_base_bounty);
         l4 = balance::value(&l1.tiny_coin_farming_bounty);
     } else {
-        assert!(l3 <= balance::value(&l1.tiny_coin_base_bounty), C33);
-        assert!(l4 <= balance::value(&l1.tiny_coin_farming_bounty), C34)
+        if (l3 <= balance::value(&l1.tiny_coin_base_bounty)) {
+            if (l4 <= balance::value(&l1.tiny_coin_farming_bounty)) {
+                
+            } else {
+                abort C34
+            }
+        } else {
+            abort C33
+        }
     };
     let l6 = balance::split(&mut l1.tiny_coin_base_bounty, l3);
     let l7 = balance::split(&mut l1.tiny_coin_farming_bounty, l4);
@@ -1979,20 +2111,26 @@ fun work_inner<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l
     } else {
         false
     };
-    assert!(l11, C21);
-    assert!(object::id(freeze(l2)) == *(&l0.pool_id), C24);
-    let l14 = position::liquidity(option::borrow(&l0.position_nft)) - l12;
-    let (reg_51, reg_52) = cetus_clmm_worker::strategy_execute(l0, l1, l2, l4, l5, l12, l6, l7, l8, l9, l10);
-    let l16 = reg_52;
-    let l15 = reg_51;
-    let l13 = position::liquidity(option::borrow(&l0.position_nft)) - l14;
-    if (coin::value(&l16) == 0u64) {
-        coin::destroy_zero(l16)
+    if (l11) {
+        if (object::id(freeze(l2)) == *(&l0.pool_id)) {
+            let l14 = position::liquidity(option::borrow(&l0.position_nft)) - l12;
+            let (reg_51, reg_52) = cetus_clmm_worker::strategy_execute(l0, l1, l2, l4, l5, l12, l6, l7, l8, l9, l10);
+            let l16 = reg_52;
+            let l15 = reg_51;
+            let l13 = position::liquidity(option::borrow(&l0.position_nft)) - l14;
+            if (coin::value(&l16) == 0u64) {
+                coin::destroy_zero(l16)
+            } else {
+                pay::keep(l16, freeze(l10))
+            };
+            cetus_clmm_worker::add_share(l0, l3, l13, l14);
+            return l15
+        } else {
+            abort C24
+        }
     } else {
-        pay::keep(l16, freeze(l10))
-    };
-    cetus_clmm_worker::add_share(l0, l3, l13, l14);
-    return l15
+        abort C21
+    }
 }
 
 fun work_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalConfig, l2: &mut Pool<T1, T0>, l3: u64, l4: Coin<T0>, l5: Coin<T1>, l6: u64, l7: u8, l8: vector<u8>, l9: &Clock, l10: &mut TxContext): Coin<T0> {
@@ -2003,20 +2141,26 @@ fun work_inner_reverse<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &GlobalC
     } else {
         false
     };
-    assert!(l11, C21);
-    assert!(object::id(freeze(l2)) == *(&l0.pool_id), C24);
-    let l14 = position::liquidity(option::borrow(&l0.position_nft)) - l12;
-    let (reg_51, reg_52) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, l4, l5, l12, l6, l7, l8, l9, l10);
-    let l16 = reg_52;
-    let l15 = reg_51;
-    let l13 = position::liquidity(option::borrow(&l0.position_nft)) - l14;
-    if (coin::value(&l16) == 0u64) {
-        coin::destroy_zero(l16)
+    if (l11) {
+        if (object::id(freeze(l2)) == *(&l0.pool_id)) {
+            let l14 = position::liquidity(option::borrow(&l0.position_nft)) - l12;
+            let (reg_51, reg_52) = cetus_clmm_worker::strategy_execute_reverse(l0, l1, l2, l4, l5, l12, l6, l7, l8, l9, l10);
+            let l16 = reg_52;
+            let l15 = reg_51;
+            let l13 = position::liquidity(option::borrow(&l0.position_nft)) - l14;
+            if (coin::value(&l16) == 0u64) {
+                coin::destroy_zero(l16)
+            } else {
+                pay::keep(l16, freeze(l10))
+            };
+            cetus_clmm_worker::add_share(l0, l3, l13, l14);
+            return l15
+        } else {
+            abort C24
+        }
     } else {
-        pay::keep(l16, freeze(l10))
-    };
-    cetus_clmm_worker::add_share(l0, l3, l13, l14);
-    return l15
+        abort C21
+    }
 }
 
 public entry fun work_none<T0, T1, T2>(l0: &mut WorkerInfo<T0, T1, T2>, l1: &mut GlobalStorage, l2: &mut Storage, l3: &GlobalConfig, l4: &mut Pool<T0, T1>, l5: u64, l6: u64, l7: u64, l8: u8, l9: vector<u8>, l10: &Aggregator, l11: &Aggregator, l12: &Clock, l13: &mut TxContext) {

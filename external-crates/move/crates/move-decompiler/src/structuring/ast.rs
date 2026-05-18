@@ -36,15 +36,20 @@ pub enum Input {
 /// attribute residual gotos by source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GotoSource {
-    /// Then-arm of a Condition targets the post-dominator.
-    ConseqEqPostDom,
-    /// Else-arm of a Condition targets the post-dominator.
-    AltEqPostDom,
     /// Condition whose arm targets the condition node itself (back-edge to the loop head).
     DegenerateJumpIf,
-    /// Arm target sits outside start's dominator subtree (typically a Continue/Break to an
-    /// enclosing loop, rewritten later by that loop's `insert_breaks`).
+    /// Arm target is the loop-head's chosen successor; `insert_breaks` rewrites this to
+    /// `Break(loop_head)`.
+    LoopBreak,
+    /// Arm target sits outside `start`'s dominator subtree, or is the IfElse/Switch's join
+    /// point. Either way, the owned-children hoist may place the target as a sibling and
+    /// elide this Jump; if it survives, `insert_breaks` reclassifies for the enclosing
+    /// loop, or `generate_output` lowers to `Unstructured`.
     ArmOutsideSubtree,
+    /// Jump emitted by `structure_code_node` when the Code block's `next` isn't its
+    /// dom-tree child — the join is owned by an enclosing scope. Without this explicit
+    /// Jump the branch would live only in the bytecode terminator, invisible to elision.
+    CodeBranch,
     /// JumpIf emitted at a latch node by `structure_latch_node`.
     LatchTest,
     /// Jump emitted at a latch node's Code-input by `structure_latch_node`.
@@ -59,10 +64,10 @@ pub enum GotoSource {
 impl GotoSource {
     pub fn as_tag(&self) -> &'static str {
         match self {
-            GotoSource::ConseqEqPostDom => "CPD",
-            GotoSource::AltEqPostDom => "APD",
             GotoSource::DegenerateJumpIf => "DJI",
+            GotoSource::LoopBreak => "LB",
             GotoSource::ArmOutsideSubtree => "AOS",
+            GotoSource::CodeBranch => "CB",
             GotoSource::LatchTest => "LT",
             GotoSource::LatchCode => "LC",
             GotoSource::SelfLoop => "SL",

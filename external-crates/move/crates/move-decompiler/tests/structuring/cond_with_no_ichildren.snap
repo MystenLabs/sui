@@ -3,15 +3,12 @@ source: crates/move-decompiler/tests/tests.rs
 ---
 if (0) {
     if (1) {
-        jump<AOS> NodeIndex(3);
-    } else {
         { }
     }
 } else {
     if (2) {
-        jump<AOS> NodeIndex(3);
-    } else {
         { }
     }
 }
 { 4 }
+{ 3 }

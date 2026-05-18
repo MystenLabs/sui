@@ -22,6 +22,11 @@ pub struct Graph {
     pub loop_heads: HashSet<NodeIndex>,
     pub back_edges: HashMap<NodeIndex, HashSet<NodeIndex>>,
     pub post_dominators: Dominators<NodeIndex>,
+    /// For each non-loop-head node, the succ_nodes of every loop whose body contains it.
+    /// `structure_acyclic_region`'s orphan hoist consults this so it doesn't eat an
+    /// enclosing-loop successor that `structure_loop` will append after the `Loop` form;
+    /// `structure_code_node`'s `next` fusion consults it for the same reason.
+    pub loop_exits: HashMap<NodeIndex, HashSet<NodeIndex>>,
 }
 
 impl Graph {
@@ -62,14 +67,29 @@ impl Graph {
             print_heading("loop heads");
             println!("{loop_heads:#?}");
         }
-        Self {
+        let mut graph = Self {
             cfg,
             dom_tree,
             loop_heads,
             back_edges,
             post_dominators,
             return_,
+            loop_exits: HashMap::new(),
+        };
+        // Populate `loop_exits` from the loops' bodies after the graph is otherwise built so
+        // `find_loop_nodes` has the dom-tree and back-edges available.
+        let mut loop_exits: HashMap<NodeIndex, HashSet<NodeIndex>> = HashMap::new();
+        for &lh in &graph.loop_heads {
+            let (body, succs) = graph.find_loop_nodes(lh);
+            for body_node in &body {
+                loop_exits
+                    .entry(*body_node)
+                    .or_default()
+                    .extend(succs.iter().copied());
+            }
         }
+        graph.loop_exits = loop_exits;
+        graph
     }
 
     pub fn update_latch_nodes(&mut self, node: NodeIndex, latch: NodeIndex) {
@@ -144,8 +164,13 @@ impl Graph {
             }
         }
 
+        // Iterate `loop_nodes` in sorted order — it's a HashSet so iteration order is
+        // otherwise non-deterministic, and that order leaks into `refine_loop_nodes`'s
+        // greedy fixpoint, which can produce different SCC-boundary refinements run-to-run.
+        let mut loop_nodes_sorted: Vec<NodeIndex> = loop_nodes.iter().copied().collect();
+        loop_nodes_sorted.sort_by_key(|n| n.index());
         let mut succ_nodes = HashSet::new();
-        for node in &loop_nodes {
+        for node in &loop_nodes_sorted {
             for successor in self
                 .cfg
                 .neighbors_directed(*node, petgraph::Direction::Outgoing)
@@ -175,7 +200,11 @@ impl Graph {
 
         while succ_nodes.len() > 1 && !new_nodes.is_empty() {
             new_nodes.clear();
-            for node in succ_nodes.clone() {
+            // Sort for determinism: HashSet iteration order leaks into the refinement's
+            // greedy frontier expansion.
+            let mut sorted_succs: Vec<NodeIndex> = succ_nodes.iter().copied().collect();
+            sorted_succs.sort_by_key(|n| n.index());
+            for node in sorted_succs {
                 if self
                     .cfg
                     .neighbors_directed(node, petgraph::Direction::Incoming)
@@ -243,44 +272,25 @@ fn find_loop_heads_and_back_edges<N, E>(
     (loop_heads, back_edges)
 }
 
+/// Vanilla post-dominator analysis. `structure_acyclic_region` consults the result only to
+/// identify a Switch/IfElse's convergence point so we emit a `Jump` rather than embedding
+/// the join into one of the arms — the owned-children hoist then places the join as a
+/// sibling. No filter on `Code(_, _, None)` sinks: the hoist handles assertion / early-return
+/// patterns directly via the per-scope sibling placement.
 fn compute_post_dominators<N, E>(
     config: &Config,
     cfg: &petgraph::Graph<N, E>,
     input: &BTreeMap<D::Label, D::Input>,
 ) -> (NodeIndex, Dominators<NodeIndex>) {
-    // Filter `Code(_, _, None)` sinks (returns and aborts) from post-dom analysis so the
-    // remaining unfiltered sinks anchor the analysis on the function's "natural" exit. With
-    // every sink kept, an `if t { abort } else { rest }` or `if t { return } else { rest }`
-    // pattern has both arms converging at `return_`, and the structurer leaves `rest` nested
-    // inside the else-arm. Filtering the assertion/early-return arm exposes the other arm's
-    // chain as the post-dom and the structurer inlines `rest` as a sibling.
-    //
-    // The filter is global: a sink is safe to filter iff every non-sink node in the CFG can
-    // still reach some *unfiltered* sink. Tentatively filter all sinks; if any node would be
-    // disconnected, un-filter one of its reachable sinks to anchor it. Repeat until stable.
-    // (For `while … { 1 }; 2`, nodes 0 and 1 only reach the trailing sink, so it gets
-    // un-filtered. For `if t { abort } else { rest; final_return }`, the abort gets filtered
-    // and `final_return` anchors everything else.)
-    let sinks: HashSet<NodeIndex> = input
-        .iter()
-        .filter_map(|(lbl, inp)| matches!(inp, D::Input::Code(_, _, None)).then_some(*lbl))
-        .collect();
-    let filtered_exit_sinks = compute_filter_set(cfg, input, &sinks);
-
-    // Build a reversed copy of the CFG and add a synthetic `return_` node. Dominators rooted
-    // at `return_` in this graph are post-dominators of the original.
     let mut rev = petgraph::graph::DiGraph::<(), ()>::from_edges(
-        cfg.edge_references()
-            .filter(|e| !filtered_exit_sinks.contains(&e.target()))
-            .map(|e| (e.target(), e.source())),
+        cfg.edge_references().map(|e| (e.target(), e.source())),
     );
     let return_: NodeIndex = rev.add_node(());
     if config.debug_print.control_flow_graph {
         println!("Return node: {return_:?}");
     }
 
-    // Wire `return_` to each original sink (a node with no outgoing edges in the original CFG,
-    // which is a node with no incoming edges in the reversed graph).
+    // Wire `return_` to each original sink (no outgoing edges in cfg = no incoming in rev).
     for node in rev.node_indices() {
         if node == return_ || !input.contains_key(&node) {
             continue;
@@ -290,16 +300,11 @@ fn compute_post_dominators<N, E>(
             .count()
             == 0
         {
-            if !matches!(input.get(&node), Some(D::Input::Code(_, _, None)))
-                && config.debug_print.control_flow_graph
-            {
-                println!("Node {node:?} with no outs");
-            }
             rev.add_edge(return_, node, ());
         }
     }
 
-    add_infinite_loop_post_dominators(config, &mut rev, return_, cfg, input, &filtered_exit_sinks);
+    add_infinite_loop_post_dominators(config, &mut rev, return_, cfg, input);
 
     (
         return_,
@@ -308,29 +313,16 @@ fn compute_post_dominators<N, E>(
 }
 
 /// Add *impossible edges* (the folk-literature name for synthetic edges introduced to make
-/// post-domination total) from `return_` to one representative of each terminal region of the
+/// post-domination total) from `return_` to one representative of each terminal SCC of the
 /// original CFG — an infinite loop or abort-cycle that never reaches a real exit. Without
 /// them, `simple_fast` leaves `immediate_dominator` undefined for nodes in those regions and
 /// structuring later crashes on `.unwrap()`.
-///
-/// We identify terminal regions as terminal SCCs of the original CFG: a strongly-connected
-/// component is *terminal* when every outgoing edge from any of its nodes stays inside the
-/// SCC, so execution that enters never leaves. (The singleton-sink case slips through this
-/// check vacuously and gets a redundant impossible edge — already wired up by the sinks pass
-/// — but `simple_fast` handles the duplicate fine.) For each terminal SCC we pick the
-/// highest-indexed input node as the representative; any node in the SCC would suffice to
-/// make the whole SCC post-dominator-defined.
-///
-/// Filtered exit sinks are excluded as representatives: `compute_post_dominators` filtered
-/// their incoming reverse edges, so they're absent from `rev`. The structurer short-circuits
-/// on `D::Input::Code(_, _, None)` before querying their post-dom, so they don't need one.
 fn add_infinite_loop_post_dominators<N, E>(
     config: &Config,
     rev: &mut DiGraph<(), ()>,
     return_: NodeIndex,
     cfg: &petgraph::Graph<N, E>,
     input: &BTreeMap<D::Label, D::Input>,
-    filtered_exit_sinks: &HashSet<NodeIndex>,
 ) {
     for scc in petgraph::algo::tarjan_scc(cfg) {
         let members: HashSet<NodeIndex> = scc.iter().copied().collect();
@@ -341,12 +333,7 @@ fn add_infinite_loop_post_dominators<N, E>(
         if !stays_in_scc {
             continue;
         }
-        let Some(rep) = scc
-            .iter()
-            .filter(|n| input.contains_key(n) && !filtered_exit_sinks.contains(n))
-            .max()
-            .copied()
-        else {
+        let Some(rep) = scc.iter().filter(|n| input.contains_key(n)).max().copied() else {
             continue;
         };
         if config.debug_print.control_flow_graph {
@@ -354,66 +341,4 @@ fn add_infinite_loop_post_dominators<N, E>(
         }
         rev.add_edge(return_, rep, ());
     }
-}
-
-/// Compute the set of sinks safe to filter from the reverse CFG. A sink is filterable iff
-/// every non-sink node in the CFG can still reach an *unfiltered* sink — otherwise filtering
-/// it disconnects some nodes from `return_` in the post-dom analysis.
-///
-/// Algorithm: tentatively filter everything, find nodes with no reachable unfiltered sink,
-/// un-filter one of their reachable sinks as an anchor, repeat to fixpoint.
-fn compute_filter_set<N, E>(
-    cfg: &petgraph::Graph<N, E>,
-    input: &BTreeMap<D::Label, D::Input>,
-    sinks: &HashSet<NodeIndex>,
-) -> HashSet<NodeIndex> {
-    // Precompute each non-sink node's reachable sinks (forward CFG traversal).
-    let reachable_sinks: HashMap<NodeIndex, Vec<NodeIndex>> = input
-        .keys()
-        .filter(|n| !sinks.contains(n))
-        .map(|&n| (n, cfg_reachable_sinks(cfg, n, sinks)))
-        .collect();
-
-    let mut filter = sinks.clone();
-    loop {
-        let mut anchors_to_unfilter: HashSet<NodeIndex> = HashSet::new();
-        for reachable in reachable_sinks.values() {
-            if reachable.iter().any(|s| !filter.contains(s)) {
-                continue;
-            }
-            // Node has no unfiltered exit; pick one of its reachable sinks as an anchor.
-            // Picking any works; we take the highest-indexed for determinism.
-            if let Some(&anchor) = reachable.iter().max() {
-                anchors_to_unfilter.insert(anchor);
-            }
-        }
-        if anchors_to_unfilter.is_empty() {
-            break;
-        }
-        for a in anchors_to_unfilter {
-            filter.remove(&a);
-        }
-    }
-    filter
-}
-
-fn cfg_reachable_sinks<N, E>(
-    cfg: &petgraph::Graph<N, E>,
-    start: NodeIndex,
-    sinks: &HashSet<NodeIndex>,
-) -> Vec<NodeIndex> {
-    let mut visited = HashSet::new();
-    let mut stack = vec![start];
-    let mut out = Vec::new();
-    while let Some(n) = stack.pop() {
-        if !visited.insert(n) {
-            continue;
-        }
-        if sinks.contains(&n) {
-            out.push(n);
-            continue;
-        }
-        stack.extend(cfg.neighbors(n));
-    }
-    out
 }

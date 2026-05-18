@@ -42,70 +42,64 @@ public fun get_square_side(l0: &Shape): u64 {
     let l2 = l0;
     let l1 = l2;
     match (l1) {
-        Shape::Square => {
-            
+        Square { side: reg_7 } => {
+            let Shape::Square { side: reg_9 } = &l2;
+            return *reg_9 : &u64
         },
-        Shape::Triangle => {
+        Triangle => {
             abort C0
         }
-    };
-    let Shape::Square { side: reg_7 } = &l1;
-    let Shape::Square { side: reg_9 } = &l2;
-    return *reg_9 : &u64
+    }
 }
 
 public fun get_triangle_size(l0: &Shape): ( u64, u64) {
     let l3 = l0;
     let l2 = l3;
     match (l2) {
-        Shape::Square => {
+        Square => {
             abort C0
         },
-        Shape::Triangle => {
-            
+        Triangle { base: reg_7, height: reg_8 } => {
+            let Shape::Triangle { base: reg_10, height: reg_11 } = &l3;
+            let l1 = reg_11 : &u64;
+            let l4 = reg_10 : &u64;
+            let l5 = l1;
+            return (*l4, *l5)
         }
-    };
-    let Shape::Triangle { base: reg_7, height: reg_8 } = &l2;
-    let Shape::Triangle { base: reg_10, height: reg_11 } = &l3;
-    let l1 = reg_11 : &u64;
-    let l4 = reg_10 : &u64;
-    let l5 = l1;
-    return (*l4, *l5)
+    }
 }
 
 public fun set_square_side(l0: &mut Shape, l1: u64) {
     let l3 = l0;
     let l2 = freeze(l3);
     match (l2) {
-        Shape::Square => {
-            
+        Square { side: reg_8 } => {
+            let Shape::Square { side: reg_10 } = &mut l3;
+            let l4 = reg_10 : &mut u64;
+            *l4 = l1;
+            return
         },
-        Shape::Triangle => {
+        Triangle => {
             abort C0
         }
-    };
-    let Shape::Square { side: reg_8 } = &l2;
-    let Shape::Square { side: reg_10 } = &mut l3;
-    let l4 = reg_10 : &mut u64;
-    *l4 = l1
+    }
 }
 
 public fun set_triangle_dimensions(l0: &mut Shape, l1: u64, l2: u64) {
     let l5 = l0;
     let l4 = freeze(l5);
     match (l4) {
-        Shape::Square => {
+        Square => {
             abort C0
         },
-        Shape::Triangle => {
-            
+        Triangle { base: reg_8, height: reg_9 } => {
+            let Shape::Triangle { base: reg_11, height: reg_12 } = &mut l5;
+            let l3 = reg_12 : &mut u64;
+            let l6 = reg_11 : &mut u64;
+            let l7 = l3;
+            *l6 = l1;
+            *l7 = l2;
+            return
         }
-    };
-    let Shape::Triangle { base: reg_8, height: reg_9 } = &l4;
-    let Shape::Triangle { base: reg_11, height: reg_12 } = &mut l5;
-    let l3 = reg_12 : &mut u64;
-    let l6 = reg_11 : &mut u64;
-    let l7 = l3;
-    *l6 = l1;
-    *l7 = l2
+    }
 }
