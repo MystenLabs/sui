@@ -281,16 +281,17 @@ impl ObserverNetworkService for ObserverService {
 
         // Merge randomness signature broadcast into the block stream when a handler is available.
         if let Some(handler) = &self.randomness_signature_handler {
-            let sig_rx = handler.subscribe_randomness_signatures();
-            let sig_stream =
-                tokio_stream::wrappers::BroadcastStream::new(sig_rx).filter_map(|result| {
-                    futures::future::ready(result.ok().map(|data| ObserverStreamItem {
-                        blocks: vec![],
-                        auxiliary_data: AuxiliaryData {
-                            randomness_signatures: vec![data],
-                        },
-                    }))
-                });
+            const MAX_SIGNATURES_PER_POLL: usize = 20;
+            let sig_stream = BroadcastStream::new_untracked(
+                handler.subscribe_randomness_signatures(),
+                MAX_SIGNATURES_PER_POLL,
+            )
+            .map(|sigs| ObserverStreamItem {
+                blocks: vec![],
+                auxiliary_data: AuxiliaryData {
+                    randomness_signatures: sigs,
+                },
+            });
             Ok(Box::pin(futures::stream::select(block_stream, sig_stream)))
         } else {
             Ok(Box::pin(block_stream))
