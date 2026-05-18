@@ -301,6 +301,13 @@ assert_cmd = "2.0.6"
 async-graphql = "=7.0.1"
 async-graphql-axum = "=7.0.1"
 async-graphql-value = "=7.0.1"
+
+# Verus formal verification deps. The `verus!` macro is a no-op for stable
+# `cargo build`; these crates only carry weight when invoked through
+# `cargo verus check`.
+vstd = "=0.0.0-2026-04-20-1748"
+verus_builtin = "=0.0.0-2026-04-12-0118"
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 async-recursion = "1.0.4"
 async-stream = "0.3.6"
 async-trait = "0.1.61"
@@ -787,10 +794,3 @@ tonic-reflection = { git = "https://github.com/hyperium/tonic.git", rev = "d6ce6
 async-graphql = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-axum = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
 async-graphql-value = { git = "https://github.com/amnn/async-graphql", branch = "v7.0.1-react-18-graphiql-4" }
-
-# Verus formal verification deps. The `verus!` macro is a no-op for stable
-# `cargo build`; these crates only carry weight when invoked through
-# `cargo verus check`.
-vstd = "=0.0.0-2026-04-20-1748"
-verus_builtin = "=0.0.0-2026-04-12-0118"
-verus_builtin_macros = "=0.0.0-2026-04-20-1748"

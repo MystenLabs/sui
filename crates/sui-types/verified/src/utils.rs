@@ -3,9 +3,24 @@
 
 //! Small utility functions with Verus specifications.
 
+use nonempty::NonEmpty;
 use vstd::prelude::*;
 
 verus! {
+
+// Register NonEmpty<T> as an external type so Verus can pass values of this
+// type through function signatures.  We don't model its internals; the
+// `nonempty_view` spec function below gives a `Seq<T>` projection that
+// is axiomatised to be non-empty.
+#[verifier::external_type_specification]
+#[verifier::external_body]
+#[verifier::reject_recursive_types(T)]
+pub struct ExNonEmpty<T>(NonEmpty<T>);
+
+/// Spec projection: the underlying sequence of a `NonEmpty<T>`.
+/// Uninterpreted — used only to express alias-lookup specs.  No axioms are
+/// declared yet; add a non-emptiness axiom if/when a proof needs it.
+pub uninterp spec fn nonempty_view<T>(ne: &NonEmpty<T>) -> Seq<T>;
 
 /// Check whether a slice contains an element.
 ///

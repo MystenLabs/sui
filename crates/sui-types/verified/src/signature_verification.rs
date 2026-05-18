@@ -12,7 +12,10 @@
 //!
 //! Informal spec: `crates/sui-types/verify_sig_spec.md`
 
+#[cfg(verus_only)]
+use crate::utils::nonempty_view;
 use crate::utils::{clone_and_set, prepend_u8, slice_contains};
+use nonempty::NonEmpty;
 use vstd::prelude::*;
 
 verus! {
@@ -984,18 +987,18 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
 // § 11  Aliased-signers preprocessing
 // ---------------------------------------------------------------------------
 
-/// The alias set for a single `signer`: the first matching entry's vec if one
-/// exists in `aliased`, otherwise just `[signer]` (the typical case).
+/// The alias set for a single `signer`: the first matching entry's alias list
+/// if one exists in `aliased`, otherwise just `[signer]` (the typical case).
 pub open spec fn lookup_aliases<Addr>(
     signer: Addr,
-    aliased: Seq<(Addr, Vec<Addr>)>,
+    aliased: Seq<(Addr, NonEmpty<Addr>)>,
 ) -> Seq<Addr>
     decreases aliased.len()
 {
     if aliased.len() == 0 {
         seq![signer]
     } else if aliased[0].0 == signer {
-        aliased[0].1@
+        nonempty_view(&aliased[0].1)
     } else {
         lookup_aliases(signer, aliased.skip(1))
     }
@@ -1004,13 +1007,13 @@ pub open spec fn lookup_aliases<Addr>(
 /// Look up the alias set for `signer` in `aliased_addresses`.
 /// Returns `[signer]` if no entry matches (the typical case).
 ///
-/// Trusted (`external_body`) — tuple-field access through slice indexing is
-/// not cleanly tracked by Verus's exec-to-spec mapping. The spec captures
+/// Trusted (`external_body`) — NonEmpty<T>'s internals and tuple-field access
+/// through slice indexing aren't cleanly tracked in Verus.  The spec captures
 /// exactly what callers need via `lookup_aliases`.
 #[verifier::external_body]
 fn find_aliases_for_signer<Addr: PartialEq + Eq + Copy>(
     signer: Addr,
-    aliased_addresses: &[(Addr, Vec<Addr>)],
+    aliased_addresses: &[(Addr, NonEmpty<Addr>)],
 ) -> (result: Vec<Addr>)
     ensures
         result@ == lookup_aliases::<Addr>(signer, aliased_addresses@),
@@ -1018,7 +1021,7 @@ fn find_aliases_for_signer<Addr: PartialEq + Eq + Copy>(
     aliased_addresses
         .iter()
         .find(|(addr, _)| *addr == signer)
-        .map(|(_, a)| a.clone())
+        .map(|(_, a)| a.iter().cloned().collect())
         .unwrap_or_else(|| vec![signer])
 }
 
@@ -1028,7 +1031,7 @@ fn find_aliases_for_signer<Addr: PartialEq + Eq + Copy>(
 /// the alias set defaults to `[signer]`.
 pub fn build_required_signers<Addr: PartialEq + Eq + Copy>(
     signers: &[Addr],
-    aliased_addresses: &[(Addr, Vec<Addr>)],
+    aliased_addresses: &[(Addr, NonEmpty<Addr>)],
 ) -> (result: Vec<(Addr, Vec<Addr>)>)
     ensures
         result@.len() == signers@.len(),
