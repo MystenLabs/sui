@@ -213,21 +213,21 @@ pub fn verify_sender_signed_data_message_signatures(
         .into());
     }
 
-    // Build (canonical_sender, aliases) pairs. When a sender is absent from
-    // aliased_addresses, its alias set defaults to {sender} (the typical case).
-    let required_signers: Vec<(SuiAddress, Vec<SuiAddress>)> = intent_message
+    // Convert NonEmpty<SuiAddress> alias lists to Vec<SuiAddress> at the verified-crate
+    // boundary (NonEmpty is opaque to Verus).
+    let aliased_vec: Vec<(SuiAddress, Vec<SuiAddress>)> = aliased_addresses
+        .into_iter()
+        .map(|(addr, aliases)| (addr, aliases.into_iter().collect()))
+        .collect();
+
+    // Delegate the (signer, aliases) pair construction to the verified function.
+    let signers: Vec<SuiAddress> = intent_message
         .value
         .required_signers()
         .into_iter()
-        .map(|signer| {
-            let aliases = aliased_addresses
-                .iter()
-                .find(|(addr, _)| *addr == signer)
-                .map(|(_, a)| a.iter().cloned().collect())
-                .unwrap_or_else(|| vec![signer]);
-            (signer, aliases)
-        })
         .collect();
+    let required_signers =
+        sui_types_verified::signature_verification::build_required_signers(&signers, &aliased_vec);
 
     // System transactions are unconditionally valid; return sequential indices.
     if intent_message.value.is_system_tx() {
