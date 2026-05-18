@@ -7,6 +7,7 @@ mod collect_uses;
 mod flatten_seq;
 mod fuse_let;
 mod hoist_arm_assignments;
+mod hoist_dual_continue;
 mod introduce_while;
 mod loop_to_seq;
 mod reconstruct_match;
@@ -15,6 +16,8 @@ mod remove_trailing_continue;
 mod remove_trailing_return;
 mod simplify_if;
 mod strip_loop_labels;
+mod swap_continue_break;
+mod swap_continue_fallthrough;
 mod utils;
 
 pub use collect_uses::{collect_local_names, collect_uses};
@@ -25,6 +28,7 @@ const REFINEMENTS: &[Refinement] = &[
     flatten_seq::refine,
     fuse_let::refine,
     hoist_arm_assignments::refine,
+    hoist_dual_continue::refine,
     introduce_while::refine,
     loop_to_seq::refine,
     reconstruct_match::refine,
@@ -36,6 +40,8 @@ const REFINEMENTS: &[Refinement] = &[
     simplify_if::refine,
     recover_asserts::refine,
     strip_loop_labels::refine,
+    swap_continue_break::refine,
+    swap_continue_fallthrough::refine,
 ];
 
 // -------------------------------------------------------------------------------------------------

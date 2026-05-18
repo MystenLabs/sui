@@ -13,6 +13,8 @@ public fun loop_test() {
         l0 = l0 + 1u64;
         if (l0 >= 10u64) {
             break
+        } else {
+            continue
         }
     }
 }
@@ -24,10 +26,13 @@ public fun loop_test_2() {
     loop {
         l0 = l0 + 1u64;
         if (l0 % 2u64 == 1u64) {
-            continue
-        };
-        if (l0 == 10u64) {
-            break
+            
+        } else {
+            if (l0 == 10u64) {
+                break
+            } else {
+                continue
+            }
         }
     }
 }
@@ -71,6 +76,8 @@ public fun loop_test_8() {
         l1 = l1 * 2u64 + l0;
         if (l0 >= 10u64) {
             break
+        } else {
+            continue
         }
     }
 }
@@ -86,6 +93,8 @@ public fun loop_test_9() {
         };
         if (l0 >= 10u64) {
             break
+        } else {
+            continue
         }
     }
 }

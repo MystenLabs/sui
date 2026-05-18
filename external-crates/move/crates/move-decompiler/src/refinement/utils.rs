@@ -3,7 +3,7 @@
 
 //! Helpers shared between refinements.
 
-use crate::ast::Exp;
+use crate::ast::{Exp, Label};
 use move_stackless_bytecode_2::ast::PrimitiveOp;
 
 /// Look through any `Exp::Block` wrappers to reach the inner expression. Used by refinements
@@ -49,5 +49,76 @@ pub(super) fn negate(exp: &mut Exp) {
                 args: vec![exp.clone()],
             };
         }
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// IfElse / continue tail-position helpers
+//
+// Shared across the swap-with-break, swap-with-fallthrough, and hoist-dual-continue
+// refinements. Each treats a `Continue` sitting at the trailing position of an arm body as
+// the canonical relocation target; these helpers locate it and reshape the surrounding
+// structure consistently.
+
+/// True iff `else_b` is missing (`None`) or an empty `Seq` — the shapes the swap-* rules
+/// treat as "no else-arm." A non-empty else is the hoist-dual-continue rule's territory
+/// (when it also ends in `continue`) or out of scope.
+pub(super) fn else_is_empty_or_missing(else_b: Option<&Exp>) -> bool {
+    match else_b {
+        None => true,
+        Some(Exp::Seq(items)) => items.is_empty(),
+        Some(_) => false,
+    }
+}
+
+/// True iff the final statement of `exp` is `Continue(label)` matching `expected`. Walks
+/// the last item of `Seq`; doesn't descend into `IfElse`/`Switch`/etc.
+pub(super) fn ends_with_continue(exp: &Exp, expected: Option<Label>) -> bool {
+    match exp {
+        Exp::Continue(l) => *l == expected,
+        Exp::Seq(items) => items
+            .last()
+            .is_some_and(|last| ends_with_continue(last, expected)),
+        _ => false,
+    }
+}
+
+/// If `exp`'s last statement is `Continue(L)`, return `L`. Otherwise return `None`. Used
+/// by `hoist_dual_continue` to detect a shared trailing continue and recover its label
+/// without committing to which loop encloses us.
+pub(super) fn trailing_continue_label(exp: &Exp) -> Option<Option<Label>> {
+    match exp {
+        Exp::Continue(l) => Some(*l),
+        Exp::Seq(items) => items.last().and_then(trailing_continue_label),
+        _ => None,
+    }
+}
+
+/// Consume `exp` (typically an arm body), drop a trailing `Continue`, and return the
+/// remaining leading items as a `Vec<Exp>`. Callers splice them back as they wish — extend
+/// an enclosing `Seq` directly, or rebuild a single `Exp` via `seq_or_singleton`. The
+/// continue's identity is the caller's concern; this helper only handles structure.
+pub(super) fn strip_trailing_continue_into_seq(exp: Exp) -> Vec<Exp> {
+    match exp {
+        Exp::Continue(_) => vec![],
+        Exp::Seq(mut items) => {
+            // Trim a single trailing `Continue` — preceding refinements have already run
+            // `flatten_seq`, so nested `Seq`s aren't expected here.
+            if matches!(items.last(), Some(Exp::Continue(_))) {
+                items.pop();
+            }
+            items
+        }
+        other => vec![other],
+    }
+}
+
+/// Reshape a `Vec<Exp>` back into a single `Exp` for arm positions: `[]` becomes
+/// `Seq([])`, a singleton unwraps to its element, and longer lists stay as a `Seq`.
+pub(super) fn seq_or_singleton(mut items: Vec<Exp>) -> Exp {
+    match items.len() {
+        0 => Exp::Seq(vec![]),
+        1 => items.pop().unwrap(),
+        _ => Exp::Seq(items),
     }
 }
