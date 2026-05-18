@@ -3,7 +3,10 @@
 
 use crate::{
     ast::Exp,
-    refinement::{Refine, utils::negate},
+    refinement::{
+        Refine,
+        utils::{negate, peek, peek_mut, unwrap_block},
+    },
 };
 
 pub fn refine(exp: &mut Exp) -> bool {
@@ -23,7 +26,7 @@ impl Refine for IntroduceWhile0 {
             return false;
         };
 
-        let Exp::IfElse(_, conseq, alt) = &**body else {
+        let Exp::IfElse(_, conseq, alt) = peek(body) else {
             return false;
         };
         let Some(alt) = &**alt else {
@@ -32,7 +35,7 @@ impl Refine for IntroduceWhile0 {
         // Only fire when the Break(label) matches this loop's label (so the break really exits
         // *this* Loop and not a labeled outer one).
         let target = *loop_label;
-        if !is_break_to(conseq, target) && !is_break_to(alt, target) {
+        if !is_break_to(peek(conseq), target) && !is_break_to(peek(alt), target) {
             return false;
         }
 
@@ -40,11 +43,11 @@ impl Refine for IntroduceWhile0 {
             let Exp::Loop(loop_label, body) = e else {
                 unreachable!()
             };
-            let Exp::IfElse(mut test, conseq, alt) = *body else {
+            let Exp::IfElse(mut test, conseq, alt) = unwrap_block(*body) else {
                 unreachable!()
             };
             let alt = alt.unwrap();
-            if is_break_to(&conseq, loop_label) {
+            if is_break_to(peek(&conseq), loop_label) {
                 negate(&mut test);
                 Exp::While(loop_label, test, Box::new(alt))
             } else {
@@ -71,18 +74,18 @@ impl Refine for IntroduceWhile1 {
         };
         let loop_label = *loop_label;
 
-        match &mut **loop_body {
+        match peek_mut(loop_body) {
             Exp::Seq(seq) if !seq.is_empty() => {
-                let Exp::IfElse(_, conseq, alt) = &seq[0] else {
+                let Exp::IfElse(_, conseq, alt) = peek(&seq[0]) else {
                     return false;
                 };
-                if !is_break_to(conseq, loop_label) {
+                if !is_break_to(peek(conseq), loop_label) {
                     return false;
                 }
                 let None = alt.as_ref() else {
                     return false;
                 };
-                let Exp::IfElse(mut test, _, _) = seq.remove(0) else {
+                let Exp::IfElse(mut test, _, _) = unwrap_block(seq.remove(0)) else {
                     return false;
                 };
                 negate(&mut test);

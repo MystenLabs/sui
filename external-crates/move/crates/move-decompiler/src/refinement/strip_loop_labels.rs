@@ -82,6 +82,7 @@ fn used_inside_nested_loop(exp: &Exp, target: Label) -> bool {
             | Exp::Unpack(_, _, e)
             | Exp::UnpackVariant(_, _, _, e)
             | Exp::VecUnpack(_, e) => go(e, target, in_nested),
+            Exp::Block(_, body) => go(body, target, in_nested),
             Exp::Break(None)
             | Exp::Declare(_)
             | Exp::Continue(None)

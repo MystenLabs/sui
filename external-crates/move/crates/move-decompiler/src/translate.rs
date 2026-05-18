@@ -257,6 +257,12 @@ fn function<S: SourceKind>(
         println!("{}", structured.to_test_string());
     }
     let mut code = generate_output(terms, structured);
+    // Block markers exist only to give surviving `Unstructured(Goto)`s something to point
+    // at. Keep `Block(N, _)` iff some surviving goto targets `N`; strip the rest. Functions
+    // with no surviving gotos shed every marker, restoring pre-Block adjacency for the
+    // refinement pipeline.
+    let targets = collect_goto_targets(&code);
+    strip_untargeted_blocks(&mut code, &targets);
     crate::structuring::hoist_declarations::hoist_declarations(&mut code, param_names);
     crate::refinement::refine(&mut code);
     if config.debug_print.decompiled_code {
@@ -399,11 +405,162 @@ fn extract_input(block: &SB::BasicBlock, next_block_label: Option<SB::Label>) ->
     }
 }
 
+/// Collect every label that a surviving `Unstructured(Goto(_))` targets. Block markers
+/// whose ID is in this set are kept (for cross-referencing); the rest are stripped.
+fn collect_goto_targets(exp: &Exp) -> HashSet<u64> {
+    let mut out = HashSet::new();
+    collect_goto_targets_into(exp, &mut out);
+    out
+}
+
+fn collect_goto_targets_into(exp: &Exp, out: &mut HashSet<u64>) {
+    use crate::ast::UnstructuredNode;
+    match exp {
+        Exp::Unstructured(nodes) => {
+            for n in nodes {
+                match n {
+                    UnstructuredNode::Goto(label) => {
+                        out.insert(*label);
+                    }
+                    UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) => {
+                        collect_goto_targets_into(body, out);
+                    }
+                }
+            }
+        }
+        Exp::Block(_, body)
+        | Exp::Loop(_, body)
+        | Exp::Assign(_, body)
+        | Exp::LetBind(_, body)
+        | Exp::Abort(body)
+        | Exp::Borrow(_, body)
+        | Exp::Unpack(_, _, body)
+        | Exp::UnpackVariant(_, _, _, body)
+        | Exp::VecUnpack(_, body) => collect_goto_targets_into(body, out),
+        Exp::While(_, c, b) => {
+            collect_goto_targets_into(c, out);
+            collect_goto_targets_into(b, out);
+        }
+        Exp::IfElse(c, t, alt) => {
+            collect_goto_targets_into(c, out);
+            collect_goto_targets_into(t, out);
+            if let Some(a) = alt.as_ref().as_ref() {
+                collect_goto_targets_into(a, out);
+            }
+        }
+        Exp::Switch(c, _, arms) => {
+            collect_goto_targets_into(c, out);
+            for (_, e) in arms {
+                collect_goto_targets_into(e, out);
+            }
+        }
+        Exp::Match(c, _, arms) => {
+            collect_goto_targets_into(c, out);
+            for (_, _, e) in arms {
+                collect_goto_targets_into(e, out);
+            }
+        }
+        Exp::Seq(es) | Exp::Return(es) | Exp::Call(_, es) => {
+            for e in es {
+                collect_goto_targets_into(e, out);
+            }
+        }
+        Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
+            for a in args {
+                collect_goto_targets_into(a, out);
+            }
+        }
+        Exp::Break(_)
+        | Exp::Continue(_)
+        | Exp::Declare(_)
+        | Exp::Value(_)
+        | Exp::Variable(_)
+        | Exp::Constant(_) => {}
+    }
+}
+
+/// Recursively strip every `Exp::Block(id, body)` whose `id` is not in `targets`, leaving
+/// targeted blocks intact. A block keeps its wrapper iff some surviving goto names its ID;
+/// untargeted wrappers would only fragment the AST for refinements without aiding the
+/// reader.
+fn strip_untargeted_blocks(exp: &mut Exp, targets: &HashSet<u64>) {
+    // First collapse this node if it's an un-targeted Block. The loop chases nested
+    // un-targeted wrappers in a single pass.
+    while let Exp::Block(id, body) = exp
+        && !targets.contains(id)
+    {
+        let inner = std::mem::replace(body.as_mut(), Exp::Seq(vec![]));
+        *exp = inner;
+    }
+    // Then recur into children, including the inside of any kept `Block`.
+    match exp {
+        Exp::Block(_, body)
+        | Exp::Loop(_, body)
+        | Exp::Assign(_, body)
+        | Exp::LetBind(_, body)
+        | Exp::Abort(body)
+        | Exp::Borrow(_, body)
+        | Exp::Unpack(_, _, body)
+        | Exp::UnpackVariant(_, _, _, body)
+        | Exp::VecUnpack(_, body) => strip_untargeted_blocks(body, targets),
+        Exp::While(_, c, b) => {
+            strip_untargeted_blocks(c, targets);
+            strip_untargeted_blocks(b, targets);
+        }
+        Exp::IfElse(c, t, alt) => {
+            strip_untargeted_blocks(c, targets);
+            strip_untargeted_blocks(t, targets);
+            if let Some(a) = alt.as_mut().as_mut() {
+                strip_untargeted_blocks(a, targets);
+            }
+        }
+        Exp::Switch(c, _, arms) => {
+            strip_untargeted_blocks(c, targets);
+            for (_, e) in arms {
+                strip_untargeted_blocks(e, targets);
+            }
+        }
+        Exp::Match(c, _, arms) => {
+            strip_untargeted_blocks(c, targets);
+            for (_, _, e) in arms {
+                strip_untargeted_blocks(e, targets);
+            }
+        }
+        Exp::Seq(es) | Exp::Return(es) | Exp::Call(_, es) => {
+            for e in es {
+                strip_untargeted_blocks(e, targets);
+            }
+        }
+        Exp::Primitive { args, .. } | Exp::Data { args, .. } => {
+            for a in args {
+                strip_untargeted_blocks(a, targets);
+            }
+        }
+        Exp::Unstructured(nodes) => {
+            use crate::ast::UnstructuredNode;
+            for n in nodes {
+                if let UnstructuredNode::Labeled(_, body) | UnstructuredNode::Statement(body) = n {
+                    strip_untargeted_blocks(body, targets);
+                }
+            }
+        }
+        Exp::Break(_)
+        | Exp::Continue(_)
+        | Exp::Declare(_)
+        | Exp::Value(_)
+        | Exp::Variable(_)
+        | Exp::Constant(_) => {}
+    }
+}
+
 fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Structured) -> Exp {
     match structured {
         D::Structured::Break(label) => Out::Exp::Break(Some(label.index() as u64)),
         D::Structured::Continue(label) => Out::Exp::Continue(Some(label.index() as u64)),
-        D::Structured::Block(lbl) => terms.remove(&(lbl as u32).into()).unwrap(),
+        D::Structured::Block(lbl) => {
+            let term = terms.remove(&(lbl as u32).into()).unwrap();
+            Out::Exp::Block(lbl, Box::new(term))
+        }
         D::Structured::Loop(label, body) => Out::Exp::Loop(
             Some(label.index() as u64),
             Box::new(generate_output(terms, *body)),
@@ -437,7 +594,7 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                 Box::new(generate_output(terms.clone(), *conseq)),
                 Box::new(alt_exp),
             ));
-            Out::Exp::Seq(exps)
+            Out::Exp::Block(lbl, Box::new(Out::Exp::Seq(exps)))
         }
         D::Structured::Switch(lbl, enum_, cases) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();
@@ -455,7 +612,7 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                 Out::TypeRef::Qualified(Out::ModuleRef::Qualified(enum_.0), enum_.1),
                 cases,
             ));
-            Out::Exp::Seq(exps)
+            Out::Exp::Block(lbl, Box::new(Out::Exp::Seq(exps)))
         }
         D::Structured::Jump(src, target) => {
             let label = target.index() as u64;
@@ -489,7 +646,7 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                     Out::UnstructuredNode::Goto(else_label),
                 ]))),
             ));
-            Out::Exp::Seq(seq)
+            Out::Exp::Block(code, Box::new(Out::Exp::Seq(seq)))
         }
     }
 }

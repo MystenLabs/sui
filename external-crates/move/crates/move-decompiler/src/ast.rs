@@ -273,6 +273,11 @@ pub enum Exp {
     // ideally not needed, but useful to avoid failing on an entire module
     // just because we can't handle one thing
     Unstructured(Vec<UnstructuredNode>),
+    /// A `D::Structured::Block(code)` after lowering. The `u64` matches the label carried by
+    /// any `Unstructured(Goto)` that targets this block, so a surviving goto can be traced
+    /// to its destination by scanning for the matching `Block` in the rendered output. The
+    /// body is the lowered block contents (typically a `Seq`).
+    Block(u64, Box<Exp>),
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -314,6 +319,7 @@ impl Exp {
                 }
                 UnstructuredNode::Goto(_) => false,
             }),
+            Exp::Block(_, body) => body.contains_break(),
         }
     }
 
@@ -353,6 +359,7 @@ impl Exp {
                 }
                 UnstructuredNode::Goto(_) => false,
             }),
+            Exp::Block(_, body) => body.contains_continue(),
         }
     }
 
@@ -453,6 +460,7 @@ impl Exp {
                 }
             }
             Exp::Value(_) | Exp::Constant(_) | Exp::Break(_) | Exp::Continue(_) => {}
+            Exp::Block(_, body) => body.collect_referenced_names(out),
         }
     }
 }
@@ -589,6 +597,7 @@ impl std::fmt::Display for Exp {
                     | Exp::UnpackVariant(_, _, _, _)
                     | Exp::VecUnpack(_, _)
                     | Exp::Unstructured(_)
+                    | Exp::Block(_, _)
             )
         }
 
@@ -801,6 +810,10 @@ impl std::fmt::Display for Exp {
                     indent(f, level)?;
                     writeln!(f, "}}")
                 }
+                // Block is a marker; recur into the body. The pretty printer emits the
+                // `/* block N */` comment; the Debug `Display` path is for tests and stays
+                // transparent.
+                Exp::Block(_, body) => fmt_exp(f, body, level),
             }
         }
 
