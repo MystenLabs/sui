@@ -2059,7 +2059,8 @@ impl AuthorityState {
 
         let tracking_store = TrackingBackingStore::new(self.get_backing_store().as_ref());
 
-        let (inner_temp_store, _, effects, timings, execution_error_result) = self
+        #[allow(unused_mut)]
+        let (inner_temp_store, _, mut effects, timings, execution_error_result) = self
             .execute_transaction_to_effects(
                 &**epoch_store.executor(),
                 &tracking_store,
@@ -2163,9 +2164,6 @@ impl AuthorityState {
                 effects.digest()
             );
         }
-
-        #[cfg(msim)]
-        let mut effects = effects;
 
         fail_point_arg!("simulate_fork_during_execution", |(
             forked_validators,
@@ -2388,13 +2386,6 @@ impl AuthorityState {
             .as_ref()
             .err()
             .and_then(|e| std::error::Error::source(e).map(|e| e.to_string()));
-        if let Some(error) = execution_result.as_ref().err() {
-            debug!(
-                tx_digest = ?tx_digest,
-                execution_error_kind = ?error.kind(),
-                "dry run transaction execution failed"
-            );
-        }
 
         let response = DryRunTransactionBlockResponse {
             suggested_gas_price,
