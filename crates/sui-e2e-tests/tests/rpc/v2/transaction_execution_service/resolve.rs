@@ -155,10 +155,7 @@ async fn simulate_transaction_read_mask_selects_command_outputs_without_transact
     let mut request = SimulateTransactionRequest::new(transaction);
     request.set_checks(ProtoTransactionChecks::Disabled);
     request.read_mask = Some(FieldMask {
-        paths: vec![
-            "command_outputs".to_owned(),
-            "suggested_gas_price".to_owned(),
-        ],
+        paths: vec!["command_outputs".to_owned()],
     });
 
     let response = alpha_client
@@ -175,7 +172,6 @@ async fn simulate_transaction_read_mask_selects_command_outputs_without_transact
     assert!(!response.command_outputs[0].return_values.is_empty());
     assert!(response.command_outputs[1].mutated_by_ref.is_empty());
     assert!(response.command_outputs[1].return_values.is_empty());
-    assert!(response.suggested_gas_price.is_none());
 }
 
 #[sim_test]

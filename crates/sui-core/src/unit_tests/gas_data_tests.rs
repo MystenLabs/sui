@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::*;
@@ -12,7 +13,9 @@ use crate::authority::authority_test_utils::{
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
+use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+use sui_move_build::BuildConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::FullObjectRef;
 use sui_types::collection_types::Table as TableType;
@@ -23,7 +26,9 @@ use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{GAS_VALUE_FOR_TESTING, MoveObject, OBJECT_START_VERSION};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::{Argument, Command, GenesisTransaction};
+use sui_types::transaction::{
+    Argument, Command, GenesisTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+};
 use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID};
@@ -361,10 +366,8 @@ async fn test_simulate_transaction_result_payloads() {
         .unwrap();
     assert!(result.effects.status().is_ok());
     assert_eq!(result.mock_gas_id, None);
-    assert_eq!(
-        result.events.is_some(),
-        result.effects.events_digest().is_some()
-    );
+    assert!(result.effects.events_digest().is_none());
+    assert!(result.events.is_none());
     assert!(
         result
             .objects
@@ -408,6 +411,41 @@ async fn test_simulate_transaction_result_payloads() {
             .iter()
             .any(|object| object.id() == ObjectID::MAX),
         "mock gas does not exist in storage, so simulation must carry it in the result object set",
+    );
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/publish_with_event");
+    let modules = BuildConfig::new_for_testing()
+        .build(&path)
+        .unwrap()
+        .get_package_bytes(false);
+
+    let event_tx = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.publish_immutable(modules, BuiltInFramework::all_package_ids());
+        TransactionData::new_with_gas_coins(
+            TransactionKind::programmable(builder.finish()),
+            env.sender,
+            vec![],
+            TEST_ONLY_GAS_UNIT_FOR_PUBLISH * env.rgp,
+            env.rgp,
+        )
+    };
+
+    let event_result = env
+        .fullnode
+        .simulate_transaction(event_tx, TransactionChecks::Enabled, true)
+        .unwrap();
+    assert!(event_result.effects.status().is_ok());
+    assert!(event_result.effects.events_digest().is_some());
+    let events = event_result
+        .events
+        .as_ref()
+        .expect("event digest should be accompanied by event data");
+    assert_eq!(events.data.len(), 1);
+    assert_eq!(
+        "PublishEvent".to_string(),
+        events.data[0].type_.name.to_string()
     );
 }
 
