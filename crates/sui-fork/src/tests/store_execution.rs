@@ -254,6 +254,42 @@ fn test_owned_objects_tracks_address_owner_transfers() {
 }
 
 #[test]
+fn test_owned_objects_tracks_consensus_address_owner_writes() {
+    let (_temp, mut store) = test_data_store();
+    let owner = SuiAddress::random_for_testing_only();
+    let object_id = ObjectID::random();
+    let object = make_gas_object(
+        object_id,
+        1,
+        Owner::ConsensusAddressOwner {
+            start_version: SequenceNumber::from_u64(1),
+            owner,
+        },
+    );
+
+    store.update_objects(BTreeMap::from([(object_id, object)]), vec![]);
+
+    let infos: Vec<_> = RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
+        .expect("owned-object iterator should build")
+        .map(|result| result.expect("owned-object entry should decode"))
+        .collect();
+    assert_eq!(infos.len(), 1);
+    assert_eq!(infos[0].owner, owner);
+    assert_eq!(infos[0].object_id, object_id);
+    assert_eq!(infos[0].version, SequenceNumber::from_u64(1));
+    assert_eq!(infos[0].balance, Some(1_000_000));
+
+    let immutable = make_gas_object(object_id, 2, Owner::Immutable);
+    store.update_objects(BTreeMap::from([(object_id, immutable)]), vec![]);
+    assert_eq!(
+        RpcIndexes::owned_objects_iter(&store, owner, Some(GasCoin::type_()), None)
+            .expect("owned-object iterator should build")
+            .count(),
+        0,
+    );
+}
+
+#[test]
 fn test_owned_objects_removes_non_address_owned_transitions() {
     let (_temp, mut store) = test_data_store();
     let owner = SuiAddress::random_for_testing_only();

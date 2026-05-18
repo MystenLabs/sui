@@ -39,7 +39,7 @@ use crate::gql::GraphQLClient;
 pub struct SeedInput {
     /// Addresses whose owned objects should seed the initial owned-object index.
     pub addresses: Vec<SuiAddress>,
-    /// Object IDs to fetch and seed when they are address-owned.
+    /// Object IDs to fetch and seed when they are owned by an address.
     pub object_ids: Vec<ObjectID>,
 }
 
@@ -74,15 +74,16 @@ impl SeedManifest {
 
 impl SeedEntry {
     fn from_object(object: &Object) -> Option<Self> {
-        let Owner::AddressOwner(owner) = &object.owner else {
-            return None;
+        let owner = match &object.owner {
+            Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => *owner,
+            _ => return None,
         };
 
         Some(Self {
             object_id: object.id(),
             version: object.version(),
             digest: object.digest(),
-            owner: *owner,
+            owner,
             object_type: object.struct_tag()?,
             balance: object.as_coin_maybe().map(|coin| coin.value()),
         })
@@ -286,7 +287,7 @@ fn resolve_object_seeds(
             warn!(
                 %object_id,
                 checkpoint,
-                "object seed is not address-owned and will not be added to the owned-object index",
+                "object seed is not owned by an address and will not be added to the owned-object index",
             );
         }
     }
@@ -471,6 +472,51 @@ mod tests {
 
         assert_eq!(manifest.entries.len(), 1);
         assert_eq!(manifest.entries[0].object_id, object.id());
+        assert_eq!(
+            store
+                .local()
+                .get_object_at_version(&object.id(), object.version().value())
+                .expect("local object lookup should not fail")
+                .unwrap(),
+            object,
+        );
+    }
+
+    #[tokio::test]
+    async fn prepare_seed_manifest_fetches_explicit_consensus_address_owner_object() {
+        let server = MockServer::start().await;
+        let owner = SuiAddress::random_for_testing_only();
+        let object = Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            SequenceNumber::from_u64(3),
+            Owner::ConsensusAddressOwner {
+                start_version: SequenceNumber::from_u64(3),
+                owner,
+            },
+        );
+        Mock::given(method("POST"))
+            .and(path("/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(object_response_body(&object)))
+            .mount(&server)
+            .await;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let store =
+            DataStore::new_for_testing_with_remote(temp.path().to_path_buf(), server.uri(), 11);
+        let manifest = prepare_seed_manifest(
+            &store,
+            "custom".to_owned(),
+            &SeedInput {
+                addresses: vec![],
+                object_ids: vec![object.id()],
+            },
+        )
+        .await
+        .expect("seed manifest should resolve");
+
+        assert_eq!(manifest.entries.len(), 1);
+        assert_eq!(manifest.entries[0].object_id, object.id());
+        assert_eq!(manifest.entries[0].owner, owner);
         assert_eq!(
             store
                 .local()

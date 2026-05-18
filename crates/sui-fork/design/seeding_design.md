@@ -79,7 +79,7 @@ Seed resolution:
 
 ## GraphQL queries
 
-### Address-owned objects query
+### Address objects query
 
 `src/gql/queries.rs` owns the checkpoint-scoped address query. The seed module
 calls `GraphQLClient::get_address_owned_objects_at_checkpoint()` and does not
@@ -99,6 +99,7 @@ query($sequenceNumber: UInt53, $address: SuiAddress!, $first: Int, $after: Strin
             digest
             owner {
               ... on AddressOwner { address { address } }
+              ... on ConsensusAddressOwner { address { address } }
             }
             contents {
               type { repr }
@@ -115,9 +116,9 @@ query($sequenceNumber: UInt53, $address: SuiAddress!, $first: Int, $after: Strin
 
 - Page size: 50
 - Paginate with cursor loop (same pattern as `events_query`)
-- Only collect `AddressOwner` entries. Other owner variants are handled by the
-  query fallback and skipped; they are not usable as address-owned gas/input
-  objects for the initial index.
+- Only collect `AddressOwner` and `ConsensusAddressOwner` entries. Other owner
+  variants are handled by the query fallback and skipped; they are not
+  controlled by the seeded address for the initial index.
 
 ### Individual objects (reuse existing)
 
@@ -190,8 +191,8 @@ once the fork has started executing.
   read masks fetch BCS lazily
 
 **When a seeded object is deleted/mutated post-fork**:
-- `update_objects()` removes the old index entry, adds the new address-owned entry, or removes the
-  entry for wrapped/shared/immutable/object-owned transitions
+- `update_objects()` removes the old index entry, adds the new address-owned entry,
+  or removes the entry for wrapped/shared/immutable/object-owned transitions
 - local deleted markers prevent current-object reads from falling back to the remote endpoint
 
 **Key invariant**: Seed manifest is immutable after creation. Post-fork state is tracked entirely

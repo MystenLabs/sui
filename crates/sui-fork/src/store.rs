@@ -626,16 +626,19 @@ impl DataStore {
             .collect())
     }
 
-    /// Validate that the given `OwnedObjectEntry` corresponds to an actual owned object in the
-    /// local store, and if so convert it to `OwnedObjectInfo`. This guards against stale index
+    /// Validate that the given `OwnedObjectEntry` corresponds to a locally cached object still
+    /// controlled by the indexed address. This guards against stale index
     /// entries that point to objects that have been deleted or wrapped by later transactions.
     fn valid_owned_object_info(&self, entry: OwnedObjectEntry) -> Option<OwnedObjectInfo> {
         if let Some(object) = self.local().get_latest_object(&entry.object_id).ok()? {
             if object.version() != entry.version {
                 return None;
             }
-            if object.owner != sui_types::object::Owner::AddressOwner(entry.owner) {
-                return None;
+            match &object.owner {
+                sui_types::object::Owner::AddressOwner(owner)
+                | sui_types::object::Owner::ConsensusAddressOwner { owner, .. }
+                    if *owner == entry.owner => {}
+                _ => return None,
             }
             let object_type = object.struct_tag()?;
             if object_type != entry.object_type {
