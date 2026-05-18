@@ -166,17 +166,17 @@ public fun elf<T0, T1, T2>(l0: &mut Pool<T0, T1>, l1: &mut CBM, l2: &mut Balance
                         let l25 = order_info::executed_quantity(&l33);
                         let l36 = order_info::paid_fees(&l33);
                         l44 = if (l29) {
-                            let l41 = l35as u128;
-                            let l38 = l37as u128;
+                            let l41 = l35 as u128;
+                            let l38 = l37 as u128;
                             let l46 = l41 * l38 / constants::float_scaling_u128() + 1u128;
                             l21 = l21 + l25;
-                            l44 - l46as u64
+                            l44 - l46 as u64
                         } else {
-                            let l42 = l25as u128;
-                            let l39 = l37as u128;
+                            let l42 = l25 as u128;
+                            let l39 = l37 as u128;
                             let l45 = l42 * l39 / constants::float_scaling_u128();
                             l21 = l21 - l35;
-                            l44 + l45as u64
+                            l44 + l45 as u64
                         };
                         l23 = l23 - l36;
                         l28 + 1u64
@@ -242,7 +242,7 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
     };
     let l16 = l9;
     let l15 = if (*(&l16)) {
-        let l25 = l2as u128 * constants::float_scaling_u128() / l7as u128as u64;
+        let l25 = l2 as u128 * constants::float_scaling_u128() / l7 as u128 as u64;
         let l21 = l25 % l5 + l5;
         if (l25 < l21) {
             return (0u64, ct::e_insufficient_quote_balance())
@@ -251,7 +251,7 @@ fun vbac<T0, T1>(l0: &Pool<T0, T1>, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64,
         if (l22 < l6) {
             return (0u64, ct::e_insufficient_quote_balance())
         };
-        let l19 = u64::max(l6, u64::min(l8, l22as u64));
+        let l19 = u64::max(l6, u64::min(l8, l22 as u64));
         l19 - l19 % l5
     } else {
         let l20 = u64::max(l6, u64::min(l8, l1));
