@@ -105,13 +105,15 @@ The `rpc` configuration block supports additional settings. The most important o
 
 Refer to the [full node YAML template](https://github.com/MystenLabs/sui/blob/main/crates/sui-config/data/fullnode-template.yaml) for the complete list of available `rpc` options.
 
-You can reclaim this storage by disabling JSON-RPC after all your client applications have migrated from JSON-RPC. All applications must migrate to gRPC or [GraphQL RPC](/develop/accessing-data/custom-indexer/custom-indexers) by July 2026. Add the following to the `fullnode.yaml` configuration of your full node to selectively disable JSON-RPC on it:
+After all your client applications have migrated from JSON-RPC, you can reclaim storage by disabling the index maintenance that supports JSON-RPC indexed queries. All applications must migrate to gRPC or [GraphQL RPC](/develop/accessing-data/custom-indexer/custom-indexers) by July 2026. Add the following to the `fullnode.yaml` configuration of your full node to disable index processing:
 
 ```sh
 
 enable-index-processing: false
 
 ```
+
+Setting `enable-index-processing` to `false` stops the node from maintaining the indexes that back JSON-RPC indexed query methods. It does not disable the HTTP JSON-RPC listener itself. The node still accepts JSON-RPC connections, but queries that depend on indexes return errors. If you need to prevent JSON-RPC traffic entirely, you must block the listener port externally (for example, through a firewall rule or load-balancer configuration), because there is currently no configuration option to disable the JSON-RPC listener.
 
 You can configure the retention window for the gRPC index on your full node by adding the following to its `fullnode.yaml` configuration:
 
@@ -123,7 +125,7 @@ authority-store-pruning-config:
 
 ```
 
-Adjust the gRPC data retention period based on your full node's resource profile and whether you've disabled JSON-RPC or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
+Adjust the gRPC data retention period based on your full node's resource profile and whether you've disabled index processing or not. In any case, test the longer retention period for performance and scalability before using gRPC in your application or offering it to other developers.
 
 ## Running a full node {#running-a-full-node}
 
