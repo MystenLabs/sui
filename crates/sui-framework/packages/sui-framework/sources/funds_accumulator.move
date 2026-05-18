@@ -95,6 +95,15 @@ public(package) fun withdraw_from_object<T: store>(obj: &mut UID, limit: u256): 
     Withdrawal { owner, limit }
 }
 
+// TODO: this is for test purposes only!
+public fun add<T: store>(value: T, recipient: address) {
+    let pkg_addr = std::type_name::original_id<T>();
+    assert!(pkg_addr != @sui);
+
+    let accumulator = sui::accumulator::accumulator_address<T>(recipient);
+    add_to_accumulator_address<T>(accumulator, recipient, value)
+}
+
 // TODO when funds become public, we likely need to wrap T
 public(package) fun add_impl<T: store>(value: T, recipient: address) {
     let accumulator = sui::accumulator::accumulator_address<T>(recipient);
