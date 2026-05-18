@@ -649,6 +649,7 @@ impl TestCheckpointBuilder {
                     effects: tx.effects,
                     events: tx.events,
                     unchanged_loaded_runtime_objects: Vec::new(),
+                    execution_error_metadata: None,
                 }
             })
             .collect();

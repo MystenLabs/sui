@@ -8,6 +8,7 @@ use sui_rpc::{
     merge::Merge,
     proto::sui::rpc::v2::{Bcs, Display, Event, Object, TransactionEffects, TransactionEvents},
 };
+use sui_types::error::ExecutionErrorMetadata;
 use sui_types::full_checkpoint_content::ObjectSet;
 
 use crate::{RpcService, reader::DisplayStore};
@@ -279,6 +280,7 @@ impl RpcService {
         &self,
         effects: &sui_types::effects::TransactionEffects,
         unchanged_loaded_runtime_objects: &[sui_types::storage::ObjectKey],
+        execution_error_metadata: Option<&ExecutionErrorMetadata>,
         objects: &ObjectSet,
         mask: &FieldMaskTree,
     ) -> TransactionEffects {
@@ -335,8 +337,39 @@ impl RpcService {
         // Try to render clever error info
         self.render_clever_error(&mut effects);
 
+        render_execution_error_metadata(&mut effects, execution_error_metadata, mask);
+
         effects
     }
+}
+
+fn render_execution_error_metadata(
+    effects: &mut TransactionEffects,
+    execution_error_metadata: Option<&ExecutionErrorMetadata>,
+    mask: &FieldMaskTree,
+) {
+    if !mask.contains(
+        TransactionEffects::path_builder()
+            .status()
+            .error()
+            .metadata(),
+    ) {
+        return;
+    }
+
+    let Some(metadata) = execution_error_metadata else {
+        return;
+    };
+
+    let Some(error) = effects
+        .status
+        .as_mut()
+        .and_then(|status| status.error.as_mut())
+    else {
+        return;
+    };
+
+    error.metadata = metadata.clone();
 }
 
 fn object_type_to_string(object_type: sui_types::base_types::ObjectType) -> String {
@@ -345,5 +378,54 @@ fn object_type_to_string(object_type: sui_types::base_types::ObjectType) -> Stri
         sui_types::base_types::ObjectType::Struct(move_object_type) => {
             move_object_type.to_canonical_string(true)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prost_types::FieldMask;
+    use sui_rpc::field::FieldMaskUtil;
+    use sui_rpc::proto::sui::rpc::v2::ExecutionError;
+    use sui_rpc::proto::sui::rpc::v2::ExecutionStatus;
+
+    fn effects_with_error() -> TransactionEffects {
+        let status = ExecutionStatus::default()
+            .with_success(false)
+            .with_error(ExecutionError::default());
+        TransactionEffects::default().with_status(status)
+    }
+
+    #[test]
+    fn render_execution_error_metadata_respects_read_mask() {
+        let metadata = ExecutionErrorMetadata::from([(
+            "source".to_owned(),
+            "Loaded runtime object limit exceeded".to_owned(),
+        )]);
+        let mask = FieldMaskTree::from(FieldMask::from_paths([TransactionEffects::path_builder()
+            .status()
+            .error()
+            .metadata()]));
+
+        let mut effects = effects_with_error();
+        render_execution_error_metadata(&mut effects, Some(&metadata), &mask);
+
+        assert_eq!(effects.status().error().metadata(), &metadata,);
+    }
+
+    #[test]
+    fn render_execution_error_metadata_does_not_leak_into_other_error_masks() {
+        let metadata = ExecutionErrorMetadata::from([("source".to_owned(), "hidden".to_owned())]);
+        let mask = FieldMaskTree::from(FieldMask::from_paths([TransactionEffects::path_builder()
+            .status()
+            .error()
+            .abort()
+            .clever_error()
+            .finish()]));
+
+        let mut effects = effects_with_error();
+        render_execution_error_metadata(&mut effects, Some(&metadata), &mask);
+
+        assert!(effects.status().error().metadata().is_empty());
     }
 }

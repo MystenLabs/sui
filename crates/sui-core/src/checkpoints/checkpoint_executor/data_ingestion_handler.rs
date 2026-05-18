@@ -128,6 +128,8 @@ pub(crate) fn load_checkpoint(
                 // We don't write empty sets to the DB to save space, so if this load went through
                 // the writeback cache to the DB itself it wouldn't find an entry.
                 .unwrap_or_default(),
+            execution_error_metadata: transaction_cache_reader
+                .get_execution_error_metadata(tx.digest()),
         };
         transactions.push(transaction);
     }

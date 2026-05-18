@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::base_types::{ExecutionData, ObjectID, ObjectRef};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use crate::error::ExecutionErrorMetadata;
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
 use crate::signature::GenericSignature;
@@ -218,6 +219,7 @@ pub struct ExecutedTransaction {
     /// The events, if any, emitted by this transactions during execution
     pub events: Option<TransactionEvents>,
     pub unchanged_loaded_runtime_objects: Vec<ObjectKey>,
+    pub execution_error_metadata: Option<ExecutionErrorMetadata>,
 }
 
 #[derive(Default, Clone, Debug)]
@@ -473,6 +475,7 @@ impl From<CheckpointData> for Checkpoint {
 
                     // lossy
                     unchanged_loaded_runtime_objects: Vec::new(),
+                    execution_error_metadata: None,
                 }
             })
             .collect();

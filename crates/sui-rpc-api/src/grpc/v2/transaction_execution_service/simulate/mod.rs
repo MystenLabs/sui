@@ -239,6 +239,7 @@ pub fn simulate_transaction(
                 service.render_effects_to_proto(
                     &effects,
                     &unchanged_loaded_runtime_objects,
+                    None,
                     &objects,
                     &mask,
                 )
