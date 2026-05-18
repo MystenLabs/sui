@@ -129,7 +129,7 @@ impl TransactionRead for GraphQLClient {
 }
 
 impl GraphQLClient {
-    /// Fetch address-owned object metadata at a checkpoint, paginating through
+    /// Fetch metadata for objects owned by an address at a checkpoint, paginating through
     /// the checkpoint-scoped ownership connection.
     pub(crate) async fn get_address_owned_objects_at_checkpoint(
         &self,

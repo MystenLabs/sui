@@ -22,7 +22,6 @@ use crate::rpc_index::RpcIndexStore;
 use crate::traffic_controller::TrafficController;
 use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use crate::transaction_outputs::TransactionOutputs;
-use crate::verify_indexes::{fix_indexes, verify_indexes};
 use arc_swap::{ArcSwap, ArcSwapOption, Guard};
 use async_trait::async_trait;
 use authority_per_epoch_store::CertLockGuard;
@@ -3640,8 +3639,6 @@ impl AuthorityState {
         });
         state.init_object_funds_checker().await;
 
-        let state_clone = Arc::downgrade(&state);
-        spawn_monitored_task!(fix_indexes(state_clone));
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
         spawn_monitored_task!(execution_process(
@@ -4221,13 +4218,6 @@ impl AuthorityState {
                 cur_epoch_store.epoch()
             );
             self.expensive_check_is_consistent_state(state_hasher, cur_epoch_store);
-        }
-
-        if expensive_safety_check_config.enable_secondary_index_checks()
-            && let Some(indexes) = self.indexes.clone()
-        {
-            verify_indexes(self.get_global_state_hash_store().as_ref(), indexes)
-                .expect("secondary indexes are inconsistent");
         }
 
         // Verify all checkpointed transactions are present in transactions_seq.

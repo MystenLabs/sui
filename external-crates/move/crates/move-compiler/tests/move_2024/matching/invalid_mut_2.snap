@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
    ┌─ tests/move_2024/matching/invalid_mut_2.move:10:13
    │
 10 │             mut Maybe::Nothing => (),

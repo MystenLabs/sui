@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ast::{Exp, Module, ModuleRef, TypeRef};
+use crate::ast::{Exp, Module, ModuleRef, Type, TypeRef};
 
 use move_binary_format::normalized::ModuleId;
 use move_symbol_pool::Symbol;
@@ -34,6 +34,13 @@ pub fn collect_uses(module: &mut Module, current_mid: ModuleId<Symbol>, used: &B
     for fun in module.functions.values_mut() {
         rewrite_self_types(&mut fun.code, current_mid);
     }
+    visit_module_types_mut(module, &mut |t| {
+        if let TypeRef::Qualified(ModuleRef::Qualified(mid), name) = t
+            && *mid == current_mid
+        {
+            *t = TypeRef::Aliased(*name);
+        }
+    });
 
     let type_counts = count_type_refs(module);
     let mut used_now = used.clone();
@@ -59,8 +66,109 @@ pub fn collect_uses(module: &mut Module, current_mid: ModuleId<Symbol>, used: &B
     for fun in module.functions.values_mut() {
         rewrite(&mut fun.code, &uses, &type_uses);
     }
+    visit_module_types_mut(module, &mut |t| alias_type(t, &uses, &type_uses));
     module.uses = uses;
     module.type_uses = type_uses;
+}
+
+// -------------------------------------------------------------------------------------------------
+// Type walking
+//
+// Function parameter/return types and struct/enum field types live on `Module` directly, not
+// inside `Exp`. The four passes below (self-rewrite, type-ref count, module-ref count, alias
+// rewrite) all need to visit these alongside their existing `Exp` walks, applying the same
+// per-`TypeRef` logic each does. Rather than thread that logic through four parallel struct
+// walkers, expose a single visitor pair (`visit_module_types` / `visit_module_types_mut`) and
+// let each pass supply its callback.
+
+fn visit_module_types_mut(module: &mut Module, visit: &mut dyn FnMut(&mut TypeRef)) {
+    for fun in module.functions.values_mut() {
+        for ty in &mut fun.parameters {
+            walk_type_mut(ty, visit);
+        }
+        for ty in &mut fun.returns {
+            walk_type_mut(ty, visit);
+        }
+    }
+    for s in module.structs.values_mut() {
+        for (_, ty) in &mut s.fields {
+            walk_type_mut(ty, visit);
+        }
+    }
+    for e in module.enums.values_mut() {
+        for v in &mut e.variants {
+            for (_, ty) in &mut v.fields {
+                walk_type_mut(ty, visit);
+            }
+        }
+    }
+}
+
+fn visit_module_types(module: &Module, visit: &mut dyn FnMut(&TypeRef)) {
+    for fun in module.functions.values() {
+        for ty in &fun.parameters {
+            walk_type(ty, visit);
+        }
+        for ty in &fun.returns {
+            walk_type(ty, visit);
+        }
+    }
+    for s in module.structs.values() {
+        for (_, ty) in &s.fields {
+            walk_type(ty, visit);
+        }
+    }
+    for e in module.enums.values() {
+        for v in &e.variants {
+            for (_, ty) in &v.fields {
+                walk_type(ty, visit);
+            }
+        }
+    }
+}
+
+fn walk_type_mut(t: &mut Type, visit: &mut dyn FnMut(&mut TypeRef)) {
+    match t {
+        Type::Datatype(dt) => {
+            visit(&mut dt.type_ref);
+            for arg in &mut dt.type_arguments {
+                walk_type_mut(arg, visit);
+            }
+        }
+        Type::Vector(inner) | Type::Reference(_, inner) => walk_type_mut(inner, visit),
+        Type::Bool
+        | Type::U8
+        | Type::U16
+        | Type::U32
+        | Type::U64
+        | Type::U128
+        | Type::U256
+        | Type::Address
+        | Type::Signer
+        | Type::TypeParameter(_) => {}
+    }
+}
+
+fn walk_type(t: &Type, visit: &mut dyn FnMut(&TypeRef)) {
+    match t {
+        Type::Datatype(dt) => {
+            visit(&dt.type_ref);
+            for arg in &dt.type_arguments {
+                walk_type(arg, visit);
+            }
+        }
+        Type::Vector(inner) | Type::Reference(_, inner) => walk_type(inner, visit),
+        Type::Bool
+        | Type::U8
+        | Type::U16
+        | Type::U32
+        | Type::U64
+        | Type::U128
+        | Type::U256
+        | Type::Address
+        | Type::Signer
+        | Type::TypeParameter(_) => {}
+    }
 }
 
 /// Rewrite every `TypeRef::Qualified(_, name)` whose module is `current_mid` to
@@ -354,12 +462,20 @@ fn type_qualified(t: &TypeRef) -> Option<(ModuleId<Symbol>, Symbol)> {
     }
 }
 
-/// Count references to each `(ModuleId, type_name)` across every function body.
+/// Count references to each `(ModuleId, type_name)` across every function body and every
+/// type written down in the module's signatures: function parameter/return types and struct/
+/// enum field types. Both kinds of sites compete for the same `type_uses` slot, so they share
+/// one counter.
 fn count_type_refs(module: &Module) -> BTreeMap<(ModuleId<Symbol>, Symbol), usize> {
     let mut out = BTreeMap::new();
     for fun in module.functions.values() {
         count_type_refs_exp(&fun.code, &mut out);
     }
+    visit_module_types(module, &mut |t| {
+        if let Some(k) = type_qualified(t) {
+            *out.entry(k).or_insert(0) += 1;
+        }
+    });
     out
 }
 
@@ -445,6 +561,16 @@ fn count_module_refs(
     for fun in module.functions.values() {
         count_module_refs_exp(&fun.code, type_uses, &mut out);
     }
+    // Types in signatures/fields: only the module side counts here (the type-name side, if
+    // present, is handled by `type_uses`). A site whose type is already aliased contributes
+    // nothing — its rendered form drops the module prefix entirely.
+    visit_module_types(module, &mut |t| {
+        if let Some(k) = type_qualified(t)
+            && !type_uses.contains_key(&k)
+        {
+            *out.entry(k.0).or_insert(0) += 1;
+        }
+    });
     out
 }
 

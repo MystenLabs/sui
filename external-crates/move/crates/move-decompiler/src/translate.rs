@@ -11,6 +11,7 @@ use crate::{
 };
 
 use crate::ast::Exp;
+use indexmap::IndexMap;
 use move_model_2::{
     model::{Model, Module as MModule},
     source_kind::SourceKind,
@@ -92,8 +93,13 @@ pub fn module<S: SourceKind>(
         .map(|(name, fun)| (name, function(config, resolved, fun)))
         .collect();
 
+    let structs = collect_structs(&resolved);
+    let enums = collect_enums(&resolved);
+
     let mut module = Out::Module {
         name,
+        structs,
+        enums,
         functions,
         uses: BTreeMap::new(),
         type_uses: BTreeMap::new(),
@@ -103,6 +109,65 @@ pub fn module<S: SourceKind>(
     let used = build_used(&module, &resolved);
     crate::refinement::collect_uses(&mut module, current_mid, &used);
     module
+}
+
+/// Convert each compiled struct in `resolved` into our `ast::Struct`. Fields' types are
+/// translated via `Type::from_normalized`, leaving every `Datatype` reference as `Qualified`
+/// initially; `collect_uses` rewrites those to `Aliased` after counting.
+fn collect_structs<S: SourceKind>(resolved: &MModule<'_, S>) -> IndexMap<Symbol, Out::Struct> {
+    let mut out = IndexMap::new();
+    for s in resolved.structs() {
+        let compiled = s.compiled();
+        let fields = compiled
+            .fields
+            .0
+            .iter()
+            .map(|(name, field)| (*name, Out::Type::from_normalized(&field.type_)))
+            .collect();
+        out.insert(
+            s.name(),
+            Out::Struct {
+                name: s.name(),
+                abilities: compiled.abilities,
+                type_parameters: compiled.type_parameters.clone(),
+                fields,
+            },
+        );
+    }
+    out
+}
+
+fn collect_enums<S: SourceKind>(resolved: &MModule<'_, S>) -> IndexMap<Symbol, Out::Enum> {
+    let mut out = IndexMap::new();
+    for e in resolved.enums() {
+        let compiled = e.compiled();
+        let variants = compiled
+            .variants
+            .iter()
+            .map(|(vname, variant)| {
+                let fields = variant
+                    .fields
+                    .0
+                    .iter()
+                    .map(|(name, field)| (*name, Out::Type::from_normalized(&field.type_)))
+                    .collect();
+                Out::Variant {
+                    name: *vname,
+                    fields,
+                }
+            })
+            .collect();
+        out.insert(
+            e.name(),
+            Out::Enum {
+                name: e.name(),
+                abilities: compiled.abilities,
+                type_parameters: compiled.type_parameters.clone(),
+                variants,
+            },
+        );
+    }
+    out
 }
 
 /// Names that no module alias may use: every function, struct, enum, variant, and field
@@ -153,16 +218,34 @@ fn function<S: SourceKind>(
             println!("Block {}:\n{blk}", lbl);
         }
     }
-    // Look up the compiled function so we can name its parameters. The first `parameters.len()`
-    // local indices are the parameters; the rest are body locals introduced by the bytecode.
-    // term_reconstruction renders local id `i` as `l{i}`, so the parameter names are
-    // `l0..l{param_count-1}`.
-    let param_count = resolved_module
-        .function(fun.name)
-        .maybe_compiled()
-        .map(|f| f.parameters.len())
-        .unwrap_or(0);
-    let params: Vec<String> = (0..param_count).map(|i| format!("l{i}")).collect();
+    // Pull the compiled function's signature so parameter/return types end up in the AST,
+    // available to `collect_uses` for alias rewriting. The first `parameters.len()` local
+    // indices are the parameters; `term_reconstruction` renders local id `i` as `l{i}`, so
+    // parameter names are `l0..l{N-1}` (we generate them at print time from this count).
+    let model_fun = resolved_module.function(fun.name);
+    let compiled = model_fun.maybe_compiled();
+    let parameters: Vec<Out::Type> = compiled
+        .map(|f| {
+            f.parameters
+                .iter()
+                .map(|t| Out::Type::from_normalized(t))
+                .collect()
+        })
+        .unwrap_or_default();
+    let returns: Vec<Out::Type> = compiled
+        .map(|f| {
+            f.return_
+                .iter()
+                .map(|t| Out::Type::from_normalized(t))
+                .collect()
+        })
+        .unwrap_or_default();
+    let visibility = compiled.map(|f| f.visibility).unwrap_or_default();
+    let is_entry = compiled.map(|f| f.is_entry).unwrap_or(false);
+    let type_parameters = compiled
+        .map(|f| f.type_parameters.clone())
+        .unwrap_or_default();
+    let param_names: Vec<String> = (0..parameters.len()).map(|i| format!("l{i}")).collect();
     let (name, terms, input, entry) = make_input(fun);
     if config.debug_print.input {
         print_heading("input");
@@ -174,13 +257,21 @@ fn function<S: SourceKind>(
         println!("{}", structured.to_test_string());
     }
     let mut code = generate_output(terms, structured);
-    crate::structuring::hoist_declarations::hoist_declarations(&mut code, params);
+    crate::structuring::hoist_declarations::hoist_declarations(&mut code, param_names);
     crate::refinement::refine(&mut code);
     if config.debug_print.decompiled_code {
         print_heading("refined code");
         println!("{code}");
     }
-    Out::Function { name, code }
+    Out::Function {
+        name,
+        visibility,
+        is_entry,
+        type_parameters,
+        parameters,
+        returns,
+        code,
+    }
 }
 
 fn make_input(

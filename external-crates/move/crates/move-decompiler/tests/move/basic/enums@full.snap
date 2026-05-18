@@ -8,7 +8,7 @@ module basic::enums;
 // -- enums -- 
 
 public enum E {
-    X {},
+    X,
     Y {
         a: u32,
         b: u32,
@@ -27,6 +27,6 @@ public enum E {
 }
 
 public enum E2 {
-    X {},
+    X,
     Y { pos0: u32 },
 }

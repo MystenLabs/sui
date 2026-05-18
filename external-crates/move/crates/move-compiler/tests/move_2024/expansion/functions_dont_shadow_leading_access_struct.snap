@@ -5,13 +5,13 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/functions_dont_shadow_leading_access_struct.move:3:19
   │
 3 │     public struct f() has copy, drop;
   │                   ^ Invalid struct name 'f'. Struct names must start with 'A'..'Z'
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
    ┌─ tests/move_2024/expansion/functions_dont_shadow_leading_access_struct.move:12:19
    │
 12 │         use a::f::f;

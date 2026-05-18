@@ -4,9 +4,9 @@
 use serde_json::Map;
 use serde_json::Value as Json;
 
-use crate::object::rpc_visitor::Format;
-use crate::object::rpc_visitor::Meter;
-use crate::object::rpc_visitor::MeterError;
+use crate::rpc_format::Format;
+use crate::rpc_format::Meter;
+use crate::rpc_format::MeterError;
 
 impl Format for Json {
     type Vec = Vec<Self>;

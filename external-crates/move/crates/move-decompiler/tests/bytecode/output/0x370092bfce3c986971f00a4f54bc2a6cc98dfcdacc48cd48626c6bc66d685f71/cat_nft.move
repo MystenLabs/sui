@@ -13,20 +13,19 @@ use 0x2::transfer as x2_transfer;
 use 0x2::tx_context;
 use 0x2::url as x2_url;
 use 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft;
+use 0x1::string::String;
+use 0x2::object::ID;
+use 0x2::object::UID;
+use 0x2::tx_context::TxContext;
+use 0x2::url::Url;
 
 // -- structs -- 
 
-public struct CatNFT
-has key, store {
-    id: 0x2::object::UID,
-    name: 0x1::string::String,
-    description: 0x1::string::String,
-    url: 0x2::url::Url,
-}
+public struct CatNFT has key, store { id: UID, name: String, description: String, url: Url }
 
 public struct CAT_NFT has drop { dummy_field: bool }
 
-public struct NFTMinted has copy, drop { object_id: 0x2::object::ID, creator: address, name: 0x1::string::String }
+public struct NFTMinted has copy, drop { object_id: ID, creator: address, name: String }
 
 // -- constants -- 
 
@@ -56,16 +55,16 @@ const C11: vector<u8> = vector[99u8, 97u8, 116u8];
 
 // -- functions -- 
 
-public entry fun burn(l0: 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT, l1: &mut 0x2::tx_context::TxContext) {
+public entry fun burn(l0: CatNFT, l1: &mut TxContext) {
     let CatNFT { id: reg_1, name: reg_2, description: reg_3, url: reg_4 } = l0;
     object::delete(reg_1 : 0x2::object::UID)
 }
 
-public fun description(l0: &0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT): &0x1::string::String {
+public fun description(l0: &CatNFT): &String {
     return &l0.description
 }
 
-fun init(l0: 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CAT_NFT, l1: &mut 0x2::tx_context::TxContext) {
+fun init(l0: CAT_NFT, l1: &mut TxContext) {
     let l3 = vector[string::utf8(C2), string::utf8(C3), string::utf8(C4), string::utf8(C5), string::utf8(C6)];
     let l5 = vector[string::utf8(C7), string::utf8(C8), string::utf8(C9), string::utf8(C10), string::utf8(C11)];
     let l4 = package::claim(l0, l1);
@@ -75,30 +74,30 @@ fun init(l0: 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71:
     x2_transfer::public_transfer(l2, tx_context::sender(freeze(l1)))
 }
 
-public fun mint(l0: vector<u8>, l1: vector<u8>, l2: vector<u8>, l3: &mut 0x2::tx_context::TxContext): 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT {
+public fun mint(l0: vector<u8>, l1: vector<u8>, l2: vector<u8>, l3: &mut TxContext): CatNFT {
     let l5 = tx_context::sender(freeze(l3));
     let l4 = CatNFT { id: object::new(l3), name: string::utf8(l0), description: string::utf8(l1), url: x2_url::new_unsafe_from_bytes(l2) };
     event::emit(NFTMinted { object_id: object::id(&l4), creator: l5, name: *(&(&l4).name) });
     return l4
 }
 
-public entry fun mint_to_cat(l0: vector<u8>, l1: vector<u8>, l2: vector<u8>, l3: address, l4: &mut 0x2::tx_context::TxContext) {
+public entry fun mint_to_cat(l0: vector<u8>, l1: vector<u8>, l2: vector<u8>, l3: address, l4: &mut TxContext) {
     x2_transfer::public_transfer(cat_nft::mint(l0, l1, l2, l4), l3)
 }
 
-public fun name(l0: &0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT): &0x1::string::String {
+public fun name(l0: &CatNFT): &String {
     return &l0.name
 }
 
-public entry fun transfer(l0: 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT, l1: address, l2: &mut 0x2::tx_context::TxContext) {
+public entry fun transfer(l0: CatNFT, l1: address, l2: &mut TxContext) {
     x2_transfer::public_transfer(l0, l1)
 }
 
-public entry fun update_description(l0: &mut 0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT, l1: vector<u8>, l2: &mut 0x2::tx_context::TxContext) {
+public entry fun update_description(l0: &mut CatNFT, l1: vector<u8>, l2: &mut TxContext) {
     *(&mut l0.description) = string::utf8(l1)
 }
 
-public fun url(l0: &0x370092bfce3c986971f00a4f54bc2a6cc98dfcdacc48cd48626c6bc66d685f71::cat_nft::CatNFT): &0x2::url::Url {
+public fun url(l0: &CatNFT): &Url {
     return &l0.url
 }
 
