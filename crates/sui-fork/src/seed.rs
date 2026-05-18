@@ -3,9 +3,9 @@
 
 //! Fork manifest and seed resolution for lazy owned-object index initialization.
 //!
-//! The manifest is written for every initialized fork directory. Address seeds resolve
-//! object references at the fork checkpoint, while explicit object seeds also cache the full
-//! object BCS through the existing object query path.
+//! The manifest is written for every initialized fork directory. Address and explicit object
+//! seeds resolve lightweight owner/object-ref metadata at the fork checkpoint. Full object BCS is
+//! fetched later when an object read or lazy owned-object index initialization needs it.
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -19,18 +19,13 @@ use tracing::warn;
 
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::SuiAddress;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::object::Object;
-use sui_types::object::Owner;
 
 use crate::DataStore;
-use crate::ObjectKey;
-use crate::ObjectRead as _;
-use crate::VersionQuery;
 use crate::gql::AddressOwnedObject;
 use crate::gql::GraphQLClient;
+use crate::gql::ObjectSeedMetadata;
 
 /// CLI seed input before it has been resolved against the upstream chain.
 #[derive(Clone, Debug, Default)]
@@ -63,20 +58,6 @@ impl SeedManifest {
             checkpoint,
             entries: Vec::new(),
         }
-    }
-}
-
-impl SeedEntry {
-    fn from_object(object: &Object) -> Option<Self> {
-        let owner = match &object.owner {
-            Owner::AddressOwner(owner) | Owner::ConsensusAddressOwner { owner, .. } => *owner,
-            _ => return None,
-        };
-
-        Some(Self {
-            object_ref: object.compute_object_reference(),
-            owner,
-        })
     }
 }
 
@@ -205,8 +186,8 @@ async fn resolve_address_seed(
         .collect())
 }
 
-fn resolve_object_seeds(
-    data_store: &DataStore,
+async fn resolve_object_seeds(
+    gql: &GraphQLClient,
     checkpoint: CheckpointSequenceNumber,
     object_ids: &[ObjectID],
 ) -> Result<Vec<SeedEntry>, Error> {
@@ -214,30 +195,24 @@ fn resolve_object_seeds(
         return Ok(Vec::new());
     }
 
-    let keys: Vec<_> = object_ids
-        .iter()
-        .map(|object_id| ObjectKey {
-            object_id: *object_id,
-            version_query: VersionQuery::AtCheckpoint(checkpoint),
-        })
-        .collect();
-    let objects = data_store.gql().get_objects(&keys)?;
+    let objects = gql
+        .get_object_seed_metadata_at_checkpoint(object_ids, checkpoint)
+        .await?;
     let mut entries = Vec::new();
 
     for (object_id, object) in object_ids.iter().zip_eq(objects) {
-        let Some((object, _)) = object else {
-            warn!(%object_id, checkpoint, "object seed not found at fork checkpoint");
-            continue;
-        };
-        data_store.local().write_object(&object)?;
-        if let Some(entry) = SeedEntry::from_object(&object) {
-            entries.push(entry);
-        } else {
-            warn!(
-                %object_id,
-                checkpoint,
-                "object seed is not owned by an address and will not be added to the seed manifest",
-            );
+        match object {
+            ObjectSeedMetadata::Missing => {
+                warn!(%object_id, checkpoint, "object seed not found at fork checkpoint");
+            }
+            ObjectSeedMetadata::NonAddressOwned => {
+                warn!(
+                    %object_id,
+                    checkpoint,
+                    "object seed is not owned by an address and will not be added to the seed manifest",
+                );
+            }
+            ObjectSeedMetadata::AddressOwned(object) => entries.push(SeedEntry::from(object)),
         }
     }
 
@@ -270,7 +245,7 @@ async fn resolve_seeds(
         .into_iter()
         .filter(|object_id| !entries.contains_key(object_id))
         .collect();
-    for entry in resolve_object_seeds(data_store, checkpoint, &remaining_object_ids)? {
+    for entry in resolve_object_seeds(data_store.gql(), checkpoint, &remaining_object_ids).await? {
         entries.insert(entry.object_ref.0, entry);
     }
 
@@ -283,30 +258,59 @@ async fn resolve_seeds(
 
 #[cfg(test)]
 mod tests {
-    use fastcrypto::encoding::Base64 as FastCryptoBase64;
-    use fastcrypto::encoding::Encoding as _;
     use serde_json::json;
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::object::Object;
+    use sui_types::object::Owner;
     use wiremock::Mock;
     use wiremock::MockServer;
     use wiremock::ResponseTemplate;
+    use wiremock::matchers::body_partial_json;
     use wiremock::matchers::method;
     use wiremock::matchers::path;
 
     use super::*;
 
-    fn object_response_body(object: &Object) -> serde_json::Value {
+    fn object_seed_response_body(
+        object: &Object,
+        owner: SuiAddress,
+        owner_type: &str,
+    ) -> serde_json::Value {
         json!({
             "data": {
                 "multiGetObjects": [{
-                    "address": object.id().to_string(),
                     "version": object.version().value(),
-                    "objectBcs": FastCryptoBase64::from_bytes(
-                        &bcs::to_bytes(object).expect("object should serialize"),
-                    )
-                    .encoded(),
+                    "digest": object.digest().to_string(),
+                    "owner": {
+                        "__typename": owner_type,
+                        "address": { "address": owner.to_string() },
+                    },
                 }]
             }
         })
+    }
+
+    fn assert_object_seed_query_shape(query: &str) {
+        assert!(query.contains("multiGetObjects"));
+        assert!(query.contains("version"));
+        assert!(query.contains("digest"));
+        assert!(query.contains("... on AddressOwner"));
+        assert!(query.contains("... on ConsensusAddressOwner"));
+        assert!(!query.contains("objectBcs"));
+
+        let object_selection_before_owner = query
+            .split("multiGetObjects")
+            .nth(1)
+            .expect("query should include multiGetObjects")
+            .split("owner")
+            .next()
+            .expect("query should include owner");
+        assert!(
+            !object_selection_before_owner
+                .lines()
+                .any(|line| line.trim() == "address"),
+            "object seed query should not request Object.address",
+        );
     }
 
     fn available_range_response(
@@ -382,16 +386,17 @@ mod tests {
         .await
         .expect_err("seed resolution should fail");
 
+        let err = format!("{err:?}");
         assert!(
-            err.to_string().contains("Failed to read response")
-                || err.to_string().contains("Object bcs is None")
-                || err.to_string().contains("Missing data")
+            err.contains("failed to query object seeds")
+                || err.contains("Failed to read response")
+                || err.contains("Missing data")
         );
         assert!(!store.local().seed_manifest_exists());
     }
 
     #[tokio::test]
-    async fn prepare_seed_manifest_fetches_explicit_object_and_caches_bcs() {
+    async fn prepare_seed_manifest_fetches_explicit_object_metadata_without_caching_bcs() {
         let server = MockServer::start().await;
         let owner = SuiAddress::random_for_testing_only();
         let object = Object::with_id_owner_version_for_testing(
@@ -401,7 +406,21 @@ mod tests {
         );
         Mock::given(method("POST"))
             .and(path("/"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(object_response_body(&object)))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "keys": [{
+                        "address": object.id().to_string(),
+                        "atCheckpoint": 11,
+                    }]
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(object_seed_response_body(
+                    &object,
+                    owner,
+                    "AddressOwner",
+                )),
+            )
             .mount(&server)
             .await;
 
@@ -424,14 +443,28 @@ mod tests {
             manifest.entries[0].object_ref,
             object.compute_object_reference()
         );
-        assert_eq!(
+        assert_eq!(manifest.entries[0].owner, owner);
+        assert!(
             store
                 .local()
                 .get_object_at_version(&object.id(), object.version().value())
                 .expect("local object lookup should not fail")
-                .unwrap(),
-            object,
+                .is_none(),
+            "explicit object seeding should not cache BCS",
         );
+
+        let requests = server
+            .received_requests()
+            .await
+            .expect("wiremock should record requests");
+        let request_body: serde_json::Value = requests[0]
+            .body_json()
+            .expect("request body should be json");
+        let query = request_body
+            .get("query")
+            .and_then(serde_json::Value::as_str)
+            .expect("query string should be present");
+        assert_object_seed_query_shape(query);
     }
 
     #[tokio::test]
@@ -448,7 +481,21 @@ mod tests {
         );
         Mock::given(method("POST"))
             .and(path("/"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(object_response_body(&object)))
+            .and(body_partial_json(json!({
+                "variables": {
+                    "keys": [{
+                        "address": object.id().to_string(),
+                        "atCheckpoint": 11,
+                    }]
+                }
+            })))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(object_seed_response_body(
+                    &object,
+                    owner,
+                    "ConsensusAddressOwner",
+                )),
+            )
             .mount(&server)
             .await;
 
@@ -467,15 +514,18 @@ mod tests {
         .expect("seed manifest should resolve");
 
         assert_eq!(manifest.entries.len(), 1);
-        assert_eq!(manifest.entries[0].object_id, object.id());
-        assert_eq!(manifest.entries[0].owner, owner);
         assert_eq!(
+            manifest.entries[0].object_ref,
+            object.compute_object_reference()
+        );
+        assert_eq!(manifest.entries[0].owner, owner);
+        assert!(
             store
                 .local()
                 .get_object_at_version(&object.id(), object.version().value())
                 .expect("local object lookup should not fail")
-                .unwrap(),
-            object,
+                .is_none(),
+            "explicit object seeding should not cache BCS",
         );
     }
 

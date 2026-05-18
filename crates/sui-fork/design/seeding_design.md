@@ -12,11 +12,9 @@ when it is first needed.
 Seeding resolves object refs (id, version, digest) plus owner at startup,
 establishing the minimal manifest needed to build a complete ownership index later.
 
-Object contents are NOT fetched during seeding for address-based seeds. Content
-fetching is deferred until lazy owned-object index initialization. For explicit
-`--object` IDs, we reuse the existing `multiGetObjects`
-infrastructure which does fetch BCS — a useful side-effect since these objects
-will likely be accessed during execution anyway.
+Object contents are NOT fetched during seeding. Content fetching is deferred
+until an actual object read or lazy owned-object index initialization needs the
+full object BCS.
 
 ### Checkpoint age constraint
 
@@ -32,11 +30,10 @@ Two new flags on the `start` command:
 --object <ID>        Seed a specific object ID if it is address-owned (repeatable)
 ```
 
-Both can be combined. Addresses are resolved into seed entries with owner plus
-object ref; explicit object IDs are fetched via the existing `multiGetObjects`
-path and reduced to the same minimal seed entry shape. Results are merged and
-deduped by object ID. It is important to note if addresses is passed, the
-checkpoint must be within the last 1h.
+Both can be combined. Addresses and explicit object IDs are resolved into seed
+entries with owner plus object ref. Results are merged and deduped by object ID.
+It is important to note if addresses is passed, the checkpoint must be within
+the last 1h.
 
 When restarting a fork with the same `--data-dir` and `--checkpoint`, the existing
 seeding information that is stored on disk will be reused. If `--address` or `--object` is
@@ -114,13 +111,27 @@ query($sequenceNumber: UInt53, $address: SuiAddress!, $first: Int, $after: Strin
   variants are handled by the query fallback and skipped; they are not
   controlled by the seeded address for the initial index.
 
-### Individual objects (reuse existing)
+### Individual objects query
 
-For explicit `--object` IDs, reuse the existing `object_query::query()`
-infrastructure (`multiGetObjects` with `ObjectFragment` that fetches `objectBcs`).
-BCS gets cached to disk. After fetching, extract the owner and object ref from
-the deserialized `Object`; persist only those fields in the `SeedEntry`.
-Object type and balance are not part of the seed manifest.
+For explicit `--object` IDs, use a metadata-only `multiGetObjects` query. The
+provided object ID is used as the object ref ID; the query does not request
+`Object.address` or `objectBcs`.
+
+```graphql
+query($keys: [ObjectKey!]!) {
+  multiGetObjects(keys: $keys) {
+    version
+    digest
+    owner {
+      ... on AddressOwner { address { address } }
+      ... on ConsensusAddressOwner { address { address } }
+    }
+  }
+}
+```
+
+The query returns the same minimal seed entry shape as address seeding. Object
+type, balance, and full BCS are not part of the seed manifest.
 
 ## Implementation Details
 
@@ -159,7 +170,7 @@ async fn resolve_seeds(
 
 1. For each address → paginate `address_objects_query`, collect entries
 2. Collect explicit object IDs not already resolved by address seeding (dedup)
-3. For remaining object IDs → `object_query::query()` (existing), extract refs and owner
+3. For remaining object IDs → metadata-only object seed query, collect entries
 4. Merge, dedup by `object_id`
 5. Return `SeedManifest`
 
