@@ -265,13 +265,13 @@ fn compute_post_dominators<N, E>(
         .iter()
         .filter_map(|(lbl, inp)| matches!(inp, D::Input::Code(_, _, None)).then_some(*lbl))
         .collect();
-    let arm_local_exits = compute_filter_set(cfg, input, &sinks);
+    let filtered_exit_sinks = compute_filter_set(cfg, input, &sinks);
 
     // Build a reversed copy of the CFG and add a synthetic `return_` node. Dominators rooted
     // at `return_` in this graph are post-dominators of the original.
     let mut rev = petgraph::graph::DiGraph::<(), ()>::from_edges(
         cfg.edge_references()
-            .filter(|e| !arm_local_exits.contains(&e.target()))
+            .filter(|e| !filtered_exit_sinks.contains(&e.target()))
             .map(|e| (e.target(), e.source())),
     );
     let return_: NodeIndex = rev.add_node(());
@@ -299,7 +299,7 @@ fn compute_post_dominators<N, E>(
         }
     }
 
-    add_infinite_loop_post_dominators(config, &mut rev, return_, cfg, input, &arm_local_exits);
+    add_infinite_loop_post_dominators(config, &mut rev, return_, cfg, input, &filtered_exit_sinks);
 
     (
         return_,
@@ -321,16 +321,16 @@ fn compute_post_dominators<N, E>(
 /// highest-indexed input node as the representative; any node in the SCC would suffice to
 /// make the whole SCC post-dominator-defined.
 ///
-/// Arm-local exits are excluded as representatives: `compute_post_dominators` filtered their
-/// incoming reverse edges, so they're absent from `rev`. The structurer short-circuits on
-/// `D::Input::Code(_, _, None)` before querying their post-dom, so they don't need one.
+/// Filtered exit sinks are excluded as representatives: `compute_post_dominators` filtered
+/// their incoming reverse edges, so they're absent from `rev`. The structurer short-circuits
+/// on `D::Input::Code(_, _, None)` before querying their post-dom, so they don't need one.
 fn add_infinite_loop_post_dominators<N, E>(
     config: &Config,
     rev: &mut DiGraph<(), ()>,
     return_: NodeIndex,
     cfg: &petgraph::Graph<N, E>,
     input: &BTreeMap<D::Label, D::Input>,
-    arm_local_exits: &HashSet<NodeIndex>,
+    filtered_exit_sinks: &HashSet<NodeIndex>,
 ) {
     for scc in petgraph::algo::tarjan_scc(cfg) {
         let members: HashSet<NodeIndex> = scc.iter().copied().collect();
@@ -343,7 +343,7 @@ fn add_infinite_loop_post_dominators<N, E>(
         }
         let Some(rep) = scc
             .iter()
-            .filter(|n| input.contains_key(n) && !arm_local_exits.contains(n))
+            .filter(|n| input.contains_key(n) && !filtered_exit_sinks.contains(n))
             .max()
             .copied()
         else {

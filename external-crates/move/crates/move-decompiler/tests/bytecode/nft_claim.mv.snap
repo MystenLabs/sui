@@ -15,18 +15,16 @@ use 0x2::transfer;
 use 0x2::tx_context;
 use 0x2::vec_set;
 use 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim;
+use 0x1::string::String;
+use 0x2::object::UID;
+use 0x2::tx_context::TxContext;
+use 0x2::vec_set::VecSet;
 
 // -- structs -- 
 
-public struct DEEPClaimNFT
-has key, store {
-    id: 0x2::object::UID,
-    name: 0x1::string::String,
-    description: 0x1::string::String,
-    image_url: 0x1::string::String,
-}
+public struct DEEPClaimNFT has key, store { id: UID, name: String, description: String, image_url: String }
 
-public struct ClaimCap has key, store { id: 0x2::object::UID, claimed: 0x2::vec_set::VecSet<address> }
+public struct ClaimCap has key, store { id: UID, claimed: VecSet<address> }
 
 public struct NFT_CLAIM has drop { dummy_field: bool }
 
@@ -46,23 +44,23 @@ const C5: vector<u8> = vector[104u8, 116u8, 116u8, 112u8, 115u8, 58u8, 47u8, 47u
 
 // -- functions -- 
 
-public fun get_description(l0: &0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::DEEPClaimNFT): &0x1::string::String {
+public fun get_description(l0: &DEEPClaimNFT): &String {
     return &l0.description
 }
 
-public fun get_id(l0: &0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::DEEPClaimNFT): address {
+public fun get_id(l0: &DEEPClaimNFT): address {
     return object::uid_to_address(&l0.id)
 }
 
-public fun get_image_url(l0: &0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::DEEPClaimNFT): &0x1::string::String {
+public fun get_image_url(l0: &DEEPClaimNFT): &String {
     return &l0.image_url
 }
 
-public fun get_name(l0: &0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::DEEPClaimNFT): &0x1::string::String {
+public fun get_name(l0: &DEEPClaimNFT): &String {
     return &l0.name
 }
 
-fun init(l0: 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::NFT_CLAIM, l1: &mut 0x2::tx_context::TxContext) {
+fun init(l0: NFT_CLAIM, l1: &mut TxContext) {
     let l3 = vector[string::utf8(C0), string::utf8(C1), string::utf8(C2)];
     let l5 = vector[string::utf8(C3), string::utf8(C4), string::utf8(C5)];
     let l4 = package::claim(l0, l1);
@@ -73,7 +71,7 @@ fun init(l0: 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8:
     transfer::transfer(ClaimCap { id: object::new(l1), claimed: vec_set::empty() }, tx_context::sender(freeze(l1)))
 }
 
-public entry fun mint_batch(l0: &mut 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::ClaimCap, l1: vector<address>, l2: &mut 0x2::tx_context::TxContext) {
+public entry fun mint_batch(l0: &mut ClaimCap, l1: vector<address>, l2: &mut TxContext) {
     let l3 = 0u64;
     let l4 = &l1.len();
     while (l3 < l4) {
@@ -85,7 +83,7 @@ public entry fun mint_batch(l0: &mut 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b
     }
 }
 
-public fun mint_single(l0: &mut 0x5c00961b77fad9e563bbf817c5cf8f49f7db8aa7b12bf6799ee00a837816a3d8::nft_claim::ClaimCap, l1: address, l2: &mut 0x2::tx_context::TxContext) {
+public fun mint_single(l0: &mut ClaimCap, l1: address, l2: &mut TxContext) {
     assert!(!(vec_set::contains(&l0.claimed, &l1)), 0u64);
     let l3 = DEEPClaimNFT { id: object::new(l2), name: string::utf8(C3), description: string::utf8(C4), image_url: string::utf8(C5) };
     vec_set::insert(&mut l0.claimed, l1);

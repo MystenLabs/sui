@@ -20,111 +20,90 @@ use 0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879::personal
 use 0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879::royalty_rule;
 use 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse;
 use 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins;
+use 0x1::option::Option;
+use 0x1::type_name::TypeName;
+use 0x2::balance::Balance;
+use 0x2::coin::Coin;
+use 0x2::kiosk::Kiosk;
+use 0x2::kiosk::KioskOwnerCap;
+use 0x2::kiosk::PurchaseCap;
+use 0x2::object::ID;
+use 0x2::object::UID;
+use 0x2::sui::SUI;
+use 0x2::transfer_policy::TransferPolicy;
+use 0x2::transfer_policy::TransferRequest;
+use 0x2::tx_context::TxContext;
+use 0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879::personal_kiosk::PersonalKioskCap;
+use 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse::AuctionHouse;
 
 // -- structs -- 
 
-public struct Kiosk_Bidding_Store
-has key, store { id: 0x2::object::UID, auction_house: 0x2::object::ID, orphaned_caps: 0x2::object::UID }
+public struct Kiosk_Bidding_Store has key, store { id: UID, auction_house: ID, orphaned_caps: UID }
 
-public struct NftListing<phantom T: key+store>
+public struct NftListing<phantom T0: key + store>
 has key, store {
-    id: 0x2::object::UID,
+    id: UID,
     seller: address,
-    kiosk_id: 0x2::object::ID,
-    nft_id: 0x2::object::ID,
-    purchase_cap: 0x2::kiosk::PurchaseCap<T0>,
+    kiosk_id: ID,
+    nft_id: ID,
+    purchase_cap: PurchaseCap<T0>,
     buyout_price: u64,
     highest_bid: u64,
-    highest_bidder: 0x1::option::Option<address>,
+    highest_bidder: Option<address>,
     status: u8,
     fee_bps: u16,
     created_at: u64,
     expires_at: u64,
-    coin_type: 0x1::type_name::TypeName,
+    coin_type: TypeName,
 }
 
-public struct Bid<phantom T>
-has key, store { id: 0x2::object::UID, bidder: address, amount: 0x2::balance::Balance<T0>, timestamp: u64 }
+public struct Bid<phantom T0> has key, store { id: UID, bidder: address, amount: Balance<T0>, timestamp: u64 }
 
-public struct OrphanedPurchaseCap<phantom T: key+store>
-has key, store {
-    id: 0x2::object::UID,
-    cap: 0x2::kiosk::PurchaseCap<T0>,
-    kiosk_id: 0x2::object::ID,
-    orphaned_at: u64,
-}
+public struct OrphanedPurchaseCap<phantom T0: key + store> has key, store { id: UID, cap: PurchaseCap<T0>, kiosk_id: ID, orphaned_at: u64 }
 
-public struct AcceptedBid<T: key+store>
-has key, store {
-    id: 0x2::object::UID,
-    listing_id: 0x2::object::ID,
-    bidder: address,
-    nft: T0,
-    timestamp: u64,
-    coin_type: 0x1::type_name::TypeName,
-}
+public struct AcceptedBid<T0: key + store>
+has key, store { id: UID, listing_id: ID, bidder: address, nft: T0, timestamp: u64, coin_type: TypeName }
 
-public struct BidKey has copy, drop, store { listing_id: 0x2::object::ID, bidder: address }
+public struct BidKey has copy, drop, store { listing_id: ID, bidder: address }
 
-public struct BiddingStoreCreated has copy, drop { store_id: 0x2::object::ID, auction_house: 0x2::object::ID, creator: address }
+public struct BiddingStoreCreated has copy, drop { store_id: ID, auction_house: ID, creator: address }
 
 public struct NftListingCreated
 has copy, drop {
     seller: address,
-    kiosk_id: 0x2::object::ID,
-    nft_id: 0x2::object::ID,
+    kiosk_id: ID,
+    nft_id: ID,
     buyout_price: u64,
     fee_bps: u16,
-    listing_id: 0x2::object::ID,
+    listing_id: ID,
     expires_at: u64,
-    coin_type: 0x1::type_name::TypeName,
+    coin_type: TypeName,
 }
 
 public struct BidPlaced
-has copy, drop {
-    listing_id: 0x2::object::ID,
-    bidder: address,
-    amount: u64,
-    timestamp: u64,
-    coin_type: 0x1::type_name::TypeName,
-}
+has copy, drop { listing_id: ID, bidder: address, amount: u64, timestamp: u64, coin_type: TypeName }
 
 public struct BidReadyForClaim
 has copy, drop {
-    listing_id: 0x2::object::ID,
+    listing_id: ID,
     seller: address,
     bidder: address,
     amount: u64,
-    nft_id: 0x2::object::ID,
+    nft_id: ID,
     timestamp: u64,
-    coin_type: 0x1::type_name::TypeName,
+    coin_type: TypeName,
 }
 
-public struct BidClaimed
-has copy, drop { listing_id: 0x2::object::ID, bidder: address, nft_id: 0x2::object::ID, timestamp: u64 }
+public struct BidClaimed has copy, drop { listing_id: ID, bidder: address, nft_id: ID, timestamp: u64 }
 
 public struct NftBoughtOut
-has copy, drop {
-    listing_id: 0x2::object::ID,
-    seller: address,
-    buyer: address,
-    amount: u64,
-    nft_id: 0x2::object::ID,
-    coin_type: 0x1::type_name::TypeName,
-}
+has copy, drop { listing_id: ID, seller: address, buyer: address, amount: u64, nft_id: ID, coin_type: TypeName }
 
-public struct ListingCancelled
-has copy, drop {
-    listing_id: 0x2::object::ID,
-    seller: address,
-    nft_id: 0x2::object::ID,
-    coin_type: 0x1::type_name::TypeName,
-}
+public struct ListingCancelled has copy, drop { listing_id: ID, seller: address, nft_id: ID, coin_type: TypeName }
 
-public struct PurchaseCapOrphaned has copy, drop { nft_id: 0x2::object::ID, kiosk_id: 0x2::object::ID, timestamp: u64 }
+public struct PurchaseCapOrphaned has copy, drop { nft_id: ID, kiosk_id: ID, timestamp: u64 }
 
-public struct OrphanedCapRecovered
-has copy, drop { nft_id: 0x2::object::ID, kiosk_id: 0x2::object::ID, recoverer: address, timestamp: u64 }
+public struct OrphanedCapRecovered has copy, drop { nft_id: ID, kiosk_id: ID, recoverer: address, timestamp: u64 }
 
 // -- constants -- 
 
@@ -176,7 +155,7 @@ const C22: u64 = 42u64;
 
 // -- functions -- 
 
-public fun accept_bid<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse::AuctionHouse, l2: 0x2::object::ID, l3: &mut 0x2::kiosk::Kiosk, l4: &0x2::transfer_policy::TransferPolicy<T0>, l5: &mut 0x2::tx_context::TxContext) {
+public fun accept_bid<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut AuctionHouse, l2: ID, l3: &mut Kiosk, l4: &TransferPolicy<T0>, l5: &mut TxContext) {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l2), C7);
     let NftListing { id: reg_14, seller: reg_15, kiosk_id: reg_16, nft_id: reg_17, purchase_cap: reg_18, buyout_price: reg_19, highest_bid: reg_20, highest_bidder: reg_21, status: reg_22, fee_bps: reg_23, created_at: reg_24, expires_at: reg_25, coin_type: reg_26 } = dynamic_object_field::remove(&mut l0.id, l2);
     let l11 = reg_26 : 0x1::type_name::TypeName;
@@ -215,16 +194,16 @@ public fun accept_bid<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1ac
     event::emit(BidReadyForClaim { listing_id: l2, seller: l23, bidder: l10, amount: l15, nft_id: l20, timestamp: l12, coin_type: l11 })
 }
 
-public entry fun accept_bid_entry<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse::AuctionHouse, l2: 0x2::object::ID, l3: &mut 0x2::kiosk::Kiosk, l4: &0x2::transfer_policy::TransferPolicy<T0>, l5: &mut 0x2::tx_context::TxContext) {
+public entry fun accept_bid_entry<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut AuctionHouse, l2: ID, l3: &mut Kiosk, l4: &TransferPolicy<T0>, l5: &mut TxContext) {
     kiosk_bidding_house_dynamic_coins::accept_bid(l0, l1, l2, l3, l4, l5)
 }
 
-public fun bid_exists<T>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID, l2: address): bool {
+public fun bid_exists<T0>(l0: &Kiosk_Bidding_Store, l1: ID, l2: address): bool {
     let l3 = kiosk_bidding_house_dynamic_coins::create_bid_key(l1, l2);
     return dynamic_object_field::exists_with_type(&l0.id, l3)
 }
 
-public entry fun buy_nft<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse::AuctionHouse, l2: 0x2::object::ID, l3: &mut 0x2::kiosk::Kiosk, l4: &0x2::transfer_policy::TransferPolicy<T0>, l5: 0x2::coin::Coin<T1>, l6: &mut 0x2::tx_context::TxContext) {
+public entry fun buy_nft<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut AuctionHouse, l2: ID, l3: &mut Kiosk, l4: &TransferPolicy<T0>, l5: Coin<T1>, l6: &mut TxContext) {
     let (reg_7, reg_8) = kiosk_bidding_house_dynamic_coins::buy_nft_with_request(l0, l1, l2, l3, l4, l5, l6);
     let l8 = reg_8;
     let l7 = reg_7;
@@ -232,7 +211,7 @@ public entry fun buy_nft<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e
     transfer::public_transfer(l7, tx_context::sender(freeze(l6)))
 }
 
-public fun buy_nft_with_request<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse::AuctionHouse, l2: 0x2::object::ID, l3: &mut 0x2::kiosk::Kiosk, l4: &0x2::transfer_policy::TransferPolicy<T0>, l5: 0x2::coin::Coin<T1>, l6: &mut 0x2::tx_context::TxContext): ( T0, 0x2::transfer_policy::TransferRequest<T0>) {
+public fun buy_nft_with_request<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut AuctionHouse, l2: ID, l3: &mut Kiosk, l4: &TransferPolicy<T0>, l5: Coin<T1>, l6: &mut TxContext): ( T0, TransferRequest<T0>) {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l2), C7);
     let NftListing { id: reg_13, seller: reg_14, kiosk_id: reg_15, nft_id: reg_16, purchase_cap: reg_17, buyout_price: reg_18, highest_bid: reg_19, highest_bidder: reg_20, status: reg_21, fee_bps: reg_22, created_at: reg_23, expires_at: reg_24, coin_type: reg_25 } = dynamic_object_field::remove(&mut l0.id, l2);
     let l11 = reg_25 : 0x1::type_name::TypeName;
@@ -278,7 +257,7 @@ public fun buy_nft_with_request<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5
     return (l18, l23)
 }
 
-public fun cancel_listing<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID, l2: &mut 0x2::kiosk::Kiosk, l3: &mut 0x2::tx_context::TxContext) {
+public fun cancel_listing<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: &mut Kiosk, l3: &mut TxContext) {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     let NftListing { id: reg_12, seller: reg_13, kiosk_id: reg_14, nft_id: reg_15, purchase_cap: reg_16, buyout_price: reg_17, highest_bid: reg_18, highest_bidder: reg_19, status: reg_20, fee_bps: reg_21, created_at: reg_22, expires_at: reg_23, coin_type: reg_24 } = dynamic_object_field::remove(&mut l0.id, l1);
     let l8 = reg_24 : 0x1::type_name::TypeName;
@@ -313,11 +292,11 @@ public fun cancel_listing<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3
     event::emit(ListingCancelled { listing_id: l1, seller: l14, nft_id: l12, coin_type: l8 })
 }
 
-public entry fun cancel_listing_entry<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID, l2: &mut 0x2::kiosk::Kiosk, l3: &mut 0x2::tx_context::TxContext) {
+public entry fun cancel_listing_entry<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: &mut Kiosk, l3: &mut TxContext) {
     kiosk_bidding_house_dynamic_coins::cancel_listing(l0, l1, l2, l3)
 }
 
-public fun claim_accepted_bid<T: key+store>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID, l2: &mut 0x2::tx_context::TxContext): T0 {
+public fun claim_accepted_bid<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: &mut TxContext): T0 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C19);
     let AcceptedBid { id: reg_11, listing_id: reg_12, bidder: reg_13, nft: reg_14, timestamp: reg_15, coin_type: reg_16 } = dynamic_object_field::remove(&mut l0.id, l1);
     let l6 = reg_14 : T0;
@@ -330,11 +309,11 @@ public fun claim_accepted_bid<T: key+store>(l0: &mut 0xe1a12941831f00ec5e8b5669c
     return l6
 }
 
-public entry fun claim_accepted_bid_entry<T: key+store>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID, l2: &mut 0x2::tx_context::TxContext) {
+public entry fun claim_accepted_bid_entry<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: &mut TxContext) {
     transfer::public_transfer(kiosk_bidding_house_dynamic_coins::claim_accepted_bid(l0, l1, l2), tx_context::sender(freeze(l2)))
 }
 
-public entry fun claim_accepted_bid_to_new_kiosk<T: key+store>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID, l2: &mut 0x2::transfer_policy::TransferPolicy<T0>, l3: 0x2::coin::Coin<0x2::sui::SUI>, l4: &mut 0x2::tx_context::TxContext) {
+public entry fun claim_accepted_bid_to_new_kiosk<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: &mut TransferPolicy<T0>, l3: Coin<SUI>, l4: &mut TxContext) {
     let (reg_1, reg_2) = kiosk::new(l4);
     let l8 = reg_2;
     let l5 = reg_1;
@@ -350,15 +329,15 @@ public entry fun claim_accepted_bid_to_new_kiosk<T: key+store>(l0: &mut 0xe1a129
     personal_kiosk::transfer_to_sender(l9, l4)
 }
 
-public entry fun create_and_share_kiosk_bidding_house_store(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse::AuctionHouse, l1: &mut 0x2::tx_context::TxContext) {
+public entry fun create_and_share_kiosk_bidding_house_store(l0: &AuctionHouse, l1: &mut TxContext) {
     transfer::share_object(kiosk_bidding_house_dynamic_coins::create_kiosk_bidding_house(l0, l1))
 }
 
-fun create_bid_key(l0: 0x2::object::ID, l1: address): 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::BidKey {
+fun create_bid_key(l0: ID, l1: address): BidKey {
     return BidKey { listing_id: l0, bidder: l1 }
 }
 
-public fun create_kiosk_bidding_house(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse::AuctionHouse, l1: &mut 0x2::tx_context::TxContext): 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store {
+public fun create_kiosk_bidding_house(l0: &AuctionHouse, l1: &mut TxContext): Kiosk_Bidding_Store {
     let l2 = tx_context::sender(freeze(l1));
     assert!(auctionhouse::is_admin(l0, l2), C14);
     let l4 = object::new(l1);
@@ -368,7 +347,7 @@ public fun create_kiosk_bidding_house(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a6
     return l3
 }
 
-public fun create_nft_listing<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &mut 0x2::kiosk::Kiosk, l2: &0x2::kiosk::KioskOwnerCap, l3: 0x2::object::ID, l4: u64, l5: u16, l6: u64, l7: &mut 0x2::tx_context::TxContext): 0x2::object::ID {
+public fun create_nft_listing<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut Kiosk, l2: &KioskOwnerCap, l3: ID, l4: u64, l5: u16, l6: u64, l7: &mut TxContext): ID {
     assert!(l5 <= 10000u16, C20);
     assert!(kiosk::has_item(freeze(l1), l3), C10);
     assert!(kiosk::has_access(l1, l2), C11);
@@ -386,11 +365,11 @@ public fun create_nft_listing<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b566
     return l13
 }
 
-public entry fun create_nft_listing_entry<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &mut 0x2::kiosk::Kiosk, l2: &0x2::kiosk::KioskOwnerCap, l3: 0x2::object::ID, l4: u64, l5: u16, l6: &mut 0x2::tx_context::TxContext) {}
+public entry fun create_nft_listing_entry<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut Kiosk, l2: &KioskOwnerCap, l3: ID, l4: u64, l5: u16, l6: &mut TxContext) {}
 
-public entry fun create_nft_listing_with_duration<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &mut 0x2::kiosk::Kiosk, l2: &0x2::kiosk::KioskOwnerCap, l3: 0x2::object::ID, l4: u64, l5: u16, l6: u64, l7: &mut 0x2::tx_context::TxContext) {}
+public entry fun create_nft_listing_with_duration<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: &mut Kiosk, l2: &KioskOwnerCap, l3: ID, l4: u64, l5: u16, l6: u64, l7: &mut TxContext) {}
 
-public entry fun create_personal_kiosk(l0: &mut 0x2::tx_context::TxContext) {
+public entry fun create_personal_kiosk(l0: &mut TxContext) {
     let (reg_1, reg_2) = kiosk::new(l0);
     let l2 = reg_2;
     let l1 = reg_1;
@@ -399,9 +378,7 @@ public entry fun create_personal_kiosk(l0: &mut 0x2::tx_context::TxContext) {
     personal_kiosk::transfer_to_sender(l3, l0)
 }
 
-public fun create_personal_kiosk_ptb(l0: &mut 0x2::tx_context::TxContext): (
-    0x2::object::ID,
-    0x434b5bd8f6a7b05fede0ff46c6e511d71ea326ed38056e3bcd681d2d7c2a7879::personal_kiosk::PersonalKioskCap) {
+public fun create_personal_kiosk_ptb(l0: &mut TxContext): ( ID, PersonalKioskCap) {
     let (reg_1, reg_2) = kiosk::new(l0);
     let l3 = reg_2;
     let l1 = reg_1;
@@ -411,7 +388,7 @@ public fun create_personal_kiosk_ptb(l0: &mut 0x2::tx_context::TxContext): (
     return (l2, l4)
 }
 
-public entry fun emergency_reset_accepted_bid<T: key+store>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse::AuctionHouse, l2: 0x2::object::ID, l3: &mut 0x2::tx_context::TxContext) {
+public entry fun emergency_reset_accepted_bid<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: &AuctionHouse, l2: ID, l3: &mut TxContext) {
     let l5 = tx_context::sender(freeze(l3));
     assert!(auctionhouse::is_admin(l1, l5), C14);
     if (dynamic_object_field::exists_with_type(&l0.id, l2)) {
@@ -429,7 +406,7 @@ public entry fun emergency_reset_accepted_bid<T: key+store>(l0: &mut 0xe1a129418
     }
 }
 
-public entry fun emergency_reset_listing<T: key+store>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::auctionhouse::AuctionHouse, l2: 0x2::object::ID, l3: &mut 0x2::tx_context::TxContext) {
+public entry fun emergency_reset_listing<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: &AuctionHouse, l2: ID, l3: &mut TxContext) {
     let l4 = tx_context::sender(freeze(l3));
     assert!(auctionhouse::is_admin(l1, l4), C14);
     if (dynamic_object_field::exists_with_type(&l0.id, l2)) {
@@ -450,65 +427,65 @@ public entry fun emergency_reset_listing<T: key+store>(l0: &mut 0xe1a12941831f00
     }
 }
 
-public fun get_buyout_price<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID): u64 {
+public fun get_buyout_price<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u64 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     return *(&(dynamic_object_field::borrow(&l0.id, l1)).buyout_price)
 }
 
-public fun get_coin_type<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID): 0x1::type_name::TypeName {
+public fun get_coin_type<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): TypeName {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     return *(&(dynamic_object_field::borrow(&l0.id, l1)).coin_type)
 }
 
-public fun get_highest_bid<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID): u64 {
+public fun get_highest_bid<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u64 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     return *(&(dynamic_object_field::borrow(&l0.id, l1)).highest_bid)
 }
 
-public fun get_highest_bidder<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID): 0x1::option::Option<address> {
+public fun get_highest_bidder<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): Option<address> {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     return *(&(dynamic_object_field::borrow(&l0.id, l1)).highest_bidder)
 }
 
-public fun get_listing_expiration<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID): u64 {
+public fun get_listing_expiration<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u64 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     return *(&(dynamic_object_field::borrow(&l0.id, l1)).expires_at)
 }
 
-public fun get_listing_status<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID): u8 {
+public fun get_listing_status<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): u8 {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     return *(&(dynamic_object_field::borrow(&l0.id, l1)).status)
 }
 
-public fun get_listings_by_coin_type<T>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store): vector<0x2::object::ID> {
+public fun get_listings_by_coin_type<T0>(l0: &Kiosk_Bidding_Store): vector<ID> {
     return vector[]
 }
 
-public fun get_listings_by_nft_type<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store): vector<0x2::object::ID> {
+public fun get_listings_by_nft_type<T0: key + store>(l0: &Kiosk_Bidding_Store): vector<ID> {
     return vector[]
 }
 
-public fun get_nft_id<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID): 0x2::object::ID {
+public fun get_nft_id<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): ID {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     return *(&(dynamic_object_field::borrow(&l0.id, l1)).nft_id)
 }
 
-public fun get_seller<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID): address {
+public fun get_seller<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): address {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     return *(&(dynamic_object_field::borrow(&l0.id, l1)).seller)
 }
 
-public fun is_listing_expired<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID, l2: &0x2::tx_context::TxContext): bool {
+public fun is_listing_expired<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID, l2: &TxContext): bool {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     let l3 = dynamic_object_field::borrow(&l0.id, l1);
     return tx_context::epoch(l2) > *(&l3.expires_at)
 }
 
-public fun listing_exists<T: key+store>(l0: &0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID): bool {
+public fun listing_exists<T0: key + store>(l0: &Kiosk_Bidding_Store, l1: ID): bool {
     return dynamic_object_field::exists_with_type(&l0.id, l1)
 }
 
-public fun place_bid<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID, l2: 0x2::coin::Coin<T1>, l3: &mut 0x2::tx_context::TxContext) {
+public fun place_bid<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: Coin<T1>, l3: &mut TxContext) {
     assert!(dynamic_object_field::exists_with_type(&l0.id, l1), C7);
     let l7 = coin::value(&l2);
     let l10 = tx_context::sender(freeze(l3));
@@ -550,11 +527,11 @@ public fun place_bid<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf
     event::emit(BidPlaced { listing_id: l1, bidder: l10, amount: l7, timestamp: l12, coin_type: l11 })
 }
 
-public entry fun place_bid_entry<T: key+store,T>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: 0x2::object::ID, l2: 0x2::coin::Coin<T1>, l3: &mut 0x2::tx_context::TxContext) {
+public entry fun place_bid_entry<T0: key + store, T1>(l0: &mut Kiosk_Bidding_Store, l1: ID, l2: Coin<T1>, l3: &mut TxContext) {
     kiosk_bidding_house_dynamic_coins::place_bid(l0, l1, l2, l3)
 }
 
-public entry fun recover_orphaned_cap<T: key+store>(l0: &mut 0xe1a12941831f00ec5e8b5669cb3e1acf0a62f5e0ced63aebab310b192c25a498::kiosk_bidding_house_dynamic_coins::Kiosk_Bidding_Store, l1: &mut 0x2::kiosk::Kiosk, l2: &0x2::kiosk::KioskOwnerCap, l3: 0x2::object::ID, l4: &mut 0x2::tx_context::TxContext) {
+public entry fun recover_orphaned_cap<T0: key + store>(l0: &mut Kiosk_Bidding_Store, l1: &mut Kiosk, l2: &KioskOwnerCap, l3: ID, l4: &mut TxContext) {
     assert!(kiosk::has_access(l1, l2), C11);
     assert!(dynamic_object_field::exists_with_type(&l0.orphaned_caps, l3), C16);
     let OrphanedPurchaseCap { id: reg_19, cap: reg_20, kiosk_id: reg_21, orphaned_at: reg_22 } = dynamic_object_field::remove(&mut l0.orphaned_caps, l3);

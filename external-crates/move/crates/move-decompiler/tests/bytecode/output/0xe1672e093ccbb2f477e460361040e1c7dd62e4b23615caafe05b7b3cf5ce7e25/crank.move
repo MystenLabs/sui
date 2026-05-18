@@ -14,12 +14,18 @@ use 0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::apy;
 use 0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::strategy;
 use 0xfda1e060539599ba4792a9a5ded85e80f1ffe580fb3910a4db5fa4c3a82dbaff::floors;
 use 0xfda1e060539599ba4792a9a5ded85e80f1ffe580fb3910a4db5fa4c3a82dbaff::vault;
+use 0x2::clock::Clock;
+use 0x2::object::UID;
+use 0x2::tx_context::TxContext;
+use 0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::apy::ApyRegistry;
+use 0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::strategy::StrategyRegistry;
+use 0xfda1e060539599ba4792a9a5ded85e80f1ffe580fb3910a4db5fa4c3a82dbaff::vault::Vault;
 
 // -- structs -- 
 
 public struct CrankConfig
 has key {
-    id: 0x2::object::UID,
+    id: UID,
     min_spread_bps: u64,
     min_apy_bps: u64,
     reroute_cooldown_ms: u64,
@@ -82,44 +88,44 @@ const C15: vector<u8> = vector[116u8, 118u8, 108u8, 95u8, 98u8, 97u8, 115u8, 101
 
 // -- functions -- 
 
-public fun create_config(l0: &0x2::clock::Clock, l1: &mut 0x2::tx_context::TxContext) {
+public fun create_config(l0: &Clock, l1: &mut TxContext) {
     let l2 = clock::timestamp_ms(l0);
     transfer::share_object(CrankConfig { id: object::new(l1), min_spread_bps: 50u64, min_apy_bps: 10u64, reroute_cooldown_ms: 43200000u64, last_reroute_ms: 0u64, max_swap_slippage_bps: 30u64, max_heartbeat_gap_ms: 21600000u64, min_heartbeat_interval_ms: 300000u64, last_heartbeat_ms: l2, max_tvl_delta_bps: 1000u64 })
 }
 
-public fun last_heartbeat_ms(l0: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig): u64 {
+public fun last_heartbeat_ms(l0: &CrankConfig): u64 {
     return *(&l0.last_heartbeat_ms)
 }
 
-public fun last_reroute_ms(l0: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig): u64 {
+public fun last_reroute_ms(l0: &CrankConfig): u64 {
     return *(&l0.last_reroute_ms)
 }
 
-public fun max_heartbeat_gap_ms(l0: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig): u64 {
+public fun max_heartbeat_gap_ms(l0: &CrankConfig): u64 {
     return *(&l0.max_heartbeat_gap_ms)
 }
 
-public fun max_swap_slippage_bps(l0: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig): u64 {
+public fun max_swap_slippage_bps(l0: &CrankConfig): u64 {
     return *(&l0.max_swap_slippage_bps)
 }
 
-public fun max_tvl_delta_bps(l0: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig): u64 {
+public fun max_tvl_delta_bps(l0: &CrankConfig): u64 {
     return *(&l0.max_tvl_delta_bps)
 }
 
-public fun min_apy_bps(l0: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig): u64 {
+public fun min_apy_bps(l0: &CrankConfig): u64 {
     return *(&l0.min_apy_bps)
 }
 
-public fun min_spread_bps(l0: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig): u64 {
+public fun min_spread_bps(l0: &CrankConfig): u64 {
     return *(&l0.min_spread_bps)
 }
 
-public fun reroute_cooldown_ms(l0: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig): u64 {
+public fun reroute_cooldown_ms(l0: &CrankConfig): u64 {
     return *(&l0.reroute_cooldown_ms)
 }
 
-public(friend) fun update_config(l0: &mut 0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64, l7: u64) {
+public(friend) fun update_config(l0: &mut CrankConfig, l1: u64, l2: u64, l3: u64, l4: u64, l5: u64, l6: u64, l7: u64) {
     floors::assert_spread(l1);
     floors::assert_min_apy(l2);
     floors::assert_cooldown(l3);
@@ -134,7 +140,7 @@ public(friend) fun update_config(l0: &mut 0xe1672e093ccbb2f477e460361040e1c7dd62
     event::emit(ConfigUpdatedEvent { min_spread_bps: l1, min_apy_bps: l2, reroute_cooldown_ms: l3, max_swap_slippage_bps: l4 })
 }
 
-public fun validate_heartbeat<T>(l0: &mut 0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig, l1: &mut 0xfda1e060539599ba4792a9a5ded85e80f1ffe580fb3910a4db5fa4c3a82dbaff::vault::Vault<T0>, l2: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::strategy::StrategyRegistry, l3: &0x2::clock::Clock) {
+public fun validate_heartbeat<T0>(l0: &mut CrankConfig, l1: &mut Vault<T0>, l2: &StrategyRegistry, l3: &Clock) {
     let l11 = clock::timestamp_ms(l3);
     assert!(l11 - *(&l0.last_heartbeat_ms) >= *(&l0.min_heartbeat_interval_ms), C6);
     let l9 = strategy::borrow_protocol_access_cap(l2);
@@ -168,7 +174,7 @@ public fun validate_heartbeat<T>(l0: &mut 0xe1672e093ccbb2f477e460361040e1c7dd62
     event::emit(HeartbeatEvent { timestamp_ms: l11 })
 }
 
-public fun validate_reroute<T>(l0: &mut 0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::crank::CrankConfig, l1: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::apy::ApyRegistry, l2: &0xe1672e093ccbb2f477e460361040e1c7dd62e4b23615caafe05b7b3cf5ce7e25::strategy::StrategyRegistry, l3: &0xfda1e060539599ba4792a9a5ded85e80f1ffe580fb3910a4db5fa4c3a82dbaff::vault::Vault<T0>, l4: u8, l5: u8, l6: &0x2::clock::Clock) {
+public fun validate_reroute<T0>(l0: &mut CrankConfig, l1: &ApyRegistry, l2: &StrategyRegistry, l3: &Vault<T0>, l4: u8, l5: u8, l6: &Clock) {
     let l10 = clock::timestamp_ms(l6);
     assert!(strategy::count_available(l2) >= 2u64, C0);
     assert!(strategy::is_available(l2, l5), C1);

@@ -447,6 +447,11 @@ fn structure_acyclic_region(
     // IfElse/Switch in its outer Seq. The predicate has to match what actually happens
     // below, because `arm_for` uses it to decide between emitting a `Jump` and an empty
     // fall-through arm.
+    //
+    // `ichildren.contains(&post_dominator)` is the load-bearing membership check: an
+    // immediate dom-tree child of `start` is by construction both (a) dominated by `start`
+    // and (b) in the same enclosing-loop scope as `start` (the dom tree doesn't cross loop
+    // boundaries for immediate children), so we don't need separate predicates for those.
     let emit_post_dom_in_seq = post_dominator != graph.return_
         && ichildren.contains(&post_dominator)
         && !start_has_back_edges_post_absorption
@@ -499,7 +504,9 @@ fn structure_acyclic_region(
         } else if target == post_dominator {
             Some(D::Structured::Jump(pd_src, target))
         } else if ichildren.contains(&target) {
-            let mut arm = structured_blocks.remove(&target).unwrap();
+            let mut arm = structured_blocks
+                .remove(&target)
+                .expect("ichildren member must be structured by post-order traversal");
             if let Some(next) = arms_next_sibling {
                 elide_tail_jump_to(&mut arm, next);
             }
@@ -589,7 +596,9 @@ fn structure_acyclic_region(
                                 .collect::<Vec<_>>(),
                             item
                         );
-                        let mut arm = structured_blocks.remove(&item).unwrap();
+                        let mut arm = structured_blocks
+                            .remove(&item)
+                            .expect("Switch arm must be structured by post-order traversal");
                         if let Some(next) = arms_next_sibling {
                             elide_tail_jump_to(&mut arm, next);
                         }
@@ -609,7 +618,9 @@ fn structure_acyclic_region(
         if config.debug_print.dominators {
             println!("  => emitting post-dominator");
         }
-        let mut pd_block = structured_blocks.remove(&post_dominator).unwrap();
+        let mut pd_block = structured_blocks
+            .remove(&post_dominator)
+            .expect("post-dom in ichildren must be structured by post-order traversal");
         // The inlined post-dom is sequenced next; whatever follows it in our Seq is what
         // our caller will place after us (their `next_in_outer`). Walk pre-built tails.
         if let Some(next) = next_in_outer {
