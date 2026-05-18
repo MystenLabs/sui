@@ -34,7 +34,7 @@ use sui_protocol_config::{
     Chain, ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
     ProtocolVersion,
 };
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
 use sui_types::execution::SharedInput;
@@ -5396,6 +5396,101 @@ async fn test_function_not_found() {
     );
 
     assert_eq!(execution_error_source, Some("Could not resolve function 'bad_function' in module '0x0000000000000000000000000000000000000000000000000000000000000001::option'".to_string()),)
+}
+
+#[tokio::test]
+async fn test_validator_execution_does_not_store_error_metadata() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (validator, fullnode, _) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            ObjectID::from_single_byte(1),
+            ident_str!("option").to_owned(),
+            ident_str!("bad_function").to_owned(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+    let kind = TransactionKind::programmable(builder.finish());
+
+    let rgp = validator.reference_gas_price_for_testing().unwrap();
+    let txn_data = TransactionData::new_with_gas_coins(
+        kind,
+        sender,
+        vec![
+            validator
+                .get_object(&gas_object_id)
+                .await
+                .unwrap()
+                .compute_object_reference(),
+        ],
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
+        rgp,
+    );
+
+    let transaction = to_sender_signed_transaction(txn_data, &sender_key);
+    let executable = create_executable_transaction(&validator, transaction).unwrap();
+    let env = ExecutionEnv::new().with_assigned_versions(AssignedVersions::new(vec![], None));
+
+    let (validator_effects, validator_execution_error) = validator
+        .try_execute_executable_for_test(&executable, env.clone())
+        .await;
+    let (fullnode_effects, fullnode_execution_error) = fullnode
+        .try_execute_executable_for_test(&executable, env)
+        .await;
+
+    let validator_effects = validator_effects.inner().data();
+    let fullnode_effects = fullnode_effects.inner().data();
+    assert_eq!(validator_effects.status(), fullnode_effects.status());
+    assert_eq!(
+        validator_effects.transaction_digest(),
+        fullnode_effects.transaction_digest()
+    );
+    assert_eq!(
+        validator_effects.gas_cost_summary(),
+        fullnode_effects.gas_cost_summary()
+    );
+    assert_eq!(validator_effects.created(), fullnode_effects.created());
+    assert_eq!(validator_effects.mutated(), fullnode_effects.mutated());
+    assert_eq!(validator_effects.deleted(), fullnode_effects.deleted());
+    assert_eq!(validator_effects.wrapped(), fullnode_effects.wrapped());
+    assert!(matches!(
+        validator_effects.status(),
+        ExecutionStatus::Failure(ExecutionFailure {
+            error: ExecutionErrorKind::FunctionNotFound,
+            command: Some(0),
+        })
+    ));
+
+    assert_eq!(
+        validator_execution_error.and_then(|error| error.metadata_with_source()),
+        None
+    );
+    assert_eq!(
+        validator
+            .get_transaction_cache_reader()
+            .get_execution_error_metadata(executable.digest()),
+        None,
+    );
+
+    let fullnode_metadata = fullnode_execution_error
+        .and_then(|error| error.metadata_with_source())
+        .unwrap();
+    assert!(
+        fullnode_metadata
+            .get("source")
+            .is_some_and(|source| source.contains("bad_function"))
+    );
+    assert_eq!(
+        fullnode
+            .get_transaction_cache_reader()
+            .get_execution_error_metadata(executable.digest()),
+        Some(fullnode_metadata),
+    );
 }
 
 #[tokio::test]

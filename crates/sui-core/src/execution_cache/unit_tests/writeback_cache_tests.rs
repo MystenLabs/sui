@@ -564,6 +564,7 @@ async fn test_execution_error_metadata_round_trip() {
         s.outputs.execution_error_metadata = Some(metadata.clone());
 
         let tx = s.do_tx().await;
+        assert!(s.cache.dirty.execution_error_metadata.contains_key(&tx));
         assert_eq!(
             s.cache.get_execution_error_metadata(&tx),
             Some(metadata.clone())
@@ -581,6 +582,26 @@ async fn test_execution_error_metadata_round_trip() {
             Some(metadata.clone())
         );
         assert_eq!(s.cache.get_execution_error_metadata(&tx), Some(metadata));
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_empty_execution_error_metadata_is_ignored() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.outputs.execution_error_metadata = Some(BTreeMap::new());
+
+        let tx = s.do_tx().await;
+        assert!(!s.cache.dirty.execution_error_metadata.contains_key(&tx));
+        assert_eq!(s.cache.get_execution_error_metadata(&tx), None);
+
+        s.commit(tx).await.unwrap();
+        assert_eq!(s.cache.get_execution_error_metadata(&tx), None);
+
+        s.reset_cache();
+        assert_eq!(s.store.get_execution_error_metadata(&tx).unwrap(), None);
+        assert_eq!(s.cache.get_execution_error_metadata(&tx), None);
     })
     .await;
 }
