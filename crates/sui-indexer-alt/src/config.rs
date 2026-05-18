@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::num::NonZeroUsize;
+
 use sui_default_config::DefaultConfig;
 use sui_indexer_alt_framework::config::ConcurrencyConfig;
 use sui_indexer_alt_framework::ingestion::IngestionConfig;
@@ -51,7 +53,7 @@ pub struct IngestionLayer {
     pub checkpoint_buffer_size: Option<usize>,
     pub ingest_concurrency: Option<ConcurrencyConfig>,
     pub retry_interval_ms: Option<u64>,
-    pub streaming_backoff_initial_batch_size: Option<usize>,
+    pub streaming_backoff_initial_batch_size: Option<NonZeroUsize>,
     pub streaming_backoff_max_batch_size: Option<usize>,
     pub streaming_connection_timeout_ms: Option<u64>,
     pub streaming_statement_timeout_ms: Option<u64>,

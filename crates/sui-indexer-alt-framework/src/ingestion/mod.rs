@@ -6,6 +6,7 @@
 // bound is hit, the indexer could deadlock.
 #![allow(clippy::disallowed_methods)]
 
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -67,7 +68,7 @@ pub struct IngestionConfig {
     pub retry_interval_ms: u64,
 
     /// Initial number of checkpoints to process using ingestion after a streaming connection failure.
-    pub streaming_backoff_initial_batch_size: usize,
+    pub streaming_backoff_initial_batch_size: NonZeroUsize,
 
     /// Maximum number of checkpoints to process using ingestion after repeated streaming connection failures.
     pub streaming_backoff_max_batch_size: usize,
@@ -90,26 +91,6 @@ pub struct IngestionService {
 }
 
 impl IngestionConfig {
-    fn validate(&self) -> anyhow::Result<()> {
-        if self.streaming_backoff_initial_batch_size == 0 {
-            anyhow::bail!("streaming_backoff_initial_batch_size must be greater than 0");
-        }
-
-        if self.streaming_backoff_max_batch_size == 0 {
-            anyhow::bail!("streaming_backoff_max_batch_size must be greater than 0");
-        }
-
-        if self.streaming_backoff_max_batch_size < self.streaming_backoff_initial_batch_size {
-            anyhow::bail!(
-                "streaming_backoff_max_batch_size ({}) must be greater than or equal to streaming_backoff_initial_batch_size ({})",
-                self.streaming_backoff_max_batch_size,
-                self.streaming_backoff_initial_batch_size,
-            );
-        }
-
-        Ok(())
-    }
-
     pub fn retry_interval(&self) -> Duration {
         Duration::from_millis(self.retry_interval_ms)
     }
@@ -139,8 +120,6 @@ impl IngestionService {
         metrics_prefix: Option<&str>,
         registry: &Registry,
     ) -> Result<Self> {
-        config.validate().map_err(Error::StreamingError)?;
-
         let metrics = IngestionMetrics::new(metrics_prefix, registry);
         let ingestion_client = IngestionClient::new(args.ingestion, metrics.clone())?;
         let streaming_client = args.streaming.streaming_url.map(|uri| {
@@ -282,10 +261,11 @@ impl Default for IngestionConfig {
                 dead_band: None,
             },
             retry_interval_ms: 200,
-            streaming_backoff_initial_batch_size: 10, // 10 checkpoints, ~ 2 seconds
-            streaming_backoff_max_batch_size: 10000,  // 10000 checkpoints, ~ 40 minutes
-            streaming_connection_timeout_ms: 5000,    // 5 seconds
-            streaming_statement_timeout_ms: 5000,     // 5 seconds
+            streaming_backoff_initial_batch_size: NonZeroUsize::new(10)
+                .expect("default initial streaming backoff is non-zero"), // 10 checkpoints, ~ 2 seconds
+            streaming_backoff_max_batch_size: 10000, // 10000 checkpoints, ~ 40 minutes
+            streaming_connection_timeout_ms: 5000,   // 5 seconds
+            streaming_statement_timeout_ms: 5000,    // 5 seconds
         }
     }
 }
@@ -598,50 +578,10 @@ mod tests {
 
     #[test]
     fn reject_zero_initial_streaming_backoff_batch_size() {
-        let config = IngestionConfig {
-            streaming_backoff_initial_batch_size: 0,
-            ..Default::default()
-        };
+        let mut config = serde_json::to_value(IngestionConfig::default()).unwrap();
+        config["streaming_backoff_initial_batch_size"] = serde_json::json!(0);
 
-        assert!(matches!(
-            config.validate(),
-            Err(error)
-                if error
-                    .to_string()
-                    .contains("streaming_backoff_initial_batch_size")
-        ));
-    }
-
-    #[test]
-    fn reject_zero_max_streaming_backoff_batch_size() {
-        let config = IngestionConfig {
-            streaming_backoff_max_batch_size: 0,
-            ..Default::default()
-        };
-
-        assert!(matches!(
-            config.validate(),
-            Err(error)
-                if error
-                    .to_string()
-                    .contains("streaming_backoff_max_batch_size")
-        ));
-    }
-
-    #[test]
-    fn reject_max_streaming_backoff_batch_size_smaller_than_initial() {
-        let config = IngestionConfig {
-            streaming_backoff_initial_batch_size: 8,
-            streaming_backoff_max_batch_size: 4,
-            ..Default::default()
-        };
-
-        assert!(matches!(
-            config.validate(),
-            Err(error)
-                if error
-                    .to_string()
-                    .contains("must be greater than or equal to")
-        ));
+        let error = serde_json::from_value::<IngestionConfig>(config).unwrap_err();
+        assert!(error.to_string().contains("nonzero"));
     }
 }
