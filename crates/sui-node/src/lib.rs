@@ -798,18 +798,6 @@ impl SuiNode {
         // Start the loop that receives new randomness and generates transactions for it.
         RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
 
-        if config
-            .expensive_safety_check_config
-            .enable_secondary_index_checks()
-            && let Some(indexes) = state.indexes.clone()
-        {
-            sui_core::verify_indexes::verify_indexes(
-                state.get_global_state_hash_store().as_ref(),
-                indexes,
-            )
-            .expect("secondary indexes are inconsistent");
-        }
-
         let (end_of_epoch_channel, end_of_epoch_receiver) =
             broadcast::channel(config.end_of_epoch_broadcast_channel_capacity);
 
