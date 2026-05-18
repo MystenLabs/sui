@@ -302,7 +302,7 @@ export default function OpenInAgentButton({
           <path d="M10 18v4" />
           <path d="M14 18v4" />
         </svg>
-        <span className={styles.label}>Agent</span>
+        <span className={styles.label}>Use an Agent</span>
         <svg
           width="10"
           height="10"

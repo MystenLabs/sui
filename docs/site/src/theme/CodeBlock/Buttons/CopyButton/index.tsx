@@ -76,7 +76,7 @@ export default function CopyButton({ className }: Props): ReactNode {
   const { copyCode, isCopied } = useCopyButton(buttonRef);
 
   return (
-    <span ref={buttonRef}>
+    <span ref={buttonRef} style={{ display: "contents" }}>
       <Button
         aria-label={ariaLabel(isCopied)}
         title={title()}
