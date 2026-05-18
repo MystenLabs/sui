@@ -9,21 +9,22 @@ use super::*;
 use crate::authority::authority_test_utils::{
     init_state_validator_with_fullnode, submit_and_execute,
 };
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::FullObjectRef;
 use sui_types::collection_types::Table as TableType;
-use sui_types::crypto::{AccountKeyPair, get_key_pair};
+use sui_types::crypto::{AccountKeyPair, get_authority_key_pair, get_key_pair};
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::error::{SuiError, SuiErrorKind, UserInputError};
+use sui_types::error::{SuiError, SuiErrorKind, SuiResult, UserInputError};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{GAS_VALUE_FOR_TESTING, MoveObject, OBJECT_START_VERSION};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::transaction::Command;
-use sui_types::transaction_executor::TransactionChecks;
+use sui_types::transaction::{Argument, Command, GenesisTransaction};
+use sui_types::transaction_executor::{SimulateTransactionResult, TransactionChecks};
 use sui_types::utils::to_sender_signed_transaction;
 use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID};
 
@@ -334,9 +335,226 @@ fn assert_ok(results: &[EntryPointResult], entry_point: NodeEntryPoint) {
     );
 }
 
+fn assert_simulate_err(
+    result: SuiResult<SimulateTransactionResult>,
+    check: impl Fn(&SuiErrorKind) -> bool,
+    expected_desc: &str,
+) {
+    match result {
+        Err(e) => assert!(check(e.as_inner()), "expected {expected_desc}, got: {e:?}"),
+        Ok(_) => panic!("expected {expected_desc}, got Ok"),
+    }
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
+
+#[tokio::test]
+async fn test_simulate_transaction_result_payloads() {
+    let env = setup_test_env().await;
+    let data = build_transfer(&env, TEST_GAS_BUDGET, env.rgp);
+
+    let result = env
+        .fullnode
+        .simulate_transaction(data.clone(), TransactionChecks::Enabled, false)
+        .unwrap();
+    assert!(result.effects.status().is_ok());
+    assert_eq!(result.mock_gas_id, None);
+    assert_eq!(
+        result.events.is_some(),
+        result.effects.events_digest().is_some()
+    );
+    assert!(
+        result
+            .objects
+            .iter()
+            .any(|object| object.id() == env.object_ref.0)
+    );
+    assert!(
+        result
+            .objects
+            .iter()
+            .any(|object| object.id() == env.gas_object_ref.0)
+    );
+
+    let mut no_payment = data;
+    no_payment.gas_data_mut().payment.clear();
+    let without_mock =
+        env.fullnode
+            .simulate_transaction(no_payment.clone(), TransactionChecks::Enabled, false);
+    assert_simulate_err(
+        without_mock,
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UserInputError {
+                    error: UserInputError::InvalidWithdrawReservation { .. }
+                }
+            )
+        },
+        "InvalidWithdrawReservation",
+    );
+
+    let with_mock = env
+        .fullnode
+        .simulate_transaction(no_payment, TransactionChecks::Enabled, true)
+        .unwrap();
+    assert!(with_mock.effects.status().is_ok());
+    assert_eq!(with_mock.mock_gas_id, Some(ObjectID::MAX));
+    assert!(
+        with_mock
+            .objects
+            .iter()
+            .any(|object| object.id() == ObjectID::MAX),
+        "mock gas does not exist in storage, so simulation must carry it in the result object set",
+    );
+}
+
+#[tokio::test]
+async fn test_simulate_transaction_preserves_command_outputs() {
+    let env = setup_test_env().await;
+    let recipient = SuiAddress::random_for_testing_only();
+    let amount = 500;
+
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder.pay_sui(vec![recipient], vec![amount]).unwrap();
+        builder.finish()
+    };
+    let data = TransactionData::new_programmable(env.sender, vec![], pt, TEST_GAS_BUDGET, env.rgp);
+
+    let result = env
+        .fullnode
+        .simulate_transaction(data, TransactionChecks::Disabled, true)
+        .unwrap();
+    assert!(result.effects.status().is_ok());
+
+    let mut command_outputs = result.execution_result.unwrap();
+    assert_eq!(command_outputs.len(), 2);
+
+    // The first PaySui command is SplitCoins(GasCoin, ...). It is the compact regression target
+    // for both categories of command output: a by-reference gas coin update and a returned coin.
+    let (mutated_by_ref, mut return_values) = command_outputs.remove(0);
+    assert_eq!(mutated_by_ref.len(), 1);
+    let (argument, gas_coin_bytes, gas_coin_type) = &mutated_by_ref[0];
+    assert_eq!(argument, &Argument::GasCoin);
+    assert_gas_coin_output(gas_coin_bytes, gas_coin_type);
+
+    assert_eq!(return_values.len(), 1);
+    let (split_coin_bytes, split_coin_type) = return_values.pop().unwrap();
+    assert_gas_coin_output(&split_coin_bytes, &split_coin_type);
+    let split_coin: GasCoin = bcs::from_bytes(&split_coin_bytes).unwrap();
+    assert_eq!(split_coin.value(), amount);
+
+    let (mutated_by_ref, return_values) = command_outputs.remove(0);
+    assert!(mutated_by_ref.is_empty());
+    assert!(return_values.is_empty());
+}
+
+fn assert_gas_coin_output(actual_value: &[u8], actual_type: &TypeTag) {
+    assert_eq!(actual_type, &TypeTag::Struct(Box::new(GasCoin::type_())));
+    let _: GasCoin = bcs::from_bytes(actual_value).unwrap();
+}
+
+#[tokio::test]
+async fn test_simulate_transaction_guard_errors() {
+    let env = setup_test_env().await;
+    let data = build_transfer(&env, TEST_GAS_BUDGET, env.rgp);
+
+    let validator_result =
+        env.validator
+            .simulate_transaction(data, TransactionChecks::Enabled, false);
+    assert_simulate_err(
+        validator_result,
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UnsupportedFeatureError { error }
+                    if error == "simulate is only supported on fullnodes"
+            )
+        },
+        "fullnode-only unsupported feature error",
+    );
+
+    let system_transaction = TransactionData::new(
+        TransactionKind::Genesis(GenesisTransaction { objects: vec![] }),
+        env.sender,
+        env.gas_object_ref,
+        TEST_GAS_BUDGET,
+        env.rgp,
+    );
+    let system_result =
+        env.fullnode
+            .simulate_transaction(system_transaction, TransactionChecks::Enabled, false);
+    assert_simulate_err(
+        system_result,
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UnsupportedFeatureError { error }
+                    if error == "simulate does not support system transactions"
+            )
+        },
+        "system transaction unsupported feature error",
+    );
+}
+
+#[tokio::test]
+async fn test_simulate_transaction_dev_inspect_disabled_guard() {
+    let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object =
+        Object::with_id_owner_gas_for_testing(ObjectID::random(), sender, GAS_VALUE_FOR_TESTING);
+    let transfer_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+    let transfer_object_ref = transfer_object.compute_object_reference();
+    let starting_objects = [gas_object, transfer_object];
+
+    let fullnode_key_pair = get_authority_key_pair().1;
+    let fullnode = TestAuthorityBuilder::new()
+        .with_dev_inspect_disabled()
+        .with_keypair(&fullnode_key_pair)
+        .with_starting_objects(&starting_objects)
+        .build()
+        .await;
+
+    let recipient = SuiAddress::random_for_testing_only();
+    let pt = {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        builder
+            .transfer_object(
+                recipient,
+                FullObjectRef::from_fastpath_ref(transfer_object_ref),
+            )
+            .unwrap();
+        builder.finish()
+    };
+    let data = TransactionData::new(
+        TransactionKind::ProgrammableTransaction(pt),
+        sender,
+        gas_object_ref,
+        TEST_GAS_BUDGET,
+        fullnode.reference_gas_price_for_testing().unwrap(),
+    );
+
+    let disabled = fullnode.simulate_transaction(data.clone(), TransactionChecks::Disabled, false);
+    assert_simulate_err(
+        disabled,
+        |e| {
+            matches!(
+                e,
+                SuiErrorKind::UnsupportedFeatureError { error }
+                    if error == "simulate with checks disabled is not allowed on this node"
+            )
+        },
+        "checks-disabled unsupported feature error",
+    );
+
+    let enabled = fullnode
+        .simulate_transaction(data, TransactionChecks::Enabled, false)
+        .unwrap();
+    assert!(enabled.effects.status().is_ok());
+}
 
 #[tokio::test]
 async fn test_simple_transfer_gas_all_paths() {
