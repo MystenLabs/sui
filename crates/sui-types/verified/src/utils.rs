@@ -18,8 +18,15 @@ verus! {
 pub struct ExNonEmpty<T>(NonEmpty<T>);
 
 /// Spec projection: the underlying sequence of a `NonEmpty<T>`.
-/// Uninterpreted — used only to express alias-lookup specs.  No axioms are
-/// declared yet; add a non-emptiness axiom if/when a proof needs it.
+///
+/// Uninterpreted — this is the trust boundary for NonEmpty.  The helpers
+/// `nonempty_len`, `nonempty_index`, and `nonempty_to_vec` are all trusted
+/// to faithfully implement this projection, analogous to how the crypto
+/// predicates (`spec_sig_crypto_valid`, etc.) are trusted via the
+/// `SignatureVerifiable` trait ensures.
+///
+/// The non-emptiness guarantee of `NonEmpty<T>` is NOT yet captured as an
+/// axiom.  Add `axiom_nonempty_view_nonempty` if a proof needs `len >= 1`.
 pub uninterp spec fn nonempty_view<T>(ne: &NonEmpty<T>) -> Seq<T>;
 
 /// Number of elements in a `NonEmpty<T>`.
@@ -94,14 +101,9 @@ pub fn clone_and_set<T: Clone>(v: &[T], pos: usize, val: T) -> (result: Vec<T>)
 /// Prepend a single `u8` to a slice, returning a new `Vec`.
 ///
 /// Trusted (`external_body`) — `extend_from_slice` is not specced in vstd.
-/// The ensures directly state the concatenation so callers need no extra proof.
 #[verifier::external_body]
 pub fn prepend_u8(x: u8, v: &[u8]) -> (result: Vec<u8>)
-    ensures
-        result@.len() == 1 + v@.len(),
-        result@[0] == x,
-        forall|i: int| 1 <= i < result@.len() ==> result@[i] == v@[i - 1],
-        result@ =~= seq![x] + v@,
+    ensures result@ =~= seq![x] + v@,
 {
     let mut r = Vec::with_capacity(1 + v.len());
     r.push(x);
