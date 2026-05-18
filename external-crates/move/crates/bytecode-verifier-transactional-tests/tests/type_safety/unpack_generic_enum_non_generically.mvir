@@ -1,6 +1,6 @@
 //# publish
 mvir 0x2::ByValue {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(y: Self::Foo<u64>) {
         let x: u64;
@@ -13,7 +13,7 @@ mvir 0x2::ByValue {
 
 //# publish
 mvir 0x2::ByImmRef {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(y: Self::Foo<u64>) {
         let x: u64;
@@ -26,7 +26,7 @@ mvir 0x2::ByImmRef {
 
 //# publish
 mvir 0x2::ByMutRef {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(y: Self::Foo<u64>) {
         let x: u64;
@@ -39,7 +39,7 @@ mvir 0x2::ByMutRef {
 
 //# publish
 mvir 0x2::ByValue {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(y: &Self::Foo<u64>) {
         let x: u64;
@@ -52,7 +52,7 @@ mvir 0x2::ByValue {
 
 //# publish
 mvir 0x2::ByImmRef {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(y: &Self::Foo<u64>) {
         let x: u64;
@@ -65,7 +65,7 @@ mvir 0x2::ByImmRef {
 
 //# publish
 mvir 0x2::ByMutRef {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(y: &Self::Foo<u64>) {
         let x: u64;
@@ -78,7 +78,7 @@ mvir 0x2::ByMutRef {
 
 //# publish
 mvir 0x2::ByValue {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(y: &mut Self::Foo<u64>) {
         let x: u64;
@@ -91,7 +91,7 @@ mvir 0x2::ByValue {
 
 //# publish
 mvir 0x2::ByImmRef {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(y: &mut Self::Foo<u64>) {
         let x: u64;
@@ -104,7 +104,7 @@ mvir 0x2::ByImmRef {
 
 //# publish
 mvir 0x2::ByMutRef {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(y: &mut Self::Foo<u64>) {
         let x: u64;

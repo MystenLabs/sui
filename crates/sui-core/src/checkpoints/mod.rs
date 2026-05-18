@@ -11,9 +11,9 @@ use crate::authority::AuthorityState;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority_client::{AuthorityAPI, make_network_authority_clients_with_network_config};
 use crate::checkpoints::causal_order::CausalOrder;
-use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
+use crate::checkpoints::checkpoint_output::CertifiedCheckpointOutput;
 pub use crate::checkpoints::checkpoint_output::{
-    LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
+    CheckpointOutput, LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
@@ -226,12 +226,12 @@ impl CheckpointStoreTables {
         use crate::authority::authority_store_pruner::apply_relocation_filter;
         use typed_store::tidehunter_util::{
             Decision, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,
-            default_mutex_count, default_value_cache_size,
+            default_max_dirty_keys, default_mutex_count, default_value_cache_size,
         };
         let mutexes = default_mutex_count();
         let u64_sequence_key = KeyType::from_prefix_bits(6 * 8);
         let override_dirty_keys_config = KeySpaceConfig::new()
-            .with_max_dirty_keys(16_000)
+            .with_max_dirty_keys(16 * default_max_dirty_keys())
             .with_value_cache_size(default_value_cache_size());
         let config_u64 = ThConfig::new_with_config(
             8,

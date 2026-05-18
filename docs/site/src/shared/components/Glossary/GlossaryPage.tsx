@@ -5,20 +5,29 @@
 
 import React, { useMemo } from "react";
 import { useGlossary } from "./GlossaryProvider";
+import glossaryData from "@site/static/glossary.json";
+
+type GlossaryEntry = { label: string; definition: string; id?: string; aliases?: string[] };
+
+function buildMap(data: GlossaryEntry[]): Map<string, GlossaryEntry> {
+    const m = new Map<string, GlossaryEntry>();
+    for (const item of data) {
+        if (!item?.label || !item?.definition) continue;
+        const keys = [item.label, ...(item.id ? [item.id] : []), ...(item.aliases || [])];
+        for (const k of keys) m.set(k.toLowerCase(), item);
+    }
+    return m;
+}
 
 export default function GlossaryPage() {
-    const { map } = useGlossary();
+    const { map: contextMap } = useGlossary();
+
+    // Use context map when available (client-side), fall back to static import for SSR.
+    const map = contextMap ?? buildMap(glossaryData as GlossaryEntry[]);
 
     const { sortedTerms, termsByLetter, availableLetters } = useMemo(() => {
-        if (!map)
-            return {
-                sortedTerms: [],
-                termsByLetter: {},
-                availableLetters: new Set(),
-            };
-
         // Extract unique entries (avoid duplicates from aliases/ids)
-        const uniqueEntries = new Map();
+        const uniqueEntries = new Map<string, GlossaryEntry>();
         map.forEach((entry) => {
             if (!uniqueEntries.has(entry.label)) {
                 uniqueEntries.set(entry.label, entry);
@@ -51,14 +60,6 @@ export default function GlossaryPage() {
     }, [map]);
 
     const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-
-    if (!map) {
-        return (
-            <div className="text-center py-8 text-wal-gray-80 dark:text-wal-white-60 italic">
-                Loading glossary...
-            </div>
-        );
-    }
 
     if (sortedTerms.length === 0) {
         return (

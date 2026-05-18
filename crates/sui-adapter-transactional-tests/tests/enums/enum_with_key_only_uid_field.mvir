@@ -9,7 +9,7 @@ mvir 0x0::f {
     import 0x2::object;
     import 0x2::tx_context;
 
-    enum X has key {
+    public enum X has key {
         A { id: object::UID }
     }
 

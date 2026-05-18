@@ -3,7 +3,7 @@
 // entry points can now return values
 
 mvir 0x42::M {
-    struct S { f: u64 }
+    public struct S { f: u64 }
 
     public fun t(
         x: u64,

@@ -1,0 +1,270 @@
+---
+title: Predict
+description: Learn about the Predict shared object, public trading functions, liquidity functions, configuration reads, and emitted events.
+keywords:
+  [
+    predict object,
+    deepbook predict,
+    mint,
+    redeem,
+    mint range,
+    redeem range,
+    supply,
+    withdraw,
+    plp,
+  ]
+---
+
+The `Predict` shared object is the main protocol entry point. It coordinates user actions across manager balances, oracle state, pricing config, risk config, and vault accounting.
+
+## API
+
+Following are the public functions that applications use most often.
+
+<details>
+<summary>Create a `PredictManager`</summary>
+
+The `create_manager()` function creates a new shared `PredictManager` for the caller and returns its object ID.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="create_manager"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Preview binary position amounts</summary>
+
+The `get_trade_amounts()` function returns the mint cost and redeem payout for a binary position at the requested quantity.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="get_trade_amounts"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Mint a binary position</summary>
+
+The `mint()` function buys a binary position using an enabled quote asset deposited in the caller's `PredictManager`.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="mint"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Redeem a binary position</summary>
+
+The `redeem()` function sells a binary position and deposits the payout back into the owner's `PredictManager`.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="redeem"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Redeem a settled binary position permissionlessly</summary>
+
+The `redeem_permissionless()` function lets anyone redeem a settled position into the owner's `PredictManager`.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="redeem_permissionless"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Preview range amounts</summary>
+
+The `get_range_trade_amounts()` function returns the mint cost and redeem payout for a vertical range at the requested quantity.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="get_range_trade_amounts"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Mint a vertical range</summary>
+
+The `mint_range()` function buys a bounded range position. The range is keyed by oracle ID, expiry, lower strike, and higher strike.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="mint_range"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Redeem a vertical range</summary>
+
+The `redeem_range()` function sells a range position and deposits the payout into the owner's `PredictManager`.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="redeem_range"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Supply vault liquidity</summary>
+
+The `supply()` function deposits an accepted quote asset into the vault and returns `PLP` shares.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="supply"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Withdraw vault liquidity</summary>
+
+The `withdraw()` function burns `PLP` shares and returns the selected quote asset when the requested amount is available after max payout coverage.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="withdraw"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Compact settled oracle exposure</summary>
+
+The `compact_settled_oracle()` function lets an authorized oracle operator compact settled strike-matrix exposure into constant-size settled state.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="compact_settled_oracle"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Read protocol configuration</summary>
+
+These read functions expose trading pause state, accepted quote assets, pricing parameters, risk limits, ask bounds, and currently available withdrawal amount.
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="ask_bounds,trading_paused,accepted_quotes,base_spread,min_spread,utilization_multiplier,max_total_exposure_pct,available_withdrawal"
+	noComments
+/>
+
+</details>
+
+## Events
+
+<details>
+<summary>Trading events</summary>
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="PositionMinted,PositionRedeemed,RangeMinted,RangeRedeemed"
+/>
+
+</details>
+
+<details>
+<summary>Liquidity events</summary>
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="Supplied,Withdrawn"
+/>
+
+</details>
+
+<details>
+<summary>Configuration events</summary>
+
+<ImportContent
+	source="packages/predict/sources/predict.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="TradingPauseUpdated,PricingConfigUpdated,OracleAskBoundsSet,OracleAskBoundsCleared,RiskConfigUpdated,QuoteAssetEnabled,QuoteAssetDisabled"
+/>
+
+</details>

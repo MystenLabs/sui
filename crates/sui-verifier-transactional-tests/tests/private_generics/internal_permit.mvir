@@ -7,7 +7,7 @@
 mvir 0x0::t {
     import 0x1::internal;
 
-    struct Internal { dummy_field: bool }
+    public struct Internal { dummy_field: bool }
 
     fun test_success() {
         let permit: internal::Permit<Self::Internal>;
@@ -34,7 +34,7 @@ mvir 0x0::t {
 mvir 0x0::t {
     import 0x1::internal;
 
-    struct Internal { dummy_field: bool }
+    public struct Internal { dummy_field: bool }
 
     fun test_fail_permit_type() {
         let permit: internal::Permit<internal::Permit<Self::Internal>>;
@@ -48,7 +48,7 @@ mvir 0x0::t {
 mvir 0x0::t {
     import 0x1::internal;
 
-    struct Internal { dummy_field: bool }
+    public struct Internal { dummy_field: bool }
 
     fun test_fail_permit_type() {
         let permit: internal::Permit<vector<Self::Internal>>;

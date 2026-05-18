@@ -105,6 +105,7 @@ use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_framework::ingestion::{
     ClientArgs, IngestionConfig,
     ingestion_client::IngestionClientArgs,
+    streaming_client::StreamingClientArgs,
 };
 
 async fn main() -> anyhow::Result<()> {
@@ -117,11 +118,23 @@ async fn main() -> anyhow::Result<()> {
         IndexerArgs::default(),
         ClientArgs {
             ingestion: IngestionClientArgs {
-                // Use full node gRPC as the primary steady-state source and the
-                // remote checkpoint store as a fallback.
-                rpc_api_url: Some("https://fullnode.testnet.sui.io:443".parse()?),
+                // Use the full-retention Testnet GCS bucket for checkpoint
+                // catch-up and streaming fallback. The public Testnet HTTPS
+                // checkpoint endpoint has 30-day retention only.
+                remote_store_gcs: Some("mysten-testnet-checkpoints-use4".to_string()),
+                // This is the programmatic equivalent of passing
+                // --remote-store-header="x-goog-user-project:my-project"
+                // to the indexer framework CLI.
+                remote_store_headers: vec![(
+                    "x-goog-user-project".parse()?,
+                    "my-project".parse()?,
+                )],
+                ..Default::default()
+            },
+            streaming: StreamingClientArgs {
+                // Stream live checkpoints from full node gRPC for steady-state
+                // low-latency ingestion.
                 streaming_url: Some("https://fullnode.testnet.sui.io:443".parse()?),
-                remote_store_url: Some("https://checkpoints.testnet.sui.io".to_string()),
                 ..Default::default()
             },
             ..Default::default()

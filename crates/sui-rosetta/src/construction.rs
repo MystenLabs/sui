@@ -293,6 +293,8 @@ pub async fn metadata(
         address_balance_withdrawal,
         fss_object_count,
         redeem_token_amount,
+        redeem_plan,
+        bind_epoch,
     } = option
         .internal_operation
         .try_fetch_needed_objects(&mut context.client.clone(), Some(gas_price), budget)
@@ -308,9 +310,21 @@ pub async fn metadata(
         vec![]
     };
 
-    // Fetch epoch and chain_id for address-balance gas transactions
-    let (epoch, chain_id) = if gas_coins.is_empty() || address_balance_withdrawal > 0 {
-        let epoch = crate::get_current_epoch(&mut context.client.clone()).await?;
+    // Fetch epoch and chain_id for address-balance gas transactions.
+    //
+    // Prefer `bind_epoch` (atomic with the rate snapshot from
+    // `get_validator_set_snapshot`) over a separate `get_current_epoch` RPC.
+    // If both are needed and `bind_epoch` is set, reusing it both saves an
+    // RPC and guarantees `metadata.epoch == bind_epoch`. Without this, an
+    // epoch transition between the two RPCs would leave them disagreeing,
+    // causing the bind-epoch mismatch check at signing time to reject the
+    // metadata even though both reads were individually valid.
+    let needs_address_balance_metadata = gas_coins.is_empty() || address_balance_withdrawal > 0;
+    let (epoch, chain_id) = if needs_address_balance_metadata {
+        let epoch = match bind_epoch {
+            Some(e) => e,
+            None => crate::get_current_epoch(&mut context.client.clone()).await?,
+        };
         let chain_id_str =
             sui_types::digests::CheckpointDigest::new(*context.chain_id.as_bytes()).base58_encode();
         (Some(epoch), Some(chain_id_str))
@@ -334,6 +348,8 @@ pub async fn metadata(
             chain_id,
             fss_object_count,
             redeem_token_amount,
+            redeem_plan,
+            bind_epoch,
         },
         suggested_fee: vec![Amount::new(budget as i128, None)],
     })

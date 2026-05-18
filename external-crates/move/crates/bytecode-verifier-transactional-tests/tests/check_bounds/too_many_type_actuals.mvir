@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::M {
-    struct S { b: bool }
+    public struct S { b: bool }
 
     fun foo() {
         // type arg mismatch

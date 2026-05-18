@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
-    struct X has drop { f: Self::Y }
-    struct Y has drop { g: u64, h: u64 }
+    public struct X has drop { f: Self::Y }
+    public struct Y has drop { g: u64, h: u64 }
 
     fun t1() {
         let x: Self::X;
@@ -29,8 +29,8 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M2 {
-    struct X has drop { f: Self::Y }
-    struct Y has drop { g: u64, h: u64 }
+    public struct X has drop { f: Self::Y }
+    public struct Y has drop { g: u64, h: u64 }
     fun t2() {
         let x: Self::X;
         let ref_x: &mut Self::X;

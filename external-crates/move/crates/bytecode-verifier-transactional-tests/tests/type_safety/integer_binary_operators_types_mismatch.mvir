@@ -135,7 +135,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 + (R { x: true });
@@ -145,7 +145,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) + 0;
@@ -155,7 +155,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun h() {
     label b0:
         _ = (R { x: true }) + (R { x: true });
@@ -300,7 +300,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 - (R { x: true });
@@ -310,7 +310,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) - 0;
@@ -320,7 +320,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun h() {
     label b0:
         _ = (R { x: true }) - (R { x: true });
@@ -465,7 +465,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 * (R { x: true });
@@ -475,7 +475,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) * 0;
@@ -485,7 +485,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun h() {
     label b0:
         _ = (R { x: true }) * (R { x: true });
@@ -630,7 +630,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 / (R { x: true });
@@ -640,7 +640,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) / 0;
@@ -650,7 +650,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun h() {
     label b0:
         _ = (R { x: true }) / (R { x: true });
@@ -795,7 +795,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 & (R { x: true });
@@ -805,7 +805,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) & 0;
@@ -815,7 +815,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun h() {
     label b0:
         _ = (R { x: true }) & (R { x: true });
@@ -960,7 +960,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 | (R { x: true });
@@ -970,7 +970,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) | 0;
@@ -980,7 +980,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun h() {
     label b0:
         _ = (R { x: true }) | (R { x: true });
@@ -1125,7 +1125,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 ^ (R { x: true });
@@ -1135,7 +1135,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) ^ 0;
@@ -1145,7 +1145,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun h() {
     label b0:
         _ = (R { x: true }) ^ (R { x: true });
@@ -1268,7 +1268,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 == (R { x: true });
@@ -1278,7 +1278,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) == 0;
@@ -1400,7 +1400,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 != (R { x: true });
@@ -1410,7 +1410,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) != 0;
@@ -1955,7 +1955,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 << (R { x: true });
@@ -1965,7 +1965,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) << 0;
@@ -1975,7 +1975,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun h() {
     label b0:
         _ = (R { x: true }) << (R { x: true });
@@ -2076,7 +2076,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun f() {
     label b0:
         _ = 0 >> (R { x: true });
@@ -2086,7 +2086,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun g() {
     label b0:
         _ = (R { x: true }) >> 0;
@@ -2096,7 +2096,7 @@ mvir 0x42::M {
 
 //# publish
 mvir 0x42::M {
-    struct R { x: bool }
+    public struct R { x: bool }
     fun h() {
     label b0:
         _ = (R { x: true }) >> (R { x: true });

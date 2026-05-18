@@ -1,0 +1,21 @@
+// An if/else whose arms converge at a code block, followed by an unconditional infinite loop
+// with no exit. Nothing reaches a sink in the original CFG, so an impossible edge is added at
+// the deepest unvisited node (4) and post-domination cascades back through 3, 1, 2, and 0.
+// Structuring then emits the if/else, the converged code block, and the trailing loop in
+// sequence.
+//
+//       0
+//      / \
+//     1   2
+//      \ /
+//       3
+//       |
+//    -> 4
+//   |   |
+//    ---
+
+cond,0,1,2
+code,1,3
+code,2,3
+code,3,4
+code,4,4

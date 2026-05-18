@@ -33,8 +33,9 @@ graph LR
    - **Read-only account** for the gRPC service; requires `roles/bigtable.reader`.
 - Access to the Sui checkpoint buckets for your target network:
    - **Mainnet fallback endpoint:** `https://checkpoints.mainnet.sui.io` for the latest 30 days only.
-   - **Mainnet full-history backfill bucket:** `gs://mysten-mainnet-checkpoints-use4` via `--remote-store-gcs mysten-mainnet-checkpoints-use4`. This bucket is Requester Pays enabled.
-   - **Testnet endpoint:** `https://checkpoints.testnet.sui.io` with full history.
+   - **Testnet fallback endpoint:** `https://checkpoints.testnet.sui.io` for the latest 30 days only.
+   - **Mainnet full-retention backfill bucket:** `gs://mysten-mainnet-checkpoints-use4` through `--remote-store-gcs mysten-mainnet-checkpoints-use4`. This bucket is Requester Pays enabled.
+   - **Testnet full-retention backfill bucket:** `gs://mysten-testnet-checkpoints-use4` through `--remote-store-gcs mysten-testnet-checkpoints-use4`. This bucket is Requester Pays enabled.
 - A [Sui full node](/operators/full-node/sui-full-node) with gRPC enabled. After the initial backfill, you can stream checkpoints from a full node instead of polling the bucket for lower latency. See [Steady-state operation](#steady-state-operation).
 
 </TabItem>
@@ -52,7 +53,7 @@ Both the indexer and gRPC service authenticate to GCP using [Application Default
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 ```
 
-The public HTTPS checkpoint endpoints retain only the latest 30 days of checkpoints. For Mainnet backfill beyond 30 days, use `--remote-store-gcs mysten-mainnet-checkpoints-use4`. This bucket is Requester Pays enabled. Using `--remote-store-gcs` with valid credentials and a billing project avoids throttling and is the supported path for full-history backfill.
+The public HTTPS checkpoint endpoints retain only the latest 30 days of checkpoints. For full-retention backfill beyond 30 days, use `--remote-store-gcs mysten-mainnet-checkpoints-use4` on Mainnet or `--remote-store-gcs mysten-testnet-checkpoints-use4` on Testnet. These buckets are Requester Pays enabled. Using `--remote-store-gcs` with valid credentials and a billing project avoids throttling and is the supported path for full-retention backfill.
 
 ## Bigtable setup
 
@@ -203,6 +204,8 @@ sui-kvstore-alt \
     my-bigtable-instance \
     --remote-store-gcs mysten-mainnet-checkpoints-use4
 ```
+
+For Testnet, use `--chain testnet` with `--remote-store-gcs mysten-testnet-checkpoints-use4`.
 
 #### Example (steady-state from fullnode)
 

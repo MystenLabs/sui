@@ -8,15 +8,15 @@ mvir 0x0::test {
     import 0x2::transfer;
     import 0x2::tx_context;
 
-    struct A has key {
+    public struct A has key {
         id: object::UID
     }
 
-    struct C has key {
+    public struct C has key {
         id: object::UID
     }
 
-    struct B {
+    public struct B {
         id: object::UID
     }
 
@@ -41,11 +41,11 @@ mvir 0x0::test {
 mvir 0x0::m {
     import 0x2::object;
 
-    struct Foo has key {
+    public struct Foo has key {
         id: object::UID,
     }
 
-    struct Bar {
+    public struct Bar {
         id: object::UID,
         v: u64,
     }

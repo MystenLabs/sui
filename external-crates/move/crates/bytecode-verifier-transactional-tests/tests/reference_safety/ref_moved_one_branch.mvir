@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::A {
-    struct S {value: u64}
+    public struct S {value: u64}
 
     public fun t(changed: bool, s: &mut Self::S) {
     label b0:

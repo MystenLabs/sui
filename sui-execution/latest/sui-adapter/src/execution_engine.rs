@@ -124,6 +124,54 @@ mod checked {
         }
     }
 
+    /// Compute the per-`(address, type)` funds-accumulator reservation budget consumed by
+    /// `TemporaryStore::check_address_balance_changes`. Today every funds accumulator is a
+    /// `Balance<T>`, but the `(address, TypeTag)` keying lets this generalize as more
+    /// accumulator types are added. Sources:
+    /// - PTB `FundsWithdrawalArg`s for any supported accumulator type (sender or sponsor as
+    ///   owner).
+    /// - Gas paid entirely from address balance (credits `(gas_owner, Balance<SUI>)`).
+    /// - Gas-data entries with coin-reservation digests (also credit `(gas_owner, Balance<SUI>)`).
+    fn compute_input_reservations(
+        transaction_kind: &TransactionKind,
+        gas_data: &GasData,
+        transaction_signer: SuiAddress,
+    ) -> BTreeMap<(SuiAddress, TypeTag), u64> {
+        use sui_types::balance::Balance;
+        use sui_types::gas_coin::GAS;
+        use sui_types::transaction::{Reservation, WithdrawFrom, is_gas_paid_from_address_balance};
+
+        let mut reservations: BTreeMap<(SuiAddress, TypeTag), u64> = BTreeMap::new();
+        let sui_balance_type = Balance::type_tag(GAS::type_tag());
+
+        for arg in transaction_kind.get_funds_withdrawals() {
+            let owner = match arg.withdraw_from {
+                WithdrawFrom::Sender => transaction_signer,
+                WithdrawFrom::Sponsor => gas_data.owner,
+            };
+            let Reservation::MaxAmountU64(reservation) = arg.reservation;
+            *reservations
+                .entry((owner, arg.type_arg.to_type_tag()))
+                .or_insert(0) += reservation;
+        }
+
+        if is_gas_paid_from_address_balance(gas_data, transaction_kind) {
+            *reservations
+                .entry((gas_data.owner, sui_balance_type.clone()))
+                .or_insert(0) += gas_data.budget;
+        }
+
+        for entry in &gas_data.payment {
+            if let Ok(parsed) = ParsedDigest::try_from(entry.2) {
+                *reservations
+                    .entry((gas_data.owner, sui_balance_type.clone()))
+                    .or_insert(0) += parsed.reservation_amount();
+            }
+        }
+
+        reservations
+    }
+
     #[allow(clippy::type_complexity)]
     #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
@@ -205,6 +253,9 @@ mod checked {
             && is_gasless_transaction(&gas_data, &transaction_kind);
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
 
+        let input_reservations =
+            compute_input_reservations(&transaction_kind, &gas_data, transaction_signer);
+
         let (gas_cost_summary, execution_result, timings) = execute_transaction::<Mode>(
             store,
             &mut temporary_store,
@@ -219,43 +270,10 @@ mod checked {
             execution_params,
             trace_builder_opt,
             is_gasless,
+            &input_reservations,
         );
 
         let status = if let Err(error) = &execution_result {
-            // Elaborate errors in logs if they are unexpected or their status is terse.
-            use ExecutionErrorKind as K;
-            match error.kind() {
-                K::InvariantViolation | K::VMInvariantViolation => {
-                    debug_fatal!(
-                        "INVARIANT VIOLATION! Txn Digest: {}, Source: {:?}",
-                        transaction_digest,
-                        error.source_ref(),
-                    );
-                }
-
-                K::SuiMoveVerificationError | K::VMVerificationOrDeserializationError => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Verification Error. Source: {:?}",
-                        error.source_ref(),
-                    );
-                }
-
-                K::PublishUpgradeMissingDependency | K::PublishUpgradeDependencyDowngrade => {
-                    #[skip_checked_arithmetic]
-                    tracing::debug!(
-                        kind = ?error.kind(),
-                        tx_digest = ?transaction_digest,
-                        "Publish/Upgrade Error. Source: {:?}",
-                        error.source_ref(),
-                    )
-                }
-
-                _ => (),
-            };
-
             ExecutionStatus::new_failure(error.to_execution_failure())
         } else {
             ExecutionStatus::Success
@@ -281,8 +299,9 @@ mod checked {
                 .check_ownership_invariants(
                     &transaction_signer,
                     &sponsor,
-                    &mut gas_charger,
+                    &gas_charger,
                     &mutable_inputs,
+                    &input_reservations,
                     is_epoch_change,
                 )
                 .unwrap()
@@ -415,6 +434,7 @@ mod checked {
         execution_params: ExecutionOrEarlyError,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
         is_gasless: bool,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, Mode::Error>,
@@ -447,10 +467,9 @@ mod checked {
                         Mode::ExecutionResults,
                         Mode::Error,
                     > = match execution_params {
-                        ExecutionOrEarlyError::Err(early_execution_error) => Err((
-                            ExecutionError::new(early_execution_error, None).into(),
-                            vec![],
-                        )),
+                        ExecutionOrEarlyError::Err(early_execution_error) => {
+                            Err((Mode::Error::from_kind(early_execution_error), vec![]))
+                        }
                         ExecutionOrEarlyError::Ok(()) => execution_loop::<Mode>(
                             store,
                             temporary_store,
@@ -500,9 +519,10 @@ mod checked {
             && let Err(msg) = temporary_store
                 .check_gasless_execution_requirements(withdrawal_reservations.as_ref())
         {
-            result = Err(
-                ExecutionError::new_with_source(ExecutionErrorKind::InsufficientGas, msg).into(),
-            );
+            result = Err(Mode::Error::new_with_source(
+                ExecutionErrorKind::InsufficientGas,
+                msg,
+            ));
         }
 
         let cost_summary = gas_charger.charge_gas(temporary_store, &mut result);
@@ -525,6 +545,7 @@ mod checked {
             &cost_summary,
             is_genesis_tx,
             advance_epoch_gas_summary,
+            input_reservations,
         ) {
             // FIXME: we cannot fail the transaction if this is an epoch change transaction.
             result = Err(e);
@@ -544,22 +565,21 @@ mod checked {
         cost_summary: &GasCostSummary,
         is_genesis_tx: bool,
         advance_epoch_gas_summary: Option<(u64, u64)>,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
     ) -> Result<(), Mode::Error> {
         let mut result: Result<(), Mode::Error> = Ok(());
         if !is_genesis_tx && !Mode::skip_conservation_checks() {
-            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-            let conservation_result = {
-                temporary_store
+            let run_checks = |store: &TemporaryStore<'_>| -> Result<(), ExecutionError> {
+                store
                     .check_sui_conserved(simple_conservation_checks, cost_summary)
                     .and_then(|()| {
                         if enable_expensive_checks {
-                            // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
                             let mut layout_resolver = TypeLayoutResolver::new(
                                 move_vm,
-                                temporary_store.protocol_config(),
-                                Box::new(&*temporary_store),
+                                store.protocol_config(),
+                                Box::new(store),
                             );
-                            temporary_store.check_sui_conserved_expensive(
+                            store.check_sui_conserved_expensive(
                                 cost_summary,
                                 advance_epoch_gas_summary,
                                 &mut layout_resolver,
@@ -568,38 +588,25 @@ mod checked {
                             Ok(())
                         }
                     })
+                    .and_then(|()| {
+                        store.check_address_balance_changes(
+                            store.protocol_config(),
+                            input_reservations,
+                        )
+                    })
             };
-            if let Err(conservation_err) = conservation_result {
-                // conservation violated. try to avoid panic by dumping all writes, charging for gas, re-checking
-                // conservation, and surfacing an aborted transaction with an invariant violation if all of that works
+
+            if let Err(conservation_err) = run_checks(temporary_store) {
+                // conservation violated. try to avoid panic by dumping all writes, charging for gas,
+                // re-checking conservation, and surfacing an aborted transaction with an invariant
+                // violation if all of that works.
                 result = Err(conservation_err.into());
                 gas_charger.reset(temporary_store);
                 gas_charger.charge_gas(temporary_store, &mut result);
-                // check conservation once more
-                if let Err(recovery_err) = {
-                    temporary_store
-                        .check_sui_conserved(simple_conservation_checks, cost_summary)
-                        .and_then(|()| {
-                            if enable_expensive_checks {
-                                // ensure that this transaction did not create or destroy SUI, try to recover if the check fails
-                                let mut layout_resolver = TypeLayoutResolver::new(
-                                    move_vm,
-                                    temporary_store.protocol_config(),
-                                    Box::new(&*temporary_store),
-                                );
-                                temporary_store.check_sui_conserved_expensive(
-                                    cost_summary,
-                                    advance_epoch_gas_summary,
-                                    &mut layout_resolver,
-                                )
-                            } else {
-                                Ok(())
-                            }
-                        })
-                } {
-                    // if we still fail, it's a problem with gas
-                    // charging that happens even in the "aborted" case--no other option but panic.
-                    // we will create or destroy SUI otherwise
+                if let Err(recovery_err) = run_checks(temporary_store) {
+                    // if we still fail, it's a problem with gas charging that happens even in the
+                    // "aborted" case — no other option but panic. We will create or destroy SUI
+                    // otherwise (or admit an unauthorized accumulator Split).
                     panic!(
                         "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
                         tx_digest,
@@ -641,14 +648,13 @@ mod checked {
                 );
                 Ok(())
             }
-            LimitThresholdCrossed::Hard(_, lim) => Err(ExecutionError::new_with_source(
+            LimitThresholdCrossed::Hard(_, lim) => Err(Mode::Error::new_with_source(
                 ExecutionErrorKind::EffectsTooLarge {
                     current_size: effects_estimated_size as u64,
                     max_size: lim as u64,
                 },
                 "Transaction effects are too large",
-            )
-            .into()),
+            )),
         }
     }
 
@@ -681,14 +687,13 @@ mod checked {
                     )
                 }
                 LimitThresholdCrossed::Hard(_, lim) => {
-                    return Err(ExecutionError::new_with_source(
+                    return Err(Mode::Error::new_with_source(
                         ExecutionErrorKind::WrittenObjectsTooLarge {
                             current_size: written_objects_size as u64,
                             max_size: lim as u64,
                         },
                         "Written objects size crossed hard limit",
-                    )
-                    .into());
+                    ));
                 }
             };
         }
@@ -850,9 +855,7 @@ mod checked {
                 rewritten_inputs,
                 pt,
                 trace_builder_opt,
-            )
-            // TODO push Mode::Error lower into the call stack and remove into()
-            .map_err(|(e, timings)| (e.into(), timings)),
+            ),
             TransactionKind::ProgrammableSystemTransaction(pt) => {
                 SPT::execute::<execution_mode::System<Mode::Error>>(
                     protocol_config,
@@ -866,8 +869,7 @@ mod checked {
                     pt,
                     trace_builder_opt,
                 )
-                // TODO push Mode::Error lower into the call stack and remove into()
-                .map_err(|(e, _)| (e.into(), vec![]))?;
+                .map_err(|(e, _)| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
@@ -997,9 +999,8 @@ mod checked {
             }
         }?;
         temporary_store
-            .check_execution_results_consistency()
-            // TODO push Mode::Error lower into the call stack and remove into()
-            .map_err(|e| (e.into(), vec![]))?;
+            .check_execution_results_consistency::<Mode>()
+            .map_err(|e| (e, vec![]))?;
         Ok(result)
     }
 
@@ -1037,10 +1038,10 @@ mod checked {
         (storage_rewards, computation_rewards)
     }
 
-    pub fn construct_advance_epoch_pt(
+    pub fn construct_advance_epoch_pt<Mode: ExecutionMode>(
         mut builder: ProgrammableTransactionBuilder,
         params: &AdvanceEpochParams,
-    ) -> Result<ProgrammableTransaction, ExecutionError> {
+    ) -> Result<ProgrammableTransaction, Mode::Error> {
         // Step 1: Create storage and computation rewards.
         let (storage_rewards, computation_rewards) = mint_epoch_rewards_in_pt(&mut builder, params);
 
@@ -1158,9 +1159,8 @@ mod checked {
             reward_slashing_rate: protocol_config.reward_slashing_rate(),
             epoch_start_timestamp_ms: change_epoch.epoch_start_timestamp_ms,
         };
-        // TODO push Mode::Error lower into the call stack and remove (implicit) into()
-        let advance_epoch_pt = construct_advance_epoch_pt(builder, &params)?;
-        let result = SPT::execute::<execution_mode::System>(
+        let advance_epoch_pt = construct_advance_epoch_pt::<Mode>(builder, &params)?;
+        let result = SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics.clone(),
             move_vm,
@@ -1312,7 +1312,7 @@ mod checked {
             );
             builder.finish()
         };
-        SPT::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics,
             move_vm,
@@ -1324,7 +1324,6 @@ mod checked {
             pt,
             trace_builder_opt,
         )
-        // TODO push Mode::Error lower into the call stack and remove (implicit) into()
         .map_err(|(e, _)| e)?;
         Ok(())
     }
@@ -1461,7 +1460,7 @@ mod checked {
             );
             builder.finish()
         };
-        SPT::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics,
             move_vm,
@@ -1534,7 +1533,7 @@ mod checked {
             );
             builder.finish()
         };
-        SPT::execute::<execution_mode::System>(
+        SPT::execute::<execution_mode::System<Mode::Error>>(
             protocol_config,
             metrics,
             move_vm,

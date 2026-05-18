@@ -29,6 +29,7 @@ use crate::api::scalars::uint53::UInt53;
 use crate::api::types::address;
 use crate::api::types::address::Address;
 use crate::api::types::address::AddressKey;
+use crate::api::types::checkpoint;
 use crate::api::types::checkpoint::CCheckpoint;
 use crate::api::types::checkpoint::Checkpoint;
 use crate::api::types::checkpoint::filter::CheckpointFilter;
@@ -198,20 +199,29 @@ impl Query {
         Ok(Base58::encode(chain_id.wait().await.as_bytes()))
     }
 
-    /// Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
+    /// Fetch a checkpoint by its sequence number or digest, or the latest checkpoint if neither is provided.
+    ///
+    /// It is an error to specify both `sequenceNumber` and `digest`.
     ///
     /// Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
     async fn checkpoint(
         &self,
         ctx: &Context<'_>,
         sequence_number: Option<UInt53>,
-    ) -> Option<Result<Checkpoint, RpcError>> {
+        digest: Option<Digest>,
+    ) -> Option<Result<Checkpoint, RpcError<checkpoint::Error>>> {
         async {
             let scope = self.scope(ctx)?;
-            Ok(Checkpoint::with_sequence_number(
-                scope,
-                sequence_number.map(|s| s.into()),
-            ))
+            match (sequence_number, digest) {
+                (Some(_), Some(_)) => Err(bad_user_input(checkpoint::Error::BothBoundsSet)),
+                (None, Some(digest)) => Checkpoint::by_digest(ctx, scope, digest.into())
+                    .await
+                    .map_err(upcast),
+                (sequence_number, None) => Ok(Checkpoint::with_sequence_number(
+                    scope,
+                    sequence_number.map(|s| s.into()),
+                )),
+            }
         }
         .await
         .transpose()

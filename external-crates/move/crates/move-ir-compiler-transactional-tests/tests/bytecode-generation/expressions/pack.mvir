@@ -1,6 +1,6 @@
 //# print-bytecode
 mvir 0x2d20::M {
-    struct T { u: u64 }
+    public struct T { u: u64 }
 
     fun f(): Self::T {
     label b0:
@@ -10,7 +10,7 @@ mvir 0x2d20::M {
 
 //# print-bytecode
 mvir 0x3d20::M {
-    struct T { u: u64, v: u128 }
+    public struct T { u: u64, v: u128 }
 
     // A pack expression must use the correct field names.
     fun f(): Self::T {
@@ -21,7 +21,7 @@ mvir 0x3d20::M {
 
 //# print-bytecode
 mvir 0x4d20::M {
-    struct T { x: u64, y: u64 }
+    public struct T { x: u64, y: u64 }
 
     // A pack expression must refer to the fields in the correct order.
     fun f(): Self::T {

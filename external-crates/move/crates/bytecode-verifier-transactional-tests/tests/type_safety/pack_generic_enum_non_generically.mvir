@@ -1,6 +1,6 @@
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: u64): Self::Foo<u64> {
         let y: Self::Foo<u64>;

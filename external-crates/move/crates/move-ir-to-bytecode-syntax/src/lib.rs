@@ -158,9 +158,8 @@
 //! ## Modules
 //! ```text
 //! sdecl ∈ StructDecl ::=
-//!   | resource n { f_1: t_1, ..., f_j: t_j } // declaration of a resource struct
-//!   | struct n { f_1: t_1, ..., f_j: t_j }   // declaration of a non-resource (value) struct
-//!                                            // s.t. any 't_i' is not of resource kind
+//!   | public struct n { f_1: t_1, ..., f_j: t_j } // declaration of a struct;
+//!                                                 // currently `public` is the only supported visibility
 //!
 //! body ∈ ProcedureBody ::=
 //!  | let x_1; ... let x_j; s // The locals declared in this procedure, and the code for that procedure

@@ -1,0 +1,90 @@
+---
+title: Predict Manager
+description: Learn about PredictManager accounts, deposited quote balances, binary position quantities, and range quantities.
+keywords:
+  [
+    predict manager,
+    predictmanager,
+    deepbook predict,
+    position table,
+    range position,
+    balance manager,
+    deposit,
+    withdraw,
+  ]
+---
+
+The `PredictManager` is a per-user shared account object. It wraps a DeepBook `BalanceManager`, stores quote balances, and tracks Predict positions internally.
+
+Each user should create one manager and reuse it. Binary positions and vertical ranges are not separate onchain objects; they are quantities stored inside the manager.
+
+## API
+
+<details>
+<summary>Read owner, balances, and position quantities</summary>
+
+Use these functions to read the manager owner, deposited asset balances, binary position quantities, and range quantities.
+
+<ImportContent
+	source="packages/predict/sources/predict_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="owner,balance,position,range_position"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Deposit quote assets</summary>
+
+The manager owner deposits quote assets before minting positions or ranges.
+
+<ImportContent
+	source="packages/predict/sources/predict_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="deposit"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Withdraw quote assets</summary>
+
+The manager owner can withdraw quote assets from the manager.
+
+<ImportContent
+	source="packages/predict/sources/predict_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="withdraw"
+	noComments
+/>
+
+</details>
+
+## Events
+
+<details>
+<summary>`PredictManagerCreated`</summary>
+
+Emitted when a new `PredictManager` is created.
+
+<ImportContent
+	source="packages/predict/sources/predict_manager.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="PredictManagerCreated"
+/>
+
+</details>

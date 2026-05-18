@@ -1,6 +1,6 @@
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: &Self::Foo<u64>) {
     label b0:
@@ -15,7 +15,7 @@ mvir 0x2::O {
 
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T } }
+    public enum Foo<T> { V { x: T } }
 
     fun foo(x: &Self::Foo<u64>) {
     label b0:
@@ -29,7 +29,7 @@ mvir 0x2::O {
 
 //# publish
 mvir 0x2::O {
-    enum Foo<T> { V { x: T }, X { } }
+    public enum Foo<T> { V { x: T }, X { } }
 
     fun foo(x: &Self::Foo<u64>) {
     label b0:

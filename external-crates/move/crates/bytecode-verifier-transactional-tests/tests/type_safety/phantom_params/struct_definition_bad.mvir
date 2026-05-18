@@ -5,7 +5,7 @@
 
 mvir 0x1::M1 {
     // A phantom parameter cannot be used as the type of a field
-    struct S1<phantom T> {
+    public struct S1<phantom T> {
         a: T
     }
 }
@@ -13,7 +13,7 @@ mvir 0x1::M1 {
 //# publish
 mvir 0x1::M2 {
     // The parameter of vector is non-phantom and a phantom parameter shouldn't be allowed in that position
-    struct S2<phantom T> {
+    public struct S2<phantom T> {
         a: vector<T>
     }
 }
@@ -21,8 +21,8 @@ mvir 0x1::M2 {
 //# publish
 mvir 0x1::M3 {
     // A phantom parameter cannot be used as the argument to a non-phantom parameter
-    struct S1<T> { f: bool }
-    struct S2<phantom T> {
+    public struct S1<T> { f: bool }
+    public struct S2<phantom T> {
         a: Self::S1<T>
     }
 }
@@ -31,9 +31,9 @@ mvir 0x1::M3 {
 mvir 0x1::M4 {
     // More complicated test where the phantom position violation is inside another
     // type argument.
-    struct S1<T> { a: T}
-    struct S2<T> { a : T }
-    struct S3<phantom T> {
+    public struct S1<T> { a: T}
+    public struct S2<T> { a : T }
+    public struct S3<phantom T> {
         a: Self::S1<Self::S2<T>>
     }
 }
@@ -41,7 +41,7 @@ mvir 0x1::M4 {
 //# publish
 mvir 0x1::M5 {
     // Mixing phantom and non-phantom parameters
-    struct S<T1, phantom T2, T3> {
+    public struct S<T1, phantom T2, T3> {
         a: T2
     }
 }
@@ -49,8 +49,8 @@ mvir 0x1::M5 {
 //# publish
 mvir 0x1::M6 {
     // Phantom parameters should satisfy constraints
-    struct S1<phantom T: copy> { a: bool }
-    struct S2<phantom T> {
+    public struct S1<phantom T: copy> { a: bool }
+    public struct S2<phantom T> {
         a: Self::S1<T>
     }
 }
@@ -62,7 +62,7 @@ mvir 0x1::M6 {
 
 mvir 0x2::M1 {
     // A phantom parameter cannot be used as the type of a field
-    enum S1<phantom T> {
+    public enum S1<phantom T> {
         V { a: T }
     }
 }
@@ -70,7 +70,7 @@ mvir 0x2::M1 {
 //# publish
 mvir 0x2::M2 {
     // The parameter of vector is non-phantom and a phantom parameter shouldn't be allowed in that position
-    enum S2<phantom T> {
+    public enum S2<phantom T> {
         V { a: vector<T> }
     }
 }
@@ -78,8 +78,8 @@ mvir 0x2::M2 {
 //# publish
 mvir 0x2::M3 {
     // A phantom parameter cannot be used as the argument to a non-phantom parameter
-    enum S1<T> { V{ f: bool }}
-    enum S2<phantom T> {
+    public enum S1<T> { V{ f: bool }}
+    public enum S2<phantom T> {
         V { a: Self::S1<T> }
     }
 }
@@ -88,9 +88,9 @@ mvir 0x2::M3 {
 mvir 0x2::M4 {
     // More complicated test where the phantom position violation is inside another
     // type argument.
-    enum S1<T> { V{ a: T}}
-    enum S2<T> { V{ a : T } }
-    enum S3<phantom T> {
+    public enum S1<T> { V{ a: T}}
+    public enum S2<T> { V{ a : T } }
+    public enum S3<phantom T> {
         V { a: Self::S1<Self::S2<T>> }
     }
 }
@@ -98,7 +98,7 @@ mvir 0x2::M4 {
 //# publish
 mvir 0x2::M5 {
     // Mixing phantom and non-phantom parameters
-    enum S<T1, phantom T2, T3> {
+    public enum S<T1, phantom T2, T3> {
         V { a: T2 }
     }
 }
@@ -106,8 +106,8 @@ mvir 0x2::M5 {
 //# publish
 mvir 0x2::M6 {
     // Phantom parameters should satisfy constraints
-    enum S1<phantom T: copy> { V{ a: bool } }
-    enum S2<phantom T> {
+    public enum S1<phantom T: copy> { V{ a: bool } }
+    public enum S2<phantom T> {
         V { a: Self::S1<T> }
     }
 }

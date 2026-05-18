@@ -1,11 +1,11 @@
 //# publish
 mvir 0x6::Enums {
-    enum PolyEnum<T> {
+    public enum PolyEnum<T> {
         One { },
         Two { x: T },
     }
 
-    enum MonoEnum {
+    public enum MonoEnum {
         One { },
         Two { x: u8 },
     }

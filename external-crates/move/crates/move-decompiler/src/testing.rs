@@ -50,6 +50,11 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
 
             match parts.as_slice() {
                 ["cond", a, b, c] => match (a.parse::<u32>(), b.parse::<u32>(), c.parse::<u32>()) {
+                    // Match the translate.rs normalization: a `cond` whose two arms target
+                    // the same label is a `code` with a dead condition.
+                    (Ok(a), Ok(b), Ok(c)) if b == c => {
+                        nodes.push(In::Code(a.into(), a.into(), Some(b.into())))
+                    }
                     (Ok(a), Ok(b), Ok(c)) => {
                         nodes.push(In::Condition(a.into(), a.into(), b.into(), c.into()))
                     }

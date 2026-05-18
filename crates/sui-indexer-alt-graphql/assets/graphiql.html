@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GraphiQL</title>
+  <link rel="stylesheet" href="https://unpkg.com/graphiql@3.9.0/graphiql.min.css" />
+</head>
+<body style="margin: 0;">
+  <div id="graphiql" style="height: 100vh;"></div>
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/graphiql@3.9.0/graphiql.min.js"></script>
+  <script src="https://unpkg.com/graphql-sse@2.6.0/umd/graphql-sse.min.js"></script>
+  <script type="module">
+    import { parse, getOperationAST } from "https://unpkg.com/graphql@16.14.0/index.mjs?module";
+
+    const GRAPHQL_ENDPOINT = "__GRAPHQL_PATH__";
+    const GRAPHQL_SUBSCRIPTIONS_ENDPOINT = "__GRAPHQL_SUBSCRIPTIONS_PATH__";
+
+    const sseClient = graphqlSse.createClient({ url: GRAPHQL_SUBSCRIPTIONS_ENDPOINT });
+
+    function isSubscription(params) {
+      try {
+        const document = parse(params.query || '');
+        const operation = getOperationAST(document, params.operationName);
+        return operation?.operation === 'subscription';
+      } catch {
+        return false;
+      }
+    }
+
+    const fetcher = async function*(params) {
+      if (isSubscription(params)) {
+        for await (const result of sseClient.iterate(params)) yield result;
+        return;
+      }
+      const response = await fetch(GRAPHQL_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(params),
+      });
+      yield await response.json();
+    };
+
+    ReactDOM.createRoot(document.getElementById('graphiql'))
+      .render(React.createElement(GraphiQL, { fetcher }));
+  </script>
+</body>
+</html>

@@ -6,12 +6,10 @@ if (0) {
         if (2) {
             { 3 }
         } else {
-            jump NodeIndex(4);
+            jump<APD> NodeIndex(4);
         }
     } else {
-        jump NodeIndex(4);
+        jump<APD> NodeIndex(4);
     }
-} else {
-    jump NodeIndex(4);
 }
 { 4 }

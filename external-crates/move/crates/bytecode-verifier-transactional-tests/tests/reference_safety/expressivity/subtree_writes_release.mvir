@@ -4,9 +4,9 @@
 
 mvir 0x2::extension_after_join {
 
-struct Tree has copy, drop, store { l: Self::Sub1, r: Self::Sub1 }
-struct Sub1 has copy, drop, store { l: Self::Sub2, r: Self::Sub2 }
-struct Sub2 has copy, drop, store { l: u64, r: u64 }
+public struct Tree has copy, drop, store { l: Self::Sub1, r: Self::Sub1 }
+public struct Sub1 has copy, drop, store { l: Self::Sub2, r: Self::Sub2 }
+public struct Sub2 has copy, drop, store { l: u64, r: u64 }
 
 fun t(cond: bool, root: &mut Self::Tree) {
     let x: &mut Self::Sub1;

@@ -121,6 +121,12 @@ pub fn get_checkpoint(
             }
 
             if let Some(submask) = read_mask.subtree(Checkpoint::TRANSACTIONS_FIELD.name) {
+                // Share a single JSON-rendering budget across every event in
+                // every transaction in the checkpoint. Without this, an
+                // unauthenticated `GetCheckpoint` with a permissive `read_mask`
+                // multiplies one input checkpoint into thousands of per-event
+                // renders, each with its own `max_json_move_value_size` budget.
+                let mut json_budget = service.config.max_json_move_value_response_size();
                 checkpoint.transactions = checkpoint_data
                     .transactions
                     .into_iter()
@@ -155,10 +161,11 @@ pub fn get_checkpoint(
                                 events.events.iter_mut().zip_debug_eq(&sdk_events.data)
                             {
                                 message.json = service
-                                    .render_json(
+                                    .render_json_with_budget(
                                         &event.type_,
                                         &event.contents,
                                         &TypesObjectSet::default(),
+                                        &mut json_budget,
                                     )
                                     .map(Box::new);
                             }

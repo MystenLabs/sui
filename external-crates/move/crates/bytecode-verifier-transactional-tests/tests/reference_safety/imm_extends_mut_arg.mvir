@@ -3,7 +3,7 @@
 //# publish
 
 mvir 0x2::eps1_freeze {
-    struct T has copy { f: u64 }
+    public struct T has copy { f: u64 }
 
     fun eps1(s: &Self::T, s2: &mut Self::T) {
     label b0:
@@ -23,7 +23,7 @@ mvir 0x2::eps1_freeze {
 //# publish
 
 mvir 0x3::eps2_freeze {
-    struct T has copy { f: u64 }
+    public struct T has copy { f: u64 }
 
     fun eps2(s2: &mut Self::T, s: &Self::T) {
     label b0:
@@ -43,7 +43,7 @@ mvir 0x3::eps2_freeze {
 //# publish
 
 mvir 0x4::eps1_reborrow {
-    struct T has copy, drop { f: u64 }
+    public struct T has copy, drop { f: u64 }
 
     fun eps1(s: &Self::T, s2: &mut Self::T) {
     label b0:
@@ -65,7 +65,7 @@ mvir 0x4::eps1_reborrow {
 //# publish
 
 mvir 0x5::eps2_reborrow {
-    struct T has copy, drop { f: u64 }
+    public struct T has copy, drop { f: u64 }
 
     fun eps2(s2: &mut Self::T, s: &Self::T) {
     label b0:

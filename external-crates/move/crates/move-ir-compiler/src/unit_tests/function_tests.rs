@@ -39,7 +39,7 @@ fn compile_module_with_large_frame() {
     let mut code = String::from(
         "
         mvir 0x16::Foobar {
-            struct FooCoin { value: u64 }
+            public struct FooCoin { value: u64 }
         ",
     );
 

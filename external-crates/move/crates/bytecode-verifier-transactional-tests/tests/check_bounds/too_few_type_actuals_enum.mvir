@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    enum S<T> { V{ b: bool } }
+    public enum S<T> { V{ b: bool } }
 
     fun foo() {
         // missing type arg

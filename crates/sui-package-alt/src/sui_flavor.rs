@@ -3,6 +3,7 @@
 
 use std::{collections::BTreeMap, path::PathBuf};
 
+use anyhow::Context;
 use async_trait::async_trait;
 use indexmap::IndexMap;
 use move_compiler::editions::Edition;
@@ -15,21 +16,95 @@ use move_package_alt::{
 };
 
 use serde::{Deserialize, Serialize};
-use sui_package_management::system_package_versions::{SYSTEM_GIT_REPO, latest_system_packages};
+use sui_package_management::system_package_versions::{
+    SYSTEM_GIT_REPO, latest_system_packages, system_packages_for_protocol,
+};
+use sui_protocol_config::ProtocolVersion;
+use sui_rpc_api::Client as RpcClient;
 use sui_sdk::types::{base_types::ObjectID, is_system_package};
+use sui_sdk::wallet_context::WalletContext;
+use tokio::sync::OnceCell;
+use tracing::warn;
 
 use crate::{mainnet_environment, testnet_environment};
 
 const EDITION: &str = "2024";
 const FLAVOR: &str = "sui";
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct SuiFlavor;
+/// The Sui-specific implementation of the [MoveFlavor] trait.
+///
+/// Can be constructed in offline mode ([`SuiFlavor::new`]) or connected mode
+/// ([`SuiFlavor::with_client`]). In connected mode, queries the network via gRPC to determine the
+/// protocol version for correct system dependency resolution.
+#[derive(Clone, Default)]
+pub struct SuiFlavor {
+    /// The gRPC client for the target network. `None` for offline/test usage.
+    client: Option<RpcClient>,
+    /// Lazily populated from gRPC when needed.
+    protocol_version: OnceCell<ProtocolVersion>,
+}
+
+impl std::fmt::Debug for SuiFlavor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SuiFlavor")
+            .field("connected", &self.client.is_some())
+            .field("protocol_version", &self.protocol_version)
+            .finish()
+    }
+}
 
 impl SuiFlavor {
-    /// Create a new `SuiFlavor` instance.
+    /// Create a `SuiFlavor` in offline mode. Uses the latest known system packages.
     pub fn new() -> Self {
-        Self
+        Self::default()
+    }
+
+    /// Create a `SuiFlavor` connected to the network via the gRPC client from `wallet`. Falls back
+    /// to offline mode if the client can't be created.
+    pub fn with_client(wallet: &WalletContext) -> Self {
+        match wallet.grpc_client() {
+            Ok(client) => Self {
+                client: Some(client),
+                ..Default::default()
+            },
+            Err(_) => Self::new(),
+        }
+    }
+
+    /// Return the protocol version for the target network. Lazily queries the gRPC endpoint if
+    /// available, falling back to the latest known version.
+    async fn protocol_version(&self) -> ProtocolVersion {
+        *self
+            .protocol_version
+            .get_or_init(|| async {
+                if let Some(ref client) = self.client {
+                    Self::query_protocol_version(client)
+                        .await
+                        .inspect_err(|e| {
+                            warn!(
+                                "Failed to query protocol version: {e}. \
+                                 Falling back to protocol version {}.",
+                                ProtocolVersion::MAX.as_u64()
+                            )
+                        })
+                        .unwrap_or(ProtocolVersion::MAX)
+                } else {
+                    ProtocolVersion::MAX
+                }
+            })
+            .await
+    }
+
+    /// Query the protocol version from the network via gRPC.
+    async fn query_protocol_version(client: &RpcClient) -> anyhow::Result<ProtocolVersion> {
+        let config = client
+            .get_protocol_config(None)
+            .await
+            .with_context(|| "Failed to query protocol config")?;
+        let version = config
+            .protocol_version_opt()
+            .context("Protocol config response missing protocol_version")?;
+        Ok(ProtocolVersion::new(version))
     }
 
     /// A map between system package names in the old style (capitalized) to the new naming style
@@ -102,8 +177,19 @@ impl MoveFlavor for SuiFlavor {
         let mut deps = BTreeMap::new();
         let deps_to_skip = ["DeepBook".into()];
 
-        // TODO DVX-1814: we need to use packages for protocol version instead of latest
-        let packages = latest_system_packages();
+        let version = self.protocol_version().await;
+        let packages = match system_packages_for_protocol(version) {
+            Ok((pkgs, _)) => pkgs,
+            Err(e) => {
+                warn!(
+                    "Failed to resolve system packages for protocol version {}: {e}. \
+                     Falling back to latest known packages (protocol version {}).",
+                    version.as_u64(),
+                    ProtocolVersion::MAX.as_u64()
+                );
+                latest_system_packages()
+            }
+        };
         let sha = &packages.git_revision;
         // filter out the packages that we want to skip
         let pkgs = packages

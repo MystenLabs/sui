@@ -3,7 +3,7 @@
 //# publish
 mvir 0x4::call {
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
     fun borrow_f(s: &mut Self::S): &mut u64 {
     label b0:
@@ -29,7 +29,7 @@ mvir 0x4::call {
 //# publish
 mvir 0x5::call_and_write_invalid {
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
     fun borrow_f(s: &mut Self::S): &mut u64 {
     label b0:
@@ -57,7 +57,7 @@ mvir 0x5::call_and_write_invalid {
 //# publish
 mvir 0x6::call_and_write_valid {
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
     fun borrow_f(s: &mut Self::S): &mut u64 {
     label b0:

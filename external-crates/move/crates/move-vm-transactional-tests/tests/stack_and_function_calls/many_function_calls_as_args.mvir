@@ -1,6 +1,6 @@
 //# publish
 mvir 0x5::A {
-    struct T has drop {value: u64, even: bool}
+    public struct T has drop {value: u64, even: bool}
 
     public fun new(): Self::T {
     label b0:

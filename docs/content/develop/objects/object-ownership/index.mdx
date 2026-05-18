@@ -1,11 +1,23 @@
 ---
 title: Types of Object Ownership
-description: Learn about different types of object ownership on Sui. 
+description: Learn about different types of object ownership on Sui.
 keywords: [ object model, objects on sui, sui move package, sui move object, move objects, move packages, objects, packages, referring to objects, object metadata, transaction-objects, transaction objects, relating objects and transactions ]
 pagination_prev: null
 ---
 
-Learn about different types of object ownership on Sui. 
+Every object has an owner that determines who can use it in transactions and whether the object is versioned on the fastpath or through consensus.
+
+| Ownership type | Access model | Versioning path |
+| --- | --- | --- |
+| [Address-owned](/develop/objects/object-ownership/address-owned) | A single address can use the object. | Fastpath |
+| [Shared](/develop/objects/object-ownership/shared) | Any address can use the object, subject to Move checks. | Consensus |
+| [Immutable](/develop/objects/object-ownership/immutable) | Any address can read the object; no one can mutate it. | Fixed after it becomes immutable |
+| [Wrapped](/develop/objects/object-ownership/wrapped) | Only accessible through the object that wraps it. | Depends on the wrapper |
+| [Consensus-address owned / party](/develop/objects/object-ownership/party) | A single address owns the object, but the object is sequenced by consensus. | Consensus |
+
+APIs expose consensus-address-owned objects with a `ConsensusAddressOwner` owner variant. Party objects are the public Move-facing way to create this ownership form with `sui::party::Party` and `sui::transfer::party_transfer` or `sui::transfer::public_party_transfer`. Use them when you want single-address ownership with consensus sequencing, for example to allow multiple inflight transactions against the same logical object without fastpath locks.
+
+Learn about different types of object ownership on Sui.
 
 import DocCardList from '@theme/DocCardList';
 

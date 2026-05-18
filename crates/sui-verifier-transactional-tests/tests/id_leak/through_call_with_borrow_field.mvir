@@ -7,9 +7,9 @@ mvir 0x0::m {
     import 0x2::object;
     import 0x2::transfer;
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
-    struct Object has key { id: object::UID }
+    public struct Object has key { id: object::UID }
 
     fun new(id: object::UID): Self::Object {
         label l0:

@@ -129,6 +129,8 @@ mod tests {
     use itertools::Itertools;
     use regex::Regex;
     use telemetry_subscribers::TelemetryConfig;
+
+    use crate::extensions::logging::ClientInfo;
     use uuid::Uuid;
 
     use crate::error::code;
@@ -275,6 +277,7 @@ mod tests {
                 // ffffffff-ffff-ffff-ffff-ffffffffffff
                 uuid: Uuid::from_bytes([255; 16]),
                 addr: SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0),
+                client: ClientInfo::default(),
             })
             .extension(Timeout::new(TimeoutConfig {
                 query: query_timeout,

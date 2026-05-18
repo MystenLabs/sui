@@ -9,16 +9,16 @@
 mvir test::m {
     import 0x2::object;
 
-    struct KeyStruct has key {
+    public struct KeyStruct has key {
         id: object::UID,
     }
 
-    struct KeyStoreStruct has key, store {
+    public struct KeyStoreStruct has key, store {
         id: object::UID,
     }
 
     // Enums cannot have key see failure below
-    enum StoreEnum has store {
+    public enum StoreEnum has store {
         V { id: object::UID },
     }
 }
@@ -31,7 +31,7 @@ mvir test::m {
 mvir 0x0::m {
     import 0x2::object;
     // Enums cannot have key
-    enum StoreEnum has key {
+    public enum StoreEnum has key {
         V { id: object::UID },
     }
 }

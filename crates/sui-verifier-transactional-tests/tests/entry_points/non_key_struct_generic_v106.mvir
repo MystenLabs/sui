@@ -10,8 +10,8 @@ mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::object;
 
-    struct Obj<T> has key { id: object::UID }
-    struct NoStore has copy, drop { value: u64 }
+    public struct Obj<T> has key { id: object::UID }
+    public struct NoStore has copy, drop { value: u64 }
 
     public entry fun no(s: Self::Obj<Self::NoStore>, ctx: &mut tx_context::TxContext) {
         label l0:
@@ -27,7 +27,7 @@ mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::object;
 
-    struct Obj<T> has key { id: object::UID }
+    public struct Obj<T> has key { id: object::UID }
 
     public entry fun no<T>(s: Self::Obj<T>, ctx: &mut tx_context::TxContext) {
         label l0:

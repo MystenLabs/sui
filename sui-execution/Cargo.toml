@@ -7,9 +7,15 @@ license = "Apache-2.0"
 publish = false
 edition = "2024"
 
+[lints]
+workspace = true
+
 [dependencies]
+mysten-common.workspace = true
+mysten-metrics.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
+tracing.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-verifier-meter.workspace = true

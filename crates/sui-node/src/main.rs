@@ -118,7 +118,7 @@ fn main() {
         config.network_address = listen_address;
     }
 
-    let is_validator = config.consensus_config().is_some();
+    let is_validator = config.intended_node_role().is_validator();
 
     let admin_interface_port = config.admin_interface_port;
 

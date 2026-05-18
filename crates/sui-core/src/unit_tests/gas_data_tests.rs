@@ -205,12 +205,7 @@ async fn run_all_entry_points(env: &TestEnv, data: TransactionData) -> Vec<Entry
     results.push((NodeEntryPoint::Validator, mapped));
 
     // Path 2: Fullnode dry_exec_transaction
-    let tx_digest = TransactionDigest::new(Default::default());
-    let mapped = match env
-        .fullnode
-        .dry_exec_transaction(data.clone(), tx_digest)
-        .await
-    {
+    let mapped = match env.fullnode.dry_exec_transaction(data.clone()).await {
         Ok((_, _, effects, _)) => Ok(effects.gas_cost_summary().clone()),
         Err(e) => Err(e),
     };

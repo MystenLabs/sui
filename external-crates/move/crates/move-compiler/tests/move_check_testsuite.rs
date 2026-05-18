@@ -17,7 +17,7 @@ use move_command_line_common::{
 use move_compiler::{
     Compiler, PASS_PARSER,
     command_line::compiler::move_check_for_errors,
-    diagnostics::warning_filters::WarningFiltersBuilder,
+    diagnostics::filter::{empty_filter_scope, unused_for_test_filter_scope},
     diagnostics::*,
     editions::{Edition, Flavor},
     linters::{self, LintLevel},
@@ -160,18 +160,17 @@ fn test_config(path: &Path) -> (TestKind, TestInfo, PackageConfig, Flags) {
         Edition::LEGACY
     };
     // config
-    let mut config = PackageConfig {
+    let warning_filter = if matches!(test_kind, TestKind::Unused | TestKind::IDE) {
+        empty_filter_scope()
+    } else {
+        unused_for_test_filter_scope()
+    };
+    let config = PackageConfig {
         flavor,
         edition,
         is_dependency: false,
-        warning_filter: WarningFiltersBuilder::new_for_source(),
+        warning_filter,
     };
-    // Unused and IDE do not have additional warning filters
-    if !matches!(test_kind, TestKind::Unused | TestKind::IDE) {
-        config
-            .warning_filter
-            .union(&WarningFiltersBuilder::unused_warnings_filter_for_test());
-    }
     // test info
     let test_info = TestInfo {
         flavor,

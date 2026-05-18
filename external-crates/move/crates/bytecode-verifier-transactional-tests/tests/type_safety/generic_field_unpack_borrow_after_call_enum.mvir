@@ -1,7 +1,7 @@
 //# publish
 
 mvir 0x1::M {
-    enum X has drop { V{ v: u64 }}
+    public enum X has drop { V{ v: u64 }}
     fun id<T>(x: &T): &T {
     label b0:
         return move(x);

@@ -2,8 +2,8 @@
 mvir 0x42::DeepCopy {
     import 0x1::vector;
 
-    struct Config has copy, drop, store { i: u64 }
-    struct Nested has copy, drop, store { c: Self::Config }
+    public struct Config has copy, drop, store { i: u64 }
+    public struct Nested has copy, drop, store { c: Self::Config }
 
     public fun test_struct_shallow() {
         let c1: Self::Config;

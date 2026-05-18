@@ -92,6 +92,8 @@ pub struct BuildConfig {
     /// The environment that compilation is with respect to (e.g., required to resolve
     /// published dependency IDs).
     pub environment: Environment,
+    /// The Sui flavor instance, providing network-aware system dependency resolution.
+    pub flavor: SuiFlavor,
 }
 
 impl BuildConfig {
@@ -109,6 +111,7 @@ impl BuildConfig {
             run_bytecode_verifier: true,
             print_diags_to_stderr: false,
             environment: testnet_environment(),
+            flavor: SuiFlavor::new(),
         }
     }
 
@@ -181,7 +184,7 @@ impl BuildConfig {
     pub async fn build_async(self, path: &Path) -> anyhow::Result<CompiledPackage> {
         let mut root_pkg = self
             .config
-            .package_loader(path, &self.environment, SuiFlavor::new())
+            .package_loader(path, &self.environment, self.flavor.clone())
             .load()
             .await?;
 
@@ -201,7 +204,7 @@ impl BuildConfig {
         // we need to block here to compile the package, which requires to fetch dependencies
         let mut root_pkg = self
             .config
-            .package_loader(path, &self.environment, SuiFlavor::new())
+            .package_loader(path, &self.environment, self.flavor.clone())
             .load_sync()?;
 
         self.internal_build(&mut root_pkg)

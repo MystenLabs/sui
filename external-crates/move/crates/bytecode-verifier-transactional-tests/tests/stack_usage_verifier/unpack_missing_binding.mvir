@@ -1,7 +1,7 @@
 //# publish
 mvir 0x6::Test {
-    struct X { b: bool }
-    struct T { i: u64, x: Self::X, b: bool, y: u64 }
+    public struct X { b: bool }
+    public struct T { i: u64, x: Self::X, b: bool, y: u64 }
 
     public fun new_t(): Self::T {
         let x: Self::X;

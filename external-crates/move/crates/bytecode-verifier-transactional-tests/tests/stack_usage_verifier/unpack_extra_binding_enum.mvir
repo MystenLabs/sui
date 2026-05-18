@@ -1,7 +1,7 @@
 //# publish
 mvir 0x6::Test {
-    struct X { b: bool }
-    enum T { V{ i: u64, x: Self::X } }
+    public struct X { b: bool }
+    public enum T { V{ i: u64, x: Self::X } }
 
     public fun new_t(): Self::T {
         let x: Self::X;
@@ -24,8 +24,8 @@ mvir 0x6::Test {
 
 //# publish
 mvir 0x7::Test {
-    struct X { b: bool }
-    enum T<H> { V{ i: H, x: Self::X } }
+    public struct X { b: bool }
+    public enum T<H> { V{ i: H, x: Self::X } }
 
     public fun new_t(): Self::T<u64> {
         let x: Self::X;
@@ -47,8 +47,8 @@ mvir 0x7::Test {
 
 //# publish
 mvir 0x8::Test {
-    struct X { b: bool }
-    enum T<H> { V{ i: H, x: Self::X } }
+    public struct X { b: bool }
+    public enum T<H> { V{ i: H, x: Self::X } }
 
     public fun new_t(): Self::T<u64> {
         let x: Self::X;
@@ -70,8 +70,8 @@ mvir 0x8::Test {
 
 //# publish
 mvir 0x9::Test {
-    struct X { b: bool }
-    enum T<H> { V{ i: H, x: Self::X } }
+    public struct X { b: bool }
+    public enum T<H> { V{ i: H, x: Self::X } }
 
     public fun new_t(): Self::T<u64> {
         let x: Self::X;

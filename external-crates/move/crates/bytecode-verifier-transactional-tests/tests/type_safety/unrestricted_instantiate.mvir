@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::Test {
-    struct T has drop {fint: u64, fv: bool}
+    public struct T has drop {fint: u64, fv: bool}
 
     public fun t1(fint: u64, fv: bool): Self::T {
     label b0:
@@ -30,7 +30,7 @@ label b0:
 
 //# publish
 mvir 0x44::Test {
-    enum T has drop {V {fint: u64, fv: bool} }
+    public enum T has drop {V {fint: u64, fv: bool} }
 
     public fun t1(fint: u64, fv: bool): Self::T {
     label b0:

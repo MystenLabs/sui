@@ -1,7 +1,7 @@
 //# publish
 mvir 0x42::m {
 
-struct S has copy, drop { f: u64 }
+public struct S has copy, drop { f: u64 }
 public fun foo() {
     let x: Self::S;
     let y: Self::S;

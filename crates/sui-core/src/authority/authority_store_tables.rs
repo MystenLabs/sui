@@ -195,7 +195,8 @@ impl AuthorityPerpetualTables {
         tracing::warn!("AuthorityPerpetualTables using tidehunter");
         use typed_store::tidehunter_util::{
             Bytes, Decision, KeyIndexing, KeySpaceConfig, KeyType, ThConfig,
-            default_cells_per_mutex, default_mutex_count, default_value_cache_size,
+            default_cells_per_mutex, default_max_dirty_keys, default_mutex_count,
+            default_value_cache_size,
         };
         let mutexes = default_mutex_count() * 2;
         let transaction_mutexes = mutexes * 4;
@@ -233,7 +234,7 @@ impl AuthorityPerpetualTables {
             KeyIndexing::key_reduction(obj_ref_size, 16..(obj_ref_size - 16));
 
         let mut objects_config = KeySpaceConfig::new()
-            .with_max_dirty_keys(4096)
+            .with_max_dirty_keys(4 * default_max_dirty_keys())
             .with_value_cache_size(value_cache_size);
         if matches!(db_options_override, Some(options) if options.is_validator) {
             objects_config = objects_config.with_compactor(Box::new(objects_compactor));
@@ -255,7 +256,9 @@ impl AuthorityPerpetualTables {
                     owned_object_transaction_locks_indexing,
                     mutexes * 16,
                     KeyType::uniform(default_cells_per_mutex()),
-                    bloom_config.clone().with_max_dirty_keys(16192),
+                    bloom_config
+                        .clone()
+                        .with_max_dirty_keys(16 * default_max_dirty_keys()),
                 ),
             ),
             (
@@ -433,6 +436,24 @@ impl AuthorityPerpetualTables {
     #[cfg(tidehunter)]
     pub fn force_rebuild_control_region(&self) -> anyhow::Result<()> {
         self.objects.db.force_rebuild_control_region()
+    }
+
+    /// Wait for tidehunter background threads to finish before allowing the caller
+    /// to e.g. rename the database directory. Consumes `Arc<Self>` so all internal
+    /// `Arc<Database>` clones held by the column family `DBMap`s are released as
+    /// part of the drop, leaving only the `Arc<Database>` extracted here.
+    #[cfg(tidehunter)]
+    pub fn wait_for_tidehunter_background_threads(self: Arc<Self>) {
+        let strong = Arc::strong_count(&self);
+        if strong != 1 {
+            println!(
+                "WARNING: wait_for_tidehunter_background_threads called with Arc<AuthorityPerpetualTables> strong_count={} (expected 1); other clones will keep DBMap.db Arc<Database> alive past drop(self) and the inner Database wait will warn/timeout",
+                strong,
+            );
+        }
+        let db = self.objects.db.clone();
+        drop(self);
+        db.wait_for_tidehunter_background_threads();
     }
 
     // This is used by indexer to find the correct version of dynamic field child object.

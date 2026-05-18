@@ -21,6 +21,7 @@ prometheus.workspace = true
 sui-framework.workspace = true
 sui-move.workspace = true
 sui-move-build.workspace = true
+sui-package-alt.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
 

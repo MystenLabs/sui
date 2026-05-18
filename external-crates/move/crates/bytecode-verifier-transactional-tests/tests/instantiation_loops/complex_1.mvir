@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::M {
-    struct S<T> { b: bool }
+    public struct S<T> { b: bool }
 
     fun a<T>() {
     label b0:
@@ -52,7 +52,7 @@ mvir 0x6::M {
 
 //# publish
 mvir 0x7::M2 {
-    struct S<T> { b: bool }
+    public struct S<T> { b: bool }
 
     fun f<T>() {
     label b0:
@@ -72,7 +72,7 @@ mvir 0x7::M2 {
 //# publish
 
 mvir 0x8::M3 {
-    struct S<T> { b: bool }
+    public struct S<T> { b: bool }
 
     fun a<T>() {
     label b0:

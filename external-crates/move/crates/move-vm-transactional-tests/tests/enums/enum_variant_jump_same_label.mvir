@@ -1,6 +1,6 @@
 //# print-bytecode
 mvir 0x6::Enums {
-    enum EnumWithThreeVariants<T> {
+    public enum EnumWithThreeVariants<T> {
         One { },
         Two { x: T },
         Three { } 
@@ -44,7 +44,7 @@ mvir 0x6::Enums {
 
 //# publish
 mvir 0x6::Enums {
-    enum EnumWithThreeVariants<T> {
+    public enum EnumWithThreeVariants<T> {
         One { },
         Two { x: T },
         Three { } 

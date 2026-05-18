@@ -182,7 +182,7 @@ public fun remove<K: copy + drop + store, V: store>(
 ): V;
 ```
 
-The functions add, read, write, and remove entries from the collection, respectively, and all accept keys by value. `Table` has type parameters for `K` and `V` so it is not possible to call these functions with different instantiations of `K` and `V` on the same instance of `Table`.`Bag` however does not have these type parameters, and so it permits calls with different instantiations on the same instance.
+The functions add, read, write, and remove entries from the collection, respectively, and all accept keys by value. Use plain function calls such as `table::add(&mut table, key, value)`, `table::borrow(&table, key)`, and `table::remove(&mut table, key)` instead of receiver syntax. `Table` has type parameters for `K` and `V` so it is not possible to call these functions with different instantiations of `K` and `V` on the same instance of `Table`. `Bag`, however, does not have these type parameters, and so it permits calls with different instantiations on the same instance.
 
 :::info
 

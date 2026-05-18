@@ -4,8 +4,8 @@
 //# publish
 mvir 0x0::object {
     import 0x2::object;
-    struct UID has store { flag: bool }
-    struct S has key {
+    public struct UID has store { flag: bool }
+    public struct S has key {
         id: Self::UID
     }
 }

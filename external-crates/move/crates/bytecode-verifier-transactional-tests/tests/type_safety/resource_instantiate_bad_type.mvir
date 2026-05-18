@@ -1,9 +1,9 @@
 //# publish
 
 mvir 0x42::Test {
-    struct A { b: bool }
-    struct B { b: bool }
-    struct T { ft: Self::B }
+    public struct A { b: bool }
+    public struct B { b: bool }
+    public struct T { ft: Self::B }
 
     public fun t1(x: Self::A): Self::T {
     label b0:
@@ -16,9 +16,9 @@ mvir 0x42::Test {
 //# publish
 
 mvir 0x43::Test {
-    struct B { b: bool }
-    enum A { V { b: bool } }
-    enum T { V { ft: Self::B } }
+    public struct B { b: bool }
+    public enum A { V { b: bool } }
+    public enum T { V { ft: Self::B } }
 
     public fun t1(x: Self::A): Self::T {
     label b0:

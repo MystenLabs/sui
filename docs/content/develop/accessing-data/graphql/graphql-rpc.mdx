@@ -4,7 +4,7 @@ description: Use GraphQL to make Sui RPC calls.
 keywords: [ graphql, graphql headers, x-sui-rpc-version, x-sui-rpc-show-usage, variables, fragments, pagination, graphql limits, make rpc call, sui rpc calls ]
 ---
 
-GraphQL provides a flexible way to query the Sui network. This page covers the core concepts for working with GraphQL on Sui RPC, including request headers, query composition with variables and fragments, pagination strategies, query scope, and service limits.
+GraphQL provides a flexible way to query the Sui network, submit transactions, and simulate transactions. This page covers the core concepts for working with GraphQL on Sui RPC, including request headers, query composition with variables and fragments, pagination strategies, query scope, and service limits.
 
 For practical examples, see [Querying Sui RPC with GraphQL](/develop/accessing-data/graphql/query-with-graphql). For comprehensive GraphQL fundamentals, consult the introductory documentation from [GraphQL](https://graphql.org/learn/) and [GitHub](https://docs.github.com/en/graphql/guides/introduction-to-graphql).
 
@@ -16,16 +16,9 @@ For practical examples, see [Querying Sui RPC with GraphQL](/develop/accessing-d
 
 The GraphQL RPC Service reads data from the General-purpose Indexer's Postgres-compatible database, Archival Store and Service, and a full node. GraphQL RPC is an alternative to the gRPC API. The General-purpose Indexer is a scalable implementation of the [custom indexing framework](/develop/accessing-data/custom-indexer/custom-indexers). The framework ingests data using the remote checkpoint store and full node RPCs. It lets you configure it to load different types of Sui network data into Postgres tables in parallel, improving data ingestion performance. You can also configure pruning for different tables to balance performance and cost.
 
-#### High-level release timeline
+#### Release status
 
-The target times indicated are tentative and subject to updates based on project progress and your feedback.
-
-| Tentative time | Milestone | Description |
-| -------- | ------- | ------- |
-| :heavy_check_mark: September 2025 | Beta release of GraphQL RPC Server and General-purpose Indexer. | You can start validating the setup of General-purpose Indexer, along with testing the GraphQL RPC Server to access the indexed Sui data. You can also start migrating your application in the non-production environments, and share feedback on the improvements you want to see. |
-| :heavy_check_mark: September-October 2025 | Deprecation of JSON-RPC. | **JSON-RPC is deprecated at this point and migration notice period starts.** |
-| :heavy_check_mark: February-March 2026 | GA release of GraphQL RPC Server and General-purpose Indexer. | Begin migration and cutover of your application in the production environment. |
-| July 2026 | End of migration timeline. | **JSON-RPC is fully deactivated at this point.** This timeline assumes about 7 months of migration notice period. |
+GraphQL RPC Server and the General-purpose Indexer are generally available. JSON-RPC is deprecated, and applications should migrate to GraphQL RPC or gRPC by July 2026, when JSON-RPC is planned for deactivation.
 
 
 :::info
@@ -42,7 +35,7 @@ The key components of the GraphQL and General-purpose Indexer stack include the 
 
 - **Postgres-compatible database:** Stores indexed data for GraphQL queries. It is tested using [GCP AlloyDB](https://cloud.google.com/products/alloydb), but you can run any Postgres-compatible database. Test alternative databases and share feedback on performance, cost, and operational characteristics.
 
-- **GraphQL service:** Serves structured queries over indexed data. It follows the [GraphQL specification](https://graphql.org/) and the supported schema is documented in the [GraphQL API reference](/references/sui-graphql).
+- **GraphQL service:** Serves structured queries over indexed data, routes supported historical lookups to Archival when configured, and forwards transaction execution and simulation to a full node. It follows the [GraphQL specification](https://graphql.org/) and the supported schema is documented in the [GraphQL API reference](/references/sui-graphql).
 
 - **Archival Service:** Enables point lookups for historical data from a key-value store. If unavailable, the GraphQL service falls back to the Postgres-compatible database for lookups, which might be limited by that database's retention policy. See [Archival Store and Service](/develop/accessing-data/archival-store) for more information.
 
@@ -94,11 +87,11 @@ As a developer, indexer operator, or RPC provider, you can:
 
 ## Working with the GraphQL service
 
-The GraphQL service exposes a query surface conforming to GraphQL concepts. It allows pagination, filtering, and consistent snapshot queries. The service also supports runtime configuration for schema, query cost limits, and logging. The GraphQL schema is defined in the [GraphQL reference](/references/sui-graphql). You can explore supported types and fields there, use the GraphiQL IDE to test queries, and read documentation on the up-to-date schema.
+The GraphQL service exposes query and mutation surfaces conforming to GraphQL concepts. It allows pagination, filtering, consistent snapshot queries, transaction execution, and transaction simulation. The service also supports runtime configuration for schema, query cost limits, and logging. The GraphQL schema is defined in the [GraphQL reference](/references/sui-graphql). You can explore supported types and fields there, use the GraphiQL IDE to test queries and mutations, and read documentation on the up-to-date schema.
 
 The GraphQL service is deployed as a single binary implementing a stateless, horizontally scalable service. Queries are served with data from one or more of a Postgres-compatible database (filters over historical data), Archival Service (point lookups), Consistent Store (live data), or full node (execution and simulation), based on need. Access to these stores must be configured with the service on start-up, otherwise the service might fail to respond correctly to requests. More details on how to set up, configure, and run the service are available in its [README](https://github.com/MystenLabs/sui/tree/main/crates/sui-indexer-alt-graphql).
 
-Requests to GraphQL are subject to various limits, to ensure resources are shared fairly between clients. Each limit is configurable, and the values configured for an instance can be queried through [`Query.serviceConfig`](/references/sui-api/sui-graphql/beta/reference/operations/queries/service-config). Requests that do not meet limits return with an error. The following limits are in effect:
+Requests to GraphQL are subject to various limits, to ensure resources are shared fairly between clients. Each limit is configurable, and the values configured for an instance can be queried through `Query.serviceConfig`. Requests that do not meet limits return with an error. The following limits are in effect:
 
 - **Request size:** Requests might not exceed a certain size in bytes. The limit is spread across a transaction payload limit, which applies to all values and variable bindings that are parameters to transaction signing, execution, and simulation fields (default: 175KB), and a query payload limit which applies to all other parts of the query (default: 5KB).
 
@@ -114,7 +107,7 @@ Requests to GraphQL are subject to various limits, to ensure resources are share
 
 ## Working with General-purpose Indexer
 
-General-purpose Indexer fetches checkpoints data from either a remote object store, local files, or a full node RPC, and indexes data into multiple database tables through a set of specialized pipelines. Each pipeline is responsible for extracting specific data and writing to its target tables.
+General-purpose Indexer fetches checkpoints data from either a remote object store, local files, or a full node RPC, and indexes data into multiple database tables through a set of specialized pipelines. PostgreSQL-compatible storage is the default deployment path for the general-purpose GraphQL stack. Custom indexers built on the same framework can write to other storage layers by implementing the framework's storage traits. Each pipeline is responsible for extracting specific data and writing to its target tables.
 
 <details>
 <summary>
@@ -201,7 +194,7 @@ Avoid retaining long-term historical data in Postgres unless required for specif
 
 ### Use the Archival Service and Store for historical lookups
 
-For all production deployments, pair Postgres with the [Archival Service](/develop/accessing-data/archival-store) to support point lookups of transactions, objects, and checkpoints when relevant data does not exist in Postgres. The Archival Service serves as the backend for historical versions and checkpoint data, reducing pressure on your Postgres instance. While not strictly required, use the Archival Service in any production setup that aims to support high-retention GraphQL or gRPC workloads.
+For production GraphQL deployments, pair Postgres-compatible storage with the [Archival Service](/develop/accessing-data/archival-store) to support point lookups of transactions, objects, and checkpoints when relevant data does not exist in Postgres. The Archival Service serves as the backend for historical versions and checkpoint data, reducing pressure on your Postgres instance. For gRPC workloads, full nodes do not implicitly route to Archival; clients that need high-retention data must query an Archival Service endpoint directly.
 
 Current implementation supports [GCP Bigtable](https://cloud.google.com/bigtable) which is a highly scalable and performant data store. If you plan to operate your own archival store, refer to `sui-kvstore` and `sui-kv-rpc` for indexer setup and RPC service implementation respectively. For the indexer setup, make sure to use the [custom indexing framework](/develop/accessing-data/custom-indexer/custom-indexers). If you're interested in contributing support for other scalable data stores, reach out on GitHub by creating a new issue.
 

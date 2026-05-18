@@ -5,11 +5,11 @@
 
 mvir 0x2::loopy {
 
-struct List has copy, drop {
+public struct List has copy, drop {
     dummy: bool,
 }
 
-struct Node has copy, drop {
+public struct Node has copy, drop {
     val: u8,
     next: Self::List,
 }

@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::Token {
-    struct T has key { b: bool }
+    public struct T has key { b: bool }
 
     public fun test() {
         let no: bool;
@@ -12,7 +12,7 @@ mvir 0x1::Token {
 
 //# publish
 mvir 0x2::Token {
-    enum T has key { V { b: bool } }
+    public enum T has key { V { b: bool } }
 
     public fun test() {
         let no: bool;

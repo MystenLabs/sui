@@ -1,6 +1,6 @@
 //# print-bytecode
 mvir 0x6::MonomorphicEnums {
-    enum EnumWithTwoVariants<T> {
+    public enum EnumWithTwoVariants<T> {
         One { },
         Two { x: T }
     }
@@ -25,7 +25,7 @@ mvir 0x6::MonomorphicEnums {
 
 //# publish
 mvir 0x6::MonomorphicEnums {
-    enum EnumWithTwoVariants<T> {
+    public enum EnumWithTwoVariants<T> {
         One { },
         Two { x: T }
     }

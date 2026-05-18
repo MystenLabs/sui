@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::M {
-    enum S<T> { V{ b: bool } }
+    public enum S<T> { V{ b: bool } }
 
     fun f<T1, T2, T3>() {
     label b0:

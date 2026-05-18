@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::PolymorphicEnums {
-    enum EnumWithTwoVariants<T> {
+    public enum EnumWithTwoVariants<T> {
         One { },
         Two { x: T }
     }
@@ -26,7 +26,7 @@ mvir 0x1::PolymorphicEnums {
 
 //# publish
 mvir 0x2::MonomorphicEnums {
-    enum EnumWithTwoVariants {
+    public enum EnumWithTwoVariants {
         One { },
         Two { x: u64 }
     }

@@ -4,7 +4,7 @@
 //           f<T>, g<S<T>>, f<S<T>>, g<S<S<T>>>, ...
 
 mvir 0x6::M {
-    struct S<T> { b: bool }
+    public struct S<T> { b: bool }
 
     fun f<T>() {
     label b0:

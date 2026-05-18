@@ -447,7 +447,17 @@ impl IndexStoreTables {
         path: P,
         index_options: IndexStoreOptions,
     ) -> Self {
+        // The typed-store derive macro only honors the per-field
+        // `default_options_override_fn` when `tables_db_options_override` is
+        // `None`. As soon as we pass `Some(map)`, any CF missing from the map
+        // silently falls back to bare `default_db_options()` — losing the
+        // `disable_write_throttling` applied by `default_table_options`. To
+        // avoid that, populate the map with `default_table_options()` for every
+        // table before overriding the few that need bespoke configuration.
         let mut table_options = std::collections::BTreeMap::new();
+        for (table_name, _) in IndexStoreTables::describe_tables() {
+            table_options.insert(table_name, default_table_options());
+        }
         table_options.insert("balance".to_string(), balance_table_options());
         table_options.insert(
             "events_by_stream".to_string(),
@@ -1993,5 +2003,97 @@ mod tests {
             matches!(decision, Decision::Remove),
             "Event with checkpoint equal to watermark should be removed"
         );
+    }
+
+    /// Every column family opened via `open_with_index_options` must have the
+    /// `disable_write_throttling` override applied. The typed-store derive
+    /// macro silently falls back to bare `default_db_options()` for any CF
+    /// missing from `tables_db_options_override`, reverting to RocksDB's
+    /// default stall triggers (slowdown=20, stop=36) — small enough that ~80
+    /// L0 files would stop writes entirely. RocksDB persists the effective
+    /// per-CF options to an `OPTIONS-NNNNNN` file at open; parse it to verify
+    /// every CF received the override.
+    #[tokio::test]
+    async fn open_with_index_options_overrides_every_cf() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+
+        let _tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        // Iterate the CFs RocksDB actually wrote to the OPTIONS file rather
+        // than the schema-declared set, since deprecated CFs are dropped at
+        // open time and never appear in OPTIONS. RocksDB always writes a
+        // `default` CF; we exclude it because typed-store doesn't store data
+        // there and we don't configure it.
+        let per_cf = parse_cf_options(&db_path);
+        assert!(
+            !per_cf.is_empty(),
+            "expected at least one CFOptions section in OPTIONS file"
+        );
+        for (cf_name, opts) in &per_cf {
+            if cf_name == "default" {
+                continue;
+            }
+            for (key, expected) in [
+                ("level0_slowdown_writes_trigger", "512"),
+                ("level0_stop_writes_trigger", "1024"),
+                ("soft_pending_compaction_bytes_limit", "0"),
+                ("hard_pending_compaction_bytes_limit", "0"),
+            ] {
+                let actual = opts
+                    .get(key)
+                    .unwrap_or_else(|| panic!("cf `{cf_name}` missing `{key}`"));
+                assert_eq!(
+                    actual, expected,
+                    "cf `{cf_name}` has `{key}={actual}`, expected `{expected}` — \
+                     the typed-store override map likely doesn't cover this CF"
+                );
+            }
+        }
+    }
+
+    /// Parse the newest `OPTIONS-NNNNNN` file in `db_path` into a map keyed by
+    /// column family name. RocksDB writes one such file on every open with a
+    /// section per CF in INI-like format.
+    fn parse_cf_options(db_path: &Path) -> HashMap<String, HashMap<String, String>> {
+        let mut options_file: Option<(u64, PathBuf)> = None;
+        for entry in std::fs::read_dir(db_path).expect("read_dir failed") {
+            let entry = entry.unwrap();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Some(rest) = name.strip_prefix("OPTIONS-") else {
+                continue;
+            };
+            // Skip transient files like `OPTIONS-NNNNNN.dbtmp`.
+            let Ok(seq) = rest.parse::<u64>() else {
+                continue;
+            };
+            if options_file.as_ref().is_none_or(|(s, _)| seq > *s) {
+                options_file = Some((seq, entry.path()));
+            }
+        }
+        let (_, path) = options_file.expect("no OPTIONS-* file written");
+        let content = std::fs::read_to_string(&path).expect("read OPTIONS failed");
+
+        let mut result: HashMap<String, HashMap<String, String>> = HashMap::new();
+        let mut current_cf: Option<String> = None;
+        for line in content.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("[CFOptions \"") {
+                let cf_name = rest.trim_end_matches("\"]").to_string();
+                current_cf = Some(cf_name);
+            } else if line.starts_with('[') {
+                // Any other section ends the CFOptions block.
+                current_cf = None;
+            } else if let Some(cf) = current_cf.as_ref()
+                && let Some((k, v)) = line.split_once('=')
+            {
+                result
+                    .entry(cf.clone())
+                    .or_default()
+                    .insert(k.trim().to_string(), v.trim().to_string());
+            }
+        }
+        result
     }
 }

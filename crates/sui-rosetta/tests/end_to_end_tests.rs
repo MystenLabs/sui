@@ -3737,6 +3737,188 @@ async fn test_redeem_single_fss_partial() {
     );
 }
 
+/// Redeem FSS from a validator that has been moved to `inactive_validators`.
+///
+/// Exercises the full inactive code path: FSS-first pool resolution, the
+/// `inactive_validators[pool_id]` dynamic field walk, the `Versioned →
+/// ValidatorV1` decode, and the `pool_token_exchange_rate_at_epoch` walk-back
+/// against the pool's `exchange_rates` table. The chain accepts inactive
+/// pools at the same `redeem_fungible_staked_sui` entry point
+/// (`validator_set.move:346-364`) so any layout/derive bug in the Rosetta
+/// inactive code surfaces as a metadata or submit failure here.
+///
+/// Default genesis sets `min_validator_count = 4`, and `request_remove_validator`
+/// asserts `next_epoch_validator_count() > min_validator_count` (strictly
+/// greater). We start with 6 validators so removing one leaves 5 > 4 and
+/// the remove succeeds.
+#[tokio::test]
+async fn test_redeem_fss_from_inactive_validator() {
+    use futures::TryStreamExt;
+    use sui_rpc::proto::sui::rpc::v2::ListOwnedObjectsRequest;
+    use sui_test_transaction_builder::TestTransactionBuilder;
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_num_validators(6)
+        .build()
+        .await;
+    let sender = test_cluster.get_address_0();
+    let keystore = &test_cluster.wallet.config.keystore;
+    let mut client = GrpcClient::new(test_cluster.rpc_url()).unwrap();
+    let (rosetta_client, _handles) = start_rosetta_test_server(client.clone()).await;
+    let validator = first_validator(&mut client).await;
+
+    // Stake → activate → convert StakedSui to FSS so the sender holds an
+    // FSS object whose pool_id == `validator`'s staking pool.
+    stake_via_rosetta(
+        &rosetta_client,
+        &mut client,
+        keystore,
+        sender,
+        validator,
+        2_000_000_000,
+    )
+    .await;
+    test_cluster.trigger_reconfiguration().await;
+
+    let staked_req = ListOwnedObjectsRequest::default()
+        .with_owner(sender.to_string())
+        .with_object_type("0x3::staking_pool::StakedSui".to_string())
+        .with_page_size(10u32)
+        .with_read_mask(FieldMask::from_paths(["object_id", "version", "digest"]));
+    let staked_objects: Vec<_> = client
+        .clone()
+        .list_owned_objects(staked_req)
+        .map_err(|e| panic!("list error: {e}"))
+        .try_collect()
+        .await
+        .unwrap();
+    let staked_obj = &staked_objects[0];
+    let staked_ref = (
+        ObjectID::from_str(staked_obj.object_id()).unwrap(),
+        staked_obj.version().into(),
+        staked_obj.digest().parse().unwrap(),
+    );
+    let gas_coins = get_all_coins(&mut client.clone(), sender).await.unwrap();
+    let gas_ref = get_object_ref(&mut client.clone(), gas_coins[0].id())
+        .await
+        .unwrap()
+        .as_object_ref();
+    let gas_price = client.get_reference_gas_price().await.unwrap();
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let sys = ptb.input(CallArg::SUI_SYSTEM_MUT).unwrap();
+    let staked_arg = ptb.obj(ObjectArg::ImmOrOwnedObject(staked_ref)).unwrap();
+    let fss_result = ptb.command(Command::move_call(
+        SUI_SYSTEM_PACKAGE_ID,
+        SUI_SYSTEM_MODULE_NAME.to_owned(),
+        Identifier::new("convert_to_fungible_staked_sui").unwrap(),
+        vec![],
+        vec![sys, staked_arg],
+    ));
+    let sender_arg = ptb.pure(sender).unwrap();
+    ptb.command(Command::TransferObjects(vec![fss_result], sender_arg));
+    let convert_tx = TransactionData::new_programmable(
+        sender,
+        vec![gas_ref],
+        ptb.finish(),
+        1_000_000_000,
+        gas_price,
+    );
+    let tx = to_sender_signed_transaction(convert_tx, keystore.export(&sender).unwrap());
+    execute_transaction(&mut client.clone(), &tx)
+        .await
+        .expect("convert StakedSui → FSS");
+
+    // Have the validator request its own removal (signed by validator key).
+    let validator_handle = test_cluster
+        .swarm
+        .validator_node_handles()
+        .into_iter()
+        .find(|h| h.with(|n| n.get_config().sui_address()) == validator)
+        .expect("validator node handle for active_validators[0]");
+    let validator_addr = validator_handle.with(|n| n.get_config().sui_address());
+    let validator_gas = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(validator_addr)
+        .await
+        .unwrap()
+        .unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let remove_tx = validator_handle.with(|n| {
+        TestTransactionBuilder::new(validator_addr, validator_gas, rgp)
+            .call_request_remove_validator()
+            .build_and_sign(n.get_config().account_key_pair.keypair())
+    });
+    test_cluster.execute_transaction(remove_tx).await;
+
+    // Trigger reconfiguration so the validator moves to inactive_validators.
+    // After this, `system_state.validators.active_validators` no longer
+    // contains it; only `inactive_validators[pool_id]` does.
+    test_cluster.trigger_reconfiguration().await;
+
+    let balance_before = get_sui_balance(&mut client, sender).await;
+
+    // AtLeast is the strictest mode — it forces the inactive path to fetch
+    // FSS data via dynamic-field walk, mirror the chain's payout formula
+    // (which itself reads exchange_rates[deactivation_epoch]), and bind the
+    // resulting transaction to the quote epoch. If any of those layers is
+    // wrong this fails before submission.
+    let min_sui = 500_000_000i128;
+    let response = run_redeem_flow(
+        &mut client,
+        &rosetta_client,
+        keystore,
+        sender,
+        validator,
+        "AtLeast",
+        Some(min_sui as u64),
+    )
+    .await;
+
+    // The chain's AtLeast guarantee is on the *gross* SUI delivered by
+    // `redeem_fungible_staked_sui`, not the net wallet delta — gas comes out
+    // of the same address and would push the net delta below `min_sui` even
+    // when the protocol behaved correctly. Reconstruct the gross amount as
+    // `(balance_after - balance_before) + (computation_cost + storage_cost - storage_rebate)`.
+    let balance_after = get_sui_balance(&mut client, sender).await;
+    let net_delta = balance_after as i128 - balance_before as i128;
+    let gas_net_cost = transaction_net_gas_cost(
+        &mut client,
+        &response.transaction_identifier.hash.to_string(),
+    )
+    .await;
+    let gross_redeemed = net_delta + gas_net_cost;
+    assert!(
+        gross_redeemed >= min_sui,
+        "AtLeast guarantee violated for inactive-pool redeem: \
+         gross_redeemed = {gross_redeemed} MIST (net_delta = {net_delta}, \
+         gas_net_cost = {gas_net_cost}), expected >= {min_sui}"
+    );
+}
+
+/// Read `effects.gas_used` for a transaction and return the net gas cost
+/// (`computation_cost + storage_cost - storage_rebate`) as i128.
+///
+/// `i128` matters because storage_rebate can in principle exceed
+/// `computation_cost + storage_cost` (rare but allowed by the gas model);
+/// using u64 with saturating subtraction would silently round to zero.
+async fn transaction_net_gas_cost(client: &mut GrpcClient, tx_hash: &str) -> i128 {
+    let request = GetTransactionRequest::default()
+        .with_digest(tx_hash.to_string())
+        .with_read_mask(FieldMask::from_paths(["effects.gas_used"]));
+    let tx = client
+        .clone()
+        .ledger_client()
+        .get_transaction(request)
+        .await
+        .expect("get_transaction RPC")
+        .into_inner()
+        .transaction
+        .expect("transaction should be present in response");
+    let gas = tx.effects().gas_used();
+    gas.computation_cost_opt().unwrap_or(0) as i128 + gas.storage_cost_opt().unwrap_or(0) as i128
+        - gas.storage_rebate_opt().unwrap_or(0) as i128
+}
+
 #[tokio::test]
 async fn test_redeem_multi_validator_isolation() {
     use futures::TryStreamExt;
@@ -5227,7 +5409,16 @@ fn assert_merge_redeem_parse_ops(
         panic!("wrong metadata variant: {:?}", ops[0].metadata);
     };
     assert!(validator.is_none(), "validator must be None from parser");
-    assert!(amount.is_none(), "amount must be None from parser");
+    // AtLeast carries `min_sui` decoded from the on-chain `balance::split`
+    // guard; All and the unknown-partial mode emit no amount.
+    match expected_mode {
+        Some(sui_rosetta::types::RedeemMode::AtLeast) => {
+            assert!(amount.is_some(), "AtLeast parse should recover min_sui");
+        }
+        _ => {
+            assert!(amount.is_none(), "amount must be None from parser");
+        }
+    }
     assert_eq!(redeem_mode, expected_mode);
     assert_eq!(fss_ids.len(), expected_fss_count);
 }
@@ -5288,8 +5479,14 @@ async fn test_e2e_parse_merge_redeem_single_fss_atleast() {
         "AtLeast",
     )
     .await;
-    // Partial mode — redeem_mode is None on parse output (AtLeast vs AtMost indistinguishable).
-    assert_merge_redeem_parse_ops(&ops, sender, 1, None);
+    // The PTB carries a balance::split + balance::join guard, so the parser
+    // can distinguish AtLeast from AtMost.
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        1,
+        Some(sui_rosetta::types::RedeemMode::AtLeast),
+    );
 }
 
 /// F=1, AtMost partial redeem.
@@ -5381,7 +5578,12 @@ async fn test_e2e_parse_merge_redeem_three_fss_atleast() {
         "AtLeast",
     )
     .await;
-    assert_merge_redeem_parse_ops(&ops, sender, 3, None);
+    assert_merge_redeem_parse_ops(
+        &ops,
+        sender,
+        3,
+        Some(sui_rosetta::types::RedeemMode::AtLeast),
+    );
 }
 
 /// F=3, AtMost partial.
@@ -5625,7 +5827,7 @@ async fn test_e2e_block_merge_redeem_single_fss_atleast() {
         Some(500_000_000),
         "AtLeast",
         1,
-        None,
+        Some(sui_rosetta::types::RedeemMode::AtLeast),
     )
     .await;
 }
@@ -5727,7 +5929,7 @@ async fn test_e2e_block_merge_redeem_three_fss_atleast() {
         Some(500_000_000),
         "AtLeast",
         3,
-        None,
+        Some(sui_rosetta::types::RedeemMode::AtLeast),
     )
     .await;
 }
@@ -5876,9 +6078,9 @@ async fn test_e2e_merge_redeem_errors_atleast_exceeds_balance() {
     );
 }
 
-/// AtMost amount too small (rounds to zero pool tokens) → server should error.
+/// AtMost amount = 0 → rejected before binary search runs.
 #[tokio::test]
-async fn test_e2e_merge_redeem_errors_atmost_too_small() {
+async fn test_e2e_merge_redeem_errors_atmost_zero_amount() {
     let test_cluster = TestClusterBuilder::new().build().await;
     let sender = test_cluster.get_address_0();
     let keystore = &test_cluster.wallet.config.keystore;
@@ -5897,7 +6099,6 @@ async fn test_e2e_merge_redeem_errors_atmost_too_small() {
     )
     .await;
 
-    // Amount = 1 MIST; with the typical pool exchange rate this rounds to 0 pool tokens.
     let ops = serde_json::from_value(json!([{
         "operation_identifier": {"index": 0},
         "type": "MergeAndRedeemFungibleStakedSui",
@@ -5905,7 +6106,7 @@ async fn test_e2e_merge_redeem_errors_atmost_too_small() {
         "metadata": {
             "MergeAndRedeemFungibleStakedSui": {
                 "validator": validator.to_string(),
-                "amount": "1",
+                "amount": "0",
                 "redeem_mode": "AtMost",
             }
         }
@@ -5914,7 +6115,7 @@ async fn test_e2e_merge_redeem_errors_atmost_too_small() {
     let flow = rosetta_client.rosetta_flow(&ops, keystore, None).await;
     assert!(
         flow.metadata.as_ref().is_some_and(|r| r.is_err()),
-        "expected metadata error for AtMost too small, got: {:?}",
+        "expected metadata error for AtMost amount=0, got: {:?}",
         flow.metadata
     );
 }

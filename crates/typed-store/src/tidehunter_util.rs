@@ -57,6 +57,22 @@ pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfi
         config.config.clone(),
     )
 }
+
+fn parse_env_usize(name: &str, minimum: usize) -> Option<usize> {
+    env::var(name).ok().map(|value| {
+        let parsed = value
+            .parse::<usize>()
+            .unwrap_or_else(|_| panic!("Failed to parse {name}"));
+        assert!(parsed >= minimum, "{name} must be at least {minimum}");
+        println!("Using {name} from env variable {parsed}");
+        parsed
+    })
+}
+
+pub fn default_max_dirty_keys() -> usize {
+    parse_env_usize("TH_DEFAULT_MAX_DIRTY_KEYS", 1).unwrap_or(1024)
+}
+
 fn thdb_config() -> Config {
     let frag_size = if let Ok(frag_size) = env::var("TH_FRAG_SIZE") {
         let frag_size = frag_size.parse().expect("Failed to parse TH_FRAG_SIZE");
@@ -81,7 +97,8 @@ fn thdb_config() -> Config {
     let max_maps = 4;
     #[cfg(not(debug_assertions))]
     let max_maps = 8; // 8Gb of mapped space for prod
-    let max_index_maps = Some(3);
+    let max_maps = parse_env_usize("TH_MAX_MAPS", 1).unwrap_or(max_maps);
+    let max_index_maps = Some(parse_env_usize("TH_MAX_INDEX_MAPS", 3).unwrap_or(3));
     #[cfg(debug_assertions)]
     let commit_pool_size = 0;
     #[cfg(not(debug_assertions))]
@@ -93,11 +110,13 @@ fn thdb_config() -> Config {
     Config {
         frag_size,
         // run snapshot every 64 Gb written to wal
-        snapshot_written_bytes: 64 * 1024 * 1024 * 1024,
+        snapshot_written_bytes: parse_env_usize("TH_SNAPSHOT_WRITTEN_BYTES", 1)
+            .unwrap_or(64 * 1024 * 1024 * 1024) as u64,
         // force unloading dirty index entries if behind 60 Gb of wal
-        snapshot_unload_threshold: 60 * 1024 * 1024 * 1024,
+        snapshot_unload_threshold: parse_env_usize("TH_SNAPSHOT_UNLOAD_THRESHOLD", 1)
+            .unwrap_or(60 * 1024 * 1024 * 1024) as u64,
         unload_jitter_pct: 30,
-        max_dirty_keys: 1024,
+        max_dirty_keys: default_max_dirty_keys(),
         max_maps,
         max_index_maps,
         commit_pool_size,
@@ -108,28 +127,32 @@ fn thdb_config() -> Config {
 
 #[cfg(not(debug_assertions))]
 pub fn default_mutex_count() -> usize {
-    1024
+    parse_env_usize("TH_DEFAULT_MUTEX_COUNT", 1).unwrap_or(1024)
 }
 
 #[cfg(debug_assertions)]
 pub fn default_mutex_count() -> usize {
-    16
+    parse_env_usize("TH_DEFAULT_MUTEX_COUNT", 1).unwrap_or(16)
 }
 
 pub fn default_value_cache_size() -> usize {
-    1000
+    parse_env_usize("TH_DEFAULT_VALUE_CACHE_SIZE", 1).unwrap_or(1000)
 }
 
 pub(crate) fn apply_range_bounds(
     iterator: &mut DbIterator,
     lower_bound: Option<Vec<u8>>,
     upper_bound: Option<Vec<u8>>,
+    prefix: &Option<Vec<u8>>,
 ) {
+    // Bounds come from `be_fix_int_ser(K)` which still includes the typed-store
+    // length prefix. Tidehunter stores keys with the prefix stripped, so the
+    // bounds must be stripped to match — same transform every other key path uses.
     if let Some(lower_bound) = lower_bound {
-        iterator.set_lower_bound(lower_bound);
+        iterator.set_lower_bound(transform_th_key(&lower_bound, prefix));
     }
     if let Some(upper_bound) = upper_bound {
-        iterator.set_upper_bound(upper_bound);
+        iterator.set_upper_bound(transform_th_key(&upper_bound, prefix));
     }
 }
 

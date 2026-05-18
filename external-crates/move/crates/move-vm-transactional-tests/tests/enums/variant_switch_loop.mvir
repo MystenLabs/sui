@@ -1,6 +1,6 @@
 //# print-bytecode
 mvir 0x6::InfiniteSwith {
-    enum EnumWithOneVariant {
+    public enum EnumWithOneVariant {
         One { }
     }
 
@@ -23,7 +23,7 @@ mvir 0x6::InfiniteSwith {
 
 //# publish
 mvir 0x6::InfiniteSwith {
-    enum EnumWithOneVariant {
+    public enum EnumWithOneVariant {
         One { }
     }
 

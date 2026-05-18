@@ -13,7 +13,7 @@ label b0:
 
 //# print-bytecode
 mvir 0x3d::Foobar {
-    struct FooCoin { value: u64 }
+    public struct FooCoin { value: u64 }
 
     public fun borrow_mut_field(arg: &mut Self::FooCoin) {
         let field_ref: &mut u64;
@@ -26,7 +26,7 @@ mvir 0x3d::Foobar {
 
 //# print-bytecode
 mvir 0x4d::Foobar {
-    struct FooCoin<T> { value: u64 }
+    public struct FooCoin<T> { value: u64 }
 
     public fun borrow_mut_field(arg: &mut Self::FooCoin<address>) {
         let field_ref: &mut u64;

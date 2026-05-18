@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::Enums {
-    enum PolyEnumWithTwoVariants<T> {
+    public enum PolyEnumWithTwoVariants<T> {
         One { },
         Two { x: T }
     }
@@ -23,9 +23,9 @@ mvir 0x1::Enums {
 
 //# publish
 mvir 0x1::Enums {
-    struct X { b: bool }
+    public struct X { b: bool }
 
-    enum MonoEnumWithTwoVariants {
+    public enum MonoEnumWithTwoVariants {
         One { },
         Two { x: Self::X }
     }

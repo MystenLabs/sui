@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
-    struct R { b: bool }
-    struct Box<T> { x: T }
+    public struct R { b: bool }
+    public struct Box<T> { x: T }
 
     fun foo(x: Self::Box<Self::R>): Self::Box<Self::R> {
         let y: Self::Box<Self::R>;
@@ -13,8 +13,8 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x2::M {
-    enum R { V{ b: bool } }
-    enum Box<T> { V{ x: T } }
+    public enum R { V{ b: bool } }
+    public enum Box<T> { V{ x: T } }
 
     fun foo(x: Self::Box<Self::R>): Self::Box<Self::R> {
         let y: Self::Box<Self::R>;

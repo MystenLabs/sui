@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct S<T: copy + drop> { b: bool }
+    public struct S<T: copy + drop> { b: bool }
 
     fun foo<T>() {
         // T does not have copy or drop

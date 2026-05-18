@@ -216,6 +216,15 @@ pub enum Attribute_ {
     Allow {
         allow_set: BTreeSet<(Option<Name>, Name)>,
     },
+    Deny {
+        deny_set: BTreeSet<(Option<Name>, Name)>,
+    },
+    Expect {
+        expect_set: BTreeSet<(Option<Name>, Name)>,
+    },
+    Warn {
+        warn_set: BTreeSet<(Option<Name>, Name)>,
+    },
     LintAllow {
         allow_set: BTreeSet<Name>,
     },
@@ -887,6 +896,9 @@ impl Attribute_ {
             Attribute_::Mode { .. } => AK::Mode.name(),
             Attribute_::Syntax { .. } => AK::Syntax.name(),
             Attribute_::Allow { .. } => AK::Allow.name(),
+            Attribute_::Deny { .. } => AK::Deny.name(),
+            Attribute_::Expect { .. } => AK::Expect.name(),
+            Attribute_::Warn { .. } => AK::Warn.name(),
             Attribute_::LintAllow { .. } => AK::LintAllow.name(),
             Attribute_::Test => AK::Test.name(),
             Attribute_::ExpectedFailure { .. } => AK::ExpectedFailure.name(),
@@ -1642,6 +1654,22 @@ impl AstDebug for ParsedAttribute_ {
 impl AstDebug for Attribute_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use Attribute_ as A;
+
+        fn filter_set(w: &mut AstWriter, keyword: &str, set: &BTreeSet<(Option<Name>, Name)>) {
+            w.write(format!("{keyword}("));
+            w.comma(set, |w, (prefix, name)| {
+                if let Some(pref) = prefix {
+                    w.write(pref.value.as_str());
+                    w.write("(");
+                    w.write(name.value.as_str());
+                    w.write(")");
+                } else {
+                    w.write(name.value.as_str());
+                }
+            });
+            w.write(")");
+        }
+
         match self {
             A::BytecodeInstruction => {
                 w.write("bytecode_instruction");
@@ -1687,25 +1715,10 @@ impl AstDebug for Attribute_ {
                 w.write(kind.value.as_str());
                 w.write(")");
             }
-            A::Allow { allow_set } => {
-                w.write("allow(");
-                let mut first = true;
-                for (prefix, name) in allow_set {
-                    if !first {
-                        w.write(",");
-                    }
-                    first = false;
-                    if let Some(pref) = prefix {
-                        w.write(pref.value.as_str());
-                        w.write("(");
-                        w.write(name.value.as_str());
-                        w.write(")");
-                    } else {
-                        w.write(name.value.as_str());
-                    }
-                }
-                w.write(")");
-            }
+            A::Allow { allow_set } => filter_set(w, "allow", allow_set),
+            A::Deny { deny_set } => filter_set(w, "deny", deny_set),
+            A::Expect { expect_set } => filter_set(w, "expect", expect_set),
+            A::Warn { warn_set } => filter_set(w, "warn", warn_set),
             A::LintAllow { allow_set } => {
                 w.write("lint_allow(");
                 w.comma(allow_set, |w, name| {

@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
-    struct X { b: bool }
-    struct S { z: u64 }
+    public struct X { b: bool }
+    public struct S { z: u64 }
     fun t1() {
         let x: Self::X;
         let y: &Self::X;
@@ -18,8 +18,8 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::N {
-    struct X { b: bool }
-    struct S { z: u64 }
+    public struct X { b: bool }
+    public struct S { z: u64 }
     fun t2() {
         let s: Self::S;
         let y: &Self::S;

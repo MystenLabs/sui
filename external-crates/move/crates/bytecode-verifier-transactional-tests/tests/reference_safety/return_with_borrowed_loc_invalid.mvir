@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
-    struct X has drop { y: Self::Y }
-    struct Y has drop { u: u64 }
+    public struct X has drop { y: Self::Y }
+    public struct Y has drop { u: u64 }
 
     fun t1(): &u64 {
         let x: u64;
@@ -16,8 +16,8 @@ mvir 0x1::M {
 
 //# publish
 mvir 0x1::M2 {
-    struct X has drop { y: Self::Y }
-    struct Y has drop { u: u64 }
+    public struct X has drop { y: Self::Y }
+    public struct Y has drop { u: u64 }
     fun t2(): &u64 {
         let x: u64;
         let y: &u64;
@@ -31,8 +31,8 @@ mvir 0x1::M2 {
 
 //# publish
 mvir 0x1::M3 {
-    struct X has drop { y: Self::Y }
-    struct Y has drop { u: u64 }
+    public struct X has drop { y: Self::Y }
+    public struct Y has drop { u: u64 }
     fun t3(): &u64 {
         let s: Self::X;
         let x: &Self::X;
@@ -50,8 +50,8 @@ mvir 0x1::M3 {
 
 //# publish
 mvir 0x1::M4 {
-    struct X has drop { y: Self::Y }
-    struct Y has drop { u: u64 }
+    public struct X has drop { y: Self::Y }
+    public struct Y has drop { u: u64 }
     fun t4(): &u64 {
         let s: Self::X;
         let x: &Self::X;

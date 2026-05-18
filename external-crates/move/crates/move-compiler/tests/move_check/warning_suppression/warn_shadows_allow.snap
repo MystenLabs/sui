@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/warn_shadows_allow.move:5:13
+  │
+4 │     #[warn(unused_variable)]
+  │            --------------- the lint level is defined here
+5 │     fun foo(a: u64) {
+  │             ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/warn_shadows_allow.move:6:13
+  │
+4 │     #[warn(unused_variable)]
+  │            --------------- the lint level is defined here
+5 │     fun foo(a: u64) {
+6 │         let x;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'

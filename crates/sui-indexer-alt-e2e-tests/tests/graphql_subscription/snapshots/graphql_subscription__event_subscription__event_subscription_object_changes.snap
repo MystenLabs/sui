@@ -1,0 +1,47 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/event_subscription.rs
+expression: item
+---
+{
+  "data": {
+    "events": {
+      "transaction": {
+        "effects": {
+          "status": "SUCCESS",
+          "objectChanges": {
+            "nodes": [
+              {
+                "outputState": {
+                  "address": "[address]",
+                  "version": "[version]",
+                  "digest": "[digest]",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "outputState": {
+                  "address": "[address]",
+                  "version": "[version]",
+                  "digest": "[digest]",
+                  "asMoveObject": {
+                    "contents": {
+                      "type": {
+                        "repr": "[pkg]::emit_test_event::TestObject"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

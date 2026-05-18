@@ -1554,34 +1554,127 @@ fn parse_return_type(tokens: &mut Lexer) -> Result<Vec<Type>, ParseError<Loc, an
     Ok(v)
 }
 
-// FunctionVisibility : FunctionVisibility = {
-//   (Public("("<v: Script | Friend>")")?)?
+//**************************************************************************************************
+// Modifiers
+//**************************************************************************************************
+
+/// Module-member modifiers (visibility, native, entry) parsed up front before
+/// dispatching to the appropriate decl parser. Modeled on the source-language
+/// `Modifiers` struct in `move-compiler/src/parser/syntax.rs`.
+struct Modifiers {
+    visibility: Option<(FunctionVisibility, Loc)>,
+    native: Option<Loc>,
+    entry: Option<Loc>,
+}
+
+impl Modifiers {
+    fn empty() -> Self {
+        Self {
+            visibility: None,
+            native: None,
+            entry: None,
+        }
+    }
+}
+
+// ModuleMemberModifiers = <ModuleMemberModifier>*
+// ModuleMemberModifier  = <Visibility> | "native" | "entry"
+// Each modifier may appear at most once; any order is accepted.
+fn parse_module_member_modifiers(
+    tokens: &mut Lexer,
+) -> Result<Modifiers, ParseError<Loc, anyhow::Error>> {
+    let mut mods = Modifiers::empty();
+    loop {
+        match tokens.peek() {
+            Tok::Public => {
+                let vis_loc = current_token_loc(tokens);
+                let vis = parse_visibility(tokens)?;
+                if mods.visibility.is_some() {
+                    return Err(duplicate_modifier_error(vis_loc, "visibility"));
+                }
+                mods.visibility = Some((vis, vis_loc));
+            }
+            Tok::Native => {
+                let loc = current_token_loc(tokens);
+                tokens.advance()?;
+                if mods.native.is_some() {
+                    return Err(duplicate_modifier_error(loc, "'native'"));
+                }
+                mods.native = Some(loc);
+            }
+            Tok::NameValue if tokens.content() == "entry" => {
+                let loc = current_token_loc(tokens);
+                tokens.advance()?;
+                if mods.entry.is_some() {
+                    return Err(duplicate_modifier_error(loc, "'entry'"));
+                }
+                mods.entry = Some(loc);
+            }
+            _ => break,
+        }
+    }
+    Ok(mods)
+}
+
+fn duplicate_modifier_error(loc: Loc, modifier: &str) -> ParseError<Loc, anyhow::Error> {
+    ParseError::InvalidToken {
+        location: loc,
+        message: format!("Duplicate {modifier} modifier"),
+    }
+}
+
+fn check_no_modifier(
+    modifier_loc: Option<Loc>,
+    modifier_name: &str,
+    decl: &str,
+) -> Result<(), ParseError<Loc, anyhow::Error>> {
+    if let Some(loc) = modifier_loc {
+        return Err(ParseError::InvalidToken {
+            location: loc,
+            message: format!("'{modifier_name}' is not a valid modifier on {decl} declarations"),
+        });
+    }
+    Ok(())
+}
+
+fn require_public_visibility(
+    visibility: Option<(FunctionVisibility, Loc)>,
+    decl_keyword_loc: Loc,
+    decl: &str,
+) -> Result<(), ParseError<Loc, anyhow::Error>> {
+    match visibility {
+        Some((FunctionVisibility::Public, _)) => Ok(()),
+        Some((_, loc)) => Err(ParseError::InvalidToken {
+            location: loc,
+            message: format!("only 'public' visibility is supported on {decl} declarations"),
+        }),
+        None => Err(ParseError::InvalidToken {
+            location: decl_keyword_loc,
+            message: format!("{decl} declarations require an explicit 'public' visibility"),
+        }),
+    }
+}
+
+// Visibility : FunctionVisibility = {
+//   (Public("(" "friend" ")")?)?
 // }
-fn parse_function_visibility(
+fn parse_visibility(
     tokens: &mut Lexer,
 ) -> Result<FunctionVisibility, ParseError<Loc, anyhow::Error>> {
     let visibility = if match_token(tokens, Tok::Public)? {
-        let sub_public_vis = if match_token(tokens, Tok::LParen)? {
+        if match_token(tokens, Tok::LParen)? {
             let sub_token = tokens.peek();
-            match &sub_token {
-                Tok::Script | Tok::Friend => (),
-                t => {
-                    return Err(ParseError::InvalidToken {
-                        location: current_token_loc(tokens),
-                        message: format!("expected Tok::Script or Tok::Friend, not {:?}", t),
-                    });
-                }
+            if sub_token != Tok::Friend {
+                return Err(ParseError::InvalidToken {
+                    location: current_token_loc(tokens),
+                    message: format!("expected Tok::Friend, not {:?}", sub_token),
+                });
             }
             tokens.advance()?;
             consume_token(tokens, Tok::RParen)?;
-            Some(sub_token)
+            FunctionVisibility::Friend
         } else {
-            None
-        };
-        match sub_public_vis {
-            None => FunctionVisibility::Public,
-            Some(Tok::Friend) => FunctionVisibility::Friend,
-            _ => panic!("Unexpected token that is not a visibility modifier"),
+            FunctionVisibility::Public
         }
     } else {
         FunctionVisibility::Internal
@@ -1612,30 +1705,23 @@ fn parse_function_visibility(
 
 fn parse_function_decl(
     tokens: &mut Lexer,
+    start_loc: usize,
+    modifiers: Modifiers,
 ) -> Result<(FunctionName, Function), ParseError<Loc, anyhow::Error>> {
-    let start_loc = tokens.start_loc();
+    let Modifiers {
+        visibility,
+        native,
+        entry,
+    } = modifiers;
+    let visibility = visibility
+        .map(|(v, _)| v)
+        .unwrap_or(FunctionVisibility::Internal);
+    let is_native = native.is_some();
+    let is_entry = entry.is_some();
 
-    let is_native = if tokens.peek() == Tok::Native {
-        tokens.advance()?;
-        true
-    } else {
-        false
-    };
-
-    let visibility = parse_function_visibility(tokens)?;
-    let is_entry = if tokens.peek() == Tok::NameValue && tokens.content() == "entry" {
-        tokens.advance()?;
-        true
-    } else {
-        false
-    };
-
-    if tokens.peek() != Tok::NameValue || tokens.content() != "fun" {
-        return Err(ParseError::InvalidToken {
-            location: current_token_loc(tokens),
-            message: "expected 'fun' before function name".to_string(),
-        });
-    }
+    // The dispatcher in `parse_module` has already verified the upcoming
+    // token is the `fun` keyword.
+    debug_assert!(tokens.peek() == Tok::NameValue && tokens.content() == "fun");
     tokens.advance()?;
 
     let (name, type_parameters) = parse_name_and_type_parameters(tokens, parse_type_parameter)?;
@@ -1687,23 +1773,24 @@ fn parse_field_decl(tokens: &mut Lexer) -> Result<(Field, Type), ParseError<Loc,
 }
 
 // StructDecl: StructDefinition_ = {
-//     "struct" <name_and_type_parameters:
-//     NameAndTypeFormals> ("has" <Ability> ("," <Ability)*)? "{" <data: Comma<FieldDecl>> "}"
-//     =>? { ... }
-//     <native: NativeTag> <name_and_type_parameters: NameAndTypeFormals>
-//     ("has" <Ability> ("," <Ability)*)?";" =>? { ... }
+//     "public" "native"? "struct" <name_and_type_parameters: NameAndTypeFormals>
+//         ("has" <Ability> ("," <Ability>)*)?
+//         ( "{" <data: Comma<FieldDecl>> "}" | ";" )
 // }
 fn parse_struct_decl(
     tokens: &mut Lexer,
+    start_loc: usize,
+    modifiers: Modifiers,
 ) -> Result<StructDefinition, ParseError<Loc, anyhow::Error>> {
-    let start_loc = tokens.start_loc();
-
-    let is_native = if tokens.peek() == Tok::Native {
-        tokens.advance()?;
-        true
-    } else {
-        false
-    };
+    let Modifiers {
+        visibility,
+        native,
+        entry,
+    } = modifiers;
+    let struct_keyword_loc = current_token_loc(tokens);
+    require_public_visibility(visibility, struct_keyword_loc, "struct")?;
+    check_no_modifier(entry, "entry", "struct")?;
+    let is_native = native.is_some();
 
     consume_token(tokens, Tok::Struct)?;
     let (name, type_parameters) =
@@ -1749,12 +1836,24 @@ fn parse_struct_decl(
 }
 
 // EnumDecl: EnumDefinition = {
-//     "enum" <name_and_type_parameters:
-//     NameAndTypeFormals> ("has" <Ability> ("," <Ability)*)? "{" <data: Comma<VariantDecl>> "}"
-//     => { ... }
+//     "public" "enum" <name_and_type_parameters: NameAndTypeFormals>
+//         ("has" <Ability> ("," <Ability>)*)?
+//         "{" <data: Comma<VariantDecl>> "}"
 // }
-fn parse_enum_decl(tokens: &mut Lexer) -> Result<EnumDefinition, ParseError<Loc, anyhow::Error>> {
-    let start_loc = tokens.start_loc();
+fn parse_enum_decl(
+    tokens: &mut Lexer,
+    start_loc: usize,
+    modifiers: Modifiers,
+) -> Result<EnumDefinition, ParseError<Loc, anyhow::Error>> {
+    let Modifiers {
+        visibility,
+        native,
+        entry,
+    } = modifiers;
+    let enum_keyword_loc = current_token_loc(tokens);
+    require_public_visibility(visibility, enum_keyword_loc, "enum")?;
+    check_no_modifier(native, "native", "enum")?;
+    check_no_modifier(entry, "entry", "enum")?;
 
     consume_token(tokens, Tok::Enum)?;
 
@@ -1882,15 +1981,6 @@ fn parse_import_decl(
 //     "}" =>? ModuleDefinition::new(n, imports, structs, functions),
 // }
 
-fn is_struct_decl(tokens: &mut Lexer) -> Result<bool, ParseError<Loc, anyhow::Error>> {
-    let t = tokens.peek();
-    Ok(t == Tok::Struct || (t == Tok::Native && tokens.lookahead()? == Tok::Struct))
-}
-
-fn is_enum_decl(tokens: &mut Lexer) -> bool {
-    tokens.peek() == Tok::Enum
-}
-
 fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, anyhow::Error>> {
     let publishable =
         if matches!(tokens.peek(), Tok::NameValue) && tokens.content() == "unpublishable" {
@@ -1915,18 +2005,31 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
     }
 
     let mut structs: Vec<StructDefinition> = vec![];
-    while is_struct_decl(tokens)? {
-        structs.push(parse_struct_decl(tokens)?);
-    }
-
     let mut enums: Vec<EnumDefinition> = vec![];
-    while is_enum_decl(tokens) {
-        enums.push(parse_enum_decl(tokens)?);
-    }
-
     let mut functions: Vec<(FunctionName, Function)> = vec![];
     while tokens.peek() != Tok::RBrace {
-        functions.push(parse_function_decl(tokens)?);
+        let decl_start_loc = tokens.start_loc();
+        let modifiers = parse_module_member_modifiers(tokens)?;
+
+        match tokens.peek() {
+            Tok::Struct => {
+                structs.push(parse_struct_decl(tokens, decl_start_loc, modifiers)?);
+            }
+            Tok::Enum => {
+                enums.push(parse_enum_decl(tokens, decl_start_loc, modifiers)?);
+            }
+            // `fun` is detected by content (matching the existing `entry`
+            // pattern); only function decls start with that keyword.
+            Tok::NameValue if tokens.content() == "fun" => {
+                functions.push(parse_function_decl(tokens, decl_start_loc, modifiers)?);
+            }
+            _ => {
+                return Err(ParseError::InvalidToken {
+                    location: current_token_loc(tokens),
+                    message: "expected 'struct', 'enum', or 'fun' declaration".to_string(),
+                });
+            }
+        }
     }
     tokens.advance()?; // consume the RBrace
     let end_loc = tokens.previous_end_loc();

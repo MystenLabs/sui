@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::M1 {
-    struct S<T: copy> { t: T }
+    public struct S<T: copy> { t: T }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
     public fun bad_sig<T>(s: &Self::S<T>) {
@@ -11,7 +11,7 @@ mvir 0x42::M1 {
 
 //# publish
 mvir 0x42::M2 {
-    struct S<T: copy> { t: T }
+    public struct S<T: copy> { t: T }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
     public fun bad_sig<T>(s: &mut Self::S<T>) {
@@ -22,7 +22,7 @@ mvir 0x42::M2 {
 
 //# publish
 mvir 0x42::M3 {
-    struct S<T: copy> { t: T }
+    public struct S<T: copy> { t: T }
 
     // should get flagged--missing type argument
     public fun bad_sig<T>(s: &Self::S) {
@@ -33,8 +33,8 @@ mvir 0x42::M3 {
 
 //# publish
 mvir 0x42::M4 {
-    struct Box<T> { t: T }
-    struct S<T: copy> { t: T }
+    public struct Box<T> { t: T }
+    public struct S<T: copy> { t: T }
 
     // should be rejected
     public fun bad_sig<T>(v: Self::Box<Self::S<T>>): Self::Box<Self::S<T>> {
@@ -45,7 +45,7 @@ mvir 0x42::M4 {
 
 //# publish
 mvir 0x43::M1 {
-    enum S<T: copy> { V{ t: T } }
+    public enum S<T: copy> { V{ t: T } }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
     public fun bad_sig<T>(s: &Self::S<T>) {
@@ -56,7 +56,7 @@ mvir 0x43::M1 {
 
 //# publish
 mvir 0x43::M2 {
-    struct S<T: copy> { t: T }
+    public struct S<T: copy> { t: T }
 
     // should get flagged w/ constraint not satisfied--T does not have copy
     public fun bad_sig<T>(s: &mut Self::S<T>) {
@@ -67,7 +67,7 @@ mvir 0x43::M2 {
 
 //# publish
 mvir 0x43::M3 {
-    enum S<T: copy> { V{ t: T } }
+    public enum S<T: copy> { V{ t: T } }
 
     // should get flagged--missing type argument
     public fun bad_sig<T>(s: &Self::S) {
@@ -78,8 +78,8 @@ mvir 0x43::M3 {
 
 //# publish
 mvir 0x43::M4 {
-    enum Box<T> { V{ t: T } }
-    enum S<T: copy> { V{ t: T } }
+    public enum Box<T> { V{ t: T } }
+    public enum S<T: copy> { V{ t: T } }
 
     // should be rejected
     public fun bad_sig<T>(v: Self::Box<Self::S<T>>): Self::Box<Self::S<T>> {

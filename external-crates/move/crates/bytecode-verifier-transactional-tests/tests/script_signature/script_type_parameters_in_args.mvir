@@ -30,7 +30,7 @@ label b0:
 
 //# publish
 mvir 0x42::M {
-    struct Box<T> has drop { x: T }
+    public struct Box<T> has drop { x: T }
 }
 
 

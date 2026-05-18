@@ -4,7 +4,7 @@
 
 mvir 0x2::extension_after_join {
 
-struct S has copy, drop, store { f: u64 }
+public struct S has copy, drop, store { f: u64 }
 
 fun t(cond: bool, a: &mut Self::S, b: &mut Self::S): &mut Self::S {
     let x: &mut Self::S;

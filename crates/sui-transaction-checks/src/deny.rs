@@ -134,6 +134,11 @@ fn check_disabled_features(
         "Transaction signing is temporarily disabled"
     );
 
+    deny_if_true!(
+        filter_config.gasless_disabled() && tx_data.is_gasless_transaction(),
+        "Gasless transactions are temporarily disabled"
+    );
+
     tx_signatures.iter().try_for_each(|s| {
         if let GenericSignature::ZkLoginAuthenticator(z) = s {
             deny_if_true!(

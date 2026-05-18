@@ -58,6 +58,7 @@ validator_configs:
       package-upgrade-disabled: false
       shared-object-disabled: false
       user-transaction-disabled: false
+      gasless-disabled: false
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
@@ -236,6 +237,7 @@ validator_configs:
       package-upgrade-disabled: false
       shared-object-disabled: false
       user-transaction-disabled: false
+      gasless-disabled: false
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
@@ -414,6 +416,7 @@ validator_configs:
       package-upgrade-disabled: false
       shared-object-disabled: false
       user-transaction-disabled: false
+      gasless-disabled: false
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
@@ -592,6 +595,7 @@ validator_configs:
       package-upgrade-disabled: false
       shared-object-disabled: false
       user-transaction-disabled: false
+      gasless-disabled: false
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
@@ -770,6 +774,7 @@ validator_configs:
       package-upgrade-disabled: false
       shared-object-disabled: false
       user-transaction-disabled: false
+      gasless-disabled: false
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
@@ -948,6 +953,7 @@ validator_configs:
       package-upgrade-disabled: false
       shared-object-disabled: false
       user-transaction-disabled: false
+      gasless-disabled: false
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []
@@ -1126,6 +1132,7 @@ validator_configs:
       package-upgrade-disabled: false
       shared-object-disabled: false
       user-transaction-disabled: false
+      gasless-disabled: false
       receiving-objects-disabled: false
       zklogin-sig-disabled: false
       zklogin-disabled-providers: []

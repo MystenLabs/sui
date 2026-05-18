@@ -7,11 +7,11 @@ mvir 0x0::m {
     import 0x2::tx_context;
     import 0x2::transfer;
 
-    struct Cat has key {
+    public struct Cat has key {
         id: object::UID,
     }
 
-    struct Dog has key {
+    public struct Dog has key {
         id: object::UID,
     }
 

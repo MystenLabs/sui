@@ -3,7 +3,7 @@
 
 use crate::{
     diag,
-    diagnostics::warning_filters::WarningFilters,
+    diagnostics::filter::FilterScope,
     expansion::ast::{ModuleIdent, Value_},
     ice, ice_assert,
     naming::ast::{BuiltinTypeName_, TypeInner},
@@ -70,7 +70,7 @@ impl TypingMutVisitorContext for MatchCompiler<'_, '_, '_> {
         }
     }
 
-    fn push_warning_filter_scope(&mut self, filter: WarningFilters) {
+    fn push_warning_filter_scope(&mut self, filter: FilterScope) {
         self.context.push_warning_filter_scope(filter);
     }
 

@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::execution_mode::ExecutionMode;
 use crate::gas_charger::{GasCharger, PaymentLocation};
-use mysten_common::ZipDebugEqIteratorExt;
+use mysten_common::{ZipDebugEqIteratorExt, debug_fatal};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -85,6 +86,16 @@ pub struct TemporaryStore<'backing> {
     /// The set of per-epoch config objects that were loaded during execution, and are not in the
     /// input objects. This allows us to commit them to the effects.
     loaded_per_epoch_config_objects: RwLock<BTreeSet<ObjectID>>,
+
+    /// Index ranges into `execution_results.accumulator_events` for events emitted from PTB
+    /// (Move) execution. Each `record_execution_results` call appends a contiguous range
+    /// bracketing the merge. Any index outside these ranges was emitted by the runtime outside
+    /// of PTB execution (currently only `gas_charger`'s `add_accumulator_event`). Consumed by
+    /// `check_sui_address_balance_changes` inside `run_conservation_checks` to gate
+    /// non-PTB-emitted events behind input reservations. Cleared on `drop_writes` since the
+    /// underlying events are also cleared. A `Vec` is sufficient because real transactions run
+    /// the PTB at most a handful of times.
+    ptb_emitted_accumulator_event_ranges: Vec<std::ops::Range<usize>>,
 }
 
 impl<'backing> TemporaryStore<'backing> {
@@ -138,6 +149,7 @@ impl<'backing> TemporaryStore<'backing> {
             generated_runtime_ids: BTreeSet::new(),
             cur_epoch,
             loaded_per_epoch_config_objects: RwLock::new(BTreeSet::new()),
+            ptb_emitted_accumulator_event_ranges: Vec::new(),
         }
     }
 
@@ -481,6 +493,8 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn drop_writes(&mut self) {
         self.execution_results.drop_writes();
+        // The PTB-emitted ranges pointed into the now-cleared accumulator_events vec.
+        self.ptb_emitted_accumulator_event_ranges.clear();
     }
 
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
@@ -732,15 +746,16 @@ impl TemporaryStore<'_> {
         &self,
         sender: &SuiAddress,
         sponsor: &Option<SuiAddress>,
-        gas_charger: &mut GasCharger,
+        gas_charger: &GasCharger,
         mutable_inputs: &HashSet<ObjectID>,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
         is_epoch_change: bool,
     ) -> SuiResult<()> {
         let gas_objs: HashSet<&ObjectID> = gas_charger.used_coins().map(|g| &g.0).collect();
         let gas_owner = sponsor.as_ref().unwrap_or(sender);
 
         // mark input objects as authenticated
-        let mut authenticated_for_mutation: HashSet<_> = self
+        let objects_authenticated_for_mutation: HashSet<SuiAddress> = self
             .input_objects
             .iter()
             .filter_map(|(id, obj)| {
@@ -787,13 +802,27 @@ impl TemporaryStore<'_> {
             // Add any object IDs generated in the object runtime during execution to the
             // authenticated set (i.e., new (non-package) objects, and possibly ephemeral UIDs).
             .chain(self.generated_runtime_ids.iter().copied())
+            .map(SuiAddress::from)
             .collect();
 
         // Add sender and sponsor (if present) to authenticated set
-        authenticated_for_mutation.insert((*sender).into());
-        if let Some(sponsor) = sponsor {
-            authenticated_for_mutation.insert((*sponsor).into());
-        }
+        let mut authenticated_for_mutation = {
+            assert!(
+                !objects_authenticated_for_mutation.contains(sender),
+                "Sender cannot be an object"
+            );
+            assert!(
+                sponsor
+                    .is_none_or(|sponsor| !objects_authenticated_for_mutation.contains(&sponsor)),
+                "Sponsor cannot be an object"
+            );
+            let mut s = objects_authenticated_for_mutation.clone();
+            s.insert(*sender);
+            if let Some(sponsor) = sponsor {
+                s.insert(*sponsor);
+            }
+            s
+        };
 
         // check all modified objects are authenticated
         let mut objects_to_authenticate = self
@@ -804,7 +833,7 @@ impl TemporaryStore<'_> {
             .collect::<Vec<_>>();
 
         while let Some(to_authenticate) = objects_to_authenticate.pop() {
-            if authenticated_for_mutation.contains(&to_authenticate) {
+            if authenticated_for_mutation.contains(&to_authenticate.into()) {
                 // object has already been authenticated
                 continue;
             }
@@ -867,9 +896,82 @@ impl TemporaryStore<'_> {
             };
 
             // we now assume the object is authenticated and check the parent
-            authenticated_for_mutation.insert(to_authenticate);
+            authenticated_for_mutation.insert(to_authenticate.into());
             objects_to_authenticate.push(parent);
         }
+
+        // Check that all funds accumulator splits are authorized
+        let sui_balance_type =
+            sui_types::balance::Balance::type_tag(sui_types::gas_coin::GAS::type_tag());
+        let gas_payment_address_balance =
+            gas_charger
+                .gas_payment_location()
+                .and_then(|location| match location {
+                    PaymentLocation::Coin(_) => None,
+                    PaymentLocation::AddressBalance(address) => Some(address),
+                });
+        let mut funds_net_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
+        for event in self.execution_results.accumulator_events.iter() {
+            let amount = match event.write.value {
+                AccumulatorValue::Integer(a) => a as i128,
+                AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+                    assert!(
+                        !sui_types::balance::Balance::is_balance_type(&event.write.address.ty),
+                        "Non-integer accumulator changes should not be balances"
+                    );
+                    continue;
+                }
+            };
+            let signed = match event.write.operation {
+                AccumulatorOperation::Split => -amount,
+                AccumulatorOperation::Merge => amount,
+            };
+            let address = event.write.address.address;
+            let type_tag = &event.write.address.ty;
+            let key = (address, type_tag.clone());
+            *funds_net_changes.entry(key.clone()).or_insert(0) += signed;
+            // Authorized if it is:
+            // - A merge/deposit (anyone can deposit)
+            // - A withdrawal
+            //   - with a corresponding input reservation
+            //   - from an object authenticated for mutation
+            //   - for the gas payment (potentially from a GasCoin send_funds transfer)
+            let authorized = match event.write.operation {
+                AccumulatorOperation::Merge => true,
+                AccumulatorOperation::Split => {
+                    input_reservations.contains_key(&key)
+                        || objects_authenticated_for_mutation.contains(&address)
+                        || (*type_tag == sui_balance_type
+                            && gas_payment_address_balance
+                                .is_some_and(|gas_addr| gas_addr == address))
+                }
+            };
+            assert!(
+                authorized,
+                "Unauthenticated funds-accumulator Split at address {address} for type \
+                 {type_tag}: no input reservation, address is not an authenticated object, and \
+                 it is not the final gas payment address balance"
+            );
+        }
+
+        // For all net negative changes (net withdrawals), the net changes _must_ be less than the
+        // reservation amount, or it must be from an object. This excludes the final gas payment
+        // address since the case where that withdrawal is allowed should be a net positive (or
+        // zero) since it occurs only in the case where the gas coin is transferred via send_funds
+        for (key, change) in funds_net_changes {
+            // skip if deposit or for an object
+            if change >= 0 || objects_authenticated_for_mutation.contains(&key.0) {
+                continue;
+            }
+            let reservation = input_reservations.get(&key).copied().unwrap_or(0) as u128;
+            let withdrawn = change.unsigned_abs();
+            assert!(
+                withdrawn <= reservation,
+                "Net withdrawal of {withdrawn} for {key:?} exceeds input reservation of \
+                 {reservation}"
+            );
+        }
+
         Ok(())
     }
 }
@@ -932,7 +1034,9 @@ impl TemporaryStore<'_> {
         }
     }
 
-    pub fn check_execution_results_consistency(&self) -> Result<(), ExecutionError> {
+    pub fn check_execution_results_consistency<Mode: ExecutionMode>(
+        &self,
+    ) -> Result<(), Mode::Error> {
         assert_invariant!(
             self.execution_results
                 .created_object_ids
@@ -1127,6 +1231,119 @@ impl TemporaryStore<'_> {
                 )));
             }
         }
+        Ok(())
+    }
+
+    /// Defense-in-depth invariant on funds-accumulator events. Per `(address, type)`:
+    /// - If the pair is in `input_reservations`: net withdrawal ≤ budget.
+    /// - Else if PTB-emitted events touched it: runtime contribution must not push the net
+    ///   below Move's deposit (`actual ≥ min(0, ptb_change)`).
+    /// - Else: any event is unauthorized — fatal.
+    ///
+    /// Currently the only funds-accumulator type is `Balance<T>`, so the check is scoped to
+    /// those events. As more accumulator shapes are added the filter and the integer
+    /// arithmetic in `check_address_balance_changes_impl` will need to grow with them.
+    ///
+    /// PTB-emitted events are identified via `ptb_emitted_accumulator_event_ranges`, populated
+    /// at `record_execution_results` time. They are trusted because Move enforces `&mut UID`
+    /// and the native checks the actual balance.
+    ///
+    /// `protocol_config.enforce_address_balance_change_invariant()` selects the failure mode:
+    /// - On (post-flag): violations are returned as `Err` so the caller's
+    ///   conservation-recovery flow can abort the tx cleanly.
+    /// - Off (pre-flag): the check still runs, but a violation panics so unexpected
+    ///   violations surface loudly during rollout.
+    pub fn check_address_balance_changes(
+        &self,
+        protocol_config: &ProtocolConfig,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
+    ) -> Result<(), ExecutionError> {
+        let result = self.check_address_balance_changes_impl(input_reservations);
+        if protocol_config.enforce_address_balance_change_invariant() {
+            result
+        } else {
+            if let Err(e) = result {
+                panic!("address-balance-change invariant violated pre-flag: {e}");
+            }
+            Ok(())
+        }
+    }
+
+    fn check_address_balance_changes_impl(
+        &self,
+        input_reservations: &BTreeMap<(SuiAddress, TypeTag), u64>,
+    ) -> Result<(), ExecutionError> {
+        use sui_types::balance::Balance;
+
+        let mut actual_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
+        let mut ptb_changes: BTreeMap<(SuiAddress, TypeTag), i128> = BTreeMap::new();
+        for (idx, event) in self.execution_results.accumulator_events.iter().enumerate() {
+            // Filter on the value shape first: only `Integer` carries the funds-flow we care
+            // about. Other shapes (e.g. `EventDigest` for event-stream heads) belong to
+            // non-Balance accumulators and are out of scope here. If we ever see an `Integer`
+            // value at a non-`Balance<T>` type, the accounting invariants below don't apply
+            // — debug_fatal so that case is surfaced instead of silently accepted.
+            let amount = match event.write.value {
+                AccumulatorValue::Integer(amount) => amount as i128,
+                AccumulatorValue::IntegerTuple(_, _) | AccumulatorValue::EventDigest(_) => {
+                    assert_invariant!(
+                        !sui_types::balance::Balance::is_balance_type(&event.write.address.ty),
+                        "Non-integer accumulator changes should not be balances"
+                    );
+                    continue;
+                }
+            };
+            if !Balance::is_balance_type(&event.write.address.ty) {
+                debug_fatal!(
+                    "Integer accumulator value at non-Balance type: {:?}",
+                    event.write.address.ty
+                );
+                continue;
+            }
+            let is_ptb_emitted = self
+                .ptb_emitted_accumulator_event_ranges
+                .iter()
+                .any(|range| range.contains(&idx));
+            let key = (event.write.address.address, event.write.address.ty.clone());
+            let change = match event.write.operation {
+                AccumulatorOperation::Split => -amount,
+                AccumulatorOperation::Merge => amount,
+            };
+            *actual_changes.entry(key.clone()).or_insert(0) += change;
+            if is_ptb_emitted {
+                *ptb_changes.entry(key).or_insert(0) += change;
+            }
+        }
+
+        for (key, actual) in actual_changes {
+            let (address, type_tag) = &key;
+            if let Some(budget) = input_reservations.get(&key).copied() {
+                let net_withdrawn = -actual.min(0) as u128;
+                assert_invariant!(
+                    net_withdrawn <= budget as u128,
+                    "Balance accumulator withdrawal exceeds reservation budget at address \
+                    {address} for type {type_tag}: net Split {net_withdrawn}, budget {budget}"
+                );
+            } else if let Some(ptb_change) = ptb_changes.get(&key).copied() {
+                // Runtime-emitted withdrawals at this (address, type) are bounded by Move's
+                // net deposit at the same key: actual ≥ min(0, ptb_change). When Move
+                // deposited (ptb_change > 0), the runtime may withdraw down to 0; when Move
+                // withdrew (ptb_change < 0), the runtime may not withdraw further.
+                assert_invariant!(
+                    actual >= ptb_change.min(0),
+                    "PTB-emitted Balance accumulator events do not cover runtime withdrawals \
+                    at address {address} for type {type_tag}: PTB change {ptb_change}, net \
+                    change {actual}"
+                );
+            } else {
+                invariant_violation!(
+                    "Unauthorized runtime Balance accumulator event at address {address} for \
+                    type {type_tag}: net change {actual} (no input reservation, no PTB-emitted \
+                    events)"
+                );
+            }
+        }
+
         Ok(())
     }
 
@@ -1326,9 +1543,25 @@ impl Storage for TemporaryStore<'_> {
 
         // It's important to merge instead of override results because it's
         // possible to execute PT more than once during tx execution.
+        // Track the index range of accumulator events brought in here as PTB-emitted; the
+        // address-balance change invariant (run inside `run_conservation_checks`) uses this
+        // set to distinguish trusted PTB-emitted events from runtime-emitted ones.
+        let event_start = self.execution_results.accumulator_events.len();
         self.execution_results.merge_results(
             results, /* consistent_merge */ true, /* invariant_checks */ true,
         )?;
+        let event_end = self.execution_results.accumulator_events.len();
+        debug_assert!(
+            event_start <= event_end,
+            "merge_results should not shrink accumulator_events"
+        );
+        let (event_start, event_end) = (event_start.min(event_end), event_start.max(event_end));
+        let range = event_start..event_end;
+        match self.ptb_emitted_accumulator_event_ranges.last_mut() {
+            // Coalesce with the previous PTB range if no runtime events were added in between.
+            Some(last) if last.end == range.start => last.end = range.end,
+            _ => self.ptb_emitted_accumulator_event_ranges.push(range),
+        }
 
         Ok(())
     }

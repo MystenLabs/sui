@@ -29,9 +29,7 @@ use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, VersionNumber};
-use sui_types::crypto::{
-    AccountKeyPair, AuthoritySignature, SuiKeyPair, get_account_key_pair, get_key_pair,
-};
+use sui_types::crypto::{AccountKeyPair, AuthoritySignature, get_account_key_pair};
 use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
@@ -39,8 +37,7 @@ use sui_types::object::{Object, Owner};
 use sui_types::storage::ObjectKey;
 use sui_types::storage::{ChildObjectResolver, ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
-use sui_types::transaction::TransactionDataAPI;
-use sui_types::transaction::{EndOfEpochTransactionKind, SenderSignedData};
+use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
     base_types::{EpochId, SuiAddress},
     committee::Committee,
@@ -241,30 +238,27 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         }
     }
 
-    /// Execute a transaction while impersonating a specific sender.
+    /// Execute a transaction, allowing empty-signature sender impersonation.
     ///
-    /// This method allows executing transactions as any account without requiring the private
-    /// keys for that account. This is useful for testing scenarios where you want to simulate
-    /// transactions from accounts you don't control.
+    /// Transactions with signatures are verified normally. Transactions with an empty signature
+    /// list are treated as an explicit impersonation request and skip user-signature verification,
+    /// while preserving the normal execution-time input checks.
     ///
     /// # Arguments
-    /// * `transaction_data` - The transaction data to execute
+    /// * `transaction` - The transaction to execute
     ///
     /// # Returns
     /// The transaction effects and optional execution error
     pub fn execute_transaction_impersonating(
         &mut self,
-        transaction_data: TransactionData,
+        transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        // Create dummy signatures for each required signer
-        let pk = SuiKeyPair::Ed25519(get_key_pair().1);
-        let sig = pk.sign(transaction_data.sender().as_ref());
-        // Create sender signed data with dummy signatures
-        let sender_signed_data = SenderSignedData::new(transaction_data, vec![sig.into()]);
-
-        // Create transaction and verify signatures
-        let verified_transaction = Transaction::new(sender_signed_data)
-            .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
+        let verified_transaction = if transaction.data().tx_signatures().is_empty() {
+            VerifiedTransaction::new_unchecked(transaction)
+        } else {
+            transaction
+                .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?
+        };
 
         self.execute_transaction_impl(verified_transaction)
     }

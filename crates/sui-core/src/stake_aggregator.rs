@@ -180,9 +180,21 @@ impl<const STRENGTH: bool> StakeAggregator<AuthoritySignInfo, STRENGTH> {
                                         bad_authorities.push(*name);
                                     }
                                 }
-                                InsertResult::NotEnoughVotes {
-                                    bad_votes,
-                                    bad_authorities,
+                                // After evicting invalid sigs, the remaining valid sigs may
+                                // still constitute a quorum on their own.
+                                if self.total_votes >= self.committee.threshold::<STRENGTH>() {
+                                    match AuthorityQuorumSignInfo::<STRENGTH>::new_from_auth_sign_infos(
+                                        self.data.values().cloned().collect(),
+                                        self.committee(),
+                                    ) {
+                                        Ok(aggregated) => InsertResult::QuorumReached(aggregated),
+                                        Err(error) => InsertResult::Failed { error },
+                                    }
+                                } else {
+                                    InsertResult::NotEnoughVotes {
+                                        bad_votes,
+                                        bad_authorities,
+                                    }
                                 }
                             }
                         }
@@ -627,6 +639,78 @@ mod multi_stake_aggregator_tests {
 
         // With evenly split votes, neither can reach quorum now
         assert!(agg.quorum_unreachable());
+    }
+}
+
+#[cfg(test)]
+mod stake_aggregator_insert_tests {
+    use super::*;
+    use fastcrypto::hash::{HashFunction, Sha3_256};
+    use shared_crypto::intent::IntentScope;
+
+    #[derive(Clone, Debug, Serialize, PartialEq, Eq, Hash)]
+    struct TestMessage {
+        value: String,
+    }
+
+    impl Message for TestMessage {
+        type DigestType = [u8; 32];
+        const SCOPE: IntentScope = IntentScope::SenderSignedTransaction;
+
+        fn digest(&self) -> Self::DigestType {
+            let mut hasher = Sha3_256::default();
+            hasher.update(self.value.as_bytes());
+            hasher.finalize().digest
+        }
+    }
+
+    /// Regression test for a bug where evicting a bad sig after batch verification failure
+    /// incorrectly returns NotEnoughVotes even when the remaining valid sigs form a quorum.
+    ///
+    /// Scenario: insert a bad sig (weight < Q), then a valid sig (weight > Q).
+    /// Batch verification fails; bad sig is evicted; valid sig alone has weight > Q.
+    /// The expected result is QuorumReached, but the bug causes NotEnoughVotes.
+    #[test]
+    fn test_quorum_not_lost_after_bad_sig_eviction() {
+        // Two-validator committee: auth0 has ~7000 weight (> QUORUM_THRESHOLD 6667),
+        // auth1 has ~3000 weight. So auth0 alone can form a strong quorum.
+        let (committee, key_pairs) =
+            Committee::new_simple_test_committee_with_normalized_voting_power(vec![7, 3]);
+        let committee = Arc::new(committee);
+        // committee.names() is sorted by AuthorityName (== public key bytes),
+        // matching the sort applied to key_pairs in the constructor above.
+        let authorities: Vec<_> = committee.names().copied().collect();
+        let (auth0, key0) = (authorities[0], &key_pairs[0]);
+        let (auth1, key1) = (authorities[1], &key_pairs[1]);
+
+        let mut agg: StakeAggregator<AuthoritySignInfo, true> =
+            StakeAggregator::new(committee.clone());
+
+        let msg = TestMessage {
+            value: "real".to_string(),
+        };
+        let msg_bad = TestMessage {
+            value: "wrong".to_string(),
+        };
+
+        // auth1 signs the wrong message. Its sig will be stored but will fail
+        // verify_secure when checked against `msg` during individual verification.
+        let envelope_bad = Envelope::<TestMessage, AuthoritySignInfo>::new(0, msg_bad, key1, auth1);
+        let result = agg.insert(envelope_bad);
+        // auth1 weight (~3000) < QUORUM_THRESHOLD (6667): no quorum yet.
+        assert!(matches!(result, InsertResult::NotEnoughVotes { .. }));
+
+        // auth0 signs the real message. Total stored weight is ~10000 >= quorum,
+        // so insert triggers the batch verification path. The batch fails because
+        // auth1's sig was for msg_bad. Individual verification evicts auth1.
+        // After eviction, auth0's weight alone (~7000) still exceeds the threshold,
+        // so the result must be QuorumReached.
+        let envelope_good = Envelope::<TestMessage, AuthoritySignInfo>::new(0, msg, key0, auth0);
+        let result = agg.insert(envelope_good);
+        assert!(
+            result.is_quorum_reached(),
+            "valid sig with weight > quorum threshold must yield QuorumReached after bad sig is evicted"
+        );
     }
 }
 

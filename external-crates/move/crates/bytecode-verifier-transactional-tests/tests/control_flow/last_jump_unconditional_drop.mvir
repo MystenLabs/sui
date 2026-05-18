@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::test {
-    struct HotPotato { value: u64 }
+    public struct HotPotato { value: u64 }
     public fun get_hot_potato(): Self::HotPotato {
         label l0:
         return HotPotato { value: 42 };

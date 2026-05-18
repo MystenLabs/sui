@@ -3,7 +3,7 @@
 // ref arguments are now allowed
 
 mvir 0x42::M {
-    struct S has drop { f: u64 }
+    public struct S has drop { f: u64 }
 
     public fun t1(r1: &u64) {
         label l0:

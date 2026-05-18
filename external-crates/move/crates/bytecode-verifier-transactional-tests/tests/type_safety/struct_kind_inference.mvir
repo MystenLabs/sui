@@ -1,8 +1,8 @@
 //# publish
 // ensure that generic structs instantiated with struct types behave like resources
 mvir 0x1::M1 {
-    struct MyResource { b: bool }
-    struct S<T> { t: T }
+    public struct MyResource { b: bool }
+    public struct S<T> { t: T }
 
     // verifer should reject; didn't move resource;
     public fun p(s: Self::S<Self::MyResource>) {
@@ -13,8 +13,8 @@ mvir 0x1::M1 {
 
 //# publish
 mvir 0x1::M2 {
-    struct MyResource { b: bool }
-    struct S<T> { t: T }
+    public struct MyResource { b: bool }
+    public struct S<T> { t: T }
 
     // verifier should reject; drops s2 on the floor
     public fun p(s1: Self::S<Self::MyResource>, s2: Self::S<Self::MyResource>): Self::S<Self::MyResource> {
@@ -26,8 +26,8 @@ mvir 0x1::M2 {
 
 //# publish
 mvir 0x1::M3 {
-    struct MyResource { b: bool }
-    struct S<T> { t: T }
+    public struct MyResource { b: bool }
+    public struct S<T> { t: T }
 
     // verifier should reject; copies s
     public fun p(s: &Self::S<Self::MyResource>): Self::S<Self::MyResource> {
@@ -38,8 +38,8 @@ mvir 0x1::M3 {
 
 //# publish
 mvir 0x1::M4 {
-    struct MyResource { b: bool }
-    struct S<T> { t: T }
+    public struct MyResource { b: bool }
+    public struct S<T> { t: T }
 
     // verifier should reject; drops s1 on the floor
     public fun p(s1: &mut Self::S<Self::MyResource>, s2: Self::S<Self::MyResource>) {
@@ -51,8 +51,8 @@ mvir 0x1::M4 {
 
 //# publish
 mvir 0x1::M5 {
-    struct MyResource { b: bool }
-    struct S<T> { t: T }
+    public struct MyResource { b: bool }
+    public struct S<T> { t: T }
 
     // verifier should reject; copies s
     public fun p(s: Self::S<Self::MyResource>): Self::S<Self::MyResource> * Self::S<Self::MyResource> {
@@ -64,8 +64,8 @@ mvir 0x1::M5 {
 //# publish
 // ensure that generic enums instantiated with enum types behave like resources
 mvir 0x2::M1 {
-    enum MyResource { V{ b: bool } }
-    enum S<T> { V{ t: T } }
+    public enum MyResource { V{ b: bool } }
+    public enum S<T> { V{ t: T } }
 
     // verifer should reject; didn't move resource;
     public fun p(s: Self::S<Self::MyResource>) {
@@ -76,8 +76,8 @@ mvir 0x2::M1 {
 
 //# publish
 mvir 0x2::M2 {
-    enum MyResource { V{ b: bool } }
-    enum S<T> { V{ t: T } }
+    public enum MyResource { V{ b: bool } }
+    public enum S<T> { V{ t: T } }
 
     // verifier should reject; drops s2 on the floor
     public fun p(s1: Self::S<Self::MyResource>, s2: Self::S<Self::MyResource>): Self::S<Self::MyResource> {
@@ -89,8 +89,8 @@ mvir 0x2::M2 {
 
 //# publish
 mvir 0x2::M3 {
-    enum MyResource { V{ b: bool } }
-    enum S<T> { V{ t: T } }
+    public enum MyResource { V{ b: bool } }
+    public enum S<T> { V{ t: T } }
 
     // verifier should reject; copies s
     public fun p(s: &Self::S<Self::MyResource>): Self::S<Self::MyResource> {
@@ -101,8 +101,8 @@ mvir 0x2::M3 {
 
 //# publish
 mvir 0x2::M4 {
-    enum MyResource { V{ b: bool } }
-    enum S<T> { V{ t: T } }
+    public enum MyResource { V{ b: bool } }
+    public enum S<T> { V{ t: T } }
 
     // verifier should reject; drops s1 on the floor
     public fun p(s1: &mut Self::S<Self::MyResource>, s2: Self::S<Self::MyResource>) {
@@ -114,8 +114,8 @@ mvir 0x2::M4 {
 
 //# publish
 mvir 0x2::M5 {
-    enum MyResource { V{ b: bool } }
-    enum S<T> { V{ t: T } }
+    public enum MyResource { V{ b: bool } }
+    public enum S<T> { V{ t: T } }
 
     // verifier should reject; copies s
     public fun p(s: Self::S<Self::MyResource>): Self::S<Self::MyResource> * Self::S<Self::MyResource> {

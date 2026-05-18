@@ -109,7 +109,6 @@ pub trait StateRead: Send + Sync {
     async fn dry_exec_transaction(
         &self,
         transaction: TransactionData,
-        transaction_digest: TransactionDigest,
     ) -> StateReadResult<(
         DryRunTransactionBlockResponse,
         BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
@@ -371,16 +370,13 @@ impl StateRead for AuthorityState {
     async fn dry_exec_transaction(
         &self,
         transaction: TransactionData,
-        transaction_digest: TransactionDigest,
     ) -> StateReadResult<(
         DryRunTransactionBlockResponse,
         BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
         TransactionEffects,
         Option<ObjectID>,
     )> {
-        Ok(self
-            .dry_exec_transaction(transaction, transaction_digest)
-            .await?)
+        Ok(self.dry_exec_transaction(transaction).await?)
     }
 
     async fn dev_inspect_transaction_block(

@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::M {
-    enum S<T> { V{ b: bool } }
+    public enum S<T> { V{ b: bool } }
 
     fun a<T>() {
     label b0:
@@ -52,7 +52,7 @@ mvir 0x6::M {
 
 //# publish
 mvir 0x7::M2 {
-    enum S<T> { V { b: bool } }
+    public enum S<T> { V { b: bool } }
 
     fun f<T>() {
     label b0:
@@ -72,7 +72,7 @@ mvir 0x7::M2 {
 //# publish
 
 mvir 0x8::M3 {
-    enum S<T> { V{ b: bool } }
+    public enum S<T> { V{ b: bool } }
 
     fun a<T>() {
     label b0:

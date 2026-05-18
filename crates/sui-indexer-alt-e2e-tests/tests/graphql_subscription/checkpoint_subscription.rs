@@ -12,7 +12,7 @@ use tokio_stream::StreamExt;
 use crate::testing::SubscriptionTestCluster;
 use crate::testing::checkpoint_seq;
 use crate::testing::checkpoint_tx_digests;
-use crate::testing::drain_checkpoints_until_stalled;
+use crate::testing::drain_until_stalled;
 use crate::testing::graphql_redactions;
 use crate::testing::object_wrapping_harness;
 use crate::testing::transfer_coins;
@@ -406,7 +406,8 @@ async fn test_subscription_recovers_from_upstream_disconnect() {
     // Let the validator advance so a real gap forms, then drain whatever
     // graphql had pushed before the disconnect took effect.
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    let last_seen = drain_checkpoints_until_stalled(&mut stream, second).await;
+    let drained = drain_until_stalled(&mut stream).await;
+    let last_seen = drained.last().map(checkpoint_seq).unwrap_or(second);
     let validator_tip = cluster.validator_checkpoint_tip();
     assert!(
         validator_tip > last_seen + 1,

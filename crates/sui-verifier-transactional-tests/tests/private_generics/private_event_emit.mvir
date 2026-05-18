@@ -43,7 +43,7 @@ mvir 0x0::m {
 mvir 0x0::m {
     import 0x2::event;
 
-    struct X has copy, drop {
+    public struct X has copy, drop {
         dummy: bool,
     }
 
@@ -58,7 +58,7 @@ mvir 0x0::m {
 mvir 0x0::m {
     import 0x2::event;
 
-    enum X has copy, drop {
+    public enum X has copy, drop {
         V { }
     }
 
@@ -71,11 +71,11 @@ mvir 0x0::m {
 
 //# publish
 mvir test::m {
-    struct Y has copy, drop {
+    public struct Y has copy, drop {
         dummy: bool,
     }
 
-    enum X has copy, drop {
+    public enum X has copy, drop {
         V { }
     }
 }
@@ -144,7 +144,7 @@ mvir 0x0::m {
 mvir 0x0::m {
     import 0x2::event;
 
-    struct X has copy, drop {
+    public struct X has copy, drop {
         dummy: bool,
     }
 
@@ -159,7 +159,7 @@ mvir 0x0::m {
 mvir 0x0::m {
     import 0x2::event;
 
-    enum X has copy, drop {
+    public enum X has copy, drop {
         V { }
     }
 

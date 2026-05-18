@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::M {
-    enum Foo {
+    public enum Foo {
         V { 
             a: u64,
             b: u64,

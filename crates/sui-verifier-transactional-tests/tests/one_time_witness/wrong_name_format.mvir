@@ -7,7 +7,7 @@
 mvir 0x0::mod {
     import 0x2::tx_context;
 
-    struct Mod has drop { dummy: bool }
+    public struct Mod has drop { dummy: bool }
 
     fun init(_mod: Self::Mod, ctx: &mut tx_context::TxContext) {
         label l0:

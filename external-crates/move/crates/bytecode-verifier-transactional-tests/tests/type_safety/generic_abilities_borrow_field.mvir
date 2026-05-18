@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct Foo<T>{ x: T }
+    public struct Foo<T>{ x: T }
 
     fun baz(x: u64) {
     label b0:

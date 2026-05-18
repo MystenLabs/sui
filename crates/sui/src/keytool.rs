@@ -1394,6 +1394,13 @@ impl From<PublicKey> for Key {
     }
 }
 
+impl Key {
+    pub(crate) fn with_mnemonic(mut self, mnemonic: Option<String>) -> Self {
+        self.mnemonic = mnemonic;
+        self
+    }
+}
+
 impl Display for CommandOutput {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

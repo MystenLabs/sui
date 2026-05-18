@@ -1817,7 +1817,12 @@
     },
     {
       "source": "/guides/developer/accessing-data/custom-indexer/indexer-walrus",
-      "destination": "/sui-stack/indexer-walrus",
+      "destination": "/sui-stack/walrus/indexer-walrus",
+      "permanent": true
+    },
+    {
+      "source": "/sui-stack/indexer-walrus",
+      "destination": "/sui-stack/walrus/indexer-walrus",
       "permanent": true
     },
     {

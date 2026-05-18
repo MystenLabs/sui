@@ -1,7 +1,7 @@
 //# publish
 mvir 0x1::M {
     // duplicate variant of the same name
-    enum T { 
+    public enum T { 
         V { },
         V { f: u64, f: u64 }
     }

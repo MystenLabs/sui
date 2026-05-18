@@ -3,7 +3,7 @@
 //# publish
 mvir 0x2::field {
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
     fun t(s: Self::S) {
         let s_imm: &Self::S;
@@ -20,7 +20,7 @@ mvir 0x2::field {
 //# publish
 mvir 0x3::field {
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
     fun t(s: Self::S) {
         let s_imm: &Self::S;
@@ -38,7 +38,7 @@ mvir 0x3::field {
 //# publish
 mvir 0x4::invalid_write {
 
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
     fun t(s: Self::S) {
         let s_imm: &Self::S;

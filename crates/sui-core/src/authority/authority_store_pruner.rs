@@ -841,10 +841,11 @@ impl AuthorityStorePruner {
         #[cfg(tidehunter)]
         {
             if let Some(num_epochs_to_retain) = config.num_epochs_to_retain_for_checkpoints() {
+                let prune_objects = config.num_epochs_to_retain != u64::MAX;
                 tokio::task::spawn(async move {
                     loop {
                         tokio::select! {
-                            _ = objects_prune_interval.tick() => {
+                            _ = objects_prune_interval.tick(), if prune_objects => {
                                 if let Err(err) = Self::prune_objects_for_eligible_epochs(&perpetual_db, &checkpoint_store, rpc_index.as_deref(), config.clone(), metrics.clone(), epoch_duration_ms).await {
                                     error!("Failed to prune objects: {:?}", err);
                                 }
@@ -929,6 +930,20 @@ impl AuthorityStorePruner {
         registry: &Registry,
         pruner_watermarks: Arc<PrunerWatermarks>, // used by tidehunter relocation filters
     ) -> Self {
+        // On tidehunter validators the per-keyspace `objects_compactor`
+        // (see `AuthorityPerpetualTables::open`) already retains only the latest
+        // version per ObjectID during compaction, so running the object pruner
+        // would duplicate that work. Force-disable it regardless of the configured
+        // value.
+        #[cfg(tidehunter)]
+        if is_validator && pruning_config.num_epochs_to_retain != u64::MAX {
+            info!(
+                "Tidehunter validator: disabling object pruner (was num_epochs_to_retain={}). The objects compactor performs equivalent compaction.",
+                pruning_config.num_epochs_to_retain
+            );
+            pruning_config.num_epochs_to_retain = u64::MAX;
+        }
+
         if pruning_config.num_epochs_to_retain > 0 && pruning_config.num_epochs_to_retain < u64::MAX
         {
             warn!(

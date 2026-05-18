@@ -24,12 +24,13 @@ impl UpdateDeps {
         path: Option<&Path>,
         build_config: BuildConfig,
         wallet: &WalletContext,
+        flavor: SuiFlavor,
     ) -> anyhow::Result<()> {
         let path = reroot_path(path)?;
         let environment =
             find_environment(&path, build_config.environment.clone(), wallet, false).await?;
         self.update_deps
-            .execute(Some(&path), &build_config, environment, SuiFlavor::new())
+            .execute(Some(&path), &build_config, environment, flavor)
             .await
     }
 }

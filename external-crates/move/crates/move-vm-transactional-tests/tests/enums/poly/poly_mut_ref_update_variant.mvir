@@ -2,7 +2,7 @@
 
 //# print-bytecode
 mvir 0x6::PolymorphicEnums {
-    enum EnumWithTwoVariants<T> has drop {
+    public enum EnumWithTwoVariants<T> has drop {
         One { x: T },
         Two { x: T, y: T }
     }
@@ -35,7 +35,7 @@ mvir 0x6::PolymorphicEnums {
 
 //# publish
 mvir 0x6::PolymorphicEnums {
-    enum EnumWithTwoVariants<T> has drop {
+    public enum EnumWithTwoVariants<T> has drop {
         One { x: T },
         Two { x: T, y: T }
     }

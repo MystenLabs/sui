@@ -1,16 +1,16 @@
 //# publish
 mvir 0x1::M {
-    struct K has key { dummy: bool }
+    public struct K has key { dummy: bool }
 
-    struct BoxCopy<T> has copy { f: T }
-    struct BoxDrop<T> has drop { f: T }
-    struct BoxStore<T> has store { f: T }
-    struct BoxKey<T> has key { f: T }
+    public struct BoxCopy<T> has copy { f: T }
+    public struct BoxDrop<T> has drop { f: T }
+    public struct BoxStore<T> has store { f: T }
+    public struct BoxKey<T> has key { f: T }
 
-    struct NeedsCopy<T: copy> { dummy: bool }
-    struct NeedsDrop<T: drop> { dummy: bool }
-    struct NeedsStore<T: store> { dummy: bool }
-    struct NeedsKey<T: key> { dummy: bool }
+    public struct NeedsCopy<T: copy> { dummy: bool }
+    public struct NeedsDrop<T: drop> { dummy: bool }
+    public struct NeedsStore<T: store> { dummy: bool }
+    public struct NeedsKey<T: key> { dummy: bool }
 }
 
 // tests various valid constraints in script arguments

@@ -680,6 +680,7 @@ impl SuiCommand {
                             run_bytecode_verifier: true,
                             print_diags_to_stderr: true,
                             environment,
+                            flavor: SuiFlavor::with_client(&context),
                         }
                         .build_async_from_root_pkg(&mut root_pkg)
                         .await?;

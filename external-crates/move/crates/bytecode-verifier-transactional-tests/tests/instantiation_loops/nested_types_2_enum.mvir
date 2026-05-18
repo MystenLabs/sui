@@ -1,8 +1,8 @@
 //# publish
 
 mvir 0x1::M {
-    enum S<T> { V{ b: bool } }
-    enum R<T1, T2> { V{ b: bool } }
+    public enum S<T> { V{ b: bool } }
+    public enum R<T1, T2> { V{ b: bool } }
 
     fun foo<T>() {
     label b0:

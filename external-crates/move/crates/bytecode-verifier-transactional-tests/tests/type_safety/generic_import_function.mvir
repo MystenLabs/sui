@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct R has key { f: bool }
+    public struct R has key { f: bool }
 
     public fun foo<T>(x: T) {
     label b0:

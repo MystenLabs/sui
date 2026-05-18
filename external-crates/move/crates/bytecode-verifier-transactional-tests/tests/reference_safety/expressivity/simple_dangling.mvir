@@ -2,7 +2,7 @@
 
 //# publish
 mvir 0x2::field {
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
     fun t(s: &mut Self::S) {
         let f: &u64;
     label b0:
@@ -14,8 +14,8 @@ mvir 0x2::field {
 
 //# publish
 mvir 0x3::nested_field {
-    struct S has copy, drop { f: u64 }
-    struct P has copy, drop { s: Self::S }
+    public struct S has copy, drop { f: u64 }
+    public struct P has copy, drop { s: Self::S }
     fun t(p: &mut Self::P) {
         let s: &mut Self::S;
         let f: &u64;
@@ -62,7 +62,7 @@ mvir 0x5::simple_call {
 
 //# publish
 mvir 0x5::field_call {
-    struct S has copy, drop { f: u64 }
+    public struct S has copy, drop { f: u64 }
 
     fun f(r: &mut Self::S): &u64 {
     label b0:

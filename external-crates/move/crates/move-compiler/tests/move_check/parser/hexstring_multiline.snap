@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01008]: invalid hex string
+  ┌─ tests/move_check/parser/hexstring_multiline.move:3:9
+  │
+3 │         x"00
+  │         ^^^^ Missing closing quote (") after hex string
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/hexstring_multiline.move:4:3
+  │
+4 │ 00";
+  │   ^ string literals (without a leading 'b' or 'x') are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

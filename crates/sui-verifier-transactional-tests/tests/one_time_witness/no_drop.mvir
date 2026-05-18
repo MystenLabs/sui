@@ -7,7 +7,7 @@
 mvir 0x0::m {
     import 0x2::tx_context;
 
-    struct M { dummy: bool }
+    public struct M { dummy: bool }
 
     fun init(otw: Self::M, _ctx: &mut tx_context::TxContext) {
         label l0:

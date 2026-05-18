@@ -1,5 +1,5 @@
 //# publish
 mvir 0x42::m {
-    struct X { x: bool }
-    enum X { V { x: bool } }
+    public struct X { x: bool }
+    public enum X { V { x: bool } }
 }

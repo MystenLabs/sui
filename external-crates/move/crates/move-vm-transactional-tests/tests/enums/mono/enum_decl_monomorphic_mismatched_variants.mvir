@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::MonomorphicEnums {
-    enum EnumWithTwoVariants {
+    public enum EnumWithTwoVariants {
         One { },
         Two { x: u64 }
     }

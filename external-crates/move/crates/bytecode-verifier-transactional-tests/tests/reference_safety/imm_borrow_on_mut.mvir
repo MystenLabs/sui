@@ -1,8 +1,8 @@
 //# publish
 mvir 0x1::Tester {
 
-    struct Initializer has key { x: u64, y: u64 }
-    struct Point { x: u64, y: u64 }
+    public struct Initializer has key { x: u64, y: u64 }
+    public struct Point { x: u64, y: u64 }
 
     // the key struct is here to just give a feeling why the computation might not be reorderable
     fun set_and_pick(init: &mut Self::Initializer, p: &mut Self::Point): &mut u64 {

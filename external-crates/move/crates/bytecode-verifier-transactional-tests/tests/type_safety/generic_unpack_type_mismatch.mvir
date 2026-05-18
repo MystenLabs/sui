@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::O {
-    struct Foo<T1: copy + drop, T2> { x: T1, y: T2 }
+    public struct Foo<T1: copy + drop, T2> { x: T1, y: T2 }
 
     fun foo() {
         let x: u64;
@@ -14,7 +14,7 @@ mvir 0x1::O {
 
 //# publish
 mvir 0x2::O {
-    enum Foo<T1: copy + drop, T2> { V { x: T1, y: T2 } }
+    public enum Foo<T1: copy + drop, T2> { V { x: T1, y: T2 } }
 
     fun foo() {
         let x: u64;

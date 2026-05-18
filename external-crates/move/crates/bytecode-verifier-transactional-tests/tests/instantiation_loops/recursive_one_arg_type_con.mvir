@@ -3,7 +3,7 @@
 // Bad! Can have infinitely many instances: f<T>, f<S<T>>, f<S<S<T>>>, ...
 
 mvir 0x6::M {
-    struct S<T> { b: bool }
+    public struct S<T> { b: bool }
 
     fun f<T>(x: T) {
     label b0:

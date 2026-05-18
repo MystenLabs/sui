@@ -1,0 +1,9 @@
+#!/bin/bash
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Stub `prettier-move` used by sui_move_format_tests/help.
+# Echoes args so the snapshot can confirm `--help` is forwarded.
+
+echo "prettier-move called with: $*"
+exit 0

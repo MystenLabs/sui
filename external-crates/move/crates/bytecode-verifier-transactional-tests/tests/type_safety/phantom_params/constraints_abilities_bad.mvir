@@ -1,15 +1,15 @@
 //# publish
 mvir 0x1::M1 {
-    struct NoAbilities { a: bool }
-    struct HasAbilities<phantom T1, T2> has drop, copy, store, key { a: bool }
+    public struct NoAbilities { a: bool }
+    public struct HasAbilities<phantom T1, T2> has drop, copy, store, key { a: bool }
 }
 
 //# publish
 mvir 0x2::M2 {
     import 0x1::M1;
 
-    struct S1<T: drop + copy + store + key> { a: bool }
-    struct S2 {
+    public struct S1<T: drop + copy + store + key> { a: bool }
+    public struct S2 {
         a: Self::S1<M1::HasAbilities<M1::NoAbilities, M1::NoAbilities>>,
     }
 }
@@ -18,13 +18,13 @@ mvir 0x2::M2 {
 mvir 0x3::M3 {
     import 0x1::M1;
 
-    struct HasDrop<phantom T1, T2> has drop { a: bool }
-    struct HasCopy<phantom T1, T2> has copy { a: bool }
-    struct HasStore<phantom T1, T2> has store { a: bool }
-    struct HasKey<phantom T1, T2> has key { a: bool }
+    public struct HasDrop<phantom T1, T2> has drop { a: bool }
+    public struct HasCopy<phantom T1, T2> has copy { a: bool }
+    public struct HasStore<phantom T1, T2> has store { a: bool }
+    public struct HasKey<phantom T1, T2> has key { a: bool }
 
-    struct S1<T1: drop, T2: copy, T3: store, T4: key> { a: bool }
-    struct S2 {
+    public struct S1<T1: drop, T2: copy, T3: store, T4: key> { a: bool }
+    public struct S2 {
         a: Self::S1< Self::HasDrop<M1::NoAbilities, M1::NoAbilities>,
                     Self::HasCopy<M1::NoAbilities, M1::NoAbilities>,
                     Self::HasStore<M1::NoAbilities, M1::NoAbilities>,
@@ -50,10 +50,10 @@ mvir 0x4::M4 {
 mvir 0x5::M3Valid {
     import 0x1::M1;
 
-    struct HasDrop<phantom T1, T2> has drop { a: bool }
-    struct HasCopy<phantom T1, T2> has copy { a: bool }
-    struct HasStore<phantom T1, T2> has store { a: bool }
-    struct HasKey<phantom T1, T2> has key { a: bool }
+    public struct HasDrop<phantom T1, T2> has drop { a: bool }
+    public struct HasCopy<phantom T1, T2> has copy { a: bool }
+    public struct HasStore<phantom T1, T2> has store { a: bool }
+    public struct HasKey<phantom T1, T2> has key { a: bool }
 
 }
 
@@ -76,16 +76,16 @@ mvir 0x6::M5 {
 
 //# publish
 mvir 0x7::M1 {
-    enum NoAbilities { V{ a: bool } }
-    enum HasAbilities<phantom T1, T2> has drop, copy, store, key { V{ a: bool } }
+    public enum NoAbilities { V{ a: bool } }
+    public enum HasAbilities<phantom T1, T2> has drop, copy, store, key { V{ a: bool } }
 }
 
 //# publish
 mvir 0x8::M2 {
     import 0x7::M1;
 
-    enum S1<T: drop + copy + store + key> { V{ a: bool }}
-    enum S2 {
+    public enum S1<T: drop + copy + store + key> { V{ a: bool }}
+    public enum S2 {
         V { a: Self::S1<M1::HasAbilities<M1::NoAbilities, M1::NoAbilities>> } 
     }
 }
@@ -94,13 +94,13 @@ mvir 0x8::M2 {
 mvir 0x9::M3 {
     import 0x7::M1;
 
-    enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
-    enum HasCopy<phantom T1, T2> has copy { V{ a: bool }}
-    enum HasStore<phantom T1, T2> has store { V{ a: bool }}
-    enum HasKey<phantom T1, T2> has key { V{ a: bool }}
+    public enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
+    public enum HasCopy<phantom T1, T2> has copy { V{ a: bool }}
+    public enum HasStore<phantom T1, T2> has store { V{ a: bool }}
+    public enum HasKey<phantom T1, T2> has key { V{ a: bool }}
 
-    enum S1<T1: drop, T2: copy, T3: store, T4: key> { V{ a: bool }}
-    enum S2 {
+    public enum S1<T1: drop, T2: copy, T3: store, T4: key> { V{ a: bool }}
+    public enum S2 {
         V { 
             a: Self::S1< Self::HasDrop<M1::NoAbilities, M1::NoAbilities>,
                     Self::HasCopy<M1::NoAbilities, M1::NoAbilities>,
@@ -128,10 +128,10 @@ mvir 0x10::M4 {
 mvir 0x11::M3Valid {
     import 0x7::M1;
 
-    enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
-    enum HasCopy<phantom T1, T2> has copy { V{ a: bool }}
-    enum HasStore<phantom T1, T2> has store { V{ a: bool }}
-    enum HasKey<phantom T1, T2> has key { V{ a: bool }}
+    public enum HasDrop<phantom T1, T2> has drop { V{ a: bool }}
+    public enum HasCopy<phantom T1, T2> has copy { V{ a: bool }}
+    public enum HasStore<phantom T1, T2> has store { V{ a: bool }}
+    public enum HasKey<phantom T1, T2> has key { V{ a: bool }}
 
 }
 

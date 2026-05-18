@@ -1,6 +1,6 @@
 //# publish
 mvir 0x42::M {
-    struct Foo<T> { x: bool }
+    public struct Foo<T> { x: bool }
     public fun f0<T>() { label b0: return; }
     public fun f3<T>() { label b0: Self::f0<Self::Foo<Self::Foo<Self::Foo<T>>>>(); return; }
     public fun f7<T>() { label b0: Self::f3<Self::Foo<Self::Foo<Self::Foo<Self::Foo<T>>>>>(); return; }

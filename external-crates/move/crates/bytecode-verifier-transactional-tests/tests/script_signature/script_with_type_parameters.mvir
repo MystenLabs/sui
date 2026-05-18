@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::Coin {
-    struct Coin { value: u64 }
+    public struct Coin { value: u64 }
     public fun value(c: &Self::Coin): u64 {
     label b0:
         return *&move(c).Coin::value;

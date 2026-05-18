@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct S<T: key> { b: bool }
+    public struct S<T: key> { b: bool }
 
     fun foo() {
         // bool does not have key

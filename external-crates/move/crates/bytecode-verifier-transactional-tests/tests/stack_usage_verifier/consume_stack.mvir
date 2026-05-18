@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::M {
-    struct R has key { data: vector<u8> }
+    public struct R has key { data: vector<u8> }
 
     fun is_ok_(addr: &address, data: &vector<u8>): bool {
     label b0:

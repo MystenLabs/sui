@@ -33,7 +33,8 @@ pub async fn find_environment(
     wallet: &WalletContext,
     for_publication: bool,
 ) -> anyhow::Result<Environment> {
-    let manifest_envs = RootPackage::<SuiFlavor>::environments(package_path, &SuiFlavor::new())?;
+    let flavor = SuiFlavor::with_client(wallet);
+    let manifest_envs = RootPackage::<SuiFlavor>::environments(package_path, &flavor)?;
     let finder = EnvFinder {
         explicit_env,
         wallet,

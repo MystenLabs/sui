@@ -30,14 +30,14 @@ struct DepSpec {
 }
 
 impl CachePackage {
-    pub async fn execute(&self) -> anyhow::Result<()> {
+    pub async fn execute(&self, flavor: SuiFlavor) -> anyhow::Result<()> {
         let str = format!("dep = {}", self.dependency);
         let dep: DepSpec = toml::from_str(&str)?;
         let env = Environment {
             name: self.environment_name.clone(),
             id: self.environment_id.clone(),
         };
-        let info = cache_package(&env, &dep.dep, SuiFlavor::new()).await?;
+        let info = cache_package(&env, &dep.dep, flavor).await?;
         println!("{}", serde_json::to_string(&info)?);
 
         Ok(())

@@ -3504,11 +3504,13 @@ type Query {
 	"""
 	chainIdentifier: String!
 	"""
-	Fetch a checkpoint by its sequence number, or the latest checkpoint if no sequence number is provided.
+	Fetch a checkpoint by its sequence number or digest, or the latest checkpoint if neither is provided.
+	
+	It is an error to specify both `sequenceNumber` and `digest`.
 	
 	Returns `null` if the checkpoint does not exist in the store, either because it never existed or because it was pruned.
 	"""
-	checkpoint(sequenceNumber: UInt53): Checkpoint
+	checkpoint(sequenceNumber: UInt53, digest: String): Checkpoint
 	"""
 	Paginate checkpoints in the network, optionally bounded to checkpoints in the given epoch.
 	"""
@@ -4067,6 +4069,16 @@ type Subscription {
 	"""
 	checkpoints: Checkpoint!
 	"""
+	Subscribe to events as they are emitted, with optional filtering.
+	
+	Each matching event is yielded individually as it appears in finalized
+	checkpoints. Events are ordered by checkpoint, then by transaction
+	position within the checkpoint, then by position within the transaction.
+	
+	This subscription is not yet available for use.
+	"""
+	events(filter: EventFilter): Event!
+	"""
 	Subscribe to transactions as they are finalized, with optional filtering.
 	
 	Each matching transaction is yielded individually as it appears in finalized
@@ -4257,6 +4269,10 @@ type TransactionEffects {
 	The unchanged consensus-managed objects that were referenced by this transaction.
 	"""
 	unchangedConsensusObjects(first: Int, after: String, last: Int, before: String): UnchangedConsensusObjectConnection
+	"""
+	The schema version of the effects struct.
+	"""
+	version: Int
 }
 
 input TransactionFilter {

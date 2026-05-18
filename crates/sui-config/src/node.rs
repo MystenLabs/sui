@@ -30,6 +30,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::node_role::{FullNodeSyncMode, NodeRole};
 use sui_types::supported_protocol_versions::{Chain, SupportedProtocolVersions};
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
@@ -83,6 +84,12 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
+
+    /// The sync mode for full nodes.
+    /// When `None` is provided and this is a full node then the default is used which is `StateSyncOnly`.
+    /// For validator nodes this is expected to be `None`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fullnode_sync_mode: Option<FullNodeSyncMode>,
 
     #[serde(default = "default_enable_index_processing")]
     pub enable_index_processing: bool,
@@ -883,6 +890,10 @@ impl NodeConfig {
         self.db_path.join("db_checkpoints")
     }
 
+    pub fn db_store_path(&self) -> PathBuf {
+        self.db_path().join("store")
+    }
+
     pub fn archive_path(&self) -> PathBuf {
         self.db_path.join("archive")
     }
@@ -897,6 +908,40 @@ impl NodeConfig {
 
     pub fn consensus_config(&self) -> Option<&ConsensusConfig> {
         self.consensus_config.as_ref()
+    }
+
+    /// Returns the node role as declared by configuration. This is the
+    /// *intended* role used for one-time startup decisions (e.g. whether to
+    /// create RPC servers or index stores). The authoritative per-epoch role
+    /// lives on `AuthorityPerEpochStore::node_role()`.
+    pub fn intended_node_role(&self) -> NodeRole {
+        let has_consensus_config = self.consensus_config.is_some();
+
+        match (self.fullnode_sync_mode, has_consensus_config) {
+            (Some(FullNodeSyncMode::ConsensusObserver), _) => {
+                assert!(
+                    self.has_observer_config_peers(),
+                    "Observer peers must be configured when sync mode is ConsensusObserver"
+                );
+                NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+            }
+            (Some(FullNodeSyncMode::StateSyncOnly), true) => {
+                panic!("Consensus config should not be set for a StateSyncOnly full node");
+            }
+            (Some(FullNodeSyncMode::StateSyncOnly), false) => {
+                NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+            }
+            (None, false) => NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly),
+            (None, true) => NodeRole::Validator,
+        }
+    }
+
+    pub fn has_observer_config_peers(&self) -> bool {
+        self.consensus_config
+            .as_ref()
+            .and_then(|c| c.parameters.as_ref())
+            .map(|p| !p.observer.peers.is_empty())
+            .unwrap_or(false)
     }
 
     pub fn genesis(&self) -> Result<&genesis::Genesis> {
@@ -1924,6 +1969,111 @@ remote-store-options:
         // Clean up
         std::fs::remove_file(&service_account_file).ok();
         std::fs::remove_file(&aws_key_file).ok();
+    }
+
+    mod intended_node_role_tests {
+        use super::*;
+        use crate::ConsensusConfig;
+        use consensus_config::Parameters as ConsensusParameters;
+        use fastcrypto::ed25519::Ed25519KeyPair;
+        use sui_types::node_role::{FullNodeSyncMode, NodeRole};
+
+        fn fullnode_template_config() -> NodeConfig {
+            const TEMPLATE: &str = include_str!("../data/fullnode-template.yaml");
+            serde_yaml::from_str(TEMPLATE).unwrap()
+        }
+
+        fn minimal_consensus_config() -> ConsensusConfig {
+            ConsensusConfig {
+                db_path: PathBuf::from("/tmp/consensus"),
+                db_retention_epochs: None,
+                db_pruner_period_secs: None,
+                max_pending_transactions: None,
+                parameters: Default::default(),
+                listen_address: None,
+                external_address: None,
+            }
+        }
+
+        fn consensus_config_with_observer_peers() -> ConsensusConfig {
+            let mut config = minimal_consensus_config();
+            let kp = Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32]));
+            let peer = consensus_config::PeerRecord {
+                public_key: consensus_config::NetworkPublicKey::new(kp.public().clone()),
+                address: "/ip4/127.0.0.1/udp/8080".parse().unwrap(),
+            };
+            let mut params = ConsensusParameters::default();
+            params.observer.peers = vec![peer];
+            config.parameters = Some(params);
+            config
+        }
+
+        #[test]
+        fn validator_with_consensus_config() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(minimal_consensus_config());
+            config.fullnode_sync_mode = None;
+
+            assert_eq!(config.intended_node_role(), NodeRole::Validator);
+        }
+
+        #[test]
+        fn fullnode_explicit_state_sync() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = None;
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::StateSyncOnly);
+
+            assert_eq!(
+                config.intended_node_role(),
+                NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+            );
+        }
+
+        #[test]
+        fn fullnode_implicit_state_sync() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = None;
+            config.fullnode_sync_mode = None;
+
+            assert_eq!(
+                config.intended_node_role(),
+                NodeRole::FullNode(FullNodeSyncMode::StateSyncOnly)
+            );
+        }
+
+        #[test]
+        fn fullnode_consensus_observer() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(consensus_config_with_observer_peers());
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::ConsensusObserver);
+
+            assert_eq!(
+                config.intended_node_role(),
+                NodeRole::FullNode(FullNodeSyncMode::ConsensusObserver)
+            );
+        }
+
+        #[test]
+        #[should_panic(
+            expected = "Consensus config should not be set for a StateSyncOnly full node"
+        )]
+        fn state_sync_with_consensus_config_panics() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(minimal_consensus_config());
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::StateSyncOnly);
+
+            config.intended_node_role();
+        }
+
+        #[test]
+        #[should_panic(expected = "Observer peers must be configured")]
+        fn observer_without_peers_panics() {
+            let mut config = fullnode_template_config();
+            config.consensus_config = Some(minimal_consensus_config());
+            config.fullnode_sync_mode = Some(FullNodeSyncMode::ConsensusObserver);
+
+            config.intended_node_role();
+        }
     }
 }
 

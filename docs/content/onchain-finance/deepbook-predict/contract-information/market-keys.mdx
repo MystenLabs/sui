@@ -1,0 +1,116 @@
+---
+title: Market Keys
+description: Learn how DeepBook Predict identifies binary positions and vertical ranges with MarketKey and RangeKey.
+keywords:
+  [
+    deepbook predict market key,
+    marketkey,
+    rangekey,
+    binary position,
+    vertical range,
+    strike,
+    expiry,
+  ]
+---
+
+`MarketKey` and `RangeKey` identify the internal position quantities stored in a `PredictManager`.
+
+Use `MarketKey` for binary positions keyed by oracle ID, expiry, strike, and direction. Use `RangeKey` for vertical ranges keyed by oracle ID, expiry, lower strike, and higher strike.
+
+## Binary position keys
+
+<details>
+<summary>Create `MarketKey` values</summary>
+
+Use `up()`, `down()`, or `new()` to create keys for binary positions.
+
+<ImportContent
+	source="packages/predict/sources/market_key/market_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="up,down,new"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Read `MarketKey` fields</summary>
+
+<ImportContent
+	source="packages/predict/sources/market_key/market_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="oracle_id,expiry,strike,is_up,is_down"
+	noComments
+/>
+
+</details>
+
+## Range keys
+
+<details>
+<summary>Create `RangeKey` values</summary>
+
+Use `new()` to create a vertical range key. It aborts if `lower_strike` is not less than `higher_strike`.
+
+<ImportContent
+	source="packages/predict/sources/market_key/range_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="new"
+	noComments
+/>
+
+</details>
+
+<details>
+<summary>Read `RangeKey` fields</summary>
+
+<ImportContent
+	source="packages/predict/sources/market_key/range_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	fun="oracle_id,expiry,lower_strike,higher_strike"
+	noComments
+/>
+
+</details>
+
+## Structs
+
+<details>
+<summary>`MarketKey`</summary>
+
+<ImportContent
+	source="packages/predict/sources/market_key/market_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="MarketKey"
+/>
+
+</details>
+
+<details>
+<summary>`RangeKey`</summary>
+
+<ImportContent
+	source="packages/predict/sources/market_key/range_key.move"
+	mode="code"
+	org="MystenLabs"
+	repo="deepbookv3"
+	branch="predict-testnet-4-16"
+	struct="RangeKey"
+/>
+
+</details>

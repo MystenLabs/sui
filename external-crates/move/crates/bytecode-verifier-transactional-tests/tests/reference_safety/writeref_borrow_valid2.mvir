@@ -1,6 +1,6 @@
 //# publish
 mvir 0x1::M {
-    struct S { f: u64, g: u64, h: u64 }
+    public struct S { f: u64, g: u64, h: u64 }
 
     fun t1(root: &mut Self::S, cond: bool) {
         let x: &mut u64;

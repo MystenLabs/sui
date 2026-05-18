@@ -7,7 +7,7 @@
 mvir 0x0::m {
     import 0x2::tx_context;
 
-    struct M has drop { some_field: bool }
+    public struct M has drop { some_field: bool }
 
     fun init(_otw: Self::M, _ctx: &mut tx_context::TxContext) {
         label l0:

@@ -3,7 +3,7 @@
 //# publish
 
 mvir 0x1::Tester {
-    struct T has copy { f: u64 }
+    public struct T has copy { f: u64 }
 
     fun f1(s: &Self::T, f: &mut u64) {
     label b0:
@@ -26,7 +26,7 @@ mvir 0x1::Tester {
 //# publish
 
 mvir 0x1::Tester {
-    struct T has copy { f: u64 }
+    public struct T has copy { f: u64 }
 
     fun f2(f: &mut u64, s: &Self::T) {
     label b0:

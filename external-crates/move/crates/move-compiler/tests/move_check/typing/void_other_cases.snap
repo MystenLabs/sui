@@ -1,0 +1,42 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04004]: expected a single non-reference type
+  ┌─ tests/move_check/typing/void_other_cases.move:5:18
+  │
+5 │         let _o = option::some(abort 0);
+  │                  ^^^^^^^^^^^^^^^^^^^^^
+  │                  │            │
+  │                  │            Could not find a concrete type for this expression
+  │                  Invalid type argument
+
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_check/typing/void_other_cases.move:10:25
+   │
+10 │         let _v = vector[vector[abort 0]];
+   │                         ^^^^^^^^^^^^^^^
+   │                         │      │
+   │                         │      Could not find a concrete type for this expression
+   │                         Invalid 'vector' type
+
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_check/typing/void_other_cases.move:16:18
+   │
+16 │         let _x = id(abort 0);
+   │                  ^^^^^^^^^^^
+   │                  │  │
+   │                  │  Could not find a concrete type for this expression
+   │                  Invalid type argument
+
+error[E04004]: expected a single non-reference type
+   ┌─ tests/move_check/typing/void_other_cases.move:21:18
+   │
+21 │         let _v = vector[if (cond) abort 0 else abort 1];
+   │                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                  │                │
+   │                  │                Could not find a concrete type for this expression
+   │                  Invalid 'vector' type

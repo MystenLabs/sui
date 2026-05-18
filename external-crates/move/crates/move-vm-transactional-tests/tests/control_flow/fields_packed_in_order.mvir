@@ -1,6 +1,6 @@
 //# publish
 mvir 0x6::M {
-    struct T has drop {
+    public struct T has drop {
         b: u64,
         a: u64
     }

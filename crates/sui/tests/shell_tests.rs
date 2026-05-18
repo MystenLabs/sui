@@ -91,9 +91,11 @@ async fn shell_tests(path: &Path) -> datatest_stable::Result<()> {
         output.status.success(),
         output.status.code().unwrap_or(!0),
         String::from_utf8_lossy(&output.stdout)
+            .replace("\r\n", "\n")
             .replace(r"\\", "/")
             .replace(r"\", "/"),
         String::from_utf8_lossy(&output.stderr)
+            .replace("\r\n", "\n")
             .replace(r"\\", "/")
             .replace(r"\", "/"),
     );

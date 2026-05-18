@@ -21,7 +21,7 @@ use colored::Colorize;
 use move_compiler::{
     Compiler, Flags,
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::warning_filters::WarningFiltersBuilder,
+    diagnostics::filter::empty_filter_scope,
     editions::{Edition, Flavor},
     linters,
     shared::{
@@ -391,7 +391,7 @@ pub fn make_deps_for_compiler<W: Write + Send, F: MoveFlavor>(
                 .or(build_config.default_edition)
                 .unwrap_or(Edition::LEGACY), // TODO require edition
             flavor: Flavor::from_str(pkg.flavor().unwrap_or("sui"))?,
-            warning_filter: WarningFiltersBuilder::new_for_source(),
+            warning_filter: empty_filter_scope(),
         };
 
         // Assign a unique name for the compiler for each package.
