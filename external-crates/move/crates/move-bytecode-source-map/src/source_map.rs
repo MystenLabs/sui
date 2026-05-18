@@ -900,6 +900,13 @@ impl SourceMap {
             for (_, loc) in function_map.code_map.iter_mut() {
                 *loc = Loc::new(file_hash, loc.start(), loc.end());
             }
+            // Defensive for generated source maps. Disassembly bytecode maps currently
+            // leave macro metadata empty because bytecode does not retain macro frames.
+            for frame in function_map.macro_frame_info.iter_mut() {
+                frame.source_loc =
+                    Loc::new(file_hash, frame.source_loc.start(), frame.source_loc.end());
+                frame.call_loc = Loc::new(file_hash, frame.call_loc.start(), frame.call_loc.end());
+            }
         }
     }
 
