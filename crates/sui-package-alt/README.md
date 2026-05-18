@@ -7,5 +7,5 @@ It is a thin wrapper around the `move-package-alt` crate to fill in the sui-spec
 
 See also the [user guide][guide] ([generated][generated]).
 
-[guide]: /docs/content/guides/developer/sui-101/move-package-management.mdx
+[guide]: /docs/content/develop/manage-packages/move-package-management.mdx
 [generated]: https://docs.sui.io/guides/developer/packages/move-package-management
