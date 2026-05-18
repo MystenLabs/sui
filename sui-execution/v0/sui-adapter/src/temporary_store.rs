@@ -582,9 +582,7 @@ impl TemporaryStore<'_> {
                             )
                         }
                         Owner::Party { .. } => {
-                            unimplemented!(
-                                "Party does not exist for this execution version"
-                            )
+                            unimplemented!("Party does not exist for this execution version")
                         }
                     }
                 }
@@ -617,9 +615,7 @@ impl TemporaryStore<'_> {
                             )
                         }
                         Owner::Party { .. } => {
-                            unimplemented!(
-                                "Party does not exist for this execution version"
-                            )
+                            unimplemented!("Party does not exist for this execution version")
                         }
                     }
                 }

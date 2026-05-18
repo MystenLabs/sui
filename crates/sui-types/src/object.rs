@@ -590,6 +590,13 @@ impl ObjectPermissions {
         Self::from_bits(ObjectPermission::Wrap as u64 | ObjectPermission::MutableUsage as u64);
     pub const ALL: Self = Self::from_bits(Self::ALL_BITS);
 
+    pub const LEGACY_SHARED_OBJECT: Self = Self::from_bits(
+        (ObjectPermission::Write as u64)
+            | (ObjectPermission::Delete as u64)
+            | (ObjectPermission::MutableUsage as u64)
+            | (ObjectPermission::ImmutableUsage as u64),
+    );
+
     /// Private const constructor. Asserts that:
     /// - no unknown bits are set
     /// - if any individual mutable permission is set, `MutableUsage` is also set

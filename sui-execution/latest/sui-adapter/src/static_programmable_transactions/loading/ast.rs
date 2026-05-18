@@ -21,7 +21,7 @@ use std::rc::Rc;
 use sui_types::{
     Identifier, TypeTag,
     base_types::{ObjectID, ObjectRef, RESOLVED_TX_CONTEXT, SequenceNumber, TxContextKind},
-    object::{ObjectPermissions, Party},
+    object::ObjectPermissions,
 };
 
 //**************************************************************************************************
@@ -51,30 +51,25 @@ pub enum InputArg {
     FundsWithdrawal(FundsWithdrawalArg),
 }
 
-#[derive(Debug, Clone)]
-pub enum SharedObjectKind {
-    Legacy,
-    Party(ObjectPermissions),
+#[derive(Debug)]
+#[cfg_attr(debug_assertions, derive(Clone))]
+pub enum ObjectArgKind {
+    ImmObject(ObjectRef),
+    OwnedObject(ObjectRef),
+    ConsensusObject {
+        id: ObjectID,
+        initial_shared_version: SequenceNumber,
+    },
 }
 
 #[derive(Debug)]
 #[cfg_attr(debug_assertions, derive(Clone))]
-pub enum ObjectArg {
-    ImmObject(ObjectRef),
-    OwnedObject(ObjectRef),
-    SharedObject {
-        id: ObjectID,
-        initial_shared_version: SequenceNumber,
-        mutability: ObjectMutability,
-        kind: SharedObjectKind,
-    },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ObjectMutability {
-    Mutable,
-    Immutable,
-    NonExclusiveWrite,
+pub struct ObjectArg {
+    pub kind: ObjectArgKind,
+    /// Permissions, potentially refined/limited based on the input argument. For example if a
+    /// shared object is used but marked as read-only, the permissiones would be refined to being
+    /// _only_ immutable usage.
+    pub refined_permissions: ObjectPermissions,
 }
 
 #[derive(Debug)]
@@ -177,17 +172,15 @@ pub use sui_types::transaction::Argument;
 
 impl ObjectArg {
     pub fn id(&self) -> ObjectID {
-        match self {
-            ObjectArg::ImmObject(oref) | ObjectArg::OwnedObject(oref) => oref.0,
-            ObjectArg::SharedObject { id, .. } => *id,
-        }
+        self.kind.id()
     }
+}
 
-    pub fn mutability(&self) -> ObjectMutability {
+impl ObjectArgKind {
+    pub fn id(&self) -> ObjectID {
         match self {
-            ObjectArg::ImmObject(_) => ObjectMutability::Immutable,
-            ObjectArg::OwnedObject(_) => ObjectMutability::Mutable,
-            ObjectArg::SharedObject { mutability, .. } => *mutability,
+            Self::ImmObject(oref) | Self::OwnedObject(oref) => oref.0,
+            Self::ConsensusObject { id, .. } => *id,
         }
     }
 }

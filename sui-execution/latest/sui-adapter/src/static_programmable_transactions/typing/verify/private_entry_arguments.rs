@@ -388,7 +388,8 @@ impl Context {
 ///   does not have `drop` and does not have `store`.
 /// - A clique is the "hot" in one of two ways:
 ///   - If it contains 1 or more "hot potato" values
-///   - If it is marked as "always hot" if a command consumes a shared object by-value
+///   - If it is marked as "always hot" if a command consumes an object that requires post-execution
+///     checks as specified by its permissions.
 /// - A non-public `entry` function cannot have any inputs that are in a `hot` clique.
 /// - Note that command inputs are released before checking the rules, so an `entry` function can
 ///   consume a hot potato value if it is the last "heating" value in its clique.
@@ -419,7 +420,7 @@ fn command<Mode: ExecutionMode>(
         command,
         result_type,
         drop_values,
-        consumed_shared_objects,
+        incurs_post_execution_checks,
     } = c;
     let argument_cliques = arguments(env, context, command.arguments())?;
     match command {
@@ -434,8 +435,7 @@ fn command<Mode: ExecutionMode>(
     let merged_clique = context
         .cliques
         .merge::<Mode::Error>(argument_cliques.into_iter().map(|(_, c)| c).collect())?;
-    let consumes_shared_objects = !consumed_shared_objects.is_empty();
-    if consumes_shared_objects {
+    if *incurs_post_execution_checks {
         context
             .cliques
             .mark_always_hot::<Mode::Error>(merged_clique)?;

@@ -306,7 +306,7 @@ impl<'a> ObjectRuntime<'a> {
             TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
-                // don't use == for dummy values in Shared or ConsensusAddressOwner
+                // don't use == for dummy values in Shared, ConsensusAddressOwner, or Party
                 (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
                 (
                     Owner::ConsensusAddressOwner {
@@ -316,7 +316,23 @@ impl<'a> ObjectRuntime<'a> {
                         owner: old_owner, ..
                     },
                 ) if new_owner == old_owner => TransferResult::SameOwner,
-                (new, old) if new == old => TransferResult::SameOwner,
+                (
+                    Owner::Party {
+                        permissions: new_permissions,
+                        ..
+                    },
+                    Owner::Party {
+                        permissions: old_permissions,
+                        ..
+                    },
+                ) if new_permissions == old_permissions => TransferResult::SameOwner,
+                (new @ Owner::AddressOwner(_), old)
+                | (new @ Owner::ObjectOwner(_), old)
+                | (new @ Owner::Immutable, old)
+                    if new == old =>
+                {
+                    TransferResult::SameOwner
+                }
                 _ => TransferResult::OwnerChanged,
             }
         } else if is_framework_obj {

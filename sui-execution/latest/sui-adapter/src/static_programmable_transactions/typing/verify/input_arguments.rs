@@ -9,8 +9,8 @@ use crate::{
     },
     static_programmable_transactions::{
         env::Env,
-        loading::ast::{ObjectMutability, Type},
-        typing::ast::{self as T, BytesConstraint, ObjectArg},
+        loading::ast::Type,
+        typing::ast::{self as T, BytesConstraint},
     },
 };
 use indexmap::IndexSet;
@@ -38,29 +38,13 @@ impl Context {
         let objects = txn
             .objects
             .iter()
-            .map(|object_input| match &object_input.arg {
-                ObjectArg::ImmObject(_) => ObjectUsage {
-                    allow_by_value: false,
-                    allow_by_mut_ref: false,
-                },
-                ObjectArg::OwnedObject(_) => ObjectUsage {
-                    allow_by_value: true,
-                    allow_by_mut_ref: true,
-                },
-                ObjectArg::SharedObject { mutability, .. } => ObjectUsage {
-                    allow_by_value: match mutability {
-                        ObjectMutability::Mutable => true,
-                        ObjectMutability::Immutable => false,
-                        // NonExclusiveWrite can be taken by value, but unless it is re-shared
-                        // with no mutations, the transaction will abort.
-                        ObjectMutability::NonExclusiveWrite => true,
-                    },
-                    allow_by_mut_ref: match mutability {
-                        ObjectMutability::Mutable => true,
-                        ObjectMutability::Immutable => false,
-                        ObjectMutability::NonExclusiveWrite => true,
-                    },
-                },
+            .map(|object_input| {
+                let allow_by_value = object_input.arg.refined_permissions.can_use_mutably();
+                let allow_by_mut_ref = object_input.arg.refined_permissions.can_use_mutably();
+                ObjectUsage {
+                    allow_by_value,
+                    allow_by_mut_ref,
+                }
             })
             .collect();
         Self { objects }
