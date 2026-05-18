@@ -5,7 +5,7 @@ info:
   edition: 2024.alpha
   lint: false
 ---
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/macro_identifier_for_non_macro.move:2:29
   │
 2 │     public struct S<phantom $T>()
@@ -13,7 +13,7 @@ error[E02010]: invalid name
   │
   = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/macro_identifier_for_non_macro.move:3:16
   │
 3 │     fun foo<T>($x: u64, $f: |u64|) {
@@ -21,7 +21,7 @@ error[E02010]: invalid name
   │
   = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
 
-error[E02010]: invalid name
+error[E02010]: invalid declaration name
   ┌─ tests/move_2024/expansion/macro_identifier_for_non_macro.move:3:25
   │
 3 │     fun foo<T>($x: u64, $f: |u64|) {

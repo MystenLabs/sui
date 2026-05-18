@@ -11,7 +11,7 @@ error[E04036]: non-exhaustive pattern
 4 │         match (e) { E::W(0) => 1 }
   │                ^ Pattern 'E::W(false)' not covered
 
-warning[W04039]: unable to determine principal type for literal
+warning[W04039]: unable to determine literal's type
   ┌─ tests/move_2024/expansion/match_expansion_25451.move:4:26
   │
 4 │         match (e) { E::W(0) => 1 }
