@@ -981,7 +981,84 @@ fn verify_sigs_rec<S: SignatureVerifiable<Addr>, Addr: PartialEq + Eq + Copy>(
 }
 
 // ---------------------------------------------------------------------------
-// § 11  Public entry point
+// § 11  Aliased-signers preprocessing
+// ---------------------------------------------------------------------------
+
+/// The alias set for a single `signer`: the first matching entry's vec if one
+/// exists in `aliased`, otherwise just `[signer]` (the typical case).
+pub open spec fn lookup_aliases<Addr>(
+    signer: Addr,
+    aliased: Seq<(Addr, Vec<Addr>)>,
+) -> Seq<Addr>
+    decreases aliased.len()
+{
+    if aliased.len() == 0 {
+        seq![signer]
+    } else if aliased[0].0 == signer {
+        aliased[0].1@
+    } else {
+        lookup_aliases(signer, aliased.skip(1))
+    }
+}
+
+/// Look up the alias set for `signer` in `aliased_addresses`.
+/// Returns `[signer]` if no entry matches (the typical case).
+///
+/// Trusted (`external_body`) — tuple-field access through slice indexing is
+/// not cleanly tracked by Verus's exec-to-spec mapping. The spec captures
+/// exactly what callers need via `lookup_aliases`.
+#[verifier::external_body]
+fn find_aliases_for_signer<Addr: PartialEq + Eq + Copy>(
+    signer: Addr,
+    aliased_addresses: &[(Addr, Vec<Addr>)],
+) -> (result: Vec<Addr>)
+    ensures
+        result@ == lookup_aliases::<Addr>(signer, aliased_addresses@),
+{
+    aliased_addresses
+        .iter()
+        .find(|(addr, _)| *addr == signer)
+        .map(|(_, a)| a.clone())
+        .unwrap_or_else(|| vec![signer])
+}
+
+/// Build the `(canonical_sender, aliases)` pairs that `verify_signatures` expects.
+///
+/// For each signer, looks up its alias set in `aliased_addresses`; if absent,
+/// the alias set defaults to `[signer]`.
+pub fn build_required_signers<Addr: PartialEq + Eq + Copy>(
+    signers: &[Addr],
+    aliased_addresses: &[(Addr, Vec<Addr>)],
+) -> (result: Vec<(Addr, Vec<Addr>)>)
+    ensures
+        result@.len() == signers@.len(),
+        forall|k: int| 0 <= k < signers@.len() ==>
+            (#[trigger] result@[k].0 == signers@[k])
+            && result@[k].1@ == lookup_aliases::<Addr>(signers@[k], aliased_addresses@),
+{
+    let n = signers.len();
+    let mut result: Vec<(Addr, Vec<Addr>)> = Vec::with_capacity(n);
+    let mut i = 0usize;
+    while i < n
+        invariant
+            n == signers@.len(),
+            i <= n,
+            result@.len() == i,
+            forall|k: int| 0 <= k < i as int ==>
+                (#[trigger] result@[k].0 == signers@[k])
+                && result@[k].1@ == lookup_aliases::<Addr>(signers@[k], aliased_addresses@),
+        decreases n - i
+    {
+        let signer = signers[i];
+        let aliases = find_aliases_for_signer(signer, aliased_addresses);
+        result.push((signer, aliases));
+        i += 1;
+    }
+    result
+}
+
+// ---------------------------------------------------------------------------
+// § 12  Public entry point
 // ---------------------------------------------------------------------------
 
 /// Verify signatures on a user-signed transaction.
