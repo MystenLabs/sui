@@ -14,7 +14,7 @@
 
 #[cfg(verus_only)]
 use crate::utils::nonempty_view;
-use crate::utils::{clone_and_set, prepend_u8, slice_contains};
+use crate::utils::{clone_and_set, copy_eq, nonempty_to_vec, prepend_u8, slice_contains};
 use nonempty::NonEmpty;
 use vstd::prelude::*;
 
@@ -1004,15 +1004,33 @@ pub open spec fn lookup_aliases<Addr>(
     }
 }
 
+/// If `signer` doesn't match any of the first `i` entries, the lookup result
+/// is unchanged when those entries are skipped.
+proof fn lemma_lookup_aliases_skip<Addr>(
+    signer: Addr,
+    aliased: Seq<(Addr, NonEmpty<Addr>)>,
+    i: int,
+)
+    requires
+        0 <= i <= aliased.len(),
+        forall|k: int| 0 <= k < i ==> #[trigger] aliased[k].0 != signer,
+    ensures
+        lookup_aliases(signer, aliased) == lookup_aliases(signer, aliased.skip(i))
+    decreases i
+{
+    if i == 0 {
+        assert(aliased.skip(0) =~= aliased);
+    } else {
+        lemma_lookup_aliases_skip::<Addr>(signer, aliased, i - 1);
+        assert(aliased.skip(i - 1)[0] == aliased[i - 1]);
+        assert(aliased.skip(i - 1).skip(1) =~= aliased.skip(i));
+    }
+}
+
 /// Look up the alias set for `signer` in `aliased_addresses`.
 /// Returns `[signer]` if no entry matches (the typical case).
 ///
-/// Trusted (`external_body`).  The obstacle is unrelated to NonEmpty: Verus
-/// does not currently connect `aliased[i].0` (exec) to `aliased@[i].0` (spec)
-/// through tuple-field access on slice indexing, so the if-branch's failure
-/// can't be lifted to the spec inequality needed for the loop invariant.
-/// The spec captures exactly what callers need via `lookup_aliases`.
-#[verifier::external_body]
+/// Uses `copy_eq` to bridge exec `PartialEq::eq` to spec `==`.
 fn find_aliases_for_signer<Addr: PartialEq + Eq + Copy>(
     signer: Addr,
     aliased_addresses: &[(Addr, NonEmpty<Addr>)],
@@ -1020,11 +1038,35 @@ fn find_aliases_for_signer<Addr: PartialEq + Eq + Copy>(
     ensures
         result@ == lookup_aliases::<Addr>(signer, aliased_addresses@),
 {
-    aliased_addresses
-        .iter()
-        .find(|(addr, _)| *addr == signer)
-        .map(|(_, a)| a.iter().cloned().collect())
-        .unwrap_or_else(|| vec![signer])
+    let n = aliased_addresses.len();
+    let mut i = 0usize;
+    while i < n
+        invariant
+            n == aliased_addresses@.len(),
+            i <= n,
+            forall|k: int| 0 <= k < i as int ==> #[trigger] aliased_addresses@[k].0 != signer,
+        decreases n - i
+    {
+        // copy_eq ensures: result <==> (a == b), bridging exec PartialEq to spec ==
+        if copy_eq(aliased_addresses[i].0, signer) {
+            let result = nonempty_to_vec(&aliased_addresses[i].1);
+            proof {
+                lemma_lookup_aliases_skip::<Addr>(signer, aliased_addresses@, i as int);
+                assert(aliased_addresses@.skip(i as int)[0] == aliased_addresses@[i as int]);
+            }
+            return result;
+        }
+        proof {
+            // copy_eq ensures: false <==> aliased_addresses@[i].0 == signer
+            assert(aliased_addresses@[i as int].0 != signer);
+        }
+        i += 1;
+    }
+    proof {
+        lemma_lookup_aliases_skip::<Addr>(signer, aliased_addresses@, n as int);
+        assert(aliased_addresses@.skip(n as int) =~= Seq::<(Addr, NonEmpty<Addr>)>::empty());
+    }
+    vec![signer]
 }
 
 /// Build the `(canonical_sender, aliases)` pairs that `verify_signatures` expects.
