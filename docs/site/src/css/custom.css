@@ -2798,3 +2798,9 @@ html[data-theme='dark'] .protoUnionNote {
   color: var(--ifm-navbar-link-color) !important;
   background: transparent !important;
 }
+
+/* Force code block buttons to always be visible (not just on hover) */
+[class*="buttonGroup_"] {
+  opacity: 1 !important;
+  transition: none !important;
+}
