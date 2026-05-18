@@ -213,14 +213,8 @@ pub fn verify_sender_signed_data_message_signatures(
         .into());
     }
 
-    // Delegate the (signer, aliases) pair construction to the verified function.
-    let signers: Vec<SuiAddress> = intent_message
-        .value
-        .required_signers()
-        .into_iter()
-        .collect();
     let required_signers = sui_types_verified::signature_verification::build_required_signers(
-        &signers,
+        &intent_message.value.required_signers(),
         &aliased_addresses,
     );
 

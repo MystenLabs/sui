@@ -14,7 +14,10 @@
 
 #[cfg(verus_only)]
 use crate::utils::nonempty_view;
-use crate::utils::{clone_and_set, copy_eq, nonempty_to_vec, prepend_u8, slice_contains};
+use crate::utils::{
+    clone_and_set, copy_eq, nonempty_index, nonempty_len, nonempty_to_vec, prepend_u8,
+    slice_contains,
+};
 use nonempty::NonEmpty;
 use vstd::prelude::*;
 
@@ -1074,29 +1077,29 @@ fn find_aliases_for_signer<Addr: PartialEq + Eq + Copy>(
 /// For each signer, looks up its alias set in `aliased_addresses`; if absent,
 /// the alias set defaults to `[signer]`.
 pub fn build_required_signers<Addr: PartialEq + Eq + Copy>(
-    signers: &[Addr],
+    signers: &NonEmpty<Addr>,
     aliased_addresses: &[(Addr, NonEmpty<Addr>)],
 ) -> (result: Vec<(Addr, Vec<Addr>)>)
     ensures
-        result@.len() == signers@.len(),
-        forall|k: int| 0 <= k < signers@.len() ==>
-            (#[trigger] result@[k].0 == signers@[k])
-            && result@[k].1@ == lookup_aliases::<Addr>(signers@[k], aliased_addresses@),
+        result@.len() == nonempty_view(signers).len(),
+        forall|k: int| 0 <= k < nonempty_view(signers).len() ==>
+            (#[trigger] result@[k].0 == nonempty_view(signers)[k])
+            && result@[k].1@ == lookup_aliases::<Addr>(nonempty_view(signers)[k], aliased_addresses@),
 {
-    let n = signers.len();
+    let n = nonempty_len(signers);
     let mut result: Vec<(Addr, Vec<Addr>)> = Vec::with_capacity(n);
     let mut i = 0usize;
     while i < n
         invariant
-            n == signers@.len(),
+            n == nonempty_view(signers).len(),
             i <= n,
             result@.len() == i,
             forall|k: int| 0 <= k < i as int ==>
-                (#[trigger] result@[k].0 == signers@[k])
-                && result@[k].1@ == lookup_aliases::<Addr>(signers@[k], aliased_addresses@),
+                (#[trigger] result@[k].0 == nonempty_view(signers)[k])
+                && result@[k].1@ == lookup_aliases::<Addr>(nonempty_view(signers)[k], aliased_addresses@),
         decreases n - i
     {
-        let signer = signers[i];
+        let signer = nonempty_index(signers, i);
         let aliases = find_aliases_for_signer(signer, aliased_addresses);
         result.push((signer, aliases));
         i += 1;
