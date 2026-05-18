@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object::rpc_visitor::Meter;
-use crate::object::rpc_visitor::MeterError;
+use crate::rpc_format::Meter;
+use crate::rpc_format::MeterError;
 
-/// A trait for serializing Move values into some nested structured representation that supports
+/// A trait for serializing values into some nested structured representation that supports
 /// `null`, `bool`, numbers, strings, vectors, and maps (e.g. JSON or Protobuf).
 ///
 /// Formats decide both the output shape and how each output operation is charged against a meter.
