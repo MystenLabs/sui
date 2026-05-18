@@ -242,7 +242,7 @@ pub(crate) mod address_owned_objects_query {
 
     const PAGE_SIZE: i32 = 50;
 
-    /// Lightweight metadata for an object owned by an address at a checkpoint.
+    /// Lightweight metadata for an address-owned object at a checkpoint.
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub(crate) struct AddressOwnedObject {
         pub(crate) object_id: ObjectID,
@@ -503,7 +503,7 @@ pub(crate) mod address_owned_objects_query {
         object_id: &str,
     ) -> Result<SuiAddressType, Error> {
         address
-            .ok_or_else(|| anyhow!("address seed entry is missing owner address"))?
+            .context("address seed entry is missing owner address")?
             .address
             .0
             .parse::<SuiAddressType>()

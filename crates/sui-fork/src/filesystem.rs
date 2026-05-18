@@ -126,7 +126,7 @@ impl RemovedObjectKind {
     }
 }
 
-/// Index entry for a live object owned by an address.
+/// Index entry for a live address-owned object.
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub(crate) struct OwnedObjectEntry {
     pub(crate) owner: SuiAddress,
