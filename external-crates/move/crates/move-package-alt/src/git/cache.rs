@@ -17,7 +17,6 @@ use std::{
     process::Stdio,
     sync::OnceLock,
 };
-#[cfg(not(msim))]
 use tokio::process::Command;
 use tracing::debug;
 
@@ -334,7 +333,6 @@ async fn find_default_branch_and_get_sha(repo_url: &str) -> GitResult<GitSha> {
 /// Runs `git <args>` in `cwd`. Fails if there is an io failure or if `git` returns a non-zero
 /// exit status; returns the standard output and logs standard error to `info!`
 // TODO: this should be &Path?
-#[cfg(not(msim))]
 pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResult<String> {
     // Run the git command
 
@@ -352,6 +350,14 @@ pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitR
     debug!("running `{}`", display_cmd(&cmd));
     debug!("  in directory `{:?}`", cmd.as_std().get_current_dir());
 
+    // Under simtest, no tokio runtime is available during initial package fetching, so
+    // run the command synchronously via the inner `std::process::Command`.
+    #[cfg(msim)]
+    let output = cmd
+        .as_std_mut()
+        .output()
+        .map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
+    #[cfg(not(msim))]
     let output = cmd
         .output()
         .await
@@ -378,68 +384,10 @@ pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitR
     String::from_utf8(output.stdout).map_err(|_| GitError::non_utf_output(&cmd, &cwd))
 }
 
-/// Synchronous `std::process::Command` variant used under simtest. simtest does not have a tokio
-/// runtime available during initial setup, so spawning a `tokio::process::Command` would panic.
-/// The function is still `async fn` for signature parity with the non-msim version, but it does
-/// not `.await` any IO and resolves immediately when polled.
-#[cfg(msim)]
-pub async fn run_git_cmd_with_args(args: &[&str], cwd: Option<&PathBuf>) -> GitResult<String> {
-    use std::process::Command as StdCommand;
-
-    let mut cmd = StdCommand::new("git");
-    cmd.args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    cmd.env("GIT_CONFIG_GLOBAL", "");
-
-    if let Some(cwd) = cwd {
-        cmd.current_dir(cwd);
-    }
-
-    debug!("running `{}`", display_std_cmd(&cmd));
-    debug!("  in directory `{:?}`", cmd.get_current_dir());
-
-    let output = cmd
-        .output()
-        .map_err(|e| GitError::io_error(&cmd, &cwd, e))?;
-
-    if !output.stderr.is_empty() {
-        user_info!("output from `{}`", display_std_cmd(&cmd));
-        for line in output.stderr.lines() {
-            user_info!("  │ {}", line.expect("vector read can't fail"));
-        }
-    }
-
-    if !output.stdout.is_empty() {
-        debug!("stdout from `{}`", display_std_cmd(&cmd));
-        for line in output.stdout.lines() {
-            debug!("  │ {}", line.expect("vector read can't fail"));
-        }
-    }
-
-    if !output.status.success() {
-        return Err(GitError::nonzero_exit_status(&cmd, &cwd, output.status));
-    }
-
-    String::from_utf8(output.stdout).map_err(|_| GitError::non_utf_output(&cmd, &cwd))
-}
-
 /// Output the `cmd` and its args in a concise form (without quoting or showing the working directory)
-#[cfg(not(msim))]
 fn display_cmd(cmd: &Command) -> String {
     let mut result: String = cmd.as_std().get_program().to_string_lossy().into();
     for arg in cmd.as_std().get_args() {
-        result.push(' ');
-        result.push_str(arg.to_string_lossy().as_ref());
-    }
-    result
-}
-
-#[cfg(msim)]
-fn display_std_cmd(cmd: &std::process::Command) -> String {
-    let mut result: String = cmd.get_program().to_string_lossy().into();
-    for arg in cmd.get_args() {
         result.push(' ');
         result.push_str(arg.to_string_lossy().as_ref());
     }
