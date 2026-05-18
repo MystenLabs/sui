@@ -63,6 +63,11 @@ pub struct Function {
     /// Return types. Empty for `(): ()`, single element for one return, multiple for a tuple.
     pub returns: Vec<Type>,
     pub code: Exp,
+    /// Basic-block ids that the structurer received as input but never emitted into the
+    /// structured output. Non-empty means the renderer prepends a
+    /// `// Did not structure and emit blocks N, K, ...` notice so the reader knows part of
+    /// the bytecode is missing from this function's source view.
+    pub unstructured_blocks: Vec<u64>,
 }
 
 #[derive(Debug, Clone)]

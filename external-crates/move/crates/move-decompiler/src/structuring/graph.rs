@@ -27,6 +27,12 @@ pub struct Graph {
     /// enclosing-loop successor that `structure_loop` will append after the `Loop` form;
     /// `structure_code_node`'s `next` fusion consults it for the same reason.
     pub loop_exits: HashMap<NodeIndex, HashSet<NodeIndex>>,
+    /// Per-node emission flag. Set when a structurer constructs a `Block`, `IfElse`,
+    /// `Switch`, or `JumpIf` carrying that node's code. After `structure()` returns,
+    /// any input node whose slot is still `false` was never emitted into the structured
+    /// output — the rendered function carries a `// Did not structure and emit blocks …`
+    /// note listing them.
+    pub emitted: Vec<bool>,
 }
 
 impl Graph {
@@ -67,6 +73,7 @@ impl Graph {
             print_heading("loop heads");
             println!("{loop_heads:#?}");
         }
+        let node_count = cfg.node_count();
         let mut graph = Self {
             cfg,
             dom_tree,
@@ -75,6 +82,7 @@ impl Graph {
             post_dominators,
             return_,
             loop_exits: HashMap::new(),
+            emitted: vec![false; node_count],
         };
         // Populate `loop_exits` from the loops' bodies after the graph is otherwise built so
         // `find_loop_nodes` has the dom-tree and back-edges available.
@@ -90,6 +98,28 @@ impl Graph {
         }
         graph.loop_exits = loop_exits;
         graph
+    }
+
+    /// Mark `code` (a basic-block id) as emitted into the structured output. Called at every
+    /// site that constructs a `Block`, `IfElse`, `Switch`, or `JumpIf` carrying a `Code`.
+    pub fn mark_emitted(&mut self, code: u64) {
+        let idx = code as usize;
+        if idx < self.emitted.len() {
+            self.emitted[idx] = true;
+        }
+    }
+
+    /// Input nodes (out of `all_nodes`) whose basic-block ids never got `mark_emitted`
+    /// during structuring. Sorted ascending; intended to drive the rendered
+    /// `// Did not structure and emit blocks …` notice.
+    pub fn unemitted_from(&self, all_nodes: &[NodeIndex]) -> Vec<u64> {
+        let mut out: Vec<u64> = all_nodes
+            .iter()
+            .filter(|n| !self.emitted.get(n.index()).copied().unwrap_or(false))
+            .map(|n| n.index() as u64)
+            .collect();
+        out.sort_unstable();
+        out
     }
 
     pub fn update_latch_nodes(&mut self, node: NodeIndex, latch: NodeIndex) {

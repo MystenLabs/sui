@@ -31,13 +31,16 @@ pub(crate) fn structure(
     config: &config::Config,
     mut input: BTreeMap<D::Label, D::Input>,
     entry_node: D::Label,
-) -> D::Structured {
+) -> (D::Structured, Vec<u64>) {
     // Native functions have empty basic blocks - return early to avoid panicking in Graph::new
     if input.is_empty() {
-        return D::Structured::Seq(vec![]);
+        return (D::Structured::Seq(vec![]), vec![]);
     }
 
     let mut graph = Graph::new(config, &input, entry_node);
+    // Capture node ids up front — `structure_nodes` drains `input` as it processes each
+    // node, so by the time we report `unemitted` the map is empty.
+    let all_nodes: Vec<NodeIndex> = input.keys().copied().collect();
 
     let mut structured_blocks: BTreeMap<D::Label, D::Structured> = BTreeMap::new();
 
@@ -61,7 +64,8 @@ pub(crate) fn structure(
 
     let mut result = structured_blocks.remove(&entry_node).unwrap();
     flatten_sequence(&mut result);
-    result
+    let unemitted = graph.unemitted_from(&all_nodes);
+    (result, unemitted)
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -471,6 +475,7 @@ fn structure_acyclic_region(
                 graph.update_latch_branch_nodes(start, absorbed);
             }
 
+            graph.mark_emitted(code);
             D::Structured::IfElse(code, Box::new(conseq_arm), Box::new(Some(alt_arm)))
         }
         D::Input::Variants(_lbl, code, enum_, items) => {
@@ -510,6 +515,7 @@ fn structure_acyclic_region(
                     (v, body)
                 })
                 .collect();
+            graph.mark_emitted(code);
             // Maybe we could reconstruct matches from the arms? It would require a lot more —
             // and more painful — analysis.
             D::Structured::Switch(code, enum_, arms)
@@ -625,7 +631,7 @@ fn hoist_order(graph: &Graph, _start: NodeIndex, orphans: &[NodeIndex]) -> Vec<N
 
 fn structure_latch_node(
     config: &config::Config,
-    graph: &Graph,
+    graph: &mut Graph,
     node_ndx: NodeIndex,
     node: D::Input,
 ) -> D::Structured {
@@ -635,12 +641,16 @@ fn structure_latch_node(
     assert!(graph.back_edges.contains_key(&node_ndx));
     match node {
         D::Input::Condition(_, code, conseq, alt) => {
+            graph.mark_emitted(code);
             D::Structured::JumpIf(GotoSource::LatchTest, code, conseq, alt)
         }
-        D::Input::Code(_, code, next) => D::Structured::Seq(vec![
-            D::Structured::Block(code),
-            D::Structured::Jump(GotoSource::LatchCode, next.unwrap()),
-        ]),
+        D::Input::Code(_, code, next) => {
+            graph.mark_emitted(code);
+            D::Structured::Seq(vec![
+                D::Structured::Block(code),
+                D::Structured::Jump(GotoSource::LatchCode, next.unwrap()),
+            ])
+        }
         D::Input::Variants(_, _, _, _) => unreachable!(),
     }
 }
@@ -656,10 +666,13 @@ fn structure_code_node(
         println!("structuring code node: {node:#?}");
     }
     match node {
-        D::Input::Code(_, code, Some(next)) if next == node_ndx => D::Structured::Seq(vec![
-            D::Structured::Block(code),
-            D::Structured::Jump(GotoSource::SelfLoop, next),
-        ]),
+        D::Input::Code(_, code, Some(next)) if next == node_ndx => {
+            graph.mark_emitted(code);
+            D::Structured::Seq(vec![
+                D::Structured::Block(code),
+                D::Structured::Jump(GotoSource::SelfLoop, next),
+            ])
+        }
         D::Input::Code(_, code, next) => {
             // Fuse `next` only if it's our exclusive dom-tree child — i.e. it's in
             // `ichildren` and singly entered (no other path from outside its own subtree
@@ -675,6 +688,7 @@ fn structure_code_node(
                 graph.dom_tree.get(node_ndx).immediate_children().collect();
             let enclosing_loop_exits: Option<HashSet<NodeIndex>> =
                 graph.loop_exits.get(&node_ndx).cloned();
+            graph.mark_emitted(code);
             let mut seq = vec![D::Structured::Block(code)];
             if let Some(next) = next {
                 let fuse = ichildren.contains(&next)

@@ -130,6 +130,6 @@ pub fn structuring_unit_test(file_path: &std::path::Path) -> String {
         return "Expected an entry point `0`, but none was found".to_owned();
     }
     let config = crate::config::Config::default();
-    let structured = crate::structuring::structure(&config, input, 0.into());
+    let (structured, _unemitted) = crate::structuring::structure(&config, input, 0.into());
     structured.to_test_string()
 }

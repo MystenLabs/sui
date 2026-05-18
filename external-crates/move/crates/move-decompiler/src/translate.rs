@@ -251,7 +251,7 @@ fn function<S: SourceKind>(
         print_heading("input");
         println!("{input:?}");
     }
-    let structured = crate::structuring::structure(config, input, entry);
+    let (structured, unstructured_blocks) = crate::structuring::structure(config, input, entry);
     if config.debug_print.structured {
         print_heading("structured");
         println!("{}", structured.to_test_string());
@@ -277,6 +277,7 @@ fn function<S: SourceKind>(
         parameters,
         returns,
         code,
+        unstructured_blocks,
     }
 }
 

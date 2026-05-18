@@ -199,20 +199,54 @@ fn function(context: &Context, fun: &Function) -> Doc {
     let header = fun_header_doc(fun);
     let code = &fun.code;
 
+    // Notice for input blocks the structurer received but never emitted. Prepending it
+    // inside the function braces puts the warning right above the recovered source so a
+    // reader of the decompiled file can't miss it.
+    let unstructured_notice: Option<Doc> = if fun.unstructured_blocks.is_empty() {
+        None
+    } else {
+        let ids = fun
+            .unstructured_blocks
+            .iter()
+            .map(|id| id.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        Some(D::text(format!(
+            "// Did not structure and emit blocks {ids}"
+        )))
+    };
+
     // Three cases for the body to avoid double-bracing:
     // - empty Seq (e.g., from a refined-away trailing `return`) -> just `{}`
     // - non-empty Seq, or a `Block` wrapping one -> already renders as `{ ... }` via the
     //   Block-aware `exp` path
     // - any other Exp -> wrap in our own braces
     let inner = peek_block(code);
-    match inner {
-        Exp::Seq(seq) if seq.is_empty() => header.concat_space(Doc::text("{}")),
-        Exp::Seq(_) => header.concat_space(exp(context, code)),
-        _ => header
+    match (inner, unstructured_notice) {
+        // No notice: keep the existing fast paths so the rendering is bit-identical to
+        // before for cleanly-structured functions.
+        (Exp::Seq(seq), None) if seq.is_empty() => header.concat_space(Doc::text("{}")),
+        (Exp::Seq(_), None) => header.concat_space(exp(context, code)),
+        (_, None) => header
             .concat_space(Doc::text("{"))
             .concat(Doc::nest(Doc::line().concat(exp(context, code)), 4))
             .concat(Doc::line())
             .concat(Doc::text("}")),
+        // Notice present: we always wrap in our own braces so the notice can sit at the
+        // top of the body.
+        (Exp::Seq(seq), Some(notice)) if seq.is_empty() => header
+            .concat_space(Doc::text("{"))
+            .concat(Doc::nest(Doc::line().concat(notice), 4))
+            .concat(Doc::line())
+            .concat(Doc::text("}")),
+        (_, Some(notice)) => {
+            let body = notice.concat(Doc::line()).concat(exp(context, code));
+            header
+                .concat_space(Doc::text("{"))
+                .concat(Doc::nest(Doc::line().concat(body), 4))
+                .concat(Doc::line())
+                .concat(Doc::text("}"))
+        }
     }
 }
 
@@ -242,6 +276,7 @@ fn fun_header_doc(fun: &Function) -> Doc {
         parameters,
         returns,
         code: _,
+        unstructured_blocks: _,
     } = fun;
 
     let mut prefix_parts: Vec<Doc> = Vec::new();
