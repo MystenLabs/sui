@@ -812,8 +812,7 @@ impl SuiNode {
         }
 
         // Start the loop that receives new randomness and generates transactions for it.
-        // The returned broadcast sender and handle are long-lived (node lifetime).
-        // Start the loop that receives new randomness and generates transactions for it.
+        // The returned is long-lived (node lifetime).
         let randomness_receiver_handle =
             RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
 
