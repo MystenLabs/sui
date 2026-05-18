@@ -241,11 +241,6 @@ pub(crate) trait ValidatorNetworkService: Send + Sync + 'static {
 
 /// Handler for randomness round signatures exchanged between validators and
 /// observer nodes via the consensus block stream.
-///
-/// Implemented by `RandomnessRoundReceiverHandle` in sui-core. Consensus
-/// calls [`handle_randomness_signature`](Self::handle_randomness_signature)
-/// on the receiving (observer) side, and [`subscribe_randomness_signatures`](Self::subscribe_randomness_signatures)
-/// on the serving (validator/observer-server) side to push signatures to peers.
 pub trait RandomnessSignatureHandler: Send + Sync + 'static {
     /// Called by the observer subscriber for each randomness round signature
     /// received from the block stream.
