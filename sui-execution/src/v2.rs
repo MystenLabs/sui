@@ -140,6 +140,7 @@ impl executor::Executor for Executor {
         SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
+        Option<ExecutionErrorMetadata>,
     ) {
         let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, result) = if skip_all_checks {
@@ -180,7 +181,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (inner_temp_store, gas_status, effects, result)
+        (inner_temp_store, gas_status, effects, result, None)
     }
 
     fn execute_transaction_to_effects_and_execution_error(
@@ -229,14 +230,7 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (
-            inner_temp_store,
-            gas_status,
-            effects,
-            vec![],
-            result,
-            None,
-        )
+        (inner_temp_store, gas_status, effects, vec![], result, None)
     }
 
     fn update_genesis_state(

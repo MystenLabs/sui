@@ -2575,66 +2575,82 @@ impl AuthorityState {
             .epoch_start_config()
             .epoch_data()
             .epoch_start_timestamp();
-        let (inner_temp_store, _, effects, execution_result) = executor.dev_inspect_transaction(
-            &tracking_store,
-            protocol_config,
-            self.metrics.execution_metrics.clone(),
-            false, // expensive_checks
-            execution_params,
-            &epoch_id,
-            epoch_timestamp_ms,
-            checked_input_objects,
-            gas_data,
-            gas_status,
-            kind,
-            rewritten_inputs.clone(),
-            signer,
-            tx_digest,
-            dev_inspect,
-        );
+        let (inner_temp_store, _, effects, execution_result, execution_error_metadata) = executor
+            .dev_inspect_transaction(
+                &tracking_store,
+                protocol_config,
+                self.metrics.execution_metrics.clone(),
+                false, // expensive_checks
+                execution_params,
+                &epoch_id,
+                epoch_timestamp_ms,
+                checked_input_objects,
+                gas_data,
+                gas_status,
+                kind,
+                rewritten_inputs.clone(),
+                signer,
+                tx_digest,
+                dev_inspect,
+            );
 
         // Post-execution: check object funds (non-address withdrawals discovered during execution).
-        let (inner_temp_store, effects, execution_result) = if execution_result.is_ok() {
-            let has_insufficient_object_funds = inner_temp_store
-                .accumulator_running_max_withdraws
-                .iter()
-                .filter(|(id, _)| !address_funds.contains(id))
-                .any(|(id, max_withdraw)| {
-                    let (balance, _) = self.get_account_funds_read().get_latest_account_amount(id);
-                    balance < *max_withdraw
-                });
+        let (inner_temp_store, effects, execution_result, execution_error_metadata) =
+            if execution_result.is_ok() {
+                let has_insufficient_object_funds = inner_temp_store
+                    .accumulator_running_max_withdraws
+                    .iter()
+                    .filter(|(id, _)| !address_funds.contains(id))
+                    .any(|(id, max_withdraw)| {
+                        let (balance, _) =
+                            self.get_account_funds_read().get_latest_account_amount(id);
+                        balance < *max_withdraw
+                    });
 
-            if has_insufficient_object_funds {
-                let retry_gas_status = SuiGasStatus::new(
-                    cloned_gas.budget,
-                    cloned_gas.price,
-                    epoch_store.reference_gas_price(),
-                    protocol_config,
-                )?;
-                let (store, _, effects, result) = executor.dev_inspect_transaction(
-                    &tracking_store,
-                    protocol_config,
-                    self.metrics.execution_metrics.clone(),
-                    false,
-                    ExecutionOrEarlyError::Err(ExecutionErrorKind::InsufficientFundsForWithdraw),
-                    &epoch_id,
-                    epoch_timestamp_ms,
-                    cloned_input_objects,
-                    cloned_gas,
-                    retry_gas_status,
-                    cloned_kind,
-                    rewritten_inputs,
-                    signer,
-                    tx_digest,
-                    dev_inspect,
-                );
-                (store, effects, result)
+                if has_insufficient_object_funds {
+                    let retry_gas_status = SuiGasStatus::new(
+                        cloned_gas.budget,
+                        cloned_gas.price,
+                        epoch_store.reference_gas_price(),
+                        protocol_config,
+                    )?;
+                    let (store, _, effects, result, error_metadata) = executor
+                        .dev_inspect_transaction(
+                            &tracking_store,
+                            protocol_config,
+                            self.metrics.execution_metrics.clone(),
+                            false,
+                            ExecutionOrEarlyError::Err(
+                                ExecutionErrorKind::InsufficientFundsForWithdraw,
+                            ),
+                            &epoch_id,
+                            epoch_timestamp_ms,
+                            cloned_input_objects,
+                            cloned_gas,
+                            retry_gas_status,
+                            cloned_kind,
+                            rewritten_inputs,
+                            signer,
+                            tx_digest,
+                            dev_inspect,
+                        );
+                    (store, effects, result, error_metadata)
+                } else {
+                    (
+                        inner_temp_store,
+                        effects,
+                        execution_result,
+                        execution_error_metadata,
+                    )
+                }
             } else {
-                (inner_temp_store, effects, execution_result)
-            }
-        } else {
-            (inner_temp_store, effects, execution_result)
-        };
+                (
+                    inner_temp_store,
+                    effects,
+                    execution_result,
+                    execution_error_metadata,
+                )
+            };
 
         let loaded_runtime_objects = tracking_store.into_read_objects();
         let unchanged_loaded_runtime_objects =
@@ -2674,12 +2690,12 @@ impl AuthorityState {
 
             set
         };
-
         Ok(SimulateTransactionResult {
             objects: object_set,
             events: effects.events_digest().map(|_| inner_temp_store.events),
             effects,
             execution_result,
+            execution_error_metadata,
             mock_gas_id,
             unchanged_loaded_runtime_objects,
             suggested_gas_price: self

@@ -176,6 +176,7 @@ fn render_executed_transaction(
         checkpoint: _,
         timestamp_ms,
         unchanged_loaded_runtime_objects,
+        execution_error_metadata,
     }: crate::reader::TransactionRead,
     checkpoint: u64,
     mask: &FieldMaskTree,
@@ -238,6 +239,7 @@ fn render_executed_transaction(
         let effects = service.render_effects_to_proto(
             &effects,
             &unchanged_loaded_runtime_objects,
+            execution_error_metadata.as_ref(),
             &objects,
             &submask,
         );

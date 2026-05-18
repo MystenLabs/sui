@@ -206,6 +206,7 @@ pub fn simulate_transaction(
         events,
         objects,
         execution_result,
+        execution_error_metadata,
         mock_gas_id,
         unchanged_loaded_runtime_objects,
         suggested_gas_price,
@@ -239,6 +240,7 @@ pub fn simulate_transaction(
                 service.render_effects_to_proto(
                     &effects,
                     &unchanged_loaded_runtime_objects,
+                    execution_error_metadata.as_ref(),
                     &objects,
                     &mask,
                 )
