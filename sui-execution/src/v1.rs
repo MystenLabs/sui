@@ -139,7 +139,7 @@ impl executor::Executor for Executor {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
-        Result<Vec<ExecutionResult>, ExecutionError>,
+        Result<Vec<ExecutionResult>, ExecutionErrorContext>,
     ) {
         let gas_coins = gas.payment;
         let (inner_temp_store, gas_status, effects, result) = if skip_all_checks {
@@ -180,7 +180,12 @@ impl executor::Executor for Executor {
         if let Err(error) = &result {
             log_execution_error(transaction_digest, error);
         }
-        (inner_temp_store, gas_status, effects, result)
+        (
+            inner_temp_store,
+            gas_status,
+            effects,
+            result.map_err(ExecutionErrorContext::from),
+        )
     }
 
     fn execute_transaction_to_effects_and_execution_error(

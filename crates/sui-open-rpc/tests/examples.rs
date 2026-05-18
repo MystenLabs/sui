@@ -282,6 +282,7 @@ impl RpcExampleProvider {
             events: SuiTransactionBlockEvents { data: vec![] },
             results: None,
             error: None,
+            execution_error_metadata: None,
             raw_txn_data: vec![],
             raw_effects: vec![],
         };

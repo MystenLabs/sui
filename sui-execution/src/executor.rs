@@ -108,7 +108,7 @@ pub trait Executor {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
-        Result<Vec<ExecutionResult>, ExecutionError>,
+        Result<Vec<ExecutionResult>, ExecutionErrorContext>,
     );
 
     fn update_genesis_state(

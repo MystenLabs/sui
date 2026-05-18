@@ -2343,6 +2343,7 @@ impl AuthorityState {
             events,
             objects,
             execution_result,
+            execution_error_metadata,
             mock_gas_id,
             suggested_gas_price,
             ..
@@ -2393,6 +2394,14 @@ impl AuthorityState {
             .err()
             .and_then(|e| std::error::Error::source(e).map(|e| e.to_string()));
 
+        if let Some(error) = execution_result.as_ref().err() {
+            debug!(
+                tx_digest = ?tx_digest,
+                execution_error_kind = ?error.kind(),
+                "dry run transaction execution failed"
+            );
+        }
+
         let response = DryRunTransactionBlockResponse {
             suggested_gas_price,
             input: SuiTransactionBlockData::try_from_with_module_cache(
@@ -2414,6 +2423,7 @@ impl AuthorityState {
             object_changes: Vec::new(),
             balance_changes: Vec::new(),
             execution_error_source,
+            execution_error_metadata,
         };
 
         Ok((response, written_with_kind, effects, mock_gas_id))
@@ -2675,12 +2685,17 @@ impl AuthorityState {
 
             set
         };
+        let execution_error_metadata = execution_result
+            .as_ref()
+            .err()
+            .and_then(ExecutionErrorContext::metadata_with_source);
 
         Ok(SimulateTransactionResult {
             objects: object_set,
             events: effects.events_digest().map(|_| inner_temp_store.events),
             effects,
             execution_result,
+            execution_error_metadata,
             mock_gas_id,
             unchanged_loaded_runtime_objects,
             suggested_gas_price: self

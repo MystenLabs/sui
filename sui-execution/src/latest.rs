@@ -182,10 +182,10 @@ impl executor::Executor for Executor {
         InnerTemporaryStore,
         SuiGasStatus,
         TransactionEffects,
-        Result<Vec<ExecutionResult>, ExecutionError>,
+        Result<Vec<ExecutionResult>, ExecutionErrorContext>,
     ) {
         let (inner_temp_store, gas_status, effects, _timings, result) = if skip_all_checks {
-            execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
+            execute_transaction_to_effects::<execution_mode::DevInspect<true, ExecutionErrorContext>>(
                 store,
                 input_objects,
                 gas,
@@ -204,7 +204,7 @@ impl executor::Executor for Executor {
                 &mut None,
             )
         } else {
-            execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
+            execute_transaction_to_effects::<execution_mode::DevInspect<false, ExecutionErrorContext>>(
                 store,
                 input_objects,
                 gas,
