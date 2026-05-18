@@ -22,6 +22,29 @@ pub struct ExNonEmpty<T>(NonEmpty<T>);
 /// declared yet; add a non-emptiness axiom if/when a proof needs it.
 pub uninterp spec fn nonempty_view<T>(ne: &NonEmpty<T>) -> Seq<T>;
 
+/// Clone a `NonEmpty<T>`'s elements into a fresh `Vec<T>`.
+///
+/// Trusted (`external_body`) — `NonEmpty::iter` and collection are not specced
+/// in vstd. The ensures ties the result directly to `nonempty_view`.
+#[verifier::external_body]
+pub fn nonempty_to_vec<T: Clone>(ne: &NonEmpty<T>) -> (result: Vec<T>)
+    ensures result@ == nonempty_view(ne)
+{
+    ne.iter().cloned().collect()
+}
+
+/// Compare two `Copy + Eq` values, bridging exec `PartialEq::eq` to spec `==`.
+///
+/// Trusted (`external_body`) — Verus does not automatically axiomatize that
+/// `PartialEq::eq` agrees with spec equality for generic types.  This is
+/// sound for any well-behaved `Eq` implementation (the `Eq` laws require it).
+#[verifier::external_body]
+pub fn copy_eq<A: PartialEq + Eq + Copy>(a: A, b: A) -> (r: bool)
+    ensures r <==> (a == b)
+{
+    a == b
+}
+
 /// Check whether a slice contains an element.
 ///
 /// Trusted (`external_body`) — neither `Iterator::any` nor `slice::contains`
