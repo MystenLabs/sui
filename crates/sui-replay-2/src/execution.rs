@@ -175,7 +175,7 @@ pub fn execute_transaction_to_effects(
 
     debug!(op = "execute_tx", phase = "end", "execution");
     Ok((
-        result,
+        result.map_err(ExecutionError::from),
         TxnContextAndEffects {
             txn_data,
             execution_effects: effects,
