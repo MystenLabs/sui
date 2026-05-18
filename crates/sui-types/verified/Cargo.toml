@@ -16,6 +16,7 @@ anyhow.workspace = true
 bcs.workspace = true
 derive_more = { workspace = true, features = ["as_ref"] }
 fastcrypto.workspace = true
+nonempty.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde-name.workspace = true
