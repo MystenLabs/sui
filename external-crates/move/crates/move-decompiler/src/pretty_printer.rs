@@ -1,8 +1,11 @@
 // Copyright (c) The Move Contributors SPDX-License-Identifier: Apache-2.0
 
-use crate::ast::{self, Exp};
+use crate::ast::{self, Datatype, Enum, Exp, Function, Struct, Type, Variant};
 
-use move_binary_format::normalized::Constant;
+use move_binary_format::{
+    file_format::{AbilitySet, DatatypeTyParameter, Visibility},
+    normalized::Constant,
+};
 use move_core_types::runtime_value::MoveValue as Value;
 use move_model_2::{model, source_kind::SourceKind, summary};
 use move_stackless_bytecode_2::ast::{DataOp, PrimitiveOp};
@@ -65,6 +68,8 @@ pub fn module<S: SourceKind>(
 
     let crate::ast::Module {
         name,
+        structs,
+        enums,
         functions,
         uses,
         type_uses,
@@ -107,38 +112,39 @@ pub fn module<S: SourceKind>(
         doc = doc.concat(D::line());
     }
 
-    if model_mod.structs().next().is_some() {
+    if !structs.is_empty() {
         doc = doc
             .concat(D::text("// -- structs -- "))
             .concat(D::line())
             .concat(D::line());
 
-        let structs = {
+        let structs_doc = {
             let mut doc = D::nil();
-            for s in model_mod.structs() {
-                let s_doc = s.to_doc();
-                doc = doc.concat(s_doc).concat(D::line()).concat(D::line());
+            for s in structs.values() {
+                doc = doc
+                    .concat(struct_doc(s))
+                    .concat(D::line())
+                    .concat(D::line());
             }
             doc
         };
-        doc = doc.concat(structs);
+        doc = doc.concat(structs_doc);
     }
 
-    if model_mod.enums().next().is_some() {
+    if !enums.is_empty() {
         doc = doc
             .concat(D::text("// -- enums -- "))
             .concat(D::line())
             .concat(D::line());
 
-        let enums = {
+        let enums_doc = {
             let mut doc = D::nil();
-            for e in model_mod.enums() {
-                let e_doc = e.to_doc();
-                doc = doc.concat(e_doc).concat(D::line()).concat(D::line());
+            for e in enums.values() {
+                doc = doc.concat(enum_doc(e)).concat(D::line()).concat(D::line());
             }
             doc
         };
-        doc = doc.concat(enums);
+        doc = doc.concat(enums_doc);
     }
 
     if !constant_table.is_empty() {
@@ -175,33 +181,23 @@ pub fn module<S: SourceKind>(
             .concat(D::line())
             .concat(D::line());
 
-        let functions = {
+        let functions_doc = {
             let mut doc = D::nil();
-            for (name, fun) in functions {
-                let Some(model_fun) = model_mod.maybe_function(*name) else {
-                    anyhow::bail!("Function {} not found in module {}", name, module.name);
-                };
-                let f_doc = function(&context, &model_fun, fun);
+            for fun in functions.values() {
+                let f_doc = function(&context, fun);
                 doc = doc.concat(f_doc).concat(D::line()).concat(D::line());
             }
             doc
         };
-        doc = doc.concat(functions);
+        doc = doc.concat(functions_doc);
     }
 
     Ok(doc)
 }
 
-fn function<S: SourceKind>(
-    context: &Context,
-    model_fun: &model::Function<'_, S>,
-    fun: &crate::ast::Function,
-) -> Doc {
-    // TODO: Docs, Attributes
-    let header =
-        move_model_2::pretty_printer::fun_header(model_fun, /* use_param_names */ false);
-
-    let crate::ast::Function { name: _, code } = fun;
+fn function(context: &Context, fun: &Function) -> Doc {
+    let header = fun_header_doc(fun);
+    let code = &fun.code;
 
     // Three cases for the body to avoid double-bracing:
     // - empty Seq (e.g., from a refined-away trailing `return`) -> just `{}`
@@ -215,6 +211,336 @@ fn function<S: SourceKind>(
             .concat(Doc::nest(Doc::line().concat(exp(context, code)), 4))
             .concat(Doc::line())
             .concat(Doc::text("}")),
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// Header / type renderers (AST-driven, alias-aware)
+//
+// Anything that prints a `Type` ultimately bottoms out at a `TypeRef`'s `Display` impl, which
+// already knows about `Aliased` vs. `Qualified`. The renderers below just walk the AST shapes
+// in the same shape as `move_model_2::pretty_printer::fun_header` etc. — the difference is the
+// types they read have been through `collect_uses`.
+
+fn fun_header_doc(fun: &Function) -> Doc {
+    let Function {
+        name,
+        visibility,
+        is_entry,
+        type_parameters,
+        parameters,
+        returns,
+        code: _,
+    } = fun;
+
+    let mut prefix_parts: Vec<Doc> = Vec::new();
+    if let Some(v) = visibility_doc(*visibility) {
+        prefix_parts.push(v);
+    }
+    if *is_entry {
+        prefix_parts.push(D::text("entry"));
+    }
+    let prefix = if prefix_parts.is_empty() {
+        D::nil()
+    } else {
+        D::intersperse(prefix_parts, D::space()).concat(D::space())
+    };
+
+    let name_doc = D::text("fun").concat_space(D::text(name.as_str()));
+
+    let tparams_doc = if type_parameters.is_empty() {
+        D::nil()
+    } else {
+        // Function type parameters are abilities-only in bytecode (no phantom marker on
+        // function tparams). Render as `T{i}` with optional `: abilities` constraints.
+        D::angles(
+            D::intersperse(
+                type_parameters
+                    .iter()
+                    .enumerate()
+                    .map(|(i, abilities)| fun_tparam_doc(i, *abilities)),
+                D::text(",").concat(D::space()),
+            )
+            .group(),
+        )
+    };
+
+    let params_doc = {
+        // Parameter names follow the same `l{i}` scheme as `term_reconstruction::local_name`.
+        let parts = parameters.iter().enumerate().map(|(i, ty)| {
+            D::text(format!("l{i}"))
+                .concat(D::text(":"))
+                .group()
+                .concat_space(type_doc(ty))
+                .group()
+        });
+        D::intersperse(parts, D::text(",").concat(D::space()))
+            .group()
+            .parens()
+    };
+
+    let ret_doc = returns_doc(returns);
+
+    prefix
+        .concat(name_doc)
+        .concat(tparams_doc)
+        .concat(params_doc)
+        .concat(ret_doc)
+        .group()
+}
+
+fn returns_doc(rets: &[Type]) -> Doc {
+    match rets {
+        [] => D::nil(),
+        [t] => D::text(": ").concat(type_doc(t)),
+        many => {
+            let items = many.iter().map(type_doc);
+            D::text(": ").concat(
+                D::softline()
+                    .concat(D::intersperse(items, D::text(",").concat(D::softline())))
+                    .nest(4)
+                    .parens()
+                    .group(),
+            )
+        }
+    }
+}
+
+fn visibility_doc(v: Visibility) -> Option<Doc> {
+    match v {
+        Visibility::Private => None,
+        Visibility::Public => Some(D::text("public")),
+        Visibility::Friend => Some(D::text("public(friend)")),
+    }
+}
+
+fn fun_tparam_doc(idx: usize, constraints: AbilitySet) -> Doc {
+    let name = D::text(format!("T{idx}"));
+    if let Some(c) = ability_constraints_doc(constraints) {
+        name.concat(D::text(":")).concat_space(c).group()
+    } else {
+        name
+    }
+}
+
+fn datatype_tparam_doc(idx: usize, tp: &DatatypeTyParameter) -> Doc {
+    let phantom = if tp.is_phantom {
+        D::text("phantom").concat(D::space())
+    } else {
+        D::nil()
+    };
+    let name = phantom.concat(D::text(format!("T{idx}")));
+    if let Some(c) = ability_constraints_doc(tp.constraints) {
+        name.concat(D::text(":")).concat_space(c).group()
+    } else {
+        name
+    }
+}
+
+/// Render the abilities in an `AbilitySet`, in the same order as
+/// `move_model_2::summary::Ability` (copy, drop, key, store) so output stays stable against
+/// any upstream changes to AbilitySet iteration. `sep` is the joiner — `+` for constraints
+/// in type-parameter positions, `,` for struct/enum `has` clauses.
+fn ability_parts(s: AbilitySet) -> Vec<Doc> {
+    let mut parts: Vec<Doc> = Vec::new();
+    if s.has_copy() {
+        parts.push(D::text("copy"));
+    }
+    if s.has_drop() {
+        parts.push(D::text("drop"));
+    }
+    if s.has_key() {
+        parts.push(D::text("key"));
+    }
+    if s.has_store() {
+        parts.push(D::text("store"));
+    }
+    parts
+}
+
+/// `copy + drop + key + store` rendering for type-parameter constraints. Returns `None` when
+/// the set is empty so callers can elide the `: ` separator entirely.
+fn ability_constraints_doc(s: AbilitySet) -> Option<Doc> {
+    let parts = ability_parts(s);
+    if parts.is_empty() {
+        None
+    } else {
+        Some(D::intersperse(parts, D::text(" + ")).group())
+    }
+}
+
+/// `has copy, drop` ability list for struct/enum declarations — same set as
+/// `ability_constraints_doc` but comma-separated instead of `+`-separated.
+fn ability_list_doc(s: AbilitySet) -> Option<Doc> {
+    let parts = ability_parts(s);
+    if parts.is_empty() {
+        None
+    } else {
+        Some(D::intersperse(parts, D::text(",").concat(D::space())).group())
+    }
+}
+
+fn struct_doc(s: &Struct) -> Doc {
+    let Struct {
+        name,
+        abilities,
+        type_parameters,
+        fields,
+    } = s;
+
+    let tparams = if type_parameters.is_empty() {
+        D::nil()
+    } else {
+        D::angles(
+            D::intersperse(
+                type_parameters
+                    .iter()
+                    .enumerate()
+                    .map(|(i, tp)| datatype_tparam_doc(i, tp)),
+                D::text(",").concat(D::space()),
+            )
+            .group(),
+        )
+    };
+    let abilities_doc = ability_list_doc(*abilities)
+        .map(|c| D::softline().concat(D::text("has").concat_space(c)).group())
+        .unwrap_or(D::nil());
+
+    D::text("public struct")
+        .concat_space(D::text(name.as_str()))
+        .concat(tparams)
+        .group()
+        .concat(abilities_doc)
+        .concat_space(fields_doc(fields))
+        .group()
+}
+
+fn enum_doc(e: &Enum) -> Doc {
+    let Enum {
+        name,
+        abilities,
+        type_parameters,
+        variants,
+    } = e;
+
+    let tparams = if type_parameters.is_empty() {
+        D::nil()
+    } else {
+        D::angles(
+            D::intersperse(
+                type_parameters
+                    .iter()
+                    .enumerate()
+                    .map(|(i, tp)| datatype_tparam_doc(i, tp)),
+                D::text(",").concat(D::space()),
+            )
+            .group(),
+        )
+    };
+    let abilities_doc = ability_list_doc(*abilities)
+        .map(|c| D::softline().concat(D::text("has").concat_space(c)).group())
+        .unwrap_or(D::nil());
+
+    let variants_doc = D::intersperse(
+        variants.iter().map(|v| variant_doc(v).concat(D::text(","))),
+        D::line(),
+    );
+
+    D::text("public enum")
+        .concat_space(D::text(name.as_str()))
+        .concat(tparams)
+        .group()
+        .concat(abilities_doc)
+        .concat_space(
+            D::line()
+                .concat(variants_doc.indent(4))
+                .concat(D::line())
+                .braces(),
+        )
+}
+
+fn variant_doc(v: &Variant) -> Doc {
+    let Variant { name, fields } = v;
+    if fields.is_empty() {
+        D::text(name.as_str())
+    } else {
+        D::text(name.as_str()).concat_space(fields_doc(fields))
+    }
+}
+
+/// `{ name: ty, ... }` — used for both struct fields and enum variant fields. Empty fields
+/// render as `{}`. Wide-vs.-tall layout mirrors model-2's `Fields::to_doc` so output stays
+/// stable: the wide form is `{ a: A, b: B }`, the tall form has each field on its own line
+/// with a trailing comma.
+fn fields_doc(fields: &[(Symbol, Type)]) -> Doc {
+    if fields.is_empty() {
+        return D::nil().braces();
+    }
+    let items: Vec<Doc> = fields
+        .iter()
+        .map(|(name, ty)| {
+            D::text(name.as_str())
+                .concat(D::text(":"))
+                .concat_space(type_doc(ty))
+        })
+        .collect();
+
+    let wide = D::space().concat(
+        D::intersperse(items.iter().cloned(), D::text(",").concat(D::space())).concat(D::space()),
+    );
+    let tall = D::line()
+        .concat(
+            D::intersperse(items, D::text(",").concat(D::line()))
+                .concat(D::text(","))
+                .indent(4),
+        )
+        .concat(D::line())
+        .group();
+    D::alt(wide, tall).group().braces()
+}
+
+fn type_doc(t: &Type) -> Doc {
+    match t {
+        Type::Bool => D::text("bool"),
+        Type::U8 => D::text("u8"),
+        Type::U16 => D::text("u16"),
+        Type::U32 => D::text("u32"),
+        Type::U64 => D::text("u64"),
+        Type::U128 => D::text("u128"),
+        Type::U256 => D::text("u256"),
+        Type::Address => D::text("address"),
+        Type::Signer => D::text("signer"),
+        Type::Vector(inner) => D::text("vector").concat(D::angles(type_doc(inner))).group(),
+        Type::Reference(is_mut, inner) => {
+            let head = if *is_mut {
+                D::text("&mut").concat(D::space())
+            } else {
+                D::text("&")
+            };
+            head.concat(type_doc(inner)).group()
+        }
+        Type::TypeParameter(idx) => D::text(format!("T{idx}")),
+        Type::Datatype(dt) => datatype_doc(dt),
+    }
+}
+
+fn datatype_doc(dt: &Datatype) -> Doc {
+    let Datatype {
+        type_ref,
+        type_arguments,
+    } = dt;
+    let head = D::text(format!("{type_ref}"));
+    if type_arguments.is_empty() {
+        head
+    } else {
+        head.concat(D::angles(
+            D::intersperse(
+                type_arguments.iter().map(type_doc),
+                D::text(",").concat(D::space()),
+            )
+            .group(),
+        ))
+        .group()
     }
 }
 

@@ -14,11 +14,11 @@ public enum Temperature {
 
 // -- functions -- 
 
-public fun c(): enums::temperature::Temperature {
+public fun c(): Temperature {
     return Temperature::Celcius { pos0: 0u32 }
 }
 
-public fun dtor(l0: enums::temperature::Temperature) {
+public fun dtor(l0: Temperature) {
     let l2 = l0;
     let l1 = &l2;
     match (l1) {
@@ -31,11 +31,11 @@ public fun dtor(l0: enums::temperature::Temperature) {
     }
 }
 
-public fun f(): enums::temperature::Temperature {
+public fun f(): Temperature {
     return Temperature::Fahrenheit { pos0: 32u64 }
 }
 
-public fun is_temperature_fahrenheit(l0: &enums::temperature::Temperature): bool {
+public fun is_temperature_fahrenheit(l0: &Temperature): bool {
     let l2 = l0;
     let l1 = match (l2) {
         Fahrenheit { pos0: reg_3 } => {
