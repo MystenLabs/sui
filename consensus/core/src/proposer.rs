@@ -406,7 +406,15 @@ impl Proposer for ValidatorProposer {
 
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
         // or because we are actually ready to produce the block (leader exists and min delay has passed).
-        if !force {
+        // Leaders for the current round skip the previous-round leader wait and min_round_delay to
+        // reduce commit latency — getting the leader block out fast is more important than waiting
+        // for the previous leader, as non-leader blocks can still include it.
+        let is_leader = self
+            .leaders(clock_round)
+            .iter()
+            .any(|slot| slot.authority == self.context.own_index);
+
+        if !force && !is_leader {
             if !self.leaders_exist(quorum_round) {
                 return None;
             }

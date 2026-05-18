@@ -1836,8 +1836,10 @@ mod test {
             last_round_blocks = this_round_blocks;
         }
 
-        // Try to create the blocks for round 4 by calling the try_propose() method. No block should be created as the
-        // leader - authority 3 - hasn't proposed any block.
+        // Try to create the blocks for round 4 by calling the try_propose() method. Non-leader
+        // cores should not propose as the leader of round 3 - authority 3 - hasn't proposed
+        // any block. The leader of round 4 (authority 0) will propose during add_blocks since
+        // leaders skip the previous-round leader wait.
         for core_fixture in cores.iter_mut() {
             wait_blocks(&last_round_blocks, &core_fixture.core.context).await;
 
@@ -1846,9 +1848,12 @@ mod test {
         }
 
         // Now try to create the blocks for round 4 via the leader timeout method which should
-        // ignore any leader checks or min round delay.
+        // ignore any leader checks or min round delay. The leader of round 4 will have already
+        // proposed during add_blocks above.
         for core_fixture in cores.iter_mut() {
-            assert!(core_fixture.core.new_block(4, true).unwrap().is_some());
+            if core_fixture.core.last_proposed_round() != Some(4) {
+                assert!(core_fixture.core.new_block(4, true).unwrap().is_some());
+            }
             assert_eq!(core_fixture.core.last_proposed_round(), Some(4));
 
             // Flush the DAG state to storage.
@@ -2096,8 +2101,14 @@ mod test {
         assert!(fixture.add_blocks(blocks).unwrap().is_empty());
 
         // We now have triggered a leader schedule change so we should have
-        // one EXCLUDE authority (1) when we go to select ancestors for the next proposal
-        let block = fixture.core.try_propose(true).expect("No error").unwrap();
+        // one EXCLUDE authority (1) when we go to select ancestors for the next proposal.
+        // Authority 0 may have already proposed for round 15 during add_blocks if it became
+        // the leader via leader swap (authority 1 is a bad node and gets swapped).
+        let block = fixture
+            .core
+            .try_propose(true)
+            .expect("No error")
+            .unwrap_or_else(|| fixture.core.last_proposed_block());
         assert_eq!(block.round(), 15);
         assert_eq!(block.ancestors().len(), 6);
 
