@@ -125,85 +125,6 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D, ()> {
     }
 }
 
-/// Does crypto validation for a transaction which may be user-provided, or may be from a checkpoint.
-/// Returns the signature index (into `tx_signatures`) used to verify each required signer,
-/// in the same order as `required_signers`.
-pub fn verify_sender_signed_data_message_signatures(
-    txn: &SenderSignedData,
-    current_epoch: EpochId,
-    verify_params: &VerifyParams,
-    zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
-    aliased_addresses: Vec<(SuiAddress, NonEmpty<SuiAddress>)>,
-) -> SuiResult<Vec<u8>> {
-    let intent_message = txn.intent_message();
-    assert_eq!(intent_message.intent, Intent::sui_transaction());
-
-    // 1. One signature per signer is required.
-    let required_signers = txn.intent_message().value.required_signers();
-    fp_ensure!(
-        txn.inner().tx_signatures.len() == required_signers.len(),
-        SuiErrorKind::SignerSignatureNumberMismatch {
-            actual: txn.inner().tx_signatures.len(),
-            expected: required_signers.len()
-        }
-        .into()
-    );
-
-    // 2. System transactions do not require valid signatures. User-submitted transactions are
-    // verified not to be system transactions before this point.
-    if intent_message.value.is_system_tx() {
-        // System tx are defined to use all of the dummy signatures provided.
-        return Ok((0..required_signers.len() as u8).collect());
-    }
-
-    // 3. Each signer must provide a signature from one of the set of allowed aliases.
-    // Use index mapping to track which signature index satisfies each required signer.
-    let sig_mapping = txn.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
-
-    let mut signer_to_sig_index = Vec::with_capacity(required_signers.len());
-    for signer in required_signers.iter() {
-        let alias_set = aliased_addresses
-            .iter()
-            .find(|(addr, _)| *addr == *signer)
-            .map(|(_, aliases)| aliases.clone())
-            .unwrap_or(NonEmpty::new(*signer));
-
-        // Find the signature that matches any alias for this signer.
-        let Some(sig_index) = alias_set
-            .iter()
-            .find_map(|alias| sig_mapping.get(alias).map(|(idx, _)| *idx))
-        else {
-            return Err(SuiErrorKind::SignerSignatureAbsent {
-                expected: alias_set
-                    .iter()
-                    .map(|s| s.to_string())
-                    .collect::<Vec<_>>()
-                    .join(" or "),
-                actual: sig_mapping.keys().map(|s| s.to_string()).collect(),
-            }
-            .into());
-        };
-        signer_to_sig_index.push(sig_index);
-    }
-
-    // 4. Every signature must be valid.
-    for (signer, (_, signature)) in sig_mapping {
-        signature.verify_authenticator(
-            intent_message,
-            signer,
-            current_epoch,
-            verify_params,
-            zklogin_inputs_cache.clone(),
-        )?;
-    }
-    Ok(signer_to_sig_index)
-}
-
-// ---------------------------------------------------------------------------
-// Verified implementation (replaces the function above once the Verus proof
-// is complete — see crates/sui-types/verified/src/signature_verification.rs)
-// ---------------------------------------------------------------------------
-
 /// A `GenericSignature` bundled with the context needed to verify it.
 ///
 /// This wrapper implements `SignatureVerifiable<SuiAddress>` so that the
@@ -267,13 +188,15 @@ fn sig_verify_err_to_sui(e: SigVerifyError) -> SuiError {
     }
 }
 
-/// Thin wrapper that will replace [`verify_sender_signed_data_message_signatures`]
-/// once the Verus proof for [`sui_types_verified::signature_verification::verify_signatures`]
-/// is complete.
+/// Crypto validation for a sender-signed transaction.
 ///
-/// Handles intent checking and the system-transaction bypass before delegating
-/// user-transaction verification to the generic verified function.
-pub fn verify_sender_signed_data_message_signatures_verified(
+/// Returns the signature index (into `tx_signatures`) used to verify each
+/// required signer, in the same order as `required_signers`.
+///
+/// Handles intent checking and the system-transaction bypass, then delegates
+/// user-transaction verification to the Verus-verified
+/// [`sui_types_verified::signature_verification::verify_signatures`].
+pub fn verify_sender_signed_data_message_signatures(
     txn: &SenderSignedData,
     current_epoch: EpochId,
     verify_params: &VerifyParams,
