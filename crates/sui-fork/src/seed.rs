@@ -512,8 +512,7 @@ mod tests {
             },
         )
         .await
-        .expect("seed manifest should resolve")
-        .expect("manifest should exist");
+        .expect("seed manifest should resolve");
 
         assert_eq!(manifest.entries.len(), 1);
         assert_eq!(manifest.entries[0].object_id, object.id());
