@@ -762,7 +762,8 @@ pub struct CoinInfo {
 
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct BalanceInfo {
-    pub balance: u64,
+    pub coin_balance: u64,
+    pub address_balance: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]

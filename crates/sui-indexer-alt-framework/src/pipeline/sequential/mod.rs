@@ -14,12 +14,16 @@ use crate::config::ConcurrencyConfig;
 use crate::ingestion::ingestion_client::CheckpointEnvelope;
 use crate::metrics::IndexerMetrics;
 use crate::pipeline::CommitterConfig;
+use crate::pipeline::IngestionConfig;
 use crate::pipeline::Processor;
 use crate::pipeline::processor::processor;
+use crate::pipeline::sequential::collector::BatchedRows;
+use crate::pipeline::sequential::collector::collector;
 use crate::pipeline::sequential::committer::committer;
 use crate::store::SequentialStore;
 use crate::store::Store;
 
+mod collector;
 mod committer;
 
 /// Handlers implement the logic for a given indexing pipeline: How to process checkpoint data (by
@@ -34,17 +38,22 @@ mod committer;
 /// available, the pipeline will attempt to combine their writes taking advantage of batching to
 /// avoid emitting redundant writes.
 ///
-/// Back-pressure is handled by setting a high watermark on the ingestion service: The pipeline
-/// notifies the ingestion service of the checkpoint it last successfully wrote to the database
-/// for, and in turn the ingestion service will only run ahead by its buffer size. This guarantees
-/// liveness and limits the amount of memory the pipeline can consume, by bounding the number of
-/// checkpoints that can be received before the next checkpoint.
+/// Back-pressure is handled by the bounded subscriber channel from the ingestion service, the
+/// same as concurrent pipelines: the channel blocks broadcaster sends when full, and the adaptive
+/// ingestion controller cuts fetch concurrency as the channel fills up.
 #[async_trait]
 pub trait Handler: Processor {
     type Store: SequentialStore;
 
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
+
+    /// Soft cap: once this many rows are pending, the collector stops eagerly draining
+    /// its input channel and yields to the flush phase. Receive is never hard-gated — unlike
+    /// concurrent pipelines, a missing predecessor may be buried in the input channel, and
+    /// blocking receive would risk deadlock. The cap only bounds receive-to-flush latency in
+    /// the happy path.
+    const MAX_PENDING_ROWS: usize = 5000;
 
     /// Maximum number of checkpoints to try and write in a single batch. The larger this number
     /// is, the more chances the pipeline has to merge redundant writes, but the longer each write
@@ -82,8 +91,8 @@ pub struct SequentialConfig {
     /// Configuration for the writer, that makes forward progress.
     pub committer: CommitterConfig,
 
-    /// How many checkpoints to hold back writes for.
-    pub checkpoint_lag: u64,
+    /// Per-pipeline ingestion overrides.
+    pub ingestion: IngestionConfig,
 
     /// Processor concurrency. Defaults to adaptive scaling up to the number of CPUs.
     pub fanout: Option<ConcurrencyConfig>,
@@ -91,11 +100,18 @@ pub struct SequentialConfig {
     /// Override for `Handler::MIN_EAGER_ROWS` (eager batch threshold).
     pub min_eager_rows: Option<usize>,
 
+    /// Override for `Handler::MAX_PENDING_ROWS` (soft cap).
+    pub max_pending_rows: Option<usize>,
+
     /// Override for `Handler::MAX_BATCH_CHECKPOINTS` (checkpoints per write batch).
     pub max_batch_checkpoints: Option<usize>,
 
     /// Size of the channel between the processor and committer.
     pub processor_channel_size: Option<usize>,
+
+    /// Depth of the channel between the collector and committer tasks. Allows the collector
+    /// to build the next batch while the previous batch is being flushed to the DB.
+    pub pipeline_depth: Option<usize>,
 }
 
 /// Start a new sequential (in-order) indexing pipeline, served by the handler, `H`. Starting
@@ -111,15 +127,7 @@ pub struct SequentialConfig {
 /// [Handler::commit] is not chunked up, so the handler must perform this step itself, if
 /// necessary.
 ///
-/// The pipeline can optionally be configured to lag behind the ingestion service by a fixed number
-/// of checkpoints (configured by `checkpoint_lag`).
-///
-/// Watermarks are also shared with the ingestion service, which is guaranteed to bound the
-/// checkpoint height it pre-fetches to some constant additive factor above the pipeline's
-/// watermark.
-///
-/// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, watermark updates
-/// are communicated to the ingestion service through the `watermark_tx` channel and internal
+/// Checkpoint data is fed into the pipeline through the `checkpoint_rx` channel, and internal
 /// channels are created to communicate between its various components. The pipeline will shutdown
 /// if any of its input or output channels close, any of its independent tasks fail, or if it is
 /// signalled to shutdown through the returned service handle.
@@ -129,7 +137,6 @@ pub(crate) fn pipeline<H: Handler>(
     config: SequentialConfig,
     store: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointEnvelope>>,
-    commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
 ) -> Service {
     info!(
@@ -147,12 +154,18 @@ pub(crate) fn pipeline<H: Handler>(
             dead_band: None,
         });
     let min_eager_rows = config.min_eager_rows.unwrap_or(H::MIN_EAGER_ROWS);
+    let max_pending_rows = config.max_pending_rows.unwrap_or(H::MAX_PENDING_ROWS);
     let max_batch_checkpoints = config
         .max_batch_checkpoints
         .unwrap_or(H::MAX_BATCH_CHECKPOINTS);
 
     let processor_channel_size = config.processor_channel_size.unwrap_or(num_cpus::get() / 2);
-    let (processor_tx, committer_rx) = mpsc::channel(processor_channel_size);
+    let (processor_tx, collector_rx) = mpsc::channel(processor_channel_size);
+
+    let pipeline_depth = config
+        .pipeline_depth
+        .unwrap_or_else(|| (num_cpus::get() / 2).max(4));
+    let (collector_tx, committer_rx) = mpsc::channel::<BatchedRows<H>>(pipeline_depth);
 
     let handler = Arc::new(handler);
 
@@ -165,17 +178,356 @@ pub(crate) fn pipeline<H: Handler>(
         store.clone(),
     );
 
-    let s_committer = committer::<H>(
-        handler,
+    let s_collector = collector::<H>(
+        handler.clone(),
         config,
         next_checkpoint,
-        committer_rx,
-        commit_hi_tx,
-        store,
+        collector_rx,
         metrics.clone(),
         min_eager_rows,
+        max_pending_rows,
         max_batch_checkpoints,
+        collector_tx,
     );
 
-    s_processor.merge(s_committer)
+    let s_committer = committer::<H>(handler, store, metrics.clone(), committer_rx);
+
+    s_processor.merge(s_collector).merge(s_committer)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use prometheus::Registry;
+    use sui_types::full_checkpoint_content::Checkpoint;
+
+    use crate::mocks::store::FallibleMockConnection;
+    use crate::mocks::store::FallibleMockStore;
+    use crate::pipeline::IndexedCheckpoint;
+
+    use super::*;
+
+    // Test implementation of Handler
+    #[derive(Default)]
+    struct TestHandler;
+
+    #[async_trait]
+    impl Processor for TestHandler {
+        const NAME: &'static str = "test";
+        type Value = u64;
+
+        async fn process(&self, _checkpoint: &Arc<Checkpoint>) -> anyhow::Result<Vec<Self::Value>> {
+            Ok(vec![])
+        }
+    }
+
+    #[async_trait]
+    impl Handler for TestHandler {
+        type Store = FallibleMockStore;
+        type Batch = Vec<u64>;
+        const MAX_BATCH_CHECKPOINTS: usize = 3; // Using small max value for testing.
+        const MIN_EAGER_ROWS: usize = 4; // Using small eager value for testing.
+
+        fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
+            batch.extend(values);
+        }
+
+        async fn commit<'a>(
+            &self,
+            batch: &Self::Batch,
+            conn: &mut FallibleMockConnection<'a>,
+        ) -> anyhow::Result<usize> {
+            if !batch.is_empty() {
+                let mut sequential_data = conn.0.sequential_checkpoint_data.lock().unwrap();
+                sequential_data.extend(batch.iter().cloned());
+            }
+            Ok(batch.len())
+        }
+    }
+
+    struct TestSetup {
+        store: FallibleMockStore,
+        checkpoint_tx: mpsc::Sender<IndexedCheckpoint<TestHandler>>,
+        #[allow(unused)]
+        service: Service,
+    }
+
+    /// Emulates adding a sequential pipeline to the indexer. Bypasses the processor stage and
+    /// feeds [IndexedCheckpoint]s directly to the collector. `next_checkpoint` is the starting
+    /// checkpoint for the indexer.
+    fn setup_test(
+        next_checkpoint: u64,
+        config: SequentialConfig,
+        store: FallibleMockStore,
+    ) -> TestSetup {
+        let metrics = IndexerMetrics::new(None, &Registry::default());
+
+        let min_eager_rows = config.min_eager_rows.unwrap_or(TestHandler::MIN_EAGER_ROWS);
+        let max_pending_rows = config
+            .max_pending_rows
+            .unwrap_or(TestHandler::MAX_PENDING_ROWS);
+        let max_batch_checkpoints = config
+            .max_batch_checkpoints
+            .unwrap_or(TestHandler::MAX_BATCH_CHECKPOINTS);
+        let pipeline_depth = config
+            .pipeline_depth
+            .unwrap_or_else(|| (num_cpus::get() / 2).max(4));
+
+        let (checkpoint_tx, checkpoint_rx) = mpsc::channel(10);
+        let (collector_tx, committer_rx) =
+            mpsc::channel::<BatchedRows<TestHandler>>(pipeline_depth);
+
+        let store_clone = store.clone();
+        let handler = Arc::new(TestHandler);
+
+        let s_collector = collector(
+            handler.clone(),
+            config,
+            next_checkpoint,
+            checkpoint_rx,
+            metrics.clone(),
+            min_eager_rows,
+            max_pending_rows,
+            max_batch_checkpoints,
+            collector_tx,
+        );
+        let s_committer = committer(handler, store_clone, metrics, committer_rx);
+
+        TestSetup {
+            store,
+            checkpoint_tx,
+            service: s_collector.merge(s_committer),
+        }
+    }
+
+    async fn send_checkpoint(setup: &mut TestSetup, checkpoint: u64) {
+        setup
+            .checkpoint_tx
+            .send(create_checkpoint(checkpoint))
+            .await
+            .unwrap();
+    }
+
+    fn create_checkpoint(checkpoint: u64) -> IndexedCheckpoint<TestHandler> {
+        IndexedCheckpoint::new(
+            checkpoint,        // epoch
+            checkpoint,        // checkpoint number
+            checkpoint,        // tx_hi
+            checkpoint * 1000, // timestamp
+            vec![checkpoint],  // values
+        )
+    }
+
+    #[tokio::test]
+    async fn test_committer_processes_sequential_checkpoints() {
+        let config = SequentialConfig::default();
+        let mut setup = setup_test(0, config, FallibleMockStore::default());
+
+        // Send checkpoints in order
+        for i in 0..3 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Verify data was written in order
+        assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2]);
+
+        // Verify watermark was updated
+        let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(2));
+        assert_eq!(watermark.tx_hi, 2);
+    }
+
+    /// Configure `FallibleMockStore` with no watermark, and emulate `first_checkpoint` by passing
+    /// the `initial_watermark` into the setup.
+    #[tokio::test]
+    async fn test_committer_processes_sequential_checkpoints_with_initial_watermark() {
+        let config = SequentialConfig::default();
+        let mut setup = setup_test(5, config, FallibleMockStore::default());
+
+        // Verify watermark hasn't progressed
+        let watermark = setup.store.watermark(TestHandler::NAME);
+        assert!(watermark.is_none());
+
+        // Send checkpoints in order
+        for i in 0..5 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Verify watermark hasn't progressed
+        let watermark = setup.store.watermark(TestHandler::NAME);
+        assert!(watermark.is_none());
+
+        for i in 5..8 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Verify data was written in order
+        assert_eq!(setup.store.get_sequential_data(), vec![5, 6, 7]);
+
+        // Verify watermark was updated
+        let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(7));
+        assert_eq!(watermark.tx_hi, 7);
+    }
+
+    #[tokio::test]
+    async fn test_committer_processes_out_of_order_checkpoints() {
+        let config = SequentialConfig::default();
+        let mut setup = setup_test(0, config, FallibleMockStore::default());
+
+        // Send checkpoints out of order
+        for i in [1, 0, 2] {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Verify data was written in order despite receiving out of order
+        assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2]);
+
+        // Verify watermark was updated
+        let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(2));
+        assert_eq!(watermark.tx_hi, 2);
+    }
+
+    #[tokio::test]
+    async fn test_committer_commit_up_to_max_batch_checkpoints() {
+        let config = SequentialConfig::default();
+        let mut setup = setup_test(0, config, FallibleMockStore::default());
+
+        // Send checkpoints up to MAX_BATCH_CHECKPOINTS
+        for i in 0..4 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Verify data is written in order across batches
+        assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn test_committer_commits_eagerly() {
+        let config = SequentialConfig {
+            committer: CommitterConfig {
+                collect_interval_ms: 4_000, // Long polling to test eager commit
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut setup = setup_test(0, config, FallibleMockStore::default());
+
+        // Wait for initial poll to be over
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Send checkpoints 0-2
+        for i in 0..3 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Verify no checkpoints are written yet (not enough rows for eager commit)
+        assert_eq!(setup.store.get_sequential_data(), Vec::<u64>::new());
+
+        // Send checkpoint 3 to trigger the eager commit (3 + 1 >= MIN_EAGER_ROWS)
+        send_checkpoint(&mut setup, 3).await;
+
+        // Wait for processing
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        // Verify all checkpoints are written
+        assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn test_committer_retries_on_transaction_failure() {
+        let config = SequentialConfig {
+            committer: CommitterConfig {
+                collect_interval_ms: 1_000, // Long polling to test retry logic
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // Create store with transaction failure configuration
+        let store = FallibleMockStore::default().with_transaction_failures(1); // Will fail once before succeeding
+
+        let mut setup = setup_test(10, config, store);
+
+        // Send a checkpoint
+        send_checkpoint(&mut setup, 10).await;
+
+        // Wait long enough for the collector to poll-tick (collect_interval = 1s),
+        // hand the batch to the committer, and for the committer to complete one failed
+        // attempt + one successful retry under exponential backoff (100ms initial).
+        tokio::time::sleep(Duration::from_millis(1_500)).await;
+
+        assert_eq!(setup.store.get_sequential_data(), vec![10]);
+    }
+
+    /// Smoke test for pipelined operation under a slow-commit store: with
+    /// `pipeline_depth = 1` and two full batches to process, both batches must land and
+    /// the watermark must reach the last checkpoint.
+    #[tokio::test]
+    async fn pipelined_commit_runs_under_slow_commit() {
+        let config = SequentialConfig {
+            committer: CommitterConfig::default(),
+            max_batch_checkpoints: Some(3),
+            min_eager_rows: Some(1),
+            pipeline_depth: Some(1),
+            ..Default::default()
+        };
+
+        let store = FallibleMockStore::default().with_commit_delay(700);
+        let mut setup = setup_test(0, config, store);
+
+        for i in 0..6 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        // Two batches × 700ms commit each + slack.
+        tokio::time::sleep(Duration::from_millis(2_000)).await;
+
+        assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2, 3, 4, 5]);
+        let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(5));
+    }
+
+    /// Watermarks must advance strictly in batch order, even under pipelining.
+    #[tokio::test]
+    async fn pipelined_commit_preserves_watermark_ordering() {
+        let config = SequentialConfig {
+            committer: CommitterConfig::default(),
+            max_batch_checkpoints: Some(2),
+            min_eager_rows: Some(1),
+            pipeline_depth: Some(2),
+            ..Default::default()
+        };
+
+        let store = FallibleMockStore::default().with_commit_delay(100);
+        let mut setup = setup_test(0, config, store);
+
+        for i in 0..6 {
+            send_checkpoint(&mut setup, i).await;
+        }
+
+        tokio::time::sleep(Duration::from_millis(1_500)).await;
+
+        assert_eq!(setup.store.get_sequential_data(), vec![0, 1, 2, 3, 4, 5]);
+        let watermark = setup.store.watermark(TestHandler::NAME).unwrap();
+        assert_eq!(watermark.checkpoint_hi_inclusive, Some(5));
+        assert_eq!(watermark.tx_hi, 5);
+    }
 }

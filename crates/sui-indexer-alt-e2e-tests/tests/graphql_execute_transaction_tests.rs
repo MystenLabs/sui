@@ -14,12 +14,12 @@ use serde_json::Value;
 use serde_json::json;
 use sui_futures::service::Service;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
-use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_macros::sim_test;
 use sui_pg_db::DbArgs;
@@ -123,16 +123,14 @@ impl GraphQlTestCluster {
             no_ide: true,
         };
 
-        let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: Some(validator_cluster.rpc_url().parse().unwrap()),
-        };
+        let fullnode_args = FullnodeArgs::new(validator_cluster.rpc_url().parse().unwrap());
 
         // Start GraphQL server that connects directly to TestCluster's RPC
         let service = start_graphql(
             None, // No database - GraphQL will use fullnode RPC for executeTransaction
             fullnode_args,
             DbArgs::default(),
-            GraphQlKvArgs::default(),
+            KvArgs::default(),
             ConsistentReaderArgs::default(),
             graphql_args,
             SystemPackageTaskArgs::default(),
@@ -650,6 +648,7 @@ async fn test_execute_transaction_effects_json() {
                 executeTransaction(transactionDataBcs: $txData, signatures: $sigs) {
                     effects {
                         status
+                        version
                         effectsJson
                         balanceChangesJson
                     }

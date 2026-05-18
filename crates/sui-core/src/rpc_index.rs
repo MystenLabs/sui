@@ -51,7 +51,7 @@ use typed_store::rocks::{DBMap, DBMapTableConfigMap, MetricConf};
 use typed_store::rocksdb::{MergeOperands, WriteOptions, compaction_filter::Decision};
 use typed_store::traits::Map;
 
-const CURRENT_DB_VERSION: u64 = 3;
+const CURRENT_DB_VERSION: u64 = 4;
 // I tried increasing this to 100k and 1M and it didn't speed up indexing at all.
 const BALANCE_FLUSH_THRESHOLD: usize = 10_000;
 
@@ -168,20 +168,18 @@ pub struct CoinIndexInfo {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Debug, Default)]
 pub struct BalanceIndexInfo {
-    pub balance_delta: i128,
-}
-
-impl From<u64> for BalanceIndexInfo {
-    fn from(coin_value: u64) -> Self {
-        Self {
-            balance_delta: coin_value as i128,
-        }
-    }
+    pub coin_balance_delta: i128,
+    pub address_balance_delta: i128,
 }
 
 impl BalanceIndexInfo {
     fn merge_delta(&mut self, other: &Self) {
-        self.balance_delta += other.balance_delta;
+        self.coin_balance_delta = self
+            .coin_balance_delta
+            .saturating_add(other.coin_balance_delta);
+        self.address_balance_delta = self
+            .address_balance_delta
+            .saturating_add(other.address_balance_delta);
     }
 }
 
@@ -193,8 +191,12 @@ impl From<BalanceIndexInfo> for sui_types::storage::BalanceInfo {
         // total balances over u64::MAX. To avoid crashing the indexer, we clamp the merged value instead
         // of panicking on overflow. This has the unfortunate consequence of making bugs in the index
         // harder to detect, but is a necessary trade-off to avoid creating a DOS attack vector.
-        let balance = index_info.balance_delta.clamp(0, u64::MAX as i128) as u64;
-        sui_types::storage::BalanceInfo { balance }
+        let coin_balance = index_info.coin_balance_delta.clamp(0, u64::MAX as i128) as u64;
+        let address_balance = index_info.address_balance_delta.clamp(0, u64::MAX as i128) as u64;
+        sui_types::storage::BalanceInfo {
+            coin_balance,
+            address_balance,
+        }
     }
 }
 
@@ -245,18 +247,29 @@ fn balance_delta_merge_operator(
     existing_val: Option<&[u8]>,
     operands: &MergeOperands,
 ) -> Option<Vec<u8>> {
-    let mut result = existing_val
-        .map(|v| {
-            bcs::from_bytes::<BalanceIndexInfo>(v)
-                .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.")
-        })
-        .unwrap_or_default();
+    let mut result = if let Some(existing_val) = existing_val {
+        bcs::from_bytes::<BalanceIndexInfo>(existing_val)
+            .inspect_err(|e| {
+                tracing::error!(
+                    "Failed to deserialize BalanceIndexInfo from RocksDB - data corruption: {e}"
+                )
+            })
+            .ok()?
+    } else {
+        BalanceIndexInfo::default()
+    };
 
     for operand in operands.iter() {
         let delta = bcs::from_bytes::<BalanceIndexInfo>(operand)
-            .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption.");
+            .inspect_err(|e| {
+                tracing::error!(
+                    "Failed to deserialize BalanceIndexInfo from RocksDB - data corruption: {e}"
+                )
+            })
+            .ok()?;
         result.merge_delta(&delta);
     }
+
     Some(
         bcs::to_bytes(&result)
             .expect("Failed to deserialize BalanceIndexInfo from RocksDB - data corruption."),
@@ -269,7 +282,7 @@ fn balance_compaction_filter(_level: u32, _key: &[u8], value: &[u8]) -> Decision
         Err(_) => return Decision::Keep,
     };
 
-    if balance_info.balance_delta == 0 {
+    if balance_info.coin_balance_delta == 0 && balance_info.address_balance_delta == 0 {
         Decision::Remove
     } else {
         Decision::Keep
@@ -434,7 +447,17 @@ impl IndexStoreTables {
         path: P,
         index_options: IndexStoreOptions,
     ) -> Self {
+        // The typed-store derive macro only honors the per-field
+        // `default_options_override_fn` when `tables_db_options_override` is
+        // `None`. As soon as we pass `Some(map)`, any CF missing from the map
+        // silently falls back to bare `default_db_options()` — losing the
+        // `disable_write_throttling` applied by `default_table_options`. To
+        // avoid that, populate the map with `default_table_options()` for every
+        // table before overriding the few that need bespoke configuration.
         let mut table_options = std::collections::BTreeMap::new();
+        for (table_name, _) in IndexStoreTables::describe_tables() {
+            table_options.insert(table_name, default_table_options());
+        }
         table_options.insert("balance".to_string(), balance_table_options());
         table_options.insert(
             "events_by_stream".to_string(),
@@ -801,7 +824,7 @@ impl IndexStoreTables {
 
         // iterate in reverse order, process accumulator settlements first
         for (tx_idx, tx) in checkpoint.transactions.iter().enumerate().rev() {
-            let balance_changes = sui_types::balance_change::derive_balance_changes(
+            let balance_changes = sui_types::balance_change::derive_detailed_balance_changes(
                 &tx.effects,
                 &tx.input_objects,
                 &tx.output_objects,
@@ -815,7 +838,8 @@ impl IndexStoreTables {
                             coin_type: *coin_type,
                         },
                         BalanceIndexInfo {
-                            balance_delta: change.amount,
+                            coin_balance_delta: change.coin_amount,
+                            address_balance_delta: change.address_amount,
                         },
                     ))
                 } else {
@@ -1636,7 +1660,10 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
 
                 if let Some((coin_type, value)) = get_balance_and_type_if_coin(&object)? {
                     let balance_key = BalanceKey { owner, coin_type };
-                    let balance_info = BalanceIndexInfo::from(value);
+                    let balance_info = BalanceIndexInfo {
+                        coin_balance_delta: value.into(),
+                        address_balance_delta: 0,
+                    };
                     self.balance_changes
                         .entry(balance_key)
                         .or_default()
@@ -1665,7 +1692,8 @@ impl LiveObjectIndexer for RpcLiveObjectIndexer<'_> {
                 {
                     let balance_key = BalanceKey { owner, coin_type };
                     let balance_info = BalanceIndexInfo {
-                        balance_delta: balance,
+                        coin_balance_delta: 0,
+                        address_balance_delta: balance,
                     };
                     self.balance_changes
                         .entry(balance_key)
@@ -1975,5 +2003,97 @@ mod tests {
             matches!(decision, Decision::Remove),
             "Event with checkpoint equal to watermark should be removed"
         );
+    }
+
+    /// Every column family opened via `open_with_index_options` must have the
+    /// `disable_write_throttling` override applied. The typed-store derive
+    /// macro silently falls back to bare `default_db_options()` for any CF
+    /// missing from `tables_db_options_override`, reverting to RocksDB's
+    /// default stall triggers (slowdown=20, stop=36) — small enough that ~80
+    /// L0 files would stop writes entirely. RocksDB persists the effective
+    /// per-CF options to an `OPTIONS-NNNNNN` file at open; parse it to verify
+    /// every CF received the override.
+    #[tokio::test]
+    async fn open_with_index_options_overrides_every_cf() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("rpc-index");
+
+        let _tables =
+            IndexStoreTables::open_with_index_options(&db_path, IndexStoreOptions::default());
+
+        // Iterate the CFs RocksDB actually wrote to the OPTIONS file rather
+        // than the schema-declared set, since deprecated CFs are dropped at
+        // open time and never appear in OPTIONS. RocksDB always writes a
+        // `default` CF; we exclude it because typed-store doesn't store data
+        // there and we don't configure it.
+        let per_cf = parse_cf_options(&db_path);
+        assert!(
+            !per_cf.is_empty(),
+            "expected at least one CFOptions section in OPTIONS file"
+        );
+        for (cf_name, opts) in &per_cf {
+            if cf_name == "default" {
+                continue;
+            }
+            for (key, expected) in [
+                ("level0_slowdown_writes_trigger", "512"),
+                ("level0_stop_writes_trigger", "1024"),
+                ("soft_pending_compaction_bytes_limit", "0"),
+                ("hard_pending_compaction_bytes_limit", "0"),
+            ] {
+                let actual = opts
+                    .get(key)
+                    .unwrap_or_else(|| panic!("cf `{cf_name}` missing `{key}`"));
+                assert_eq!(
+                    actual, expected,
+                    "cf `{cf_name}` has `{key}={actual}`, expected `{expected}` — \
+                     the typed-store override map likely doesn't cover this CF"
+                );
+            }
+        }
+    }
+
+    /// Parse the newest `OPTIONS-NNNNNN` file in `db_path` into a map keyed by
+    /// column family name. RocksDB writes one such file on every open with a
+    /// section per CF in INI-like format.
+    fn parse_cf_options(db_path: &Path) -> HashMap<String, HashMap<String, String>> {
+        let mut options_file: Option<(u64, PathBuf)> = None;
+        for entry in std::fs::read_dir(db_path).expect("read_dir failed") {
+            let entry = entry.unwrap();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let Some(rest) = name.strip_prefix("OPTIONS-") else {
+                continue;
+            };
+            // Skip transient files like `OPTIONS-NNNNNN.dbtmp`.
+            let Ok(seq) = rest.parse::<u64>() else {
+                continue;
+            };
+            if options_file.as_ref().is_none_or(|(s, _)| seq > *s) {
+                options_file = Some((seq, entry.path()));
+            }
+        }
+        let (_, path) = options_file.expect("no OPTIONS-* file written");
+        let content = std::fs::read_to_string(&path).expect("read OPTIONS failed");
+
+        let mut result: HashMap<String, HashMap<String, String>> = HashMap::new();
+        let mut current_cf: Option<String> = None;
+        for line in content.lines() {
+            let line = line.trim();
+            if let Some(rest) = line.strip_prefix("[CFOptions \"") {
+                let cf_name = rest.trim_end_matches("\"]").to_string();
+                current_cf = Some(cf_name);
+            } else if line.starts_with('[') {
+                // Any other section ends the CFOptions block.
+                current_cf = None;
+            } else if let Some(cf) = current_cf.as_ref()
+                && let Some((k, v)) = line.split_once('=')
+            {
+                result
+                    .entry(cf.clone())
+                    .or_default()
+                    .insert(k.trim().to_string(), v.trim().to_string());
+            }
+        }
+        result
     }
 }

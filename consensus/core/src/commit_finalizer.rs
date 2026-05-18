@@ -21,7 +21,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    transaction_certifier::TransactionCertifier,
+    transaction_vote_tracker::TransactionVoteTracker,
 };
 
 /// For transaction T committed at leader round R, when a new leader at round >= R + INDIRECT_REJECT_DEPTH
@@ -68,7 +68,7 @@ impl CommitFinalizerHandle {
 pub struct CommitFinalizer {
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
-    transaction_certifier: TransactionCertifier,
+    transaction_vote_tracker: TransactionVoteTracker,
     commit_sender: UnboundedSender<CommittedSubDag>,
 
     // Last commit index processed by CommitFinalizer.
@@ -83,13 +83,13 @@ impl CommitFinalizer {
     pub fn new(
         context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         commit_sender: UnboundedSender<CommittedSubDag>,
     ) -> Self {
         Self {
             context,
             dag_state,
-            transaction_certifier,
+            transaction_vote_tracker,
             commit_sender,
             last_processed_commit: None,
             pending_commits: VecDeque::new(),
@@ -100,10 +100,10 @@ impl CommitFinalizer {
     pub(crate) fn start(
         context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         commit_sender: UnboundedSender<CommittedSubDag>,
     ) -> CommitFinalizerHandle {
-        let processor = Self::new(context, dag_state, transaction_certifier, commit_sender);
+        let processor = Self::new(context, dag_state, transaction_vote_tracker, commit_sender);
         let (sender, receiver) = unbounded_channel("consensus_commit_finalizer");
         let _handle =
             spawn_logged_monitored_task!(processor.run(receiver), "consensus_commit_finalizer");
@@ -331,7 +331,7 @@ impl CommitFinalizer {
                 );
                 continue;
             }
-            let reject_votes = self.transaction_certifier.get_reject_votes(&block_ref)
+            let reject_votes = self.transaction_vote_tracker.get_reject_votes(&block_ref)
                 .unwrap_or_else(|| panic!("No vote info found for {block_ref}. It is either incorrectly gc'ed or failed to be recovered after crash."));
             metrics
                 .finalizer_transaction_status
@@ -480,7 +480,7 @@ impl CommitFinalizer {
         // Collect all rejected transactions without modifying state
         for (block_ref, pending_transactions) in &self.pending_commits[0].pending_transactions {
             let reject_votes: BTreeMap<TransactionIndex, Stake> = self
-                .transaction_certifier
+                .transaction_vote_tracker
                 .get_reject_votes(block_ref)
                 .unwrap_or_else(|| panic!("No vote info found for {block_ref}. It is incorrectly gc'ed or failed to be recovered after crash."))
                 .into_iter()
@@ -856,13 +856,13 @@ impl CommitFinalizer {
     }
 
     fn try_update_gc_round(&mut self, last_finalized_commit_round: Round) {
-        // GC TransactionCertifier state only with finalized commits, to ensure unfinalized transactions
-        // can access their reject votes from TransactionCertifier.
+        // GC TransactionVoteTracker state only with finalized commits, to ensure unfinalized transactions
+        // can access their reject votes from TransactionVoteTracker.
         let gc_round = self
             .dag_state
             .read()
             .calculate_gc_round(last_finalized_commit_round);
-        self.transaction_certifier.run_gc(gc_round);
+        self.transaction_vote_tracker.run_gc(gc_round);
     }
 
     #[cfg(test)]
@@ -995,7 +995,7 @@ mod tests {
     async fn test_direct_finalize_no_reject_votes() {
         let mut fixture = create_commit_finalizer_fixture();
 
-        // Create round 1-4 blocks with 10 transactions each. Add these blocks to transaction certifier.
+        // Create round 1-4 blocks with 10 transactions each. Add these blocks to the transaction vote tracker.
         let mut dag_builder = DagBuilder::new(fixture.context.clone());
         dag_builder.layers(1..=4).num_transactions(10).build();
         let blocks = dag_builder.all_blocks();
@@ -1555,7 +1555,7 @@ mod tests {
             local: bool,
         ) -> Vec<CommittedSubDag> {
             let leader = leaders[index].clone();
-            // Add blocks related to the commit to DagState and TransactionCertifier.
+            // Add blocks related to the commit to DagState and TransactionVoteTracker.
             if local {
                 for round_blocks in all_blocks.iter().take(leader.round() as usize + 2) {
                     fixture.add_blocks(round_blocks.clone());

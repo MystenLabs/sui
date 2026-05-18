@@ -3,11 +3,14 @@
 
 use crate::{
     data_store::PackageStore,
-    static_programmable_transactions::linkage::resolution::{ResolutionTable, VersionConstraint},
+    static_programmable_transactions::linkage::{
+        config::ResolutionConfig,
+        resolution::{ResolutionTable, VersionConstraint},
+    },
 };
 use move_vm_runtime::shared::linkage_context::LinkageContext;
 use std::{borrow::Borrow, collections::BTreeMap, rc::Rc};
-use sui_types::{base_types::ObjectID, error::ExecutionError};
+use sui_types::{base_types::ObjectID, error::ExecutionErrorTrait};
 
 #[derive(Clone, Debug)]
 pub struct ExecutableLinkage(pub Rc<ResolvedLinkage>);
@@ -20,24 +23,30 @@ impl ExecutableLinkage {
     /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
     /// Since this linkage analysis should only be used for types, all packages are resolved
     /// "upwards" (i.e., later versions of the package are preferred).
-    pub fn type_linkage<I>(ids: I, store: &dyn PackageStore) -> Result<Self, ExecutionError>
+    pub fn type_linkage<I, E>(
+        config: ResolutionConfig,
+        ids: I,
+        store: &dyn PackageStore,
+    ) -> Result<Self, E>
     where
+        E: ExecutionErrorTrait,
         I: IntoIterator,
         I::Item: Borrow<ObjectID>,
     {
-        let mut resolution_table = ResolutionTable::empty();
+        let mut resolution_table = ResolutionTable::empty(config);
         resolution_table.add_type_linkages_to_table(ids, store)?;
         Ok(Self::new(ResolvedLinkage::from_resolution_table(
             resolution_table,
         )))
     }
 
-    pub fn linkage_context(&self) -> Result<LinkageContext, ExecutionError> {
+    pub fn linkage_context<E: ExecutionErrorTrait>(&self) -> Result<LinkageContext, E> {
         LinkageContext::new(self.0.linkage.iter().map(|(k, v)| (**k, **v)).collect()).map_err(|e| {
             make_invariant_violation!(
                 "Failed to create linkage context from resolved linkage: {:?}",
                 e
             )
+            .into()
         })
     }
 }

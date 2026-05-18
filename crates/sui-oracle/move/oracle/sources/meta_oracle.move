@@ -27,7 +27,7 @@ module oracle::meta_oracle {
 
     public fun new<T: copy + drop>(threshold: u64, time_window_ms: u64, ticker: String): MetaOracle<T> {
         MetaOracle {
-            oracle_data: vector::empty(),
+            oracle_data: vector[],
             threshold,
             time_window_ms,
             ticker,

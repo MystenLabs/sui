@@ -36,7 +36,6 @@ use sui_indexer_alt_framework::ingestion::ingestion_client::IngestionClientArgs;
 use sui_indexer_alt_framework::pipeline::CommitterConfig;
 use sui_indexer_alt_framework::postgres::schema::watermarks;
 use sui_indexer_alt_graphql::RpcArgs as GraphQlArgs;
-use sui_indexer_alt_graphql::args::KvArgs as GraphQlKvArgs;
 use sui_indexer_alt_graphql::args::SubscriptionArgs;
 use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
 use sui_indexer_alt_graphql::start_rpc as start_graphql;
@@ -44,11 +43,13 @@ use sui_indexer_alt_jsonrpc::NodeArgs as JsonRpcNodeArgs;
 use sui_indexer_alt_jsonrpc::RpcArgs as JsonRpcArgs;
 use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
 use sui_indexer_alt_jsonrpc::start_rpc as start_jsonrpc;
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::consistent_reader::ConsistentReaderArgs;
 use sui_indexer_alt_reader::fullnode_client::FullnodeArgs;
+use sui_indexer_alt_reader::kv_loader::KvArgs;
 use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 use sui_kv_rpc::KvRpcServer;
+use sui_kvstore::ALL_PIPELINE_NAMES;
+use sui_kvstore::ALPHA_PIPELINE_NAMES;
 use sui_kvstore::BigTableClient;
 use sui_kvstore::BigTableIndexer;
 use sui_kvstore::BigTableStore;
@@ -84,6 +85,7 @@ use url::Url;
 
 pub mod coin_registry;
 pub mod find;
+pub mod move_helpers;
 
 /// A simulation of the network, accompanied by off-chain services (database, indexer, RPC),
 /// connected by local data ingestion.
@@ -155,6 +157,7 @@ pub struct OffchainClusterConfig {
     pub indexer_config: IndexerConfig,
     pub consistent_config: ConsistentConfig,
     pub jsonrpc_config: JsonRpcConfig,
+    pub jsonrpc_node_args: JsonRpcNodeArgs,
     pub graphql_config: GraphQlConfig,
     pub bootstrap_genesis: Option<BootstrapGenesis>,
 }
@@ -337,6 +340,7 @@ impl OffchainCluster {
             indexer_config,
             consistent_config,
             jsonrpc_config,
+            jsonrpc_node_args,
             graphql_config,
             bootstrap_genesis,
         }: OffchainClusterConfig,
@@ -417,7 +421,7 @@ impl OffchainCluster {
         let (bigtable_client, bigtable_emulator, archival_service) =
             start_archival(client_args.clone(), kv_rpc_address, registry).await?;
 
-        let graphql_kv_args = GraphQlKvArgs {
+        let kv_args = KvArgs {
             ledger_grpc_url: Some(
                 format!("http://{kv_rpc_address}")
                     .parse()
@@ -428,12 +432,11 @@ impl OffchainCluster {
 
         let jsonrpc = start_jsonrpc(
             Some(database_url.clone()),
-            None,
             DbArgs::default(),
-            BigtableArgs::default(),
+            kv_args.clone(),
             consistent_reader_args.clone(),
             jsonrpc_args,
-            JsonRpcNodeArgs::default(),
+            jsonrpc_node_args,
             SystemPackageTaskArgs::default(),
             jsonrpc_config,
             registry,
@@ -445,7 +448,7 @@ impl OffchainCluster {
             Some(database_url.clone()),
             fullnode_args,
             DbArgs::default(),
-            graphql_kv_args,
+            kv_args,
             consistent_reader_args,
             graphql_args,
             SystemPackageTaskArgs::default(),
@@ -718,9 +721,14 @@ impl OffchainCluster {
             loop {
                 interval.tick().await;
                 if client
-                    .get_watermark()
+                    .get_watermark_for_pipelines(&ALL_PIPELINE_NAMES)
                     .await
-                    .is_ok_and(|wm| wm.is_some_and(|wm| wm.checkpoint_hi_inclusive >= checkpoint))
+                    .is_ok_and(|wm| {
+                        wm.is_some_and(|wm| {
+                            wm.checkpoint_hi_inclusive
+                                .is_some_and(|cp| cp >= checkpoint)
+                        })
+                    })
                 {
                     break;
                 }
@@ -735,10 +743,11 @@ impl Default for OffchainClusterConfig {
         Self {
             indexer_args: Default::default(),
             consistent_indexer_args: Default::default(),
-            fullnode_args: Default::default(),
+            fullnode_args: FullnodeArgs::default(),
             indexer_config: IndexerConfig::for_test(),
             consistent_config: ConsistentConfig::for_test(),
             jsonrpc_config: Default::default(),
+            jsonrpc_node_args: Default::default(),
             graphql_config: Default::default(),
             bootstrap_genesis: None,
         }
@@ -840,13 +849,15 @@ async fn start_archival(
         BtIndexerConfig::default(),
         PipelineLayer::default(),
         Chain::Unknown,
+        &ALPHA_PIPELINE_NAMES,
         registry,
     )
     .await
     .context("Failed to create BigTable indexer")?;
 
+    // Use the BigTable wrapper, not the raw framework indexer, so bitmap
+    // committer background tasks are supervised for the duration of the test.
     let bt_indexer_service = bt_indexer
-        .indexer
         .run()
         .await
         .context("Failed to start BigTable indexer")?;
@@ -860,7 +871,13 @@ async fn start_archival(
     .await
     .context("Failed to create KvRpcServer")?;
     let kv_rpc_service = kv_rpc_server
-        .start_service(kv_rpc_address, sui_kv_rpc::ServerConfig::default())
+        .start_service(
+            kv_rpc_address,
+            sui_kv_rpc::ServerConfig {
+                enable_experimental_query_apis: true,
+                ..Default::default()
+            },
+        )
         .await
         .context("Failed to start kv-rpc server")?;
 

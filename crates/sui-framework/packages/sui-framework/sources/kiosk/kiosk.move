@@ -321,7 +321,7 @@ public fun take<T: key + store>(self: &mut Kiosk, cap: &KioskOwnerCap, id: ID): 
     assert!(self.has_item(id), EItemNotFound);
 
     self.item_count = self.item_count - 1;
-    df::remove_if_exists<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
+    df::remove_opt<Listing, u64>(&mut self.id, Listing { id, is_exclusive: false });
     dof::remove(&mut self.id, Item { id })
 }
 
@@ -379,7 +379,7 @@ public fun purchase<T: key + store>(
 
     self.item_count = self.item_count - 1;
     assert!(price == payment.value(), EIncorrectAmount);
-    df::remove_if_exists<Lock, bool>(&mut self.id, Lock { id });
+    df::remove_opt<Lock, bool>(&mut self.id, Lock { id });
     coin::put(&mut self.profits, payment);
 
     event::emit(ItemPurchased<T> { kiosk: object::id(self), id, price });
@@ -431,7 +431,7 @@ public fun purchase_with_cap<T: key + store>(
 
     coin::put(&mut self.profits, payment);
     self.item_count = self.item_count - 1;
-    df::remove_if_exists<Lock, bool>(&mut self.id, Lock { id });
+    df::remove_opt<Lock, bool>(&mut self.id, Lock { id });
     let item = dof::remove<Item, T>(&mut self.id, Item { id });
 
     (item, transfer_policy::new_request(id, paid, object::id(self)))
@@ -490,7 +490,7 @@ public(package) fun uid_mut_internal(self: &mut Kiosk): &mut UID {
 
 /// Check whether the `item` is present in the `Kiosk`.
 public fun has_item(self: &Kiosk, id: ID): bool {
-    dof::exists_(&self.id, Item { id })
+    dof::exists(&self.id, Item { id })
 }
 
 /// Check whether the `item` is present in the `Kiosk` and has type T.
@@ -502,18 +502,18 @@ public fun has_item_with_type<T: key + store>(self: &Kiosk, id: ID): bool {
 /// that the only two actions that can be performed on it are `list` and
 /// `list_with_purchase_cap`, it cannot be `take`n out of the `Kiosk`.
 public fun is_locked(self: &Kiosk, id: ID): bool {
-    df::exists_(&self.id, Lock { id })
+    df::exists(&self.id, Lock { id })
 }
 
 /// Check whether an `item` is listed (exclusively or non exclusively).
 public fun is_listed(self: &Kiosk, id: ID): bool {
-    df::exists_(&self.id, Listing { id, is_exclusive: false })
+    df::exists(&self.id, Listing { id, is_exclusive: false })
         || self.is_listed_exclusively(id)
 }
 
 /// Check whether there's a `PurchaseCap` issued for an item.
 public fun is_listed_exclusively(self: &Kiosk, id: ID): bool {
-    df::exists_(&self.id, Listing { id, is_exclusive: true })
+    df::exists(&self.id, Listing { id, is_exclusive: true })
 }
 
 /// Check whether the `KioskOwnerCap` matches the `Kiosk`.

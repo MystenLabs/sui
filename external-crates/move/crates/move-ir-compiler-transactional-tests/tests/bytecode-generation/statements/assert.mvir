@@ -1,6 +1,6 @@
 //# print-bytecode
-module 0x6.m {
-entry foo() {
+mvir 0x6::m {
+entry fun foo() {
     let x: u64;
 label b0:
     x = 3;

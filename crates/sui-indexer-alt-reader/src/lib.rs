@@ -10,6 +10,7 @@ pub mod epochs;
 pub mod error;
 pub mod events;
 pub mod fullnode_client;
+pub mod governance;
 pub mod kv_loader;
 pub mod ledger_grpc_reader;
 pub(crate) mod metrics;

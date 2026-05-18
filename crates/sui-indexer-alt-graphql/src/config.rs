@@ -234,12 +234,21 @@ pub struct SubscriptionConfig {
     /// as each buffered checkpoint's data is kept alive until it leaves the buffer.
     /// Subscribers that fall behind by this many checkpoints receive a lagged error.
     pub broadcast_buffer: usize,
+
+    /// How often (in milliseconds) the eviction task checks the `kv_packages` watermark
+    /// and evicts indexed packages from the streaming index.
+    pub package_eviction_interval_ms: u64,
+
+    /// Number of checkpoints fetched concurrently per chunk during upstream gap recovery.
+    pub gap_recovery_chunk_size: usize,
 }
 
 impl Default for SubscriptionConfig {
     fn default() -> Self {
         Self {
             broadcast_buffer: 256,
+            package_eviction_interval_ms: 300_000,
+            gap_recovery_chunk_size: 50,
         }
     }
 }
@@ -249,12 +258,20 @@ impl Default for SubscriptionConfig {
 #[serde(deny_unknown_fields)]
 pub struct SubscriptionLayer {
     pub broadcast_buffer: Option<usize>,
+    pub package_eviction_interval_ms: Option<u64>,
+    pub gap_recovery_chunk_size: Option<usize>,
 }
 
 impl SubscriptionLayer {
     pub(crate) fn finish(self, base: SubscriptionConfig) -> SubscriptionConfig {
         SubscriptionConfig {
             broadcast_buffer: self.broadcast_buffer.unwrap_or(base.broadcast_buffer),
+            package_eviction_interval_ms: self
+                .package_eviction_interval_ms
+                .unwrap_or(base.package_eviction_interval_ms),
+            gap_recovery_chunk_size: self
+                .gap_recovery_chunk_size
+                .unwrap_or(base.gap_recovery_chunk_size),
         }
     }
 }
@@ -527,6 +544,8 @@ impl From<SubscriptionConfig> for SubscriptionLayer {
     fn from(value: SubscriptionConfig) -> Self {
         Self {
             broadcast_buffer: Some(value.broadcast_buffer),
+            package_eviction_interval_ms: Some(value.package_eviction_interval_ms),
+            gap_recovery_chunk_size: Some(value.gap_recovery_chunk_size),
         }
     }
 }

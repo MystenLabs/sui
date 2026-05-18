@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09008]: unused function
+  ┌─ tests/move_check/warning_suppression/warn_category_unused.move:5:9
+  │
+4 │     #[warn(unused)]
+  │            ------ the lint level is defined here
+5 │     fun foo() {
+  │         ^^^ The non-'public', non-'entry' function 'foo' is never called. Consider removing it.
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/warn_category_unused.move:6:13
+  │
+4 │     #[warn(unused)]
+  │            ------ the lint level is defined here
+5 │     fun foo() {
+6 │         let x = 0u64;
+  │             ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'

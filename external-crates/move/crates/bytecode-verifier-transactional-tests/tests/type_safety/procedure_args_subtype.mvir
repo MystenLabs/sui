@@ -1,7 +1,7 @@
 //# publish
 
-module 0x42.Test {
-    public t(fr: &u64) {
+mvir 0x42::Test {
+    public fun t(fr: &u64) {
     label b0:
         _ = move(fr);
         return;
@@ -9,16 +9,16 @@ module 0x42.Test {
 }
 
 //# run
-module 0x42.m {
+mvir 0x42::m {
 
-import 0x42.Test;
+import 0x42::Test;
 
-entry foo() {
+entry fun foo() {
     let x: u64;
 label b0:
     x = 0;
     // arg type mismatch, no implicit freeze
-    Test.t(&mut x);
+    Test::t(&mut x);
     return;
 }
 }

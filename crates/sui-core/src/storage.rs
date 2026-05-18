@@ -556,11 +556,11 @@ impl RpcStateReader for RestReadStore {
     ) -> Result<Option<move_core_types::annotated_value::MoveTypeLayout>> {
         let backing_store = self.state.get_backing_package_store();
         let overlay_store = OverlayBackingPackageStore::new(overlay, backing_store.as_ref());
-        self.state
-            .load_epoch_store_one_call_per_task()
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        epoch_store
             .executor()
             // TODO(cache) - must read through cache
-            .type_layout_resolver(Box::new(overlay_store))
+            .type_layout_resolver(epoch_store.protocol_config(), Box::new(overlay_store))
             .get_annotated_layout(struct_tag)
             .map(|layout| layout.into_layout())
             .map(Some)

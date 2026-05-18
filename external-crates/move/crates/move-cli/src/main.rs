@@ -24,5 +24,5 @@ async fn main() -> Result<()> {
         stdlib_native_function_table(addr, GasParameters::zeros(), /* silent */ false),
     );
 
-    move_cli::move_cli::<Vanilla, _>(vm_test_setup).await
+    move_cli::move_cli::<Vanilla, _>(vm_test_setup, Vanilla).await
 }

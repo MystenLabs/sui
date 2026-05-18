@@ -21,7 +21,7 @@ use sui::client_commands::{
 use sui::client_ptb::ptb::PTB;
 use sui::sui_commands::RpcArgs;
 use sui_keys::key_identity::KeyIdentity;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use sui_rpc_api::Client;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::effects::TransactionEffectsAPI;
@@ -2905,6 +2905,29 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
+    let forking_mode_tx = SuiClientCommands::TransferSui {
+        to: KeyIdentity::Address(address1),
+        sui_coin_object_id: coin,
+        amount: Some(1),
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs {
+            serialize_signed_transaction: true,
+            forking_mode: true,
+            ..Default::default()
+        },
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::SerializedSignedTransaction(sender_signed_data) = forking_mode_tx
+    else {
+        panic!("Expected SerializedSignedTransaction result");
+    };
+    assert!(sender_signed_data.tx_signatures().is_empty());
+
     // use alias for transfer
     SuiClientCommands::TransferSui {
         to: KeyIdentity::Alias(alias1),
@@ -3488,6 +3511,50 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
     } else {
         panic!("PayAllSui test failed");
     }
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_send_funds_sui() -> Result<(), anyhow::Error> {
+    let (mut test_cluster, client, rgp, _objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let protocol_config = ProtocolConfig::get_for_version(
+        ProtocolVersion::max(),
+        test_cluster.get_chain_identifier().chain(),
+    );
+    if !protocol_config.enable_address_balance_gas_payments() {
+        return Ok(());
+    }
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
+    let context = &mut test_cluster.wallet;
+    let amount = 1_000_000_000u64;
+
+    let send_funds = SuiClientCommands::SendFunds {
+        to: recipient1.clone(),
+        amount: Some(amount),
+        all_coins: false,
+        coin_type: None,
+        stateless: false,
+        gas_data: GasDataArgs {
+            gas_budget: Some(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
+            ..Default::default()
+        },
+        processing: TxProcessingArgs::default(),
+    }
+    .execute(context)
+    .await?;
+
+    let SuiClientCommandResult::TransactionBlock(response) = send_funds else {
+        panic!("SendFunds test failed");
+    };
+    assert!(response.effects.status().is_ok());
+
+    // `send-funds` deposits into the recipient's address balance, not a Coin<T>.
+    let balance = client.get_balance(address2, &GAS::type_()).await?;
+    assert_eq!(balance.address_balance(), amount);
+    assert_eq!(balance.coin_balance(), 0);
 
     Ok(())
 }

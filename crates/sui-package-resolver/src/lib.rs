@@ -756,6 +756,21 @@ impl Package {
         &self.modules
     }
 
+    pub fn storage_id(&self) -> AccountAddress {
+        self.storage_id
+    }
+
+    #[cfg(any(test, feature = "testing"))]
+    pub fn for_test(storage_id: AccountAddress, version: SequenceNumber) -> Self {
+        Self {
+            storage_id,
+            runtime_id: storage_id,
+            linkage: BTreeMap::new(),
+            version,
+            modules: BTreeMap::new(),
+        }
+    }
+
     fn data_def(&self, module_name: &str, datatype_name: &str) -> Result<DataDef> {
         let module = self.module(module_name)?;
         let Some(data_def) = module.data_def(datatype_name)? else {

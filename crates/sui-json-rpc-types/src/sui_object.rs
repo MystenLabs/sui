@@ -27,8 +27,7 @@ use sui_types::base_types::{
     TransactionDigest,
 };
 use sui_types::error::{
-    ExecutionError, SuiErrorKind, SuiObjectResponseError, SuiResult, UserInputError,
-    UserInputResult,
+    SuiErrorKind, SuiObjectResponseError, SuiResult, UserInputError, UserInputResult,
 };
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
@@ -253,7 +252,9 @@ impl SuiObjectData {
                 p.id,
                 self.version,
                 p.module_map,
-                protocol_config.max_move_package_size(),
+                // Package is published, so no need to bound (and it may be a system package so may
+                // exceed normal publish limits)
+                u64::MAX,
                 p.type_origin_table,
                 p.linkage_table,
             )?),
@@ -1045,22 +1046,6 @@ impl From<MovePackage> for SuiRawMovePackage {
             type_origin_table: p.type_origin_table().clone(),
             linkage_table: p.linkage_table().clone(),
         }
-    }
-}
-
-impl SuiRawMovePackage {
-    pub fn to_move_package(
-        &self,
-        max_move_package_size: u64,
-    ) -> Result<MovePackage, ExecutionError> {
-        MovePackage::new(
-            self.id,
-            self.version,
-            self.module_map.clone(),
-            max_move_package_size,
-            self.type_origin_table.clone(),
-            self.linkage_table.clone(),
-        )
     }
 }
 

@@ -68,7 +68,7 @@ public fun remove<K: copy + drop + store, V: key + store>(bag: &mut ObjectBag, k
 
 /// Returns true iff there is an value associated with the key `k: K` in the bag `bag: &ObjectBag`
 public fun contains<K: copy + drop + store>(bag: &ObjectBag, k: K): bool {
-    ofield::exists_<K>(&bag.id, k)
+    ofield::exists<K>(&bag.id, k)
 }
 
 /// Returns true iff there is an value associated with the key `k: K` in the bag `bag: &ObjectBag`

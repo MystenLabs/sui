@@ -11,7 +11,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use consensus_config::{AuthorityIndex, DIGEST_LENGTH, DefaultHashFunction};
+use consensus_config::{DIGEST_LENGTH, DefaultHashFunction};
 use consensus_types::block::{BlockRef, BlockTimestampMs, Round, TransactionIndex};
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction as _};
@@ -371,9 +371,6 @@ pub struct CommittedSubDag {
     pub decided_with_local_blocks: bool,
     /// Whether rejected transactions in this commit have been recovered from storage.
     pub recovered_rejected_transactions: bool,
-    /// Optional scores that are provided as part of the consensus output to Sui
-    /// that can then be used by Sui for future submission to consensus.
-    pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
 
     /// Set by CommitFinalizer.
     ///
@@ -396,7 +393,6 @@ impl CommittedSubDag {
             commit_ref,
             decided_with_local_blocks: true,
             recovered_rejected_transactions: false,
-            reputation_scores_desc: vec![],
             rejected_transactions_by_block: BTreeMap::new(),
         }
     }
@@ -441,9 +437,8 @@ impl fmt::Debug for CommittedSubDag {
         )?;
         write!(
             f,
-            ";{}ms;rs{:?};{};{};[{}]",
+            ";{}ms;{};{};[{}]",
             self.timestamp_ms,
-            self.reputation_scores_desc,
             self.decided_with_local_blocks,
             self.recovered_rejected_transactions,
             self.rejected_transactions_by_block
@@ -461,7 +456,6 @@ impl fmt::Debug for CommittedSubDag {
 pub(crate) fn load_committed_subdag_from_store(
     store: &dyn Store,
     commit: TrustedCommit,
-    reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
 ) -> CommittedSubDag {
     let mut leader_block_idx = None;
     let commit_blocks = store
@@ -488,8 +482,6 @@ pub(crate) fn load_committed_subdag_from_store(
         commit.timestamp_ms(),
         commit.reference(),
     );
-
-    subdag.reputation_scores_desc = reputation_scores_desc;
 
     let reject_votes = store
         .read_rejected_transactions(commit.reference())
@@ -594,7 +586,7 @@ impl DecidedLeader {
     }
 
     #[cfg(test)]
-    pub(crate) fn authority(&self) -> AuthorityIndex {
+    pub(crate) fn authority(&self) -> consensus_config::AuthorityIndex {
         match self {
             Self::Commit(block, _direct) => block.author(),
             Self::Skip(leader) => leader.authority,
@@ -772,7 +764,7 @@ mod tests {
             leader_ref,
             blocks.clone(),
         );
-        let subdag = load_committed_subdag_from_store(store.as_ref(), commit.clone(), vec![]);
+        let subdag = load_committed_subdag_from_store(store.as_ref(), commit.clone());
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(
@@ -780,7 +772,6 @@ mod tests {
             (num_authorities * wave_length) as usize + 1
         );
         assert_eq!(subdag.commit_ref, commit.reference());
-        assert_eq!(subdag.reputation_scores_desc, vec![]);
     }
 
     #[tokio::test]

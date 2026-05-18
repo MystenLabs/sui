@@ -25,7 +25,7 @@ public entry fun emit_multiple(start_value: u64, count: u64) {
 }
 
 public entry fun emit_large(value: u64, size: u64) {
-    let mut data = vector::empty<u8>();
+    let mut data = vector[];
     let mut i = 0;
     while (i < size) {
         data.push_back(0);

@@ -3,6 +3,7 @@
 
 use std::iter::Rev;
 use std::ops::Range;
+use std::sync::Arc;
 
 use anyhow::Context as _;
 use async_graphql::Context;
@@ -90,7 +91,7 @@ fn tx_events_paginated<'e>(
 
             let event = Event {
                 scope: scope.clone(),
-                native: native.clone(),
+                native: Arc::new(native.clone()),
                 transaction_digest,
                 sequence_number: ev_sequence_number as u64,
                 timestamp_ms: contents.timestamp_ms(),

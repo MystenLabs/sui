@@ -8,7 +8,7 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    diagnostics::{DiagnosticReporter, Diagnostics, warning_filters::WarningFiltersScope},
+    diagnostics::{DiagnosticReporter, Diagnostics, filter::FilterStack},
     expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::{
         ast::{self as H, Value_, Var, Visibility},
@@ -166,7 +166,7 @@ fn pre_compiled_decls(
         let empty_known_filter_names = BTreeMap::new();
         let empty_diags = Arc::new(RwLock::new(Diagnostics::new()));
         let empty_ide_info = Arc::new(RwLock::new(IDEInfo::new()));
-        let empty_warning_filters_scope = WarningFiltersScope::root(None);
+        let empty_warning_filters_scope = FilterStack::new();
         // create an empty reporter to collect all diagnostics,
         // and report ICE if any exist as in here there shouldn't be any
         // (we are effectively re-doing part of an earlier pass here that
@@ -264,7 +264,6 @@ pub fn program(
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program {
         modules: gmodules,
-        warning_filters_table,
         info: _,
     } = prog;
 
@@ -286,9 +285,6 @@ pub fn program(
             units.push(unit);
         }
     }
-    // there are unsafe pointers into this table in the WarningFilters in the AST. Now that they
-    // are gone, the table can safely be dropped.
-    drop(warning_filters_table);
     units
 }
 
@@ -305,7 +301,7 @@ fn module(
     function_declarations: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) -> Option<AnnotatedCompiledUnit> {
     let G::ModuleDefinition {
-        warning_filter: _warning_filter,
+        warning_filter: module_filter,
         package_name,
         attributes,
         target_kind: _,
@@ -316,11 +312,17 @@ fn module(
         constants: gconstants,
         functions: gfunctions,
     } = mdef;
+
+    for d in module_filter.finalize() {
+        reporter.add_diag(d);
+    }
+
     let mut context = Context::new(compilation_env, package_name, Some(&ident));
-    let structs = struct_defs(&mut context, &ident, gstructs);
-    let enums = enum_defs(&mut context, &ident, genums);
-    let constants = constants(&mut context, &ident, gconstants);
-    let (collected_function_infos, functions) = functions(&mut context, &ident, gfunctions);
+    let structs = struct_defs(&mut context, reporter, &ident, gstructs);
+    let enums = enum_defs(&mut context, reporter, &ident, genums);
+    let constants = constants(&mut context, reporter, &ident, gconstants);
+    let (collected_function_infos, functions) =
+        functions(&mut context, reporter, &ident, gfunctions);
 
     let friends = gfriends
         .into_iter()
@@ -477,6 +479,7 @@ fn var_info(
 
 fn struct_defs(
     context: &mut Context,
+    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     structs: UniqueMap<DatatypeName, H::StructDefinition>,
 ) -> Vec<IR::StructDefinition> {
@@ -484,24 +487,29 @@ fn struct_defs(
     structs.sort_by_key(|(_, s)| s.index);
     structs
         .into_iter()
-        .map(|(s, sdef)| struct_def(context, m, s, sdef))
+        .map(|(s, sdef)| struct_def(context, reporter, m, s, sdef))
         .collect()
 }
 
 fn struct_def(
     context: &mut Context,
+    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     s: DatatypeName,
     sdef: H::StructDefinition,
 ) -> IR::StructDefinition {
     let H::StructDefinition {
-        warning_filter: _warning_filter,
+        warning_filter,
         index: _index,
         attributes: _attributes,
         abilities: abs,
         type_parameters: tys,
         fields,
     } = sdef;
+    warning_filter
+        .finalize()
+        .into_iter()
+        .for_each(|d| reporter.add_diag(d));
     let loc = s.loc();
     let name = context.struct_definition_name(m, s);
     let abilities = abilities(&abs);
@@ -551,6 +559,7 @@ fn struct_fields(
 
 fn enum_defs(
     context: &mut Context,
+    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     enums: UniqueMap<DatatypeName, H::EnumDefinition>,
 ) -> Vec<IR::EnumDefinition> {
@@ -558,24 +567,29 @@ fn enum_defs(
     enums.sort_by_key(|(_, e)| e.index);
     enums
         .into_iter()
-        .map(|(e, edef)| enum_def(context, m, e, edef))
+        .map(|(e, edef)| enum_def(context, reporter, m, e, edef))
         .collect()
 }
 
 fn enum_def(
     context: &mut Context,
+    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     e: DatatypeName,
     edef: H::EnumDefinition,
 ) -> IR::EnumDefinition {
     let H::EnumDefinition {
-        warning_filter: _warning_filter,
+        warning_filter,
         index: _index,
         attributes: _attributes,
         abilities: abs,
         type_parameters: tys,
         variants,
     } = edef;
+    warning_filter
+        .finalize()
+        .into_iter()
+        .for_each(|d| reporter.add_diag(d));
     let loc = e.loc();
     let name = context.enum_definition_name(m, e);
     let abilities = abilities(&abs);
@@ -622,6 +636,7 @@ fn enum_variants(
 
 fn constants(
     context: &mut Context,
+    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     constants: UniqueMap<ConstantName, G::Constant>,
 ) -> Vec<IR::Constant> {
@@ -629,24 +644,29 @@ fn constants(
     constants.sort_by_key(|(_, c)| c.index);
     constants
         .into_iter()
-        .map(|(n, c)| constant(context, m, n, c))
+        .map(|(n, c)| constant(context, reporter, m, n, c))
         .collect()
 }
 
 fn constant(
     context: &mut Context,
+    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     n: ConstantName,
     c: G::Constant,
 ) -> IR::Constant {
     let G::Constant {
         loc: _,
-        warning_filter: _,
+        warning_filter,
         index: _,
         attributes,
         signature,
         value,
     } = c;
+    warning_filter
+        .finalize()
+        .into_iter()
+        .for_each(|d| reporter.add_diag(d));
     let is_error_constant = attributes.contains_key_(&AttributeKind_::Error);
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, signature);
@@ -665,6 +685,7 @@ fn constant(
 
 fn functions(
     context: &mut Context,
+    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     functions: UniqueMap<FunctionName, G::Function>,
 ) -> (CollectedInfos, Vec<(IR::FunctionName, IR::Function)>) {
@@ -673,16 +694,8 @@ fn functions(
     let mut collected_function_infos = UniqueMap::new();
     let functions_vec = functions
         .into_iter()
-        // TODO full prover support for vector bytecode instructions
-        // TODO filter out fake natives
-        // These cannot be filtered out due to lacking prover support for the operations
-        // .filter(|(_, fdef)| {
-        //            !fdef
-        //             .attributes
-        //             .contains_key_(&fake_natives::FAKE_NATIVE_ATTR)
-        // })
         .map(|(f, fdef)| {
-            let (res, info) = function(context, m, f, fdef);
+            let (res, info) = function(context, reporter, m, f, fdef);
             collected_function_infos.add(f, info).unwrap();
             res
         })
@@ -692,12 +705,13 @@ fn functions(
 
 fn function(
     context: &mut Context,
+    reporter: &DiagnosticReporter,
     m: &ModuleIdent,
     f: FunctionName,
     fdef: G::Function,
 ) -> ((IR::FunctionName, IR::Function), CollectedInfo) {
     let G::Function {
-        warning_filter: _warning_filter,
+        warning_filter,
         index: _index,
         attributes,
         loc,
@@ -709,6 +723,10 @@ fn function(
         signature,
         body,
     } = fdef;
+    warning_filter
+        .finalize()
+        .into_iter()
+        .for_each(|d| reporter.add_diag(d));
     let v = visibility(context, v);
     let parameters = signature.parameters.clone();
     let signature = function_signature(context, signature);

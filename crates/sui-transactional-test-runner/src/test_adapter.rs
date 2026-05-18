@@ -79,7 +79,9 @@ use sui_types::committee::EpochId;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, RandomnessRound, get_authority_key_pair,
 };
-use sui_types::digests::{ChainIdentifier, ConsensusCommitDigest, TransactionDigest};
+use sui_types::digests::{
+    ChainIdentifier, CheckpointDigest, ConsensusCommitDigest, TransactionDigest,
+};
 use sui_types::effects::{
     AccumulatorOperation, AccumulatorValue as EffectsAccumulatorValue, TransactionEffects,
     TransactionEffectsAPI, TransactionEvents,
@@ -168,6 +170,9 @@ pub struct SuiTestAdapter {
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
     /// Mapping from task ID to a transaction digest, for use in named variable substitution.
     digest_enumeration: BTreeMap<u64, TransactionDigest>,
+    /// Mapping from a checkpoint's sequence number to its digest, for use in named variable
+    /// substitution as `@{cp_digest_N}`.
+    cp_digest_enumeration: BTreeMap<u64, CheckpointDigest>,
     /// Tracks the global creation order of each object across all transactions.
     creation_order: BTreeMap<ObjectID, u64>,
     next_fake: (u64, u64),
@@ -404,7 +409,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
         >,
     ) -> Option<String> {
         match &task.command {
-            TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..)) => {
+            TaskCommand::Subcommand(SuiSubcommand::ProgrammableTransaction(..))
+            | TaskCommand::Subcommand(SuiSubcommand::BenchProgrammable(..)) => {
                 let data_str = std::fs::read_to_string(task.data.as_ref()?)
                     .ok()?
                     .trim()
@@ -525,6 +531,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             default_syntax,
             object_enumeration: BiBTreeMap::new(),
             digest_enumeration: BTreeMap::new(),
+            cp_digest_enumeration: BTreeMap::new(),
             creation_order: BTreeMap::new(),
             next_fake: (0, 0),
             // TODO: make this configurable
@@ -752,6 +759,7 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             }};
             ($fake_id:ident) => {{ get_obj!($fake_id, None) }};
         }
+        let bench_programmable = matches!(&command, SuiSubcommand::BenchProgrammable(_));
         match command {
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
@@ -875,7 +883,10 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
             }
             SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand { count }) => {
                 for _ in 0..count.unwrap_or(1) {
-                    self.executor.create_checkpoint().await?;
+                    let checkpoint = self.executor.create_checkpoint().await?;
+                    let summary = checkpoint.data();
+                    self.cp_digest_enumeration
+                        .insert(summary.sequence_number, *checkpoint.digest());
                 }
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 Ok(Some(format!("Checkpoint created: {}", latest_chk)))
@@ -1113,7 +1124,22 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 dry_run,
                 expiration,
                 inputs,
+            })
+            | SuiSubcommand::BenchProgrammable(ProgrammableTransactionCommand {
+                sender,
+                sponsor,
+                gas_budget,
+                address_balance_gas,
+                gas_price,
+                gas_payment,
+                dev_inspect,
+                dry_run,
+                expiration,
+                inputs,
             }) => {
+                if bench_programmable && (dev_inspect || dry_run) {
+                    bail!("bench ptb does not support dev-inspect or dry-run");
+                }
                 if dev_inspect && self.is_simulator() {
                     bail!("Dev inspect is not supported on simulator mode");
                 }
@@ -1201,6 +1227,27 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                             tx_data
                         },
                     );
+                    if bench_programmable {
+                        let assigned_versions = AssignedVersions::default();
+                        let objects = self
+                            .executor
+                            .read_input_objects(transaction.clone(), assigned_versions)
+                            .await?;
+                        // only run benchmarks in release mode
+                        if !cfg!(debug_assertions) {
+                            let mut c = Criterion::default();
+                            let bench_name = format!("benchmark_tx_task_{number}");
+                            c.bench_function(&bench_name, |b| {
+                                let tx = transaction.clone();
+                                let objects = objects.clone();
+                                b.iter(|| {
+                                    self.executor
+                                        .prepare_txn(tx.clone(), objects.clone())
+                                        .unwrap();
+                                })
+                            });
+                        }
+                    }
                     self.execute_txn(transaction).await?
                 } else if dry_run {
                     let gas_price = gas_price.unwrap_or(self.gas_price);
@@ -1535,7 +1582,8 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 if !cfg!(debug_assertions) {
                     let mut c = Criterion::default();
 
-                    c.bench_function("benchmark_tx", |b| {
+                    let bench_name = format!("benchmark_tx_task_{number}");
+                    c.bench_function(&bench_name, |b| {
                         let tx = tx.clone();
                         let objects = objects.clone();
                         b.iter(|| {
@@ -1683,6 +1731,10 @@ impl SuiTestAdapter {
 
         for (tid, digest) in &self.digest_enumeration {
             variables.insert(format!("digest_{tid}"), digest.to_string());
+        }
+
+        for (seq, digest) in &self.cp_digest_enumeration {
+            variables.insert(format!("cp_digest_{seq}"), digest.to_string());
         }
 
         variables
@@ -2145,11 +2197,7 @@ impl SuiTestAdapter {
     }
 
     async fn dry_run(&mut self, transaction: TransactionData) -> anyhow::Result<TxnSummary> {
-        let digest = transaction.digest();
-        let results = self
-            .executor
-            .dry_run_transaction_block(transaction, digest)
-            .await?;
+        let results = self.executor.dry_run_transaction_block(transaction).await?;
         let DryRunTransactionBlockResponse {
             effects, events, ..
         } = results;

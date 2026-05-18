@@ -275,7 +275,7 @@ impl Workload<dyn Payload> for SharedCounterDeletionWorkload {
                 .build_and_sign(keypair.as_ref());
             let proxy_ref = execution_proxy.clone();
             futures.push(async move {
-                let (_, execution_result) = proxy_ref.execute_transaction_block(transaction).await;
+                let execution_result = proxy_ref.execute_transaction_block(transaction).await;
                 execution_result.unwrap().created()[0].0
             });
         }

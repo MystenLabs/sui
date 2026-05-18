@@ -27,6 +27,7 @@ use sui_indexer_alt_reader::ledger_grpc_reader::LedgerGrpcReader;
 use sui_indexer_alt_reader::pg_reader::PgReader;
 use sui_sql_macro::query;
 use tokio::sync::RwLock;
+use tokio::sync::watch;
 use tokio::time;
 use tonic::metadata::AsciiMetadataValue;
 use tracing::debug;
@@ -39,11 +40,17 @@ use crate::metrics::RpcMetrics;
 ///
 /// Each request takes a snapshot of these bounds when it starts and makes sure all queries to the
 /// store are consistent with data from this snapshot.
+pub(crate) const KV_PACKAGES_PIPELINE: &str = "kv_packages";
+
 pub(crate) struct WatermarkTask {
     /// Thread-safe watermark that avoids writer starvation. The outer `Arc` is used to share the
     /// watermarks between the schema and this task. The inner `Arc` is used to allow the task to
     /// efficiently swap in new watermark values.
     watermarks: WatermarksLock,
+
+    /// Publishes the latest watermarks on each update. Consumers can subscribe and use
+    /// `wait_for` with a predicate to await specific pipeline conditions without polling.
+    watermarks_tx: watch::Sender<Arc<Watermarks>>,
 
     /// Access to the Postgres DB
     pg_reader: PgReader,
@@ -139,8 +146,10 @@ impl WatermarkTask {
             watermark_polling_interval,
         } = config;
 
+        let (watermarks_tx, _) = watch::channel(Arc::new(Watermarks::default()));
         Self {
             watermarks: Default::default(),
+            watermarks_tx,
             pg_reader,
             bigtable_reader,
             ledger_grpc_reader,
@@ -156,11 +165,18 @@ impl WatermarkTask {
         self.watermarks.clone()
     }
 
+    /// Receiver for observing watermark updates. Use `wait_for` with a predicate to await
+    /// specific pipeline conditions.
+    pub(crate) fn watermarks_rx(&self) -> watch::Receiver<Arc<Watermarks>> {
+        self.watermarks_tx.subscribe()
+    }
+
     /// Start a new task that regularly polls the database for watermarks.
     pub(crate) fn run(self) -> Service {
         Service::new().spawn_aborting(async move {
             let Self {
                 watermarks,
+                watermarks_tx,
                 pg_reader,
                 bigtable_reader,
                 ledger_grpc_reader,
@@ -225,7 +241,12 @@ impl WatermarkTask {
                     "Watermark updated"
                 );
 
-                *watermarks.write().await = Arc::new(w);
+                let w = Arc::new(w);
+                // TODO: `WatermarksLock` is effectively a broadcast channel here — redundant
+                // with `watermarks_tx`. Follow-up to unify on `watch::Receiver<Arc<Watermarks>>`
+                // across request handlers and middleware.
+                *watermarks.write().await = w.clone();
+                let _ = watermarks_tx.send(w);
             }
         })
     }
@@ -313,6 +334,10 @@ impl Pipeline {
             .as_millis() as u64
     }
 
+    pub(crate) fn hi(&self) -> &Watermark {
+        &self.hi
+    }
+
     pub(crate) fn lo(&self) -> &Watermark {
         &self.lo
     }
@@ -398,21 +423,46 @@ impl Default for Watermarks {
     }
 }
 
+#[cfg(test)]
+impl Watermarks {
+    /// Build a `Watermarks` snapshot with the given pipeline high-checkpoints.
+    pub(crate) fn for_test(pipelines: &[(&str, u64)]) -> Self {
+        let mut w = Self::default();
+        for (name, hi_cp) in pipelines {
+            w.per_pipeline.insert(
+                name.to_string(),
+                Pipeline {
+                    hi: Watermark {
+                        checkpoint: *hi_cp as i64,
+                        ..Default::default()
+                    },
+                    lo: Watermark::default(),
+                    timestamp_ms_hi_inclusive: 0,
+                },
+            );
+        }
+        w
+    }
+}
+
 async fn watermark_from_bigtable(bigtable_reader: &BigtableReader) -> anyhow::Result<WatermarkRow> {
     let wm = bigtable_reader
         .watermark()
         .await
         .context("Failed to get checkpoint watermark")?
         .context("Checkpoint watermark not found")?;
+    let checkpoint_hi_inclusive = wm
+        .checkpoint_hi_inclusive
+        .context("Checkpoint watermark not found")?;
 
     Ok(WatermarkRow {
         pipeline: "bigtable".to_owned(),
         epoch_hi_inclusive: wm.epoch_hi_inclusive as i64,
-        checkpoint_hi_inclusive: wm.checkpoint_hi_inclusive as i64,
+        checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
         tx_hi: wm.tx_hi as i64,
         timestamp_ms_hi_inclusive: wm.timestamp_ms_hi_inclusive as i64,
         epoch_lo: 0,
-        checkpoint_lo: 0,
+        checkpoint_lo: wm.reader_lo as i64,
         tx_lo: 0,
     })
 }

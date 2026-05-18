@@ -4,7 +4,7 @@
 // Tests: native struct nested inside a regular struct, destructured in match.
 // Targets: struct_fields().unwrap() in deeper specialization paths.
 module 0x0::M {
-    public native struct N;
+    public native struct N has drop;
 
     public struct Wrapper has drop {
         inner: N,

@@ -1,0 +1,144 @@
+---
+title: Creating Displays
+description: An Object Display must be explicitly created and then maintained by the package or type owner.
+keywords: [ Object Display, object, display, display properties, object properties, sui::display, Sui utility objects ]
+---
+
+:::info
+
+Object Display V2 is the current Object Display standard. If you manage a display from Move code, use the `sui::display_registry` APIs.
+
+A system snapshot migration migrated existing V1 displays to V2. If you need to manage a migrated display, claim the capability when you are ready (see [Migrating to V2](#migrating-to-v2)).
+
+:::
+
+An Object Display must be explicitly created and then maintained by the [package or type owner](#display-registry). The standard does not limit the fields you can set. Use the `{property}` syntax to access all object properties and insert them as part of the template string. The basic set of suggested properties includes:
+
+- `name`: A name for the object. The name displays when users view the object.
+- `description`: A description for the object. The description displays when users view the object.
+- `link`: A link to the object to use in an application.
+- `image_url`: A URL or a blob with the image for the object.
+- `thumbnail_url`: A URL to a smaller image to use in wallets, explorers, and other products as a preview.
+- `project_url`: A link to a website associated with the object or creator.
+- `creator`: A string that indicates the object creator.
+
+For the full Object Display syntax, see the [Object Display reference page](/references/object-display-syntax).
+
+## Display registry
+
+In V1, discovering the display for a type relied on events, for example `DisplayCreated<T>`. Clients had to query historical events by type and infer which objects represented the display. This approach depends on historical event data, does not scale for full nodes that might not retain full history, and is a poor fit for RPC APIs like JSON-RPC, gRPC, and others that need a stable, cheap way to resolve the display for type `T` without scanning events.
+
+In V2, the display for type `T` has a single, deterministic ID derived from the global registry and the type. That ID can be computed offline without using events or history. RPCs can resolve the display for type `T` by derivation only, which is sustainable for full nodes. This is the main gain for JSON-RPC and gRPC. GraphQL is less affected because it maintains its own indexed state.
+
+### Structural change: N to 1, and derived
+
+In Object Display V1, you could have N displays per type and had to use events to query them. In Object Display V2, there is only 1 per type and you get it by derivation.
+
+|                                | **V1**                                              | **V2**                                                                                                                                                        |
+| ------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Displays per type**          | Multiple `Display<T>` could exist.                  | Exactly one `Display<T>` per type `T`.                                                                                                                        |
+| **How you find `Display<T>`**  | Query events by type; requires historical events.   | Offline derivation. `Display<T>` is a derived object from `(DisplayRegistry UID, DisplayKey<T>)`. ID is computable from registry and type; no events, no scan. |
+| **Identity**                   | Unpredictable (per creation transaction).           | Deterministic. The same registry and same `T` result in the same display ID everywhere.                                                                       |
+
+## Example
+
+The `display_registry::new_with_publisher<T>` call creates a V2 `Display<T>` and `DisplayCap<T>` for a type. The display object has a deterministic derived ID, and the capability authorizes future updates.
+```move
+module sui::display_registry;
+
+public fun new_with_publisher<T>(
+    registry: &mut DisplayRegistry,
+    publisher: &mut Publisher,
+    ctx: &mut TxContext,
+): (Display<T>, DisplayCap<T>);
+```
+
+After you create the `Display<T>`, set its fields with `display_registry::set`, remove fields with `display_registry::unset`, or clear all fields with `display_registry::clear`. Each update requires the matching `DisplayCap<T>`.
+```move
+module sui::display_registry;
+
+public fun set<T>(
+    display: &mut Display<T>,
+    cap: &DisplayCap<T>,
+    name: String,
+    value: String,
+);
+
+public fun unset<T>(display: &mut Display<T>, cap: &DisplayCap<T>, name: String);
+
+public fun clear<T>(display: &mut Display<T>, cap: &DisplayCap<T>);
+```
+
+When the display is ready, share it with `display_registry::share(display)`. Unlike V1, V2 does not rely on emitting an event and then scanning historical events to discover the display.
+
+## Object Display patterns
+
+The following are examples of Object Display patterns. You can explore and interact with additional patterns using the [Object Display template preview](/develop/objects/display/display-overview).
+
+### Objects with unique static content
+
+This example demonstrates an object with static metadata that is set once during the object's mint event. If the metadata standard evolves and some ecosystem projects add new features for some properties, this object always stays in its original form and might require backward-compatible changes.
+```move
+module sui::devnet_nft;
+
+use std::string::String;
+
+/// A Collectible with a static data. URL, name, description are
+/// set only once on a mint event
+public struct DevNetNFT has key, store {
+    id: UID,
+    name: String,
+    description: String,
+    url: String,
+}
+```
+
+### Objects with data duplication
+
+A common case with in-game items is to have a large number of similar objects grouped by some criteria. It is important to optimize their size and the cost to mint and update them. Typically, a game uses a single source image or URL per group or item criteria. Storing the source image inside of every object is not optimal.
+
+In some cases, users mint in-game items when a game allows them or when they purchase an in-game item. To enable this, some metadata must be created and stored in advance elsewhere, such as on [Walrus](https://docs.wal.app). This requires additional logic that is usually not related to the in-game properties of the item.
+
+The following example demonstrates how to create a `Capy` item:
+```move
+module capy::capy_items;
+
+use std::string::String;
+
+/// A wearable Capy item. For some items there can be an
+/// unlimited supply. And items with the same name are identical.
+public struct CapyItem has key, store {
+    id: UID,
+    name: String
+}
+```
+
+### Sui utility objects
+
+In Sui, utility objects enable authorization for capabilities. Almost all modules have features that can be accessed only with the required capability. Generic modules allow one capability per application, such as a marketplace. Some capabilities mark ownership of a shared object onchain, or access the shared data from another account.
+
+With capabilities, it is important to provide a meaningful description of objects to facilitate user interface implementation. This helps avoid accidentally transferring the wrong object when objects are similar. It also provides a user-friendly description of items that users see.
+
+The following example demonstrates how to create a capability called `capy`:
+```move
+module capy::utility;
+
+/// A capability which grants Capy Manager permission to add
+/// new genes and manage the Capy Market
+public struct CapyManagerCap has key, store { id: UID }
+```
+
+## Migrating to V2
+
+:::caution
+
+A **system snapshot migration** migrated existing V1 displays to V2. You do not need to do anything upfront. After the snapshot, for each type the single V2 `Display<T>` exists with `cap_id: none` until the capability is claimed.
+
+:::
+
+You can claim the capability in either of 2 ways:
+
+- **Publisher** using `claim_with_publisher`: Use this if you hold the `Publisher` object. It proves type ownership through `publisher.from_package<T>()`.
+- **Legacy Display** using `claim`: Use this if you hold the V1 `Display<T>` object. Pass it in; it is consumed and you receive the `DisplayCap<T>`.
+
+Once claimed, the holder of `DisplayCap<T>` can update the display fields (`set`, `unset`, `clear`). Anyone who holds a V1 `Display<T>` can call `delete_legacy(display, legacy)` to burn their legacy object.

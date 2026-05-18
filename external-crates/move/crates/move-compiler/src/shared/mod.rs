@@ -10,10 +10,10 @@ use crate::{
     command_line as cli, diag,
     diagnostics::{
         Diagnostic, DiagnosticReporter, Diagnostics, DiagnosticsFormat,
-        codes::{DiagnosticsID, Severity},
-        warning_filters::{
-            FILTER_ALL, FilterName, FilterPrefix, WarningFilter, WarningFiltersBuilder,
-            WarningFiltersScope, WarningFiltersTable,
+        codes::{DIAGNOSTIC_FILTER_WILDCARD, DiagnosticsID, Severity},
+        filter::{
+            self, COMPILER_KNOWN_FILTERS, FilterName, FilterPrefix, FilterScope, FilterStack,
+            IDE_KNOWN_FILTERS,
         },
     },
     editions::{Edition, FeatureGate, Flavor, check_feature_or_error, feature_edition_error_msg},
@@ -238,15 +238,14 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
 pub struct CompilationEnv {
     flags: Flags,
     modes: BTreeSet<Symbol>,
-    top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder>,
+    root_scope: FilterScope,
     diags: Arc<RwLock<Diagnostics>>,
     visitors: Visitors,
     package_configs: BTreeMap<Symbol, PackageConfig>,
     /// Config for any package not found in `package_configs`, or for inputs without a package.
     default_config: PackageConfig,
-    /// Maps warning filter key (filter name and filter attribute name) to the filter itself.
-    known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>>,
-    /// Maps a diagnostics ID to a known filter name.
+    known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>>,
+    /// Maps a diagnostics ID to a known filter name (for "add #[allow(...)]" hints).
     known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     prim_definers: OnceLock<BTreeMap<N::BuiltinTypeName_, E::ModuleIdent>>,
     // TODO(tzakian): Remove the global counter and use this counter instead
@@ -263,7 +262,7 @@ impl CompilationEnv {
         flags: Flags,
         mut visitors: Vec<cli::compiler::Visitor>,
         save_hooks: Vec<SaveHook>,
-        warning_filters: Option<WarningFiltersBuilder>,
+        root_scope: Option<FilterScope>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
         files_to_compile: Option<BTreeSet<PathBuf>>,
@@ -272,27 +271,34 @@ impl CompilationEnv {
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
-        let mut known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> =
-            WarningFilter::compiler_known_filters();
-        if flags.ide_mode() {
-            known_filters_.extend(WarningFilter::ide_known_filters());
+
+        let mut known_filters_: BTreeMap<FilterName, Vec<DiagnosticsID>> = BTreeMap::new();
+        for (name, expansion) in COMPILER_KNOWN_FILTERS.iter() {
+            known_filters_
+                .entry(Symbol::from(*name))
+                .or_default()
+                .extend_from_slice(expansion);
         }
-        let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
+        if flags.ide_mode() {
+            for (name, expansion) in IDE_KNOWN_FILTERS.iter() {
+                known_filters_
+                    .entry(Symbol::from(*name))
+                    .or_default()
+                    .extend_from_slice(expansion);
+            }
+        }
+        let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, Vec<DiagnosticsID>>> =
             BTreeMap::from([(None, known_filters_)]);
 
         let known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)> = known_filters
             .iter()
             .flat_map(|(attr, all_filters)| {
                 all_filters.iter().flat_map(|(name, filters)| {
-                    filters.iter().filter_map(|v| {
-                        if let WarningFilter::Code {
-                            prefix,
-                            category,
-                            code,
-                            ..
-                        } = v
+                    filters.iter().filter_map(|f| {
+                        if f.category != DIAGNOSTIC_FILTER_WILDCARD
+                            && f.code != DIAGNOSTIC_FILTER_WILDCARD
                         {
-                            Some(((*prefix, *category, *code), (*attr, *name)))
+                            Some((*f, (*attr, *name)))
                         } else {
                             None
                         }
@@ -301,18 +307,12 @@ impl CompilationEnv {
             })
             .collect();
 
-        let top_level_warning_filter_opt = if flags.silence_warnings() {
-            let mut f = WarningFiltersBuilder::new_for_source();
-            f.add(WarningFilter::All(None));
-            Some(f)
+        let root_scope = if flags.silence_warnings() {
+            filter::all_filter_scope()
         } else {
-            warning_filters
+            root_scope.unwrap_or_else(filter::empty_filter_scope)
         };
-        let top_level_warning_filter_scope: Option<&'static WarningFiltersBuilder> =
-            top_level_warning_filter_opt.map(|f| {
-                let f: &'static WarningFiltersBuilder = Box::leak(Box::new(f));
-                f
-            });
+
         let mut diags = Diagnostics::new();
         if flags.json_errors() {
             diags.set_format(DiagnosticsFormat::JSON);
@@ -323,7 +323,7 @@ impl CompilationEnv {
         Self {
             flags,
             modes,
-            top_level_warning_filter_scope,
+            root_scope,
             diags: Arc::new(RwLock::new(diags)),
             visitors: Visitors::new(visitors),
             package_configs,
@@ -375,7 +375,7 @@ impl CompilationEnv {
             &self.known_filter_names,
             Arc::clone(&self.diags),
             Arc::clone(&self.ide_information),
-            WarningFiltersScope::root(self.top_level_warning_filter_scope),
+            FilterStack::root(self.root_scope.clone()),
         )
     }
 
@@ -383,7 +383,7 @@ impl CompilationEnv {
         DiagnosticReporter::dummy_reporter(
             &self.flags,
             &self.known_filter_names,
-            WarningFiltersScope::root(self.top_level_warning_filter_scope),
+            FilterStack::root(self.root_scope.clone()),
         )
     }
 
@@ -444,7 +444,7 @@ impl CompilationEnv {
         &self,
         prefix: Option<impl Into<Symbol>>,
         name: impl Into<Symbol>,
-    ) -> BTreeSet<WarningFilter> {
+    ) -> Vec<DiagnosticsID> {
         self.known_filters
             .get(&prefix.map(|p| p.into()))
             .and_then(|filters| filters.get(&name.into()).cloned())
@@ -454,41 +454,21 @@ impl CompilationEnv {
     pub fn add_custom_known_filters(
         &mut self,
         attr_name: FilterPrefix,
-        filters: Vec<WarningFilter>,
-    ) -> anyhow::Result<()> {
+        filters: Vec<(FilterName, Vec<DiagnosticsID>)>,
+    ) {
         let filter_attr = self.known_filters.entry(attr_name).or_default();
-        for filter in filters {
-            let (prefix, n) = match filter {
-                WarningFilter::All(prefix) => (prefix, Symbol::from(FILTER_ALL)),
-                WarningFilter::Category { name, prefix, .. } => {
-                    let Some(n) = name else {
-                        anyhow::bail!("A known Category warning filter must have a name specified");
-                    };
-                    (prefix, Symbol::from(n))
+        for (name, ids) in filters {
+            let existing = filter_attr.entry(name).or_default();
+            for f in ids {
+                if f.category != DIAGNOSTIC_FILTER_WILDCARD && f.code != DIAGNOSTIC_FILTER_WILDCARD
+                {
+                    self.known_filter_names.insert(f, (attr_name, name));
                 }
-                WarningFilter::Code {
-                    prefix,
-                    category,
-                    code,
-                    name,
-                } => {
-                    let Some(n) = name else {
-                        anyhow::bail!("A known Code warning filter must have a name specified");
-                    };
-                    let n = Symbol::from(n);
-                    self.known_filter_names
-                        .insert((prefix, category, code), (attr_name, n));
-                    (prefix, n)
+                if !existing.contains(&f) {
+                    existing.push(f);
                 }
-            };
-            anyhow::ensure!(
-                attr_name.is_some() == prefix.is_some(),
-                "If the attribute name is specified, e.g. Some(_), the external prefix must also \
-                be specified. attribute name: {attr_name:?}, external prefix: {prefix:?}",
-            );
-            filter_attr.entry(n).or_default().insert(filter);
+            }
         }
-        Ok(())
     }
 
     pub fn visitors(&self) -> &Visitors {
@@ -912,10 +892,10 @@ fn parse_symbol(s: &str) -> Result<Symbol, String> {
 // Package Level Config
 //**************************************************************************************************
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PackageConfig {
     pub is_dependency: bool,
-    pub warning_filter: WarningFiltersBuilder,
+    pub warning_filter: FilterScope,
     pub flavor: Flavor,
     pub edition: Edition,
 }
@@ -924,7 +904,7 @@ impl Default for PackageConfig {
     fn default() -> Self {
         Self {
             is_dependency: false,
-            warning_filter: WarningFiltersBuilder::new_for_source(),
+            warning_filter: filter::empty_filter_scope(),
             flavor: Flavor::default(),
             edition: Edition::default(),
         }
@@ -967,8 +947,8 @@ fn check<T: Send + Sync>() {}
 fn check_all() {
     check::<Visitors>();
     check::<&Visitors>();
-    check::<&WarningFiltersTable>();
-    check::<&WarningFiltersScope>();
+    check::<&FilterStack>();
+    check::<&FilterScope>();
     check::<&CompilationEnv>();
 }
 

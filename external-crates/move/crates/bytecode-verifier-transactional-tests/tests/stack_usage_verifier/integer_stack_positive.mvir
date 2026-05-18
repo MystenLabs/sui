@@ -1,90 +1,90 @@
 //# publish
-module 0x6.A {
-    two(): u8 * u8{
+mvir 0x6::A {
+    fun two(): u8 * u8{
     label b0:
         return 0u8, 255u8;
     }
 
-    pop() {
+    fun pop() {
     label b0:
         // negative stack size, missing pop
-        _  = Self.two();
+        _  = Self::two();
         return;
     }
 }
 
 
 //# publish
-module 0x7.A {
-    two(): u16 * u16{
+mvir 0x7::A {
+    fun two(): u16 * u16{
     label b0:
         return 0u16, 65535u16;
     }
 
-    pop() {
+    fun pop() {
     label b0:
         // negative stack size, missing pop
-        _ = Self.two();
+        _ = Self::two();
         return;
     }
 }
 
 //# publish
-module 0x8.A {
-    two(): u32 * u32{
+mvir 0x8::A {
+    fun two(): u32 * u32{
     label b0:
         return 0u32, 4294967295u32;
     }
 
-    pop() {
+    fun pop() {
     label b0:
         // negative stack size, missing pop
-        _ = Self.two();
+        _ = Self::two();
         return;
     }
 }
 
 //# publish
-module 0x9.A {
-    two(): u64 * u64{
+mvir 0x9::A {
+    fun two(): u64 * u64{
     label b0:
         return 0u64, 18446744073709551615u64;
     }
 
-    pop() {
+    fun pop() {
     label b0:
         // negative stack size, missing pop
-        _ = Self.two();
+        _ = Self::two();
         return;
     }
 }
 
 //# publish
-module 0xa.A {
-    two(): u128 * u128{
+mvir 0xa::A {
+    fun two(): u128 * u128{
     label b0:
         return 0u128, 340282366920938463463374607431768211455u128;
     }
 
-    pop() {
+    fun pop() {
     label b0:
         // negative stack size, missing pop
-        _ = Self.two();
+        _ = Self::two();
         return;
     }
 }
 
 //# publish
-module 0xb.A {
-    two(): u256 * u256{
+mvir 0xb::A {
+    fun two(): u256 * u256{
     label b0:
         return 0u256, 115792089237316195423570985008687907853269984665640564039457584007913129639935u256;
     }
 
-    pop() {
+    fun pop() {
     label b0:
         // negative stack size, missing pop
-        _ = Self.two();
+        _ = Self::two();
         return;
     }
 }

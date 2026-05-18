@@ -1,6 +1,6 @@
 //# publish
-module 0x1.M {
-    foo<T>(x: T): T {
+mvir 0x1::M {
+    fun foo<T>(x: T): T {
         let y: T;
     label b0:
         y = copy(x); // generic does not have copy

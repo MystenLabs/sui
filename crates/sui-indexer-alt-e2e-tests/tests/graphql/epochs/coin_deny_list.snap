@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 8 tasks
 
@@ -20,7 +19,7 @@ gas summary: computation_cost: 1000000, storage_cost: 13877600,  storage_rebate:
 task 3, lines 52-53:
 //# programmable --sender A --inputs object(0x403) object(2,2)
 //> P::coin::poke_deny_list(Input(0), Input(1))
-events: Event { package_id: P, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 76, 100, 51, 98, 51, 102, 50, 52, 97, 52, 54, 100, 98, 49, 97, 54, 100, 97, 53, 55, 102, 49, 54, 57, 57, 99, 48, 52, 52, 101, 52, 99, 54, 49, 52, 51, 54, 101, 100, 54, 52, 97, 52, 101, 49, 57, 49, 56, 97, 54, 50, 49, 99, 100, 100, 51, 99, 49, 98, 49, 98, 57, 51, 100, 57, 58, 58, 99, 111, 105, 110, 58, 58, 67, 79, 73, 78, 247, 167, 149, 153, 33, 42, 153, 28, 55, 114, 220, 224, 181, 221, 207, 95, 71, 54, 79, 80, 162, 11, 191, 168, 145, 41, 225, 125, 87, 249, 135, 249] }
+events: Event { package_id: P, transaction_module: Identifier("coin"), sender: A, type_: StructTag { address: sui, module: Identifier("deny_list"), name: Identifier("PerTypeConfigCreated"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0, 76, 51, 51, 50, 50, 51, 53, 52, 50, 54, 54, 102, 56, 98, 56, 55, 99, 50, 99, 97, 55, 49, 56, 55, 55, 97, 98, 99, 48, 51, 56, 53, 53, 100, 48, 49, 55, 49, 101, 101, 50, 98, 55, 102, 98, 55, 48, 51, 53, 100, 97, 98, 52, 54, 102, 97, 49, 56, 101, 57, 98, 102, 99, 51, 53, 58, 58, 99, 111, 105, 110, 58, 58, 67, 79, 73, 78, 122, 52, 221, 109, 130, 77, 187, 136, 87, 113, 189, 180, 97, 73, 167, 227, 18, 78, 96, 178, 218, 166, 244, 168, 192, 143, 200, 23, 215, 122, 108, 197] }
 created: object(3,0), object(3,1), object(3,2)
 mutated: 0x0000000000000000000000000000000000000000000000000000000000000403, object(0,0), object(2,2)
 gas summary: computation_cost: 1000000, storage_cost: 12502000,  storage_rebate: 3205224, non_refundable_storage_fee: 32376

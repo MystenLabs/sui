@@ -1,7 +1,7 @@
 //# run
-module 0x6.m {
+mvir 0x6::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
 label b0:
     v = vec_pack_0<u64>();
@@ -13,9 +13,9 @@ label b0:
 
 }
 //# run
-module 0x7.m {
+mvir 0x7::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
 label b0:
     v = vec_pack_1<u64>(42);
@@ -26,9 +26,9 @@ label b0:
 
 }
 //# run
-module 0x8.m {
+mvir 0x8::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
 label b0:
     v = vec_pack_0<u64>();
@@ -40,9 +40,9 @@ label b0:
 
 }
 //# run
-module 0x9.m {
+mvir 0x9::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
 label b0:
     v = vec_pack_1<u64>(42);
@@ -53,9 +53,9 @@ label b0:
 
 }
 //# run
-module 0xa.m {
+mvir 0xa::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
 label b0:
     v = vec_pack_0<u64>();
@@ -67,9 +67,9 @@ label b0:
 
 }
 //# run
-module 0xb.m {
+mvir 0xb::m {
 
-entry foo() {
+entry fun foo() {
     let v: vector<u64>;
 label b0:
     v = vec_pack_1<u64>(42);

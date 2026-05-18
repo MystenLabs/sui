@@ -1384,27 +1384,47 @@ impl WritebackCache {
 
 impl AccountFundsRead for WritebackCache {
     fn get_latest_account_amount(&self, account_id: &AccumulatorObjId) -> (u128, SequenceNumber) {
+        // Settlement is not atomic. A settlement transaction writes the accumulator
+        // objects at version V+1 first, and then a later barrier transaction bumps the
+        // root from V to V+1. A reader that observes the state in between sees
+        // post-settlement account objects alongside the pre-settlement root version,
+        // and reading the "latest" account can therefore disagree with the root we
+        // just captured.
+        //
+        // We handle this with two pieces:
+        //
+        // 1. MVCC read capped at the captured root version (see the call site below).
+        //    By construction of the settlement/barrier ordering, every account object's
+        //    version is <= the root version after the corresponding barrier runs, so
+        //    capping at the captured root strips away any newer-settlement writes that
+        //    have raced ahead of the barrier — we get the balance consistent with the
+        //    root version we captured.
+        //
+        // 2. Root-version stability check (pre == post). `get_account_amount_at_version`
+        //    is only safe to call when the target version has not been pruned. Pruning
+        //    is tied to root advancement, so by reading the root before and after the
+        //    MVCC read and retrying on mismatch, we ensure that no root advance (and
+        //    therefore no pruning of the version we read at) could have happened while
+        //    we were reading — the data we read is still live in the system (memory or
+        //    db) throughout the call.
         let mut pre_root_version =
             ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                 .unwrap()
                 .version();
         let mut loop_iter = 0;
         loop {
-            let account_obj = ObjectCacheRead::get_object(self, account_id.inner());
-            if let Some(account_obj) = account_obj {
-                let (_, AccumulatorValue::U128(value)) =
-                    account_obj.data.try_as_move().unwrap().try_into().unwrap();
-                return (value.value, account_obj.version());
-            }
+            // Safe because of (1) and (2) above: the stability check below bounds the
+            // lifetime of `pre_root_version` to a window in which no pruning happens.
+            let value = self.get_account_amount_at_version(account_id, pre_root_version);
             let post_root_version =
                 ObjectCacheRead::get_object(self, &SUI_ACCUMULATOR_ROOT_OBJECT_ID)
                     .unwrap()
                     .version();
             if pre_root_version == post_root_version {
-                return (0, pre_root_version);
+                return (value, pre_root_version);
             }
             debug!(
-                "Root version changed from {} to {} while reading account amount, retrying",
+                "Root version changed from {} to {} during MVCC read, retrying",
                 pre_root_version, post_root_version
             );
             pre_root_version = post_root_version;

@@ -256,13 +256,8 @@ async fn test_dry_run_transaction_block() {
         .unwrap()
         .version();
 
-    let transaction_digest = *transaction.digest();
-
     let (response, _, _, _) = fullnode
-        .dry_exec_transaction(
-            transaction.data().intent_message().value.clone(),
-            transaction_digest,
-        )
+        .dry_exec_transaction(transaction.data().intent_message().value.clone())
         .await
         .unwrap();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
@@ -286,10 +281,7 @@ async fn test_dry_run_transaction_block() {
         txn_data.gas_budget(),
         txn_data.gas_price(),
     );
-    let (response, _, _, _) = fullnode
-        .dry_exec_transaction(txn_data, transaction_digest)
-        .await
-        .unwrap();
+    let (response, _, _, _) = fullnode.dry_exec_transaction(txn_data).await.unwrap();
     let gas_usage_no_gas = response.effects.gas_cost_summary();
     assert_eq!(*response.effects.status(), SuiExecutionStatus::Success);
     assert_eq!(gas_usage, gas_usage_no_gas);
@@ -318,10 +310,7 @@ async fn test_dry_run_no_gas_big_transfer() {
     let signed = to_sender_signed_transaction(data, &sender_key);
 
     let (dry_run_res, _, _, _) = fullnode
-        .dry_exec_transaction(
-            signed.data().intent_message().value.clone(),
-            *signed.digest(),
-        )
+        .dry_exec_transaction(signed.data().intent_message().value.clone())
         .await
         .unwrap();
     assert_eq!(*dry_run_res.effects.status(), SuiExecutionStatus::Success);
@@ -994,12 +983,8 @@ async fn test_dev_inspect_on_validator() {
 async fn test_dry_run_on_validator() {
     let (validator, _fullnode, transaction, _gas_object_id, _shared_object_id) =
         construct_shared_object_transaction_with_sequence_number(None).await;
-    let transaction_digest = *transaction.digest();
     let response = validator
-        .dry_exec_transaction(
-            transaction.data().intent_message().value.clone(),
-            transaction_digest,
-        )
+        .dry_exec_transaction(transaction.data().intent_message().value.clone())
         .await;
     assert!(response.is_err());
 }
@@ -1114,13 +1099,11 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
         rgp,
     );
-    let transaction = to_sender_signed_transaction(data.clone(), &sender_key);
-    let digest = *transaction.digest();
     let DryRunTransactionBlockResponse {
         effects,
         execution_error_source,
         ..
-    } = fullnode.dry_exec_transaction(data, digest).await.unwrap().0;
+    } = fullnode.dry_exec_transaction(data).await.unwrap().0;
 
     assert_eq!(effects.deleted().len(), 0);
     assert!(execution_error_source.is_some());
@@ -1137,7 +1120,7 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
 // tests using a gas coin with version MAX - 1
 #[tokio::test]
 async fn test_dry_run_dev_inspect_max_gas_version() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (validator, fullnode) = init_state_validator_with_fullnode().await;
     let (validator, object_basics) = publish_object_basics(validator).await;
@@ -1180,10 +1163,8 @@ async fn test_dry_run_dev_inspect_max_gas_version() {
         rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
         rgp,
     );
-    let transaction = to_sender_signed_transaction(data.clone(), &sender_key);
-    let digest = *transaction.digest();
     let DryRunTransactionBlockResponse { effects, .. } =
-        fullnode.dry_exec_transaction(data, digest).await.unwrap().0;
+        fullnode.dry_exec_transaction(data).await.unwrap().0;
     assert_eq!(effects.status(), &SuiExecutionStatus::Success);
 }
 
@@ -3901,7 +3882,7 @@ async fn test_iter_live_object_set() {
 
 #[tokio::test]
 async fn test_clever_abort_error() {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (validator, fullnode) = init_state_validator_with_fullnode().await;
     let (validator, aborts) = publish_aborts(validator).await;
@@ -3936,17 +3917,11 @@ async fn test_clever_abort_error() {
         rgp,
     );
 
-    let transaction = to_sender_signed_transaction(txn_data.clone(), &sender_key);
-    let digest = *transaction.digest();
     let DryRunTransactionBlockResponse {
         effects,
         execution_error_source,
         ..
-    } = fullnode
-        .dry_exec_transaction(txn_data, digest)
-        .await
-        .unwrap()
-        .0;
+    } = fullnode.dry_exec_transaction(txn_data).await.unwrap().0;
 
     assert!(matches!(
         effects.status(),
@@ -3983,17 +3958,11 @@ async fn test_clever_abort_error() {
         rgp,
     );
 
-    let transaction = to_sender_signed_transaction(txn_data.clone(), &sender_key);
-    let digest = *transaction.digest();
     let DryRunTransactionBlockResponse {
         effects,
         execution_error_source,
         ..
-    } = fullnode
-        .dry_exec_transaction(txn_data, digest)
-        .await
-        .unwrap()
-        .0;
+    } = fullnode.dry_exec_transaction(txn_data).await.unwrap().0;
 
     assert!(matches!(
         effects.status(),
@@ -4032,17 +4001,11 @@ async fn test_clever_abort_error() {
         rgp,
     );
 
-    let transaction = to_sender_signed_transaction(txn_data.clone(), &sender_key);
-    let digest = *transaction.digest();
     let DryRunTransactionBlockResponse {
         effects,
         execution_error_source,
         ..
-    } = fullnode
-        .dry_exec_transaction(txn_data, digest)
-        .await
-        .unwrap()
-        .0;
+    } = fullnode.dry_exec_transaction(txn_data).await.unwrap().0;
 
     assert!(matches!(
         effects.status(),
@@ -4080,17 +4043,11 @@ async fn test_clever_abort_error() {
         rgp,
     );
 
-    let transaction = to_sender_signed_transaction(txn_data.clone(), &sender_key);
-    let digest = *transaction.digest();
     let DryRunTransactionBlockResponse {
         effects,
         execution_error_source,
         ..
-    } = fullnode
-        .dry_exec_transaction(txn_data, digest)
-        .await
-        .unwrap()
-        .0;
+    } = fullnode.dry_exec_transaction(txn_data).await.unwrap().0;
 
     assert!(matches!(
         effects.status(),
@@ -5376,10 +5333,7 @@ async fn test_for_inc_201_dry_run() {
         _,
         _,
     ) = fullnode
-        .dry_exec_transaction(
-            signed.data().intent_message().value.clone(),
-            *signed.digest(),
-        )
+        .dry_exec_transaction(signed.data().intent_message().value.clone())
         .await
         .unwrap();
     assert_eq!(effects.status(), &SuiExecutionStatus::Success);
@@ -5431,10 +5385,7 @@ async fn test_function_not_found() {
         _,
         _,
     ) = fullnode
-        .dry_exec_transaction(
-            signed.data().intent_message().value.clone(),
-            *signed.digest(),
-        )
+        .dry_exec_transaction(signed.data().intent_message().value.clone())
         .await
         .unwrap();
     assert_eq!(
@@ -5488,10 +5439,7 @@ async fn test_arity_mismatch() {
         _,
         _,
     ) = authority
-        .dry_exec_transaction(
-            signed.data().intent_message().value.clone(),
-            *signed.digest(),
-        )
+        .dry_exec_transaction(signed.data().intent_message().value.clone())
         .await
         .unwrap();
     assert_eq!(

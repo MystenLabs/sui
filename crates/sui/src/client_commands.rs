@@ -713,6 +713,10 @@ pub struct TxProcessingArgs {
     /// private key corresponding to this address is not in keystore.
     #[arg(long, required = false, value_parser)]
     pub sender: Option<SuiAddress>,
+    /// Submit the transaction without signatures for forked networks that support sender
+    /// impersonation. This is only intended for local forked-network testing.
+    #[arg(long)]
+    pub forking_mode: bool,
 }
 
 #[derive(Args, Debug, Default)]
@@ -943,7 +947,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "upgrade")?;
                 verify_no_build_env(&args.build_config, "upgrade")?;
-                let _ = context.cache_chain_id().await?;
                 upgrade_command(args, context, false).await?
             }
 
@@ -956,7 +959,6 @@ impl SuiClientCommands {
                 verify_no_test_mode(&args.build_config)?;
                 verify_no_pubfile_path(&args.build_config, "publish")?;
                 verify_no_build_env(&args.build_config, "publish")?;
-                let _ = context.cache_chain_id().await?;
                 let mut root_package = load_root_pkg_for_publish_upgrade(
                     context,
                     &args.build_config,
@@ -1387,19 +1389,16 @@ impl SuiClientCommands {
                 let _ = context.cache_chain_id().await?;
                 let client = context.grpc_client()?;
 
-                let coin_type_tag = coin_type.unwrap_or_else(|| {
-                    TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid")
-                });
+                let sui_type_tag =
+                    TypeTag::from_str(SUI_COIN_TYPE).expect("SUI_COIN_TYPE should be valid");
+                let coin_type_tag = coin_type.unwrap_or_else(|| sui_type_tag.clone());
 
-                let is_sui = coin_type_tag.to_canonical_string(true) == SUI_COIN_TYPE;
+                let is_sui = coin_type_tag == sui_type_tag;
 
-                let coin_struct_tag: StructTag = format!(
-                    "0x2::coin::Coin<{}>",
-                    coin_type_tag.to_canonical_string(true)
-                )
-                .parse()
-                .expect("valid struct tag");
-                let balance_info = client.get_balance(signer, &coin_struct_tag).await?;
+                let TypeTag::Struct(coin_struct_tag) = &coin_type_tag else {
+                    bail!("coin type must be a struct type, got {coin_type_tag}");
+                };
+                let balance_info = client.get_balance(signer, coin_struct_tag).await?;
                 let coin_balance = balance_info.coin_balance();
                 let address_balance = balance_info.address_balance();
 
@@ -1857,6 +1856,7 @@ impl SuiClientCommands {
                     run_bytecode_verifier: true,
                     print_diags_to_stderr: true,
                     environment: environment.clone(),
+                    flavor: SuiFlavor::with_client(context),
                 };
                 let compiled_package = build_config
                     .build_async_from_root_pkg(&mut root_pkg)
@@ -3326,6 +3326,7 @@ async fn dry_run_or_execute_or_serialize_impl(
         serialize_unsigned_transaction,
         serialize_signed_transaction,
         sender,
+        forking_mode,
     } = processing;
 
     ensure!(
@@ -3449,31 +3450,36 @@ async fn dry_run_or_execute_or_serialize_impl(
     } else if tx_digest {
         Ok(SuiClientCommandResult::ComputeTransactionDigest(tx_data))
     } else {
-        let mut signatures = vec![
-            context
-                .sign_secure(
-                    &KeyIdentity::Address(signer),
-                    &tx_data,
-                    Intent::sui_transaction(),
-                )
-                .await?
-                .into(),
-        ];
-
-        if let Some(gas_sponsor) = gas_sponsor
-            && gas_sponsor != signer
-        {
-            signatures.push(
+        let signatures = if forking_mode {
+            vec![]
+        } else {
+            let mut signatures = vec![
                 context
                     .sign_secure(
-                        &KeyIdentity::Address(gas_sponsor),
+                        &KeyIdentity::Address(signer),
                         &tx_data,
                         Intent::sui_transaction(),
                     )
                     .await?
                     .into(),
-            );
-        }
+            ];
+
+            if let Some(gas_sponsor) = gas_sponsor
+                && gas_sponsor != signer
+            {
+                signatures.push(
+                    context
+                        .sign_secure(
+                            &KeyIdentity::Address(gas_sponsor),
+                            &tx_data,
+                            Intent::sui_transaction(),
+                        )
+                        .await?
+                        .into(),
+                );
+            }
+            signatures
+        };
 
         let sender_signed_data = SenderSignedData::new(tx_data, signatures);
         if serialize_signed_transaction {
@@ -3730,7 +3736,10 @@ pub async fn load_root_pkg_for_publish_upgrade(
 ) -> anyhow::Result<RootPackage<SuiFlavor>> {
     let env = find_environment(path, build_config.environment.clone(), wallet, true).await?;
 
-    Ok(build_config.package_loader(path, &env).load().await?)
+    Ok(build_config
+        .package_loader(path, &env, SuiFlavor::with_client(wallet))
+        .load()
+        .await?)
 }
 
 pub async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
@@ -3745,6 +3754,7 @@ pub async fn load_root_pkg_for_ephemeral_publish_or_upgrade(
         build_env.clone(),
         chain_id.to_string(),
         pubfile_path,
+        SuiFlavor::new(),
     )
     .modes(modes)
     .load()

@@ -93,7 +93,7 @@ pub(crate) struct ConsensusCommitOutput {
         Vec<(ExecutionTimeObservationKey, Duration)>,
     )>,
 
-    // Owned object locks acquired post-consensus (when disable_preconsensus_locking=true)
+    // Owned object locks acquired post-consensus.
     owned_object_locks: HashMap<ObjectRef, LockDetails>,
 
     // True when the checkpoint queue had no pending roots after this commit's flush.
@@ -719,7 +719,6 @@ impl ConsensusOutputQuarantine {
             if let Some(idx) = last_drain_idx {
                 for _ in 0..=idx {
                     let output = self.output_queue.pop_front().unwrap();
-                    info!("committing drain-boundary output");
                     self.remove_shared_object_next_versions(&output);
                     self.remove_processed_consensus_messages(&output);
                     self.remove_congestion_control_debts(&output);
@@ -893,7 +892,6 @@ impl ConsensusOutputQuarantine {
     }
 
     /// Gets owned object locks, checking quarantine first then falling back to DB.
-    /// Used for post-consensus conflict detection when preconsensus locking is disabled.
     /// After crash recovery, quarantine is empty so we naturally fall back to DB.
     pub(super) fn get_owned_object_locks(
         &self,

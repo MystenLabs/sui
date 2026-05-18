@@ -9,7 +9,7 @@ edition = "2024"
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-bb8 = "0.8.5"
+bb8 = "0.9.1"
 clap.workspace = true
 chrono.workspace = true
 diesel = { workspace = true, features = ["chrono"] }
@@ -32,4 +32,5 @@ sui-indexer-alt-framework-store-traits.workspace = true
 sui-sql-macro.workspace = true
 
 [dev-dependencies]
+sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
 telemetry-subscribers.workspace = true

@@ -85,6 +85,7 @@ pub fn on_code_action_request<F: MoveFlavor>(
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
+    move_flavor: Arc<F>,
     flavor: Option<Flavor>,
 ) {
     let response = Response::new_ok(
@@ -94,6 +95,7 @@ pub fn on_code_action_request<F: MoveFlavor>(
             request,
             ide_files_root,
             pkg_dependencies,
+            move_flavor,
             flavor,
         ),
     );
@@ -109,6 +111,7 @@ fn access_chain_autofix_actions<F: MoveFlavor>(
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
+    move_flavor: Arc<F>,
     flavor: Option<Flavor>,
 ) -> Vec<CodeAction> {
     let mut code_actions = vec![];
@@ -144,6 +147,7 @@ fn access_chain_autofix_actions<F: MoveFlavor>(
         ide_files_root,
         &pkg_path,
         LintLevel::None,
+        move_flavor,
         flavor,
         None,
     ) else {

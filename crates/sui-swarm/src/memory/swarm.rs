@@ -27,6 +27,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
     CommitteeConfig, ConfigBuilder, FundsWithdrawSchedulerTypeConfig,
     GlobalStateHashV2EnabledConfig, ProtocolVersionsConfig, SupportedProtocolVersionsCallback,
+    ValidatorObserverConfigCallback,
 };
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::AuthorityName;
@@ -60,14 +61,13 @@ pub struct SwarmBuilder<R = OsRng> {
     fullnode_run_with_range: Option<RunWithRange>,
     fullnode_policy_config: Option<PolicyConfig>,
     fullnode_fw_config: Option<RemoteFirewallConfig>,
-    max_submit_position: Option<usize>,
-    submit_delay_step_override_millis: Option<u64>,
     global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig,
     funds_withdraw_scheduler_type_config: Option<FundsWithdrawSchedulerTypeConfig>,
     disable_fullnode_pruning: bool,
     state_sync_config: Option<sui_config::p2p::StateSyncConfig>,
     #[cfg(msim)]
     execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
+    validator_observer_config: Option<ValidatorObserverConfigCallback>,
 }
 
 impl SwarmBuilder {
@@ -96,14 +96,13 @@ impl SwarmBuilder {
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
             fullnode_fw_config: None,
-            max_submit_position: None,
-            submit_delay_step_override_millis: None,
             global_state_hash_v2_enabled_config: GlobalStateHashV2EnabledConfig::Global(true),
             funds_withdraw_scheduler_type_config: None,
             disable_fullnode_pruning: false,
             state_sync_config: None,
             #[cfg(msim)]
             execution_time_observer_config: None,
+            validator_observer_config: None,
         }
     }
 }
@@ -134,14 +133,13 @@ impl<R> SwarmBuilder<R> {
             fullnode_run_with_range: self.fullnode_run_with_range,
             fullnode_policy_config: self.fullnode_policy_config,
             fullnode_fw_config: self.fullnode_fw_config,
-            max_submit_position: self.max_submit_position,
-            submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             global_state_hash_v2_enabled_config: self.global_state_hash_v2_enabled_config,
             funds_withdraw_scheduler_type_config: self.funds_withdraw_scheduler_type_config,
             disable_fullnode_pruning: self.disable_fullnode_pruning,
             state_sync_config: self.state_sync_config,
             #[cfg(msim)]
             execution_time_observer_config: self.execution_time_observer_config,
+            validator_observer_config: self.validator_observer_config,
         }
     }
 
@@ -287,6 +285,11 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
+    pub fn with_validator_observer_config(mut self, c: ValidatorObserverConfigCallback) -> Self {
+        self.validator_observer_config = Some(c);
+        self
+    }
+
     pub fn with_fullnode_supported_protocol_versions_config(
         mut self,
         c: ProtocolVersionsConfig,
@@ -352,21 +355,8 @@ impl<R> SwarmBuilder<R> {
         self.genesis_config.as_mut().unwrap()
     }
 
-    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
-        self.max_submit_position = Some(max_submit_position);
-        self
-    }
-
     pub fn with_disable_fullnode_pruning(mut self) -> Self {
         self.disable_fullnode_pruning = true;
-        self
-    }
-
-    pub fn with_submit_delay_step_override_millis(
-        mut self,
-        submit_delay_step_override_millis: u64,
-    ) -> Self {
-        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
         self
     }
 }
@@ -415,16 +405,6 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 config_builder = config_builder.with_data_ingestion_dir(path);
             }
 
-            if let Some(max_submit_position) = self.max_submit_position {
-                config_builder = config_builder.with_max_submit_position(max_submit_position);
-            }
-
-            if let Some(submit_delay_step_override_millis) = self.submit_delay_step_override_millis
-            {
-                config_builder = config_builder
-                    .with_submit_delay_step_override_millis(submit_delay_step_override_millis);
-            }
-
             #[allow(unused_mut)]
             let mut final_builder = config_builder
                 .committee(self.committee)
@@ -453,6 +433,11 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             if let Some(execution_time_observer_config) = self.execution_time_observer_config {
                 final_builder = final_builder
                     .with_execution_time_observer_config(execution_time_observer_config);
+            }
+
+            if let Some(validator_observer_config) = self.validator_observer_config {
+                final_builder =
+                    final_builder.with_validator_observer_config(validator_observer_config);
             }
 
             final_builder.build()

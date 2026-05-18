@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::data_store::PackageStore;
+use crate::{
+    data_store::PackageStore, static_programmable_transactions::linkage::config::ResolutionConfig,
+};
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use std::{
     borrow::Borrow,
@@ -9,7 +11,7 @@ use std::{
     sync::Arc,
 };
 use sui_types::{
-    base_types::ObjectID, error::ExecutionError, execution_status::ExecutionErrorKind,
+    base_types::ObjectID, error::ExecutionErrorTrait, execution_status::ExecutionErrorKind,
 };
 
 /// Unifiers. These are used to determine how to unify two packages.
@@ -27,6 +29,7 @@ pub enum VersionConstraint {
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolutionTable {
+    pub(crate) config: ResolutionConfig,
     pub(crate) resolution_table: BTreeMap<ObjectID, VersionConstraint>,
     /// For every version of every package that we have seen, a mapping of the ObjectID for that
     /// package to its runtime ID.
@@ -34,8 +37,9 @@ pub(crate) struct ResolutionTable {
 }
 
 impl ResolutionTable {
-    pub fn empty() -> Self {
+    pub fn empty(config: ResolutionConfig) -> Self {
         Self {
+            config,
             resolution_table: BTreeMap::new(),
             all_versions_resolution_table: BTreeMap::new(),
         }
@@ -44,18 +48,23 @@ impl ResolutionTable {
     /// Given a list of object IDs, generate a `ResolvedLinkage` for them.
     /// Since this linkage analysis should only be used for types, all packages are resolved
     /// "upwards" (i.e., later versions of the package are preferred).
-    pub fn add_type_linkages_to_table<I>(
+    pub fn add_type_linkages_to_table<I, E>(
         &mut self,
         ids: I,
         store: &dyn PackageStore,
-    ) -> Result<(), ExecutionError>
+    ) -> Result<(), E>
     where
+        E: ExecutionErrorTrait,
         I: IntoIterator,
         I::Item: Borrow<ObjectID>,
     {
         for id in ids {
             let pkg = get_package(id.borrow(), store)?;
-            let transitive_deps = pkg.linkage_table().values().copied().map(ObjectID::from);
+            let transitive_deps = self
+                .config
+                .linkage_table(&pkg)
+                .into_values()
+                .map(ObjectID::from);
             let package_id = pkg.version_id().into();
             add_and_unify(&package_id, store, self, VersionConstraint::at_least)?;
             for object_id in transitive_deps {
@@ -81,12 +90,15 @@ impl VersionConstraint {
         ))
     }
 
-    pub fn unify(&self, other: &VersionConstraint) -> Result<VersionConstraint, ExecutionError> {
+    pub fn unify<E: ExecutionErrorTrait>(
+        &self,
+        other: &VersionConstraint,
+    ) -> Result<VersionConstraint, E> {
         match (&self, other) {
             // If we have two exact resolutions, they must be the same.
             (VersionConstraint::Exact(sv, self_id), VersionConstraint::Exact(ov, other_id)) => {
                 if self_id != other_id || sv != ov {
-                    Err(ExecutionError::new_with_source(
+                    Err(E::new_with_source(
                         ExecutionErrorKind::InvalidLinkage,
                         format!(
                             "exact/exact conflicting resolutions for package: linkage requires the same package \
@@ -125,7 +137,7 @@ impl VersionConstraint {
                 VersionConstraint::Exact(exact_version, exact_id),
             ) => {
                 if exact_version < at_least_version {
-                    return Err(ExecutionError::new_with_source(
+                    return Err(E::new_with_source(
                         ExecutionErrorKind::InvalidLinkage,
                         format!(
                             "Exact/AtLeast conflicting resolutions for package: linkage requires exactly this \
@@ -144,26 +156,24 @@ impl VersionConstraint {
 
 /// Load a package from the store, and update the type origin map with the types in that
 /// package.
-pub(crate) fn get_package(
+pub(crate) fn get_package<E: ExecutionErrorTrait>(
     object_id: &ObjectID,
     store: &dyn PackageStore,
-) -> Result<Arc<VerifiedPackage>, ExecutionError> {
+) -> Result<Arc<VerifiedPackage>, E> {
     store
         .get_package(object_id)
-        .map_err(|e| {
-            ExecutionError::new_with_source(ExecutionErrorKind::PublishUpgradeMissingDependency, e)
-        })?
-        .ok_or_else(|| ExecutionError::from_kind(ExecutionErrorKind::InvalidLinkage))
+        .map_err(|e| E::new_with_source(ExecutionErrorKind::PublishUpgradeMissingDependency, e))?
+        .ok_or_else(|| E::from_kind(ExecutionErrorKind::InvalidLinkage))
 }
 
 // Add a package to the unification table, unifying it with any existing package in the table.
 // Errors if the packages cannot be unified (e.g., if one is exact and the other is not).
-pub(crate) fn add_and_unify(
+pub(crate) fn add_and_unify<E: ExecutionErrorTrait>(
     object_id: &ObjectID,
     store: &dyn PackageStore,
     resolution_table: &mut ResolutionTable,
     resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     let package = get_package(object_id, store)?;
 
     let Some(resolution) = resolution_fn(&package) else {

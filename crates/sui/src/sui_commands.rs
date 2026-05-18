@@ -6,6 +6,7 @@ use std::net::{AddrParseError, IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io};
@@ -50,11 +51,11 @@ use sui_indexer_alt_framework::{
     ingestion::{ClientArgs, ingestion_client::IngestionClientArgs},
 };
 use sui_indexer_alt_graphql::{
-    RpcArgs as GraphQlArgs, args::KvArgs as GraphQlKvArgs, args::SubscriptionArgs,
-    config::RpcConfig as GraphQlConfig, start_rpc as start_graphql,
+    RpcArgs as GraphQlArgs, args::SubscriptionArgs, config::RpcConfig as GraphQlConfig,
+    start_rpc as start_graphql,
 };
 use sui_indexer_alt_reader::{
-    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs,
+    consistent_reader::ConsistentReaderArgs, fullnode_client::FullnodeArgs, kv_loader::KvArgs,
     system_package_task::SystemPackageTaskArgs,
 };
 use sui_keys::key_derive::generate_new_key;
@@ -420,6 +421,12 @@ pub enum SuiCommand {
 
         #[command(flatten)]
         replay_config: SR2::ReplayConfigStable,
+
+        /// Network or GraphQL URL to replay against. Accepts `mainnet`, `testnet`,
+        /// or a full GraphQL URL (e.g. for devnet or a self-hosted endpoint).
+        /// When omitted, the network is derived from the active wallet env.
+        #[arg(long = "node", short = 'n')]
+        node: Option<String>,
     },
 
     /// Generate shell completion scripts for CLI
@@ -673,6 +680,7 @@ impl SuiCommand {
                             run_bytecode_verifier: true,
                             print_diags_to_stderr: true,
                             environment,
+                            flavor: SuiFlavor::with_client(&context),
                         }
                         .build_async_from_root_pkg(&mut root_pkg)
                         .await?;
@@ -786,7 +794,7 @@ impl SuiCommand {
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
-                analyzer::run::<SuiFlavor>(Some(Flavor::Sui));
+                analyzer::run::<SuiFlavor>(Arc::new(SuiFlavor::new()), Some(Flavor::Sui));
                 Ok(())
             }
             SuiCommand::AnalyzeTrace {
@@ -797,13 +805,18 @@ impl SuiCommand {
             SuiCommand::ReplayTransaction {
                 config,
                 replay_config,
+                node,
             } => {
                 let mut context = get_wallet_context(&config).await?;
                 if let Some(env_override) = config.env {
                     context = context.with_env_override(env_override);
                 }
 
-                let node = get_replay_node(&context).await?;
+                let node = match node {
+                    Some(s) => sui_data_store::Node::from_str(&s)
+                        .map_err(|e| anyhow!("invalid --node value: {e}"))?,
+                    None => get_replay_node(&context).await?,
+                };
                 let file_config = SR2::load_config_file()?;
                 let stable_config = SR2::merge_configs(replay_config, file_config);
                 let experimental_config = SR2::ReplayConfigExperimental {
@@ -1166,9 +1179,7 @@ async fn start(
             ..Default::default()
         };
 
-        let fullnode_args = FullnodeArgs {
-            fullnode_rpc_url: Some(socket_addr_to_url(fullnode_rpc_address)?),
-        };
+        let fullnode_args = FullnodeArgs::new(socket_addr_to_url(fullnode_rpc_address)?);
 
         let mut graphql_config = GraphQlConfig::default();
         graphql_config.zklogin.env = sui_indexer_alt_graphql::config::ZkLoginEnv::Test;
@@ -1178,7 +1189,7 @@ async fn start(
                 database_url.clone(),
                 fullnode_args,
                 DbArgs::default(),
-                GraphQlKvArgs::default(),
+                KvArgs::default(),
                 consistent_reader_args,
                 graphql_args,
                 SystemPackageTaskArgs::default(),
@@ -1750,6 +1761,11 @@ async fn download_package_and_deps_under(
         linkage.insert(*original_id, pkg_info.clone());
         type_origins.insert(*original_id, package.type_origin_table().clone());
     }
+
+    type_origins.insert(
+        root_package.original_package_id(),
+        root_package.type_origin_table().clone(),
+    );
 
     let package_path = path.join(
         root_package

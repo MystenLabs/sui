@@ -101,16 +101,30 @@ impl CheckpointStreamingClient for GrpcStreamingClient {
             .map_err(|e| Error::StreamingError(anyhow!("Chain ID parse error: {e}")))?
             .into();
 
-        let stream = response.into_inner().map(|result| match result {
-            Ok(response) => response
-                .checkpoint
-                .context("Checkpoint data missing in response")
-                .and_then(|checkpoint| {
-                    Checkpoint::try_from(&checkpoint).context("Failed to parse checkpoint")
-                })
-                .map_err(Error::StreamingError),
-            Err(e) => Err(Error::RpcClientError(e)),
-        });
+        let stream = response
+            .into_inner()
+            .map(|result| async move {
+                match result {
+                    Ok(response) => {
+                        let checkpoint = response
+                            .checkpoint
+                            .context("Checkpoint data missing in response")
+                            .map_err(Error::StreamingError)?;
+                        // Proto -> Checkpoint conversion is multi-ms of CPU work;
+                        // offload to the blocking pool so it doesn't stall the reactor.
+                        // Combined with `.buffered(4)` below, up to 4 decodes can run
+                        // concurrently while new bytes keep flowing from gRPC.
+                        tokio::task::spawn_blocking(move || {
+                            Checkpoint::try_from(&checkpoint).context("Failed to parse checkpoint")
+                        })
+                        .await
+                        .map_err(|e| Error::StreamingError(anyhow!("decode task panicked: {e}")))?
+                        .map_err(Error::StreamingError)
+                    }
+                    Err(e) => Err(Error::RpcClientError(e)),
+                }
+            })
+            .buffered(4);
         let stream = wrap_stream(stream, self.statement_timeout);
 
         Ok(CheckpointStream { stream, chain_id })

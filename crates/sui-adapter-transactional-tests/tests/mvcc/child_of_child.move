@@ -60,7 +60,7 @@ module test::m {
             let child: &Obj = ofield::borrow(&parent.id, KEY);
             assert!(&child.value == option::borrow(&v3), 0);
         } else {
-            assert!(!ofield::exists_<u64>(&parent.id, KEY), 0);
+            assert!(!ofield::exists<u64>(&parent.id, KEY), 0);
         }
     }
 }

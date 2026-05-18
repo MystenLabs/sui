@@ -1,0 +1,58 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/transaction_subscription.rs
+expression: item
+---
+{
+  "data": {
+    "transactions": {
+      "digest": "[digest]",
+      "effects": {
+        "objectChanges": {
+          "nodes": [
+            {
+              "inputState": {
+                "address": "[address]",
+                "version": "[version]",
+                "digest": "[digest]",
+                "asMoveObject": {
+                  "contents": {
+                    "type": {
+                      "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                    }
+                  }
+                }
+              },
+              "outputState": {
+                "address": "[address]",
+                "version": "[version]",
+                "digest": "[digest]",
+                "asMoveObject": {
+                  "contents": {
+                    "type": {
+                      "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "inputState": null,
+              "outputState": {
+                "address": "[address]",
+                "version": "[version]",
+                "digest": "[digest]",
+                "asMoveObject": {
+                  "contents": {
+                    "type": {
+                      "repr": "[pkg]::wrapping::Item"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -9,9 +9,225 @@ title: 'Release Notes'
 ---
 
 
+## v1.71.1
+
+**🔶 Testnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/testnet-v1.71.1)*
+
+
+#### Sui Protocol Version in this release: `123`
+
+[#26492](https://github.com/MystenLabs/sui/pull/26492): Bump protocol version
+
+[#26166](https://github.com/MystenLabs/sui/pull/26166): - Adds `sui::dynamic_field::borrow_or_add`
+- Adds `sui::dynamic_field::borrow_mut_or_add`
+- Adds `sui::dynamic_field::get_do`
+- Adds `sui::dynamic_field::get_mut_do`
+- Adds `sui::dynamic_field::get_fold`
+- Adds `sui::dynamic_field::get_mut_fold`
+- Adds `sui::dynamic_object_field::borrow_or_add`
+- Adds `sui::dynamic_object_field::borrow_mut_or_add`
+- Adds `sui::dynamic_object_field::get_do`
+- Adds `sui::dynamic_object_field::get_mut_do`
+- Adds `sui::dynamic_object_field::get_fold`
+- Adds `sui::dynamic_object_field::get_mut_fold`
+
+[#26196](https://github.com/MystenLabs/sui/pull/26196): deprecates `vector::empty` and `vector::singleton` in the MoveStdlib
+
+[#26226](https://github.com/MystenLabs/sui/pull/26226): - Deprecated `sui::dynamic_field::exists_` in favor of `sui::dynamic_field::exists`.
+- Deprecated `sui::dynamic_field::remove_if_exists` in favor of `sui::dynamic_field::remove_opt`.
+- Deprecated `sui::dynamic_object_field::exists_` in favor of `sui::dynamic_object_field::exists`.
+- Adds `sui::dynamic_object_field::remove_opt`.
+
+[#25959](https://github.com/MystenLabs/sui/pull/25959): Add a new native function, **verify_bulletproof_ristretto255_internal** and enable on devnet.
+
+[#26248](https://github.com/MystenLabs/sui/pull/26248): - Adds `sui::dynamic_field::replace`.
+- Adds `sui::dynamic_object_field::replace`.
+
+[#26318](https://github.com/MystenLabs/sui/pull/26318): Adds amendments to certain linkages to allow them to be loaded into the new VM.
+
+#### GraphQL
+
+[#25863](https://github.com/MystenLabs/sui/pull/25863): Add new verifySignature
+
+[#26208](https://github.com/MystenLabs/sui/pull/26208): Fixes an issue where a derived object or dynamic field load could be incorrectly bounded by the version of the object containing the derived object key, instead of the parent.
+
+#### Indexing Framework
+
+[#26181](https://github.com/MystenLabs/sui/pull/26181): Implement `accepts_chain_id` in consistent store.
+
+[#26171](https://github.com/MystenLabs/sui/pull/26171): Implement `accepts_chain_id` in analytics indexer.
+
+[#26247](https://github.com/MystenLabs/sui/pull/26247): Implement `accepts_chain_id` in object store
+
+[#26150](https://github.com/MystenLabs/sui/pull/26150): Implements `ConcurrentConnection` for `BigTableConnection` to support backwards indexing. Updates `BigTableReader` to use new watermark format.
+
+[#26302](https://github.com/MystenLabs/sui/pull/26302): ## Adaptive ingestion for sequential pipelines
+
+Sequential pipelines now participate in the adaptive ingestion concurrency system alongside concurrent pipelines. Fetch concurrency is driven by per-subscriber bounded-channel fill across both pipeline types — one mechanism, no special cases.
+
+#### Removed
+
+- **`checkpoint_lag`** is gone. The sequential committer no longer holds writes back behind a lag window; it commits whenever contiguous checkpoints are available.
+- **`checkpoint_buffer_size`** is gone.
+
+#### Added
+
+- **`subscriber_channel_size`** is now a per-pipeline knob under the pipeline's `ingestion` section. Defaults to `max(num_cpus / 2, 4)`.
+
+  ```toml
+  [pipeline.my_pipeline.ingestion]
+  subscriber_channel_size = 32
+  ```
+
+#### Migration
+
+Config layers carry `#[serde(deny_unknown_fields)]`, so stale fields will fail to parse on upgrade. Before deploying:
+
+- Remove `checkpoint_buffer_size` from `[ingestion]`.
+- Remove `checkpoint_lag` from any `[pipeline.*]` section.
+
+**We recommend omitting these overrides entirely** — the adaptive controller sizes fetch concurrency against the slowest subscriber automatically.
+
+---
+##### Full Log: https://github.com/MystenLabs/sui/commits/testnet-v1.71.1
+
+
+---
+
+
+## v1.70.2
+
+**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.70.2)*
+
+
+#### Sui Protocol Version in this release: `121`
+
+[#26095](https://github.com/MystenLabs/sui/pull/26095): Shifts 120 to 121, and adds an additional check in 120 to enforce cleanliness around jumps.
+
+[#23295](https://github.com/MystenLabs/sui/pull/23295): Adds the Move standard library function `std::u8::mul_div` 
+Adds the Move standard library function `std::u8::mul_div_ceil`
+Adds the Move standard library function `std::u16::mul_div` 
+Adds the Move standard library function `std::u16::mul_div_ceil`
+Adds the Move standard library function `std::u32::mul_div`
+Adds the Move standard library function `std::u32::mul_div_ceil`
+Adds the Move standard library function `std::u64::mul_div`
+Adds the Move standard library function `std::u64::mul_div_ceil`
+Adds the Move standard library function `std::u128::mul_div`
+Adds the Move standard library function `std::u128::mul_div_ceil`
+Adds the Move standard library function `std::u256::mul_div`
+Adds the Move standard library function `std::u256::mul_div_ceil`
+
+[#26051](https://github.com/MystenLabs/sui/pull/26051): Deprecated `std::u8::divide_and_round_up` in favor of `std::u8::div_ceil`.
+Deprecated `std::u16::divide_and_round_up` in favor of `std::u16::div_ceil`.
+Deprecated `std::u32::divide_and_round_up` in favor of `std::u32::div_ceil`.
+Deprecated `std::u64::divide_and_round_up` in favor of `std::u64::div_ceil`.
+Deprecated `std::u128::divide_and_round_up` in favor of `std::u128::div_ceil`.
+Deprecated `std::u256::divide_and_round_up` in favor of `std::u256::div_ceil`.
+
+#### gRPC
+
+[#26070](https://github.com/MystenLabs/sui/pull/26070): When `0x1::type_name::TypeName` Move values show up in structured outputs, it will show up as a simple string representation of the type, rather than an object with a `name` field.
+
+[#26062](https://github.com/MystenLabs/sui/pull/26062): Display v2: Implicitly format fields using the `json` transform, if the `str` transform would not work for them.
+
+#### JSON-RPC
+
+[#26070](https://github.com/MystenLabs/sui/pull/26070): When `0x1::type_name::TypeName` Move values show up in structured outputs, it will show up as a simple string representation of the type, rather than an object with a `name` field.
+
+[#26062](https://github.com/MystenLabs/sui/pull/26062): Display v2: Implicitly format fields using the `json` transform, if the `str` transform would not work for them.
+
+#### GraphQL
+
+[#26061](https://github.com/MystenLabs/sui/pull/26061): Bugfix in how GraphQL fetches Display v2 formats
+
+[#26070](https://github.com/MystenLabs/sui/pull/26070): When `0x1::type_name::TypeName` Move values show up in structured outputs, it will show up as a simple string representation of the type, rather than an object with a `name` field.
+
+[#26062](https://github.com/MystenLabs/sui/pull/26062): Display v2: Implicitly format fields using the `json` transform, if the `str` transform would not work for them.
+
+#### Indexing Framework
+
+[#25881](https://github.com/MystenLabs/sui/pull/25881): Refactors `Connection` trait into `ConcurrentConnection`/`SequentialConnection` subtraits and `Store` trait into `ConcurrentStore`/`SequentialStore` subtraits.
+
+[#26092](https://github.com/MystenLabs/sui/pull/26092): Removes `SequentialStore::sequential_connect` which was introduced in a recent refactoring but is not used.
+
+[#26133](https://github.com/MystenLabs/sui/pull/26133): Implements `ConcurrentConnection` for `ObjectStoreConnection` to support backwards indexing.
+
+[#26096](https://github.com/MystenLabs/sui/pull/26096): Remove `CheckpointData::Raw` raw variant. Treat all ingestion errors as transient (retryable). Populate `total_ingested_bytes` during gRPC ingestion.
+
+[#26116](https://github.com/MystenLabs/sui/pull/26116): Added `IngestionClientTrait::latest_checkpoint_number()`, concurrent pipelines with pruning enabled now start indexing at `network tip - retention`.
+
+---
+##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.70.2
+
+
+---
+
+
+## v1.69.2
+
+**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.69.2)*
+
+
+#### Sui Protocol Version in this release: `120`
+
+[#26098](https://github.com/MystenLabs/sui/pull/26098): adds an additional check in protocol version 120 to enforce cleanliness around jumps.
+
+[#25792](https://github.com/MystenLabs/sui/pull/25792): metadata hardening in Sui System
+
+[#25838](https://github.com/MystenLabs/sui/pull/25838): Enables the new Move VM in protocol version 118.
+
+[#25911](https://github.com/MystenLabs/sui/pull/25911): New VM pushed to 119 instead of 118 due to cherry-pick
+
+#### gRPC
+
+[#25908](https://github.com/MystenLabs/sui/pull/25908): Fix X_SUI_CHAIN_ID header to return full 32-byte, base58 encoded chain id
+
+[#25828](https://github.com/MystenLabs/sui/pull/25828): Wire up balance changes and object set for archival
+
+[#26112](https://github.com/MystenLabs/sui/pull/26112): Display v2: Implicitly format fields using the `json` transform, if the `str` transform would not work for them.
+
+#### JSON-RPC
+
+[#26112](https://github.com/MystenLabs/sui/pull/26112): Display v2: Implicitly format fields using the `json` transform, if the `str` transform would not work for them.
+
+#### GraphQL
+
+[#26112](https://github.com/MystenLabs/sui/pull/26112): Display v2: Implicitly format fields using the `json` transform, if the `str` transform would not work for them.
+
+#### CLI
+
+[#25862](https://github.com/MystenLabs/sui/pull/25862): `sui client object` now displays decoded Move struct fields instead of raw BCS-encoded byte arrays.
+
+[#25444](https://github.com/MystenLabs/sui/pull/25444): `sui move build --dump` can now be run without an active network connection if tree shaking is disabled.
+
+fixes for ephemeral publication with local dependencies on windows.
+
+improved error message when building against an undefined environment.
+
+#### Indexing Framework
+
+[#25838](https://github.com/MystenLabs/sui/pull/25838): Fix a clippy lint in `mocks/store.rs`
+
+Co-authored-by: @cgswords
+
+[#25834](https://github.com/MystenLabs/sui/pull/25834): Renamed `IngestionClientTrait::fetch` to `IngestionClientTrait::checkpoint`.
+
+[#25895](https://github.com/MystenLabs/sui/pull/25895): Adds new `IngestionClientTrait::chain_id` to retrieve the `chain_id` from that ingestion source.
+
+[#25905](https://github.com/MystenLabs/sui/pull/25905): Changed `Processor`'s receiver to accept new `CheckpointEnvelope` type containing the `chain_id`.
+
+[#25875](https://github.com/MystenLabs/sui/pull/25875): Add `Connection::init_chain_id` method to store and retrieve `chain_id`.
+
+---
+##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.69.2
+
+
+---
+
+
 ## v1.68.1
 
-**🔶 Testnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/testnet-v1.68.1)*
+**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.68.1)*
 
 
 #### Sui Protocol Version in this release: `118`
@@ -54,7 +270,7 @@ title: 'Release Notes'
   **Migration:** To preserve previous fixed-concurrency behavior, set `fanout: Some(ConcurrencyConfig::Fixed { value: N })` or `ingest_concurrency: ConcurrencyConfig::Fixed { value: N }`. Otherwise, no changes are needed — the adaptive defaults should work well for most workloads.
 
 ---
-##### Full Log: https://github.com/MystenLabs/sui/commits/testnet-v1.68.1
+##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.68.1
 
 
 ---
@@ -758,273 +974,6 @@ clearer instructions for offline signing.
 
 ---
 ##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.60.1
-
-
----
-
-
-## v1.59.1
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.59.1)*
-
-
-#### Sui Protocol Version in this release: `100`
-
-[#24108](https://github.com/MystenLabs/sui/pull/24108): Simplify private generics check
-
-#### GraphQL
-
-[#23851](https://github.com/MystenLabs/sui/pull/23851): Fix a bug where live object set queries would include historical data.
-
-[#23417](https://github.com/MystenLabs/sui/pull/23417): Adds `AvailableRange` API for querying the checkpoint ranges we have data available for types, fields, and filters.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.59.1
-
-
----
-
-
-## v1.58.3
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.58.3)*
-
-
-#### Sui Protocol Version in this release: `98`
-
-[#23866](https://github.com/MystenLabs/sui/pull/23866): Fix issue in bytecode verifier
-
-#### JSON-RPC
-
-[#23766](https://github.com/MystenLabs/sui/pull/23766): Fix wrong iter bounds that cause missing results in `get_transactions_by_move_function`
-
-#### GraphQL
-
-[#23689](https://github.com/MystenLabs/sui/pull/23689): Adds `Validator.operationCap` that displays address that the operation ability was delegated to if it exists.
-
-[#23697](https://github.com/MystenLabs/sui/pull/23697): Adds `Validator.exchangeRatesTable` that displays a mapping of epoch number to exchange rate. The exchange rate is used to determine the amount of SUI tokens that each past SUI staker can withdraw in the future.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.58.3
-
-
----
-
-
-## v1.57.3
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.57.3)*
-
-
-#### Sui Protocol Version in this release: `97`
-
-[#23858](https://github.com/MystenLabs/sui/pull/23858): Adds a new protocol version that fixes an issue in the bytecode verifier.
-
-#### JSON-RPC
-
-[#23766](https://github.com/MystenLabs/sui/pull/23766): Fix wrong iter bounds that cause missing results in `get_transactions_by_move_function`
-
-#### GraphQL
-
-[#23689](https://github.com/MystenLabs/sui/pull/23689): Adds `Validator.operationCap` that displays address that the operation ability was delegated to if it exists.
-
-[#23697](https://github.com/MystenLabs/sui/pull/23697): Adds `Validator.exchangeRatesTable` that displays a mapping of epoch number to exchange rate. The exchange rate is used to determine the amount of SUI tokens that each past SUI staker can withdraw in the future.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.57.3
-
-
----
-
-
-## v1.57.2
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.57.2)*
-
-
-#### Sui Protocol Version in this release: `96`
-
-[#23650](https://github.com/MystenLabs/sui/pull/23650): Mysticeti v2 (Mysticeti fastpath) support is enabled on mainnet.
-
-#### Nodes (Validators and Full nodes)
-
-[#23492](https://github.com/MystenLabs/sui/pull/23492): Adds CheckpointArtifacts digest to the summary. Currently enabled in Devnet for testing.
-
-#### gRPC
-
-[#22874](https://github.com/MystenLabs/sui/pull/22874): Integrating GetCoinInfo with the new CoinRegistry system object.
-
-#### JSON-RPC
-
-[#22903](https://github.com/MystenLabs/sui/pull/22903): Integrating coin metadata and total supply APIs with the CoinRegistry system object.
-
-#### GraphQL
-
-[#23597](https://github.com/MystenLabs/sui/pull/23597): Adds support for Coin Registry to GraphQL's `Query.coinMetadata` API.
-
-[#23636](https://github.com/MystenLabs/sui/pull/23636): Fix a bug where queries would fail if they used a variable to populate a nullable parameter, and then did not supply the variable (which is a valid thing to do).
-
-#### CLI
-
-[#23433](https://github.com/MystenLabs/sui/pull/23433): Fixed a bug where an upgrade command would terminate early if the CLI binary is not at the same protocol version or newer than the network.
-
-[#23533](https://github.com/MystenLabs/sui/pull/23533): Transaction replay now has its own command in Sui CLI: `sui replay`
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.57.2
-
-
----
-
-
-## v1.56.2
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.56.2)*
-
-#### CLI
-
-[#23472](https://github.com/MystenLabs/sui/pull/23472): Fixed a bug where an upgrade command would terminate early if the CLI binary is not at the same protocol version or newer than the network.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.56.2
-
-
----
-
-
-## v1.55.0
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.55.0)*
-
-
-#### Sui Protocol Version in this release: `94`
-
-[#23220](https://github.com/MystenLabs/sui/pull/23220): Protocol bump to version `94`
-
-#### Nodes (Validators and Full nodes)
-
-[#23074](https://github.com/MystenLabs/sui/pull/23074): Delta to CheckpointSignatures sent to consensus, now including Digest as part of dedup key.
-
-#### CLI
-
-[#23036](https://github.com/MystenLabs/sui/pull/23036): (linux, macos) Ensure that `sui.keystore` files are flagged with 0600 flags. This is a defense-in-depth measure to defend Sui wallets running on shared multi-user hosts.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.55.0
-
-
----
-
-
-## v1.54.2
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.54.2)*
-
-
-#### Sui Protocol Version in this release: `92`
-
-[#22675](https://github.com/MystenLabs/sui/pull/22675): Minor patch in Sui Framework.
-
-[#23041](https://github.com/MystenLabs/sui/pull/23041): Shared object deletion rules are now more granular and per-command, rather than per-transaction.
-
-#### CLI
-
-[#22924](https://github.com/MystenLabs/sui/pull/22924): now supports transfer of party objects via `client transfer` command
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.54.2
-
-
----
-
-
-## v1.53.2
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.53.2)*
-
-
-#### Sui Protocol Version in this release: `90`
-
-[#20957](https://github.com/MystenLabs/sui/pull/20957): updates to protocol version `89`, standard library changes
-
-[#22798](https://github.com/MystenLabs/sui/pull/22798): Enable passkey and passkey inside multisig for `mainnet` in protocol version `89`.
-
-[#22940](https://github.com/MystenLabs/sui/pull/22940): Shifts protocol version `89` to `90`.
-
-#### Nodes (Validators and Full nodes)
-
-[#22842](https://github.com/MystenLabs/sui/pull/22842): `ObjectNotFound` and `DependencyPackageNotFound` errors from transaction processing now get retried in `QuorumDriver` by default.
-
-#### CLI
-
-[#22914](https://github.com/MystenLabs/sui/pull/22914): Fixes a bug around global value mutation tracking in generated traces for debugger
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.53.2
-
-
----
-
-
-## v1.52.3
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.52.3)*
-
-
-#### Sui Protocol Version in this release: `89`
-
-[#22937](https://github.com/MystenLabs/sui/pull/22937): Adds a new protocol version to enable the latest checks.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.52.3
-
-
----
-
-
-## v1.52.2
-
-**✅ Mainnet** | *Source: [GitHub Release](https://github.com/MystenLabs/sui/releases/tag/mainnet-v1.52.2)*
-
-
-#### Sui Protocol Version in this release: `88`
-
-[#22580](https://github.com/MystenLabs/sui/pull/22580): Adds `calculate_rewards` function to Sui System
-
-[#22611](https://github.com/MystenLabs/sui/pull/22611): Improve error messages around type resolution.
-
-#### Nodes (Validators and Full nodes)
-
-[#22572](https://github.com/MystenLabs/sui/pull/22572): support path-based remote-store options for fullnode state sync fallback
-
-[#22594](https://github.com/MystenLabs/sui/pull/22594): No noticeable impact to users
-
-#### gRPC
-
-[#22435](https://github.com/MystenLabs/sui/pull/22435): Implementing GetPackage, GetModule, GetFunction, and GetDatatype APIs
-
-[#22525](https://github.com/MystenLabs/sui/pull/22525): Implementing ListPackageVersions API for MovePackageService
-
-[#22560](https://github.com/MystenLabs/sui/pull/22560): Speeding up index initialization by accumulating batches of balance updates in memory.
-
-[#22619](https://github.com/MystenLabs/sui/pull/22619): Tune rocksdb for index initialization.
-
-#### CLI
-
-[#22530](https://github.com/MystenLabs/sui/pull/22530): `sui keytool export` to show the `alias` field correctly.
-
-[#22528](https://github.com/MystenLabs/sui/pull/22528): `sui move build --dump-bytecode-as-base64` is now working correctly due to a bug in the logic when a Move.lock file existed with the published address.
-
-[#22622](https://github.com/MystenLabs/sui/pull/22622): Updates to the transaction `replay-transaction` and `replay-batch` client subcommands to use the new transaction replay infrastructure.
-
-[#22644](https://github.com/MystenLabs/sui/pull/22644): Remove `profile-transaction` and `replay-checkpoint` commands from the `sui client` commands.
-
-#### Rust SDK
-
-[#22595](https://github.com/MystenLabs/sui/pull/22595): Adds support for custom user-defined headers in the `SuiClientBuilder`. Custom headers can be defined through the `SuiClientBuilder::custom_headers` function and should be added right before building.
-
----
-##### Full Log: https://github.com/MystenLabs/sui/commits/mainnet-v1.52.2
 
 
 ---

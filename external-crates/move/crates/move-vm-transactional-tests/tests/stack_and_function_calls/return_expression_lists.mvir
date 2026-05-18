@@ -1,6 +1,6 @@
 //# publish
-module 0x5.A {
-    public foo(t: u64): u64 * u64 {
+mvir 0x5::A {
+    public fun foo(t: u64): u64 * u64 {
         let k: u64;
     label b0:
         jump_if (copy(t) % 2 == 0) b2;
@@ -17,15 +17,15 @@ module 0x5.A {
 
 
 //# run
-module 0x43.m {
+mvir 0x43::m {
 
-import 0x5.A;
+import 0x5::A;
 
-entry foo() {
+entry fun foo() {
     let y: u64;
     let z: u64;
 label b0:
-    y, z = A.foo(10);
+    y, z = A::foo(10);
     assert(move(y) == 10, 42);
     assert(move(z) == 21, 42);
     return;

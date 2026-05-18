@@ -1,7 +1,7 @@
 //# run
-module 0x6.m {
+mvir 0x6::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u8 == 0u8, 1000);
     assert(0u64 == 0u64, 1001);
@@ -19,9 +19,9 @@ label b0:
 
 }
 //# run
-module 0x7.m {
+mvir 0x7::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u8 != 1u8, 2000);
     assert(0u64 != 1u64, 2001);
@@ -39,9 +39,9 @@ label b0:
 
 }
 //# run
-module 0x8.m {
+mvir 0x8::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u8 < 1u8, 3000);
     assert(0u64 < 1u64, 3001);
@@ -59,9 +59,9 @@ label b0:
 
 }
 //# run
-module 0x9.m {
+mvir 0x9::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(1u8 > 0u8, 4000);
     assert(1u64 > 0u64, 4001);
@@ -79,9 +79,9 @@ label b0:
 
 }
 //# run
-module 0xa.m {
+mvir 0xa::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(0u8 <= 1u8, 5000);
     assert(0u64 <= 1u64, 5001);
@@ -99,9 +99,9 @@ label b0:
 
 }
 //# run
-module 0xb.m {
+mvir 0xb::m {
 
-entry foo() {
+entry fun foo() {
 label b0:
     assert(1u8 >= 0u8, 6000);
     assert(1u64 >= 0u64, 6001);

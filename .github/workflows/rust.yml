@@ -102,7 +102,11 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Install BigTable emulator
         run: |
           echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee /etc/apt/sources.list.d/google-cloud-sdk.list
@@ -147,7 +151,11 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
@@ -155,6 +163,9 @@ jobs:
       - name: cargo test with tidehunter
         run: |
           RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo nextest run --profile ci --cargo-quiet -p sui-core --features typed-store/tidehunter
+      - name: cargo check sui-tool with tidehunter + tideconsole
+        run: |
+          RUST_BACKTRACE=1 USE_TIDEHUNTER=1 cargo check --quiet -p sui-tool --features typed-store/tidehunter,sui-tool/tideconsole
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
@@ -205,14 +216,18 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
           swap-size-gb: 256
       - name: cargo test (sui-graphql staging)
         run: |
-          cargo nextest run --profile ci --cargo-quiet --features staging -E 'package(sui-indexer-alt-graphql)'
+          cargo nextest run --profile ci --cargo-quiet --features staging -E 'package(sui-indexer-alt-graphql) or (package(sui-indexer-alt-e2e-tests) and binary(graphql_subscription))'
       - name: doctests
         run: |
           cargo test --doc
@@ -376,7 +391,11 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:
@@ -408,7 +427,11 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        shell: bash
+        run: |
+          pg_bin=$(ls -d /usr/lib/postgresql/*/bin 2>/dev/null | head -1)
+          [ -n "$pg_bin" ] || { echo "ERROR: no postgres bin dir found under /usr/lib/postgresql"; exit 1; }
+          echo "$pg_bin" >> "$GITHUB_PATH"
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@fc79b3f67fa8a838184ce84a674ca12238d2c761 # pin@master
         with:

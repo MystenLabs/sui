@@ -56,7 +56,8 @@ impl Node {
         match self {
             Node::Mainnet => MAINNET_GQL_URL,
             Node::Testnet => TESTNET_GQL_URL,
-            Node::Custom(_url) => todo!("custom gql url not implemented"),
+            // For custom, assume it's already a GraphQL URL
+            Node::Custom(url) => url.as_str(),
         }
     }
 
@@ -79,6 +80,27 @@ impl FromStr for Node {
             "mainnet" => Ok(Node::Mainnet),
             "testnet" => Ok(Node::Testnet),
             _ => Ok(Node::Custom(s.to_string())),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn custom_gql_url_returns_provided_url() {
+        let url = "https://graphql.devnet.example.com/graphql";
+        let node = Node::Custom(url.to_string());
+        assert_eq!(node.gql_url(), url);
+    }
+
+    #[test]
+    fn from_str_unknown_becomes_custom() {
+        let url = "https://graphql.devnet.example.com/graphql";
+        match Node::from_str(url).unwrap() {
+            Node::Custom(s) => assert_eq!(s, url),
+            other => panic!("expected Custom, got {other:?}"),
         }
     }
 }

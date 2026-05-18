@@ -20,6 +20,9 @@ use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
 use prometheus::Histogram;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderName;
+use reqwest::header::HeaderValue;
 use sui_futures::future::with_slow_future_monitor;
 use sui_rpc::Client;
 use sui_rpc::client::HeadersInterceptor;
@@ -80,6 +83,11 @@ pub struct IngestionClientArgs {
     #[arg(long, group = "source")]
     pub remote_store_azure: Option<String>,
 
+    /// Default header to include in remote store requests, as `<name>:<value>`.
+    /// Can be provided multiple times.
+    #[arg(long = "remote-store-header", value_parser = parse_remote_store_header)]
+    pub remote_store_headers: Vec<(HeaderName, HeaderValue)>,
+
     /// Path to the local ingestion directory.
     #[arg(long, group = "source")]
     pub local_ingestion_path: Option<PathBuf>,
@@ -114,6 +122,7 @@ impl Default for IngestionClientArgs {
             remote_store_s3: None,
             remote_store_gcs: None,
             remote_store_azure: None,
+            remote_store_headers: vec![],
             local_ingestion_path: None,
             rpc_api_url: None,
             rpc_username: None,
@@ -127,18 +136,32 @@ impl Default for IngestionClientArgs {
 impl IngestionClientArgs {
     fn client_options(&self) -> ClientOptions {
         let mut options = ClientOptions::default();
+
         options = if self.checkpoint_timeout_ms == 0 {
             options.with_timeout_disabled()
         } else {
             let timeout = Duration::from_millis(self.checkpoint_timeout_ms);
             options.with_timeout(timeout)
         };
+
         options = if self.checkpoint_connection_timeout_ms == 0 {
             options.with_connect_timeout_disabled()
         } else {
             let timeout = Duration::from_millis(self.checkpoint_connection_timeout_ms);
             options.with_connect_timeout(timeout)
         };
+
+        options = if !self.remote_store_headers.is_empty() {
+            let mut headers = HeaderMap::new();
+            for (name, value) in &self.remote_store_headers {
+                headers.append(name.clone(), value.clone());
+            }
+
+            options.with_default_headers(headers)
+        } else {
+            options
+        };
+
         options
     }
 }
@@ -448,8 +471,21 @@ where
     Ok(data)
 }
 
+fn parse_remote_store_header(header: &str) -> Result<(HeaderName, HeaderValue), String> {
+    let (name, value) = header
+        .split_once(':')
+        .ok_or_else(|| "remote store header must be in `<name>:<value>` format".to_string())?;
+
+    let name = HeaderName::from_bytes(name.as_bytes())
+        .map_err(|err| format!("invalid remote store header name `{name}`: {err}"))?;
+    let value = HeaderValue::from_str(value)
+        .map_err(|err| format!("invalid remote store header value for `{name}`: {err}"))?;
+
+    Ok((name, value))
+}
+
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -487,18 +523,33 @@ mod tests {
         ingestion: IngestionClientArgs,
     }
 
-    /// Mock implementation of IngestionClientTrait for testing
+    /// Mock implementation of IngestionClientTrait for testing.
+    ///
+    /// - `checkpoints`: pre-inserted checkpoints returned by `checkpoint()`. Sequences not
+    ///   in the map return `CheckpointError::NotFound`.
+    /// - `not_found_failures` / `fetch_failures` / `decode_failures`: number of times to
+    ///   return the corresponding error for a given sequence number before succeeding.
+    /// - `latest_checkpoint`: value returned by `latest_checkpoint_number()`.
     #[derive(Default)]
-    struct MockIngestionClient {
-        checkpoints: DashMap<u64, Checkpoint>,
-        not_found_failures: DashMap<u64, usize>,
-        fetch_failures: DashMap<u64, usize>,
-        decode_failures: DashMap<u64, usize>,
+    pub(crate) struct MockIngestionClient {
+        pub checkpoints: DashMap<u64, Checkpoint>,
+        pub not_found_failures: DashMap<u64, usize>,
+        pub fetch_failures: DashMap<u64, usize>,
+        pub decode_failures: DashMap<u64, usize>,
+        pub latest_checkpoint: u64,
     }
 
     impl MockIngestionClient {
-        fn mock_chain_id() -> ChainIdentifier {
+        pub(crate) fn mock_chain_id() -> ChainIdentifier {
             CheckpointDigest::new([1; 32]).into()
+        }
+
+        /// Populate `checkpoints` with synthetic test checkpoints for the given sequence
+        /// numbers.
+        pub(crate) fn insert_checkpoints(&self, range: impl IntoIterator<Item = u64>) {
+            for seq in range {
+                self.checkpoints.insert(seq, test_checkpoint(seq));
+            }
         }
     }
 
@@ -509,7 +560,6 @@ mod tests {
         }
 
         async fn checkpoint(&self, checkpoint: u64) -> CheckpointResult {
-            // Check for not found failures
             if let Some(mut remaining) = self.not_found_failures.get_mut(&checkpoint)
                 && *remaining > 0
             {
@@ -517,7 +567,6 @@ mod tests {
                 return Err(CheckpointError::NotFound);
             }
 
-            // Check for fetch errors
             if let Some(mut remaining) = self.fetch_failures.get_mut(&checkpoint)
                 && *remaining > 0
             {
@@ -525,7 +574,6 @@ mod tests {
                 return Err(CheckpointError::Fetch(anyhow::anyhow!("Mock fetch error")));
             }
 
-            // Check for decode errors
             if let Some(mut remaining) = self.decode_failures.get_mut(&checkpoint)
                 && *remaining > 0
             {
@@ -535,7 +583,6 @@ mod tests {
                 )));
             }
 
-            // Return the checkpoint data if it exists
             self.checkpoints
                 .get(&checkpoint)
                 .as_deref()
@@ -544,7 +591,7 @@ mod tests {
         }
 
         async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-            Ok(0)
+            Ok(self.latest_checkpoint)
         }
     }
 
@@ -603,6 +650,80 @@ mod tests {
         .unwrap_err();
 
         assert_eq!(err.kind(), ErrorKind::MissingRequiredArgument);
+    }
+
+    #[test]
+    fn test_args_remote_store_headers() {
+        let args = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-goog-user-project:my-project",
+            "--remote-store-header",
+            "authorization:Bearer abc:def",
+        ])
+        .unwrap();
+
+        assert_eq!(args.ingestion.remote_store_headers.len(), 2);
+        assert_eq!(
+            args.ingestion.remote_store_headers[0].0,
+            HeaderName::from_static("x-goog-user-project")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[0].1,
+            HeaderValue::from_static("my-project")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[1].0,
+            HeaderName::from_static("authorization")
+        );
+        assert_eq!(
+            args.ingestion.remote_store_headers[1].1,
+            HeaderValue::from_static("Bearer abc:def")
+        );
+    }
+
+    #[test]
+    fn test_args_remote_store_header_requires_delimiter() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-goog-user-project",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_remote_store_header_rejects_invalid_name() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "bad name:value",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_remote_store_header_rejects_invalid_value() {
+        let err = TestArgs::try_parse_from([
+            "cmd",
+            "--remote-store-gcs",
+            "bucket",
+            "--remote-store-header",
+            "x-test:bad\nvalue",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
     }
 
     #[tokio::test]

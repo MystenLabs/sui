@@ -219,19 +219,24 @@ impl CoinReservationResolver {
     }
 
     /// Looks up the type tag and owner for a given accumulator object ID.
-    /// Returns (owner, type_tag) if the object exists and is a valid balance accumulator field.
+    /// Returns `Ok(Some((owner, type_tag)))` if the object exists and is a valid balance
+    /// accumulator field, `Ok(None)` if the object does not exist (a transient condition
+    /// on this node), and `Err(_)` for any other failure (which is permanent for this
+    /// `object_id` and therefore safe to cache).
     pub fn get_owner_and_type_for_object(
         &self,
         object_id: ObjectID,
         accumulator_version: Option<SequenceNumber>,
-    ) -> UserInputResult<(SuiAddress, TypeTag)> {
-        let object = AccumulatorValue::load_object_by_id(
+    ) -> UserInputResult<Option<(SuiAddress, TypeTag)>> {
+        let Some(object) = AccumulatorValue::load_object_by_id(
             self.child_object_resolver.as_ref(),
             accumulator_version,
             object_id,
         )
         .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?
-        .ok_or_else(|| invalid_res_error!("coin reservation object id {} not found", object_id))?;
+        else {
+            return Ok(None);
+        };
 
         let move_object = object.data.try_as_move().unwrap();
 
@@ -249,7 +254,7 @@ impl CoinReservationResolver {
             .try_into()
             .map_err(|e| invalid_res_error!("could not load coin reservation object id {}", e))?;
 
-        Ok((key.owner, type_tag))
+        Ok(Some((key.owner, type_tag)))
     }
 
     pub fn resolve_funds_withdrawal(
@@ -258,10 +263,17 @@ impl CoinReservationResolver {
         coin_reservation: ParsedObjectRefWithdrawal,
         accumulator_version: Option<SequenceNumber>,
     ) -> UserInputResult<FundsWithdrawalArg> {
-        let (owner, type_tag) = self.get_owner_and_type_for_object(
-            coin_reservation.unmasked_object_id,
-            accumulator_version,
-        )?;
+        let (owner, type_tag) = self
+            .get_owner_and_type_for_object(
+                coin_reservation.unmasked_object_id,
+                accumulator_version,
+            )?
+            .ok_or_else(|| {
+                invalid_res_error!(
+                    "coin reservation object id {} not found",
+                    coin_reservation.unmasked_object_id
+                )
+            })?;
 
         if sender != owner {
             return Err(invalid_res_error!(

@@ -42,20 +42,21 @@ echo "Running e2e simtests with $TEST_NUM iterations"
 echo "================================================"
 date
 
-# This command runs many different tests, so it already uses all CPUs fairly efficiently, and
-# don't need to be done inside of the for loop below.
-# TODO: this logs directly to stdout since it is not being run in parallel. is that ok?
-MSIM_TEST_SEED="$SEED" \
-MSIM_TEST_NUM=${TEST_NUM} \
-MSIM_WATCHDOG_TIMEOUT_MS=60000 \
-scripts/simtest/cargo-simtest simtest \
-  --color always \
-  --test-threads "$NUM_CPUS" \
+# Phase 1 runs every (test, seed) pair in its own OS process via seed-search.py.
+mkdir -p "$LOG_DIR/e2e"
+
+scripts/simtest/seed-search.py \
   --package consensus-simtests \
   --package sui-core \
   --package sui-e2e-tests \
-  --profile simtestnightly \
-  -E "$TEST_FILTER" 2>&1 | tee "$LOG_FILE"
+  --num-seeds "$TEST_NUM" \
+  --seed-start "$SEED" \
+  --concurrency "$NUM_CPUS" \
+  --watchdog-timeout-ms 60000 \
+  --exclude 'batch_verification_tests' \
+  --log-dir "$LOG_DIR/e2e" \
+  --no-reachability 2>&1 | tee "$LOG_FILE"
+PHASE1_EXIT=${PIPESTATUS[0]}
 
 # Clean up temp files from the e2e phase to prevent /tmp (tmpfs) from filling up.
 rm -rf /tmp/tmp.* /tmp/.tmp* /tmp/sui-* 2>/dev/null
@@ -118,24 +119,54 @@ echo "All tests completed, checking for failures..."
 echo "============================================="
 date
 
-grep -EqHn 'TIMEOUT|FAIL' "$LOG_DIR"/*
+PHASE1_FAILED=0
+PHASE23_FAILED=0
 
-# if grep found no failures exit now
-[ $? -eq 1 ] && echo "No test failures detected" && exit 0
+# Phase 1 is failed if any individual test failed (`failures.ndjson` non-empty)
+# OR if seed-search.py itself exited non-zero (e.g. build failure, infrastructure
+# error). The pipe through tee otherwise hides that exit code.
+if [ -s "$LOG_DIR/e2e/failures.ndjson" ] || [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
+  PHASE1_FAILED=1
+fi
 
-echo "Failures detected, printing logs..."
+# Phase 2/3 logs are flat files in $LOG_DIR (log-* per stress iteration plus
+# determinism-log). Phase 1's per-job logs live under $LOG_DIR/e2e/, which we
+# intentionally don't grep over here — Phase 1 failures are surfaced via
+# failures.ndjson.
+#
+# TODO: this regex misses signal-based terminations. nextest reports
+# signal-killed tests with status tokens other than FAIL/TIMEOUT — e.g.
+# `SIGABRT [time] pkg::bin::test`, and similarly SIGSEGV, SIGBUS, SIGKILL,
+# SIGTRAP, SIGFPE, SIGSYS, plus LEAK for goroutine/thread leaks. Today
+# sui-benchmark's `test_simulated_load_large_consensus_commit_prologue_size`
+# SIGABRTs in ~50% of stress iterations on main and silently passes as a
+# result. Same regex is used in collect-failures.sh — keep them in sync.
+if grep -EqHn 'TIMEOUT|FAIL' "$LOG_DIR"/log-* "$LOG_DIR"/determinism-log 2>/dev/null; then
+  PHASE23_FAILED=1
+fi
 
-# read all filenames in $LOG_DIR that contain the string "FAIL" into a bash array
-# and print the line number and filename for each
-readarray -t FAILED_LOG_FILES < <(grep -El 'TIMEOUT|FAIL' "$LOG_DIR"/*)
+if [ "$PHASE1_FAILED" -eq 0 ] && [ "$PHASE23_FAILED" -eq 0 ]; then
+  echo "No test failures detected"
+  exit 0
+fi
 
-# iterate over the array and print the contents of each file
-for LOG_FILE in "${FAILED_LOG_FILES[@]}"; do
+echo "Failures detected, printing details..."
+
+# Build/infra failure case (seed-search.py exited non-zero, e.g. cargo build
+# error). The relevant evidence is in $LOG_DIR/log; surface its tail before
+# the per-test rendering.
+if [ "${PHASE1_EXIT:-0}" -ne 0 ]; then
   echo ""
   echo "=============================="
-  echo "Failure detected in $LOG_FILE:"
+  echo "Phase 1 build/infrastructure failure:"
   echo "=============================="
-  cat "$LOG_FILE"
-done
+  echo "seed-search.py exited with code $PHASE1_EXIT"
+  echo "Tail of $LOG_DIR/log:"
+  tail -100 "$LOG_DIR/log"
+fi
+
+# Per-test failure rendering (Phase 1 NDJSON + Phase 2/3 nextest plaintext)
+# lives in collect-failures.py.
+scripts/simtest/collect-failures.py --format=detailed "$LOG_DIR"
 
 exit 1

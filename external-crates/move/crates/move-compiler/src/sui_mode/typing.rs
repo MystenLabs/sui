@@ -8,7 +8,7 @@ use move_symbol_pool::Symbol;
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, warning_filters::WarningFilters},
+    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics, filter::FilterScope},
     editions::Flavor,
     expansion::ast::{Fields, ModuleIdent, Visibility},
     naming::ast::{
@@ -111,7 +111,7 @@ const OTW_NOTE: &str = "One-time witness types are structs with the following re
 //**************************************************************************************************
 
 impl TypingVisitorContext for Context<'_> {
-    fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
+    fn push_warning_filter_scope(&mut self, filters: FilterScope) {
         self.reporter.push_warning_filter_scope(filters)
     }
 

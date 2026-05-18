@@ -58,7 +58,7 @@ Creates a vector (potentially empty) of Move values.
 
 - `Args: [Argument]`: Vector elements (any type). Taken by value (copied if `T: copy`, moved otherwise).
 
-**Returns:** Single result of type `vector<T>`. Elements cannot be accessed individually using `NestedResult`; use the entire vector or access elements inside Move code via `MoveCall`.
+**Returns:** Single result of type `vector<T>`. Elements cannot be accessed individually using `NestedResult`; use the entire vector or access elements inside Move code through `MoveCall`.
 
 **Signature:** `(T...): vector<T>`
 
@@ -112,5 +112,5 @@ Upgrades an existing package. No `init` functions are called for upgraded module
 
 **Returns:** Single result of type `sui::package::UpgradeReceipt` providing proof of upgrade.
 
-For more details on upgrades, see [Upgrading Packages](/guides/developer/packages/upgrade.mdx).
+For more details on upgrades, see [Upgrading Packages](/develop/publish-upgrade-packages/upgrade).
 

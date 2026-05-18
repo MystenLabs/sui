@@ -15,7 +15,6 @@ futures.workspace = true
 mysten-metrics.workspace = true
 notify.workspace = true
 prost.workspace = true
-serde.workspace = true
 serde_json.workspace = true
 object_store.workspace = true
 prometheus.workspace = true
@@ -23,7 +22,6 @@ tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tracing.workspace = true
 sui-rpc.workspace = true
-sui-storage.workspace = true
 sui-types.workspace = true
 url.workspace = true
 tempfile.workspace = true

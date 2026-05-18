@@ -5,6 +5,7 @@ expression: "result.pointer(\"/data/simulateTransaction\")"
 {
   "effects": {
     "status": "SUCCESS",
+    "version": 2,
     "effectsJson": {
       "digest": "[digest]",
       "version": 2,

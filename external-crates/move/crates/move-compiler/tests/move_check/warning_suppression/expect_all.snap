@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/warning_suppression/expect_all.move:3:10
+  │
+3 │ #[expect(all)]
+  │          ^^^ 'all' matches multiple diagnostics, but 'expect' may only be used for individual diagnostics
+  │
+  = Use '#[allow(all)]' instead
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/expect_all.move:4:26
+  │
+4 │ module 0x42::m { fun var(a: u64) { } }
+  │                          ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/warning_suppression/expect_all.move:7:10
+  │
+7 │ #[expect(unused)]
+  │          ^^^^^^ 'unused' matches multiple diagnostics, but 'expect' may only be used for individual diagnostics
+  │
+  = Use '#[allow(unused)]' instead
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/warning_suppression/expect_all.move:8:26
+  │
+8 │ module 0x42::n { fun foo(a: u64) { } }
+  │                          ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

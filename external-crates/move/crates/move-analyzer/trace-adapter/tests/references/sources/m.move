@@ -31,14 +31,14 @@ fun some_struct(): SomeStruct {
     SomeStruct {
         struct_field: SimpleStruct { field: 0 },
         simple_field: 0,
-        vec_simple_field: vector::singleton(0),
+        vec_simple_field: vector[0],
     }
 }
 
 #[test]
 fun test() {
     let mut some_struct = some_struct();
-    let mut vec = vector::singleton(0);
+    let mut vec = vector[0];
     vector::push_back(&mut vec, 7);
     let num = 42;
     foo(&mut some_struct, &mut vec, &num);

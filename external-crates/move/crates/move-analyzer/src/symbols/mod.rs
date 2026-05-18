@@ -167,6 +167,7 @@ pub fn get_symbols<F: MoveFlavor>(
     ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: LintLevel,
+    move_flavor: Arc<F>,
     cursor_info: Option<(&PathBuf, Position)>,
     flavor: Option<Flavor>,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
@@ -197,6 +198,7 @@ pub fn get_symbols<F: MoveFlavor>(
             ide_files_root.clone(),
             pkg_path,
             lint,
+            move_flavor.clone(),
             flavor,
             cursor_info.map(|(path, _)| path),
         )?;

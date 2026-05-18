@@ -14,6 +14,7 @@ use std::str::FromStr;
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
     digests::Digest,
+    effects::TransactionEffects,
     messages_checkpoint::CheckpointArtifacts,
 };
 
@@ -49,6 +50,21 @@ fn build_ocs_inclusion_proof(
         .iter()
         .map(|tx| &tx.effects)
         .collect();
+
+    // Skip proof construction for effects versions that predate proofs existing.
+    if effects_refs
+        .iter()
+        .any(|effects| matches!(effects, TransactionEffects::V1(_)))
+    {
+        return Err(RpcError::new(
+            tonic::Code::FailedPrecondition,
+            format!(
+                "Object inclusion proofs are not supported for checkpoint {} \
+                because it contains TransactionEffectsV1",
+                checkpoint_seq
+            ),
+        ));
+    }
 
     let checkpoint_artifacts = CheckpointArtifacts::from(effects_refs.as_slice());
 

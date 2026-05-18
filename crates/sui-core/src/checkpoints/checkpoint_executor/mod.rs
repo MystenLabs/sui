@@ -718,6 +718,7 @@ impl CheckpointExecutor {
             // DB until later (committing must be done in-order)
             if let Some(rpc_index) = &self.state.rpc_index {
                 let mut layout_resolver = self.epoch_store.executor().type_layout_resolver(
+                    self.epoch_store.protocol_config(),
                     Box::new(PackageStoreWithFallback::new(
                         self.state.get_backing_package_store(),
                         &checkpoint_data,

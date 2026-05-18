@@ -5,6 +5,7 @@
 extern crate core;
 
 pub mod accumulators;
+pub mod admission_queue;
 pub mod authority;
 pub mod authority_aggregator;
 pub mod authority_client;
@@ -37,7 +38,6 @@ pub(crate) mod post_consensus_tx_reorder;
 pub mod rpc_index;
 pub mod runtime;
 pub mod safe_client;
-mod scoring_decision;
 pub mod signature_verifier;
 mod stake_aggregator;
 mod status_aggregator;

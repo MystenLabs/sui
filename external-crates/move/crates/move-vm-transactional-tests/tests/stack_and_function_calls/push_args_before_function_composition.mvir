@@ -1,16 +1,16 @@
 //# publish
-module 0x5.A {
-    public push_u64(): u64  {
+mvir 0x5::A {
+    public fun push_u64(): u64  {
     label b0:
         return 42;
     }
 
-    public parity(u: u64): bool {
+    public fun parity(u: u64): bool {
     label b0:
         return (move(u) % 2 == 0);
     }
 
-    public foo(u: u64, b: bool): u64 {
+    public fun foo(u: u64, b: bool): u64 {
     label b0:
         jump_if (move(b)) b2;
     label b1:
@@ -22,17 +22,17 @@ module 0x5.A {
 
 
 //# run
-module 0x43.m {
+mvir 0x43::m {
 
-import 0x5.A;
+import 0x5::A;
 
-entry foo() {
+entry fun foo() {
     let k: u64;
     let ans: u64;
 label b0:
     k = 101;
-    (A.push_u64());
-    ans = A.foo(A.parity(move(k)));
+    (A::push_u64());
+    ans = A::foo(A::parity(move(k)));
     return;
 }
 }

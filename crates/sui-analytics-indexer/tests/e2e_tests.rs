@@ -201,10 +201,7 @@ impl TestHarness {
             sf_role: None,
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(Pipeline::Checkpoint)],
-            ingestion: IngestionLayer {
-                checkpoint_buffer_size: Some(100),
-                ..Default::default()
-            },
+            ingestion: IngestionLayer::default(),
             committer: CommitterLayer::default(),
             migration_id: None,
             file_format: FileFormat::Parquet,
@@ -482,10 +479,7 @@ impl MockTestHarness {
             sf_role: None,
             sf_password_file: None,
             pipeline_configs: vec![default_pipeline_config(Pipeline::Checkpoint)],
-            ingestion: IngestionLayer {
-                checkpoint_buffer_size: Some(100),
-                ..Default::default()
-            },
+            ingestion: IngestionLayer::default(),
             committer: CommitterLayer::default(),
             migration_id: None,
             file_format: FileFormat::Parquet,

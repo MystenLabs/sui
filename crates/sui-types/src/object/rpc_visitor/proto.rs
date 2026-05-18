@@ -35,6 +35,22 @@ impl ProtoVisitor {
             &mut RV::RpcVisitor::<Value, _>::new(RV::LocalMeter::new(&mut self.bound, MAX_DEPTH)),
         )
     }
+
+    /// Like `deserialize_value`, but draws from an externally-owned size
+    /// budget so that callers rendering many values into one response can
+    /// share a single aggregate cap. The budget is decremented in place; if
+    /// it is exhausted, deserialization fails with `MeterError::TooBig`.
+    pub fn deserialize_value_with_budget(
+        bytes: &[u8],
+        layout: &A::MoveTypeLayout,
+        size_budget: &mut usize,
+    ) -> Result<Value, RV::Error> {
+        A::MoveValue::visit_deserialize(
+            bytes,
+            layout,
+            &mut RV::RpcVisitor::<Value, _>::new(RV::LocalMeter::new(size_budget, MAX_DEPTH)),
+        )
+    }
 }
 
 impl RV::Format for Value {

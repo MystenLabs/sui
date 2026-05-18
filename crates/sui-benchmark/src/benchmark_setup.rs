@@ -174,7 +174,7 @@ impl BenchmarkSetup {
                         data,
                         vec![&*keypair],
                     );
-                    let (_, effects) = execution_proxy.execute_transaction_block(tx).await;
+                    let effects = execution_proxy.execute_transaction_block(tx).await;
                     let effects = effects?;
                     primary_ref = effects.gas_object().0;
                 }

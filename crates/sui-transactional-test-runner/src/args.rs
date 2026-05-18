@@ -339,6 +339,7 @@ pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     RunGraphql(RunGraphqlCommand),
     RunJsonRpc(RunJsonRpcCommand),
     Bench(RunCommand<ExtraValueArgs>, ExtraRunArgs),
+    BenchProgrammable(ProgrammableTransactionCommand),
 }
 
 impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
@@ -397,10 +398,15 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
             Some(("run-jsonrpc", matches)) => {
                 SuiSubcommand::RunJsonRpc(RunJsonRpcCommand::from_arg_matches(matches)?)
             }
-            Some(("bench", matches)) => SuiSubcommand::Bench(
-                RunCommand::from_arg_matches(matches)?,
-                ExtraRunArgs::from_arg_matches(matches)?,
-            ),
+            Some(("bench", matches)) => match matches.subcommand() {
+                Some(("ptb", sub_matches)) => SuiSubcommand::BenchProgrammable(
+                    ProgrammableTransactionCommand::from_arg_matches(sub_matches)?,
+                ),
+                _ => SuiSubcommand::Bench(
+                    RunCommand::from_arg_matches(matches)?,
+                    ExtraRunArgs::from_arg_matches(matches)?,
+                ),
+            },
             _ => {
                 return Err(clap::Error::raw(
                     clap::error::ErrorKind::InvalidSubcommand,
@@ -441,7 +447,10 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::CommandFactory
             .subcommand(RunGraphqlCommand::command().name("run-graphql"))
             .subcommand(RunJsonRpcCommand::command().name("run-jsonrpc"))
             .subcommand(
-                RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command()).name("bench"),
+                RunCommand::<ExtraValueArgs>::augment_args(ExtraRunArgs::command())
+                    .name("bench")
+                    .args_conflicts_with_subcommands(true)
+                    .subcommand(ProgrammableTransactionCommand::command().name("ptb")),
             )
     }
 

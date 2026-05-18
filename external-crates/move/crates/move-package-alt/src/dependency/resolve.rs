@@ -20,27 +20,28 @@ use tokio::process::Command;
 use tracing::debug;
 
 use crate::{
-    dependency::combine::Combined,
     logging::user_info,
-    package::{EnvironmentID, EnvironmentName},
+    package::EnvironmentName,
     schema::{
-        EXTERNAL_RESOLVE_ARG, PackageName, ResolveRequest, ResolveResponse, ResolverDependencyInfo,
-        ResolverName,
+        EXTERNAL_RESOLVE_ARG, Environment, PackageName, ResolveRequest, ResolveResponse,
+        ResolverDependencyInfo, ResolverName,
     },
 };
 
-use super::{CombinedDependency, Dependency};
+use super::{CombinedDependency, DependencyContext, combine::Combined};
 
-/// A [Dependency<Resolved>] is like a [Dependency<Combined>] except that it no longer has
-/// externally resolved or system dependencies
-pub type Resolved = ResolverDependencyInfo;
+/// The dep_info type for the resolved stage.
+pub(super) type Resolved = ResolverDependencyInfo;
 
 pub type ResolverResult<T> = Result<T, ResolverError>;
 
 /// A [ResolvedDependency] is like a [CombinedDependency] except that it no longer has
-/// externally resolved dependencies
+/// externally resolved or system dependencies.
 #[derive(Debug)]
-pub struct ResolvedDependency(pub(super) Dependency<Resolved>);
+pub(super) struct ResolvedDependency {
+    pub(super) context: DependencyContext,
+    pub(super) dep_info: Resolved,
+}
 
 #[derive(Error, Debug)]
 pub enum ResolverError {
@@ -88,18 +89,19 @@ impl ResolvedDependency {
     /// Precondition: there are no `System` dependencies (TODO: this needs better design)
     pub async fn resolve(
         deps: Vec<CombinedDependency>,
-        environment_id: &EnvironmentID,
+        env: &Environment,
     ) -> ResolverResult<Vec<ResolvedDependency>> {
         // iterate over [deps] to collect queries for external resolvers
         let mut requests: BTreeMap<ResolverName, BTreeMap<PackageName, ResolveRequest>> =
             BTreeMap::new();
 
         for dep in deps.iter() {
-            if let Combined::External(ext) = &dep.0.dep_info {
+            if let Combined::External(ext) = &dep.dep_info {
                 requests.entry(ext.resolver.clone()).or_default().insert(
-                    dep.0.name.clone(),
+                    dep.context.name.clone(),
                     ResolveRequest {
-                        env: environment_id.clone(),
+                        env: env.id().clone(),
+                        env_name: env.name().clone(),
                         data: ext.data.clone(),
                     },
                 );
@@ -120,16 +122,21 @@ impl ResolvedDependency {
         // build the output
         let mut result = Vec::new();
         for dep in deps.into_iter() {
-            let ext = responses.remove(&dep.0.name);
-            result.push(ResolvedDependency(dep.0.map(|info| match info {
-                Combined::Local(loc) => Resolved::Local(loc),
-                Combined::Git(git) => Resolved::Git(git),
-                Combined::OnChain(onchain) => Resolved::OnChain(onchain),
-                Combined::External(_) => ext.expect("resolve_single outputs same keys as input"),
-                Combined::System(_) => panic!(
-                    "invariant violation; all system dependencies should already be transformed"
-                ),
-            })));
+            let ext = responses.remove(&dep.context.name);
+            result.push(ResolvedDependency {
+                context: dep.context,
+                dep_info: match dep.dep_info {
+                    Combined::Local(loc) => Resolved::Local(loc),
+                    Combined::Git(git) => Resolved::Git(git),
+                    Combined::OnChain(onchain) => Resolved::OnChain(onchain),
+                    Combined::External(_) => {
+                        ext.expect("resolve_single outputs same keys as input")
+                    }
+                    Combined::System(_) => panic!(
+                        "invariant violation; all system dependencies should already be transformed"
+                    ),
+                },
+            });
         }
         assert!(responses.is_empty());
 

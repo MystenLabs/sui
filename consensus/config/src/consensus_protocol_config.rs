@@ -25,6 +25,7 @@ pub struct ConsensusProtocolConfig {
     transaction_voting_enabled: bool,
     num_leaders_per_round: Option<usize>,
     bad_nodes_stake_threshold: u64,
+    enable_v3: bool,
 }
 
 impl Default for ConsensusProtocolConfig {
@@ -39,6 +40,7 @@ impl Default for ConsensusProtocolConfig {
             transaction_voting_enabled: false,
             num_leaders_per_round: None,
             bad_nodes_stake_threshold: 0,
+            enable_v3: false,
         }
     }
 }
@@ -54,6 +56,7 @@ impl ConsensusProtocolConfig {
         transaction_voting_enabled: bool,
         num_leaders_per_round: Option<usize>,
         bad_nodes_stake_threshold: u64,
+        enable_v3: bool,
     ) -> Self {
         Self {
             protocol_version,
@@ -65,6 +68,7 @@ impl ConsensusProtocolConfig {
             transaction_voting_enabled,
             num_leaders_per_round,
             bad_nodes_stake_threshold,
+            enable_v3,
         }
     }
 
@@ -81,6 +85,7 @@ impl ConsensusProtocolConfig {
             transaction_voting_enabled: true,
             num_leaders_per_round: Some(1),
             bad_nodes_stake_threshold: 30,
+            enable_v3: false,
         }
     }
 
@@ -122,6 +127,10 @@ impl ConsensusProtocolConfig {
         self.bad_nodes_stake_threshold
     }
 
+    pub fn enable_v3(&self) -> bool {
+        self.enable_v3
+    }
+
     // Test setter methods
 
     pub fn set_gc_depth_for_testing(&mut self, val: u32) {
@@ -150,5 +159,9 @@ impl ConsensusProtocolConfig {
 
     pub fn set_num_leaders_per_round_for_testing(&mut self, val: Option<usize>) {
         self.num_leaders_per_round = val;
+    }
+
+    pub fn set_enable_v3_for_testing(&mut self, val: bool) {
+        self.enable_v3 = val;
     }
 }

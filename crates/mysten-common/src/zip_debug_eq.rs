@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::debug_fatal;
+use crate::debug_fatal_at;
 use std::panic::Location;
 
 /// Extension trait providing `zip_debug_eq` on all iterators.
@@ -40,7 +40,8 @@ impl<A: Iterator, B: Iterator> Iterator for ZipDebugEq<A, B> {
             (None, None) => None,
             (None, Some(_)) => {
                 self.finished = true;
-                debug_fatal!(
+                debug_fatal_at!(
+                    &format!("{}:{}", self.caller.file(), self.caller.line()),
                     "zip_debug_eq: first iterator shorter than second (created at {})",
                     self.caller
                 );
@@ -48,7 +49,8 @@ impl<A: Iterator, B: Iterator> Iterator for ZipDebugEq<A, B> {
             }
             (Some(_), None) => {
                 self.finished = true;
-                debug_fatal!(
+                debug_fatal_at!(
+                    &format!("{}:{}", self.caller.file(), self.caller.line()),
                     "zip_debug_eq: second iterator shorter than first (created at {})",
                     self.caller
                 );

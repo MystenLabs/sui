@@ -57,6 +57,25 @@ use crate::{
 // TODO: put max RPC response size in protocol config.
 pub(crate) const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
+pub(crate) fn max_fetch_blocks_response_bytes(
+    context: &Context,
+    block_refs: &[BlockRef],
+    fetch_after_rounds: &[Round],
+) -> usize {
+    // Mirror the server-side limit selection in `block_sync_service::fetch_blocks`:
+    // live sync (both inputs non-empty) is capped by `max_blocks_per_sync`,
+    // every other mode by `max_blocks_per_fetch`.
+    let max_response_num_blocks = if !fetch_after_rounds.is_empty() && !block_refs.is_empty() {
+        context.parameters.max_blocks_per_sync
+    } else {
+        context.parameters.max_blocks_per_fetch
+    };
+
+    max_response_num_blocks
+        .saturating_mul(context.protocol_config.max_transactions_in_block_bytes() as usize)
+        .saturating_mul(2)
+}
+
 const DEFAULT_GRPC_SERVER_TIMEOUT: Duration = Duration::from_secs(300);
 
 // HTTP/2 connection and stream window sizes for both validator and observer servers.
@@ -151,6 +170,8 @@ impl ValidatorNetworkClient for TonicValidatorClient {
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
+        let max_allowed_bytes =
+            max_fetch_blocks_response_bytes(&self.context, &block_refs, &fetch_after_rounds);
         let mut request = Request::new(FetchBlocksRequest {
             block_refs: block_refs
                 .iter()
@@ -179,13 +200,6 @@ impl ValidatorNetworkClient for TonicValidatorClient {
             })?
             .into_inner();
 
-        // Allow twice the max total size of transactions in the fetched blocks.
-        let max_allowed_bytes = block_refs.len()
-            * self
-                .context
-                .protocol_config
-                .max_transactions_in_block_bytes() as usize
-            * 2;
         let mut blocks = vec![];
         let mut total_fetched_bytes = 0;
         loop {
@@ -764,6 +778,10 @@ impl TonicManager {
         // Calculate own address
         let own_address = if let Some(listen_addr) = &context.parameters.listen_address_override {
             listen_addr
+        } else if context.is_observer() {
+            // Observer node - use the configured observer server port since we're not in the committee.
+            let port = context.parameters.observer.server_port.unwrap_or(0);
+            &Multiaddr::try_from(format!("/ip4/0.0.0.0/tcp/{port}")).unwrap()
         } else {
             let authority = context.committee.authority(context.own_index);
             // By default, bind to the unspecified address to allow the actual address to be assigned.
@@ -965,14 +983,15 @@ impl TonicManager {
     }
 
     async fn start_observer_server_impl<O: ObserverNetworkService>(&mut self, service: Arc<O>) {
-        let config = &self.context.parameters.tonic;
-        let Some(observer_port) = config.observer_server_port else {
+        let observer_params = &self.context.parameters.observer;
+        let tonic_config = &self.context.parameters.tonic;
+        let Some(observer_port) = observer_params.server_port else {
             info!("Observer server not configured, skipping observer server start");
             return;
         };
 
         // Parse observer allowlist from configuration and create TLS verifier
-        let observer_allowlist = parse_observer_allowlist(&config.observer_allowlist);
+        let observer_allowlist = parse_observer_allowlist(&observer_params.allowlist);
         let observer_tls_config = if observer_allowlist.is_empty() {
             info!("Observer server allowlist disabled - all observers allowed");
             sui_tls::create_rustls_server_config_with_client_verifier(
@@ -1003,8 +1022,8 @@ impl TonicManager {
         let observer_service_proxy = ObserverServiceProxy::new(service);
 
         let observer_service_server = ObserverServiceServer::new(observer_service_proxy)
-            .max_encoding_message_size(config.message_size_limit)
-            .max_decoding_message_size(config.message_size_limit)
+            .max_encoding_message_size(tonic_config.message_size_limit)
+            .max_decoding_message_size(tonic_config.message_size_limit)
             .send_compressed(CompressionEncoding::Zstd)
             .accept_compressed(CompressionEncoding::Zstd);
 
@@ -1044,8 +1063,8 @@ impl TonicManager {
         let http_config = sui_http::Config::default()
             .initial_connection_window_size(HTTP2_INITIAL_CONNECTION_WINDOW_SIZE)
             .initial_stream_window_size(HTTP2_INITIAL_STREAM_WINDOW_SIZE)
-            .http2_keepalive_interval(Some(config.keepalive_interval))
-            .http2_keepalive_timeout(Some(config.keepalive_interval))
+            .http2_keepalive_interval(Some(tonic_config.keepalive_interval))
+            .http2_keepalive_timeout(Some(tonic_config.keepalive_interval))
             .accept_http1(false);
 
         let deadline = Instant::now() + Duration::from_secs(20);
@@ -1418,6 +1437,7 @@ mod tests {
     use super::*;
     use crate::{context::Clock, metrics::initialise_metrics};
     use consensus_config::{ConsensusProtocolConfig, Parameters, local_committee_and_keys};
+    use consensus_types::block::BlockDigest;
     use prometheus::Registry;
 
     fn create_test_context_and_client() -> (Arc<Context>, TonicValidatorClient) {
@@ -1426,9 +1446,10 @@ mod tests {
         let protocol_config = ConsensusProtocolConfig::for_testing();
         let metrics = initialise_metrics(Registry::new());
 
+        let authority_index = committee.to_authority_index(0).unwrap();
         let context = Arc::new(Context::new(
             0,
-            committee.to_authority_index(0).unwrap(),
+            Some(authority_index),
             committee,
             parameters,
             protocol_config,
@@ -1440,6 +1461,40 @@ mod tests {
         let client = TonicValidatorClient::new(context.clone(), network_keypair);
 
         (context, client)
+    }
+
+    #[tokio::test]
+    async fn test_max_fetch_blocks_response_bytes_uses_response_mode_limit() {
+        let (mut context, _keys) = Context::new_for_test(4);
+        context.parameters.max_blocks_per_fetch = 11;
+        context.parameters.max_blocks_per_sync = 7;
+        let context = Arc::new(context);
+        let bytes_per_block =
+            context.protocol_config.max_transactions_in_block_bytes() as usize * 2;
+
+        let block_ref = BlockRef::new(1, AuthorityIndex::new_for_test(0), BlockDigest::MIN);
+        let fetch_after_rounds = vec![0; context.committee.size()];
+
+        // Commit-sync mode (block_refs only): always sized to max_blocks_per_fetch,
+        // independent of how many block_refs the caller actually requested.
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[block_ref; 3], &[]),
+            context.parameters.max_blocks_per_fetch * bytes_per_block
+        );
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[block_ref; 20], &[]),
+            context.parameters.max_blocks_per_fetch * bytes_per_block
+        );
+        // Periodic-sync mode (fetch_after_rounds only): max_blocks_per_fetch.
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[], &fetch_after_rounds),
+            context.parameters.max_blocks_per_fetch * bytes_per_block
+        );
+        // Live-sync mode (both inputs non-empty): max_blocks_per_sync.
+        assert_eq!(
+            max_fetch_blocks_response_bytes(&context, &[block_ref], &fetch_after_rounds),
+            context.parameters.max_blocks_per_sync * bytes_per_block
+        );
     }
 
     #[tokio::test]

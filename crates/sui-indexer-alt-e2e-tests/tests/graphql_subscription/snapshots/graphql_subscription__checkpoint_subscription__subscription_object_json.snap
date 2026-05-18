@@ -1,0 +1,308 @@
+---
+source: crates/sui-indexer-alt-e2e-tests/tests/graphql_subscription/checkpoint_subscription.rs
+expression: "[cp1, cp2, cp3, cp4]"
+---
+[
+  {
+    "data": {
+      "checkpoints": {
+        "transactions": {
+          "nodes": [
+            {
+              "digest": "[digest]",
+              "effects": {
+                "objectChanges": {
+                  "nodes": [
+                    {
+                      "inputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "balance": "30000000000000000"
+                            }
+                          }
+                        }
+                      },
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "balance": "29999999996666800"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "inputState": null,
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::wrapping::Item"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "value": "42"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "data": {
+      "checkpoints": {
+        "transactions": {
+          "nodes": [
+            {
+              "digest": "[digest]",
+              "effects": {
+                "objectChanges": {
+                  "nodes": [
+                    {
+                      "inputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "balance": "30000000000000000"
+                            }
+                          }
+                        }
+                      },
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "balance": "29999999997998548"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "inputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::wrapping::Item"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "value": "42"
+                            }
+                          }
+                        }
+                      },
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::wrapping::Item"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "value": "100"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "data": {
+      "checkpoints": {
+        "transactions": {
+          "nodes": [
+            {
+              "digest": "[digest]",
+              "effects": {
+                "objectChanges": {
+                  "nodes": [
+                    {
+                      "inputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "balance": "30000000000000000"
+                            }
+                          }
+                        }
+                      },
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "balance": "29999999997732548"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "inputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::wrapping::Item"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "value": "100"
+                            }
+                          }
+                        }
+                      },
+                      "outputState": null
+                    },
+                    {
+                      "inputState": null,
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::wrapping::Wrapper"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "item": {
+                                "id": "[id]",
+                                "value": "100"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "data": {
+      "checkpoints": {
+        "transactions": {
+          "nodes": [
+            {
+              "digest": "[digest]",
+              "effects": {
+                "objectChanges": {
+                  "nodes": [
+                    {
+                      "inputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "balance": "30000000000000000"
+                            }
+                          }
+                        }
+                      },
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "balance": "29999999998261888"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "inputState": null,
+                      "outputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::wrapping::Item"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "value": "100"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "inputState": {
+                        "asMoveObject": {
+                          "contents": {
+                            "type": {
+                              "repr": "[pkg]::wrapping::Wrapper"
+                            },
+                            "json": {
+                              "id": "[id]",
+                              "item": {
+                                "id": "[id]",
+                                "value": "100"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "outputState": null
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+]

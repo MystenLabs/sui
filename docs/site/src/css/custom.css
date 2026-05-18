@@ -333,16 +333,79 @@ div[role="tabpanel"] {
   justify-content: space-between;
 }
 
+@media screen and (min-width: 1280px) {
+  .navbar__items {
+    min-width: 0;
+    flex-wrap: nowrap !important;
+  }
+
+  .navbar__inner {
+    flex-wrap: nowrap !important;
+    gap: clamp(0.5rem, 1.5vw, 2rem);
+  }
+
+  .navbar__items:not(.navbar__items--right) {
+    flex: 1 1 0%;
+  }
+
+  .navbar__items--right {
+    flex: 0 0 auto;
+  }
+}
+
 .navbar__items .navbar__brand {
-  width: 27%;
+  width: auto;
+  flex-shrink: 0;
+  margin-right: clamp(0.5rem, 1vw, 1.5rem);
 }
 
 .navbar__items .navbar__item.navbar__link {
   font-family: var(--headerFont);
-  font-size: .9375rem;
+  font-size: clamp(0.8rem, 0.95vw, 0.9375rem);
   font-weight: 500;
   line-height: 1.125rem;
   letter-spacing: -0.02em;
+  white-space: nowrap;
+  padding: 0.5rem clamp(0.25rem, 0.6vw, 0.75rem);
+}
+
+@media screen and (min-width: 1280px) {
+  .navbar-left-items {
+    display: flex !important;
+    flex: 1 1 0%;
+    flex-wrap: nowrap;
+    align-items: center;
+    min-width: 0;
+    justify-content: space-evenly;
+  }
+
+  .navbar-left-items > .navbar__item {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
+@media screen and (max-width: 1279px) {
+  .navbar-left-items {
+    display: none !important;
+  }
+
+  .navbar__brand {
+    display: none !important;
+  }
+}
+
+
+
+.navbar-right-controls {
+  gap: clamp(0.5rem, 1vw, 0.75rem);
+}
+
+/* Show hamburger toggle up to 1279px instead of Docusaurus default 996px */
+@media screen and (min-width: 997px) and (max-width: 1279px) {
+  .navbar__toggle {
+    display: inherit !important;
+  }
 }
 
 .darkNavbarColorModeToggle {
@@ -351,7 +414,29 @@ div[role="tabpanel"] {
 
 @media screen and (min-width: 767px) {
   .navbar__items.navbar__items--right {
+    min-width: 0;
+  }
+}
+
+@media screen and (min-width: 1400px) {
+  .navbar__items.navbar__items--right {
     min-width: 325px;
+  }
+}
+
+/* Compact right-side controls below full desktop width */
+@media screen and (max-width: 1399px) {
+  .navbar .kapa-trigger-btn {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    padding: 0 !important;
+    justify-content: center;
+    margin: 0;
+  }
+
+  .DocSearch-Button {
+    width: 9rem;
   }
 }
 
@@ -511,7 +596,7 @@ td .theme-code-block {
 }
 
 .modal-result mark {
-  @apply bg-sui-steel-dark;
+  @apply bg-sui-blue-bright/30 text-inherit rounded-sm;
 }
 
 .ais-Pagination-list {
@@ -1360,7 +1445,7 @@ h5 {
     #F4F5F7 100%
   );
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
   position: relative;
   isolation: isolate; /* Creates new stacking context */
 }
@@ -1420,32 +1505,8 @@ h5 {
   display: none;
 }
 
-.theme-doc-markdown details summary::before {
-  content: '→';
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  flex-shrink: 0;
-  background: rgba(41, 141, 255, 0.1);
-  color: #298DFF;
-  font-weight: 700;
-  font-size: 0.875rem;
-  line-height: 1;
-  border-radius: 0.375rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  z-index: 1;
-}
-
 .theme-doc-markdown details summary:hover {
   color: #1759C4;
-}
-
-.theme-doc-markdown details summary:hover::before {
-  background: rgba(41, 141, 255, 0.15);
-  transform: scale(1.1);
 }
 
 /* FIX: Make tooltip appear above everything */
@@ -1455,36 +1516,14 @@ h5 {
 }
 
 .theme-doc-markdown details[open] summary {
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #E0E2E6;
+  margin-bottom: 0;
+  padding-bottom: 0;
 }
 
-.theme-doc-markdown details[open] summary::before {
-  transform: rotate(90deg);
-  background: rgba(41, 141, 255, 0.15);
-}
 
-/* Details content - remove double spacing */
-.theme-doc-markdown details > :not(summary) {
-  animation: slideDown 0.3s ease-out;
-  position: relative;
-  z-index: 1;
-}
-
+/* Details content — Docusaurus Collapsible handles the expand animation */
 .theme-doc-markdown details[open] > :not(summary):first-of-type {
   margin-top: 0 !important;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 /* Nested details */
@@ -1524,21 +1563,6 @@ h5 {
   color: #5CA9FF;
 }
 
-[data-theme='dark'] .theme-doc-markdown details summary::before {
-  background: rgba(41, 141, 255, 0.15);
-}
-
-[data-theme='dark'] .theme-doc-markdown details summary:hover::before {
-  background: rgba(41, 141, 255, 0.25);
-}
-
-[data-theme='dark'] .theme-doc-markdown details[open] summary {
-  border-bottom-color: #343940;
-}
-
-[data-theme='dark'] .theme-doc-markdown details[open] summary::before {
-  background: rgba(41, 141, 255, 0.25);
-}
 
 [data-theme='dark'] .theme-doc-markdown details details {
   background: #222529;
@@ -1910,7 +1934,7 @@ html[data-theme="dark"] .api-code-title { background: rgba(255,255,255,0.04); }
   color: var(--ifm-color-emphasis-700);
 }
 
-@media (max-width: 996px) {
+@media (max-width: 1279px) {
   .theme-toggle-wrapper {
     display: flex !important;
     align-items: center !important;
@@ -2034,7 +2058,7 @@ html[data-theme="dark"] .api-code-title { background: rgba(255,255,255,0.04); }
   }
 }
 
-@media (max-width: 996px) {
+@media (max-width: 1279px) {
   /* --- Kapa: keep only the icon on mobile --- */
 
   /* Ensure Kapa trigger lays out like an icon button */
@@ -2161,8 +2185,8 @@ html[data-theme='dark'] .protoGridTitle {
 }
 
 .protoKey {
-  grid-column: span 2;
-  padding: 12px 24px;
+  grid-column: span 3;
+  padding: 10px 16px;
   font-size: 14px;
   font-weight: 600;
   border-right: 1px solid rgba(120, 120, 120, 0.14);
@@ -2171,14 +2195,26 @@ html[data-theme='dark'] .protoGridTitle {
 }
 
 .protoVal {
-  grid-column: span 4;
-  padding: 12px 24px;
-  font-size: 14px;
+  grid-column: span 3;
+  padding: 10px 16px;
+  font-size: 13px;
   border-bottom: 1px solid rgba(120, 120, 120, 0.14);
+  min-height: 0;
+}
+
+/* Collapse empty description cells */
+.protoVal:empty {
+  padding: 0;
+  border-bottom: none;
+}
+
+/* When val is empty, let the key span the full row */
+.protoKey:has(+ .protoVal:empty) {
+  grid-column: 1 / -1;
+  border-right: none;
 }
 
 .protoValMuted {
-  margin-top: 8px;
   font-size: 13px;
   opacity: 0.85;
   line-height: 1.5;
@@ -2491,7 +2527,7 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 /* All sidebar links */
 .menu__link {
   border-radius: 0.5rem;
-  font-size: 0.95rem;
+  font-size: 1rem;
   line-height: 1.4;
   padding: 0.375rem 0.625rem !important;
   transition: background 0.15s ease, color 0.15s ease;
@@ -2542,7 +2578,7 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 
 /* Top-level page links — same weight as categories, no dot */
 .theme-doc-sidebar-menu > .menu__list > .theme-doc-sidebar-item-link > .menu__link {
-  font-size: 0.95rem !important;
+  font-size: 1rem !important;
   font-weight: 600;
   color: #000000;
   padding-left: 0.625rem !important;
@@ -2574,7 +2610,7 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 /* Child pages and child categories — muted color */
 .theme-doc-sidebar-item-category .menu__list > .theme-doc-sidebar-item-link > .menu__link,
 .theme-doc-sidebar-item-category .menu__list > .theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link {
-  font-size: 0.9rem !important;
+  font-size: 0.95rem !important;
   color: #4B515B;
 }
 
@@ -2615,15 +2651,150 @@ html[data-theme='light'] .navbar-sidebar .menu__link--active .linkLabel_sEOA {
 html[data-theme='dark'] .protoUnionNote {
   background: rgba(120, 120, 120, 0.08);
 }
- 
-/* Method signatures: allow long type names to wrap gracefully */
+
+.protoTruncNote {
+  grid-column: 1 / -1;
+  padding: 10px 24px;
+  font-size: 13px;
+  font-style: italic;
+  opacity: 0.7;
+  border-top: 1px dashed rgba(120, 120, 120, 0.2);
+}
+
+.protoTruncNote a {
+  font-style: normal;
+}
+
+/* Method signatures: name on top, types below */
 .protoMethodSig {
   overflow-wrap: anywhere;
   word-break: break-word;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
- 
+
+.protoMethodName {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.protoMethodTypes {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
 /* Arrow between request → response in service methods */
 .protoArrow {
   margin: 0 4px;
   opacity: 0.5;
+}
+
+/* ── Navbar dropdown styling ─────────────────────────────────────────────── */
+
+@media screen and (min-width: 997px) {
+  .navbar .dropdown {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: center;
+    position: relative;
+  }
+
+  .navbar .dropdown .dropdown__menu {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+.navbar .dropdown .dropdown__menu {
+  min-width: 240px;
+  padding: 6px;
+  border-radius: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  backdrop-filter: blur(12px);
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__menu {
+  background: #131518;
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.navbar .dropdown .dropdown__link {
+  padding: 8px 12px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  border-radius: 2px;
+  margin: 1px 0;
+  color: #343940;
+  transition: all 0.12s ease;
+  border-left: 2px solid transparent;
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__link {
+  color: #C2C6CD;
+}
+
+.navbar .dropdown .dropdown__link:hover {
+  background: rgba(41, 141, 255, 0.06);
+  color: #1759C4;
+  border-left-color: #298DFF;
+  text-decoration: none;
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__link:hover {
+  background: rgba(41, 141, 255, 0.1);
+  color: #5CA9FF;
+  border-left-color: #5CA9FF;
+}
+
+/* No persistent active highlight in dropdown menus */
+.navbar .dropdown .dropdown__link--active {
+  color: #343940 !important;
+  font-weight: 500 !important;
+  background: transparent !important;
+  border-left-color: transparent !important;
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__link--active {
+  color: #C2C6CD !important;
+  background: transparent !important;
+  border-left-color: transparent !important;
+}
+
+/* But hover still works on active items */
+.navbar .dropdown .dropdown__link--active:hover {
+  background: rgba(41, 141, 255, 0.06) !important;
+  color: #1759C4 !important;
+  border-left-color: #298DFF !important;
+}
+
+[data-theme='dark'] .navbar .dropdown .dropdown__link--active:hover {
+  background: rgba(41, 141, 255, 0.1) !important;
+  color: #5CA9FF !important;
+  border-left-color: #5CA9FF !important;
+}
+
+/* Hide top-level section cards from category index pages */
+.docCardListScopeExclude .col:has(a[href="/getting-started"]),
+.docCardListScopeExclude .col:has(a[href="/getting-started/"]),
+.docCardListScopeExclude .col:has(a[href="/onchain-finance/"]),
+.docCardListScopeExclude .col:has(a[href="/onchain-finance"]),
+.docCardListScopeExclude .col:has(a[href="/develop/"]),
+.docCardListScopeExclude .col:has(a[href="/develop"]),
+.docCardListScopeExclude .col:has(a[href="/references/"]),
+.docCardListScopeExclude .col:has(a[href="/references"]),
+.docCardListScopeExclude .col:has(a[href="/sui-stack/"]),
+.docCardListScopeExclude .col:has(a[href="/sui-stack"]) {
+  display: none !important;
+}
+
+/* No highlight on dropdown trigger labels */
+.navbar .dropdown > .navbar__link,
+.navbar .dropdown > .navbar__link.navbar__link--active {
+  color: var(--ifm-navbar-link-color) !important;
+  background: transparent !important;
 }

@@ -22,7 +22,7 @@ public fun new(length: u64): BitVector {
     assert!(length > 0, ELENGTH);
     assert!(length < MAX_SIZE, ELENGTH);
     let mut counter = 0;
-    let mut bit_field = vector::empty();
+    let mut bit_field = vector[];
     while (counter < length) {
         bit_field.push_back(false);
         counter = counter + 1;

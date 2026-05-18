@@ -19,10 +19,10 @@ use sui_types::object::rpc_visitor::proto::ProtoVisitor;
 
 use crate::{KvRpcServer, PackageResolver};
 
-mod get_checkpoint;
+pub(crate) mod get_checkpoint;
 mod get_epoch;
 mod get_object;
-mod get_transaction;
+pub(crate) mod get_transaction;
 
 /// Maximum size in bytes for JSON-rendered Move values (1 MiB).
 const MAX_JSON_MOVE_VALUE_SIZE: usize = 1024 * 1024;
@@ -57,6 +57,7 @@ impl LedgerService for KvRpcServer {
             self.client.clone(),
             self.chain_id,
             self.server_version.clone(),
+            &self.service_info_watermark_pipelines,
         )
         .await
         .map(tonic::Response::new)
@@ -152,15 +153,22 @@ pub(crate) async fn get_service_info(
     mut client: BigTableClient,
     chain_id: ChainIdentifier,
     server_version: Option<ServerVersion>,
+    watermark_pipelines: &[&str],
 ) -> Result<GetServiceInfoResponse, RpcError> {
-    let Some(wm) = client.get_watermark().await? else {
+    let Some(wm) = client
+        .get_watermark_for_pipelines(watermark_pipelines)
+        .await?
+    else {
+        return Err(CheckpointNotFoundError::sequence_number(0).into());
+    };
+    let Some(checkpoint_hi_inclusive) = wm.checkpoint_hi_inclusive else {
         return Err(CheckpointNotFoundError::sequence_number(0).into());
     };
     let mut message = GetServiceInfoResponse::default();
     message.chain_id = Some(Digest::new(chain_id.as_bytes().to_owned()).to_string());
     message.chain = Some(chain_id.chain().as_str().into());
     message.epoch = Some(wm.epoch_hi_inclusive);
-    message.checkpoint_height = Some(wm.checkpoint_hi_inclusive);
+    message.checkpoint_height = Some(checkpoint_hi_inclusive);
     message.timestamp = Some(timestamp_ms_to_proto(wm.timestamp_ms_hi_inclusive));
     message.lowest_available_checkpoint = Some(0);
     message.lowest_available_checkpoint_objects = Some(0);

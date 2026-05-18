@@ -24,7 +24,7 @@ module coiner::coin_factory {
         size: u64,
         ctx: &mut TxContext
     ): vector<Coin<COIN_FACTORY>> {
-        let mut v = vector::empty<Coin<COIN_FACTORY>>();
+        let mut v = vector<Coin<COIN_FACTORY>>[];
         let mut i = 0;
         while (i < size) {
             vector::push_back(&mut v, coin::mint(cap, value, ctx));

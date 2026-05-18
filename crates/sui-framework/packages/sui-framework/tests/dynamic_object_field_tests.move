@@ -10,7 +10,7 @@ use sui::dynamic_object_field::{
     add,
     borrow,
     borrow_mut,
-    exists_,
+    exists,
     exists_with_type,
     remove,
     id as field_id
@@ -42,9 +42,9 @@ fun simple_all_functions() {
     add(&mut id, b"", counter2);
     add(&mut id, false, counter3);
     // check they exist
-    assert!(exists_(&id, 0u64));
-    assert!(exists_(&id, b""));
-    assert!(exists_(&id, false));
+    assert!(exists(&id, 0u64));
+    assert!(exists(&id, b""));
+    assert!(exists(&id, false));
     // check the IDs
     assert!(field_id(&id, 0u64).borrow() == &id1);
     assert!(field_id(&id, b"").borrow() == &id2);
@@ -66,9 +66,9 @@ fun simple_all_functions() {
     assert!(destroy(remove(&mut id, b"")) == 2);
     assert!(destroy(remove(&mut id, false)) == 3);
     // verify that they are not there
-    assert!(!exists_(&id, 0u64));
-    assert!(!exists_(&id, b""));
-    assert!(!exists_(&id, false));
+    assert!(!exists(&id, 0u64));
+    assert!(!exists(&id, b""));
+    assert!(!exists(&id, false));
     scenario.end();
     id.delete();
 }
@@ -164,10 +164,10 @@ fun sanity_check_exists() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    assert!(!exists_<u64>(&id, 0));
+    assert!(!exists<u64>(&id, 0));
     add(&mut id, 0u64, new(&mut scenario));
-    assert!(exists_<u64>(&id, 0));
-    assert!(!exists_<u8>(&id, 0));
+    assert!(exists<u64>(&id, 0));
+    assert!(!exists<u8>(&id, 0));
     scenario.end();
     id.delete();
 }
@@ -194,7 +194,7 @@ fun delete_uid_with_fields() {
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
     add(&mut id, 0u64, new(&mut scenario));
-    assert!(exists_<u64>(&id, 0));
+    assert!(exists<u64>(&id, 0));
     scenario.end();
     id.delete();
 }
@@ -207,18 +207,118 @@ fun transfer_object() {
     let mut id1 = scenario.new_object();
     let mut id2 = scenario.new_object();
     add(&mut id1, 0u64, new(&mut scenario));
-    assert!(exists_<u64>(&id1, 0));
-    assert!(!exists_<u64>(&id2, 0));
+    assert!(exists<u64>(&id1, 0));
+    assert!(!exists<u64>(&id2, 0));
     bump(borrow_mut(&mut id1, 0u64));
     let c: Counter = remove(&mut id1, 0u64);
     add(&mut id2, 0u64, c);
-    assert!(!exists_<u64>(&id1, 0));
-    assert!(exists_<u64>(&id2, 0));
+    assert!(!exists<u64>(&id1, 0));
+    assert!(exists<u64>(&id2, 0));
     bump(borrow_mut(&mut id2, 0u64));
     assert!(count(borrow(&id2, 0u64)) == 2);
     scenario.end();
     id1.delete();
     id2.delete();
+}
+
+#[test]
+fun remove_opt_existing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    bump(borrow_mut(&mut id, 0u64));
+    let old: Option<Counter> = dynamic_object_field::remove_opt(&mut id, 0u64);
+    assert_eq!(destroy(old.destroy_some()), 1);
+    assert!(!exists<u64>(&id, 0));
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun remove_opt_missing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    let old: Option<Counter> = dynamic_object_field::remove_opt(&mut id, 0u64);
+    old.destroy_none();
+    scenario.end();
+    id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun remove_opt_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    // Value is Fake but actual value is Counter, so remove_opt should abort
+    let _old: Option<Fake> = dynamic_object_field::remove_opt(&mut id, 0u64);
+    abort
+}
+
+#[test]
+fun replace_existing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    bump(borrow_mut(&mut id, 0u64));
+    let old: Option<Counter> = dynamic_object_field::replace(&mut id, 0u64, new(&mut scenario));
+    // old counter was bumped once, so count should be 1
+    assert_eq!(destroy(old.destroy_some()), 1);
+    // new counter is fresh, so count should be 0
+    assert_eq!(count(borrow(&id, 0u64)), 0);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun replace_missing() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    // no previous value, so none is returned
+    let old: Option<Counter> = dynamic_object_field::replace(&mut id, 0u64, new(&mut scenario));
+    old.destroy_none();
+    assert_eq!(count(borrow(&id, 0u64)), 0);
+    scenario.end();
+    id.delete();
+}
+
+#[test]
+fun replace_different_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    bump(borrow_mut(&mut id, 0u64));
+    let old: Option<Counter> = dynamic_object_field::replace(
+        &mut id,
+        0u64,
+        Fake { id: scenario.new_object() },
+    );
+    // old counter was bumped once, so count should be 1
+    assert_eq!(destroy(old.destroy_some()), 1);
+    // new value is a Fake, confirm it exists
+    assert!(exists_with_type<u64, Fake>(&id, 0));
+    scenario.end();
+    id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun replace_wrong_old_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    // ValueOld is Fake but actual value is Counter, so remove_opt call in replace should abort
+    let _old: Option<Fake> = dynamic_object_field::replace(
+        &mut id,
+        0u64,
+        Fake { id: scenario.new_object() },
+    );
+    abort
 }
 
 // === Macro Tests ===
@@ -231,7 +331,16 @@ fun borrow_or_add_existing() {
     add(&mut id, 0u64, new(&mut scenario));
     bump(borrow_mut(&mut id, 0u64));
     // count should be 1 since it was bumped above
-    assert_eq!(count(dynamic_object_field::borrow_or_add!(&mut id, 0u64, new(&mut scenario))), 1);
+    assert_eq!(
+        count(
+            dynamic_object_field::borrow_or_add!(
+                &mut id,
+                0u64,
+                { assert!(false); new(&mut scenario) },
+            ),
+        ),
+        1,
+    );
     scenario.end();
     id.delete();
 }
@@ -241,11 +350,22 @@ fun borrow_or_add_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    assert!(!exists_<u64>(&id, 0));
+    assert!(!exists<u64>(&id, 0));
     // count should be 0 since it is newly added
     assert_eq!(count(dynamic_object_field::borrow_or_add!(&mut id, 0u64, new(&mut scenario))), 0);
     scenario.end();
     id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun borrow_or_add_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    // borrow aborts on type mismatch
+    dynamic_object_field::borrow_or_add!(&mut id, 0u64, Fake { id: scenario.new_object() });
+    abort
 }
 
 #[test]
@@ -255,7 +375,13 @@ fun borrow_mut_or_add_existing() {
     let mut id = scenario.new_object();
     add(&mut id, 0u64, new(&mut scenario));
     bump(borrow_mut(&mut id, 0u64));
-    bump(dynamic_object_field::borrow_mut_or_add!(&mut id, 0u64, new(&mut scenario)));
+    bump(
+        dynamic_object_field::borrow_mut_or_add!(
+            &mut id,
+            0u64,
+            { assert!(false); new(&mut scenario) },
+        ),
+    );
     // count should be 2 since it was bumped twice above
     assert_eq!(count(borrow(&id, 0u64)), 2);
     scenario.end();
@@ -267,12 +393,23 @@ fun borrow_mut_or_add_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    assert!(!exists_<u64>(&id, 0));
+    assert!(!exists<u64>(&id, 0));
     bump(dynamic_object_field::borrow_mut_or_add!(&mut id, 0u64, new(&mut scenario)));
     // count should be 1 since it was bumped above
     assert_eq!(count(borrow(&id, 0u64)), 1);
     scenario.end();
     id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun borrow_mut_or_add_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    // borrow_mut aborts on type mismatch
+    dynamic_object_field::borrow_mut_or_add!(&mut id, 0u64, Fake { id: scenario.new_object() });
+    abort
 }
 
 #[test]
@@ -296,11 +433,19 @@ fun get_do_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let id = scenario.new_object();
-    let mut called = false;
-    dynamic_object_field::get_do!(&id, 0u64, |_v: &Counter| { called = true; assert!(false) });
-    assert!(!called);
+    dynamic_object_field::get_do!(&id, 0u64, |_v: &Counter| assert!(false));
     scenario.end();
     id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun get_do_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    dynamic_object_field::get_do!(&id, 0u64, |_v: &Fake| assert!(false));
+    abort
 }
 
 #[test]
@@ -321,14 +466,19 @@ fun get_mut_do_missing() {
     let sender = @0x0;
     let mut scenario = test_scenario::begin(sender);
     let mut id = scenario.new_object();
-    let mut called = false;
-    dynamic_object_field::get_mut_do!(&mut id, 0u64, |_v: &mut Counter| {
-        called = true;
-        assert!(false)
-    });
-    assert!(!called);
+    dynamic_object_field::get_mut_do!(&mut id, 0u64, |_v: &mut Counter| assert!(false));
     scenario.end();
     id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun get_mut_do_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    dynamic_object_field::get_mut_do!(&mut id, 0u64, |_v: &mut Fake| assert!(false));
+    abort
 }
 
 #[test]
@@ -353,6 +503,16 @@ fun get_fold_missing() {
     assert_eq!(result, 99);
     scenario.end();
     id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun get_fold_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    let _result: u64 = dynamic_object_field::get_fold!(&id, 0u64, 99u64, |_: &Fake| abort 0);
+    abort
 }
 
 #[test]
@@ -383,6 +543,32 @@ fun get_mut_fold_missing() {
         |_: &mut Counter| abort 0,
     );
     assert_eq!(result, 99);
+    scenario.end();
+    id.delete();
+}
+
+#[test, expected_failure(abort_code = sui::dynamic_field::EFieldTypeMismatch)]
+fun get_mut_fold_wrong_type() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    add(&mut id, 0u64, new(&mut scenario));
+    dynamic_object_field::get_mut_fold!(&mut id, 0u64, 99u64, |_: &mut Fake| abort 0);
+    abort
+}
+
+// === Deprecated Tests ===
+
+#[test, allow(deprecated_usage)]
+fun deprecated_exists() {
+    let sender = @0x0;
+    let mut scenario = test_scenario::begin(sender);
+    let mut id = scenario.new_object();
+    assert_eq!(dynamic_object_field::exists_<u64>(&id, 0), exists<u64>(&id, 0));
+    assert_eq!(exists<u64>(&id, 0), false);
+    add(&mut id, 0u64, new(&mut scenario));
+    assert_eq!(dynamic_object_field::exists_<u64>(&id, 0), exists<u64>(&id, 0));
+    assert_eq!(exists<u64>(&id, 0), true);
     scenario.end();
     id.delete();
 }

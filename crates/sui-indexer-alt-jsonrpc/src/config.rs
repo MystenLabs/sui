@@ -1,19 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context as _;
-use jsonrpsee::http_client::HeaderMap;
-use jsonrpsee::http_client::HeaderValue;
-use jsonrpsee::http_client::HttpClient;
-use jsonrpsee::http_client::HttpClientBuilder;
 use sui_default_config::DefaultConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 
 pub use sui_name_service::NameServiceConfig;
-
-pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 
 #[derive(Debug)]
 pub struct RpcConfig {
@@ -308,22 +301,6 @@ impl CoinsLayer {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
         }
-    }
-}
-
-impl NodeConfig {
-    pub fn client(&self, fullnode_rpc_url: url::Url) -> anyhow::Result<HttpClient> {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            CLIENT_SDK_TYPE_HEADER,
-            HeaderValue::from_str(&self.header_value)?,
-        );
-
-        HttpClientBuilder::default()
-            .max_request_size(self.max_request_size)
-            .set_headers(headers)
-            .build(&fullnode_rpc_url)
-            .context("Failed to initialize fullnode RPC client")
     }
 }
 

@@ -32,11 +32,11 @@ Response: {
       "asMoveObject": {
         "contents": {
           "json": {
-            "id": "0xdf243002c0e2a03803b05b0591f4afbefad01cd45a565c784e9a8f9b8a26d8ec",
-            "tn": "vector<877b45a9854b1b058b4c04792c2d2aa2df7a13065283b14050074ce2cdfff0bf::mod::Foo>"
+            "id": "0x3ccb9cdd4754869f2d45965aae056495d54a5a2fa94422fc8771e0738ec98933",
+            "tn": "vector<2f697244e5def7e2f8aa93815aaedf7c373c43392152c63254e2e6661e9d485b::mod::Foo>"
           },
-          "typeAsJson": "vector<877b45a9854b1b058b4c04792c2d2aa2df7a13065283b14050074ce2cdfff0bf::mod::Foo>",
-          "typeAsStr": "vector<877b45a9854b1b058b4c04792c2d2aa2df7a13065283b14050074ce2cdfff0bf::mod::Foo>"
+          "typeAsJson": "vector<2f697244e5def7e2f8aa93815aaedf7c373c43392152c63254e2e6661e9d485b::mod::Foo>",
+          "typeAsStr": "vector<2f697244e5def7e2f8aa93815aaedf7c373c43392152c63254e2e6661e9d485b::mod::Foo>"
         }
       }
     }

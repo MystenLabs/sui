@@ -13,6 +13,9 @@ use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::http::HttpBuilder;
 use object_store::local::LocalFileSystem;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderName;
+use reqwest::header::HeaderValue;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
@@ -61,6 +64,11 @@ struct Args {
     #[arg(long, group = "store")]
     path: Option<PathBuf>,
 
+    /// Default header to include in object store requests, as `<name>:<value>`.
+    /// Can be provided multiple times.
+    #[arg(long = "store-header", value_parser = parse_object_store_header)]
+    store_headers: Vec<(HeaderName, HeaderValue)>,
+
     /// Request timeout
     #[arg(long, default_value = "30s", value_parser = humantime::parse_duration)]
     request_timeout: Duration,
@@ -95,7 +103,17 @@ async fn main() -> anyhow::Result<()> {
     info!("Config: {:#?}", config);
 
     let is_bounded_job = args.indexer_args.last_checkpoint.is_some();
-    let client_options = ClientOptions::default().with_timeout(args.request_timeout);
+
+    let mut client_options = ClientOptions::default().with_timeout(args.request_timeout);
+    if !args.store_headers.is_empty() {
+        let mut headers = HeaderMap::new();
+        for (name, value) in &args.store_headers {
+            headers.append(name.clone(), value.clone());
+        }
+
+        client_options = client_options.with_default_headers(headers)
+    }
+
     let retry_config = RetryConfig {
         max_retries: 0,
         ..Default::default()
@@ -203,5 +221,114 @@ async fn main() -> anyhow::Result<()> {
         Err(Error::Task(_)) => {
             std::process::exit(2);
         }
+    }
+}
+
+fn parse_object_store_header(header: &str) -> Result<(HeaderName, HeaderValue), String> {
+    let (name, value) = header
+        .split_once(':')
+        .ok_or_else(|| "object store header must be in `<name>:<value>` format".to_string())?;
+
+    let name = HeaderName::from_bytes(name.as_bytes())
+        .map_err(|err| format!("invalid object store header name `{name}`: {err}"))?;
+    let value = HeaderValue::from_str(value)
+        .map_err(|err| format!("invalid object store header value for `{name}`: {err}"))?;
+
+    Ok((name, value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::error::ErrorKind;
+
+    #[test]
+    fn test_args_object_store_headers() {
+        let args = Args::try_parse_from([
+            "cmd",
+            "--config",
+            "config.toml",
+            "--gcs",
+            "bucket",
+            "--store-header",
+            "x-goog-user-project:my-project",
+            "--store-header",
+            "authorization:Bearer abc:def",
+            "--local-ingestion-path",
+            "/tmp/checkpoints",
+        ])
+        .unwrap();
+
+        assert_eq!(args.store_headers.len(), 2);
+        assert_eq!(
+            args.store_headers[0].0,
+            HeaderName::from_static("x-goog-user-project")
+        );
+        assert_eq!(
+            args.store_headers[0].1,
+            HeaderValue::from_static("my-project")
+        );
+        assert_eq!(
+            args.store_headers[1].0,
+            HeaderName::from_static("authorization")
+        );
+        assert_eq!(
+            args.store_headers[1].1,
+            HeaderValue::from_static("Bearer abc:def")
+        );
+    }
+
+    #[test]
+    fn test_args_object_store_header_requires_delimiter() {
+        let err = Args::try_parse_from([
+            "cmd",
+            "--config",
+            "config.toml",
+            "--gcs",
+            "bucket",
+            "--store-header",
+            "x-goog-user-project",
+            "--local-ingestion-path",
+            "/tmp/checkpoints",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_object_store_header_rejects_invalid_name() {
+        let err = Args::try_parse_from([
+            "cmd",
+            "--config",
+            "config.toml",
+            "--gcs",
+            "bucket",
+            "--store-header",
+            "bad name:value",
+            "--local-ingestion-path",
+            "/tmp/checkpoints",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
+    }
+
+    #[test]
+    fn test_args_object_store_header_rejects_invalid_value() {
+        let err = Args::try_parse_from([
+            "cmd",
+            "--config",
+            "config.toml",
+            "--gcs",
+            "bucket",
+            "--store-header",
+            "x-test:bad\nvalue",
+            "--local-ingestion-path",
+            "/tmp/checkpoints",
+        ])
+        .unwrap_err();
+
+        assert_eq!(err.kind(), ErrorKind::ValueValidation);
     }
 }

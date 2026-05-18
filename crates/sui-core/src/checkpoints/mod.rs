@@ -11,9 +11,9 @@ use crate::authority::AuthorityState;
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority_client::{AuthorityAPI, make_network_authority_clients_with_network_config};
 use crate::checkpoints::causal_order::CausalOrder;
-use crate::checkpoints::checkpoint_output::{CertifiedCheckpointOutput, CheckpointOutput};
+use crate::checkpoints::checkpoint_output::CertifiedCheckpointOutput;
 pub use crate::checkpoints::checkpoint_output::{
-    LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
+    CheckpointOutput, LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::consensus_manager::ReplayWaiter;
@@ -36,7 +36,6 @@ use pin_project_lite::pin_project;
 use serde::{Deserialize, Serialize};
 use sui_macros::fail_point_arg;
 use sui_network::default_mysten_network_config;
-use sui_types::SUI_ACCUMULATOR_ROOT_OBJECT_ID;
 use sui_types::base_types::{ConciseableName, SequenceNumber};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::execution::ExecutionTimeObservationKey;
@@ -44,6 +43,7 @@ use sui_types::messages_checkpoint::{
     CheckpointArtifacts, CheckpointCommitment, VersionedFullCheckpointContents,
 };
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
+use sui_types::{SUI_ACCUMULATOR_ROOT_OBJECT_ID, accumulator_metadata};
 use tokio::sync::{mpsc, watch};
 use typed_store::rocks::{DBOptions, ReadWriteOptions, default_db_options};
 
@@ -226,12 +226,12 @@ impl CheckpointStoreTables {
         use crate::authority::authority_store_pruner::apply_relocation_filter;
         use typed_store::tidehunter_util::{
             Decision, KeySpaceConfig, KeyType, ThConfig, default_cells_per_mutex,
-            default_mutex_count, default_value_cache_size,
+            default_max_dirty_keys, default_mutex_count, default_value_cache_size,
         };
         let mutexes = default_mutex_count();
         let u64_sequence_key = KeyType::from_prefix_bits(6 * 8);
         let override_dirty_keys_config = KeySpaceConfig::new()
-            .with_max_dirty_keys(16_000)
+            .with_max_dirty_keys(16 * default_max_dirty_keys())
             .with_value_cache_size(default_value_cache_size());
         let config_u64 = ThConfig::new_with_config(
             8,
@@ -1664,6 +1664,10 @@ impl CheckpointBuilder {
             tx_key,
         )
         .await;
+        let (accounts_created, accounts_deleted) =
+            accumulators::count_accumulator_object_changes(&settlement_effects);
+        self.metrics
+            .report_accumulator_account_changes(accounts_created, accounts_deleted);
 
         let barrier_tx = accumulators::build_accumulator_barrier_tx(
             epoch,
@@ -1689,13 +1693,13 @@ impl CheckpointBuilder {
         )
         .await;
 
-        let settlement_effects: Vec<_> = settlement_effects
+        let settlement_and_barrier_effects: Vec<_> = settlement_effects
             .into_iter()
             .chain(barrier_effects)
             .collect();
 
         let mut next_accumulator_version = None;
-        for fx in settlement_effects.iter() {
+        for fx in settlement_and_barrier_effects.iter() {
             assert!(
                 fx.status().is_ok(),
                 "settlement transaction cannot fail (digest: {:?}) {:#?}",
@@ -1724,7 +1728,7 @@ impl CheckpointBuilder {
             .execution_scheduler()
             .settle_address_funds(settlements);
 
-        (tx_key, settlement_effects)
+        (tx_key, settlement_and_barrier_effects)
     }
 
     // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
@@ -2019,12 +2023,12 @@ impl CheckpointBuilder {
         debug!(
             ?settlement_digests,
             ?settlement_key,
-            "fallback: reading settlement effects from cache"
+            "reading settlement effects from cache"
         );
 
         let settlement_effects = wait_for_effects_with_retry(
             self.effects_store.as_ref(),
-            "CheckpointBuilder::fallback_settlement_effects",
+            "CheckpointBuilder::settlement_effects",
             &settlement_digests,
             settlement_key,
         )
@@ -2042,7 +2046,7 @@ impl CheckpointBuilder {
 
         let barrier_effects = wait_for_effects_with_retry(
             self.effects_store.as_ref(),
-            "CheckpointBuilder::fallback_barrier_effects",
+            "CheckpointBuilder::barrier_effects",
             &[barrier_digest],
             settlement_key,
         )
@@ -3400,6 +3404,7 @@ impl CheckpointService {
         info!(
             "Starting checkpoint service with {max_transactions_per_checkpoint} max_transactions_per_checkpoint and {max_checkpoint_size_bytes} max_checkpoint_size_bytes"
         );
+        Self::initialize_accumulator_account_metrics(&state, &epoch_store, &metrics);
         let notify_builder = Arc::new(Notify::new());
         let notify_aggregator = Arc::new(Notify::new());
 
@@ -3467,6 +3472,23 @@ impl CheckpointService {
                 ckpt_state_hasher,
             ))),
         })
+    }
+
+    fn initialize_accumulator_account_metrics(
+        state: &AuthorityState,
+        epoch_store: &AuthorityPerEpochStore,
+        metrics: &CheckpointMetrics,
+    ) {
+        if !epoch_store.protocol_config().enable_accumulators() {
+            return;
+        }
+
+        let object_store = state.get_object_store();
+        match accumulator_metadata::get_accumulator_object_count(object_store.as_ref()) {
+            Ok(Some(count)) => metrics.initialize_accumulator_accounts_live(count),
+            Ok(None) => {}
+            Err(e) => fatal!("failed to initialize accumulator account metrics: {e}"),
+        }
     }
 
     /// Starts the CheckpointService.

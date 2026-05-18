@@ -27,7 +27,10 @@ pub struct Interpreter<S: V::Store> {
 
     /// Cache of the objects that have been fetched so far. This cache is never evicted -- it is
     /// used to keep objects alive for the lifetime of the interpreter.
-    cache: DashMap<AccountAddress, Option<Arc<V::OwnedSlice>>>,
+    ///
+    /// The cache is keyed by the object ID and whether the object is being accessed as a child of
+    /// another object (bounded by its version -- `true`), or at its latest version (`false`).
+    cache: DashMap<(AccountAddress, bool), Option<Arc<V::OwnedSlice>>>,
 
     root: V::OwnedSlice,
 }
@@ -136,8 +139,8 @@ impl<S: V::Store> Interpreter<S> {
         while let Some(accessor) = accessors.last() {
             match (root, accessor) {
                 (VV::Address(a), A::DFIndex(i)) => {
-                    let df_id = i.derive_dynamic_field_id(a)?.into();
-                    let Some(slice) = self.object(df_id).await? else {
+                    let df_id = i.derive_dynamic_field_id(a.bytes)?.into();
+                    let Some(slice) = self.fetch(df_id, a.scoped).await? else {
                         return Ok(None);
                     };
 
@@ -155,12 +158,13 @@ impl<S: V::Store> Interpreter<S> {
                     root = VV::Slice(V::Slice {
                         bytes: field.value_bytes,
                         layout: field.value_layout,
+                        scoped: slice.scoped,
                     });
                 }
 
                 (VV::Address(a), A::DOFIndex(i)) => {
-                    let df_id = i.derive_dynamic_object_field_id(a)?.into();
-                    let Some(slice) = self.object(df_id).await? else {
+                    let df_id = i.derive_dynamic_object_field_id(a.bytes)?.into();
+                    let Some(slice) = self.fetch(df_id, a.scoped).await? else {
                         return Ok(None);
                     };
 
@@ -178,7 +182,7 @@ impl<S: V::Store> Interpreter<S> {
                         return Ok(None);
                     };
 
-                    let Some(value_slice) = self.object(id).await? else {
+                    let Some(value_slice) = self.fetch(id, a.scoped).await? else {
                         return Ok(None);
                     };
 
@@ -187,8 +191,8 @@ impl<S: V::Store> Interpreter<S> {
                 }
 
                 (VV::Address(a), A::Derived(i)) => {
-                    let id = i.derive_object_id(a)?.into();
-                    let Some(slice) = self.object(id).await? else {
+                    let id = i.derive_object_id(a.bytes)?.into();
+                    let Some(slice) = self.fetch(id, a.scoped).await? else {
                         return Ok(None);
                     };
 
@@ -244,10 +248,13 @@ impl<S: V::Store> Interpreter<S> {
                 // value. This can consume multiple accessors, but will pause if it encounters a
                 // dynamic (object) field access.
                 (VV::Slice(slice), _) => {
-                    let Some(value) = Extractor::deserialize_slice(slice, &mut accessors)? else {
+                    let Some(mut value) = Extractor::deserialize_slice(slice, &mut accessors)?
+                    else {
                         return Ok(None);
                     };
 
+                    // The extractor does not track scoping -- attach that information on the side.
+                    value.set_scope(slice.scoped);
                     root = value;
                 }
 
@@ -304,7 +311,7 @@ impl<S: V::Store> Interpreter<S> {
 
         Ok(match lit {
             L::Self_ => Some(VV::Slice(self.root.as_slice())),
-            L::Address(a) => Some(VV::Address(*a)),
+            L::Address(a) => Some(VV::Address(V::Address::latest(*a))),
             L::Bool(b) => Some(VV::Bool(*b)),
             L::U8(n) => Some(VV::U8(*n)),
             L::U16(n) => Some(VV::U16(*n)),
@@ -400,21 +407,36 @@ impl<S: V::Store> Interpreter<S> {
 
     /// Fetch an object from the store, caching the result.
     ///
+    /// Accepts the object's ID and whether the fetch should be scoped by the store's parent object
+    /// (if the store supports this concept).
+    ///
     /// Returns a `Slice<'s>` that borrows from the cached data. The returned slice is guaranteed
     /// to remain valid for the lifetime 's because the cache (and the Arc it contains) lives for
     /// the entire lifetime of the Interpreter.
-    async fn object<'s>(&'s self, id: AccountAddress) -> Result<Option<V::Slice<'s>>, FormatError> {
-        let owned = if let Some(cached) = self.cache.get(&id) {
+    async fn fetch<'s>(
+        &'s self,
+        id: AccountAddress,
+        scoped: bool,
+    ) -> Result<Option<V::Slice<'s>>, FormatError> {
+        let key = (id, scoped);
+        let owned = if let Some(cached) = self.cache.get(&key) {
             cached.clone()
         } else {
-            let loaded = self
-                .store
-                .object(id)
-                .await
-                .map_err(|e| FormatError::Store(Arc::new(e)))?
-                .map(Arc::new);
+            let loaded = if scoped {
+                self.store.scoped(id).await
+            } else {
+                self.store.latest(id).await
+            }
+            .map_err(|e| FormatError::Store(Arc::new(e)))?
+            .map(|(layout, bytes)| {
+                Arc::new(V::OwnedSlice {
+                    layout,
+                    bytes,
+                    scoped,
+                })
+            });
 
-            self.cache.entry(id).or_insert(loaded).clone()
+            self.cache.entry(key).or_insert(loaded).clone()
         };
 
         let Some(owned) = owned.as_ref() else {

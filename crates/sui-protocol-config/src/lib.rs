@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::BTreeSet,
-    sync::atomic::{AtomicBool, Ordering},
+    collections::{BTreeMap, BTreeSet},
+    sync::{
+        Arc, LazyLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 #[cfg(msim)]
@@ -17,6 +20,7 @@ use move_binary_format::{
     binary_config::{BinaryConfig, TableConfig},
     file_format_common::VERSION_1,
 };
+use move_core_types::account_address::AccountAddress;
 use move_vm_config::verifier::VerifierConfig;
 use mysten_common::in_integration_test;
 use serde::{Deserialize, Serialize};
@@ -28,10 +32,25 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 121;
+const MAX_PROTOCOL_VERSION: u64 = 124;
 
 const TESTNET_USDC: &str =
     "0xa1ec7fc00a6f40db9693ad1415d0c193ad3906494428cf252621037bd7117e29::usdc::USDC";
+
+const MAINNET_USDC: &str =
+    "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC";
+const MAINNET_USDSUI: &str =
+    "0x44f838219cf67b058f3b37907b655f226153c18e33dfcd0da559a844fea9b1c1::usdsui::USDSUI";
+const MAINNET_SUI_USDE: &str =
+    "0x41d587e5336f1c86cad50d38a7136db99333bb9bda91cea4ba69115defeb1402::sui_usde::SUI_USDE";
+const MAINNET_USDY: &str =
+    "0x960b531667636f39e85867775f52f6b1f220a058c4de786905bdf761e06a56bb::usdy::USDY";
+const MAINNET_FDUSD: &str =
+    "0xf16e6b723f242ec745dfd7634ad072c42d5c1d9ac9d62a39c381303eaa57693a::fdusd::FDUSD";
+const MAINNET_AUSD: &str =
+    "0x2053d08c1e2bd02791056171aab0fd12bd7cd7efad2ab8f6b9c8902f14df2ff2::ausd::AUSD";
+const MAINNET_USDB: &str =
+    "0xe14726c336e81b32328e92afc37345d159f5b550b09fa92bd43640cfdd0a0cfd::usdb::USDB";
 
 // Record history of protocol version allocations here:
 //
@@ -316,6 +335,21 @@ const TESTNET_USDC: &str =
 // Version 119: Enable the new VM.
 // Version 120: Disallow unused jump tables
 // Version 121: Re-enable defer_unpaid_amplification (devnet + testnet).
+// Version 122: Framework update: vector::empty is deprecated.
+//              Enable bulletproofs verification on devnet.
+//              Enable defer_unpaid_amplification on mainnet.
+// Version 123: Gas accounting refresh (gas_model v13).
+// Version 124: Add timestamp_based_epoch_close feature flag and enable in tests.
+//              Fix native call double-pop in gas meter stack height tracking (gas_model v14).
+//              Limit public inputs in groth16::prepare_verifying_key.
+//              Enable address balances, free tier (gasless), and coin reservations on mainnet.
+//              Enables enable_accumulators, enable_address_balance_gas_payments,
+//              enable_authenticated_event_streams, enable_coin_reservation_obj_refs,
+//              enable_object_funds_withdraw, convert_withdrawal_compatibility_ptb_arguments,
+//              split_checkpoints_in_consensus_handler, include_checkpoint_artifacts_digest_in_summary,
+//              and enable_gasless on mainnet to bring it in line with testnet.
+//              Configure mainnet gasless allowlist with stablecoin types and $0.01 minimum
+//              transfer per stable.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -589,6 +623,10 @@ struct FeatureFlags {
     // Enable group operations for Ristretto255
     #[serde(skip_serializing_if = "is_false")]
     enable_ristretto255_group_ops: bool,
+
+    // Enable native functions for group operations.
+    #[serde(skip_serializing_if = "is_false")]
+    enable_verify_bulletproofs_ristretto255: bool,
 
     // Enable nitro attestation.
     #[serde(skip_serializing_if = "is_false")]
@@ -1048,11 +1086,33 @@ struct FeatureFlags {
     enable_gasless: bool,
 
     #[serde(skip_serializing_if = "is_false")]
+    gasless_verify_remaining_balance: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
     disallow_jump_orphans: bool,
 
     // If true, return early on type mismatch in receive_object.
     #[serde(skip_serializing_if = "is_false")]
     early_return_receive_object_mismatched_type: bool,
+
+    // If true, use consensus commit timestamps to determine epoch close instead of EndOfPublish voting.
+    // Each validator transitions from AcceptAllCerts to RejectAllCerts when the consensus commit
+    // timestamp exceeds the reconfiguration timestamp. EndOfPublish quorum still works as a
+    // fallback for manual epoch close.
+    #[serde(skip_serializing_if = "is_false")]
+    timestamp_based_epoch_close: bool,
+
+    // If true, groth16::prepare_verifying_key checks that the verifying key has no more than
+    // MAX_PUBLIC_INPUTS public inputs.
+    #[serde(skip_serializing_if = "is_false")]
+    limit_groth16_pvk_inputs: bool,
+
+    // If true, the funds-accumulator address-balance change invariant
+    // (`TemporaryStore::check_address_balance_changes`) is enforced as a consensus check —
+    // violations abort the tx via the conservation-recovery flow. When false, the check still
+    // runs but a violation panics so unexpected violations surface during rollout.
+    #[serde(skip_serializing_if = "is_false")]
+    enforce_address_balance_change_invariant: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1725,6 +1785,9 @@ pub struct ProtocolConfig {
     group_ops_ristretto_scalar_div_cost: Option<u64>,
     group_ops_ristretto_point_div_cost: Option<u64>,
 
+    verify_bulletproofs_ristretto255_base_cost: Option<u64>,
+    verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: Option<u64>,
+
     // hmac::hmac_sha3_256
     hmac_hmac_sha3_256_cost_base: Option<u64>,
     hmac_hmac_sha3_256_input_cost_per_byte: Option<u64>,
@@ -1927,6 +1990,7 @@ pub struct ProtocolConfig {
     gasless_max_computation_units: Option<u64>,
 
     /// Allowed token types for gasless transactions, with minimum transfer sizes per token.
+    #[skip_accessor]
     gasless_allowed_token_types: Option<Vec<(String, u64)>>,
 
     /// Maximum number of unused Pure inputs allowed in a gasless transaction.
@@ -1940,6 +2004,14 @@ pub struct ProtocolConfig {
 
     /// Max tps for gasless transactions. Unlimited when unset, zero when set to zero.
     gasless_max_tps: Option<u64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[skip_accessor]
+    include_special_package_amendments: Option<Arc<Amendments>>,
+
+    /// Maximum serialized size in bytes of a gasless transaction (SenderSignedData).
+    /// Bounds the persistent storage impact of each admitted gasless transaction.
+    gasless_max_tx_size_bytes: Option<u64>,
 }
 
 /// An aliased address.
@@ -2277,6 +2349,10 @@ impl ProtocolConfig {
 
     pub fn enable_ristretto255_group_ops(&self) -> bool {
         self.feature_flags.enable_ristretto255_group_ops
+    }
+
+    pub fn enable_verify_bulletproofs_ristretto255(&self) -> bool {
+        self.feature_flags.enable_verify_bulletproofs_ristretto255
     }
 
     pub fn reject_mutable_random_on_entry_functions(&self) -> bool {
@@ -2727,6 +2803,10 @@ impl ProtocolConfig {
         self.feature_flags.enable_gasless
     }
 
+    pub fn gasless_verify_remaining_balance(&self) -> bool {
+        self.feature_flags.gasless_verify_remaining_balance
+    }
+
     pub fn gasless_allowed_token_types(&self) -> &[(String, u64)] {
         debug_assert!(self.gasless_allowed_token_types.is_some());
         self.gasless_allowed_token_types.as_deref().unwrap_or(&[])
@@ -2740,6 +2820,10 @@ impl ProtocolConfig {
         self.gasless_max_pure_input_bytes.unwrap_or(u64::MAX)
     }
 
+    pub fn get_gasless_max_tx_size_bytes(&self) -> u64 {
+        self.gasless_max_tx_size_bytes.unwrap_or(u64::MAX)
+    }
+
     pub fn disallow_jump_orphans(&self) -> bool {
         self.feature_flags.disallow_jump_orphans
     }
@@ -2747,6 +2831,22 @@ impl ProtocolConfig {
     pub fn early_return_receive_object_mismatched_type(&self) -> bool {
         self.feature_flags
             .early_return_receive_object_mismatched_type
+    }
+
+    pub fn include_special_package_amendments_as_option(&self) -> &Option<Arc<Amendments>> {
+        &self.include_special_package_amendments
+    }
+
+    pub fn timestamp_based_epoch_close(&self) -> bool {
+        self.feature_flags.timestamp_based_epoch_close
+    }
+
+    pub fn limit_groth16_pvk_inputs(&self) -> bool {
+        self.feature_flags.limit_groth16_pvk_inputs
+    }
+
+    pub fn enforce_address_balance_change_invariant(&self) -> bool {
+        self.feature_flags.enforce_address_balance_change_invariant
     }
 }
 
@@ -2801,6 +2901,7 @@ impl ProtocolConfig {
         if version.0 >= ProtocolVersion::MIN.0 && version.0 <= ProtocolVersion::MAX_ALLOWED.0 {
             let mut ret = Self::get_for_version_impl(version, chain);
             ret.version = version;
+            ret = Self::apply_config_override(version, ret);
             Some(ret)
         } else {
             None
@@ -3197,6 +3298,9 @@ impl ProtocolConfig {
             group_ops_ristretto_scalar_div_cost: None,
             group_ops_ristretto_point_div_cost: None,
 
+            verify_bulletproofs_ristretto255_base_cost: None,
+            verify_bulletproofs_ristretto255_cost_per_bit_and_commitment: None,
+
             // zklogin::check_zklogin_id
             check_zklogin_id_cost_base: None,
             // zklogin::check_zklogin_issuer
@@ -3333,6 +3437,8 @@ impl ProtocolConfig {
             gasless_max_unused_inputs: None,
             gasless_max_pure_input_bytes: None,
             gasless_max_tps: None,
+            include_special_package_amendments: None,
+            gasless_max_tx_size_bytes: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -4797,6 +4903,68 @@ impl ProtocolConfig {
                     cfg.feature_flags
                         .early_return_receive_object_mismatched_type = true;
                 }
+                122 => {
+                    // Enable unpaid amplification deferral on mainnet
+                    cfg.feature_flags.defer_unpaid_amplification = true;
+                    // Enable bulletproofs range proofs on devnet
+                    cfg.verify_bulletproofs_ristretto255_base_cost = Some(30000);
+                    cfg.verify_bulletproofs_ristretto255_cost_per_bit_and_commitment = Some(6500);
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.enable_verify_bulletproofs_ristretto255 = true;
+                    }
+                    cfg.feature_flags.gasless_verify_remaining_balance = true;
+                    cfg.include_special_package_amendments = match chain {
+                        Chain::Mainnet => Some(MAINNET_LINKAGE_AMENDMENTS.clone()),
+                        Chain::Testnet => Some(TESTNET_LINKAGE_AMENDMENTS.clone()),
+                        Chain::Unknown => None,
+                    };
+                    cfg.gasless_max_tx_size_bytes = Some(16 * 1024);
+                    cfg.gasless_max_tps = Some(300);
+                    cfg.gasless_max_computation_units = Some(5_000);
+                }
+                123 => {
+                    cfg.gas_model_version = Some(13);
+                }
+                124 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.timestamp_based_epoch_close = true;
+                    }
+                    cfg.gas_model_version = Some(14);
+                    cfg.feature_flags.limit_groth16_pvk_inputs = true;
+
+                    // Bring mainnet in line with testnet: enable address balances, the
+                    // gasless "free tier", coin reservations, and the rest of the
+                    // accumulator/withdraw stack. These are all already enabled on
+                    // testnet and devnet, so setting them unconditionally is a no-op
+                    // there.
+                    cfg.feature_flags.enable_accumulators = true;
+                    cfg.feature_flags.enable_address_balance_gas_payments = true;
+                    cfg.feature_flags.enable_authenticated_event_streams = true;
+                    cfg.feature_flags.enable_coin_reservation_obj_refs = true;
+                    cfg.feature_flags.enable_object_funds_withdraw = true;
+                    cfg.feature_flags
+                        .convert_withdrawal_compatibility_ptb_arguments = true;
+                    cfg.feature_flags.split_checkpoints_in_consensus_handler = true;
+                    cfg.feature_flags
+                        .include_checkpoint_artifacts_digest_in_summary = true;
+                    cfg.feature_flags.enable_gasless = true;
+
+                    // Set the mainnet allow-list. Testnet already has its USDC entry
+                    // from v119, so only set this on mainnet to avoid clobbering the
+                    // testnet value. $0.01 minimum transfer per stable; all listed
+                    // tokens have 6 decimals.
+                    if chain == Chain::Mainnet {
+                        cfg.gasless_allowed_token_types = Some(vec![
+                            (MAINNET_USDC.to_string(), 10_000),
+                            (MAINNET_USDSUI.to_string(), 10_000),
+                            (MAINNET_SUI_USDE.to_string(), 10_000),
+                            (MAINNET_USDY.to_string(), 10_000),
+                            (MAINNET_FDUSD.to_string(), 10_000),
+                            (MAINNET_AUSD.to_string(), 10_000),
+                            (MAINNET_USDB.to_string(), 10_000),
+                        ]);
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -5191,9 +5359,11 @@ impl ProtocolConfig {
     pub fn enable_gasless_for_testing(&mut self) {
         self.enable_address_balance_gas_payments_for_testing();
         self.feature_flags.enable_gasless = true;
-        self.gasless_max_computation_units = Some(50_000);
+        self.feature_flags.gasless_verify_remaining_balance = true;
+        self.gasless_max_computation_units = Some(5_000);
         self.gasless_allowed_token_types = Some(vec![]);
         self.gasless_max_tps = Some(1000);
+        self.gasless_max_tx_size_bytes = Some(16 * 1024);
     }
 
     pub fn disable_gasless_for_testing(&mut self) {
@@ -5387,6 +5557,52 @@ macro_rules! check_limit_by_meter {
         result
     }};
 }
+
+// Amendments tables
+
+pub type Amendments = BTreeMap<AccountAddress, BTreeMap<AccountAddress, AccountAddress>>;
+
+static MAINNET_LINKAGE_AMENDMENTS: LazyLock<Arc<Amendments>> =
+    LazyLock::new(|| parse_amendments(include_str!("mainnet_amendments.json")));
+
+static TESTNET_LINKAGE_AMENDMENTS: LazyLock<Arc<Amendments>> =
+    LazyLock::new(|| parse_amendments(include_str!("testnet_amendments.json")));
+
+fn parse_amendments(json: &str) -> Arc<Amendments> {
+    #[derive(serde::Deserialize)]
+    struct AmendmentEntry {
+        root: String,
+        deps: Vec<DepEntry>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct DepEntry {
+        original_id: String,
+        version_id: String,
+    }
+
+    let entries: Vec<AmendmentEntry> =
+        serde_json::from_str(json).expect("Failed to parse amendments JSON");
+    let mut amendments = BTreeMap::new();
+    for entry in entries {
+        let root_id = AccountAddress::from_hex_literal(&entry.root).unwrap();
+        let mut dep_ids = BTreeMap::new();
+        for dep in entry.deps {
+            let orig_id = AccountAddress::from_hex_literal(&dep.original_id).unwrap();
+            let upgraded_id = AccountAddress::from_hex_literal(&dep.version_id).unwrap();
+            assert!(
+                dep_ids.insert(orig_id, upgraded_id).is_none(),
+                "Duplicate original ID in amendments table"
+            );
+        }
+        assert!(
+            amendments.insert(root_id, dep_ids).is_none(),
+            "Duplicate root ID in amendments table"
+        );
+    }
+    Arc::new(amendments)
+}
+
 #[cfg(all(test, not(msim)))]
 mod test {
     use insta::assert_yaml_snapshot;
@@ -5443,6 +5659,26 @@ mod test {
 
         prot.set_attr_for_testing("max_arguments".to_string(), "456".to_string());
         assert_eq!(prot.max_arguments(), 456);
+    }
+
+    #[test]
+    fn test_get_for_version_if_supported_applies_test_overrides() {
+        let before =
+            ProtocolConfig::get_for_version_if_supported(ProtocolVersion::new(1), Chain::Unknown)
+                .unwrap();
+
+        assert!(!before.enable_coin_reservation_obj_refs());
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut cfg| {
+            cfg.enable_coin_reservation_for_testing();
+            cfg
+        });
+
+        let after =
+            ProtocolConfig::get_for_version_if_supported(ProtocolVersion::new(1), Chain::Unknown)
+                .unwrap();
+
+        assert!(after.enable_coin_reservation_obj_refs());
     }
 
     #[test]
@@ -5579,5 +5815,13 @@ mod test {
             check_limit!(2550000u64, high),
             LimitThresholdCrossed::Hard(2550000, 10000)
         ));
+    }
+
+    #[test]
+    fn linkage_amendments_load() {
+        let mainnet = LazyLock::force(&MAINNET_LINKAGE_AMENDMENTS);
+        let testnet = LazyLock::force(&TESTNET_LINKAGE_AMENDMENTS);
+        assert!(!mainnet.is_empty(), "mainnet amendments must not be empty");
+        assert!(!testnet.is_empty(), "testnet amendments must not be empty");
     }
 }

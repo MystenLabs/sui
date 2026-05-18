@@ -391,6 +391,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
     ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: LintLevel,
+    move_flavor: Arc<F>,
     flavor: Option<Flavor>,
     cursor_file_opt: Option<&PathBuf>,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
@@ -423,7 +424,7 @@ pub fn get_compiled_pkg<F: MoveFlavor>(
         None
     };
 
-    let root_pkg = load_root_pkg::<F>(&build_config, pkg_path)?;
+    let root_pkg = load_root_pkg(&build_config, pkg_path, move_flavor)?;
     let root_pkg_name = Symbol::from(root_pkg.name().to_string());
     // the package's transitive dependencies
     let mut dependencies: Vec<_> = root_pkg
@@ -1194,7 +1195,13 @@ fn merge_compiler_analysis_info(
     // Add new entries - no additional filtering needed
     // as incremental compilation produced these
     // only for modified files
-    result.macro_info.extend(new_info.macro_info);
+    for (loc, mut entries) in new_info.macro_info {
+        result
+            .macro_info
+            .entry(loc)
+            .or_default()
+            .append(&mut entries);
+    }
     result.expanded_lambdas.extend(new_info.expanded_lambdas);
     result.ellipsis_binders.extend(new_info.ellipsis_binders);
     result.string_values.extend(new_info.string_values);
@@ -1332,9 +1339,12 @@ fn is_parsed_pkg_modified(
 fn load_root_pkg<F: MoveFlavor>(
     build_config: &BuildConfig,
     path: &Path,
+    flavor: Arc<F>,
 ) -> anyhow::Result<RootPackage<F>> {
-    let env = find_env::<F>(path, build_config)?;
-    let mut root_pkg = build_config.package_loader(path, &env).load_sync()?;
+    let env = find_env(path, build_config, &*flavor)?;
+    let mut root_pkg = build_config
+        .package_loader(path, &env, flavor)
+        .load_sync()?;
 
     root_pkg.save_lockfile_to_disk()?;
 

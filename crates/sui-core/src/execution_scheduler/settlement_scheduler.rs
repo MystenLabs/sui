@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::AuthorityMetrics;
 use crate::{
     accumulators::{self, AccumulatorSettlementTxBuilder},
     authority::{
@@ -15,7 +16,6 @@ use crate::{
     execution_scheduler::funds_withdraw_scheduler::FundsSettlement,
 };
 use futures::stream::{FuturesUnordered, StreamExt};
-use mysten_common::assert_reachable;
 use mysten_metrics::{monitored_mpsc, spawn_monitored_task};
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -64,17 +64,20 @@ pub(crate) struct SettlementScheduler {
     execution_scheduler: ExecutionScheduler,
     transaction_cache_read: Arc<dyn TransactionCacheRead>,
     settlement_queue_sender: Arc<Mutex<Option<SettlementQueueSender>>>,
+    metrics: Arc<AuthorityMetrics>,
 }
 
 impl SettlementScheduler {
     pub(crate) fn new(
         execution_scheduler: ExecutionScheduler,
         transaction_cache_read: Arc<dyn TransactionCacheRead>,
+        metrics: Arc<AuthorityMetrics>,
     ) -> Self {
         Self {
             execution_scheduler,
             transaction_cache_read,
             settlement_queue_sender: Arc::new(Mutex::new(None)),
+            metrics,
         }
     }
 
@@ -136,13 +139,11 @@ impl SettlementScheduler {
                         let keys = [key];
                         tokio::select! {
                             txns = epoch_store.wait_for_settlement_transactions(key) => {
-                                assert_reachable!("settlement transactions received");
                                 (key, Some(txns), env)
                             }
                             result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
                                 let _ = result;
                                 debug!(?key, "Settlement already executed, skipping scheduler wait");
-                                assert_reachable!("settlement already executed");
                                 (key, None, env)
                             }
                         }
@@ -174,7 +175,6 @@ impl SettlementScheduler {
                     let keys = [settlement_key];
                     tokio::select! {
                         barrier_tx = epoch_store.wait_for_barrier_transaction(settlement_key) => {
-                            assert_reachable!("barrier transaction received");
                             let deps = barrier_deps
                                 .process_tx(*barrier_tx.digest(), barrier_tx.transaction_data());
                             let env = env.with_barrier_dependencies(deps);
@@ -183,7 +183,6 @@ impl SettlementScheduler {
                         result = epoch_store.notify_read_tx_key_to_digest(&keys) => {
                             let _ = result;
                             debug!(?settlement_key, "Barrier already executed, skipping scheduler wait");
-                            assert_reachable!("barrier already executed");
                         }
                     }
                 }));
@@ -293,6 +292,13 @@ impl SettlementScheduler {
             checkpoint_seq,
             tx_index_offset,
         );
+
+        self.metrics
+            .accumulator_deposits
+            .inc_by(builder.num_deposits());
+        self.metrics
+            .accumulator_withdrawals
+            .inc_by(builder.num_withdrawals());
 
         let funds_changes = builder.collect_funds_changes();
         let settlement_txns = builder.build_tx(

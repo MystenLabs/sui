@@ -174,9 +174,10 @@ impl StressTestRunner {
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
         let backing_package_store = state.get_backing_package_store();
-        let mut layout_resolver = epoch_store
-            .executor()
-            .type_layout_resolver(Box::new(backing_package_store.as_ref()));
+        let mut layout_resolver = epoch_store.executor().type_layout_resolver(
+            epoch_store.protocol_config(),
+            Box::new(backing_package_store.as_ref()),
+        );
         for (obj_ref, _) in effects.created() {
             let object_opt = state
                 .get_object_store()
@@ -341,7 +342,7 @@ mod add_stake {
                 let epoch_store = state.load_epoch_store_one_call_per_task();
                 let mut layout_resolver = epoch_store
                     .executor()
-                    .type_layout_resolver(Box::new(cache.as_ref()));
+                    .type_layout_resolver(epoch_store.protocol_config(), Box::new(cache.as_ref()));
                 let staked_amount =
                     object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
                 assert_eq!(staked_amount, self.stake_amount);

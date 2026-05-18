@@ -42,10 +42,6 @@ jobs:
   release-build:
     name: Build & Publish Binaries
     timeout-minutes: 240
-    env:
-      SCCACHE_BUCKET: mystenlabs-sccache
-      SCCACHE_REGION: us-west-2
-      SCCACHE_S3_KEY_PREFIX: ${{ matrix.os }}
     strategy:
       matrix:
         os:
@@ -143,12 +139,6 @@ jobs:
         run: |
           brew install postgresql
 
-      - name: Install postgres (Ubuntu arm64)
-        if: ${{ matrix.os == 'ubuntu-arm64' && env.s3_existing_archive == '' }}
-        shell: bash
-        run: |
-          sudo apt update && sudo apt install libpq-dev
-
       - name: Remove unused apps (MacOS arm64)
         if: ${{ matrix.os == 'macos-latest-xlarge' && env.s3_existing_archive == '' }}
         continue-on-error: true
@@ -162,18 +152,15 @@ jobs:
           sudo rm -rf ~/Library/Developer/Xcode/iOS\ DeviceSupport/*
           df -h /
 
-      - name: Setup sccache
+      - uses: ./.github/actions/setup-sccache
         if: ${{ env.s3_existing_archive == '' }}
-        id: sccache
-        continue-on-error: true
-        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # pin@v0.0.9
-
-      - name: Enable sccache
-        if: steps.sccache.outcome == 'success'
-        shell: bash
-        run: echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          key-prefix: ${{ matrix.os }}
 
       - name: Register cargo problem matcher
+        if: ${{ env.s3_existing_archive == '' }}
         run: echo "::add-matcher::.github/matchers/cargo.json"
 
       - name: Cargo build for ${{ matrix.os }} platform
@@ -277,23 +264,40 @@ jobs:
     name: Tag sui docker images in DockerHub
     runs-on: ubuntu-latest
     steps:
+      - name: Derive cache_family from release tag
+        id: cf
+        shell: bash
+        run: |
+          sui_tag="${{ env.TAG_NAME }}"
+          sui_version=$(echo "${sui_tag}" | sed -e 's|^refs/tags/||' -e 's/^mainnet-v//' -e 's/^testnet-v//' -e 's/^devnet-v//')
+          echo "cache_family=releases/sui-v${sui_version}-release" >> "$GITHUB_OUTPUT"
+
       - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: tag-docker-images
-          client-payload: '{"sui_commit": "${{ github.sha }}", "tag": "${{ env.TAG_NAME }}"}'
+          client-payload: '{"sui_commit": "${{ github.sha }}", "tag": "${{ env.TAG_NAME }}", "cache_family": "${{ steps.cf.outputs.cache_family }}"}'
 
-  # Tag all sui images with release tag, so that they can be easily found
+  # Tag sui binaries in S3 under the release alias so node operators that pull
+  # by tag name (e.g. `release: testnet-v1.70.2` in ansible) find them.
   tag-release-binaries-in-s3:
     name: Tag sui binaries in s3
     runs-on: ubuntu-latest
     steps:
-      - name: Dispatch Release binaries builds in MystenLabs/sui-operations
+      - name: Derive cache_family from release tag
+        id: cf
+        shell: bash
+        run: |
+          sui_tag="${{ env.TAG_NAME }}"
+          sui_version=$(echo "${sui_tag}" | sed -e 's|^refs/tags/||' -e 's/^mainnet-v//' -e 's/^testnet-v//' -e 's/^devnet-v//')
+          echo "cache_family=releases/sui-v${sui_version}-release" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch ensure-sui-binaries in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # pin@v4.0.1
         with:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
-          event-type: build-release-binaries
-          client-payload: '{"sui_commit": "${{ github.sha }}", "tag_name": "${{ env.TAG_NAME }}"}'
+          event-type: ensure-sui-binaries
+          client-payload: '{"sui_commit": "${{ github.sha }}", "tag_name": "${{ env.TAG_NAME }}", "cache_family": "${{ steps.cf.outputs.cache_family }}"}'

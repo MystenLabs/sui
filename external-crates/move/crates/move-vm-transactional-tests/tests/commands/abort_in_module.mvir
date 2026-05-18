@@ -1,6 +1,6 @@
 //# publish
-module 0x5.M {
-    public foo() {
+mvir 0x5::M {
+    public fun foo() {
     label b0:
         abort 22;
     }
@@ -8,13 +8,13 @@ module 0x5.M {
 }
 
 //# run
-module 0x42.m {
-import 0x5.M;
+mvir 0x42::m {
+import 0x5::M;
 
-entry foo() {
+entry fun foo() {
 label b0:
     // should abort and point to the module
-    M.foo();
+    M::foo();
     return;
 }
 }

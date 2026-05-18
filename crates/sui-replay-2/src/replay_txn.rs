@@ -185,12 +185,6 @@ pub(crate) async fn replay_transaction<S: ReadDataStore>(
         .unwrap();
 
     artifact_manager
-        .member(Artifact::TransactionEffects)
-        .serialize_artifact(&context_and_effects.execution_effects)
-        .transpose()?
-        .unwrap();
-
-    artifact_manager
         .member(Artifact::TransactionGasReport)
         .serialize_artifact(&context_and_effects.gas_status.gas_usage_report())
         .transpose()?

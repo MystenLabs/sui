@@ -317,7 +317,7 @@ mod tests {
         layout: MoveTypeLayout,
         path: &str,
     ) -> Result<Option<serde_json::Value>, FormatError> {
-        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
         let used = AtomicUsize::new(0);
 
         let chain = Extract::parse(Limits::default(), path)?;
@@ -329,6 +329,21 @@ mod tests {
         Ok(Some(value.format_json(meter)?))
     }
 
+    async fn extract_owned(
+        store: impl Store,
+        bytes: Vec<u8>,
+        layout: MoveTypeLayout,
+        path: &str,
+    ) -> Result<Option<OwnedSlice>, FormatError> {
+        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
+        let chain = Extract::parse(Limits::default(), path)?;
+        let Some(value) = chain.extract(&interpreter).await? else {
+            return Ok(None);
+        };
+
+        Ok(value.into_owned_slice())
+    }
+
     async fn dynamic_field_id(
         store: MockStore,
         bytes: Vec<u8>,
@@ -336,8 +351,7 @@ mod tests {
         parent: AccountAddress,
         literal: &str,
     ) -> Result<Option<AccountAddress>, FormatError> {
-        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
-
+        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
         let name = Name::parse(Limits::default(), literal)?;
         let Some(value) = name.eval(&interpreter).await? else {
             return Ok(None);
@@ -353,8 +367,7 @@ mod tests {
         parent: AccountAddress,
         literal: &str,
     ) -> Result<Option<AccountAddress>, FormatError> {
-        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
-
+        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
         let name = Name::parse(Limits::default(), literal)?;
         let Some(value) = name.eval(&interpreter).await? else {
             return Ok(None);
@@ -370,8 +383,7 @@ mod tests {
         parent: AccountAddress,
         literal: &str,
     ) -> Result<Option<AccountAddress>, FormatError> {
-        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
-
+        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
         let name = Name::parse(Limits::default(), literal)?;
         let Some(value) = name.eval(&interpreter).await? else {
             return Ok(None);
@@ -390,7 +402,7 @@ mod tests {
         max_output_size: usize,
         fields: impl IntoIterator<Item = (&'s str, &'s str)>,
     ) -> Result<IndexMap<String, Result<serde_json::Value, FormatError>>, Error> {
-        let interpreter = Interpreter::new(OwnedSlice { bytes, layout }, store);
+        let interpreter = Interpreter::new(OwnedSlice::new(layout, bytes), store);
         Display::parse(limits, fields)?
             .display(max_depth, max_output_size, &interpreter)
             .await
@@ -821,10 +833,7 @@ mod tests {
         ];
 
         let store = MockStore::default();
-        let root = OwnedSlice {
-            layout: struct_("0x1::m::S", fields),
-            bytes,
-        };
+        let root = OwnedSlice::new(struct_("0x1::m::S", fields), bytes);
 
         let mut output: Vec<serde_json::Value> = Vec::with_capacity(formats.len());
         let interpreter = Interpreter::new(root, store);
@@ -1570,9 +1579,12 @@ mod tests {
 
         #[async_trait]
         impl Store for BlockingStore {
-            async fn object(&self, id: AccountAddress) -> anyhow::Result<Option<OwnedSlice>> {
+            async fn latest(
+                &self,
+                id: AccountAddress,
+            ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
                 self.barrier.wait().await;
-                self.inner.object(id).await
+                self.inner.latest(id).await
             }
         }
 
@@ -1755,6 +1767,156 @@ mod tests {
             ),
         }
         "###);
+    }
+
+    #[tokio::test]
+    async fn test_extract_root_value_remains_scoped() {
+        let parent = AccountAddress::from_str("0x4000").unwrap();
+        let bytes = bcs::to_bytes(&parent).unwrap();
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![(
+                "parent",
+                struct_(
+                    "0x1::m::Parent",
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
+                ),
+            )],
+        );
+
+        let store = MockStore::default().with_dynamic_field(
+            parent,
+            "key",
+            L::Struct(Box::new(move_utf8_str_layout())),
+            (20u64, 21u64),
+            struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
+        );
+
+        let slice = extract_owned(store, bytes, layout, "parent.id->['key']")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(slice.scoped);
+        assert_eq!(slice.bytes, bcs::to_bytes(&(20u64, 21u64)).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_extract_literal_lookup_is_latest() {
+        let parent = AccountAddress::from_str("0x4100").unwrap();
+        let bytes = bcs::to_bytes(&false).unwrap();
+        let layout = L::Bool;
+
+        let store = MockStore::default().with_dynamic_field(
+            parent,
+            "key",
+            L::Struct(Box::new(move_utf8_str_layout())),
+            (20u64, 21u64),
+            struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
+        );
+
+        let slice = extract_owned(store, bytes, layout, "@0x4100->['key']")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(!slice.scoped);
+        assert_eq!(slice.bytes, bcs::to_bytes(&(20u64, 21u64)).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_extract_root_value_via_literal_field_remains_scoped() {
+        let parent = AccountAddress::from_str("0x4200").unwrap();
+        let bytes = bcs::to_bytes(&parent).unwrap();
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![(
+                "parent",
+                struct_(
+                    "0x1::m::Parent",
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
+                ),
+            )],
+        );
+
+        let store = MockStore::default().with_dynamic_field(
+            parent,
+            "key",
+            L::Struct(Box::new(move_utf8_str_layout())),
+            (20u64, 21u64),
+            struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
+        );
+
+        let slice = extract_owned(
+            store,
+            bytes,
+            layout,
+            "0x1::m::Wrapper{p: parent.id.id}.p->['key']",
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert!(slice.scoped);
+        assert_eq!(slice.bytes, bcs::to_bytes(&(20u64, 21u64)).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_extract_derived_object_with_literal_parent_is_latest() {
+        let literal_parent = AccountAddress::from_str("0x4300").unwrap();
+        let bytes = bcs::to_bytes(&("derived_key",)).unwrap();
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![("key", L::Struct(Box::new(move_utf8_str_layout())))],
+        );
+
+        let store = MockStore::default().with_derived_object(
+            literal_parent,
+            "derived_key",
+            L::Struct(Box::new(move_utf8_str_layout())),
+            (20u64, 21u64),
+            struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
+        );
+
+        let slice = extract_owned(store, bytes, layout, "@0x4300~>[key]")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(!slice.scoped);
+        assert_eq!(slice.bytes, bcs::to_bytes(&(20u64, 21u64)).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_extract_derived_object_with_root_parent_remains_scoped() {
+        let parent = AccountAddress::from_str("0x4400").unwrap();
+        let bytes = bcs::to_bytes(&parent).unwrap();
+        let layout = struct_(
+            "0x1::m::Root",
+            vec![(
+                "parent",
+                struct_(
+                    "0x1::m::Parent",
+                    vec![("id", L::Struct(Box::new(UID::layout())))],
+                ),
+            )],
+        );
+
+        let store = MockStore::default().with_derived_object(
+            parent,
+            "derived_key",
+            L::Struct(Box::new(move_utf8_str_layout())),
+            (20u64, 21u64),
+            struct_("0x1::m::Inner", vec![("x", L::U64), ("y", L::U64)]),
+        );
+
+        let slice = extract_owned(store, bytes, layout, "parent~>['derived_key']")
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert!(slice.scoped);
+        assert_eq!(slice.bytes, bcs::to_bytes(&(20u64, 21u64)).unwrap());
     }
 
     #[tokio::test]
@@ -2568,7 +2730,7 @@ mod tests {
         );
 
         let store = MockStore::default();
-        let root = OwnedSlice { bytes, layout };
+        let root = OwnedSlice::new(layout, bytes);
         let interpreter = Interpreter::new(root, store);
 
         let formats = ["{st}", "{en}", "{vs}"];

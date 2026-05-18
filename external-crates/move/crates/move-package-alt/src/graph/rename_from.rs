@@ -95,7 +95,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
             } else if local_dep_name != actual_dep_name {
                 return Err(RenameError::MismatchedNames {
                     local_dep_name,
-                    dep_location: dep.as_ref().abbreviated(),
+                    dep_location: dep.pinned().abbreviated(),
                     actual_dep_name,
                 });
             }
@@ -123,7 +123,7 @@ impl<F: MoveFlavor> PackageGraph<F> {
                 continue;
             }
 
-            let dep_location = edge.weight().as_ref().abbreviated();
+            let dep_location = edge.weight().pinned().abbreviated();
 
             debug!("local name: {local_dep_name}");
             debug!("actual name: {actual_dep_name}");

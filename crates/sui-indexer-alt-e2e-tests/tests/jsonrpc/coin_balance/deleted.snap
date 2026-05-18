@@ -1,6 +1,5 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
-assertion_line: 920
 ---
 processed 10 tasks
 
@@ -69,7 +68,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 0,
   "result": {
-    "coinType": "0x148406f6b8390ce94fcaa482f4a9482a8548877d8178730064348d1caf1374bb::fake::FAKE",
+    "coinType": "0xa44457906b2313811c86d0521e3556f8eccb247c211d10e03e8370197175e68e::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "600",
     "lockedBalance": {},
@@ -95,7 +94,7 @@ Response: {
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
-    "coinType": "0x148406f6b8390ce94fcaa482f4a9482a8548877d8178730064348d1caf1374bb::fake::FAKE",
+    "coinType": "0xa44457906b2313811c86d0521e3556f8eccb247c211d10e03e8370197175e68e::fake::FAKE",
     "coinObjectCount": 1,
     "totalBalance": "600",
     "lockedBalance": {},

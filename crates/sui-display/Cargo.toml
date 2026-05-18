@@ -19,7 +19,6 @@ indexmap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-prost-types.workspace = true
 
 move-core-types.workspace = true
 

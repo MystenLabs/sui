@@ -1643,6 +1643,12 @@ StoreExecutionTimeObservationsTransaction._
 Subscription.checkpoints
   => {}
 
+Subscription.transactions
+  => {}
+
+Subscription.events
+  => {}
+
 Transaction.id
   => {}
 
@@ -1683,6 +1689,9 @@ TransactionEffects.checkpoint
   => {}
 
 TransactionEffects.status
+  => {}
+
+TransactionEffects.version
   => {}
 
 TransactionEffects.lamportVersion

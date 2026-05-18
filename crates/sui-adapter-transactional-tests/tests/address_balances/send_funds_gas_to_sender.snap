@@ -1,0 +1,67 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 13-18:
+//# programmable --sender A --inputs 100000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: sui::coin::into_balance<sui::sui::SUI>(Result(0));
+//> 2: sui::balance::send_funds<sui::sui::SUI>(Result(1), Input(1));
+// Create a 1B coin owned by A - this will be the secondary in the smash.
+mutated: object(0,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 100000000000)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 19-21:
+//# programmable --sender A --inputs 1000000000 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 23:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, line 25:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+100000000000
+
+task 5, lines 27-31:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 3
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 1000000000u64,
+    },
+}
+
+task 6, lines 32-33:
+//# programmable --sender A --gas-budget 500000000 --gas-payment withdraw<sui::balance::Balance<sui::sui::SUI>>(500000000) --gas-payment object(2,0) --inputs @A
+//> sui::coin::send_funds<sui::sui::SUI>(Gas, Input(0))
+deleted: object(2,0)
+accumulators_written: (object(1,0), A, sui::balance::Balance<sui::sui::SUI>, Merge, 999978120)
+gas summary: computation_cost: 1000000, storage_cost: 0,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, lines 35-40:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, line 41:
+//# view-funds sui::balance::Balance<sui::sui::SUI> A
+100999978120
+
+task 9, line 43:
+//# view-object 2,0
+No object at id 2,0

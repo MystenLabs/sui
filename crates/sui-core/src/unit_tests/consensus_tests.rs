@@ -16,6 +16,7 @@ use move_core_types::{account_address::AccountAddress, ident_str};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng, thread_rng};
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
 use sui_types::crypto::{AccountKeyPair, deterministic_random_account_key};
 use sui_types::gas::GasCostSummary;

@@ -212,9 +212,6 @@ impl<'a> TestAuthorityBuilder<'a> {
         // `AuthorityPerEpochStore::new` is called
         //
         // Only create a guard if an explicit protocol_config was provided.
-        // If no protocol_config is provided, the caller is responsible for setting up
-        // any necessary protocol config overrides (e.g., disable_preconsensus_locking=false
-        // for tests that use the Quorum Driver flow with extract_cert).
         let _guard = self
             .protocol_config
             .clone()
@@ -330,6 +327,7 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .unwrap_or(0),
             0,
             Arc::new(SubmittedTransactionCacheMetrics::new(&registry)),
+            None,
         )
         .expect("failed to create authority per epoch store");
 

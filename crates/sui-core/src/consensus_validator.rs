@@ -25,10 +25,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef},
     error::{SuiError, SuiErrorKind, SuiResult, UserInputError},
     messages_consensus::{ConsensusPosition, ConsensusTransaction, ConsensusTransactionKind},
-    transaction::{
-        CertifiedTransaction, InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI,
-        TransactionWithClaims,
-    },
+    transaction::{InputObjectKind, PlainTransactionWithClaims, TransactionDataAPI},
 };
 use tap::TapFallible;
 use tracing::{debug, info, instrument, warn};
@@ -36,7 +33,6 @@ use tracing::{debug, info, instrument, warn};
 use crate::{
     authority::{AuthorityState, authority_per_epoch_store::AuthorityPerEpochStore},
     checkpoints::CheckpointServiceNotify,
-    consensus_adapter::{ConsensusOverloadChecker, NoopConsensusOverloadChecker},
 };
 
 /// Validates transactions from consensus and votes on whether to execute the transactions
@@ -45,7 +41,6 @@ use crate::{
 pub struct SuiTxValidator {
     authority_state: Arc<AuthorityState>,
     epoch_store: Arc<AuthorityPerEpochStore>,
-    consensus_overload_checker: Arc<dyn ConsensusOverloadChecker>,
     checkpoint_service: Arc<dyn CheckpointServiceNotify + Send + Sync>,
     metrics: Arc<SuiTxValidatorMetrics>,
 }
@@ -61,12 +56,9 @@ impl SuiTxValidator {
             "SuiTxValidator constructed for epoch {}",
             epoch_store.epoch()
         );
-        // Intentionally do not check consensus overload, because this is validating transactions already in consensus.
-        let consensus_overload_checker = Arc::new(NoopConsensusOverloadChecker {});
         Self {
             authority_state,
             epoch_store,
-            consensus_overload_checker,
             checkpoint_service,
             metrics,
         }
@@ -74,8 +66,6 @@ impl SuiTxValidator {
 
     fn validate_transactions(&self, txs: &[ConsensusTransactionKind]) -> Result<(), SuiError> {
         let epoch_store = &self.epoch_store;
-        // cert_batch is always empty since CertifiedTransaction is rejected
-        let cert_batch: Vec<&CertifiedTransaction> = Vec::new();
         let mut ckpt_messages = Vec::new();
         let mut ckpt_batch = Vec::new();
         for tx in txs.iter() {
@@ -186,13 +176,9 @@ impl SuiTxValidator {
             }
         }
 
-        // verify the certificate signatures as a batch
-        let cert_count = cert_batch.len();
         let ckpt_count = ckpt_batch.len();
 
-        epoch_store
-            .signature_verifier
-            .verify_certs_and_checkpoints(cert_batch, ckpt_batch)
+        crate::signature_verifier::batch_verify_checkpoints(epoch_store.committee(), &ckpt_batch)
             .tap_err(|e| warn!("batch verification error: {}", e))?;
 
         // All checkpoint sigs have been verified, forward them to the checkpoint service
@@ -200,9 +186,6 @@ impl SuiTxValidator {
             self.checkpoint_service.notify_checkpoint_signature(ckpt)?;
         }
 
-        self.metrics
-            .certificate_signatures_verified
-            .inc_by(cert_count as u64);
         self.metrics
             .checkpoint_signatures_verified
             .inc_by(ckpt_count as u64);
@@ -216,16 +199,9 @@ impl SuiTxValidator {
         txs: Vec<ConsensusTransactionKind>,
     ) -> Vec<TransactionIndex> {
         let epoch_store = &self.epoch_store;
-        if !epoch_store.protocol_config().mysticeti_fastpath() {
-            return vec![];
-        }
-
         let mut reject_txn_votes = Vec::new();
         for (i, tx) in txs.into_iter().enumerate() {
             let tx: PlainTransactionWithClaims = match tx {
-                ConsensusTransactionKind::UserTransaction(tx) => {
-                    TransactionWithClaims::no_aliases(*tx)
-                }
                 ConsensusTransactionKind::UserTransactionV2(tx) => *tx,
                 _ => continue,
             };
@@ -272,7 +248,6 @@ impl SuiTxValidator {
         inner_tx.validity_check(&epoch_store.tx_validity_check_context())?;
 
         self.authority_state.check_system_overload(
-            &*self.consensus_overload_checker,
             inner_tx.data(),
             self.authority_state.check_system_overload_at_signing(),
         )?;
@@ -491,7 +466,6 @@ impl TransactionVerifier for SuiTxValidator {
 }
 
 pub struct SuiTxValidatorMetrics {
-    certificate_signatures_verified: IntCounter,
     checkpoint_signatures_verified: IntCounter,
     transaction_reject_votes: IntCounterVec,
 }
@@ -499,12 +473,6 @@ pub struct SuiTxValidatorMetrics {
 impl SuiTxValidatorMetrics {
     pub fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
-            certificate_signatures_verified: register_int_counter_with_registry!(
-                "tx_validator_certificate_signatures_verified",
-                "Number of certificates verified in consensus batch verifier",
-                registry
-            )
-            .unwrap(),
             checkpoint_signatures_verified: register_int_counter_with_registry!(
                 "tx_validator_checkpoint_signatures_verified",
                 "Number of checkpoint verified in consensus batch verifier",

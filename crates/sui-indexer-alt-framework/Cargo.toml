@@ -11,7 +11,6 @@ anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
 backoff.workspace = true
-bb8 = "0.8.5"
 bytes.workspace = true
 chrono.workspace = true
 clap = { workspace = true, features = ["env"] }
@@ -24,6 +23,7 @@ mysten-network.workspace = true
 num_cpus.workspace = true
 prometheus.workspace = true
 object_store.workspace = true
+reqwest.workspace = true
 serde_json.workspace = true
 rand.workspace = true
 scoped-futures.workspace = true
@@ -42,9 +42,6 @@ sui-futures.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-rpc.workspace = true
-sui-sdk-types.workspace = true
-sui-rpc-api.workspace = true
-sui-storage.workspace = true
 sui-types.workspace = true
 prost.workspace = true
 prost-types.workspace = true
@@ -58,6 +55,7 @@ wiremock.workspace = true
 sui-pg-db.workspace = true
 dashmap.workspace = true
 
+sui-indexer-alt-framework-store-traits = { workspace = true, features = ["testing"] }
 sui-synthetic-ingestion.workspace = true
 
 [features]

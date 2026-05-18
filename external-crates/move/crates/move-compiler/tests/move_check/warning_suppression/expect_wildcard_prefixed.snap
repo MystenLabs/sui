@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/warning_suppression/expect_wildcard_prefixed.move:2:15
+  │
+2 │ #[expect(lint(all))]
+  │               ^^^ 'lint(all)' matches multiple diagnostics, but 'expect' may only be used for individual diagnostics
+  │
+  = Use '#[allow(lint(all))]' instead

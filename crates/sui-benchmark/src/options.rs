@@ -196,6 +196,19 @@ pub enum RunSpec {
         // relative weight of composite transactions in the benchmark workload
         #[clap(long, num_args(1..), value_delimiter = ',', default_values_t = [0])]
         composite: Vec<u32>,
+        // Target address(es) for deposit load test. When set, runs the
+        // addr_bal_deposit workload exclusively: every transaction withdraws
+        // from the sender's address balance and deposits to these addresses.
+        // Multiple addresses can be specified to deposit to all of them in
+        // a single transaction.
+        #[clap(long, num_args(1..), value_delimiter = ',')]
+        deposit_target_address: Option<Vec<String>>,
+        // Amount of SUI (not MIST) to seed each sender's address balance with.
+        // Each payload sender gets a gas coin of this size, half of which is
+        // deposited into the sender's address balance during init.
+        // Total primary gas needed = this value * target_qps * in_flight_ratio.
+        #[clap(long, default_value = "100000")]
+        deposit_seed_sui: u64,
 
         // --- workload-specific options --- (TODO: use subcommands or similar)
         // 100 for max hotness i.e all requests target

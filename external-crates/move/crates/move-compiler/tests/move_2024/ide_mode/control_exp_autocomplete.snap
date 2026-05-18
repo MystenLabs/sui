@@ -9,7 +9,7 @@ warning[W10007]: issue with attribute value
   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:3:9
   │
 3 │ #[allow(ide_path_autocomplete)]
-  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown diagnostic filter 'ide_path_autocomplete'
 
 warning[W09002]: unused variable
    ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:14:24

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     sync::Arc,
     time::Duration,
 };
@@ -27,7 +27,7 @@ use tokio::{
     task::{JoinError, JoinSet},
     time::{Instant, sleep, sleep_until, timeout},
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::{
     BlockAPI,
@@ -39,11 +39,12 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{ObserverNetworkClient, PeerId, SynchronizerClient, ValidatorNetworkClient},
+    peers_pool::PeersPool,
     round_tracker::RoundTracker,
 };
 use crate::{
     authority_service::COMMIT_LAG_MULTIPLIER, core_thread::CoreThreadDispatcher,
-    transaction_certifier::TransactionCertifier,
+    transaction_vote_tracker::TransactionVoteTracker,
 };
 
 /// The number of concurrent fetch blocks requests per authority
@@ -64,51 +65,49 @@ const COMMIT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(10);
 struct BlocksGuard {
     map: Arc<InflightBlocksMap>,
     block_refs: BTreeSet<BlockRef>,
-    peer: AuthorityIndex,
+    peer: PeerId,
 }
 
 impl Drop for BlocksGuard {
     fn drop(&mut self) {
-        self.map.unlock_blocks(&self.block_refs, self.peer);
+        self.map.unlock_blocks(&self.block_refs, self.peer.clone());
     }
 }
 
-// Keeps a mapping between the missing blocks that have been instructed to be fetched and the authorities
-// that are currently fetching them. For a block ref there is a maximum number of authorities that can
-// concurrently fetch it. The authority ids that are currently fetching a block are set on the corresponding
+// Keeps a mapping between the missing blocks that have been instructed to be fetched and the peers
+// that are currently fetching them. For a block ref there is a maximum number of peers that can
+// concurrently fetch it. The peer ids that are currently fetching a block are set on the corresponding
 // `BTreeSet` and basically they act as "locks".
 struct InflightBlocksMap {
-    inner: Mutex<HashMap<BlockRef, BTreeSet<AuthorityIndex>>>,
+    inner: Mutex<BTreeMap<BlockRef, BTreeSet<PeerId>>>,
 }
 
 impl InflightBlocksMap {
     fn new() -> Arc<Self> {
         Arc::new(Self {
-            inner: Mutex::new(HashMap::new()),
+            inner: Mutex::new(BTreeMap::new()),
         })
     }
 
-    /// Locks the blocks to be fetched for the assigned `peer_index`. We want to avoid re-fetching the
-    /// missing blocks from too many authorities at the same time, thus we limit the concurrency
+    /// Locks the blocks to be fetched for the assigned `peer`. We want to avoid re-fetching the
+    /// missing blocks from too many peers at the same time, thus we limit the concurrency
     /// per block by attempting to lock per block. If a block is already fetched by the maximum allowed
-    /// number of authorities, then the block ref will not be included in the returned set. The method
+    /// number of peers, then the block ref will not be included in the returned set. The method
     /// returns all the block refs that have been successfully locked and allowed to be fetched.
     fn lock_blocks(
         self: &Arc<Self>,
         missing_block_refs: BTreeSet<BlockRef>,
-        peer: AuthorityIndex,
+        peer: PeerId,
     ) -> Option<BlocksGuard> {
         let mut blocks = BTreeSet::new();
         let mut inner = self.inner.lock();
 
         for block_ref in missing_block_refs {
-            // check that the number of authorities that are already instructed to fetch the block is not
-            // higher than the allowed and the `peer_index` has not already been instructed to do that.
-            let authorities = inner.entry(block_ref).or_default();
-            if authorities.len() < MAX_AUTHORITIES_TO_FETCH_PER_BLOCK
-                && authorities.get(&peer).is_none()
-            {
-                assert!(authorities.insert(peer));
+            // check that the number of peers that are already instructed to fetch the block is not
+            // higher than the allowed and the `peer` has not already been instructed to do that.
+            let peers = inner.entry(block_ref).or_default();
+            if peers.len() < MAX_AUTHORITIES_TO_FETCH_PER_BLOCK && peers.get(&peer).is_none() {
+                assert!(peers.insert(peer.clone()));
                 blocks.insert(block_ref);
             }
         }
@@ -127,18 +126,18 @@ impl InflightBlocksMap {
     /// Unlocks the provided block references for the given `peer`. The unlocking is strict, meaning that
     /// if this method is called for a specific block ref and peer more times than the corresponding lock
     /// has been called, it will panic.
-    fn unlock_blocks(self: &Arc<Self>, block_refs: &BTreeSet<BlockRef>, peer: AuthorityIndex) {
+    fn unlock_blocks(self: &Arc<Self>, block_refs: &BTreeSet<BlockRef>, peer: PeerId) {
         // Now mark all the blocks as fetched from the map
         let mut blocks_to_fetch = self.inner.lock();
         for block_ref in block_refs {
-            let authorities = blocks_to_fetch
+            let peers = blocks_to_fetch
                 .get_mut(block_ref)
                 .expect("Should have found a non empty map");
 
-            assert!(authorities.remove(&peer), "Peer index should be present!");
+            assert!(peers.remove(&peer), "Peer should be present!");
 
             // if the last one then just clean up
-            if authorities.is_empty() {
+            if peers.is_empty() {
                 blocks_to_fetch.remove(block_ref);
             }
         }
@@ -150,7 +149,7 @@ impl InflightBlocksMap {
     fn swap_locks(
         self: &Arc<Self>,
         blocks_guard: BlocksGuard,
-        peer: AuthorityIndex,
+        peer: PeerId,
     ) -> Option<BlocksGuard> {
         let block_refs = blocks_guard.block_refs.clone();
 
@@ -171,7 +170,7 @@ impl InflightBlocksMap {
 enum Command {
     FetchBlocks {
         missing_block_refs: BTreeSet<BlockRef>,
-        peer_index: AuthorityIndex,
+        peer: PeerId,
         result: oneshot::Sender<Result<(), ConsensusError>>,
     },
     FetchOwnLastBlock,
@@ -185,17 +184,17 @@ pub(crate) struct SynchronizerHandle {
 
 impl SynchronizerHandle {
     /// Explicitly asks from the synchronizer to fetch the blocks - provided the block_refs set - from
-    /// the peer authority.
+    /// the peer.
     pub(crate) async fn fetch_blocks(
         &self,
         missing_block_refs: BTreeSet<BlockRef>,
-        peer_index: AuthorityIndex,
+        peer: PeerId,
     ) -> ConsensusResult<()> {
         let (sender, receiver) = oneshot::channel();
         self.commands_sender
             .send(Command::FetchBlocks {
                 missing_block_refs,
-                peer_index,
+                peer,
                 result: sender,
             })
             .await
@@ -210,6 +209,17 @@ impl SynchronizerHandle {
             result?
         }
         Ok(())
+    }
+
+    #[cfg(test)]
+    /// Creates a mock synchronizer handle for testing
+    pub(crate) fn new_for_test() -> Arc<Self> {
+        use tokio::task::JoinSet;
+        let (tx, _rx) = channel("test_synchronizer", 1);
+        Arc::new(Self {
+            commands_sender: tx,
+            tasks: tokio::sync::Mutex::new(JoinSet::new()),
+        })
     }
 }
 
@@ -242,7 +252,7 @@ pub(crate) struct Synchronizer<
 > {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
-    fetch_block_senders: BTreeMap<AuthorityIndex, Sender<BlocksGuard>>,
+    fetch_block_senders: BTreeMap<PeerId, Sender<BlocksGuard>>,
     core_dispatcher: Arc<D>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
     dag_state: Arc<RwLock<DagState>>,
@@ -250,7 +260,7 @@ pub(crate) struct Synchronizer<
     fetch_own_last_block_task: JoinSet<()>,
     network_client: Arc<SynchronizerClient<VC, OC>>,
     block_verifier: Arc<V>,
-    transaction_certifier: TransactionCertifier,
+    transaction_vote_tracker: TransactionVoteTracker,
     round_tracker: Arc<RwLock<RoundTracker>>,
     inflight_blocks_map: Arc<InflightBlocksMap>,
     commands_sender: Sender<Command>,
@@ -258,6 +268,7 @@ pub(crate) struct Synchronizer<
     last_commit_change_time: Instant,
     // When commit is not progressing, commit sync fails over to periodic sync for catchup.
     commit_sync_failover: bool,
+    peers_pool: Arc<PeersPool>,
 }
 
 impl<V, D, VC, OC> Synchronizer<V, D, VC, OC>
@@ -273,9 +284,10 @@ where
         core_dispatcher: Arc<D>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         block_verifier: Arc<V>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         round_tracker: Arc<RwLock<RoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
+        peers_pool: Arc<PeersPool>,
         sync_last_known_own_block: bool,
     ) -> Arc<SynchronizerHandle> {
         let (commands_sender, commands_receiver) =
@@ -285,17 +297,18 @@ where
         // Spawn the tasks to fetch the blocks from the others
         let mut fetch_block_senders = BTreeMap::new();
         let mut tasks = JoinSet::new();
-        for (index, _) in context.committee.authorities() {
-            if index == context.own_index {
-                continue;
-            }
+
+        // Create fetch tasks for all known peers (validators and observers)
+        // TODO: refactor to update the sender tasks based on the registered/removed pool peers.
+        let known_peers = peers_pool.get_known_peers();
+        for peer in known_peers {
             let (sender, receiver) =
                 channel("consensus_synchronizer_fetches", FETCH_BLOCKS_CONCURRENCY);
-            let fetch_blocks_from_authority_async = Self::fetch_blocks_from_authority(
-                index,
+            let fetch_blocks_from_peer_async = Self::fetch_blocks_from_peer(
+                peer.clone(),
                 network_client.clone(),
                 block_verifier.clone(),
-                transaction_certifier.clone(),
+                transaction_vote_tracker.clone(),
                 commit_vote_monitor.clone(),
                 context.clone(),
                 core_dispatcher.clone(),
@@ -303,9 +316,10 @@ where
                 receiver,
                 commands_sender.clone(),
                 round_tracker.clone(),
+                peers_pool.clone(),
             );
-            tasks.spawn(monitored_future!(fetch_blocks_from_authority_async));
-            fetch_block_senders.insert(index, sender);
+            tasks.spawn(monitored_future!(fetch_blocks_from_peer_async));
+            fetch_block_senders.insert(peer, sender);
         }
 
         let commands_sender_clone = commands_sender.clone();
@@ -328,7 +342,7 @@ where
                 fetch_own_last_block_task: JoinSet::new(),
                 network_client,
                 block_verifier,
-                transaction_certifier,
+                transaction_vote_tracker,
                 inflight_blocks_map,
                 commands_sender: commands_sender_clone,
                 dag_state,
@@ -336,6 +350,7 @@ where
                 last_changed_commit_index: 0,
                 last_commit_change_time: Instant::now(),
                 commit_sync_failover: false,
+                peers_pool,
             };
             s.run().await;
         }));
@@ -358,9 +373,10 @@ where
             tokio::select! {
                 Some(command) = self.commands_receiver.recv() => {
                     match command {
-                        Command::FetchBlocks{ missing_block_refs, peer_index, result } => {
-                            if peer_index == self.context.own_index {
-                                error!("We should never attempt to fetch blocks from our own node");
+                        Command::FetchBlocks{ missing_block_refs, peer, result } => {
+                            // Check if peer is available. This check also makes sure that we are not trying to fetch from ourselves.
+                            if !self.peers_pool.is_peer_known(&peer) {
+                                result.send(Err(ConsensusError::PeerUnavailable(format!("{:?}", peer)))).ok();
                                 continue;
                             }
 
@@ -372,7 +388,7 @@ where
                                 .take(self.context.parameters.max_blocks_per_sync)
                                 .collect();
 
-                            let blocks_guard = self.inflight_blocks_map.lock_blocks(missing_block_refs, peer_index);
+                            let blocks_guard = self.inflight_blocks_map.lock_blocks(missing_block_refs, peer.clone());
                             let Some(blocks_guard) = blocks_guard else {
                                 result.send(Ok(())).ok();
                                 continue;
@@ -382,23 +398,26 @@ where
                             // synchronization task will handle any still missing blocks in next run.
                             let r = self
                                 .fetch_block_senders
-                                .get(&peer_index)
-                                .expect("Fatal error, sender should be present")
-                                .try_send(blocks_guard)
-                                .map_err(|err| {
-                                    match err {
-                                        TrySendError::Full(_) => {
-                                            let peer_hostname = &self.context.committee.authority(peer_index).hostname;
-                                            self.context
-                                                .metrics
-                                                .node_metrics
-                                                .synchronizer_skipped_fetch_requests
-                                                .with_label_values(&[peer_hostname])
-                                                .inc();
-                                            ConsensusError::SynchronizerSaturated(peer_index)
-                                        },
-                                        TrySendError::Closed(_) => ConsensusError::Shutdown
-                                    }
+                                .get(&peer)
+                                .ok_or(ConsensusError::PeerNotFound(format!("Peer {} not found in fetch_block_senders", peer)))
+                                .and_then(|sender| {
+                                    sender
+                                        .try_send(blocks_guard)
+                                        .map_err(|err| {
+                                            match err {
+                                                TrySendError::Full(_) => {
+                                                    let peer_name = peer.labelname(&self.context);
+                                                    self.context
+                                                        .metrics
+                                                        .node_metrics
+                                                        .synchronizer_skipped_fetch_requests
+                                                        .with_label_values(&[peer_name])
+                                                        .inc();
+                                                    ConsensusError::SynchronizerSaturated(format!("{:?}", peer))
+                                                },
+                                                TrySendError::Closed(_) => ConsensusError::Shutdown
+                                            }
+                                        })
                                 });
 
                             result.send(r).ok();
@@ -467,11 +486,11 @@ where
         }
     }
 
-    async fn fetch_blocks_from_authority(
-        peer_index: AuthorityIndex,
+    async fn fetch_blocks_from_peer(
+        peer: PeerId,
         network_client: Arc<SynchronizerClient<VC, OC>>,
         block_verifier: Arc<V>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
@@ -479,9 +498,9 @@ where
         mut receiver: Receiver<BlocksGuard>,
         commands_sender: Sender<Command>,
         round_tracker: Arc<RwLock<RoundTracker>>,
+        _peers_pool: Arc<PeersPool>,
     ) {
         const MAX_RETRIES: u32 = 3;
-        let peer_hostname = &context.committee.authority(peer_index).hostname;
         let mut requests = FuturesUnordered::new();
 
         loop {
@@ -489,33 +508,33 @@ where
                 Some(blocks_guard) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
                     let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
 
-                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 1))
+                    requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, 1))
                 },
                 Some((response, blocks_guard, retries, _peer, fetch_after_rounds)) = requests.next() => {
                     match response {
                         Ok(blocks) => {
                             if let Err(err) = Self::process_fetched_blocks(blocks,
-                                peer_index,
+                                peer.clone(),
                                 blocks_guard,
                                 core_dispatcher.clone(),
                                 block_verifier.clone(),
-                                transaction_certifier.clone(),
+                                transaction_vote_tracker.clone(),
                                 commit_vote_monitor.clone(),
                                 context.clone(),
                                 commands_sender.clone(),
                                 round_tracker.clone(),
                                 "live"
                             ).await {
-                                warn!("Error while processing fetched blocks from peer {peer_index} {peer_hostname}: {err}");
-                                context.metrics.node_metrics.synchronizer_process_fetched_failures.with_label_values(&[peer_hostname.as_str(), "live"]).inc();
+                                warn!("Error while processing fetched blocks from peer {}: {err}", peer.hostname(&context));
+                                context.metrics.node_metrics.synchronizer_process_fetched_failures.with_label_values(&[peer.labelname(&context).as_str(), "live"]).inc();
                             }
                         },
                         Err(_) => {
-                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname.as_str(), "live"]).inc();
+                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer.labelname(&context).as_str(), "live"]).inc();
                             if retries <= MAX_RETRIES {
-                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
+                                requests.push(Self::fetch_blocks_request(network_client.clone(), peer.clone(), blocks_guard, fetch_after_rounds, true, FETCH_REQUEST_TIMEOUT, retries))
                             } else {
-                                warn!("Max retries {retries} reached while trying to fetch blocks from peer {peer_index} {peer_hostname}.");
+                                warn!("Max retries {retries} reached while trying to fetch blocks from peer {}.", peer.hostname(&context));
                                 // we don't necessarily need to do, but dropping the guard here to unlock the blocks
                                 drop(blocks_guard);
                             }
@@ -523,22 +542,22 @@ where
                     }
                 },
                 else => {
-                    info!("Fetching blocks from authority {peer_index} task will now abort.");
+                    info!("Fetching blocks from peer {} task will now abort.", peer.hostname(&context));
                     break;
                 }
             }
         }
     }
 
-    /// Processes the requested raw fetched blocks from peer `peer_index`. If no error is returned then
+    /// Processes the requested raw fetched blocks from peer. If no error is returned then
     /// the verified blocks are immediately sent to Core for processing.
     async fn process_fetched_blocks(
         mut serialized_blocks: Vec<Bytes>,
-        peer_index: AuthorityIndex,
+        peer: PeerId,
         requested_blocks_guard: BlocksGuard,
         core_dispatcher: Arc<D>,
         block_verifier: Arc<V>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         context: Arc<Context>,
         commands_sender: Sender<Command>,
@@ -557,13 +576,14 @@ where
             .spawn_blocking({
                 let block_verifier = block_verifier.clone();
                 let context = context.clone();
+                let peer = peer.clone();
                 move || {
                     Self::verify_blocks(
                         serialized_blocks,
                         block_verifier,
-                        transaction_certifier,
+                        transaction_vote_tracker,
                         &context,
-                        peer_index,
+                        peer,
                     )
                 }
             })
@@ -588,10 +608,9 @@ where
         }
 
         let metrics = &context.metrics.node_metrics;
-        let peer_hostname = &context.committee.authority(peer_index).hostname;
         metrics
             .synchronizer_fetched_blocks_by_peer
-            .with_label_values(&[peer_hostname.as_str(), sync_method])
+            .with_label_values(&[peer.labelname(&context).as_str(), sync_method])
             .inc_by(blocks.len() as u64);
         for block in &blocks {
             let block_hostname = &context.committee.authority(block.author()).hostname;
@@ -602,8 +621,9 @@ where
         }
 
         debug!(
-            "Synced {} missing blocks from peer {peer_index} {peer_hostname}: {}",
+            "Synced {} missing blocks from peer {:?}: {}",
             blocks.len(),
+            peer,
             blocks.iter().map(|b| b.reference().to_string()).join(", "),
         );
 
@@ -658,9 +678,9 @@ where
     fn verify_blocks(
         serialized_blocks: Vec<Bytes>,
         block_verifier: Arc<V>,
-        transaction_certifier: TransactionCertifier,
+        transaction_vote_tracker: TransactionVoteTracker,
         context: &Context,
-        peer_index: AuthorityIndex,
+        peer: PeerId,
     ) -> ConsensusResult<Vec<VerifiedBlock>> {
         let mut verified_blocks = Vec::new();
         let mut voted_blocks = Vec::new();
@@ -672,14 +692,14 @@ where
             let (verified_block, reject_txn_votes) = block_verifier
                 .verify_and_vote(signed_block, serialized_block)
                 .tap_err(|e| {
-                    let hostname = context.committee.authority(peer_index).hostname.clone();
+                    let peer_label = peer.labelname(context);
                     context
                         .metrics
                         .node_metrics
                         .invalid_blocks
-                        .with_label_values(&[hostname.as_str(), "synchronizer", e.clone().name()])
+                        .with_label_values(&[peer_label.as_str(), "synchronizer", e.clone().name()])
                         .inc();
-                    info!("Invalid block received from {}: {}", peer_index, e);
+                    info!("Invalid block received from {}: {}", peer, e);
                 })?;
 
             // TODO: improve efficiency, maybe suspend and continue processing the block asynchronously.
@@ -710,7 +730,7 @@ where
         }
 
         if context.protocol_config.transaction_voting_enabled() {
-            transaction_certifier.add_voted_blocks(voted_blocks);
+            transaction_vote_tracker.add_voted_blocks(voted_blocks);
         }
 
         Ok(verified_blocks)
@@ -718,7 +738,7 @@ where
 
     async fn fetch_blocks_request(
         network_client: Arc<SynchronizerClient<VC, OC>>,
-        peer: AuthorityIndex,
+        peer: PeerId,
         blocks_guard: BlocksGuard,
         fetch_after_rounds: Vec<Round>,
         fetch_missing_ancestors: bool,
@@ -728,15 +748,14 @@ where
         ConsensusResult<Vec<Bytes>>,
         BlocksGuard,
         u32,
-        AuthorityIndex,
+        PeerId,
         Vec<Round>,
     ) {
-        use crate::network::PeerId;
         let start = Instant::now();
         let resp = timeout(
             request_timeout,
             network_client.fetch_blocks(
-                PeerId::Validator(peer),
+                peer.clone(),
                 blocks_guard
                     .block_refs
                     .clone()
@@ -824,7 +843,7 @@ where
                 let mut retry_delay_step = Duration::from_millis(500);
                 'main:loop {
                     if context.committee.size() == 1 {
-                        highest_round = dag_state.read().get_last_proposed_block().round();
+                        highest_round = dag_state.read().get_last_proposed_block().expect("Last proposed block should be returned on validators").round();
                         info!("Only one node in the network, will not try fetching own last block from peers.");
                         break 'main;
                     }
@@ -921,13 +940,14 @@ where
         let context = self.context.clone();
         let network_client = self.network_client.clone();
         let block_verifier = self.block_verifier.clone();
-        let transaction_certifier = self.transaction_certifier.clone();
+        let transaction_vote_tracker = self.transaction_vote_tracker.clone();
         let commit_vote_monitor = self.commit_vote_monitor.clone();
         let core_dispatcher = self.core_dispatcher.clone();
         let blocks_to_fetch = self.inflight_blocks_map.clone();
         let commands_sender = self.commands_sender.clone();
         let dag_state = self.dag_state.clone();
         let round_tracker = self.round_tracker.clone();
+        let peers_pool = self.peers_pool.clone();
 
         let mut missing_blocks = self
             .core_dispatcher
@@ -961,17 +981,19 @@ where
                         blocks_to_fetch.clone(),
                         network_client,
                         dag_state,
+                        peers_pool,
                     )
                     .await
                 } else {
                     let _scope = monitored_scope("BlockSync::Periodic::MissingBlocks");
                     // Fetch blocks from 1 to MAX_PERIODIC_SYNC_PEERS peers
-                    Self::fetch_blocks_from_authorities(
+                    Self::fetch_blocks_from_peers(
                         context.clone(),
                         blocks_to_fetch.clone(),
                         network_client,
                         missing_blocks,
                         dag_state,
+                        peers_pool,
                     )
                     .await
                 };
@@ -993,11 +1015,11 @@ where
 
                     if let Err(err) = Self::process_fetched_blocks(
                         fetched_blocks,
-                        peer,
+                        peer.clone(),
                         blocks_guard,
                         core_dispatcher.clone(),
                         block_verifier.clone(),
-                        transaction_certifier.clone(),
+                        transaction_vote_tracker.clone(),
                         commit_vote_monitor.clone(),
                         context.clone(),
                         commands_sender.clone(),
@@ -1007,16 +1029,15 @@ where
                     .await
                     {
                         warn!(
-                            "Error occurred while processing fetched blocks from peer {peer}: {err}"
+                            "Error occurred while processing fetched blocks from peer {:?}: {err}",
+                            peer
                         );
+                        let peer_name = peer.labelname(&context);
                         context
                             .metrics
                             .node_metrics
                             .synchronizer_process_fetched_failures
-                            .with_label_values(&[
-                                context.committee.authority(peer).hostname.as_str(),
-                                "periodic",
-                            ])
+                            .with_label_values(&[peer_name.as_str(), "periodic"])
                             .inc();
                     }
                 }
@@ -1112,26 +1133,28 @@ where
         inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
         dag_state: Arc<RwLock<DagState>>,
-    ) -> Vec<(BlocksGuard, Vec<Bytes>, AuthorityIndex)> {
+        peers_pool: Arc<PeersPool>,
+    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
         let fetch_after_rounds = Self::get_fetch_after_rounds(&context, dag_state.clone());
 
         // Pick a random peer (excluding self).
-        let mut peers: Vec<AuthorityIndex> = context
-            .committee
-            .authorities()
-            .filter_map(|(index, _)| (index != context.own_index).then_some(index))
-            .collect();
+        // Get available peers from the PeersPool
+        let mut peers = peers_pool.get_known_peers();
+
+        // TODO: in the future it would be possible, temporarily, for an Observer node to not have peers to fetch from.
+        // We should change this assertion to allow for this case.
+        assert!(!peers.is_empty(), "No known peers to fetch blocks from");
+
         if cfg!(not(test)) {
             peers.shuffle(&mut ThreadRng::default());
         }
-        let peer = *peers
-            .first()
-            .expect("Committee should have more than 1 member");
+
+        let peer = peers.first().unwrap().clone();
 
         let response = timeout(
             FETCH_REQUEST_TIMEOUT,
             network_client.fetch_blocks(
-                PeerId::Validator(peer),
+                peer.clone(),
                 vec![],
                 fetch_after_rounds,
                 false,
@@ -1155,7 +1178,7 @@ where
         let blocks_guard = BlocksGuard {
             map: inflight_blocks,
             block_refs: BTreeSet::new(),
-            peer,
+            peer: peer.clone(),
         };
 
         vec![(blocks_guard, serialized_blocks, peer)]
@@ -1165,14 +1188,15 @@ where
     /// Each response from peer can contain the requested blocks, and additional blocks from the last accepted round for
     /// authorities with missing blocks.
     /// Each element of the vector is a tuple which contains the requested missing block refs, the returned blocks and
-    /// the peer authority index.
-    async fn fetch_blocks_from_authorities(
+    /// the peer.
+    async fn fetch_blocks_from_peers(
         context: Arc<Context>,
         inflight_blocks: Arc<InflightBlocksMap>,
         network_client: Arc<SynchronizerClient<VC, OC>>,
         missing_blocks: BTreeSet<BlockRef>,
         dag_state: Arc<RwLock<DagState>>,
-    ) -> Vec<(BlocksGuard, Vec<Bytes>, AuthorityIndex)> {
+        peers_pool: Arc<PeersPool>,
+    ) -> Vec<(BlocksGuard, Vec<Bytes>, PeerId)> {
         // Preliminary truncation of missing blocks to fetch. Since each peer can have different
         // number of missing blocks and the fetching is batched by peer, so keep more than max_blocks_per_fetch
         // per peer on average.
@@ -1189,11 +1213,19 @@ where
                 .or_default()
                 .push(*block_ref);
         }
+
+        // Get known peers from the PeersPool
+        let mut peers = peers_pool.get_known_peers();
+
         // Distribute the same number of authorities into each peer to sync.
-        // When running this function, context.committee.size() is always greater than 1.
+        // Use the number of known peers from the pool, capped at MAX_PERIODIC_SYNC_PEERS
+        // TODO: in the future it would be possible, temporarily, for an Observer node to not have peers to fetch from.
+        // We should change this assertion to allow for this case.
+        assert!(!peers.is_empty(), "No known peers to fetch blocks from");
+
         let num_authorities_per_peer = authorities
             .len()
-            .div_ceil((context.committee.size() - 1).min(MAX_PERIODIC_SYNC_PEERS));
+            .div_ceil(peers.len().min(MAX_PERIODIC_SYNC_PEERS));
 
         // Update metrics related to missing blocks.
         let mut missing_blocks_per_authority = vec![0; context.committee.size()];
@@ -1217,12 +1249,6 @@ where
                 .with_label_values(&[&authority.hostname])
                 .set(missing as i64);
         }
-
-        let mut peers = context
-            .committee
-            .authorities()
-            .filter_map(|(peer_index, _)| (peer_index != context.own_index).then_some(peer_index))
-            .collect::<Vec<_>>();
 
         // TODO: probably inject the RNG to allow unit testing - this is a work around for now.
         if cfg!(not(test)) {
@@ -1248,7 +1274,7 @@ where
                 debug_fatal!("No more peers left to fetch blocks!");
                 break;
             };
-            let peer_hostname = &context.committee.authority(peer).hostname;
+            let peer_name = peer.hostname(&context);
             // Fetch from the lowest round missing blocks to ensure progress.
             // This may reduce efficiency and increase the chance of duplicated data transfer in edge cases.
             let block_refs = batch
@@ -1261,12 +1287,14 @@ where
                 .collect::<BTreeSet<_>>();
 
             // lock the blocks to be fetched. If no lock can be acquired for any of the blocks then don't bother
-            if let Some(blocks_guard) = inflight_blocks.lock_blocks(block_refs.clone(), peer) {
+            if let Some(blocks_guard) =
+                inflight_blocks.lock_blocks(block_refs.clone(), peer.clone())
+            {
                 info!(
-                    "Periodic sync of {} missing blocks from peer {} {}: {}",
+                    "Periodic sync of {} missing blocks from peer {} {:?}: {}",
+                    peer_name.as_str(),
                     block_refs.len(),
                     peer,
-                    peer_hostname,
                     block_refs
                         .iter()
                         .map(|b| b.to_string())
@@ -1292,11 +1320,10 @@ where
 
         loop {
             tokio::select! {
-                Some((response, blocks_guard, _retries, peer_index, fetch_after_rounds)) = request_futures.next() => {
-                    let peer_hostname = &context.committee.authority(peer_index).hostname;
+                Some((response, blocks_guard, _retries, peer, fetch_after_rounds)) = request_futures.next() => {
                     match response {
                         Ok(fetched_blocks) => {
-                            results.push((blocks_guard, fetched_blocks, peer_index));
+                            results.push((blocks_guard, fetched_blocks, peer));
 
                             // no more pending requests are left, just break the loop
                             if request_futures.is_empty() {
@@ -1304,15 +1331,16 @@ where
                             }
                         },
                         Err(_) => {
-                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname.as_str(), "periodic"]).inc();
+                            let peer_name = peer.labelname(&context);
+                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_name.as_str(), "periodic"]).inc();
                             // try again if there is any peer left
                             if let Some(next_peer) = peers.next() {
                                 // do best effort to lock guards. If we can't lock then don't bother at this run.
-                                if let Some(blocks_guard) = inflight_blocks.swap_locks(blocks_guard, next_peer) {
+                                if let Some(blocks_guard) = inflight_blocks.swap_locks(blocks_guard, next_peer.clone()) {
                                     info!(
-                                        "Retrying syncing {} missing blocks from peer {}: {}",
+                                        "Retrying syncing {} missing blocks from peer {:?}: {}",
                                         blocks_guard.block_refs.len(),
-                                        peer_hostname,
+                                        next_peer,
                                         blocks_guard.block_refs
                                             .iter()
                                             .map(|b| b.to_string())
@@ -1329,7 +1357,7 @@ where
                                         1,
                                     ));
                                 } else {
-                                    debug!("Couldn't acquire locks to fetch blocks from peer {next_peer}.")
+                                    debug!("Couldn't acquire locks to fetch blocks from peer {:?}.", next_peer)
                                 }
                             } else {
                                 debug!("No more peers left to fetch blocks");
@@ -1374,7 +1402,9 @@ mod tests {
         core_thread::CoreThreadDispatcher,
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
-        network::{BlockStream, ObserverNetworkClient, SynchronizerClient, ValidatorNetworkClient},
+        network::{
+            BlockStream, ObserverNetworkClient, PeerId, SynchronizerClient, ValidatorNetworkClient,
+        },
         storage::mem_store::MemStore,
         synchronizer::{
             COMMIT_PROGRESS_TIMEOUT, FETCH_BLOCKS_CONCURRENCY, FETCH_REQUEST_TIMEOUT,
@@ -1383,7 +1413,8 @@ mod tests {
     };
     use crate::{
         authority_service::COMMIT_LAG_MULTIPLIER, core_thread::MockCoreThreadDispatcher,
-        round_tracker::RoundTracker, transaction_certifier::TransactionCertifier,
+        peers_pool::PeersPool, round_tracker::RoundTracker,
+        transaction_vote_tracker::TransactionVoteTracker,
     };
 
     type FetchRequestKey = (Vec<BlockRef>, AuthorityIndex);
@@ -1559,6 +1590,8 @@ mod tests {
             &self,
             _peer: crate::network::PeerId,
             _block_refs: Vec<BlockRef>,
+            _fetch_after_rounds: Vec<Round>,
+            _fetch_missing_ancestors: bool,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Observer fetch_blocks not implemented in mock")
@@ -1593,28 +1626,30 @@ mod tests {
             // Try to acquire the block locks for authorities 1 & 2
             for i in 1..=2 {
                 let authority = AuthorityIndex::new_for_test(i);
+                let peer = PeerId::Validator(authority);
 
-                let guard = map.lock_blocks(missing_block_refs.clone(), authority);
+                let guard = map.lock_blocks(missing_block_refs.clone(), peer.clone());
                 let guard = guard.expect("Guard should be created");
                 assert_eq!(guard.block_refs.len(), 4);
 
                 all_guards.push(guard);
 
                 // trying to acquire any of them again will not succeed
-                let guard = map.lock_blocks(missing_block_refs.clone(), authority);
+                let guard = map.lock_blocks(missing_block_refs.clone(), peer);
                 assert!(guard.is_none());
             }
 
             // Trying to acquire for authority 3 it will fail - as we have maxed out the number of allowed peers
             let authority_3 = AuthorityIndex::new_for_test(3);
+            let peer_3 = PeerId::Validator(authority_3);
 
-            let guard = map.lock_blocks(missing_block_refs.clone(), authority_3);
+            let guard = map.lock_blocks(missing_block_refs.clone(), peer_3.clone());
             assert!(guard.is_none());
 
             // Explicitly drop the guard of authority 1 and try for authority 3 again - it will now succeed
             drop(all_guards.remove(0));
 
-            let guard = map.lock_blocks(missing_block_refs.clone(), authority_3);
+            let guard = map.lock_blocks(missing_block_refs.clone(), peer_3);
             let guard = guard.expect("Guard should be successfully acquired");
 
             assert_eq!(guard.block_refs, missing_block_refs);
@@ -1630,13 +1665,13 @@ mod tests {
         {
             // acquire a lock for authority 1
             let authority_1 = AuthorityIndex::new_for_test(1);
-            let guard = map
-                .lock_blocks(missing_block_refs.clone(), authority_1)
-                .unwrap();
+            let peer_1 = PeerId::Validator(authority_1);
+            let guard = map.lock_blocks(missing_block_refs.clone(), peer_1).unwrap();
 
             // Now swap the locks for authority 2
             let authority_2 = AuthorityIndex::new_for_test(2);
-            let guard = map.swap_locks(guard, authority_2);
+            let peer_2 = PeerId::Validator(authority_2);
+            let guard = map.swap_locks(guard, peer_2);
 
             assert_eq!(guard.unwrap().block_refs, missing_block_refs);
         }
@@ -1653,8 +1688,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let network_client = Arc::new(SynchronizerClient::new(
@@ -1662,15 +1697,17 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let handle = Synchronizer::start(
             network_client,
-            context,
+            context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state,
+            peers_pool.clone(),
             false,
         );
 
@@ -1690,7 +1727,12 @@ mod tests {
             .await;
 
         // WHEN request missing blocks from peer 1
-        assert!(handle.fetch_blocks(missing_blocks, peer).await.is_ok());
+        assert!(
+            handle
+                .fetch_blocks(missing_blocks, PeerId::Validator(peer))
+                .await
+                .is_ok()
+        );
 
         // Wait a little bit until those have been added in core
         sleep(Duration::from_millis(1_000)).await;
@@ -1711,8 +1753,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         let network_client = Arc::new(SynchronizerClient::new(
@@ -1720,15 +1762,17 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let handle = Synchronizer::start(
             network_client,
-            context,
+            context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state,
+            peers_pool.clone(),
             false,
         );
 
@@ -1757,14 +1801,22 @@ mod tests {
             // WHEN requesting to fetch the blocks, it should not succeed for the last request and get
             // an error with "saturated" synchronizer
             if iter.peek().is_none() {
-                match handle.fetch_blocks(missing_blocks, peer).await {
-                    Err(ConsensusError::SynchronizerSaturated(index)) => {
-                        assert_eq!(index, peer);
+                match handle
+                    .fetch_blocks(missing_blocks, PeerId::Validator(peer))
+                    .await
+                {
+                    Err(ConsensusError::SynchronizerSaturated(peer_str)) => {
+                        assert_eq!(peer_str, format!("{:?}", PeerId::Validator(peer)));
                     }
                     _ => panic!("A saturated synchronizer error was expected"),
                 }
             } else {
-                assert!(handle.fetch_blocks(missing_blocks, peer).await.is_ok());
+                assert!(
+                    handle
+                        .fetch_blocks(missing_blocks, PeerId::Validator(peer))
+                        .await
+                        .is_ok()
+                );
             }
         }
     }
@@ -1780,8 +1832,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
         // Create some test blocks
@@ -1822,15 +1874,17 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let _handle = Synchronizer::start(
             network_client,
-            context,
+            context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state,
+            peers_pool.clone(),
             false,
         );
 
@@ -1860,8 +1914,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
@@ -1925,15 +1979,17 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let _handle = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state.clone(),
+            peers_pool.clone(),
             false,
         );
 
@@ -1989,8 +2045,8 @@ mod tests {
         let mock_client = Arc::new(MockNetworkClient::default());
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
 
@@ -2048,15 +2104,17 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let _handle = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state.clone(),
+            peers_pool.clone(),
             false,
         );
 
@@ -2147,8 +2205,8 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let our_index = AuthorityIndex::new_for_test(0);
 
@@ -2220,15 +2278,17 @@ mod tests {
             Some(mock_client.clone()),
             Some(mock_client.clone()),
         ));
+        let peers_pool = Arc::new(PeersPool::new(context.clone()));
         let handle = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             round_tracker,
             dag_state,
+            peers_pool.clone(),
             true,
         );
 
@@ -2272,8 +2332,8 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let transaction_certifier =
-            TransactionCertifier::new(context.clone(), block_verifier.clone(), dag_state.clone());
+        let transaction_vote_tracker =
+            TransactionVoteTracker::new(context.clone(), block_verifier.clone(), dag_state.clone());
         let round_tracker = Arc::new(RwLock::new(RoundTracker::new(context.clone(), vec![])));
         let (commands_sender, _commands_receiver) =
             monitored_mpsc::channel("consensus_synchronizer_commands", 1000);
@@ -2302,11 +2362,12 @@ mod tests {
 
         // GIVEN peer to fetch blocks from
         let peer_index = AuthorityIndex::new_for_test(2);
+        let peer = PeerId::Validator(peer_index);
 
         // Create blocks_guard
         let inflight_blocks_map = InflightBlocksMap::new();
         let blocks_guard = inflight_blocks_map
-            .lock_blocks(expected_block_refs.clone(), peer_index)
+            .lock_blocks(expected_block_refs.clone(), peer.clone())
             .expect("Failed to lock blocks");
 
         assert_eq!(
@@ -2322,11 +2383,11 @@ mod tests {
             MockNetworkClient,
         >::process_fetched_blocks(
             expected_serialized_blocks,
-            peer_index,
+            peer,
             blocks_guard, // The guard is consumed here
             core_dispatcher.clone(),
             block_verifier,
-            transaction_certifier,
+            transaction_vote_tracker,
             commit_vote_monitor,
             context.clone(),
             commands_sender,

@@ -47,7 +47,7 @@ const LINT_ALL: &str = "all";
 const PROGRESS_TOKEN: &str = "symbolication";
 
 #[allow(deprecated)]
-pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
+pub fn run<F: MoveFlavor + 'static>(move_flavor: Arc<F>, flavor: Option<Flavor>) {
     // stdio is used to communicate Language Server Protocol requests and responses.
     // stderr is used for logging (and, when Visual Studio Code is used to communicate with this
     // server, it captures this output in a dedicated "output channel").
@@ -167,6 +167,7 @@ pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
         pkg_deps.clone(),
         diag_sender,
         lint,
+        move_flavor.clone(),
         flavor,
         initialize_params.process_id,
     );
@@ -354,7 +355,7 @@ pub fn run<F: MoveFlavor>(flavor: Option<Flavor>) {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request::<F>(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, flavor);
+                        shutdown_req_received = on_request::<F>(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received, move_flavor.clone(), flavor);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -396,6 +397,7 @@ fn on_request<F: MoveFlavor>(
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<CachedPackages>>,
     shutdown_request_received: bool,
+    move_flavor: Arc<F>,
     flavor: Option<Flavor>,
 ) -> bool {
     if shutdown_request_received {
@@ -419,6 +421,7 @@ fn on_request<F: MoveFlavor>(
             request,
             ide_files_root.clone(),
             pkg_dependencies,
+            move_flavor,
             flavor,
         ),
         lsp_types::request::GotoDefinition::METHOD => {
@@ -445,6 +448,7 @@ fn on_request<F: MoveFlavor>(
                 request,
                 ide_files_root.clone(),
                 pkg_dependencies,
+                move_flavor,
                 flavor,
             );
         }

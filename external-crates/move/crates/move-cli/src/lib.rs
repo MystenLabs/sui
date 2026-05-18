@@ -83,37 +83,62 @@ pub async fn run_cli<F: MoveFlavor, V: VMTestSetup + Sync>(
     vm_test_setup: V,
     move_args: Move,
     cmd: Command,
+    flavor: F,
 ) -> Result<()> {
     // TODO: right now, the gas metering story for move-cli (as a library) is a bit of a mess.
     //         1. It's still using the old CostTable.
     //         2. The CostTable only affects sandbox runs, but not unit tests, which use a unit cost table.
     match cmd {
         Command::Build(c) => {
-            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
-                .await
+            c.execute::<F>(
+                move_args.package_path.as_deref(),
+                move_args.build_config,
+                flavor,
+            )
+            .await
         }
         Command::Coverage(c) => {
-            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
-                .await
+            c.execute::<F>(
+                move_args.package_path.as_deref(),
+                move_args.build_config,
+                flavor,
+            )
+            .await
         }
         Command::Decompile(c) => {
             c.execute(move_args.package_path.as_deref(), move_args.build_config)
         }
         Command::Disassemble(c) => {
-            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
-                .await
+            c.execute::<F>(
+                move_args.package_path.as_deref(),
+                move_args.build_config,
+                flavor,
+            )
+            .await
         }
         Command::Docgen(c) => {
-            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
-                .await
+            c.execute::<F>(
+                move_args.package_path.as_deref(),
+                move_args.build_config,
+                flavor,
+            )
+            .await
         }
         Command::Lint(c) => {
-            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
-                .await
+            c.execute(
+                move_args.package_path.as_deref(),
+                move_args.build_config,
+                flavor,
+            )
+            .await
         }
         Command::Migrate(c) => {
-            c.execute::<F>(move_args.package_path.as_deref(), move_args.build_config)
-                .await
+            c.execute::<F>(
+                move_args.package_path.as_deref(),
+                move_args.build_config,
+                flavor,
+            )
+            .await
         }
         Command::New(c) => c.execute_with_defaults(move_args.package_path.as_deref()),
         Command::Profile(c) => c.execute(),
@@ -121,12 +146,13 @@ pub async fn run_cli<F: MoveFlavor, V: VMTestSetup + Sync>(
             c.execute::<F, V>(
                 move_args.package_path.as_deref(),
                 move_args.build_config,
+                flavor,
                 vm_test_setup,
             )
             .await
         }
         Command::Sandbox { storage_dir, cmd } => {
-            cmd.handle_command::<F, V>(vm_test_setup, &move_args, &storage_dir)
+            cmd.handle_command::<F, V>(vm_test_setup, &move_args, &storage_dir, flavor)
                 .await
         }
         Command::Summary(summary) => {
@@ -134,6 +160,7 @@ pub async fn run_cli<F: MoveFlavor, V: VMTestSetup + Sync>(
                 .execute::<F, ()>(
                     move_args.package_path.as_deref(),
                     move_args.build_config,
+                    flavor,
                     None,
                 )
                 .await
@@ -141,7 +168,10 @@ pub async fn run_cli<F: MoveFlavor, V: VMTestSetup + Sync>(
     }
 }
 
-pub async fn move_cli<F: MoveFlavor, V: VMTestSetup + Sync>(vm_test_setup: V) -> Result<()> {
+pub async fn move_cli<F: MoveFlavor, V: VMTestSetup + Sync>(
+    vm_test_setup: V,
+    flavor: F,
+) -> Result<()> {
     let args = MoveCLI::parse();
-    run_cli::<F, V>(vm_test_setup, args.move_args, args.cmd).await
+    run_cli::<F, V>(vm_test_setup, args.move_args, args.cmd, flavor).await
 }

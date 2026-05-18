@@ -1,20 +1,20 @@
 //# publish
 
-module 0x6.M {
-    struct Box<T> { x: T }
+mvir 0x6::M {
+    public struct Box<T> { x: T }
 
-    unbox<T>(b: Self.Box<T>): T {
+    fun unbox<T>(b: Self::Box<T>): T {
         let x: T;
     label b0:
         Box<T> { x: x } = move(b);
         return move(x);
     }
 
-    f<T>(n: u64, x: T): T {
+    fun f<T>(n: u64, x: T): T {
     label b0:
         jump_if (copy(n) == 0) b2;
     label b1:
-        return Self.unbox<T>(Self.f<Self.Box<T>>(copy(n) - 1, Box<T> { x: move(x) }));
+        return Self::unbox<T>(Self::f<Self::Box<T>>(copy(n) - 1, Box<T> { x: move(x) }));
     label b2:
         return move(x);
     }

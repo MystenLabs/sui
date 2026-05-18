@@ -1,11 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Allow use of `unbounded_channel` in `ingestion` -- it is used by the regulator task to receive
-// feedback. Traffic through this task should be minimal, but if a bound is applied to it and that
-// bound is hit, the indexer could deadlock.
-#![allow(clippy::disallowed_methods)]
-
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -56,9 +51,6 @@ pub struct ClientArgs {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct IngestionConfig {
-    /// Maximum size of checkpoint backlog across all workers downstream of the ingestion service.
-    pub checkpoint_buffer_size: usize,
-
     /// Concurrency control for checkpoint ingestion. A plain integer gives fixed concurrency;
     /// an object with `initial`, `min`, and `max` fields enables adaptive concurrency that adjusts
     /// based on subscriber channel fill fraction.
@@ -84,8 +76,6 @@ pub struct IngestionService {
     config: IngestionConfig,
     ingestion_client: IngestionClient,
     streaming_client: Option<GrpcStreamingClient>,
-    commit_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
-    commit_hi_rx: mpsc::UnboundedReceiver<(&'static str, u64)>,
     subscribers: Vec<mpsc::Sender<Arc<CheckpointEnvelope>>>,
     metrics: Arc<IngestionMetrics>,
 }
@@ -112,8 +102,9 @@ impl IngestionService {
     /// - `config` specifies the various sizes and time limits for ingestion.
     /// - `metrics_prefix` and `registry` are used to set up metrics for the service.
     ///
-    /// After initialization, subscribers can be added using [Self::subscribe], and the service is
-    /// started with [Self::run], given a range of checkpoints to fetch (potentially unbounded).
+    /// After initialization, subscribers can be added using [Self::subscribe_bounded], and the
+    /// service is started with [Self::run], given a range of checkpoints to fetch (potentially
+    /// unbounded).
     pub fn new(
         args: ClientArgs,
         config: IngestionConfig,
@@ -130,15 +121,11 @@ impl IngestionService {
             )
         });
 
-        let subscribers = Vec::new();
-        let (commit_hi_tx, commit_hi_rx) = mpsc::unbounded_channel();
         Ok(Self {
             config,
             ingestion_client,
             streaming_client,
-            commit_hi_tx,
-            commit_hi_rx,
-            subscribers,
+            subscribers: Vec::new(),
             metrics,
         })
     }
@@ -176,50 +163,36 @@ impl IngestionService {
         &self.metrics
     }
 
-    /// Add a new subscription to the ingestion service. Note that the service is susceptible to
-    /// the "slow receiver" problem: If one receiver is slower to process checkpoints than the
-    /// checkpoint ingestion rate, it will eventually hold up all receivers.
+    /// The ingestion configuration this service was built with.
+    pub fn config(&self) -> &IngestionConfig {
+        &self.config
+    }
+
+    /// Add a new subscription backed by a bounded `mpsc` channel of the given capacity. The
+    /// channel itself is the backpressure signal: when this consumer falls behind, the channel
+    /// fills and the adaptive ingestion controller cuts fetch concurrency. Send blocks when the
+    /// channel is full.
     ///
-    /// The ingestion service can optionally receive checkpoint high values from its
-    /// subscribers. If a subscriber provides a commit_hi, the ingestion service will commit to not
-    /// run ahead of the commit_hi by more than the config's buffer_size.
-    ///
-    /// Returns the channel to receive checkpoints from and the channel to send commit_hi values to.
-    pub fn subscribe(
-        &mut self,
-    ) -> (
-        mpsc::Receiver<Arc<CheckpointEnvelope>>,
-        mpsc::UnboundedSender<(&'static str, u64)>,
-    ) {
-        let (sender, receiver) = mpsc::channel(self.config.checkpoint_buffer_size);
-        self.subscribers.push(sender);
-        (receiver, self.commit_hi_tx.clone())
+    /// Callers typically pass `pipeline::IngestionConfig::subscriber_channel_size()`.
+    pub fn subscribe_bounded(&mut self, size: usize) -> mpsc::Receiver<Arc<CheckpointEnvelope>> {
+        let (tx, rx) = mpsc::channel(size);
+        self.subscribers.push(tx);
+        rx
     }
 
     /// Start the ingestion service as a background task, consuming it in the process.
     ///
-    /// Checkpoints are fetched concurrently from the `checkpoints` iterator, and pushed to
-    /// subscribers' channels (potentially out-of-order). Subscribers can communicate with the
-    /// ingestion service via their channels in the following ways:
+    /// Checkpoints are fetched concurrently from the `checkpoints` iterator and pushed to
+    /// subscribers' channels (potentially out-of-order). Each subscriber's bounded channel
+    /// acts as the backpressure signal: when it fills, the adaptive ingestion controller
+    /// throttles fetch concurrency. The slowest subscriber gates ingestion for everyone.
     ///
-    /// - If a subscriber is slow to accept checkpoints from the channel, it will provide
-    ///   back-pressure as this channel has a fixed buffer size (configured when the ingestion
-    ///   service is initialized).
-    /// - If the ingestion service is run with `next_sequential_checkpoint` set, subscribers must
-    ///   also update the ingestion service with the latest checkpoint they have completely
-    ///   processed, and the ingestion service will use this to limit how far ahead it fetches
-    ///   checkpoints.
-    /// - If a subscriber closes either of these channels, the ingestion service will interpret
-    ///   that as a signal to shutdown as well.
+    /// If a subscriber closes its channel, the ingestion service shuts down as well.
     ///
-    /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
-    /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
-    /// become available.
-    pub async fn run<R>(
-        self,
-        checkpoints: R,
-        next_sequential_checkpoint: Option<u64>,
-    ) -> Result<Service>
+    /// If ingestion reaches the leading edge of the network, it will encounter checkpoints
+    /// that do not exist yet. These are retried on a fixed `retry_interval` until they become
+    /// available.
+    pub async fn run<R>(self, checkpoints: R) -> Result<Service>
     where
         R: std::ops::RangeBounds<u64> + Send + 'static,
     {
@@ -227,8 +200,6 @@ impl IngestionService {
             config,
             ingestion_client,
             streaming_client,
-            commit_hi_tx: _,
-            commit_hi_rx,
             subscribers,
             metrics,
         } = self;
@@ -239,11 +210,9 @@ impl IngestionService {
 
         Ok(broadcaster(
             checkpoints,
-            next_sequential_checkpoint,
             streaming_client,
             config,
             ingestion_client,
-            commit_hi_rx,
             subscribers,
             metrics,
         ))
@@ -253,7 +222,6 @@ impl IngestionService {
 impl Default for IngestionConfig {
     fn default() -> Self {
         Self {
-            checkpoint_buffer_size: 50,
             ingest_concurrency: IngestConcurrencyConfig::Adaptive {
                 initial: 1,
                 min: 1,
@@ -299,45 +267,28 @@ mod tests {
     use wiremock::MockServer;
     use wiremock::Request;
 
-    use crate::ingestion::ingestion_client::CheckpointResult;
-    use crate::ingestion::ingestion_client::IngestionClientTrait;
+    use crate::ingestion::ingestion_client::tests::MockIngestionClient;
     use crate::ingestion::store_client::tests::respond_with;
     use crate::ingestion::store_client::tests::respond_with_chain_id;
     use crate::ingestion::store_client::tests::status;
     use crate::ingestion::streaming_client::test_utils::MockStreamingClient;
     use crate::ingestion::test_utils::test_checkpoint_data;
     use crate::metrics::IngestionMetrics;
-    use crate::types::digests::ChainIdentifier;
 
     use super::*;
 
     const FALLBACK: u64 = 99;
 
-    struct MockLatestCheckpoint(u64);
-
-    #[async_trait::async_trait]
-    impl IngestionClientTrait for MockLatestCheckpoint {
-        async fn chain_id(&self) -> anyhow::Result<ChainIdentifier> {
-            unimplemented!()
-        }
-        async fn checkpoint(&self, _: u64) -> CheckpointResult {
-            unimplemented!()
-        }
-        async fn latest_checkpoint_number(&self) -> anyhow::Result<u64> {
-            Ok(self.0)
-        }
-    }
-
     fn mock_ingestion_client(latest_checkpoint: u64) -> IngestionClient {
         let metrics = IngestionMetrics::new(None, &Registry::new());
-        IngestionClient::new_impl(Arc::new(MockLatestCheckpoint(latest_checkpoint)), metrics)
+        let mock = MockIngestionClient {
+            latest_checkpoint,
+            ..Default::default()
+        };
+        IngestionClient::new_impl(Arc::new(mock), metrics)
     }
 
-    async fn test_ingestion(
-        uri: String,
-        checkpoint_buffer_size: usize,
-        ingest_concurrency: usize,
-    ) -> IngestionService {
+    async fn test_ingestion(uri: String, ingest_concurrency: usize) -> IngestionService {
         let registry = Registry::new();
         IngestionService::new(
             ClientArgs {
@@ -348,7 +299,6 @@ mod tests {
                 ..Default::default()
             },
             IngestionConfig {
-                checkpoint_buffer_size,
                 ingest_concurrency: IngestConcurrencyConfig::Fixed {
                     value: ingest_concurrency,
                 },
@@ -387,9 +337,9 @@ mod tests {
         let server = MockServer::start().await;
         respond_with(&server, status(StatusCode::NOT_FOUND)).await;
 
-        let ingestion_service = test_ingestion(server.uri(), 1, 1).await;
+        let ingestion_service = test_ingestion(server.uri(), 1).await;
 
-        let res = ingestion_service.run(0.., None).await;
+        let res = ingestion_service.run(0..).await;
         assert!(matches!(res, Err(Error::NoSubscribers)));
     }
 
@@ -405,11 +355,11 @@ mod tests {
         .await;
         respond_with_chain_id(&server).await;
 
-        let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
+        let mut ingestion_service = test_ingestion(server.uri(), 1).await;
 
-        let (rx, _) = ingestion_service.subscribe();
+        let rx = ingestion_service.subscribe_bounded(1);
         let subscriber = test_subscriber(usize::MAX, rx).await;
-        let svc = ingestion_service.run(0.., None).await.unwrap();
+        let svc = ingestion_service.run(0..).await.unwrap();
 
         svc.shutdown().await.unwrap();
         subscriber.await.unwrap();
@@ -427,11 +377,11 @@ mod tests {
         .await;
         respond_with_chain_id(&server).await;
 
-        let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
+        let mut ingestion_service = test_ingestion(server.uri(), 1).await;
 
-        let (rx, _) = ingestion_service.subscribe();
+        let rx = ingestion_service.subscribe_bounded(1);
         let subscriber = test_subscriber(1, rx).await;
-        let mut svc = ingestion_service.run(0.., None).await.unwrap();
+        let mut svc = ingestion_service.run(0..).await.unwrap();
 
         drop(subscriber);
         svc.join().await.unwrap();
@@ -455,11 +405,11 @@ mod tests {
         .await;
         respond_with_chain_id(&server).await;
 
-        let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
+        let mut ingestion_service = test_ingestion(server.uri(), 1).await;
 
-        let (rx, _) = ingestion_service.subscribe();
+        let rx = ingestion_service.subscribe_bounded(1);
         let subscriber = test_subscriber(6, rx).await;
-        let _svc = ingestion_service.run(0.., None).await.unwrap();
+        let _svc = ingestion_service.run(0..).await.unwrap();
 
         let seqs = subscriber.await.unwrap();
         assert_eq!(seqs, vec![0, 1, 2, 3, 6, 7]);
@@ -482,11 +432,11 @@ mod tests {
         .await;
         respond_with_chain_id(&server).await;
 
-        let mut ingestion_service = test_ingestion(server.uri(), 1, 1).await;
+        let mut ingestion_service = test_ingestion(server.uri(), 1).await;
 
-        let (rx, _) = ingestion_service.subscribe();
+        let rx = ingestion_service.subscribe_bounded(1);
         let subscriber = test_subscriber(6, rx).await;
-        let _svc = ingestion_service.run(0.., None).await.unwrap();
+        let _svc = ingestion_service.run(0..).await.unwrap();
 
         let seqs = subscriber.await.unwrap();
         assert_eq!(seqs, vec![0, 1, 2, 3, 6, 7]);
@@ -507,18 +457,19 @@ mod tests {
         .await;
         respond_with_chain_id(&server).await;
 
-        let mut ingestion_service = test_ingestion(server.uri(), 3, 1).await;
+        let mut ingestion_service = test_ingestion(server.uri(), 1).await;
+        let size = 3;
 
         // This subscriber will take its sweet time processing checkpoints.
-        let (mut laggard, _) = ingestion_service.subscribe();
+        let mut laggard = ingestion_service.subscribe_bounded(size);
         async fn unblock(laggard: &mut mpsc::Receiver<Arc<CheckpointEnvelope>>) -> u64 {
             let checkpoint_envelope = laggard.recv().await.unwrap();
             checkpoint_envelope.checkpoint.summary.sequence_number
         }
 
-        let (rx, _) = ingestion_service.subscribe();
+        let rx = ingestion_service.subscribe_bounded(size);
         let subscriber = test_subscriber(6, rx).await;
-        let _svc = ingestion_service.run(0.., None).await.unwrap();
+        let _svc = ingestion_service.run(0..).await.unwrap();
 
         // At this point, the service will have been able to pass 3 checkpoints to the non-lagging
         // subscriber, while the laggard's buffer fills up. Now the laggard will pull two

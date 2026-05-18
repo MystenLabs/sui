@@ -9,6 +9,7 @@ use move_unit_test::UnitTestingConfig;
 use sui_framework_tests::setup_examples;
 use sui_move::unit_test::{MAX_UNIT_TEST_INSTRUCTIONS, run_move_unit_tests};
 use sui_move_build::BuildConfig;
+use sui_package_alt::SuiFlavor;
 
 pub(crate) const EXAMPLES: &str = "../../examples";
 pub(crate) const FRAMEWORK: &str = "../sui-framework/packages";
@@ -81,9 +82,16 @@ pub(crate) async fn tests(path: &Path) -> datatest_stable::Result<()> {
     testing_config.filter = std::env::var("FILTER").ok().map(|s| s.to_string());
 
     assert_eq!(
-        run_move_unit_tests(path, move_config, Some(testing_config), false, false)
-            .await
-            .unwrap(),
+        run_move_unit_tests(
+            path,
+            move_config,
+            Some(testing_config),
+            false,
+            false,
+            SuiFlavor::new()
+        )
+        .await
+        .unwrap(),
         UnitTestResult::Success
     );
 

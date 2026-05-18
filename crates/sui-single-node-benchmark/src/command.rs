@@ -135,6 +135,23 @@ pub enum WorkloadKind {
         )]
         manifest_file: PathBuf,
     },
+    /// Benchmark send_funds transactions that withdraw from the sender's address
+    /// balance and deposit to a recipient via balance::send_funds.
+    /// Gas is paid from address balance.
+    SendFunds {
+        #[arg(
+            long,
+            default_value_t = 100_000_000_000,
+            help = "Amount of MIST to seed each sender's address balance with"
+        )]
+        seed_amount: u64,
+        #[arg(
+            long,
+            default_value_t = 1000,
+            help = "Amount of MIST to transfer per send_funds transaction"
+        )]
+        transfer_amount: u64,
+    },
 }
 
 impl WorkloadKind {
@@ -143,6 +160,8 @@ impl WorkloadKind {
             // Each transaction will always have 1 gas object, plus the number of owned objects that will be transferred.
             WorkloadKind::PTB { num_transfers, .. } => *num_transfers + 1,
             WorkloadKind::Publish { .. } => 1,
+            // 1 gas object used during the seeding phase; benchmark transactions use address balance gas.
+            WorkloadKind::SendFunds { .. } => 1,
         }
     }
 }

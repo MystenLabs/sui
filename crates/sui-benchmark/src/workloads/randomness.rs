@@ -239,7 +239,6 @@ impl Workload<dyn Payload> for RandomnessWorkload {
             let (obj_ref, owner) = execution_proxy
                 .execute_transaction_block(transaction)
                 .await
-                .1
                 .unwrap()
                 .created()[0]
                 .clone();

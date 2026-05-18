@@ -215,7 +215,7 @@ impl UseDefTest {
 }
 
 impl AutoCompletionTest {
-    fn test<F: MoveFlavor>(
+    fn test<F: MoveFlavor + Default>(
         &self,
         test_idx: usize,
         packages_info: Arc<Mutex<CachedPackages>>,
@@ -239,7 +239,7 @@ impl AutoCompletionTest {
 }
 
 impl AutoImportTest {
-    fn test<F: MoveFlavor>(
+    fn test<F: MoveFlavor + Default>(
         &self,
         test_idx: usize,
         packages_info: Arc<Mutex<CachedPackages>>,
@@ -562,7 +562,7 @@ impl RenameTest {
     }
 }
 
-fn completion_test<F: MoveFlavor>(
+fn completion_test<F: MoveFlavor + Default>(
     use_line: u32,
     use_col: u32,
     test_idx: usize,
@@ -629,12 +629,13 @@ fn completion_test<F: MoveFlavor>(
 /// which triggers incremental compilation by causing file hash mismatches.
 ///
 /// Returns both CompiledPkgInfo and Symbols for test suites that need both.
-fn test_symbols_with_optional_modifications<F: MoveFlavor>(
+fn test_symbols_with_optional_modifications<F: MoveFlavor + Default>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     project_path: PathBuf,
     file_modifications: Option<BTreeMap<PathBuf, String>>,
 ) -> anyhow::Result<(CompiledPkgInfo, Symbols)> {
+    let move_flavor = Arc::new(F::default());
     // Apply file modifications to VFS overlay if provided
     if let Some(modifications) = file_modifications {
         for (file_path, content) in modifications {
@@ -664,6 +665,7 @@ fn test_symbols_with_optional_modifications<F: MoveFlavor>(
         ide_files_root,
         project_path.as_path(),
         LintLevel::None,
+        move_flavor,
         Some(Flavor::Sui),
         None, // No cursor file
     )?;
@@ -680,19 +682,21 @@ fn test_symbols_with_optional_modifications<F: MoveFlavor>(
 /// Compute symbols for a specific cursor position in autocomplete tests.
 /// This generates fresh CompilerAutocompleteInfo for the cursor position
 /// while leveraging cached CompilerAnalysisInfo and dependencies.
-fn test_symbols_for_autocomplete<F: MoveFlavor>(
+fn test_symbols_for_autocomplete<F: MoveFlavor + Default>(
     packages_info: Arc<Mutex<CachedPackages>>,
     ide_files_root: VfsPath,
     project_path: PathBuf,
     cursor_path: &PathBuf,
     cursor_pos: Position,
 ) -> anyhow::Result<Symbols> {
+    let move_flavor = Arc::new(F::default());
     // Single compilation with cursor position (no retry loop)
     let (compiled_pkg_info_opt, _) = get_compiled_pkg::<F>(
         packages_info.clone(),
         ide_files_root,
         project_path.as_path(),
         LintLevel::None,
+        move_flavor,
         Some(Flavor::Sui),
         Some(cursor_path),
     )?;
@@ -710,7 +714,7 @@ fn test_symbols_for_autocomplete<F: MoveFlavor>(
     Ok(symbols)
 }
 
-fn use_def_test_suite<F: MoveFlavor>(
+fn use_def_test_suite<F: MoveFlavor + Default>(
     project: String,
     file_tests: BTreeMap<String, Vec<UseDefTest>>,
 ) -> datatest_stable::Result<String> {
@@ -780,7 +784,7 @@ fn use_def_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
-fn auto_completion_test_suite<F: MoveFlavor>(
+fn auto_completion_test_suite<F: MoveFlavor + Default>(
     project: String,
     file_tests: BTreeMap<String, Vec<AutoCompletionTest>>,
 ) -> datatest_stable::Result<String> {
@@ -832,7 +836,7 @@ fn auto_completion_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
-fn auto_import_test_suite<F: MoveFlavor>(
+fn auto_import_test_suite<F: MoveFlavor + Default>(
     project: String,
     file_tests: BTreeMap<String, Vec<AutoImportTest>>,
 ) -> datatest_stable::Result<String> {
@@ -884,7 +888,7 @@ fn auto_import_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
-fn cursor_test_suite<F: MoveFlavor>(
+fn cursor_test_suite<F: MoveFlavor + Default>(
     project: String,
     file_tests: BTreeMap<String, Vec<CursorTest>>,
 ) -> datatest_stable::Result<String> {
@@ -924,7 +928,7 @@ fn cursor_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
-fn hint_test_suite<F: MoveFlavor>(
+fn hint_test_suite<F: MoveFlavor + Default>(
     project: String,
     file_tests: BTreeMap<String, Vec<HintTest>>,
 ) -> datatest_stable::Result<String> {
@@ -966,7 +970,7 @@ fn hint_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
-fn access_chain_quick_fix_test_suite<F: MoveFlavor>(
+fn access_chain_quick_fix_test_suite<F: MoveFlavor + Default>(
     project: String,
     file_tests: BTreeMap<String, Vec<AccessChainQuickFixTest>>,
 ) -> datatest_stable::Result<String> {
@@ -1008,7 +1012,7 @@ fn access_chain_quick_fix_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
-fn references_test_suite<F: MoveFlavor>(
+fn references_test_suite<F: MoveFlavor + Default>(
     project: String,
     file_tests: BTreeMap<String, Vec<ReferencesTest>>,
 ) -> datatest_stable::Result<String> {
@@ -1054,7 +1058,7 @@ fn references_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
-fn rename_test_suite<F: MoveFlavor>(
+fn rename_test_suite<F: MoveFlavor + Default>(
     project: String,
     file_tests: BTreeMap<String, Vec<RenameTest>>,
 ) -> datatest_stable::Result<String> {
@@ -1100,7 +1104,7 @@ fn rename_test_suite<F: MoveFlavor>(
     Ok(result)
 }
 
-fn move_ide_testsuite<F: MoveFlavor>(test_path: &Path) -> datatest_stable::Result<()> {
+fn move_ide_testsuite<F: MoveFlavor + Default>(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
     let suite: TestSuite = serde_json::from_reader(stripped)?;

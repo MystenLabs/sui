@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -17,8 +16,10 @@ use sui_types::transaction::TransactionData;
 use tonic::transport::Channel;
 use tonic::transport::ClientTlsConfig;
 use tonic::transport::Uri;
+use tower::Layer;
 
-use crate::metrics::LedgerGrpcReaderMetrics;
+use crate::metrics::GrpcMetricsLayer;
+use crate::metrics::GrpcMetricsService;
 
 const DEFAULT_MAX_DECODING_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
 
@@ -50,9 +51,8 @@ pub struct CheckpointedTransaction {
 /// as fullnode, but is backed by Bigtable for serving historical data.
 #[derive(Clone)]
 pub struct LedgerGrpcReader {
-    client: LedgerServiceClient<Channel>,
+    client: LedgerServiceClient<GrpcMetricsService<Channel>>,
     timeout: Option<Duration>,
-    metrics: Arc<LedgerGrpcReaderMetrics>,
 }
 
 impl LedgerGrpcArgs {
@@ -80,20 +80,17 @@ impl LedgerGrpcReader {
         }
 
         let channel = endpoint.connect_lazy();
+        let layered =
+            GrpcMetricsLayer::new(prefix.unwrap_or("ledger_grpc"), registry).layer(channel);
 
         let timeout = args.statement_timeout();
         let max_decoding_message_size = args
             .ledger_grpc_max_decoding_message_size
             .unwrap_or(DEFAULT_MAX_DECODING_MESSAGE_SIZE);
-        let client = LedgerServiceClient::new(channel.clone())
-            .max_decoding_message_size(max_decoding_message_size);
-        let metrics = LedgerGrpcReaderMetrics::new(prefix, registry);
+        let client =
+            LedgerServiceClient::new(layered).max_decoding_message_size(max_decoding_message_size);
 
-        Ok(Self {
-            client,
-            timeout,
-            metrics,
-        })
+        Ok(Self { client, timeout })
     }
 
     pub fn as_data_loader(&self) -> DataLoader<Self> {
@@ -121,99 +118,82 @@ impl LedgerGrpcReader {
             .context("Failed to deserialize checkpoint summary")
     }
 
+    /// Resolve a checkpoint digest to its sequence number via the ledger service. Returns `None`
+    /// if no checkpoint with that digest is known.
+    pub async fn checkpoint_seq_by_digest(
+        &self,
+        digest: sui_types::digests::CheckpointDigest,
+    ) -> anyhow::Result<Option<u64>> {
+        use grpc::GetCheckpointRequest;
+        use prost_types::FieldMask;
+        use sui_rpc::field::FieldMaskUtil;
+
+        let sdk_digest = sui_sdk_types::Digest::new(digest.inner().to_owned());
+        let request = GetCheckpointRequest::by_digest(&sdk_digest)
+            .with_read_mask(FieldMask::from_paths(["sequence_number"]));
+
+        match self.get_checkpoint(request).await {
+            Ok(response) => {
+                let checkpoint = response.checkpoint.context("No checkpoint returned")?;
+                Ok(checkpoint.sequence_number)
+            }
+            Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
+            Err(e) => Err(anyhow::anyhow!(e)),
+        }
+    }
+
     // Public wrapper methods for gRPC calls with metrics instrumentation
 
     pub async fn get_checkpoint(
         &self,
         request: grpc::GetCheckpointRequest,
     ) -> Result<grpc::GetCheckpointResponse, tonic::Status> {
-        self.request(
-            "get_checkpoint",
-            |mut client, request| async move { client.get_checkpoint(request).await },
-            request,
-        )
-        .await
+        self.client
+            .clone()
+            .get_checkpoint(self.request(request))
+            .await
+            .map(|r| r.into_inner())
     }
 
     pub async fn batch_get_transactions(
         &self,
         request: grpc::BatchGetTransactionsRequest,
     ) -> Result<grpc::BatchGetTransactionsResponse, tonic::Status> {
-        self.request(
-            "batch_get_transactions",
-            |mut client, request| async move { client.batch_get_transactions(request).await },
-            request,
-        )
-        .await
+        self.client
+            .clone()
+            .batch_get_transactions(self.request(request))
+            .await
+            .map(|r| r.into_inner())
     }
 
     pub async fn batch_get_objects(
         &self,
         request: grpc::BatchGetObjectsRequest,
     ) -> Result<grpc::BatchGetObjectsResponse, tonic::Status> {
-        self.request(
-            "batch_get_objects",
-            |mut client, request| async move { client.batch_get_objects(request).await },
-            request,
-        )
-        .await
+        self.client
+            .clone()
+            .batch_get_objects(self.request(request))
+            .await
+            .map(|r| r.into_inner())
     }
 
     pub async fn get_transaction(
         &self,
         request: grpc::GetTransactionRequest,
     ) -> Result<grpc::GetTransactionResponse, tonic::Status> {
-        self.request(
-            "get_transaction",
-            |mut client, request| async move { client.get_transaction(request).await },
-            request,
-        )
-        .await
+        self.client
+            .clone()
+            .get_transaction(self.request(request))
+            .await
+            .map(|r| r.into_inner())
     }
 
-    // Generic request wrapper that instruments all gRPC calls with metrics
-    async fn request<F, Fut, I, R>(
-        &self,
-        method: &str,
-        response: F,
-        input: I,
-    ) -> Result<R, tonic::Status>
-    where
-        F: FnOnce(LedgerServiceClient<Channel>, tonic::Request<I>) -> Fut,
-        Fut: std::future::Future<Output = Result<tonic::Response<R>, tonic::Status>>,
-    {
-        self.metrics
-            .requests_received
-            .with_label_values(&[method])
-            .inc();
-
-        let _timer = self
-            .metrics
-            .latency
-            .with_label_values(&[method])
-            .start_timer();
-
+    /// Create a gRPC request, optionally with the grpc-timeout header if configured.
+    fn request<T>(&self, input: T) -> tonic::Request<T> {
         let mut request = tonic::Request::new(input);
         if let Some(timeout) = self.timeout {
             request.set_timeout(timeout);
         }
-
-        let response = response(self.client.clone(), request)
-            .await
-            .map(|r| r.into_inner());
-
-        if response.is_ok() {
-            self.metrics
-                .requests_succeeded
-                .with_label_values(&[method])
-                .inc();
-        } else {
-            self.metrics
-                .requests_failed
-                .with_label_values(&[method])
-                .inc();
-        }
-
-        response
+        request
     }
 }

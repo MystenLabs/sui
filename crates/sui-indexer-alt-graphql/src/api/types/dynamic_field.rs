@@ -565,10 +565,10 @@ impl DynamicField {
 
         #[async_trait]
         impl sui_display::v2::Store for NopStore {
-            async fn object(
+            async fn latest(
                 &self,
                 _: AccountAddress,
-            ) -> anyhow::Result<Option<sui_display::v2::OwnedSlice>> {
+            ) -> anyhow::Result<Option<(MoveTypeLayout, Vec<u8>)>> {
                 bail!("Dynamic loads not supported")
             }
         }
@@ -576,10 +576,8 @@ impl DynamicField {
         let limits: &Limits = ctx.data()?;
         let limits = limits.display();
 
-        let root = sui_display::v2::OwnedSlice {
-            layout: MoveTypeLayout::Bool,
-            bytes: bcs::to_bytes(&false).unwrap(),
-        };
+        let root =
+            sui_display::v2::OwnedSlice::new(MoveTypeLayout::Bool, bcs::to_bytes(&false).unwrap());
 
         let parsed =
             sui_display::v2::Name::parse(limits, &literal).map_err(|e| bad_user_input(e.into()))?;

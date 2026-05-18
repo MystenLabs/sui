@@ -19,7 +19,7 @@ use move_core_types::identifier::IdentStr;
 use move_vm_runtime::validation::verification::ast::Package as VerifiedPackage;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::ObjectID, error::ExecutionError, execution_status::ExecutionErrorKind,
+    base_types::ObjectID, error::ExecutionErrorTrait, execution_status::ExecutionErrorKind,
     transaction::ProgrammableTransaction,
 };
 
@@ -29,28 +29,28 @@ pub struct LinkageAnalyzer {
 }
 
 impl LinkageAnalyzer {
-    pub fn new<Mode: ExecutionMode>(
-        protocol_config: &ProtocolConfig,
-    ) -> Result<Self, ExecutionError> {
+    pub fn new<Mode: ExecutionMode>(protocol_config: &ProtocolConfig) -> Result<Self, Mode::Error> {
         let always_include_system_packages = !Mode::packages_are_predefined();
-        let linkage_config = LinkageConfig::legacy_linkage_settings(always_include_system_packages);
+        let linkage_config = LinkageConfig::new(
+            protocol_config
+                .include_special_package_amendments_as_option()
+                .clone(),
+            always_include_system_packages,
+        );
         let binary_config = protocol_config.binary_config(None);
         Ok(Self {
-            internal: ResolutionConfig {
-                linkage_config,
-                binary_config,
-            },
+            internal: ResolutionConfig::new(linkage_config, binary_config),
         })
     }
 
-    pub fn compute_call_linkage(
+    pub fn compute_call_linkage<E: ExecutionErrorTrait>(
         &self,
         package: &ObjectID,
         module_name: &IdentStr,
         function_name: &IdentStr,
         type_args: &[Type],
         store: &dyn PackageStore,
-    ) -> Result<ExecutableLinkage, ExecutionError> {
+    ) -> Result<ExecutableLinkage, E> {
         Ok(ExecutableLinkage::new(
             ResolvedLinkage::from_resolution_table(self.compute_call_linkage_(
                 package,
@@ -62,11 +62,11 @@ impl LinkageAnalyzer {
         ))
     }
 
-    pub fn compute_publication_linkage(
+    pub fn compute_publication_linkage<E: ExecutionErrorTrait>(
         &self,
         deps: &[ObjectID],
         store: &dyn PackageStore,
-    ) -> Result<ResolvedLinkage, ExecutionError> {
+    ) -> Result<ResolvedLinkage, E> {
         Ok(ResolvedLinkage::from_resolution_table(
             self.compute_publication_linkage_(deps, store)?,
         ))
@@ -76,12 +76,12 @@ impl LinkageAnalyzer {
         &self.internal
     }
 
-    pub fn compute_input_type_resolution_linkage(
+    pub fn compute_input_type_resolution_linkage<E: ExecutionErrorTrait>(
         &self,
         tx: &ProgrammableTransaction,
         package_store: &dyn PackageStore,
         object_store: &dyn ExecutionState,
-    ) -> Result<ExecutableLinkage, ExecutionError> {
+    ) -> Result<ExecutableLinkage, E> {
         input_type_resolution_analysis::compute_resolution_linkage(
             self,
             tx,
@@ -90,28 +90,29 @@ impl LinkageAnalyzer {
         )
     }
 
-    fn compute_call_linkage_(
+    fn compute_call_linkage_<E: ExecutionErrorTrait>(
         &self,
         package: &ObjectID,
         module_name: &IdentStr,
         function_name: &IdentStr,
         type_args: &[Type],
         store: &dyn PackageStore,
-    ) -> Result<ResolutionTable, ExecutionError> {
-        let mut resolution_table = self
-            .internal
-            .linkage_config
-            .resolution_table_with_native_packages(store)?;
+    ) -> Result<ResolutionTable, E> {
+        let mut resolution_table = self.internal.resolution_table_with_native_packages(store)?;
 
-        fn add_package(
+        fn add_package<E: ExecutionErrorTrait>(
             object_id: &ObjectID,
             store: &dyn PackageStore,
             resolution_table: &mut ResolutionTable,
             self_resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
             dep_resolution_fn: fn(&VerifiedPackage) -> Option<VersionConstraint>,
-        ) -> Result<(), ExecutionError> {
+        ) -> Result<(), E> {
             let pkg = get_package(object_id, store)?;
-            let transitive_deps = pkg.linkage_table().values().copied().map(ObjectID::from);
+            let transitive_deps = resolution_table
+                .config
+                .linkage_table(&pkg)
+                .into_values()
+                .map(ObjectID::from);
             for object_id in transitive_deps {
                 add_and_unify(&object_id, store, resolution_table, dep_resolution_fn)?;
             }
@@ -120,8 +121,8 @@ impl LinkageAnalyzer {
         }
 
         let pkg = get_package(package, store)?;
-        let fn_not_found_err = || {
-            ExecutionError::new_with_source(
+        let fn_not_found_err = || -> E {
+            E::new_with_source(
                 ExecutionErrorKind::FunctionNotFound,
                 format!(
                     "Could not resolve function '{}' in module '{}::{}'",
@@ -167,15 +168,12 @@ impl LinkageAnalyzer {
     }
 
     /// Compute the linkage for a publish or upgrade command. This is a special case because
-    fn compute_publication_linkage_(
+    fn compute_publication_linkage_<E: ExecutionErrorTrait>(
         &self,
         deps: &[ObjectID],
         store: &dyn PackageStore,
-    ) -> Result<ResolutionTable, ExecutionError> {
-        let mut resolution_table = self
-            .internal
-            .linkage_config
-            .resolution_table_with_native_packages(store)?;
+    ) -> Result<ResolutionTable, E> {
+        let mut resolution_table = self.internal.resolution_table_with_native_packages(store)?;
         for id in deps {
             add_and_unify(id, store, &mut resolution_table, VersionConstraint::exact)?;
         }
@@ -196,7 +194,7 @@ mod input_type_resolution_analysis {
     use move_core_types::language_storage::StructTag;
     use sui_types::{
         base_types::ObjectID,
-        error::ExecutionError,
+        error::ExecutionErrorTrait,
         execution_status::ExecutionErrorKind,
         transaction::{
             CallArg, Command, FundsWithdrawalArg, ObjectArg, ProgrammableMoveCall,
@@ -205,17 +203,16 @@ mod input_type_resolution_analysis {
         type_input::TypeInput,
     };
 
-    pub(super) fn compute_resolution_linkage(
+    pub(super) fn compute_resolution_linkage<E: ExecutionErrorTrait>(
         analyzer: &LinkageAnalyzer,
         tx: &ProgrammableTransaction,
         package_store: &dyn PackageStore,
         object_store: &dyn ExecutionState,
-    ) -> Result<ExecutableLinkage, ExecutionError> {
+    ) -> Result<ExecutableLinkage, E> {
         let ProgrammableTransaction { inputs, commands } = tx;
 
         let mut resolution_table = analyzer
             .internal
-            .linkage_config
             .resolution_table_with_native_packages(package_store)?;
         for arg in inputs.iter() {
             input(&mut resolution_table, arg, package_store, object_store)?;
@@ -230,12 +227,12 @@ mod input_type_resolution_analysis {
         ))
     }
 
-    fn input(
+    fn input<E: ExecutionErrorTrait>(
         resolution_table: &mut ResolutionTable,
         arg: &CallArg,
         package_store: &dyn PackageStore,
         object_store: &dyn ExecutionState,
-    ) -> Result<(), ExecutionError> {
+    ) -> Result<(), E> {
         match arg {
             CallArg::Pure(_) | CallArg::Object(ObjectArg::Receiving(_)) => (),
             CallArg::Object(
@@ -268,14 +265,14 @@ mod input_type_resolution_analysis {
         Ok(())
     }
 
-    fn command(
+    fn command<E: ExecutionErrorTrait>(
         resolution_table: &mut ResolutionTable,
         command: &Command,
         package_store: &dyn PackageStore,
-    ) -> Result<(), ExecutionError> {
-        let mut add_ty_input = |ty: &TypeInput| {
+    ) -> Result<(), E> {
+        let mut add_ty_input = |ty: &TypeInput| -> Result<(), E> {
             let tag = ty.to_type_tag().map_err(|e| {
-                ExecutionError::new_with_source(
+                E::new_with_source(
                     ExecutionErrorKind::InvalidLinkage,
                     format!("Invalid type tag in move call argument: {:?}", e),
                 )

@@ -1,68 +1,68 @@
 //# publish
-module 0x42.M {
-    public foo(): u64 {
+mvir 0x42::M {
+    public fun foo(): u64 {
     label b0:
         return 5;
     }
 }
 
 //# publish
-module 0x43.M {
-    public bar(): u64 {
+mvir 0x43::M {
+    public fun bar(): u64 {
     label b0:
         return 7;
     }
 }
 
 //# publish
-module 0x44.M {
-    import 0x43.M as M1;
-    import 0x44.M as M2;
+mvir 0x44::M {
+    import 0x43::M as M1;
+    import 0x44::M as M2;
 
-    public run() {
+    public fun run() {
         let x: u64;
     label b0:
-        x = M1.foo();
+        x = M1::foo();
         assert(move(x) == 5, 42);
-        x = M2.bar();
+        x = M2::bar();
         assert(move(x) == 7, 42);
         return;
     }
 }
 
 //# run
-module 0x45.m {
-import 0x42.M;
+mvir 0x45::m {
+import 0x42::M;
 
-entry foo() {
+entry fun foo() {
 label b0:
-    M.run();
+    M::run();
     return;
 }
 }
 
 //# publish
-module 0x46.M {
-    public baz(): u64 {
+mvir 0x46::M {
+    public fun baz(): u64 {
     label b0:
         return 9;
     }
 }
 
 //# run
-module 0x47.m {
-import 0x42.M as M1;
-import 0x43.M as M2;
-import 0x44.M as M3;
+mvir 0x47::m {
+import 0x42::M as M1;
+import 0x43::M as M2;
+import 0x44::M as M3;
 
-entry foo() {
+entry fun foo() {
     let x: u64;
 label b0:
-    x = M1.foo();
+    x = M1::foo();
     assert(move(x) == 5, 42);
-    x = M2.bar();
+    x = M2::bar();
     assert(move(x) == 7, 42);
-    x = M3.baz();
+    x = M3::baz();
     assert(move(x) == 9, 42);
     return;
 }

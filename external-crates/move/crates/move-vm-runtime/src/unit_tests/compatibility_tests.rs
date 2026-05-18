@@ -36,16 +36,16 @@ fn compile(prog: &str) -> normalized::Module<normalized::RcIdentifier> {
 fn test_enum_upgrade_variant_removal() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { }, L { } }
+        mvir 0x1::M {
+            public enum E { V { }, L { } }
         }
         ",
     );
     // Enum variant removal is not allowed
     let new = compile(
         "
-        module 0x1.M {
-            enum E { V { } }
+        mvir 0x1::M {
+            public enum E { V { } }
         }
         ",
     );
@@ -58,16 +58,16 @@ fn test_enum_upgrade_variant_removal() {
 fn test_enum_upgrade_variant_rename() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { } }
+        mvir 0x1::M {
+            public enum E { V { } }
         }
         ",
     );
     // Enum variant renaming is not allowed
     let new = compile(
         "
-        module 0x1.M {
-            enum E { L { } }
+        mvir 0x1::M {
+            public enum E { L { } }
         }
         ",
     );
@@ -80,16 +80,16 @@ fn test_enum_upgrade_variant_rename() {
 fn test_enum_upgrade_variant_reorder() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { }, L { } }
+        mvir 0x1::M {
+            public enum E { V { }, L { } }
         }
         ",
     );
     // Enum variant reordering is not allowed.
     let new = compile(
         "
-        module 0x1.M {
-            enum E { L { }, V { } }
+        mvir 0x1::M {
+            public enum E { L { }, V { } }
         }
         ",
     );
@@ -102,16 +102,16 @@ fn test_enum_upgrade_variant_reorder() {
 fn test_enum_upgrade_variant_add_field() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { } }
+        mvir 0x1::M {
+            public enum E { V { } }
         }
         ",
     );
     // Adding a new field to an existing enum variant is not allowed
     let new = compile(
         "
-        module 0x1.M {
-            enum E { V { x: u64 } }
+        mvir 0x1::M {
+            public enum E { V { x: u64 } }
         }
         ",
     );
@@ -124,16 +124,16 @@ fn test_enum_upgrade_variant_add_field() {
 fn test_enum_upgrade_variant_remove_field() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { x: u64 } }
+        mvir 0x1::M {
+            public enum E { V { x: u64 } }
         }
         ",
     );
     // Adding a new field to an existing enum variant is not allowed
     let new = compile(
         "
-        module 0x1.M {
-            enum E { V { } }
+        mvir 0x1::M {
+            public enum E { V { } }
         }
         ",
     );
@@ -146,16 +146,16 @@ fn test_enum_upgrade_variant_remove_field() {
 fn test_enum_upgrade_variant_rename_field() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { x: u64 } }
+        mvir 0x1::M {
+            public enum E { V { x: u64 } }
         }
         ",
     );
     // Renaming a field in an existing enum variant is not allowed
     let new = compile(
         "
-        module 0x1.M {
-            enum E { V { y: u64 } }
+        mvir 0x1::M {
+            public enum E { V { y: u64 } }
         }
         ",
     );
@@ -168,16 +168,16 @@ fn test_enum_upgrade_variant_rename_field() {
 fn test_enum_upgrade_variant_change_field_type() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { x: u64 } }
+        mvir 0x1::M {
+            public enum E { V { x: u64 } }
         }
         ",
     );
     // Changing the type of an existing field in an enum variant is not allowed
     let new = compile(
         "
-        module 0x1.M {
-            enum E { V { x: bool } }
+        mvir 0x1::M {
+            public enum E { V { x: bool } }
         }
         ",
     );
@@ -190,16 +190,16 @@ fn test_enum_upgrade_variant_change_field_type() {
 fn test_enum_upgrade_add_variant_at_front() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { x: u64 } }
+        mvir 0x1::M {
+            public enum E { V { x: u64 } }
         }
         ",
     );
     // Adding a new variant at the front of the enum is not allowed (ever)
     let new = compile(
         "
-        module 0x1.M {
-            enum E { L { x: u64 }, V { x: u64 } }
+        mvir 0x1::M {
+            public enum E { L { x: u64 }, V { x: u64 } }
         }
         ",
     );
@@ -213,8 +213,8 @@ fn test_enum_upgrade_add_variant_at_front() {
 fn test_enum_upgrade_add_variant_at_end() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { x: u64 } }
+        mvir 0x1::M {
+            public enum E { V { x: u64 } }
         }
         ",
     );
@@ -222,8 +222,8 @@ fn test_enum_upgrade_add_variant_at_end() {
     // `disallow_new_variants` flag is set to false.
     let new = compile(
         "
-        module 0x1.M {
-            enum E { V { x: u64 }, L { x: u64 }}
+        mvir 0x1::M {
+            public enum E { V { x: u64 }, L { x: u64 }}
         }
         ",
     );
@@ -241,16 +241,16 @@ fn test_enum_upgrade_add_variant_at_end() {
 fn test_enum_upgrade_add_store_ability() {
     let old = compile(
         "
-        module 0x1.M {
-            enum E { V { x: u64 } }
+        mvir 0x1::M {
+            public enum E { V { x: u64 } }
         }
         ",
     );
     // Adding a new variant at the front of the enum is not allowed (ever)
     let new = compile(
         "
-        module 0x1.M {
-            enum E has store { V { x: u64 } }
+        mvir 0x1::M {
+            public enum E has store { V { x: u64 } }
         }
         ",
     );

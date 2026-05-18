@@ -8,6 +8,7 @@ pub use vanilla::Vanilla;
 
 use std::{collections::BTreeMap, fmt::Debug};
 
+use async_trait::async_trait;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::schema::{
@@ -19,10 +20,15 @@ use indexmap::IndexMap;
 /// A [MoveFlavor] is used to parameterize the package management system. It defines the types and
 /// methods for package management that are specific to a particular instantiation of the Move
 /// language.
+///
+/// Note: this is distinct from [`move_compiler::editions::Flavor`], which selects compiler syntax
+/// and semantics (e.g. `Core` vs `Sui`). `MoveFlavor` controls package-level concerns like system
+/// dependencies, default environments, and on-chain fetching.
+#[async_trait]
 pub trait MoveFlavor: Debug + Send + Sync {
     /// Return an identifier for the flavor, used to ensure that the correct compiler is being used
     /// to parse a manifest.
-    fn name() -> String;
+    fn name(&self) -> String;
 
     /// A [PublishedMetadata] should contain all of the information that is generated
     /// during publication.
@@ -39,21 +45,25 @@ pub trait MoveFlavor: Debug + Send + Sync {
 
     /// Return the default environments for the flavor.
     /// Used for populating new manifests & migration purposes.
-    fn default_environments() -> IndexMap<EnvironmentName, EnvironmentID>;
+    fn default_environments(&self) -> IndexMap<EnvironmentName, EnvironmentID>;
 
-    /// Return ALL the system dependencies for the requested environment.
-    fn system_deps(environment: &EnvironmentID) -> BTreeMap<SystemDepName, LockfileDependencyInfo>;
+    /// Return ALL the system dependencies for the requested `environment`.
+    async fn system_deps(
+        &self,
+        environment: &EnvironmentID,
+    ) -> BTreeMap<SystemDepName, LockfileDependencyInfo>;
 
-    /// Return the default system dependencies for the requested environment.
-    fn implicit_dependencies(
+    /// Return the default system dependencies for the requested `environment`.
+    async fn implicit_dependencies(
+        &self,
         environment: &EnvironmentID,
     ) -> BTreeMap<PackageName, ReplacementDependency>;
 
     /// Fail if an edition is not allowed
-    fn validate_manifest(manifest: &ParsedManifest) -> Result<(), String>;
+    fn validate_manifest(&self, manifest: &ParsedManifest) -> Result<(), String>;
 
     /// Should this address be considered published in all environments? Publications with system
     /// addresses are not dropped when substituting ephemeral addresses (they can still be
     /// overridden)
-    fn is_system_address(address: &OriginalID) -> bool;
+    fn is_system_address(&self, address: &OriginalID) -> bool;
 }

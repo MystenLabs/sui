@@ -3,7 +3,7 @@
 
 use crate::static_programmable_transactions::metering::translation_meter::TranslationMeter;
 use sui_types::{
-    error::ExecutionError,
+    error::ExecutionErrorTrait,
     transaction::{CallArg, Command, ProgrammableTransaction},
 };
 
@@ -13,10 +13,10 @@ use sui_types::{
 /// - number of commands and their arguments
 /// - for Move calls, count arguments to the function (both value and type arguments) as the
 ///   "arguments" to charge for for the command.
-pub fn meter(
+pub fn meter<E: ExecutionErrorTrait>(
     meter: &mut TranslationMeter,
     transaction: &ProgrammableTransaction,
-) -> Result<(), ExecutionError> {
+) -> Result<(), E> {
     meter.charge_base_inputs(transaction.inputs.len())?;
 
     for input in &transaction.inputs {

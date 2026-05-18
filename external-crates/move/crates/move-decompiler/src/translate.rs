@@ -11,10 +11,13 @@ use crate::{
 };
 
 use crate::ast::Exp;
-use move_model_2::{model::Model, source_kind::SourceKind};
+use move_model_2::{
+    model::{Model, Module as MModule},
+    source_kind::SourceKind,
+};
 use move_stackless_bytecode_2::ast as SB;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 // -------------------------------------------------------------------------------------------------
 // Entry
@@ -29,7 +32,9 @@ pub fn model_with_config<S: SourceKind>(
     config: &Config,
     model: Model<S>,
 ) -> anyhow::Result<Out::Decompiled<S>> {
-    let stackless = move_stackless_bytecode_2::from_model(&model, /* optimize */ true)?;
+    // Don't optimize the stackless bytecode: we want to faithfully decompile what the
+    // bytecode actually contains.
+    let stackless = move_stackless_bytecode_2::from_model(&model, /* optimize */ false)?;
     let packages = packages(config, &model, stackless);
     Ok(Out::Decompiled { model, packages })
 }
@@ -49,16 +54,18 @@ fn packages<S: SourceKind>(
         .collect()
 }
 
-fn package<S: SourceKind>(config: &Config, _model: &Model<S>, sb_pkg: SB::Package) -> Out::Package {
+fn package<S: SourceKind>(config: &Config, model: &Model<S>, sb_pkg: SB::Package) -> Out::Package {
     let SB::Package {
         name,
         address,
         modules,
     } = sb_pkg;
+    let pkg = model.package(&address);
     let modules = modules
         .into_iter()
         .map(|(module_name, m)| {
-            let decompiled_module = module(config, m);
+            let resolved = pkg.module(module_name);
+            let decompiled_module = module(config, resolved, m);
             (module_name, decompiled_module)
         })
         .collect();
@@ -73,22 +80,70 @@ fn package<S: SourceKind>(config: &Config, _model: &Model<S>, sb_pkg: SB::Packag
 // Module
 // -------------------------------------------------------------------------------------------------
 
-pub fn module(config: &Config, module: SB::Module) -> Out::Module {
-    let SB::Module { name, functions } = module;
+pub fn module<S: SourceKind>(
+    config: &Config,
+    resolved: MModule<'_, S>,
+    sb_module: SB::Module,
+) -> Out::Module {
+    let SB::Module { name, functions } = sb_module;
 
     let functions = functions
         .into_iter()
-        .map(|(name, fun)| (name, function(config, fun)))
+        .map(|(name, fun)| (name, function(config, resolved, fun)))
         .collect();
 
-    Out::Module { name, functions }
+    let mut module = Out::Module {
+        name,
+        functions,
+        uses: BTreeMap::new(),
+        type_uses: BTreeMap::new(),
+    };
+
+    let current_mid = resolved.id();
+    let used = build_used(&module, &resolved);
+    crate::refinement::collect_uses(&mut module, current_mid, &used);
+    module
+}
+
+/// Names that no module alias may use: every function, struct, enum, variant, and field
+/// name declared in this module, plus every local introduced or referenced in any function
+/// body. Aliases shadowing these would produce ambiguous or wrong decompiled source.
+fn build_used<S: SourceKind>(module: &Out::Module, resolved: &MModule<'_, S>) -> BTreeSet<Symbol> {
+    let mut out = crate::refinement::collect_local_names(module);
+
+    // Function names in this module.
+    for name in module.functions.keys() {
+        out.insert(*name);
+    }
+
+    // Struct, enum, variant, and field names declared in this module.
+    for s in resolved.structs() {
+        out.insert(s.name());
+        for field in s.compiled().fields.0.keys() {
+            out.insert(*field);
+        }
+    }
+    for e in resolved.enums() {
+        out.insert(e.name());
+        for v in e.variants() {
+            out.insert(v.name());
+            for field in v.compiled().fields.0.keys() {
+                out.insert(*field);
+            }
+        }
+    }
+    out
 }
 
 // -------------------------------------------------------------------------------------------------
 // Function
 // -------------------------------------------------------------------------------------------------
 
-fn function(config: &Config, fun: SB::Function) -> Out::Function {
+fn function<S: SourceKind>(
+    config: &Config,
+    resolved_module: MModule<'_, S>,
+    fun: SB::Function,
+) -> Out::Function {
     if config.debug_print.print_function_heading() {
         println!("DECOMPILING FUNCTION {}", fun.name);
     }
@@ -98,6 +153,16 @@ fn function(config: &Config, fun: SB::Function) -> Out::Function {
             println!("Block {}:\n{blk}", lbl);
         }
     }
+    // Look up the compiled function so we can name its parameters. The first `parameters.len()`
+    // local indices are the parameters; the rest are body locals introduced by the bytecode.
+    // term_reconstruction renders local id `i` as `l{i}`, so the parameter names are
+    // `l0..l{param_count-1}`.
+    let param_count = resolved_module
+        .function(fun.name)
+        .maybe_compiled()
+        .map(|f| f.parameters.len())
+        .unwrap_or(0);
+    let params: Vec<String> = (0..param_count).map(|i| format!("l{i}")).collect();
     let (name, terms, input, entry) = make_input(fun);
     if config.debug_print.input {
         print_heading("input");
@@ -109,6 +174,7 @@ fn function(config: &Config, fun: SB::Function) -> Out::Function {
         println!("{}", structured.to_test_string());
     }
     let mut code = generate_output(terms, structured);
+    crate::structuring::hoist_declarations::hoist_declarations(&mut code, params);
     crate::refinement::refine(&mut code);
     if config.debug_print.decompiled_code {
         print_heading("refined code");
@@ -136,7 +202,6 @@ fn make_input(
 
     let blocks_iter = basic_blocks.iter();
     let mut next_blocks_iter = basic_blocks.iter().skip(1);
-    let mut let_binds = HashSet::new();
 
     for (lbl, block) in blocks_iter {
         let label = lbl;
@@ -150,11 +215,12 @@ fn make_input(
         } else {
             None
         };
-        // Extract terms and input for the block
+        // Per-block: the block's first StoreLoc of each local emits `let X = e`, the rest
+        // `X = e`. Cross-block coordination — hoisting `let X;` out of arm scopes when X is
+        // shared with siblings or seen by later items — happens later in `hoist_declarations`.
+        let mut let_binds: HashSet<SB::RegId> = HashSet::new();
         let blk_terms = generate_term_block(block, &mut let_binds);
         let blk_input = extract_input(block, next_block_label);
-
-        // Insert into the maps
 
         terms.insert((*label as u32).into(), blk_terms);
         input.insert((*label as u32).into(), blk_input);
@@ -183,12 +249,27 @@ fn extract_input(block: &SB::BasicBlock, next_block_label: Option<SB::Label>) ->
                 condition: _,
                 then_label,
                 else_label,
-            } => DI::Condition(
-                (block.label as u32).into(),
-                (block.label as u32).into(),
-                (*then_label as u32).into(),
-                (*else_label as u32).into(),
-            ),
+            } => {
+                // A degenerate JumpIf whose two arms target the same label is just an
+                // unconditional jump with a dead condition. The compiler can leave these
+                // around when an arm body is empty (`if (c) {}`) and the optimizer forwards
+                // the empty arm to the join. Lower it as `Code` so structuring isn't asked
+                // to handle a Condition whose successors aren't dominated by it.
+                if then_label == else_label {
+                    DI::Code(
+                        (block.label as u32).into(),
+                        (block.label as u32).into(),
+                        Some((*then_label as u32).into()),
+                    )
+                } else {
+                    DI::Condition(
+                        (block.label as u32).into(),
+                        (block.label as u32).into(),
+                        (*then_label as u32).into(),
+                        (*else_label as u32).into(),
+                    )
+                }
+            }
             SI::VariantSwitch {
                 condition: _,
                 enum_,
@@ -229,16 +310,19 @@ fn extract_input(block: &SB::BasicBlock, next_block_label: Option<SB::Label>) ->
 
 fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Structured) -> Exp {
     match structured {
-        D::Structured::Break => Out::Exp::Break,
-        D::Structured::Continue => Out::Exp::Continue,
+        D::Structured::Break(label) => Out::Exp::Break(Some(label.index() as u64)),
+        D::Structured::Continue(label) => Out::Exp::Continue(Some(label.index() as u64)),
         D::Structured::Block(lbl) => terms.remove(&(lbl as u32).into()).unwrap(),
-        D::Structured::Loop(body) => Out::Exp::Loop(Box::new(generate_output(terms, *body))),
+        D::Structured::Loop(label, body) => Out::Exp::Loop(
+            Some(label.index() as u64),
+            Box::new(generate_output(terms, *body)),
+        ),
         D::Structured::Seq(seq) => {
-            let seq = seq
+            let items = seq
                 .into_iter()
                 .map(|s| generate_output(terms.clone(), s))
                 .collect();
-            Out::Exp::Seq(seq)
+            Out::Exp::Seq(items)
         }
         D::Structured::IfElse(lbl, conseq, alt) => {
             let term = terms.remove(&(lbl as u32).into()).unwrap();
@@ -248,7 +332,15 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
             };
             // When a cond block has list of exp before the jump, we need to pop the conditional statement and
             let (cond, mut exps) = (seq.pop().unwrap(), seq);
-            let alt_exp = alt.map(|a| generate_output(terms.clone(), a));
+            // Drop an alt that collapsed to an empty Seq (typically from `LatchKind::InLoop`
+            // in `insert_breaks`); otherwise the output renders with empty `else { }` braces.
+            let alt_exp = alt.and_then(|a| {
+                let e = generate_output(terms.clone(), a);
+                match &e {
+                    Exp::Seq(items) if items.is_empty() => None,
+                    _ => Some(e),
+                }
+            });
             exps.push(Out::Exp::IfElse(
                 Box::new(cond),
                 Box::new(generate_output(terms.clone(), *conseq)),
@@ -267,14 +359,21 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
                 .into_iter()
                 .map(|(v, c)| (v, generate_output(terms.clone(), c)))
                 .collect();
-            exps.push(Out::Exp::Switch(Box::new(cond), enum_, cases));
+            exps.push(Out::Exp::Switch(
+                Box::new(cond),
+                Out::TypeRef::Qualified(Out::ModuleRef::Qualified(enum_.0), enum_.1),
+                cases,
+            ));
             Out::Exp::Seq(exps)
         }
-        D::Structured::Jump(target) => {
+        D::Structured::Jump(src, target) => {
             let label = target.index() as u64;
+            // Surviving Jump becomes a real goto; tag the line with its creation site so
+            // the corpus driver can break down residue by category.
+            eprintln!("GOTO[{}] -> label_{}", src.as_tag(), label);
             Out::Exp::Unstructured(vec![Out::UnstructuredNode::Goto(label)])
         }
-        D::Structured::JumpIf(code, then_target, else_target) => {
+        D::Structured::JumpIf(src, code, then_target, else_target) => {
             let term = terms.remove(&(code as u32).into()).unwrap();
             let Exp::Seq(mut seq) = term else {
                 panic!("Expected Seq for JumpIf condition")
@@ -283,6 +382,12 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
 
             let then_label = then_target.index() as u64;
             let else_label = else_target.index() as u64;
+            eprintln!(
+                "GOTO[{}] -> label_{}/label_{}",
+                src.as_tag(),
+                then_label,
+                else_label
+            );
 
             seq.push(Out::Exp::IfElse(
                 Box::new(cond),
@@ -297,3 +402,5 @@ fn generate_output(mut terms: BTreeMap<D::Label, Out::Exp>, structured: D::Struc
         }
     }
 }
+
+// -------------------------------------------------------------------------------------------------

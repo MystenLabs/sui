@@ -1,6 +1,6 @@
 //# publish
-module 0x6.test {
-    public test(external: &mut u64) {
+mvir 0x6::test {
+    public fun test(external: &mut u64) {
         let local: u64;
         let local_ref: &mut u64;
     label b0:

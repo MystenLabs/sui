@@ -1274,7 +1274,7 @@ checking the type of the <code>Config</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/token.md#sui_token_has_rule_config">has_rule_config</a>&lt;T, Rule&gt;(self: &<a href="../sui/token.md#sui_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;): bool {
-    df::exists_&lt;<a href="../sui/token.md#sui_token_RuleKey">RuleKey</a>&lt;Rule&gt;&gt;(&self.id, <a href="../sui/token.md#sui_token_key">key</a>&lt;Rule&gt;())
+    df::exists&lt;<a href="../sui/token.md#sui_token_RuleKey">RuleKey</a>&lt;Rule&gt;&gt;(&self.id, <a href="../sui/token.md#sui_token_key">key</a>&lt;Rule&gt;())
 }
 </code></pre>
 

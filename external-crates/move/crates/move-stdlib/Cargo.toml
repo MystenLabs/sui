@@ -13,13 +13,9 @@ publish = false
 [dependencies]
 move-docgen.workspace = true
 move-command-line-common.workspace = true
-move-binary-format.workspace = true
 move-core-types.workspace = true
 # referred to via path for execution versioning
-move-vm-runtime = { path = "../move-vm-runtime" }
-log.workspace = true
 walkdir.workspace = true
-sha2.workspace = true
 anyhow.workspace = true
 hex.workspace = true
 move-package-alt-compilation.workspace = true

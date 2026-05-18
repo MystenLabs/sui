@@ -302,13 +302,10 @@ impl<S: Store> Indexer<S> {
 
         let mut service = self
             .ingestion_service
-            .run(
-                (
-                    Bound::Included(start),
-                    end.map_or(Bound::Unbounded, Bound::Included),
-                ),
-                self.next_sequential_checkpoint,
-            )
+            .run((
+                Bound::Included(start),
+                end.map_or(Bound::Unbounded, Bound::Included),
+            ))
             .await
             .context("Failed to start ingestion service")?;
 
@@ -395,13 +392,17 @@ impl<S: ConcurrentStore> Indexer<S> {
             return Ok(());
         };
 
+        let checkpoint_rx = self
+            .ingestion_service
+            .subscribe_bounded(config.ingestion.subscriber_channel_size());
+
         self.pipelines.push(concurrent::pipeline::<H>(
             handler,
             next_checkpoint,
             config,
             self.store.clone(),
             self.task.clone(),
-            self.ingestion_service.subscribe().0,
+            checkpoint_rx,
             self.metrics.clone(),
         ));
 
@@ -417,9 +418,6 @@ impl<T: SequentialStore> Indexer<T> {
     /// required to handle pipelines that modify data in-place (where each update is not an insert,
     /// but could be a modification of an existing row, where ordering between updates is
     /// important).
-    ///
-    /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
-    /// number of checkpoints (configured by `checkpoint_lag`).
     pub async fn sequential_pipeline<H: sequential::Handler<Store = T>>(
         &mut self,
         handler: H,
@@ -443,7 +441,9 @@ impl<T: SequentialStore> Indexer<T> {
                 .map_or(next_checkpoint, |n| n.min(next_checkpoint)),
         );
 
-        let (checkpoint_rx, commit_hi_tx) = self.ingestion_service.subscribe();
+        let checkpoint_rx = self
+            .ingestion_service
+            .subscribe_bounded(config.ingestion.subscriber_channel_size());
 
         self.pipelines.push(sequential::pipeline::<H>(
             handler,
@@ -451,7 +451,6 @@ impl<T: SequentialStore> Indexer<T> {
             config,
             self.store.clone(),
             checkpoint_rx,
-            commit_hi_tx,
             self.metrics.clone(),
         ));
 
@@ -474,7 +473,7 @@ mod tests {
     use crate::ingestion::ingestion_client::IngestionClientArgs;
     use crate::ingestion::store_client::ObjectStoreWatermark;
     use crate::ingestion::store_client::WATERMARK_PATH;
-    use crate::mocks::store::MockStore;
+    use crate::mocks::store::FallibleMockStore;
     use crate::pipeline::CommitterConfig;
     use crate::pipeline::Processor;
     use crate::pipeline::concurrent::ConcurrentConfig;
@@ -525,7 +524,7 @@ mod tests {
 
     #[async_trait]
     impl concurrent::Handler for ControllableHandler {
-        type Store = MockStore;
+        type Store = FallibleMockStore;
         type Batch = Vec<MockValue>;
 
         fn batch(
@@ -569,7 +568,7 @@ mod tests {
 
             #[async_trait]
             impl crate::pipeline::concurrent::Handler for $handler {
-                type Store = MockStore;
+                type Store = FallibleMockStore;
                 type Batch = Vec<Self::Value>;
 
                 fn batch(
@@ -597,7 +596,7 @@ mod tests {
 
             #[async_trait]
             impl crate::pipeline::sequential::Handler for $handler {
-                type Store = MockStore;
+                type Store = FallibleMockStore;
                 type Batch = Vec<Self::Value>;
 
                 fn batch(&self, batch: &mut Self::Batch, values: std::vec::IntoIter<Self::Value>) {
@@ -635,11 +634,11 @@ mod tests {
     /// If `ingestion_data` is `Some((num_checkpoints, checkpoint_size))`, synthetic ingestion
     /// data will be generated in the temp directory before creating the indexer.
     async fn create_test_indexer(
-        store: MockStore,
+        store: FallibleMockStore,
         indexer_args: IndexerArgs,
         registry: &Registry,
         ingestion_data: Option<(u64, u64)>,
-    ) -> (Indexer<MockStore>, tempfile::TempDir) {
+    ) -> (Indexer<FallibleMockStore>, tempfile::TempDir) {
         let temp_dir = init_ingestion_dir(None);
         if let Some((num_checkpoints, checkpoint_size)) = ingestion_data {
             synthetic_ingestion::generate_ingestion(synthetic_ingestion::Config {
@@ -671,7 +670,7 @@ mod tests {
     }
 
     async fn set_committer_watermark(
-        conn: &mut <MockStore as Store>::Connection<'_>,
+        conn: &mut <FallibleMockStore as Store>::Connection<'_>,
         name: &str,
         hi: u64,
     ) {
@@ -686,8 +685,8 @@ mod tests {
         .unwrap();
     }
 
-    async fn add_concurrent<H: concurrent::Handler<Store = MockStore>>(
-        indexer: &mut Indexer<MockStore>,
+    async fn add_concurrent<H: concurrent::Handler<Store = FallibleMockStore>>(
+        indexer: &mut Indexer<FallibleMockStore>,
         handler: H,
     ) {
         indexer
@@ -696,8 +695,8 @@ mod tests {
             .unwrap();
     }
 
-    async fn add_sequential<H: sequential::Handler<Store = MockStore>>(
-        indexer: &mut Indexer<MockStore>,
+    async fn add_sequential<H: sequential::Handler<Store = FallibleMockStore>>(
+        indexer: &mut Indexer<FallibleMockStore>,
         handler: H,
     ) {
         indexer
@@ -724,7 +723,7 @@ mod tests {
         is_concurrent: bool,
     ) -> (Option<CommitterWatermark>, Option<PrunerWatermark>) {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "pipeline_name");
 
@@ -761,9 +760,9 @@ mod tests {
         watermark: Option<u64>,
         first_checkpoint: Option<u64>,
         concurrent_config: ConcurrentConfig,
-    ) -> Indexer<MockStore> {
+    ) -> Indexer<FallibleMockStore> {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
 
@@ -857,7 +856,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_checkpoint_all_pipelines_have_watermarks() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -897,7 +896,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_checkpoint_not_all_pipelines_have_watermarks() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -927,7 +926,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_checkpoint_smallest_is_0() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -956,7 +955,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_checkpoint_first_checkpoint_and_no_watermark() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -991,7 +990,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_checkpoint_ignore_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(B, "concurrent_b");
         test_pipeline!(C, "sequential_c");
@@ -1023,7 +1022,7 @@ mod tests {
     #[tokio::test]
     async fn test_next_checkpoint_large_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -1055,7 +1054,7 @@ mod tests {
     #[tokio::test]
     async fn test_latest_checkpoint_from_watermark() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
         let temp_dir = init_ingestion_dir(Some(30));
         let indexer = Indexer::new(
             store,
@@ -1122,7 +1121,7 @@ mod tests {
     #[tokio::test]
     async fn test_indexer_ingestion_existing_watermarks_no_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -1163,7 +1162,7 @@ mod tests {
     #[tokio::test]
     async fn test_indexer_ingestion_existing_watermarks_ignore_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -1204,7 +1203,7 @@ mod tests {
     #[tokio::test]
     async fn test_indexer_ingestion_missing_watermarks_no_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -1243,7 +1242,7 @@ mod tests {
     #[tokio::test]
     async fn test_indexer_ingestion_use_first_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         test_pipeline!(A, "concurrent_a");
         test_pipeline!(B, "concurrent_b");
@@ -1320,7 +1319,7 @@ mod tests {
     #[tokio::test]
     async fn test_multiple_sequential_pipelines_next_checkpoint() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         let mut conn = store.connect().await.unwrap();
         set_committer_watermark(&mut conn, MockHandler::NAME, 10).await;
@@ -1375,7 +1374,7 @@ mod tests {
     #[tokio::test]
     async fn test_tasked_pipelines_ignore_below_main_reader_lo() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         // Mock the store as if we have a main pipeline with a committer watermark at `10` and a
         // reader watermark at `7`.
@@ -1429,7 +1428,7 @@ mod tests {
     #[tokio::test]
     async fn test_tasked_pipelines_surpass_main_pipeline_committer_hi() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
 
         let mut conn = store.connect().await.unwrap();
         set_committer_watermark(&mut conn, "test", 10).await;
@@ -1486,7 +1485,7 @@ mod tests {
     #[tokio::test]
     async fn test_tasked_pipelines_skip_checkpoints_trailing_main_reader_lo() {
         let registry = Registry::new();
-        let store = MockStore::default();
+        let store = FallibleMockStore::default();
         let mut conn = store.connect().await.unwrap();
         // Set the main pipeline watermark.
         set_committer_watermark(&mut conn, ControllableHandler::NAME, 11).await;
@@ -1528,7 +1527,8 @@ mod tests {
         // committed.
         store
             .wait_for_watermark(
-                &pipeline_task::<MockStore>(ControllableHandler::NAME, Some("task")).unwrap(),
+                &pipeline_task::<FallibleMockStore>(ControllableHandler::NAME, Some("task"))
+                    .unwrap(),
                 10,
                 Duration::from_secs(10),
             )

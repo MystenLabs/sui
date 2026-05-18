@@ -127,15 +127,15 @@ B0:
 
 task 5, lines 97-112:
 //# print-bytecode
-Error: Unbound struct Self.T
+Error: Unbound struct Self::T
 
 task 6, lines 114-125:
 //# print-bytecode
-Error: Unbound struct Self.T
+Error: Unbound struct Self::T
 
 task 7, lines 127-142:
 //# print-bytecode
-Error: Unbound struct Self.T
+Error: Unbound struct Self::T
 
 task 8, lines 144-154:
 //# print-bytecode

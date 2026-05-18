@@ -18,14 +18,15 @@ impl Lint {
         self,
         path: Option<&Path>,
         mut config: BuildConfig,
+        flavor: F,
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
-        let env = find_env::<F>(&rerooted_path, &config)?;
+        let env = find_env(&rerooted_path, &config, &flavor)?;
 
         config.lint_flag.set(LintLevel::All);
 
         config
-            .check_package::<F, _>(&rerooted_path, &env, &mut std::io::stdout())
+            .check_package(&rerooted_path, &env, flavor, &mut std::io::stdout())
             .await
     }
 }

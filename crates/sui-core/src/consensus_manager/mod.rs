@@ -29,6 +29,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::crypto::NetworkPublicKey;
 use sui_types::error::{SuiErrorKind, SuiResult};
 use sui_types::messages_consensus::{ConsensusPosition, ConsensusTransaction};
+use sui_types::node_role::NodeRole;
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
@@ -130,16 +131,18 @@ fn to_consensus_protocol_config(config: &ProtocolConfig, chain: Chain) -> Consen
         config.max_transactions_in_block_bytes(),
         config.max_num_transactions_in_block(),
         config.gc_depth(),
-        config.mysticeti_fastpath(),
+        /* transaction_voting_enabled */ true,
         config.mysticeti_num_leaders_per_round(),
         config.consensus_bad_nodes_stake_threshold(),
+        /* enable_v3 */ false,
     )
 }
 
-/// Used by Sui validator to start consensus protocol for each epoch.
+/// Used by Sui to start consensus protocol for each epoch.
+/// Supports both validator mode (with protocol keypair) and observer mode (without).
 pub struct ConsensusManager {
     consensus_config: ConsensusConfig,
-    protocol_keypair: ProtocolKeyPair,
+    protocol_keypair: Option<ProtocolKeyPair>,
     network_keypair: NetworkKeyPair,
     storage_base_path: PathBuf,
     metrics: Arc<ConsensusManagerMetrics>,
@@ -168,7 +171,7 @@ pub struct ConsensusManager {
 
     // Persistent storage for address updates across epoch changes.
     // Keyed by NetworkPublicKey and then by AddressSource.
-    address_overrides: Mutex<AddressOverridesMap>,
+    address_overrides: parking_lot::Mutex<AddressOverridesMap>,
 }
 
 impl ConsensusManager {
@@ -177,15 +180,21 @@ impl ConsensusManager {
         consensus_config: &ConsensusConfig,
         registry_service: &RegistryService,
         consensus_client: Arc<UpdatableConsensusClient>,
+        node_role: NodeRole,
     ) -> Self {
         let metrics = Arc::new(ConsensusManagerMetrics::new(
             &registry_service.default_registry(),
         ));
         let client = Arc::new(LazyMysticetiClient::new());
         let (consumer_monitor_sender, _) = broadcast::channel(1);
+        let protocol_keypair = if node_role.is_validator() {
+            Some(ProtocolKeyPair::new(node_config.worker_key_pair().copy()))
+        } else {
+            None
+        };
         Self {
             consensus_config: consensus_config.clone(),
-            protocol_keypair: ProtocolKeyPair::new(node_config.worker_key_pair().copy()),
+            protocol_keypair,
             network_keypair: NetworkKeyPair::new(node_config.network_key_pair().copy()),
             storage_base_path: consensus_config.db_path().to_path_buf(),
             metrics,
@@ -198,7 +207,7 @@ impl ConsensusManager {
             consumer_monitor_sender,
             running: Mutex::new(Running::False),
             boot_counter: Mutex::new(0),
-            address_overrides: Mutex::new(AddressOverridesMap::new()),
+            address_overrides: parking_lot::Mutex::new(AddressOverridesMap::new()),
         }
     }
 
@@ -242,12 +251,6 @@ impl ConsensusManager {
             ..consensus_config.parameters.clone().unwrap_or_default()
         };
 
-        let own_protocol_key = self.protocol_keypair.public();
-        let (own_index, _) = committee
-            .authorities()
-            .find(|(_, a)| a.protocol_key == own_protocol_key)
-            .expect("Own authority should be among the consensus authorities!");
-
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
@@ -262,12 +265,15 @@ impl ConsensusManager {
             CommitConsumerArgs::new(replay_after_commit_index, last_processed_commit_index);
         let monitor = commit_consumer.monitor();
 
+        let node_role = epoch_store.node_role();
+
         // Spin up the new Mysticeti consensus handler to listen for committed sub dags, before starting authority.
         let handler = MysticetiConsensusHandler::new(
             last_processed_commit_index,
             consensus_handler,
             commit_receiver,
             monitor.clone(),
+            node_role.should_process_consensus_commits(),
         );
         let mut consensus_handler = self.consensus_handler.lock().await;
         *consensus_handler = Some(handler);
@@ -299,7 +305,6 @@ impl ConsensusManager {
         let authority = ConsensusAuthority::start(
             NetworkType::Tonic,
             epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
-            own_index,
             committee.clone(),
             parameters.clone(),
             to_consensus_protocol_config(protocol_config, epoch_store.get_chain()),
@@ -320,8 +325,10 @@ impl ConsensusManager {
         self.authority.swap(Some(registered_authority.clone()));
 
         // Reapply all stored address updates to the new consensus instance.
-        let address_overrides = self.address_overrides.lock().await;
-        let highest_priority_addresses = address_overrides.get_all_highest_priority_addresses();
+        let highest_priority_addresses = self
+            .address_overrides
+            .lock()
+            .get_all_highest_priority_addresses();
         for (network_pubkey, address) in highest_priority_addresses {
             registered_authority
                 .0
@@ -431,7 +438,7 @@ impl ConsensusAddressUpdater for ConsensusManager {
 
         // Determine what address should be used after this update (if any)
         let address_to_apply = {
-            let mut address_overrides = self.address_overrides.blocking_lock();
+            let mut address_overrides = self.address_overrides.lock();
 
             if addresses.is_empty() {
                 address_overrides.remove(network_pubkey.clone(), source);
