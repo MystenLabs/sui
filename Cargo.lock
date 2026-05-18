@@ -17277,6 +17277,7 @@ dependencies = [
  "bcs",
  "derive_more 1.0.0",
  "fastcrypto",
+ "nonempty",
  "schemars 0.8.21",
  "serde",
  "serde-name",
