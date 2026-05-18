@@ -153,7 +153,7 @@ impl Core {
                 "Recovered next commit leaders: index={} min_round={} num={} allowed={:?}",
                 next_commit_leader_schedule.next_commit_index,
                 next_commit_leader_schedule.min_next_leader_round,
-                next_commit_leader_schedule.num_leaders,
+                next_commit_leader_schedule.num_leaders(),
                 next_commit_leader_schedule.allowed_leaders,
             );
             ProposalLeaderWaiter::V3(next_commit_leader_schedule)

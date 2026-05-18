@@ -773,7 +773,6 @@ mod tests {
         let mut waiter = ProposalLeaderWaiter::V3(NextCommitLeaderSchedule {
             next_commit_index: 1,
             min_next_leader_round: 4,
-            num_leaders: 1,
             allowed_leaders: vec![
                 AuthorityIndex::new_for_test(0),
                 AuthorityIndex::new_for_test(2),
@@ -792,7 +791,6 @@ mod tests {
         waiter.update_v3_schedule(NextCommitLeaderSchedule {
             next_commit_index: 2,
             min_next_leader_round: 4,
-            num_leaders: 1,
             allowed_leaders: vec![
                 AuthorityIndex::new_for_test(1),
                 AuthorityIndex::new_for_test(3),
